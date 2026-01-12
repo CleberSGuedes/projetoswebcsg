@@ -423,7 +423,17 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> int | None:
 def preparar_aba_ped(file_path: Path) -> pd.DataFrame | None:
     try:
         xls = pd.ExcelFile(file_path)
-        df_raw = pd.read_excel(xls, sheet_name=xls.sheet_names[0], header=None, dtype=str)
+        sheet_name = xls.sheet_names[0]
+        try:
+            from openpyxl import load_workbook
+
+            wb = load_workbook(file_path, read_only=True, data_only=True)
+            active_title = wb.active.title if wb.active else None
+            if active_title in xls.sheet_names:
+                sheet_name = active_title
+        except Exception:
+            pass
+        df_raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=str)
 
         idx_cabecalho = encontrar_linha_cabecalho(df_raw)
         if idx_cabecalho is None:
