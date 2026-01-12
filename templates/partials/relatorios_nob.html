@@ -1,0 +1,114 @@
+<div class="grid">
+  <div class="card plan20-card">
+    <div class="card-title">Relatório NOB</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+      <div class="muted" id="nob-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>Exercício:</span> <strong id="nob-tot-exercicio">-</strong></div>
+          <div class="totais-row"><span>Valor NOB:</span> <strong id="nob-tot-valor-nob">0</strong></div>
+        </div>
+        <div class="actions" style="gap:8px;">
+          <button class="btn sm compact" id="nob-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="nob-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="nob-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>Exercício</th>
+            <th>Nº NOB</th>
+            <th>Nº NOB Estorno/Estornado</th>
+            <th>Nº LIQ</th>
+            <th>Nº EMP</th>
+            <th>Empenho Atual</th>
+            <th>Empenho RP</th>
+            <th>Nº PED</th>
+            <th>Valor NOB</th>
+            <th>Devolução GCV</th>
+            <th>Valor NOB - GCV</th>
+            <th>UO</th>
+            <th>UG</th>
+            <th>Dotação Orçamentária</th>
+            <th>Função</th>
+            <th>Subfunção</th>
+            <th>Programa de Governo</th>
+            <th>PAOE</th>
+            <th>Natureza de Despesa</th>
+            <th>Cat.Econ</th>
+            <th>Grupo</th>
+            <th>Modalidade</th>
+            <th>Elemento</th>
+            <th>Nome do Elemento da Despesa</th>
+            <th>Fonte</th>
+            <th>Nome da Fonte de Recurso</th>
+            <th>Iduso</th>
+            <th>Histórico LIQ</th>
+            <th>Nome do Credor Principal</th>
+            <th>CPF/CNPJ do Credor Principal</th>
+            <th>Credor</th>
+            <th>Nome do Credor</th>
+            <th>CPF/CNPJ do Credor</th>
+            <th>Data NOB</th>
+            <th>Data Cadastro NOB</th>
+            <th>Data/Hora de Cadastro da LIQ</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="numero_nob"></div></th>
+            <th><div class="multi-filter" data-col="numero_nob_estorno"></div></th>
+            <th><div class="multi-filter" data-col="numero_liq"></div></th>
+            <th><div class="multi-filter" data-col="numero_emp"></div></th>
+            <th><div class="multi-filter" data-col="empenho_atual"></div></th>
+            <th><div class="multi-filter" data-col="empenho_rp"></div></th>
+            <th><div class="multi-filter" data-col="numero_ped"></div></th>
+            <th><div class="multi-filter" data-col="valor_nob"></div></th>
+            <th><div class="multi-filter" data-col="devolucao_gcv"></div></th>
+            <th><div class="multi-filter" data-col="valor_nob_gcv"></div></th>
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="ug"></div></th>
+            <th><div class="multi-filter" data-col="dotacao_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="funcao"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao"></div></th>
+            <th><div class="multi-filter" data-col="programa_governo"></div></th>
+            <th><div class="multi-filter" data-col="paoe"></div></th>
+            <th><div class="multi-filter" data-col="natureza_despesa"></div></th>
+            <th><div class="multi-filter" data-col="cat_econ"></div></th>
+            <th><div class="multi-filter" data-col="grupo"></div></th>
+            <th><div class="multi-filter" data-col="modalidade"></div></th>
+            <th><div class="multi-filter" data-col="elemento"></div></th>
+            <th><div class="multi-filter" data-col="nome_elemento_despesa"></div></th>
+            <th><div class="multi-filter" data-col="fonte"></div></th>
+            <th><div class="multi-filter" data-col="nome_fonte_recurso"></div></th>
+            <th><div class="multi-filter" data-col="iduso"></div></th>
+            <th><div class="multi-filter" data-col="historico_liq"></div></th>
+            <th><div class="multi-filter" data-col="nome_credor_principal"></div></th>
+            <th><div class="multi-filter" data-col="cpf_cnpj_credor_principal"></div></th>
+            <th><div class="multi-filter" data-col="credor"></div></th>
+            <th><div class="multi-filter" data-col="nome_credor"></div></th>
+            <th><div class="multi-filter" data-col="cpf_cnpj_credor"></div></th>
+            <th><div class="multi-filter" data-col="data_nob"></div></th>
+            <th><div class="multi-filter" data-col="data_cadastro_nob"></div></th>
+            <th><div class="multi-filter" data-col="data_hora_cadastro_liq"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="nob-page-size">Itens por página</label>
+        <select id="nob-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="nob-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

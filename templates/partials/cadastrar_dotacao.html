@@ -1,0 +1,160 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Cadastro de Dotação</div>
+    <form id="form-dotacao" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Exercício</span>
+          <select id="dotacao-exercicio" name="exercicio" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Adjunta Responsável</span>
+          <select id="dotacao-adj" name="adj_id" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>UO</span>
+          <select id="dotacao-uo" name="uo" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Programa</span>
+          <select id="dotacao-programa" name="programa" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Ação/PAOE</span>
+          <select id="dotacao-acao" name="acao_paoe" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Produto</span>
+          <select id="dotacao-produto" name="produto" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>UG</span>
+          <select id="dotacao-ug" name="ug" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Região</span>
+          <select id="dotacao-regiao" name="regiao" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Chave de Planejamento</span>
+          <select id="dotacao-chave" name="chave_planejamento" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Subação/Entrega</span>
+          <select id="dotacao-subacao" name="subacao_entrega" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Etapa</span>
+          <select id="dotacao-etapa" name="etapa" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Natureza de Despesa</span>
+          <select id="dotacao-natureza" name="natureza_despesa" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Elemento de Despesa</span>
+          <input type="number" name="elemento" id="dotacao-elemento" min="0" step="1" required />
+        </label>
+        <label class="field">
+          <span>Fonte</span>
+          <select id="dotacao-fonte" name="fonte" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Iduso</span>
+          <select id="dotacao-iduso" name="iduso" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor da Dotação</span>
+          <input type="text" name="valor_dotacao" id="dotacao-valor" required />
+        </label>
+        <label class="field">
+          <span>Saldo de Dotação</span>
+          <input type="text" name="saldo_dotacao" id="dotacao-saldo" readonly />
+          <div id="dotacao-saldo-info" class="muted"></div>
+          <div id="dotacao-saldo-debug" class="muted"></div>
+        </label>
+        <label class="field">
+          <span>Justificativa/Histórico</span>
+          <input type="text" name="justificativa_historico" id="dotacao-justificativa" required />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit">Salvar</button>
+        <button class="btn btn-danger sm" type="button" id="dotacao-clear">Limpar Formulário</button>
+        <div id="dotacao-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Dotações cadastradas</div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Exercício</th>
+            <th>Adj</th>
+            <th>Chave</th>
+            <th>UO</th>
+            <th>Região</th>
+            <th>Subação</th>
+            <th>Etapa</th>
+            <th>Natureza</th>
+            <th>Elemento</th>
+            <th>Fonte</th>
+            <th>Iduso</th>
+            <th>Valor</th>
+            <th>Justificativa</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in dotacoes %}
+          <tr>
+            <td>{{ d.exercicio }}</td>
+            <td>{{ d.adj_abreviacao }}</td>
+            <td>{{ d.chave_planejamento }}</td>
+            <td>{{ d.uo }}</td>
+            <td>{{ d.regiao }}</td>
+            <td>{{ d.subacao_entrega }}</td>
+            <td>{{ d.etapa }}</td>
+            <td>{{ d.natureza_despesa }}</td>
+            <td>{{ d.elemento }}</td>
+            <td>{{ d.fonte }}</td>
+            <td>{{ d.iduso }}</td>
+            <td>{{ d.valor_dotacao }}</td>
+            <td>{{ d.justificativa_historico }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

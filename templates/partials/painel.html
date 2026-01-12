@@ -1,0 +1,42 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Painel de Acesso</div>
+    <p class="muted">Escolha um perfil e marque quais áreas/submenus ele pode acessar.</p>
+
+    <div class="form" id="painel-acesso">
+      <div class="form-grid">
+        <label class="field">
+          <span>Perfil</span>
+          <select id="painel-perfil">
+            <option value="">Selecione um perfil</option>
+            {% for p in perfis %}
+            <option value="{{ p.id }}">{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <div class="painel-wrapper">
+        <div class="card mini">
+          <div class="card-title" style="margin-bottom:6px;">Funcionalidades</div>
+          <div id="painel-tree" class="tree-list"></div>
+        </div>
+        <div class="card mini">
+          <div class="card-title" style="margin-bottom:6px;">Ativos para o perfil</div>
+          <ul id="painel-ativos" class="pill-list"></ul>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-danger sm" id="painel-cancelar" type="button">Cancelar</button>
+        <button class="btn btn-primary sm" id="painel-salvar" type="button">Salvar</button>
+        <div id="painel-msg" class="muted"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="painel-data"
+        type="application/json"
+        data-features='{{ features|tojson }}'
+        data-allowed='{{ allowed|tojson }}'>
+</script>

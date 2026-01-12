@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.vscode/
+instance/
+*.log
+node_modules/
+node_runners/node_modules/
+outputs/
+upload/

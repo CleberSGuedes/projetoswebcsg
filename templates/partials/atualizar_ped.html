@@ -1,0 +1,29 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">PED</div>
+    <p class="muted">Envie o arquivo PED (.xlsx) e informe a data/hora do download.</p>
+
+    <form id="form-ped" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Arquivo PED (.xlsx)</span>
+          <input type="file" name="arquivo" id="ped-file" accept=".xlsx" required />
+        </label>
+        <label class="field">
+          <span>Data/hora do download</span>
+          <input type="datetime-local" name="data_arquivo" id="ped-data" required />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="ped-submit">Upload e processar</button>
+        <div id="ped-loading" class="muted" style="display:none;">Processando...</div>
+        <div id="ped-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Última atualização</div>
+    <div id="ped-status" class="muted">Carregando...</div>
+  </div>
+</div>

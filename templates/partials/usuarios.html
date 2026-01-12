@@ -1,0 +1,59 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Cadastrar usuario</div>
+    <form id="form-criar-usuario" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" name="email" required />
+        </label>
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" name="nome" required />
+        </label>
+        <label class="field">
+          <span>Perfil</span>
+          <input type="text" name="perfil" required placeholder="ex: admin ou user" />
+        </label>
+        <label class="field">
+          <span>Senha</span>
+          <input type="password" name="senha" required />
+        </label>
+        <label class="field inline">
+          <input type="checkbox" name="ativo" checked />
+          <span>Ativo</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">Salvar</button>
+        <div id="criar-usuario-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Usuários</div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Nome</th>
+            <th>Perfil</th>
+            <th>Ativo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr>
+            <td>{{ u.email }}</td>
+            <td>{{ u.nome }}</td>
+            <td>{{ u.perfil }}</td>
+            <td>{{ 'Sim' if u.ativo else 'Não' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

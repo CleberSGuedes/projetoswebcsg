@@ -1,0 +1,31 @@
+<div class="grid">
+  <div class="card highlight">
+    <div class="card-title">Bem-vindo</div>
+    <p>Use o menu ao lado para navegar. Itens carregam sem sair da Home.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Status</div>
+    <p>Ambiente conectado. Verifique permissoes para acessar usuarios.</p>
+    {% if can_view_sessions %}
+      <hr>
+      <div class="muted">Usu&aacute;rios logados agora: {{ active_sessions|length }}</div>
+      {% if active_sessions %}
+        <ul class="muted" style="margin-top:6px;">
+          {% for s in active_sessions %}
+            <li>{{ s.nome }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted" style="margin-top:6px;">Nenhum usuario logado no momento.</div>
+      {% endif %}
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">Proximos passos</div>
+    <ul>
+      <li>Completar telas do MVP</li>
+      <li>Configurar regras por perfil</li>
+      <li>Adicionar indicadores do dashboard</li>
+    </ul>
+  </div>
+</div>

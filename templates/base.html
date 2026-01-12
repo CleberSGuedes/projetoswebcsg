@@ -1,0 +1,115 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SPO</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="app-body">
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <button class="icon-btn toggle-btn" id="sidebar-toggle" aria-label="Alternar menu">
+          <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </button>
+      </div>
+      <nav class="menu" id="menu">
+        <a href="#" data-route="dashboard" class="menu-item active" title="Início"><i class="bi bi-house"></i> <span>Início</span></a>
+        {% set perfil_atual = (g.user.perfil or '').lower() if g.user else '' %}
+        {% set nivel_atual = g.user_nivel or 99 %}
+        {% if g.user %}
+        <div class="menu-group" id="menu-atualizar">
+          <div class="menu-item menu-parent" data-submenu="submenu-atualizar" title="Atualizar"><i class="bi bi-arrow-repeat"></i> <span>Atualizar</span></div>
+          <div class="submenu" id="submenu-atualizar">
+            <a href="#" data-route="atualizar/fip613" class="menu-item" title="FIP 613 (Atualizar)"><i class="bi bi-cloud-upload"></i> <span>FIP 613</span></a>
+            <a href="#" data-route="atualizar/ped" class="menu-item" title="PED"><i class="bi bi-arrow-up-circle"></i> <span>PED</span></a>
+            <a href="#" data-route="atualizar/emp" class="menu-item" title="EMP"><i class="bi bi-cloud-arrow-up"></i> <span>EMP</span></a>
+            <a href="#" data-route="atualizar/est-emp" class="menu-item" title="Est Emp"><i class="bi bi-cloud-check"></i> <span>Est Emp</span></a>
+            <a href="#" data-route="atualizar/nob" class="menu-item" title="NOB"><i class="bi bi-cloud-plus"></i> <span>NOB</span></a>
+            <a href="#" data-route="atualizar/plan20-seduc" class="menu-item" title="Plan20 SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Plan20 - SEDUC</span></a>
+          </div>
+        </div>
+        <div class="menu-group" id="menu-cadastrar">
+          <div class="menu-item menu-parent" data-submenu="submenu-cadastrar" title="Cadastrar"><i class="bi bi-plus-circle"></i> <span>Cadastrar</span></div>
+          <div class="submenu" id="submenu-cadastrar">
+            <a href="#" data-route="cadastrar/dotacao" class="menu-item" title="Dotação"><i class="bi bi-clipboard-plus"></i> <span>Dotação</span></a>
+          </div>
+        </div>
+        <div class="menu-group" id="menu-institucional">
+          <div class="menu-item menu-parent" data-submenu="submenu-institucional" title="Institucional"><i class="bi bi-building"></i> <span>Institucional</span></div>
+          <div class="submenu" id="submenu-institucional">
+            <a href="#" data-route="institucional/diretrizes" class="menu-item" title="Diretrizes e Procedimentos"><i class="bi bi-journal-text"></i> <span>Diretrizes e Procedimentos</span></a>
+            <a href="#" data-route="institucional/repositorio" class="menu-item" title="Repositório de Arquivos"><i class="bi bi-archive"></i> <span>Repositório de Arquivos</span></a>
+            <a href="#" data-route="institucional/legislacao" class="menu-item" title="Legislação e Normas"><i class="bi bi-file-earmark-text"></i> <span>Legislação e Normas</span></a>
+            <a href="#" data-route="institucional/parceiros" class="menu-item" title="Rede de Parceiros"><i class="bi bi-people"></i> <span>Rede de Parceiros</span></a>
+          </div>
+        </div>
+        <div class="menu-group" id="menu-relatorios">
+          <div class="menu-item menu-parent" data-submenu="submenu-relatorios" title="Relatórios"><i class="bi bi-bar-chart-line"></i> <span>Relatórios</span></div>
+          <div class="submenu" id="submenu-relatorios">
+            <a href="#" data-route="relatorios/fip613" class="menu-item" title="Relatório FIP 613"><i class="bi bi-file-earmark-bar-graph"></i> <span>FIP 613</span></a>
+            <a href="#" data-route="relatorios/plan20-seduc" class="menu-item" title="Relatório Plan20 - SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Plan20 - SEDUC</span></a>
+            <a href="#" data-route="relatorios/ped" class="menu-item" title="Relatório PED"><i class="bi bi-graph-up"></i> <span>PED</span></a>
+            <a href="#" data-route="relatorios/emp" class="menu-item" title="Relatório EMP"><i class="bi bi-clipboard-data"></i> <span>EMP</span></a>
+            <a href="#" data-route="relatorios/est-emp" class="menu-item" title="Relatório Est EMP"><i class="bi bi-clipboard-check"></i> <span>Est EMP</span></a>
+            <a href="#" data-route="relatorios/nob" class="menu-item" title="Relatório NOB"><i class="bi bi-clipboard-plus"></i> <span>NOB</span></a>
+          </div>
+        </div>
+        <div class="menu-group" id="menu-usuarios">
+          <div class="menu-item menu-parent" data-submenu="submenu-usuarios" title="Usuários"><i class="bi bi-people"></i> <span>Usuários</span></div>
+          <div class="submenu" id="submenu-usuarios">
+            <a href="#" data-route="usuarios/cadastrar" class="menu-item" title="Cadastrar usuário"><i class="bi bi-plus-circle"></i> <span>Cadastrar</span></a>
+            <a href="#" data-route="usuarios/editar" class="menu-item" title="Editar usuário"><i class="bi bi-pencil-square"></i> <span>Editar</span></a>
+            <a href="#" data-route="usuarios/perfil" class="menu-item" title="Perfis"><i class="bi bi-shield-lock"></i> <span>Perfil</span></a>
+            <a href="#" data-route="usuarios/senha" class="menu-item" title="Alterar senha"><i class="bi bi-key"></i> <span>Alterar Senha</span></a>
+          </div>
+        </div>
+        <a href="#" data-route="painel" class="menu-item" title="Painel"><i class="bi bi-grid"></i> <span>Painel</span></a>
+        {% endif %}
+        <a href="#" data-route="logout" class="menu-item" title="Sair"><i class="bi bi-box-arrow-right"></i> <span>Sair</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <img class="brand-logo" src="{{ url_for('static', filename='img/logo.jpg') }}" alt="Logo">
+          <div>
+            <div class="subtitle">Sistema de Planejamento e Orçamento</div>
+            <div class="muted">SPO-NGER-SEDUCMT</div>
+          </div>
+        </div>
+        <div class="user-info">
+          {% if g.user %}
+            <div class="user-meta" id="user-meta"
+                 data-name="{{ g.user.nome }}"
+                 data-active-count="{{ g.active_sessions_count or 0 }}"
+                 data-perfil-id="{{ g.user_perfil_id or '' }}"
+                 data-nivel="{{ g.user_nivel or '' }}"
+                 data-features='{{ (initial_features or [])|tojson }}'></div>
+          {% endif %}
+          <div class="theme-toggle" aria-label="Alternar tema">
+            <button class="icon-btn sm theme-btn" id="theme-light" type="button" title="Tema claro">
+              <i class="bi bi-sun"></i>
+            </button>
+            <button class="icon-btn sm theme-btn" id="theme-dark" type="button" title="Tema escuro">
+              <i class="bi bi-moon"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="content-area" data-initial="{{ initial_content or 'dashboard' }}"></main>
+
+      <footer class="footer">
+        (c) 2025 SEDUC-MT | Nucleo de Gestao Estrategica para Resultados - NGER | Sistema de Planejamento e Orçamento | Desenvolvido por Cleber S. Guedes | RELEASE_2_2025_01_12.1
+      </footer>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

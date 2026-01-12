@@ -1,0 +1,126 @@
+<div class="grid">
+  <div class="card plan20-card">
+    <div class="card-title">Relatório EMP</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+      <div class="muted" id="emp-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>Exercício:</span> <strong id="emp-tot-exercicio">-</strong></div>
+          <div class="totais-row"><span>Valor EMP:</span> <strong id="emp-tot-valor-emp">0</strong></div>
+        </div>
+        <div class="actions" style="gap:8px;">
+          <button class="btn sm compact" id="emp-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="emp-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="emp-relatorio-tabela">
+        <thead>
+          <tr>
+            <th id="emp-col-chave">Chave de Planejamento</th>
+            <th>Região</th>
+            <th>Subfunção + UG</th>
+            <th>ADJ</th>
+            <th>Macropolítica</th>
+            <th>Pilar</th>
+            <th>Eixo</th>
+            <th>Política_Decreto</th>
+            <th>Exercício</th>
+            <th>Nº EMP</th>
+            <th>Nº PED</th>
+            <th>Valor EMP</th>
+            <th>Devolução GCV</th>
+            <th>Valor EMP-Devolução GCV</th>
+            <th>UO</th>
+            <th>Nome da Unidade Orçamentária</th>
+            <th>UG</th>
+            <th>Nome da Unidade Gestora</th>
+            <th>Dotação Orçamentária</th>
+            <th>Função</th>
+            <th>Subfunção</th>
+            <th>Programa de Governo</th>
+            <th>PAOE</th>
+            <th>Natureza de Despesa</th>
+            <th>Cat.Econ</th>
+            <th>Grupo</th>
+            <th>Modalidade</th>
+            <th>Elemento</th>
+            <th>Fonte</th>
+            <th>Iduso</th>
+            <th>Histórico</th>
+            <th>Tipo de Despesa</th>
+            <th>Credor</th>
+            <th>Nome do Credor</th>
+            <th>CPF/CNPJ do Credor</th>
+            <th>Categoria do Credor</th>
+            <th>Tipo Empenho</th>
+            <th>Situação</th>
+            <th>Data emissão</th>
+            <th>Data criação</th>
+            <th>Nº Contrato</th>
+            <th>Nº Convênio</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="chave_display"></div></th>
+            <th><div class="multi-filter" data-col="regiao"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao_ug"></div></th>
+            <th><div class="multi-filter" data-col="adj"></div></th>
+            <th><div class="multi-filter" data-col="macropolitica"></div></th>
+            <th><div class="multi-filter" data-col="pilar"></div></th>
+            <th><div class="multi-filter" data-col="eixo"></div></th>
+            <th><div class="multi-filter" data-col="politica_decreto"></div></th>
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="numero_emp"></div></th>
+            <th><div class="multi-filter" data-col="numero_ped"></div></th>
+            <th><div class="multi-filter" data-col="valor_emp"></div></th>
+            <th><div class="multi-filter" data-col="devolucao_gcv"></div></th>
+            <th><div class="multi-filter" data-col="valor_emp_devolucao_gcv"></div></th>
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="nome_unidade_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="ug"></div></th>
+            <th><div class="multi-filter" data-col="nome_unidade_gestora"></div></th>
+            <th><div class="multi-filter" data-col="dotacao_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="funcao"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao"></div></th>
+            <th><div class="multi-filter" data-col="programa_governo"></div></th>
+            <th><div class="multi-filter" data-col="paoe"></div></th>
+            <th><div class="multi-filter" data-col="natureza_despesa"></div></th>
+            <th><div class="multi-filter" data-col="cat_econ"></div></th>
+            <th><div class="multi-filter" data-col="grupo"></div></th>
+            <th><div class="multi-filter" data-col="modalidade"></div></th>
+            <th><div class="multi-filter" data-col="elemento"></div></th>
+            <th><div class="multi-filter" data-col="fonte"></div></th>
+            <th><div class="multi-filter" data-col="iduso"></div></th>
+            <th><div class="multi-filter" data-col="historico"></div></th>
+            <th><div class="multi-filter" data-col="tipo_despesa"></div></th>
+            <th><div class="multi-filter" data-col="credor"></div></th>
+            <th><div class="multi-filter" data-col="nome_credor"></div></th>
+            <th><div class="multi-filter" data-col="cpf_cnpj_credor"></div></th>
+            <th><div class="multi-filter" data-col="categoria_credor"></div></th>
+            <th><div class="multi-filter" data-col="tipo_empenho"></div></th>
+            <th><div class="multi-filter" data-col="situacao"></div></th>
+            <th><div class="multi-filter" data-col="data_emissao"></div></th>
+            <th><div class="multi-filter" data-col="data_criacao"></div></th>
+            <th><div class="multi-filter" data-col="numero_contrato"></div></th>
+            <th><div class="multi-filter" data-col="numero_convenio"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="emp-page-size">Itens por página</label>
+        <select id="emp-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="emp-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

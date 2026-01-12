@@ -1,0 +1,148 @@
+<div class="grid">
+  <div class="card plan20-card">
+    <div class="card-title">Plan20 - SEDUC</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+      <div class="muted" id="plan20-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>Exercício:</span> <strong id="plan20-tot-exercicio">-</strong></div>
+          <div class="totais-row"><span>Valor Total:</span> <strong id="plan20-tot-valor-total">0</strong></div>
+        </div>
+        <div class="actions" style="gap:8px;">
+          <button class="btn sm compact" id="plan20-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="plan20-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="plan20-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>Exercício</th>
+            <th>Chave de Planejamento</th>
+            <th>Região</th>
+            <th>Subfunção + UG</th>
+            <th>ADJ</th>
+            <th>Macropolítica</th>
+            <th>Pilar</th>
+            <th>Eixo</th>
+            <th>Política_Decreto</th>
+            <th>Público Transversal (chave)</th>
+            <th>Programa</th>
+            <th>Função</th>
+            <th>Unidade Orçamentária</th>
+            <th>Ação (P/A/OE)</th>
+            <th>Subfunção</th>
+            <th>Objetivo Específico</th>
+            <th>Esfera</th>
+            <th>Responsável pela Ação</th>
+            <th>Produto(s) da Ação</th>
+            <th>Unidade de Medida do Produto</th>
+            <th>Região do Produto</th>
+            <th>Meta do Produto</th>
+            <th>Saldo Meta do Produto</th>
+            <th>Público Transversal</th>
+            <th>Subação/entrega</th>
+            <th>Responsável</th>
+            <th>Prazo</th>
+            <th>Unid. Gestora</th>
+            <th>Unidade Setorial de Planejamento</th>
+            <th>Produto da Subação</th>
+            <th>Unidade de Medida</th>
+            <th>Região da Subação</th>
+            <th>Código</th>
+            <th>Município(s) da entrega</th>
+            <th>Meta da Subação</th>
+            <th>Detalhamento do produto</th>
+            <th>Etapa</th>
+            <th>Responsável da Etapa</th>
+            <th>Prazo da Etapa</th>
+            <th>Região da Etapa</th>
+            <th>Natureza</th>
+            <th>Cat.Econ</th>
+            <th>Grupo</th>
+            <th>Modalidade</th>
+            <th>Elemento</th>
+            <th>Subelemento</th>
+            <th>Fonte</th>
+            <th>IDU</th>
+            <th>Descrição do Item de Despesa</th>
+            <th>Unid. Medida</th>
+            <th>Quantidade</th>
+            <th>Valor Unitário</th>
+            <th>Valor Total</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="chave_planejamento"></div></th>
+            <th><div class="multi-filter" data-col="regiao"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao_ug"></div></th>
+            <th><div class="multi-filter" data-col="adj"></div></th>
+            <th><div class="multi-filter" data-col="macropolitica"></div></th>
+            <th><div class="multi-filter" data-col="pilar"></div></th>
+            <th><div class="multi-filter" data-col="eixo"></div></th>
+            <th><div class="multi-filter" data-col="politica_decreto"></div></th>
+            <th><div class="multi-filter" data-col="publico_transversal_chave"></div></th>
+            <th><div class="multi-filter" data-col="programa"></div></th>
+            <th><div class="multi-filter" data-col="funcao"></div></th>
+            <th><div class="multi-filter" data-col="unidade_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="acao_paoe"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao"></div></th>
+            <th><div class="multi-filter" data-col="objetivo_especifico"></div></th>
+            <th><div class="multi-filter" data-col="esfera"></div></th>
+            <th><div class="multi-filter" data-col="responsavel_acao"></div></th>
+            <th><div class="multi-filter" data-col="produto_acao"></div></th>
+            <th><div class="multi-filter" data-col="unid_medida_produto"></div></th>
+            <th><div class="multi-filter" data-col="regiao_produto"></div></th>
+            <th><div class="multi-filter" data-col="meta_produto"></div></th>
+            <th><div class="multi-filter" data-col="saldo_meta_produto"></div></th>
+            <th><div class="multi-filter" data-col="publico_transversal"></div></th>
+            <th><div class="multi-filter" data-col="subacao_entrega"></div></th>
+            <th><div class="multi-filter" data-col="responsavel"></div></th>
+            <th><div class="multi-filter" data-col="prazo"></div></th>
+            <th><div class="multi-filter" data-col="unid_gestora"></div></th>
+            <th><div class="multi-filter" data-col="unidade_setorial_planejamento"></div></th>
+            <th><div class="multi-filter" data-col="produto_subacao"></div></th>
+            <th><div class="multi-filter" data-col="unidade_medida"></div></th>
+            <th><div class="multi-filter" data-col="regiao_subacao"></div></th>
+            <th><div class="multi-filter" data-col="codigo"></div></th>
+            <th><div class="multi-filter" data-col="municipios_entrega"></div></th>
+            <th><div class="multi-filter" data-col="meta_subacao"></div></th>
+            <th><div class="multi-filter" data-col="detalhamento_produto"></div></th>
+            <th><div class="multi-filter" data-col="etapa"></div></th>
+            <th><div class="multi-filter" data-col="responsavel_etapa"></div></th>
+            <th><div class="multi-filter" data-col="prazo_etapa"></div></th>
+            <th><div class="multi-filter" data-col="regiao_etapa"></div></th>
+            <th><div class="multi-filter" data-col="natureza"></div></th>
+            <th><div class="multi-filter" data-col="cat_econ"></div></th>
+            <th><div class="multi-filter" data-col="grupo"></div></th>
+            <th><div class="multi-filter" data-col="modalidade"></div></th>
+            <th><div class="multi-filter" data-col="elemento"></div></th>
+            <th><div class="multi-filter" data-col="subelemento"></div></th>
+            <th><div class="multi-filter" data-col="fonte"></div></th>
+            <th><div class="multi-filter" data-col="idu"></div></th>
+            <th><div class="multi-filter" data-col="descricao_item_despesa"></div></th>
+            <th><div class="multi-filter" data-col="unid_medida_item"></div></th>
+            <th><div class="multi-filter" data-col="quantidade"></div></th>
+            <th><div class="multi-filter" data-col="valor_unitario"></div></th>
+            <th><div class="multi-filter" data-col="valor_total"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="plan20-page-size">Itens por página</label>
+        <select id="plan20-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="plan20-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

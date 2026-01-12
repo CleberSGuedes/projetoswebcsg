@@ -1,0 +1,81 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Editar Usuário</div>
+    <form id="form-editar-usuario" class="form">
+      <input type="hidden" name="email" id="edit-email" />
+      <div class="form-grid">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="edit-email-display" disabled />
+        </label>
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="edit-nome" required />
+        </label>
+        <label class="field">
+          <span>Perfil</span>
+          <select id="edit-perfil" required>
+            <option value="">Selecione um perfil</option>
+            {% for p in perfis %}
+            <option value="{{ p.nome }}">{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Senha (deixe em branco para manter)</span>
+          <div class="password-wrap">
+            <input type="password" id="edit-senha" />
+            <button class="toggle-visibility" type="button" data-target="edit-senha" aria-label="Mostrar ou ocultar senha">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </label>
+        <label class="field inline">
+          <input type="checkbox" id="edit-ativo" />
+          <span>Ativo</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit">Salvar alterações</button>
+        <div id="editar-usuario-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Usuários</div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Nome</th>
+            <th>Perfil</th>
+            <th>Ativo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          {% set is_admin = (u.perfil or '').lower() == 'admin' %}
+          {% set caller_perfil = (g.user.perfil or '').lower() if g.user else '' %}
+          <tr data-email="{{ u.email }}"
+              data-nome="{{ u.nome }}"
+              data-perfil="{{ u.perfil }}"
+              data-ativo="{{ '1' if u.ativo else '0' }}">
+            <td>{{ u.email }}</td>
+            <td>{{ u.nome }}</td>
+            <td>{{ u.perfil }}</td>
+            <td>{{ 'Sim' if u.ativo else 'Não' }}</td>
+            <td>
+              {% if not (caller_perfil == 'gestor' and is_admin) %}
+              <button class="icon-btn sm select-usuario" data-email="{{ u.email }}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,88 @@
+<div class="grid">
+  <div class="card plan20-card">
+    <div class="card-title">Relatório Est EMP</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+      <div class="muted" id="est-emp-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>Exercício:</span> <strong id="est-emp-tot-exercicio">-</strong></div>
+          <div class="totais-row"><span>Valor EMP:</span> <strong id="est-emp-tot-valor-est-emp">0</strong></div>
+        </div>
+        <div class="actions" style="gap:8px;">
+          <button class="btn sm compact" id="est-emp-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="est-emp-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="est-emp-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>Exercício</th>
+            <th>Nº EST</th>
+            <th>Nº EMP</th>
+            <th>Empenho Atual</th>
+            <th>Empenho RP</th>
+            <th>Nº PED</th>
+            <th>Valor EMP</th>
+            <th>Valor Est EMP (A LIQ/Em LIQ sem AQS)</th>
+            <th>Valor Est EMP (Em LIQ com AQS)</th>
+            <th>Valor EMP - (A LIQ/Em LIQ sem AQS) - (Em LIQ com AQS)</th>
+            <th>UO</th>
+            <th>Nome da Unidade Orçamentária</th>
+            <th>UG</th>
+            <th>Nome da Unidade Gestora</th>
+            <th>Dotação Orçamentária</th>
+            <th>Histórico</th>
+            <th>Credor</th>
+            <th>Nome do Credor</th>
+            <th>CPF/CNPJ do Credor</th>
+            <th>Data Criacao</th>
+            <th>Data Emissao</th>
+            <th>Situação</th>
+            <th>RP</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="numero_est"></div></th>
+            <th><div class="multi-filter" data-col="numero_emp"></div></th>
+            <th><div class="multi-filter" data-col="empenho_atual"></div></th>
+            <th><div class="multi-filter" data-col="empenho_rp"></div></th>
+            <th><div class="multi-filter" data-col="numero_ped"></div></th>
+            <th><div class="multi-filter" data-col="valor_emp"></div></th>
+            <th><div class="multi-filter" data-col="valor_est_emp_sem_aqs"></div></th>
+            <th><div class="multi-filter" data-col="valor_est_emp_com_aqs"></div></th>
+            <th><div class="multi-filter" data-col="valor_emp_liquido"></div></th>
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="nome_unidade_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="ug"></div></th>
+            <th><div class="multi-filter" data-col="nome_unidade_gestora"></div></th>
+            <th><div class="multi-filter" data-col="dotacao_orcamentaria"></div></th>
+            <th><div class="multi-filter" data-col="historico"></div></th>
+            <th><div class="multi-filter" data-col="credor"></div></th>
+            <th><div class="multi-filter" data-col="nome_credor"></div></th>
+            <th><div class="multi-filter" data-col="cpf_cnpj_credor"></div></th>
+            <th><div class="multi-filter" data-col="data_criacao"></div></th>
+            <th><div class="multi-filter" data-col="data_emissao"></div></th>
+            <th><div class="multi-filter" data-col="situacao"></div></th>
+            <th><div class="multi-filter" data-col="rp"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="est-emp-page-size">Itens por página</label>
+        <select id="est-emp-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="est-emp-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

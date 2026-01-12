@@ -1,0 +1,69 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Alterar senha de usuário</div>
+    <form id="form-buscar-usuario" class="form">
+      <label class="field">
+        <span>Email do usuário</span>
+        <div class="actions">
+          <input type="email" id="buscar-email" required style="flex:1;" />
+          <button class="btn sm btn-primary" type="submit">Consultar</button>
+        </div>
+      </label>
+      <div id="buscar-usuario-msg" class="muted"></div>
+    </form>
+  </div>
+
+  <div class="card" id="senha-area" style="display:none;">
+    <div class="card-title">Dados e nova senha</div>
+    <form id="form-alterar-senha" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="senha-email" readonly />
+        </label>
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="senha-nome" readonly />
+        </label>
+        <label class="field">
+          <span>Perfil</span>
+          <input type="text" id="senha-perfil" readonly />
+        </label>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Senha atual</span>
+          <div class="password-wrap">
+            <input type="password" id="senha-atual" required />
+            <button class="toggle-visibility" type="button" data-target="senha-atual" aria-label="Mostrar ou ocultar senha">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </label>
+        <label class="field">
+          <span>Nova senha</span>
+          <div class="password-wrap">
+            <input type="password" id="senha-nova" required />
+            <button class="toggle-visibility" type="button" data-target="senha-nova" aria-label="Mostrar ou ocultar senha">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </label>
+        <label class="field">
+          <span>Confirmar nova senha</span>
+          <div class="password-wrap">
+            <input type="password" id="senha-confirmar" required />
+            <button class="toggle-visibility" type="button" data-target="senha-confirmar" aria-label="Mostrar ou ocultar senha">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-danger sm" type="button" id="senha-cancelar">Cancelar</button>
+        <button class="btn btn-primary sm" type="submit">Salvar</button>
+        <div id="senha-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+</div>

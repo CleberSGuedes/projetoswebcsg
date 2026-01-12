@@ -1,0 +1,33 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">NOB</div>
+    <p class="muted">Envie o arquivo NOB (.xlsx) e informe a data/hora do download.</p>
+
+    <form id="form-nob" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Arquivo NOB (.xlsx)</span>
+          <input type="file" name="arquivo" id="nob-file" accept=".xlsx" required />
+        </label>
+        <label class="field">
+          <span>Data/hora do download</span>
+          <input type="datetime-local" name="data_arquivo" id="nob-data" required />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="nob-submit">Upload e processar</button>
+        <div id="nob-loading" class="muted" style="display:none;"><i class="bi bi-hourglass-split"></i> Processando...</div>
+        <div id="nob-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Última atualização</div>
+    <div id="nob-status" class="muted">Carregando...</div>
+    <div class="actions">
+      <button class="btn btn-secondary sm" type="button" id="nob-reprocess">Reprocessar</button>
+      <button class="btn btn-danger sm" type="button" id="nob-cancel">Cancelar</button>
+    </div>
+  </div>
+</div>

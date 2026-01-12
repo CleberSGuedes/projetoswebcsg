@@ -1,0 +1,64 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Perfis</div>
+    <form id="form-perfil" class="form">
+      <input type="hidden" id="perfil-id" />
+      <div class="form-grid">
+        <label class="field">
+          <span>Nome do perfil</span>
+          <input type="text" id="perfil-nome" required />
+        </label>
+        <label class="field">
+          <span>Nivel</span>
+          <select id="perfil-nivel" required>
+            <option value="">Selecione</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <label class="field inline">
+          <input type="checkbox" id="perfil-ativo" checked />
+          <span>Ativo</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit">Salvar</button>
+        <div id="perfil-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Lista de perfis</div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Nivel</th>
+            <th>Ativo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in perfis %}
+          <tr data-id="{{ p.id }}"
+              data-nome="{{ p.nome }}"
+              data-nivel="{{ p.nivel }}"
+              data-ativo="{{ '1' if p.ativo else '0' }}">
+            <td>{{ p.nome }}</td>
+            <td>{{ p.nivel }}</td>
+            <td>{{ 'Sim' if p.ativo else 'Não' }}</td>
+            <td class="actions" style="display:flex; gap:6px;">
+              <button class="icon-btn sm select-perfil" type="button" data-id="{{ p.id }}" title="Editar"><i class="bi bi-pencil"></i></button>
+              <button class="icon-btn sm delete-perfil" type="button" data-id="{{ p.id }}" title="Excluir"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

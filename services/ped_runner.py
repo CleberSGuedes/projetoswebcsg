@@ -1,0 +1,755 @@
+from __future__ import annotations
+
+import json
+import re
+import time
+import unicodedata
+import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+from rapidfuzz import fuzz, process
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from models import db
+
+# Evita warnings de downcasting silencioso em replace
+pd.set_option("future.no_silent_downcasting", True)
+
+BATCH_SIZE = 200
+
+# Caminhos base
+INPUT_DIR = Path("upload/ped")
+OUTPUT_DIR = Path("outputs/td_ped")
+JSON_CHAVES_PLANEJAMENTO = Path("static/js/chaves_planejamento.json")
+JSON_FORCAR_CHAVE = Path("static/js/forcar_chave.json")
+JSON_CASOS_ESPECIFICOS = Path("static/js/chave_arrumar.json")
+
+# Cabeçalho mínimo esperado (normalizado)
+HEADER_PADRAO_NORMALIZADO = ["EXERCICIO", "NO PED", "NO PED ESTORNO ESTORNADO", "NO EMP", "NO CAD", "NO NOBLIST", "NO OS"]
+HEADER_PADRAO_PREFIXOS = ["EXERCICIO", "N", "N", "N", "N", "N", "N"]
+
+# Nomes de colunas canônicos (lower normalizado -> nome final)
+COLUNAS_CANONICAS = {
+    "exercicio": "Exercício",
+    "historico": "Histórico",
+    "n ped": "Nº PED",
+    "n ped estorno estornado": "Nº PED Estorno/Estornado",
+    "n emp": "Nº EMP",
+    "n cad": "Nº CAD",
+    "n noblist": "Nº NOBLIST",
+    "n os": "Nº OS",
+    "dotacao orcamentaria": "Dotação Orçamentária",
+    "data solicitacao": "Data Solicitação",
+    "data criacao": "Data Criação",
+    "data autorizacao": "Data Autorização",
+    "data da licitacao": "Data da Licitação",
+    "data hora cadastro autorizacao": "Data/Hora Cadastro Autorização",
+    "exercicio de competencia da folha de pagamento": "Exercício de Competência da Folha de Pagamento",
+    "natureza de despesa": "Natureza de Despesa",
+}
+
+
+def ensure_dirs() -> None:
+    for base in (INPUT_DIR, OUTPUT_DIR, INPUT_DIR / "tmp", OUTPUT_DIR / "tmp"):
+        base.mkdir(parents=True, exist_ok=True)
+
+
+def move_existing_to_tmp(base_dir: Path) -> None:
+    tmp = base_dir / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    for f in base_dir.glob("*.xlsx"):
+        dest = tmp / f"{f.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}{f.suffix}"
+        try:
+            f.rename(dest)
+        except OSError:
+            pass
+
+
+def limpar_historico(texto: str) -> str:
+    if not isinstance(texto, str):
+        return "NÃO INFORMADO"
+    texto = texto.replace("_x000D_", " ").replace("\n", " ").replace("\r", " ")
+    texto = re.sub(r"\s+\*\s+", " * ", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto if texto else "NÃO INFORMADO"
+
+
+def corrigir_caracteres(texto: str) -> str:
+    if not isinstance(texto, str):
+        return "NÃO INFORMADO"
+    texto = re.sub(r"[^\w\s,./\-|*]", "", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto if texto else "NÃO INFORMADO"
+
+
+def canonizar_nome_coluna(nome: str) -> str:
+    if not isinstance(nome, str):
+        return nome
+    nome_norm = unicodedata.normalize("NFKD", nome)
+    nome_norm = "".join(ch for ch in nome_norm if not unicodedata.combining(ch))
+    nome_norm = re.sub(r"[^a-zA-Z0-9]+", " ", nome_norm).strip().lower()
+    return COLUNAS_CANONICAS.get(nome_norm, nome.strip())
+
+
+def extrair_ano(valor: Any) -> int | None:
+    if valor is None:
+        return None
+    s = str(valor).strip()
+    if not s:
+        return None
+    digits = re.sub(r"\D", "", s)
+    if len(digits) >= 4:
+        return int(digits[-4:])
+    return None
+
+
+def normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(columns={col: canonizar_nome_coluna(col) for col in df.columns})
+
+
+def encontrar_coluna_prefixo(df: pd.DataFrame, prefixo: str) -> str | None:
+    prefixo = (prefixo or "").lower()
+    for col in df.columns:
+        if isinstance(col, str) and col.lower().startswith(prefixo):
+            return col
+    return None
+
+
+def carregar_chaves_planejamento(json_path: Path) -> list[str]:
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as file:
+            chaves = json.load(file)
+        return [corrigir_caracteres(re.sub(r"\s+", " ", chave.strip())) for chave in chaves]
+    except Exception as e:
+        print(f"Erro ao carregar as chaves de planejamento: {e}")
+        return []
+
+
+def carregar_casos_especificos(json_path: Path) -> dict[str, str]:
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as file:
+            casos_especificos = json.load(file)
+        casos_especificos = {corrigir_caracteres(k): corrigir_caracteres(v) for k, v in casos_especificos.items()}
+        print(f"Casos específicos carregados do arquivo: {json_path}")
+        return casos_especificos
+    except Exception as e:
+        print(f"Erro ao carregar casos específicos: {e}")
+        return {}
+
+
+def carregar_forcar_chave(json_path: Path) -> dict[str, str]:
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as file:
+            mapping = json.load(file)
+        return {str(k).strip(): corrigir_caracteres(str(v).strip()) for k, v in mapping.items()}
+    except Exception as e:
+        print(f"Erro ao carregar forcar_chave: {e}")
+        return {}
+
+
+def extrair_chave_valida_do_historico(hist_limpo: str, chaves_planejamento: list[str]) -> str | None:
+    for chave in chaves_planejamento:
+        if chave in hist_limpo:
+            return chave
+    return None
+
+
+def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[str], casos_especificos: dict[str, str]) -> pd.DataFrame:
+    def encontrar_chave(row: pd.Series) -> str:
+        hist = row.get("Histórico", "")
+        ped_estorno = row.get("Nº PED Estorno/Estornado", "").upper()
+        num_emp = row.get("Nº EMP", "").upper()
+
+        if ped_estorno != "NÃO INFORMADO" or num_emp != "NÃO INFORMADO":
+            return "IGNORADO"
+
+        if hist == "NÃO INFORMADO":
+            return "NÃO IDENTIFICADO"
+
+        hist_limpo = re.sub(r"\s+", " ", hist).strip()
+        if not hist_limpo.startswith("*"):
+            hist_limpo = "* " + hist_limpo
+        if not hist_limpo.endswith("*"):
+            hist_limpo += " *"
+        hist_limpo = re.sub(r"\s*\*\s*", " * ", hist_limpo)
+
+        chave_direta = extrair_chave_valida_do_historico(hist_limpo, chaves_planejamento)
+        if chave_direta:
+            return chave_direta
+
+        for caso, chave in casos_especificos.items():
+            if caso in hist_limpo:
+                return chave
+
+        partes = re.findall(r"\*([^*]+)", hist_limpo)
+        if len(partes) >= 7:
+            trecho = " * ".join(partes[:7])
+            match = process.extractOne(trecho, chaves_planejamento, scorer=fuzz.WRatio, score_cutoff=95)
+            if match:
+                print(f"Chave aproximada identificada por fuzzy: {match[0]}")
+                return match[0]
+        return "NÃO IDENTIFICADO"
+
+    df["Chave"] = df.apply(encontrar_chave, axis=1)
+    return df
+
+
+def forcar_chaves_manualmente(df: pd.DataFrame, substituicoes: dict[str, str]) -> pd.DataFrame:
+    if "Nº PED" in df.columns and substituicoes:
+        df["Nº PED"] = df["Nº PED"].astype(str).str.strip()
+        mask = df["Nº PED"].isin(substituicoes.keys())
+        if mask.any():
+            df.loc[mask, "Chave de Planejamento"] = df.loc[mask, "Nº PED"].map(substituicoes)
+    return df
+
+
+def converter_tipos(df: pd.DataFrame) -> pd.DataFrame:
+    colunas_monetarias = ["Valor PED", "Valor do Estorno"]
+    colunas_datas = ["Data da Licitação", "Data Solicitação", "Data Criação", "Data Autorização", "Data/Hora Cadastro Autorização"]
+    colunas_numericas = ["Exercício de Competência da Folha de Pagamento"]
+
+    df.replace({"": "NÃO INFORMADO", None: "NÃO INFORMADO"}, inplace=True)
+
+    def parse_valor_monetario(v: Any) -> float:
+        if pd.isna(v):
+            return 0.00
+        s = str(v).strip()
+        if s in ("", "NÃO INFORMADO"):
+            return 0.00
+        s_num = re.sub(r"[^\d,.-]", "", s)
+        if "," in s_num:
+            s_num = s_num.replace(".", "").replace(",", ".")
+        try:
+            return round(float(s_num), 2)
+        except ValueError:
+            return 0.00
+
+    def formatar_real_ptbr(valor_float: float) -> str:
+        s = f"{valor_float:,.2f}"
+        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    for col in colunas_monetarias:
+        if col in df.columns:
+            df[col] = df[col].apply(parse_valor_monetario)
+            df[col] = df[col].apply(formatar_real_ptbr)
+
+    def formatar_data_br(x: Any) -> str:
+        if pd.isna(x):
+            return "00/00/0000"
+        if isinstance(x, pd.Timestamp):
+            if x.hour == 0 and x.minute == 0 and x.second == 0 and x.microsecond == 0:
+                return x.strftime("%d/%m/%Y")
+            return x.strftime("%d/%m/%Y %H:%M:%S")
+        return "00/00/0000"
+
+    for col in colunas_datas:
+        if col in df.columns:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Could not infer format")
+                serie_str = df[col].astype(str).str.strip()
+                if serie_str.str.match(r"\d{4}-\d{2}-\d{2}").all():
+                    df[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=False)
+                else:
+                    df[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=True)
+            df[col] = df[col].apply(formatar_data_br)
+
+    for col in colunas_numericas:
+        if col in df.columns:
+            df[col] = df[col].fillna(0)
+
+    return df
+
+
+def adicionar_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    novas_colunas_planejamento = ["Região", "Subfunção + UG", "ADJ", "Macropolítica", "Pilar", "Eixo", "Política_Decreto"]
+    novas_colunas_orcamentarias = [
+        "Função",
+        "Subfunção",
+        "Programa de Governo",
+        "PAOE",
+        "Natureza de Despesa",
+        "Cat.Econ",
+        "Grupo",
+        "Modalidade",
+        "Fonte",
+        "Iduso",
+        "Elemento",
+        "Nome do Elemento",
+    ]
+    ex_col = encontrar_coluna_prefixo(df, "exerc")
+
+    for col in novas_colunas_planejamento:
+        if col not in df.columns and ex_col:
+            df.insert(df.columns.get_loc(ex_col), col, "N??O INFORMADO")
+
+    if "Dotação Orçamentária" in df.columns:
+        posicao_insercao = df.columns.get_loc("Dotação Orçamentária") + 1
+        for col in novas_colunas_orcamentarias:
+            if col not in df.columns:
+                df.insert(posicao_insercao, col, "NÃO INFORMADO")
+                posicao_insercao += 1
+
+    if all(col in df.columns for col in ["Elemento", "Nome do Elemento", "Modalidade", "Fonte"]):
+        colunas = df.columns.tolist()
+        colunas.remove("Elemento")
+        colunas.remove("Nome do Elemento")
+        idx = colunas.index("Modalidade")
+        colunas.insert(idx + 1, "Elemento")
+        colunas.insert(idx + 2, "Nome do Elemento")
+        df = df[colunas]
+
+    hist_col = encontrar_coluna_prefixo(df, "hist")
+    if hist_col:
+        df[hist_col] = df[hist_col].apply(limpar_historico)
+        colunas = df.columns.tolist()
+        colunas.remove("Credor")
+        colunas.remove("Nome do Credor")
+        idx = colunas.index("Histórico")
+        colunas.insert(idx + 1, "Credor")
+        colunas.insert(idx + 2, "Nome do Credor")
+        df = df[colunas]
+
+    return df
+
+
+def preencher_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    def extrair_valores(chave: str, partes: int = 7) -> list[str]:
+        if not isinstance(chave, str) or chave.strip() in ["", "NÃO IDENTIFICADO", "NÃO INFORMADO"]:
+            return ["NÃO INFORMADO"] * partes
+        pedacos = [p.strip() for p in chave.split("*") if p.strip()]
+        pedacos += ["NÃO INFORMADO"] * (partes - len(pedacos))
+        return pedacos[:partes]
+
+    ano = None
+    ex_col = encontrar_coluna_prefixo(df, "exerc")
+    if ex_col:
+        anos = df[ex_col].apply(extrair_ano).dropna()
+        if not anos.empty:
+            ano = int(anos.mode().iloc[0])
+
+    if ano and ano >= 2026:
+        df["Chave"] = df["Chave"]
+    else:
+        valores_extraidos = df["Chave"].apply(lambda x: extrair_valores(x, partes=7))
+        valores_extraidos = pd.DataFrame(
+            valores_extraidos.tolist(),
+            columns=["Região", "Subfunção + UG", "ADJ", "Macropolítica", "Pilar", "Eixo", "Política_Decreto"],
+            index=df.index,
+        )
+        df.update(valores_extraidos)
+
+    def extrair_dotacao(dot: str) -> list[str]:
+        if not isinstance(dot, str) or dot.strip() == "":
+            return ["NÃO INFORMADO"] * 7
+        partes = dot.split(".")
+        partes += [""] * (11 - len(partes))
+        return [partes[2], partes[3], partes[4], partes[5], partes[7], partes[8], partes[9]]
+
+    if "Dotação Orçamentária" in df.columns:
+        valores_dotacao = df["Dotação Orçamentária"].apply(lambda x: extrair_dotacao(x))
+        df_dot = pd.DataFrame(
+            valores_dotacao.tolist(),
+            columns=["Função", "Subfunção", "Programa de Governo", "PAOE", "Natureza de Despesa", "Fonte", "Iduso"],
+            index=df.index,
+        )
+        df.update(df_dot)
+
+    def extrair_natureza(n: str) -> list[str]:
+        if not isinstance(n, str) or len(n) < 4:
+            return ["NÃO INFORMADO"] * 3
+        return [n[0], n[1], n[2:4]]
+
+    if "Natureza de Despesa" in df.columns:
+        natureza = df["Natureza de Despesa"].apply(lambda x: extrair_natureza(x))
+        df_nat = pd.DataFrame(natureza.tolist(), columns=["Cat.Econ", "Grupo", "Modalidade"], index=df.index)
+        df.update(df_nat)
+
+    if all(col in df.columns for col in ["Nº PED Estorno/Estornado", "Nº EMP"]):
+        df = df[df["Nº PED Estorno/Estornado"] == "NÃO INFORMADO"]
+        df = df[df["Nº EMP"] == "NÃO INFORMADO"]
+
+    return df
+
+
+def ajustar_largura_colunas(writer: pd.ExcelWriter, df: pd.DataFrame, sheet_name: str, largura_historico: int = 120) -> None:
+    worksheet = writer.sheets[sheet_name]
+    hist_col = encontrar_coluna_prefixo(df, "hist")
+    if hist_col:
+        col_index = df.columns.get_loc(hist_col)
+        worksheet.set_column(col_index, col_index, largura_historico)
+
+    for i, col in enumerate(df.columns):
+        if hist_col and col == hist_col:
+            continue
+        max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
+        worksheet.set_column(i, i, max_length)
+
+
+def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> int | None:
+    def normalizar(texto: Any) -> str:
+        if not isinstance(texto, str):
+            return ""
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+        texto = re.sub(r"[^\w\s]", " ", texto)
+        texto = re.sub(r"\s+", " ", texto).strip().upper()
+        return texto
+
+    header_normalizado = HEADER_PADRAO_NORMALIZADO
+    header_prefixos = HEADER_PADRAO_PREFIXOS
+
+    for idx, row in df_raw.iterrows():
+        valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(HEADER_PADRAO_NORMALIZADO))]
+        if valores == header_normalizado:
+            return idx
+        if valores and valores[0].startswith("EXERCICIO"):
+            if all(valores[i].startswith(header_prefixos[i]) for i in range(len(header_prefixos))):
+                return idx
+
+    print("DEBUG: cabecalho esperado (normalizado):", header_normalizado)
+    limite = min(10, len(df_raw))
+    for idx in range(limite):
+        raw = [df_raw.iloc[idx, j] if j < df_raw.shape[1] else "" for j in range(len(HEADER_PADRAO_NORMALIZADO))]
+        norm = [normalizar(val) for val in raw]
+        print(f"DEBUG linha {idx}: raw={raw} | norm={norm}")
+
+    return None
+
+
+def preparar_aba_ped(file_path: Path) -> pd.DataFrame | None:
+    try:
+        xls = pd.ExcelFile(file_path)
+        df_raw = pd.read_excel(xls, sheet_name=xls.sheet_names[0], header=None, dtype=str)
+
+        idx_cabecalho = encontrar_linha_cabecalho(df_raw)
+        if idx_cabecalho is None:
+            print(f"Cabecalho padrao nao encontrado em {file_path}")
+            return None
+
+        cabecalho = [str(c).strip() if pd.notna(c) else "" for c in df_raw.iloc[idx_cabecalho].tolist()]
+        df = df_raw.iloc[idx_cabecalho + 1 :].copy()
+        df.columns = cabecalho
+        df = df.dropna(how="all")
+        df = normalizar_colunas(df)
+        return df
+    except Exception as e:
+        print(f"Erro ao preparar aba 'ped' para {file_path}: {e}")
+        return None
+
+
+def processar_planilha(
+    df: pd.DataFrame, chaves_planejamento: list[str], casos_especificos: dict[str, str], forcar_map: dict[str, str]
+) -> pd.DataFrame | None:
+    try:
+        ano = None
+        ex_col = encontrar_coluna_prefixo(df, "exerc")
+        if ex_col:
+            anos = df[ex_col].apply(extrair_ano).dropna()
+            if not anos.empty:
+                ano = int(anos.mode().iloc[0])
+        hist_col = encontrar_coluna_prefixo(df, "hist")
+        if hist_col:
+            df[hist_col] = df[hist_col].apply(limpar_historico)
+        cols_obj = df.select_dtypes(include=["object"]).columns
+        df[cols_obj] = df[cols_obj].apply(lambda col: col.map(corrigir_caracteres))
+
+        df = converter_tipos(df)
+        df = identificar_chave_planejamento(df, chaves_planejamento, casos_especificos)
+        df = forcar_chaves_manualmente(df, forcar_map)
+
+        if "Chave" in df.columns:
+            colunas = df.columns.tolist()
+            colunas.insert(0, colunas.pop(colunas.index("Chave")))
+            df = df[colunas]
+
+        if not ano or ano < 2026:
+            df = adicionar_novas_colunas(df)
+        df = preencher_novas_colunas(df)
+
+        # Ajusta colunas "Chave" vs "Chave de Planejamento" conforme ano para a planilha tratada
+        if ano and ano >= 2026:
+            df["Chave de Planejamento"] = df.get("Chave de Planejamento", "-")
+        else:
+            df["Chave de Planejamento"] = df.get("Chave", "-")
+            df["Chave"] = "-"
+
+        df = df.replace(
+            {
+                "NÃO INFORMADO": "-",
+                "NÃO IDENTIFICADO": "-",
+                "NÇŸO INFORMADO": "-",
+                "NÇŸO IDENTIFICADO": "-",
+                "NÇO INFORMADO": "-",
+                "NÇO IDENTIFICADO": "-",
+                "N€YO INFORMADO": "-",
+                "N€YO IDENTIFICADO": "-",
+            },
+            regex=False,
+        )
+
+        return df
+    except Exception as e:
+        print(f"Erro ao processar a planilha: {e}")
+        return None
+
+
+def salvar_planilhas(ped_df: pd.DataFrame, tratado_df: pd.DataFrame, file_path: Path) -> Path:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    move_existing_to_tmp(OUTPUT_DIR)
+
+    output_file = OUTPUT_DIR / f"{file_path.stem}_Tratado.xlsx"
+    writer = pd.ExcelWriter(output_file, engine="xlsxwriter")
+
+    ped_df.to_excel(writer, index=False, sheet_name="ped")
+    tratado_df.to_excel(writer, index=False, sheet_name="ped_tratado")
+
+    ajustar_largura_colunas(writer, ped_df, "ped", largura_historico=60)
+    ajustar_largura_colunas(writer, tratado_df, "ped_tratado", largura_historico=120)
+
+    writer.close()
+    return output_file
+
+
+DF_TO_DB = {
+    "Chave": "chave",
+    "Chave de Planejamento": "chave_planejamento",
+    "Região": "regiao",
+    "Subfunção + UG": "subfuncao_ug",
+    "ADJ": "adj",
+    "Macropolítica": "macropolitica",
+    "Pilar": "pilar",
+    "Eixo": "eixo",
+    "Política_Decreto": "politica_decreto",
+    "Exercício": "exercicio",
+    "Histórico": "historico",
+    "Nº PED": "numero_ped",
+    "Nº PED Estorno/Estornado": "numero_ped_estorno",
+    "Nº EMP": "numero_emp",
+    "Nº CAD": "numero_cad",
+    "Nº NOBLIST": "numero_noblist",
+    "Nº OS": "numero_os",
+    "Convênio": "convenio",
+    "Nº Processo Orçamentário de Pagamento": "numero_processo_orcamentario_pagamento",
+    "Valor PED": "valor_ped",
+    "Valor do Estorno": "valor_estorno",
+    "Indicativo de Licitação de Exercícios Anteriores": "indicativo_licitacao_exercicios_anteriores",
+    "Data da Licitação": "data_licitacao",
+    "Liberado Fisco Estadual": "liberado_fisco_estadual",
+    "Situação": "situacao",
+    "UO": "uo",
+    "Nome da Unidade Orçamentária": "nome_unidade_orcamentaria",
+    "UG": "ug",
+    "Nome da Unidade Gestora": "nome_unidade_gestora",
+    "Data Solicitação": "data_solicitacao",
+    "Data Criação": "data_criacao",
+    "Tipo Empenho": "tipo_empenho",
+    "Dotação Orçamentária": "dotacao_orcamentaria",
+    "Função": "funcao",
+    "Subfunção": "subfuncao",
+    "Programa de Governo": "programa_governo",
+    "PAOE": "paoe",
+    "Natureza de Despesa": "natureza_despesa",
+    "Cat.Econ": "cat_econ",
+    "Grupo": "grupo",
+    "Modalidade": "modalidade",
+    "Elemento": "elemento",
+    "Nome do Elemento": "nome_elemento",
+    "Fonte": "fonte",
+    "Iduso": "iduso",
+    "Nº Emenda (EP)": "numero_emenda_ep",
+    "Autor da Emenda (EP)": "autor_emenda_ep",
+    "Nº CAC": "numero_cac",
+    "Licitação": "licitacao",
+    "Usuário Responsável": "usuario_responsavel",
+    "Credor": "credor",
+    "Nome do Credor": "nome_credor",
+    "Data Autorização": "data_autorizacao",
+    "Data/Hora Cadastro Autorização": "data_hora_cadastro_autorizacao",
+    "Tipo de Despesa": "tipo_despesa",
+    "Nº ABJ": "numero_abj",
+    "Nº Processo do Sequestro Judicial": "numero_processo_sequestro_judicial",
+    "Indicativo de Entrega imediata - § 4º  Art. 62 Lei 8.666": "indicativo_entrega_imediata",
+    "Indicativo de contrato": "indicativo_contrato",
+    "Código UO Extinta": "codigo_uo_extinta",
+    "Devolução GCV": "devolucao_gcv",
+    "Mês de Competência da Folha de Pagamento": "mes_competencia_folha_pagamento",
+    "Exercício de Competência da Folha de Pagamento": "exercicio_competencia_folha",
+    "Obrigação Patronal": "obrigacao_patronal",
+    "Tipo de Obrigação Patronal": "tipo_obrigacao_patronal",
+    "Nº NLA": "numero_nla",
+}
+
+
+def _clean_val(val: Any) -> Any:
+    try:
+        if pd.isna(val):
+            return None
+    except Exception:
+        pass
+    if isinstance(val, str) and val.strip() == "-":
+        return None
+    return val
+
+
+def _parse_valor_db(valor: Any) -> float | None:
+    """
+    Converte strings formatadas (pt-BR) em float para inserir em colunas numéricas.
+    Retorna None para valores vazios/inválidos.
+    """
+    if valor is None:
+        return None
+    s = str(valor).strip()
+    if s in ("", "-", "NÃO INFORMADO", "NÃO IDENTIFICADO"):
+        return None
+    s_num = re.sub(r"[^\d,.-]", "", s)
+    if "," in s_num:
+        s_num = s_num.replace(".", "").replace(",", ".")
+    try:
+        return float(s_num)
+    except ValueError:
+        return None
+
+
+def _parse_data_db(valor: Any) -> datetime | None:
+    """
+    Converte datas em dd/mm/yyyy (opcional hh:mm:ss) para datetime ou retorna None.
+    Evita inserir placeholders como 00/00/0000.
+    """
+    if valor is None:
+        return None
+    if isinstance(valor, datetime):
+        return valor
+    s = str(valor).strip()
+    if not s or s in ("-", "00/00/0000", "00/00/0000 00:00:00"):
+        return None
+    # normaliza separador
+    s = s.replace("-", "/")
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def montar_registros_para_db(df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int) -> list[dict[str, Any]]:
+    registros: list[dict[str, Any]] = []
+    rows = df.to_dict(orient="records")
+    for row in rows:
+        exercicio_val = None
+        for k in row:
+            if isinstance(k, str) and k.lower().startswith("exerc"):
+                exercicio_val = row.get(k)
+                break
+        ano = extrair_ano(exercicio_val)
+        payload: dict[str, Any] = {}
+        for col_df, col_db in DF_TO_DB.items():
+            payload[col_db] = _clean_val(row.get(col_df))
+        if ano:
+            payload["exercicio"] = str(ano)
+        # Ajuste de chave x chave_planejamento conforme exercicio
+        if ano and ano >= 2026:
+            payload["chave"] = _clean_val(row.get("Chave") or row.get("Chave de Planejamento"))
+            payload["chave_planejamento"] = None
+        else:
+            payload["chave_planejamento"] = _clean_val(row.get("Chave de Planejamento") or row.get("Chave"))
+            payload["chave"] = None
+        # Campos monetarios em float para evitar erro de conversao no DB
+        if "valor_ped" in payload:
+            payload["valor_ped"] = _parse_valor_db(payload["valor_ped"])
+        if "valor_estorno" in payload:
+            payload["valor_estorno"] = _parse_valor_db(payload["valor_estorno"])
+        # Campos de data convertidos para datetime ou None
+        for k in (
+            "data_solicitacao",
+            "data_criacao",
+            "data_autorizacao",
+            "data_licitacao",
+            "data_hora_cadastro_autorizacao",
+        ):
+            if k in payload:
+                payload[k] = _parse_data_db(payload[k])
+        payload["upload_id"] = upload_id
+        payload["data_atualizacao"] = datetime.utcnow()
+        payload["data_arquivo"] = data_arquivo
+        payload["user_email"] = user_email
+        payload["ativo"] = True
+        registros.append(payload)
+    return registros
+
+def update_database(df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int) -> int:
+    insert_sql = text(
+        """
+        INSERT INTO ped (
+            upload_id, chave, regiao, subfuncao_ug, adj, macropolitica, pilar, eixo, politica_decreto,
+            exercicio, historico, numero_ped, numero_ped_estorno, numero_emp, numero_cad, numero_noblist,
+            numero_os, convenio, indicativo_licitacao_exercicios_anteriores, liberado_fisco_estadual, situacao,
+            uo, nome_unidade_orcamentaria, ug, nome_unidade_gestora, numero_processo_orcamentario_pagamento,
+            valor_ped, valor_estorno, dotacao_orcamentaria, funcao, subfuncao, programa_governo, paoe,
+            natureza_despesa, cat_econ, grupo, modalidade, elemento, nome_elemento, fonte, iduso,
+            numero_emenda_ep, autor_emenda_ep, numero_cac, licitacao, usuario_responsavel, data_solicitacao,
+            data_criacao, data_autorizacao, data_licitacao, data_hora_cadastro_autorizacao, tipo_empenho,
+            tipo_despesa, numero_abj, numero_processo_sequestro_judicial, indicativo_entrega_imediata,
+            indicativo_contrato, codigo_uo_extinta, devolucao_gcv, mes_competencia_folha_pagamento,
+            exercicio_competencia_folha, obrigacao_patronal, tipo_obrigacao_patronal, numero_nla, credor,
+            nome_credor, chave_planejamento, data_atualizacao, data_arquivo, user_email, ativo
+        )
+        VALUES (
+            :upload_id, :chave, :regiao, :subfuncao_ug, :adj, :macropolitica, :pilar, :eixo, :politica_decreto,
+            :exercicio, :historico, :numero_ped, :numero_ped_estorno, :numero_emp, :numero_cad, :numero_noblist,
+            :numero_os, :convenio, :indicativo_licitacao_exercicios_anteriores, :liberado_fisco_estadual, :situacao,
+            :uo, :nome_unidade_orcamentaria, :ug, :nome_unidade_gestora, :numero_processo_orcamentario_pagamento,
+            :valor_ped, :valor_estorno, :dotacao_orcamentaria, :funcao, :subfuncao, :programa_governo, :paoe,
+            :natureza_despesa, :cat_econ, :grupo, :modalidade, :elemento, :nome_elemento, :fonte, :iduso,
+            :numero_emenda_ep, :autor_emenda_ep, :numero_cac, :licitacao, :usuario_responsavel, :data_solicitacao,
+            :data_criacao, :data_autorizacao, :data_licitacao, :data_hora_cadastro_autorizacao, :tipo_empenho,
+            :tipo_despesa, :numero_abj, :numero_processo_sequestro_judicial, :indicativo_entrega_imediata,
+            :indicativo_contrato, :codigo_uo_extinta, :devolucao_gcv, :mes_competencia_folha_pagamento,
+            :exercicio_competencia_folha, :obrigacao_patronal, :tipo_obrigacao_patronal, :numero_nla, :credor,
+            :nome_credor, :chave_planejamento, :data_atualizacao, :data_arquivo, :user_email, :ativo
+        )
+        """
+    )
+
+    try:
+        db.session.execute(text("UPDATE ped SET ativo = 0 WHERE ativo = 1"))
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        raise
+
+    registros = montar_registros_para_db(df, data_arquivo, user_email, upload_id)
+    total = 0
+    for start in range(0, len(registros), BATCH_SIZE):
+        chunk = registros[start : start + BATCH_SIZE]
+        try:
+            db.session.execute(insert_sql, chunk)
+            db.session.commit()
+            total += len(chunk)
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+    return total
+
+
+def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int) -> tuple[int, Path]:
+    ensure_dirs()
+    chaves_planejamento = carregar_chaves_planejamento(JSON_CHAVES_PLANEJAMENTO)
+    casos_especificos = carregar_casos_especificos(JSON_CASOS_ESPECIFICOS)
+    forcar_map = carregar_forcar_chave(JSON_FORCAR_CHAVE)
+
+    ped_df = preparar_aba_ped(file_path)
+    if ped_df is None:
+        raise RuntimeError("Falha ao identificar cabeçalho ou ler a aba ped.")
+
+    tratado_df = processar_planilha(ped_df.copy(), chaves_planejamento, casos_especificos, forcar_map)
+    if tratado_df is None:
+        raise RuntimeError("Falha ao tratar a planilha PED.")
+
+    output_path = salvar_planilhas(ped_df, tratado_df, file_path)
+    total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+    return total, output_path

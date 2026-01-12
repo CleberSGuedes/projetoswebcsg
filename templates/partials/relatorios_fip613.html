@@ -1,0 +1,99 @@
+<div class="grid">
+  <div class="card fip-card">
+    <div class="card-title">FIP 613</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+      <div class="muted" id="fip613-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box" id="fip613-totais">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>PAOE:</span> <strong id="tot-paoe">-</strong></div>
+          <div class="totais-row"><span>Grupo:</span> <strong id="tot-grupo">-</strong></div>
+          <div class="totais-row"><span>Créd. Autorizado:</span> <strong id="tot-cred-autorizado">0</strong></div>
+          <div class="totais-row"><span>Bloqueado/Conting.:</span> <strong id="tot-bloqueado">0</strong></div>
+          <div class="totais-row"><span>Teto Disponível:</span> <strong id="tot-teto">-</strong></div>
+          <div class="totais-row"><span>Saldo de Dotação:</span> <strong id="tot-saldo-dotacao">-</strong></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn sm compact" id="fip613-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="fip613-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table fip-table" id="fip613-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>UO</th>
+            <th>UG</th>
+            <th>Função</th>
+            <th>Subfunção</th>
+            <th>Programa</th>
+            <th>Projeto/Atividade</th>
+            <th>Regional</th>
+            <th>Natureza de Despesa</th>
+            <th>Fonte de Recurso</th>
+            <th>Iduso</th>
+            <th>Tipo de Recurso</th>
+            <th>Dotação Inicial</th>
+            <th>Créd. Suplementar</th>
+            <th>Créd. Especial</th>
+            <th>Créd. Extraordinário</th>
+            <th>Redução</th>
+            <th>Créd. Autorizado</th>
+            <th>Bloqueado/Conting.</th>
+            <th>Reserva Empenho</th>
+            <th>Saldo de Destaque</th>
+            <th>Saldo Dotação</th>
+            <th>Empenhado</th>
+            <th>Liquidado</th>
+            <th>A liquidar</th>
+            <th>Valor Pago</th>
+            <th>Valor a Pagar</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="ug"></div></th>
+            <th><div class="multi-filter" data-col="funcao"></div></th>
+            <th><div class="multi-filter" data-col="subfuncao"></div></th>
+            <th><div class="multi-filter" data-col="programa"></div></th>
+            <th><div class="multi-filter" data-col="projeto_atividade"></div></th>
+            <th><div class="multi-filter" data-col="regional"></div></th>
+            <th><div class="multi-filter" data-col="natureza_despesa"></div></th>
+            <th><div class="multi-filter" data-col="fonte_recurso"></div></th>
+            <th><div class="multi-filter" data-col="iduso"></div></th>
+            <th><div class="multi-filter" data-col="tipo_recurso"></div></th>
+            <th><div class="multi-filter" data-col="dotacao_inicial"></div></th>
+            <th><div class="multi-filter" data-col="cred_suplementar"></div></th>
+            <th><div class="multi-filter" data-col="cred_especial"></div></th>
+            <th><div class="multi-filter" data-col="cred_extraordinario"></div></th>
+            <th><div class="multi-filter" data-col="reducao"></div></th>
+            <th><div class="multi-filter" data-col="cred_autorizado"></div></th>
+            <th><div class="multi-filter" data-col="bloqueado_conting"></div></th>
+            <th><div class="multi-filter" data-col="reserva_empenho"></div></th>
+            <th><div class="multi-filter" data-col="saldo_destaque"></div></th>
+            <th><div class="multi-filter" data-col="saldo_dotacao"></div></th>
+            <th><div class="multi-filter" data-col="empenhado"></div></th>
+            <th><div class="multi-filter" data-col="liquidado"></div></th>
+            <th><div class="multi-filter" data-col="a_liquidar"></div></th>
+            <th><div class="multi-filter" data-col="valor_pago"></div></th>
+            <th><div class="multi-filter" data-col="valor_a_pagar"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="fip613-page-size">Itens por página</label>
+        <select id="fip613-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="fip613-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>
+</div>
