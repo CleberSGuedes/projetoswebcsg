@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/proj5954/projetoswebcsg_app/
+    - /bin/cp -R * $DEPLOYPATH
