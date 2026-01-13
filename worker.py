@@ -11,6 +11,7 @@ from pathlib import Path
 
 from app import create_app
 from models import db, EmpUpload, NobUpload
+from sqlalchemy.exc import SQLAlchemyError
 from services.job_status import clear_cancel_flag, write_status
 
 EMP_INPUT_DIR = Path("upload/emp")
@@ -65,6 +66,30 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
     return payload
 
 
+def _commit_upload_filename(model_cls, upload_id: int, output_filename: str | None) -> None:
+    def _do_commit() -> None:
+        upload = db.session.get(model_cls, upload_id)
+        if not upload:
+            raise RuntimeError(f"Upload nao encontrado: {upload_id}")
+        upload.output_filename = str(output_filename or "")
+        db.session.commit()
+
+    try:
+        _do_commit()
+    except SQLAlchemyError as exc:
+        msg = str(exc)
+        if "MySQL server has gone away" in msg or "Packet sequence number wrong" in msg:
+            db.session.rollback()
+            db.session.remove()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            _do_commit()
+        else:
+            raise
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Background worker for heavy uploads.")
     parser.add_argument("--kind", choices=["emp", "nob"], required=True)
@@ -80,8 +105,7 @@ def _run_emp(upload_id: int) -> None:
     if not file_path:
         raise RuntimeError(f"Arquivo EMP nao encontrado: {Path(EMP_INPUT_DIR) / upload.stored_filename}")
     payload = _run_node("emp", file_path, upload.user_email, upload.data_arquivo, upload.id)
-    upload.output_filename = str(payload.get("output_filename") or "")
-    db.session.commit()
+    _commit_upload_filename(EmpUpload, upload_id, payload.get("output_filename"))
     write_status(
         "emp",
         upload_id,
@@ -99,8 +123,7 @@ def _run_nob(upload_id: int) -> None:
     if not file_path:
         raise RuntimeError(f"Arquivo NOB nao encontrado: {Path(NOB_INPUT_DIR) / upload.stored_filename}")
     payload = _run_node("nob", file_path, upload.user_email, upload.data_arquivo, upload.id)
-    upload.output_filename = str(payload.get("output_filename") or "")
-    db.session.commit()
+    _commit_upload_filename(NobUpload, upload_id, payload.get("output_filename"))
     write_status(
         "nob",
         upload_id,

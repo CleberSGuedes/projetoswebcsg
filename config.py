@@ -87,7 +87,11 @@ class Config:
     else:
         SQLALCHEMY_DATABASE_URI = build_mysql_sqlalchemy_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "280")),
+        "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    }
 
     MAIL_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     MAIL_PORT = int(os.getenv("SMTP_PORT", "587"))

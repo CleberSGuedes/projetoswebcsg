@@ -943,5 +943,16 @@ def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id:
 
     tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
     output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
-    total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+    try:
+        total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+    except SQLAlchemyError as exc:
+        if "Packet sequence number wrong" in str(exc):
+            db.session.remove()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+        else:
+            raise
     return total, output_path
