@@ -817,7 +817,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatorio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       return last.status || null;
     } catch (err) {
@@ -856,7 +856,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatorio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -905,7 +905,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatorio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       return last.status || null;
     } catch (err) {
@@ -954,7 +954,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relatorio";
+  const viewLabel = "Ver Relatório";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1192,7 +1192,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatorio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1338,7 +1338,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatorio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1432,7 +1432,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatorio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");
@@ -1804,8 +1804,7 @@
         if (!res.ok) throw new Error(data.error || "Falha ao calcular saldo.");
         saldoInput.value = formatSaldo(data.saldo);
         if (saldoInfo) {
-          const count = data.plan21_count ?? 0;
-          saldoInfo.textContent = `Linhas plan21_nger: ${count}`;
+          saldoInfo.textContent = "";
         }
         if (saldoDebug) {
           const pedCount = data.ped_count ?? 0;
@@ -3427,12 +3426,10 @@
         const res = await fetch("/api/relatorios/emp");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
-        allData.rows = (data.data || []).map((r) => {
-          const ex = Number(r.exercicio || 0);
-          const chaveDisplay =
-            (ex >= 2026 ? r.chave : r.chave_planejamento) || r.chave_planejamento || r.chave || "";
-          return { ...r, chave_display: chaveDisplay };
-        });
+          allData.rows = (data.data || []).map((r) => {
+            const chaveDisplay = r.chave || r.chave_planejamento || "";
+            return { ...r, chave_display: chaveDisplay };
+          });
         filteredRows = allData.rows;
         setOptions(allData.rows);
         render();
@@ -3448,8 +3445,7 @@
           `;
         }
         if (chaveHeader) {
-          const has2026 = allData.rows.some((r) => Number(r.exercicio || 0) >= 2026 && r.chave);
-          chaveHeader.textContent = has2026 ? "Chave" : "Chave de Planejamento";
+          chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
       } catch (err) {
         if (meta) meta.textContent = err.message;
@@ -4473,9 +4469,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
         allData.rows = (data.data || []).map((r) => {
-          const ex = Number(r.exercicio || 0);
-          const chaveDisplay =
-            (ex >= 2026 ? r.chave : r.chave_planejamento) || r.chave_planejamento || r.chave || "";
+          const chaveDisplay = r.chave || r.chave_planejamento || "";
           return { ...r, chave_display: chaveDisplay };
         });
         filteredRows = allData.rows;
@@ -4493,8 +4487,7 @@
           `;
         }
         if (chaveHeader) {
-          const has2026 = allData.rows.some((r) => Number(r.exercicio || 0) >= 2026 && r.chave);
-          chaveHeader.textContent = has2026 ? "Chave" : "Chave de Planejamento";
+          chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
       } catch (err) {
         if (meta) meta.textContent = err.message;

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -107,6 +107,16 @@ def extrair_ano(valor: Any) -> int | None:
     return None
 
 
+def contar_partes_chave(chave: Any) -> int:
+    if not isinstance(chave, str):
+        return 0
+    texto = chave.strip()
+    if texto in ("", "-", "NÃO INFORMADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÇO IDENTIFICADO"):
+        return 0
+    partes = [p.strip() for p in texto.split("*") if p.strip()]
+    return len(partes)
+
+
 def normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns={col: canonizar_nome_coluna(col) for col in df.columns})
 
@@ -159,12 +169,36 @@ def extrair_chave_valida_do_historico(hist_limpo: str, chaves_planejamento: list
 
 
 def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[str], casos_especificos: dict[str, str]) -> pd.DataFrame:
+    def _vazio_emp_ou_estorno(v: Any) -> bool:
+        if v is None or (isinstance(v, (int, float)) and v == 0):
+            return True
+        v = str(v).strip().upper()
+        return v in (
+            "",
+            "NÃO INFORMADO",
+            "NAO INFORMADO",
+            "NÇO INFORMADO",
+            "N€O INFORMADO",
+            "N?O INFORMADO",
+            "-",
+            "0",
+            "0.0",
+            "0,0",
+        )
+
     def encontrar_chave(row: pd.Series) -> str:
         hist = row.get("Histórico", "")
-        ped_estorno = row.get("Nº PED Estorno/Estornado", "").upper()
-        num_emp = row.get("Nº EMP", "").upper()
+        ped_estorno = str(row.get("Nº PED Estorno/Estornado", "")).strip().upper()
+        num_emp = str(row.get("Nº EMP", "")).strip().upper()
+        exercicio_val = None
+        for k in row.index:
+            if isinstance(k, str) and k.lower().startswith("exerc"):
+                exercicio_val = row.get(k)
+                break
+        ano = extrair_ano(exercicio_val)
+        partes_planejamento = 8 if (ano and ano >= 2026) else 7
 
-        if ped_estorno != "NÃO INFORMADO" or num_emp != "NÃO INFORMADO":
+        if (not _vazio_emp_ou_estorno(ped_estorno)) or (not _vazio_emp_ou_estorno(num_emp)):
             return "IGNORADO"
 
         if hist == "NÃO INFORMADO":
@@ -177,7 +211,20 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
             hist_limpo += " *"
         hist_limpo = re.sub(r"\s*\*\s*", " * ", hist_limpo)
 
-        chave_direta = extrair_chave_valida_do_historico(hist_limpo, chaves_planejamento)
+        partes_hist = [p.strip() for p in hist_limpo.split("*") if p.strip()]
+        for i in range(len(partes_hist) - 3):
+            if partes_hist[i].upper() != "DOT":
+                continue
+            adj = partes_hist[i + 1]
+            ano = partes_hist[i + 2]
+            id_dot = partes_hist[i + 3]
+            if re.fullmatch(r"\d{4}", ano) and re.fullmatch(r"\d+", id_dot):
+                return f"* DOT * {adj} * {ano} * {id_dot} *"
+
+        chaves_preferidas = [c for c in chaves_planejamento if contar_partes_chave(c) == partes_planejamento]
+        chave_direta = extrair_chave_valida_do_historico(hist_limpo, chaves_preferidas)
+        if not chave_direta:
+            chave_direta = extrair_chave_valida_do_historico(hist_limpo, chaves_planejamento)
         if chave_direta:
             return chave_direta
 
@@ -186,9 +233,10 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
                 return chave
 
         partes = re.findall(r"\*([^*]+)", hist_limpo)
-        if len(partes) >= 7:
-            trecho = " * ".join(partes[:7])
-            match = process.extractOne(trecho, chaves_planejamento, scorer=fuzz.WRatio, score_cutoff=95)
+        if len(partes) >= partes_planejamento:
+            trecho = " * ".join(partes[:partes_planejamento])
+            base = chaves_preferidas or chaves_planejamento
+            match = process.extractOne(trecho, base, scorer=fuzz.WRatio, score_cutoff=95)
             if match:
                 print(f"Chave aproximada identificada por fuzzy: {match[0]}")
                 return match[0]
@@ -200,10 +248,13 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
 
 def forcar_chaves_manualmente(df: pd.DataFrame, substituicoes: dict[str, str]) -> pd.DataFrame:
     if "Nº PED" in df.columns and substituicoes:
+        if "_forcar_chave" not in df.columns:
+            df["_forcar_chave"] = False
         df["Nº PED"] = df["Nº PED"].astype(str).str.strip()
         mask = df["Nº PED"].isin(substituicoes.keys())
         if mask.any():
             df.loc[mask, "Chave de Planejamento"] = df.loc[mask, "Nº PED"].map(substituicoes)
+            df.loc[mask, "_forcar_chave"] = True
     return df
 
 
@@ -251,10 +302,13 @@ def converter_tipos(df: pd.DataFrame) -> pd.DataFrame:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message="Could not infer format")
                 serie_str = df[col].astype(str).str.strip()
-                if serie_str.str.match(r"\d{4}-\d{2}-\d{2}").all():
-                    df[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=False)
-                else:
-                    df[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=True)
+                mask_iso = serie_str.str.match(r"\d{4}-\d{2}-\d{2}")
+                parsed = pd.Series(index=serie_str.index, dtype="datetime64[ns]")
+                if mask_iso.any():
+                    parsed.loc[mask_iso] = pd.to_datetime(serie_str[mask_iso], errors="coerce", dayfirst=False)
+                if (~mask_iso).any():
+                    parsed.loc[~mask_iso] = pd.to_datetime(serie_str[~mask_iso], errors="coerce", dayfirst=True)
+                df[col] = parsed
             df[col] = df[col].apply(formatar_data_br)
 
     for col in colunas_numericas:
@@ -318,29 +372,20 @@ def adicionar_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
 
 def preencher_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
     def extrair_valores(chave: str, partes: int = 7) -> list[str]:
-        if not isinstance(chave, str) or chave.strip() in ["", "NÃO IDENTIFICADO", "NÃO INFORMADO"]:
+        if not isinstance(chave, str) or chave.strip() in ["", "NÃO IDENTIFICADO", "NÃO INFORMADO", "-"]:
             return ["NÃO INFORMADO"] * partes
         pedacos = [p.strip() for p in chave.split("*") if p.strip()]
-        pedacos += ["NÃO INFORMADO"] * (partes - len(pedacos))
+        if len(pedacos) < partes:
+            return ["NÃO INFORMADO"] * partes
         return pedacos[:partes]
 
-    ano = None
-    ex_col = encontrar_coluna_prefixo(df, "exerc")
-    if ex_col:
-        anos = df[ex_col].apply(extrair_ano).dropna()
-        if not anos.empty:
-            ano = int(anos.mode().iloc[0])
-
-    if ano and ano >= 2026:
-        df["Chave"] = df["Chave"]
-    else:
-        valores_extraidos = df["Chave"].apply(lambda x: extrair_valores(x, partes=7))
-        valores_extraidos = pd.DataFrame(
-            valores_extraidos.tolist(),
-            columns=["Região", "Subfunção + UG", "ADJ", "Macropolítica", "Pilar", "Eixo", "Política_Decreto"],
-            index=df.index,
-        )
-        df.update(valores_extraidos)
+    valores_extraidos = df["Chave"].apply(lambda x: extrair_valores(x, partes=7))
+    valores_extraidos = pd.DataFrame(
+        valores_extraidos.tolist(),
+        columns=["Região", "Subfunção + UG", "ADJ", "Macropolítica", "Pilar", "Eixo", "Política_Decreto"],
+        index=df.index,
+    )
+    df.update(valores_extraidos)
 
     def extrair_dotacao(dot: str) -> list[str]:
         if not isinstance(dot, str) or dot.strip() == "":
@@ -368,10 +413,6 @@ def preencher_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
         df_nat = pd.DataFrame(natureza.tolist(), columns=["Cat.Econ", "Grupo", "Modalidade"], index=df.index)
         df.update(df_nat)
 
-    if all(col in df.columns for col in ["Nº PED Estorno/Estornado", "Nº EMP"]):
-        df = df[df["Nº PED Estorno/Estornado"] == "NÃO INFORMADO"]
-        df = df[df["Nº EMP"] == "NÃO INFORMADO"]
-
     return df
 
 
@@ -381,15 +422,20 @@ def ajustar_largura_colunas(writer: pd.ExcelWriter, df: pd.DataFrame, sheet_name
     if hist_col:
         col_index = df.columns.get_loc(hist_col)
         worksheet.set_column(col_index, col_index, largura_historico)
-
     for i, col in enumerate(df.columns):
         if hist_col and col == hist_col:
             continue
-        max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
+        if df.empty:
+            max_length = len(str(col)) + 2
+        else:
+            max_val = df[col].astype(str).map(len).max()
+            if pd.isna(max_val):
+                max_val = len(str(col))
+            max_length = int(max(max_val, len(str(col))) + 2)
         worksheet.set_column(i, i, max_length)
 
 
-def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> int | None:
+def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> tuple[int, int] | None:
     def normalizar(texto: Any) -> str:
         if not isinstance(texto, str):
             return ""
@@ -399,18 +445,45 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> int | None:
         texto = re.sub(r"\s+", " ", texto).strip().upper()
         return texto
 
-    header_normalizado = HEADER_PADRAO_NORMALIZADO
-    header_prefixos = HEADER_PADRAO_PREFIXOS
+    def classificar(valor_norm: str) -> str | None:
+        if not valor_norm:
+            return None
+        if "EXERCICIO" in valor_norm:
+            return "exercicio"
+        if "PED" in valor_norm and "EST" in valor_norm:
+            return "ped_estorno"
+        if "PED" in valor_norm:
+            return "ped"
+        if "EMP" in valor_norm:
+            return "emp"
+        if "CAD" in valor_norm:
+            return "cad"
+        if "NOBLIS" in valor_norm:
+            return "noblist"
+        if re.search(r"\bOS\b", valor_norm) or valor_norm.endswith(" OS") or valor_norm.startswith("N OS"):
+            return "os"
+        return None
+
+    required = ["exercicio", "ped", "ped_estorno", "emp", "cad", "noblist"]
 
     for idx, row in df_raw.iterrows():
-        valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(HEADER_PADRAO_NORMALIZADO))]
-        if valores == header_normalizado:
-            return idx
-        if valores and valores[0].startswith("EXERCICIO"):
-            if all(valores[i].startswith(header_prefixos[i]) for i in range(len(header_prefixos))):
-                return idx
+        valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(row))]
+        if any("EXERCICIO IGUAL A" in v for v in valores):
+            continue
+        tipos = [classificar(v) for v in valores]
+        posicoes: dict[str, int] = {}
+        last_idx = -1
+        for req in required:
+            try:
+                next_idx = next(i for i in range(last_idx + 1, len(tipos)) if tipos[i] == req)
+            except StopIteration:
+                break
+            posicoes[req] = next_idx
+            last_idx = next_idx
+        if len(posicoes) == len(required):
+            return idx, posicoes["exercicio"]
 
-    print("DEBUG: cabecalho esperado (normalizado):", header_normalizado)
+    print("DEBUG: cabecalho esperado (normalizado):", HEADER_PADRAO_NORMALIZADO)
     limite = min(10, len(df_raw))
     for idx in range(limite):
         raw = [df_raw.iloc[idx, j] if j < df_raw.shape[1] else "" for j in range(len(HEADER_PADRAO_NORMALIZADO))]
@@ -423,32 +496,104 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> int | None:
 def preparar_aba_ped(file_path: Path) -> pd.DataFrame | None:
     try:
         xls = pd.ExcelFile(file_path)
-        sheet_name = xls.sheet_names[0]
+        sheet_names = list(xls.sheet_names)
         try:
             from openpyxl import load_workbook
 
             wb = load_workbook(file_path, read_only=True, data_only=True)
             active_title = wb.active.title if wb.active else None
-            if active_title in xls.sheet_names:
-                sheet_name = active_title
+            if active_title in sheet_names:
+                sheet_names.remove(active_title)
+                sheet_names.insert(0, active_title)
         except Exception:
             pass
-        df_raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=str)
 
-        idx_cabecalho = encontrar_linha_cabecalho(df_raw)
-        if idx_cabecalho is None:
-            print(f"Cabecalho padrao nao encontrado em {file_path}")
-            return None
+        for sheet_name in sheet_names:
+            df_raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=str)
+            resultado = encontrar_linha_cabecalho(df_raw)
+            if resultado is None:
+                continue
+            idx_cabecalho, col_inicio = resultado
+            cabecalho = [
+                str(c).strip() if pd.notna(c) else "" for c in df_raw.iloc[idx_cabecalho, col_inicio:].tolist()
+            ]
+            last_non_empty = 0
+            for i in range(len(cabecalho) - 1, -1, -1):
+                if cabecalho[i]:
+                    last_non_empty = i
+                    break
+            cabecalho = cabecalho[: last_non_empty + 1]
+            df = df_raw.iloc[idx_cabecalho + 1 :, col_inicio : col_inicio + len(cabecalho)].copy()
+            df.columns = cabecalho
+            df = df.dropna(how="all")
+            df = normalizar_colunas(df)
+            return df
 
-        cabecalho = [str(c).strip() if pd.notna(c) else "" for c in df_raw.iloc[idx_cabecalho].tolist()]
-        df = df_raw.iloc[idx_cabecalho + 1 :].copy()
-        df.columns = cabecalho
-        df = df.dropna(how="all")
-        df = normalizar_colunas(df)
-        return df
+        print(f"Cabecalho padrao nao encontrado em nenhuma aba de {file_path}")
+        return None
     except Exception as e:
         print(f"Erro ao preparar aba 'ped' para {file_path}: {e}")
         return None
+
+
+def prefiltrar_ped(df: pd.DataFrame) -> pd.DataFrame:
+    def norm_col_name(col_name: str) -> str:
+        nome = unicodedata.normalize("NFKD", col_name or "")
+        nome = "".join(ch for ch in nome if not unicodedata.combining(ch))
+        nome = re.sub(r"[^A-Z0-9]+", " ", nome.upper()).strip()
+        return nome
+
+    def _match_emp_col(name_norm: str) -> bool:
+        tokens = name_norm.split()
+        if not tokens:
+            return False
+        if tokens[0] not in ("N", "NO", "NUM", "NUMERO", "NRO"):
+            return False
+        return any(t.startswith("EMP") for t in tokens)
+
+    def _match_estorno_col(name_norm: str) -> bool:
+        tokens = name_norm.split()
+        if not tokens:
+            return False
+        if tokens[0] not in ("N", "NO", "NUM", "NUMERO", "NRO"):
+            return False
+        return ("PED" in tokens or any(t.startswith("PED") for t in tokens)) and any(t.startswith("ESTORN") for t in tokens)
+
+    colunas_norm = {c: norm_col_name(c) for c in df.columns if isinstance(c, str)}
+    estorno_col = next((c for c, n in colunas_norm.items() if n == "N PED ESTORNO ESTORNADO"), None)
+    emp_col = next((c for c, n in colunas_norm.items() if n == "N EMP"), None)
+    if not estorno_col:
+        estorno_col = next((c for c, n in colunas_norm.items() if _match_estorno_col(n)), None)
+    if not emp_col:
+        emp_col = next((c for c, n in colunas_norm.items() if _match_emp_col(n)), None)
+
+    def _is_vazio_ou_zero_raw(valor: Any, aceita_hifen: bool) -> bool:
+        if pd.isna(valor):
+            return True
+        if isinstance(valor, (int, float)) and valor == 0:
+            return True
+        s = str(valor).strip()
+        if s == "":
+            return True
+        upper = s.upper()
+        if upper in ("NAN", "NONE", "NÃO INFORMADO", "NAO INFORMADO", "NÇO INFORMADO"):
+            return True
+        if aceita_hifen and s == "-":
+            return True
+        if re.fullmatch(r"-?\d+(?:[.,]\d+)?", s):
+            try:
+                return float(s.replace(",", ".")) == 0.0
+            except ValueError:
+                return False
+        return False
+
+    if estorno_col:
+        df = df[df[estorno_col].apply(lambda v: _is_vazio_ou_zero_raw(v, aceita_hifen=True))]
+
+    if emp_col:
+        df = df[df[emp_col].apply(lambda v: _is_vazio_ou_zero_raw(v, aceita_hifen=True))]
+
+    return df
 
 
 def processar_planilha(
@@ -461,6 +606,9 @@ def processar_planilha(
             anos = df[ex_col].apply(extrair_ano).dropna()
             if not anos.empty:
                 ano = int(anos.mode().iloc[0])
+
+        df = prefiltrar_ped(df)
+
         hist_col = encontrar_coluna_prefixo(df, "hist")
         if hist_col:
             df[hist_col] = df[hist_col].apply(limpar_historico)
@@ -469,23 +617,43 @@ def processar_planilha(
 
         df = converter_tipos(df)
         df = identificar_chave_planejamento(df, chaves_planejamento, casos_especificos)
-        df = forcar_chaves_manualmente(df, forcar_map)
 
         if "Chave" in df.columns:
             colunas = df.columns.tolist()
             colunas.insert(0, colunas.pop(colunas.index("Chave")))
             df = df[colunas]
 
-        if not ano or ano < 2026:
+        partes_planejamento = 7
+        if ano and ano >= 2026:
+            partes_planejamento = 8
+
+        precisa_colunas_planejamento = False
+        if "Chave" in df.columns:
+            partes = df["Chave"].apply(contar_partes_chave)
+            precisa_colunas_planejamento = (partes >= 7).any()
+        if precisa_colunas_planejamento:
             df = adicionar_novas_colunas(df)
         df = preencher_novas_colunas(df)
 
-        # Ajusta colunas "Chave" vs "Chave de Planejamento" conforme ano para a planilha tratada
-        if ano and ano >= 2026:
-            df["Chave de Planejamento"] = df.get("Chave de Planejamento", "-")
-        else:
-            df["Chave de Planejamento"] = df.get("Chave", "-")
-            df["Chave"] = "-"
+        # Ajusta colunas "Chave" vs "Chave de Planejamento" conforme ano e formato da chave
+        def ajustar_chave_por_formato(row: pd.Series) -> pd.Series:
+            if row.get("_forcar_chave"):
+                return row
+            chave = row.get("Chave", "")
+            partes = contar_partes_chave(chave)
+            if partes == partes_planejamento:
+                row["Chave de Planejamento"] = chave or "-"
+                row["Chave"] = "-"
+            elif partes == 4:
+                row["Chave"] = chave or "-"
+                row["Chave de Planejamento"] = "-"
+            else:
+                row["Chave de Planejamento"] = row.get("Chave de Planejamento") or "-"
+                row["Chave"] = row.get("Chave") or "-"
+            return row
+
+        df = df.apply(ajustar_chave_por_formato, axis=1)
+        df = forcar_chaves_manualmente(df, forcar_map)
 
         df = df.replace(
             {
@@ -661,13 +829,26 @@ def montar_registros_para_db(df: pd.DataFrame, data_arquivo: datetime, user_emai
             payload[col_db] = _clean_val(row.get(col_df))
         if ano:
             payload["exercicio"] = str(ano)
-        # Ajuste de chave x chave_planejamento conforme exercicio
-        if ano and ano >= 2026:
-            payload["chave"] = _clean_val(row.get("Chave") or row.get("Chave de Planejamento"))
-            payload["chave_planejamento"] = None
+        # Ajuste de chave x chave_planejamento conforme ano e formato da chave
+        chave_val = row.get("Chave")
+        chave_planejamento_val = row.get("Chave de Planejamento")
+        if row.get("_forcar_chave"):
+            payload["chave"] = _clean_val(chave_val)
+            payload["chave_planejamento"] = _clean_val(chave_planejamento_val)
         else:
-            payload["chave_planejamento"] = _clean_val(row.get("Chave de Planejamento") or row.get("Chave"))
-            payload["chave"] = None
+            partes = contar_partes_chave(chave_val)
+            partes_planejamento = 7
+            if ano and ano >= 2026:
+                partes_planejamento = 8
+            if partes == partes_planejamento:
+                payload["chave_planejamento"] = _clean_val(chave_val)
+                payload["chave"] = None
+            elif partes == 4:
+                payload["chave"] = _clean_val(chave_val)
+                payload["chave_planejamento"] = None
+            else:
+                payload["chave"] = _clean_val(chave_val)
+                payload["chave_planejamento"] = _clean_val(chave_planejamento_val)
         # Campos monetarios em float para evitar erro de conversao no DB
         if "valor_ped" in payload:
             payload["valor_ped"] = _parse_valor_db(payload["valor_ped"])
@@ -760,6 +941,7 @@ def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id:
     if tratado_df is None:
         raise RuntimeError("Falha ao tratar a planilha PED.")
 
-    output_path = salvar_planilhas(ped_df, tratado_df, file_path)
+    tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
+    output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
     total = update_database(tratado_df, data_arquivo, user_email, upload_id)
     return total, output_path

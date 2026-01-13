@@ -4048,7 +4048,8 @@ def api_criar_usuario():
 @home_bp.route("/api/usuarios/<email>", methods=["GET", "PUT", "DELETE", "POST"])
 @login_required
 def api_usuario(email):
-    usuario = Usuario.query.filter_by(email=email).first()
+    email_norm = (email or "").strip().lower()
+    usuario = Usuario.query.filter(db.func.lower(Usuario.email) == email_norm).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
 
@@ -4103,7 +4104,8 @@ def api_usuario(email):
 @home_bp.route("/api/usuarios/<email>/senha", methods=["POST"])
 @login_required
 def api_usuario_senha(email):
-    usuario = Usuario.query.filter_by(email=email).first()
+    email_norm = (email or "").strip().lower()
+    usuario = Usuario.query.filter(db.func.lower(Usuario.email) == email_norm).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
     caller_nivel = getattr(g, "user_nivel", None)

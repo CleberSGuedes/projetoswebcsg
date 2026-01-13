@@ -424,7 +424,8 @@ function removerEmpenhosEstornados(dataset) {
 function obterExercicio(dataset) {
   let colName = null;
   for (const col of dataset.columns) {
-    if (normalizeSimple(col) === "exercicio") {
+    const norm = normalizeSimple(col);
+    if (norm === "exercicio" || norm.startsWith("exerc")) {
       colName = col;
       break;
     }
@@ -571,10 +572,51 @@ function extrairChaveValidaDoHistorico(hist, chaves) {
   return null;
 }
 
+function contarPartesChave(chave) {
+  if (typeof chave !== "string") return 0;
+  const texto = chave.trim();
+  if (!texto || ["-", "NÃO INFORMADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÇO IDENTIFICADO"].includes(texto)) {
+    return 0;
+  }
+  return texto.split("*").map((p) => p.trim()).filter(Boolean).length;
+}
+
+function extrairChaveDotDoHistorico(hist) {
+  if (typeof hist !== "string") return null;
+  let histLimpo = String(hist).trim();
+  histLimpo = histLimpo.replace(/\*/g, " * ");
+  histLimpo = histLimpo.replace(/\s+\*\s+/g, " * ");
+  histLimpo = histLimpo.replace(/\s+/g, " ").trim();
+  if (!histLimpo.startsWith("*")) histLimpo = `* ${histLimpo}`;
+  if (!histLimpo.endsWith("*")) histLimpo = `${histLimpo} *`;
+  histLimpo = histLimpo.replace(/\s*\*\s*/g, " * ");
+  const partes = histLimpo.split("*").map((p) => p.trim()).filter(Boolean);
+  for (let i = 0; i <= partes.length - 4; i += 1) {
+    if (String(partes[i]).toUpperCase() !== "DOT") continue;
+    const adj = partes[i + 1];
+    const ano = partes[i + 2];
+    const idDot = partes[i + 3];
+    if (/^\d{4}$/.test(String(ano)) && /^\d+$/.test(String(idDot))) {
+      return `* DOT * ${adj} * ${ano} * ${idDot} *`;
+    }
+  }
+  return null;
+}
+
 function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath, keyColName, partesChave) {
   const casosEspecificos = carregarCasosEspecificos(jsonCasosPath);
   const chavesNorm = chavesPlanejamento.map((c) => canonicalizarChave(c));
-  const chavesSet = new Set(chavesNorm);
+
+  const obterExercicioLinha = (row) => {
+    for (const key of Object.keys(row || {})) {
+      const norm = normalizeSimple(key);
+      if (norm === "exercicio" || norm.startsWith("exerc")) {
+        const ano = parseAno(row[key]);
+        if (ano) return ano;
+      }
+    }
+    return null;
+  };
 
   const paraPipe = (chave) => {
     if (typeof chave !== "string") return "";
@@ -585,10 +627,15 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     return texto.replace(/\s+/g, " ");
   };
 
-  const chavesPipeSet = new Set(chavesNorm.map((c) => paraPipe(c)).filter(Boolean));
   const resultados = [];
 
   for (const row of dataset.rows) {
+    const anoLinha = obterExercicioLinha(row);
+    const partesLinha = anoLinha && anoLinha >= 2026 ? 8 : partesChave;
+    const chavesBase = chavesNorm.filter((c) => contarPartesChave(c) === partesLinha);
+    const chavesSetBase = new Set(chavesBase);
+    const chavesPipeSetBase = new Set(chavesBase.map((c) => paraPipe(c)).filter(Boolean));
+
     const hist = row["Hist\u00f3rico"] || "";
     if (hist === "NÃO INFORMADO") {
       resultados.push("NÃO IDENTIFICADO");
@@ -606,12 +653,12 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     const histPipe = paraPipe(histLimpo);
     const histPipeComp = normalizeForComparison(histPipe);
 
-    const chaveDireta = extrairChaveValidaDoHistorico(histLimpo, chavesNorm);
+    const chaveDireta = extrairChaveValidaDoHistorico(histLimpo, chavesBase);
     if (chaveDireta) {
       resultados.push(canonicalizarChave(chaveDireta));
       continue;
     }
-    if (chavesPipeSet.has(histPipe)) {
+    if (chavesPipeSetBase.has(histPipe)) {
       const chaveStar = canonicalizarChave(histPipe.replace(/\|/g, "*"));
       resultados.push(chaveStar);
       continue;
@@ -621,8 +668,10 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     const histComp = normalizeForComparison(histLimpo);
     for (const [casoNorm, chave] of Object.entries(casosEspecificos)) {
       if (casoNorm && (histComp.includes(casoNorm) || histPipeComp.includes(casoNorm))) {
-        casoEncontrado = chave;
-        break;
+        if (contarPartesChave(chave) === partesLinha) {
+          casoEncontrado = chave;
+          break;
+        }
       }
     }
     if (casoEncontrado) {
@@ -632,16 +681,16 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
 
     const partes = histLimpo.split("*").map((p) => p.trim()).filter(Boolean);
     let chaveJanela = "NÃO IDENTIFICADO";
-    const tamanhoJanela = Math.max(1, partesChave);
+    const tamanhoJanela = Math.max(1, partesLinha);
     if (partes.length >= tamanhoJanela) {
       for (let i = 0; i <= partes.length - tamanhoJanela; i += 1) {
         const janela = `* ${partes.slice(i, i + tamanhoJanela).join(" * ")} *`;
-        if (chavesSet.has(janela)) {
+        if (chavesSetBase.has(janela)) {
           chaveJanela = janela;
           break;
         }
         const janelaPipe = paraPipe(janela);
-        if (chavesPipeSet.has(janelaPipe)) {
+        if (chavesPipeSetBase.has(janelaPipe)) {
           chaveJanela = canonicalizarChave(janelaPipe.replace(/\|/g, "*"));
           break;
         }
@@ -671,6 +720,7 @@ function forcarChavesManualmente(dataset, keyColName) {
     const numEmp = String(row["N\u00ba EMP"] || "").trim();
     if (substituicoes[numEmp]) {
       row[keyColName] = canonicalizarChave(substituicoes[numEmp]);
+      row.__forcar_chave = true;
     }
   }
   return dataset;
@@ -931,12 +981,15 @@ function montarRegistrosParaDb(dataset, dataArquivo, userEmail, uploadId) {
     }
 
     const ano = parseAno(payload.exercicio);
-    if (ano && ano >= 2026) {
-      payload.chave = payload.chave || payload.chave_planejamento || null;
-      payload.chave_planejamento = null;
+    if (row.__forcar_chave) {
+      payload.chave = payload.chave || null;
+      payload.chave_planejamento = payload.chave_planejamento || null;
     } else {
-      payload.chave_planejamento = payload.chave_planejamento || payload.chave || null;
-      payload.chave = null;
+      const partesPlanejamento = ano && ano >= 2026 ? 8 : 7;
+      const chavePartes = contarPartesChave(payload.chave);
+      const planejamentoPartes = contarPartesChave(payload.chave_planejamento);
+      payload.chave = chavePartes === 4 ? payload.chave : null;
+      payload.chave_planejamento = planejamentoPartes === partesPlanejamento ? payload.chave_planejamento : null;
     }
 
     for (const col of ["valor_emp", "devolucao_gcv", "valor_emp_devolucao_gcv"]) {
@@ -946,7 +999,9 @@ function montarRegistrosParaDb(dataset, dataArquivo, userEmail, uploadId) {
       if (col in payload) payload[col] = parseDataDb(payload[col]);
     }
 
-    payload.raw_payload = JSON.stringify(row);
+    const rawRow = { ...row };
+    delete rawRow.__forcar_chave;
+    payload.raw_payload = JSON.stringify(rawRow);
     payload.upload_id = uploadId;
     payload.data_atualizacao = new Date();
     payload.data_arquivo = dataArquivo || null;
@@ -1034,18 +1089,24 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   df = converterTipos(df);
 
   const exercicioVal = obterExercicio(df);
-  const novaChave = exercicioVal !== null && exercicioVal >= 2026;
-  const keyColName = novaChave ? "Chave" : "Chave de Planejamento";
-  const partesChave = novaChave ? 4 : 7;
-  const planejamentoAtivo = !novaChave;
+  const partesPlanejamento = exercicioVal !== null && exercicioVal >= 2026 ? 8 : 7;
+  const keyColName = "Chave de Planejamento";
+  const planejamentoAtivo = true;
 
   const chavesPlanejamento = carregarChavesPlanejamento(JSON_CHAVES_PATH);
-  df = identificarChavePlanejamento(df, chavesPlanejamento, JSON_CASOS_PATH, keyColName, partesChave);
+  df = identificarChavePlanejamento(df, chavesPlanejamento, JSON_CASOS_PATH, keyColName, partesPlanejamento);
   df = forcarChavesManualmente(df, keyColName);
 
   df = adicionarNovasColunas(df, keyColName, planejamentoAtivo);
   if (!df) throw new Error("Falha ao adicionar novas colunas.");
-  df = preencherNovasColunas(df, keyColName, planejamentoAtivo, partesChave);
+  df = preencherNovasColunas(df, keyColName, planejamentoAtivo, partesPlanejamento);
+
+  for (const row of df.rows) {
+    const chaveDot = extrairChaveDotDoHistorico(row["Hist\u00f3rico"] || "");
+    if (chaveDot) {
+      row.Chave = canonicalizarChave(chaveDot);
+    }
+  }
 
   df = removerEmpenhosEstornados(df).dataset;
   dfEmpBase.rows = removerEmpenhosEstornados(dfEmpBase).dataset.rows;
