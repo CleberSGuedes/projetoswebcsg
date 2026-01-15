@@ -5,6 +5,7 @@ from .user import (
     Perfil,
     ActiveSession,
     PerfilPermissao,
+    NivelPermissao,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,

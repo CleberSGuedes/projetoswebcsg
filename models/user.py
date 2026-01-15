@@ -4,6 +4,7 @@ from .db import db
 class Usuario(db.Model):
     __tablename__ = "usuarios"
 
+    id = db.Column(db.BigInteger)
     email = db.Column(db.String(255), primary_key=True)
     nome = db.Column(db.String(255), nullable=False)
     perfil = db.Column(db.String(50), nullable=False)
@@ -59,6 +60,17 @@ class PerfilPermissao(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     perfil_id = db.Column(db.Integer, db.ForeignKey("perfil.id"), nullable=False)
+    feature = db.Column(db.String(100), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
+
+
+class NivelPermissao(db.Model):
+    __tablename__ = "nivel_permissoes"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    nivel = db.Column(db.SmallInteger, nullable=False)
     feature = db.Column(db.String(100), nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
@@ -406,6 +418,8 @@ class Plan21Nger(db.Model):
     regiao = db.Column(db.String(255))
     subacao_entrega = db.Column(db.String(255))
     etapa = db.Column(db.String(255))
+    elemento = db.Column(db.String(50))
+    subelemento = db.Column(db.String(50))
     natureza = db.Column(db.String(255))
     fonte = db.Column(db.String(50))
     idu = db.Column(db.String(50))
@@ -418,6 +432,7 @@ class Adj(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     abreviacao = db.Column(db.String(100))
+    ativo = db.Column(db.Boolean)
 
 
 class Dotacao(db.Model):
@@ -438,8 +453,14 @@ class Dotacao(db.Model):
     etapa = db.Column(db.String(255))
     natureza_despesa = db.Column(db.String(255))
     elemento = db.Column(db.Integer)
+    subelemento = db.Column(db.String(50))
     fonte = db.Column(db.String(50))
     iduso = db.Column(db.String(50))
     valor_dotacao = db.Column(db.Numeric(18, 2))
+    chave_dotacao = db.Column(db.String(255))
     justificativa_historico = db.Column(db.Text)
+    usuarios_id = db.Column(db.BigInteger)
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
     ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))

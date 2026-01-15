@@ -1,160 +1,254 @@
 <div class="grid">
-  <div class="card">
-    <div class="card-title">Cadastrar Dotação</div>
+  <div class="card no-print">
+    <div class="card-title">Cadastrar Dota&#231;&#227;o</div>
     <form id="form-dotacao" class="form">
+      <input type="hidden" id="dotacao-id" />
       <div class="form-grid">
         <label class="field">
-          <span>Exercício</span>
+          <span>*Exerc&#237;cio</span>
           <select id="dotacao-exercicio" name="exercicio" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Adjunta Responsável</span>
+          <span>*Adjunta Respons&#225;vel</span>
           <select id="dotacao-adj" name="adj_id" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>UO</span>
+          <span>*UO</span>
           <select id="dotacao-uo" name="uo" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Programa</span>
+          <span>*Programa</span>
           <select id="dotacao-programa" name="programa" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Ação/PAOE</span>
+          <span>*A&#231;&#227;o/PAOE</span>
           <select id="dotacao-acao" name="acao_paoe" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Produto</span>
+          <span>*Produto</span>
           <select id="dotacao-produto" name="produto" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>UG</span>
+          <span>*UG</span>
           <select id="dotacao-ug" name="ug" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Região</span>
+          <span>*Regi&#227;o</span>
           <select id="dotacao-regiao" name="regiao" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Chave de Planejamento</span>
+          <span>*Chave de Planejamento</span>
           <select id="dotacao-chave" name="chave_planejamento" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Subação/Entrega</span>
+          <span>*Suba&#231;&#227;o/Entrega</span>
           <select id="dotacao-subacao" name="subacao_entrega" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Etapa</span>
+          <span>*Etapa</span>
           <select id="dotacao-etapa" name="etapa" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Natureza de Despesa</span>
+          <span>*Natureza de Despesa</span>
           <select id="dotacao-natureza" name="natureza_despesa" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Elemento de Despesa</span>
-          <input type="number" name="elemento" id="dotacao-elemento" min="0" step="1" required />
+          <span>*Elemento de Despesa</span>
+          <select id="dotacao-elemento" name="elemento" required>
+            <option value="">Carregando...</option>
+          </select>
         </label>
         <label class="field">
-          <span>Fonte</span>
+          <span>*Subelemento</span>
+          <select id="dotacao-subelemento" name="subelemento" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Fonte</span>
           <select id="dotacao-fonte" name="fonte" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Iduso</span>
+          <span>*Iduso</span>
           <select id="dotacao-iduso" name="iduso" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>Valor da Dotação</span>
+          <span>*Valor da Dota&#231;&#227;o</span>
           <input type="text" name="valor_dotacao" id="dotacao-valor" required />
         </label>
         <label class="field">
-          <span>Saldo de Dotação</span>
+          <span>Saldo de Dota&#231;&#227;o</span>
           <input type="text" name="saldo_dotacao" id="dotacao-saldo" readonly />
           <div id="dotacao-saldo-info" class="muted"></div>
           <div id="dotacao-saldo-debug" class="muted"></div>
         </label>
         <label class="field">
-          <span>Justificativa/Histórico</span>
+          <span>Controle de Dota&#231;&#227;o</span>
+          <input type="text" id="dotacao-chave-prefixo" readonly />
+        </label>
+        <label class="field">
+          <span>*Justificativa/Hist&#243;rico</span>
           <input type="text" name="justificativa_historico" id="dotacao-justificativa" required />
         </label>
       </div>
       <div class="actions">
         <button class="btn btn-primary sm" type="submit">Salvar</button>
-        <button class="btn btn-danger sm" type="button" id="dotacao-clear">Limpar Formulário</button>
+        <button class="btn btn-danger sm" type="button" id="dotacao-clear">Limpar Formul&#225;rio</button>
         <div id="dotacao-msg" class="muted"></div>
       </div>
     </form>
   </div>
 
   <div class="card">
-    <div class="card-title">Dotações cadastradas</div>
-    <div class="table-responsive">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Exercício</th>
-            <th>Adj</th>
-            <th>Chave</th>
-            <th>UO</th>
-            <th>Região</th>
-            <th>Subação</th>
-            <th>Etapa</th>
-            <th>Natureza</th>
-            <th>Elemento</th>
-            <th>Fonte</th>
-            <th>Iduso</th>
-            <th>Valor</th>
-            <th>Justificativa</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in dotacoes %}
-          <tr>
-            <td>{{ d.exercicio }}</td>
-            <td>{{ d.adj_abreviacao }}</td>
-            <td>{{ d.chave_planejamento }}</td>
-            <td>{{ d.uo }}</td>
-            <td>{{ d.regiao }}</td>
-            <td>{{ d.subacao_entrega }}</td>
-            <td>{{ d.etapa }}</td>
-            <td>{{ d.natureza_despesa }}</td>
-            <td>{{ d.elemento }}</td>
-            <td>{{ d.fonte }}</td>
-            <td>{{ d.iduso }}</td>
-            <td>{{ d.valor_dotacao }}</td>
-            <td>{{ d.justificativa_historico }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="form no-print" id="dotacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Crit&#233;rios para filtro de resultados</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Campo</span>
+          <select id="dotacao-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="exercicio">*Exerc&#237;cio</option>
+            <option value="adjunta">Adjunta Respons&#225;vel</option>
+            <option value="programa">Programa</option>
+            <option value="paoe">A&#231;&#227;o/PAOE</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="dotacao-filtro-operador">
+            <option value="eq">Igual a</option>
+            <option value="gt">Maior que</option>
+            <option value="lt">Menor que</option>
+            <option value="gte">Maior igual a</option>
+            <option value="lte">Menor igual a</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="dotacao-filtro-valor" />
+        </label>
+        <div class="actions" style="align-items:flex-end;">
+          <button class="btn btn-primary sm" type="button" id="dotacao-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Crit&#233;rios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field">
+          <ul id="dotacao-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
+          <button class="btn btn-danger sm" type="button" id="dotacao-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="dotacao-filtro-clear">Limpar</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-danger sm" type="button" id="dotacao-filtro-cancel">Cancelar</button>
+        <button class="btn btn-primary sm" type="button" id="dotacao-filtro-apply">Consultar</button>
+        <div id="dotacao-filtro-msg" class="muted"></div>
+      </div>
+    </div>
+    <div class="dotacao-summary no-print" id="dotacao-summary">
+      <div class="table-responsive">
+        <table class="table" id="dotacao-summary-table">
+          <thead>
+            <tr>
+              <th>Controle de Dota&#231;&#227;o</th>
+              <th>Justificativa/Hist&#243;rico</th>
+              <th>Valor da Dota&#231;&#227;o</th>
+              <th>Adjunta Respons&#225;vel</th>
+              <th>Chave de Planejamento</th>
+              <th>Programa</th>
+              <th>A&#231;&#227;o/PAOE</th>
+              <th>Produto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in dotacoes %}
+            <tr class="dotacao-summary-row"
+                data-id="{{ d.id }}"
+                data-exercicio="{{ d.exercicio }}"
+                data-adjunta="{{ d.adj_abreviacao }}"
+                data-programa="{{ d.programa or '' }}"
+                data-paoe="{{ d.acao_paoe or '' }}"
+                data-uo="{{ d.uo }}"
+                data-regiao="{{ d.regiao }}"
+                data-subacao="{{ d.subacao_entrega }}"
+                data-etapa="{{ d.etapa }}"
+                data-natureza="{{ d.natureza_despesa }}"
+                data-elemento="{{ d.elemento }}"
+                data-subelemento="{{ d.subelemento }}"
+                data-fonte="{{ d.fonte }}"
+                data-iduso="{{ d.iduso }}"
+                data-valor="{{ d.valor_dotacao }}"
+                data-justificativa="{{ d.justificativa_historico }}"
+                data-adj-id="{{ d.adj_id }}"
+                data-chave="{{ d.chave_planejamento }}"
+                data-chave-dotacao="{{ d.chave_dotacao }}"
+                data-usuario-nome="{{ d.usuario_nome }}"
+                data-criado-em="{{ d.criado_em }}"
+                data-alterado-em="{{ d.alterado_em }}"
+                data-produto="{{ d.produto }}"
+                data-ug="{{ d.ug }}"
+                data-programa-raw="{{ d.programa }}"
+                data-acao-paoe="{{ d.acao_paoe }}">
+              <td>{{ d.chave_dotacao }}</td>
+              <td>{{ d.justificativa_historico }}</td>
+              <td class="dotacao-summary-valor">{{ d.valor_dotacao }}</td>
+              <td>{{ d.adj_abreviacao }}</td>
+              <td>{{ d.chave_planejamento }}</td>
+              <td>{{ d.programa }}</td>
+              <td>{{ d.acao_paoe }}</td>
+              <td>{{ d.produto }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-foot no-print">
+        <div class="page-size">
+          <label for="dotacao-page-size">Itens por p&#225;gina</label>
+          <select id="dotacao-page-size" class="input">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div id="dotacao-pagination" class="pagination"></div>
+      </div>
+    </div>
+    <div class="actions no-print dotacao-actions">
+      <button class="btn btn-secondary sm" type="button" id="dotacao-edit">Editar</button>
+      <button class="btn btn-danger sm" type="button" id="dotacao-delete">Excluir</button>
+      <button class="btn btn-primary sm" type="button" id="dotacao-print">Imprimir</button>
     </div>
   </div>
 </div>

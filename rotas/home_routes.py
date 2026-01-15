@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
 from functools import wraps
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 import os
@@ -9,11 +10,13 @@ import unicodedata
 import subprocess
 import sys
 import threading
+import pytz
 import pandas as pd
 from models import (
     Usuario,
     Perfil,
     PerfilPermissao,
+    NivelPermissao,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -232,7 +235,10 @@ def _start_worker(kind: str, upload_id: int) -> None:
 @login_required
 def index():
     # initial_content tells JS which partial to load first
-    allowed = _permissoes_with_parents(getattr(g, "user_perfil_id", None))
+    allowed = _permissoes_with_parents(
+        getattr(g, "user_perfil_id", None),
+        getattr(g, "user_nivel", None),
+    )
     return render_template("base.html", initial_content="dashboard", initial_features=allowed)
 
 
@@ -279,46 +285,115 @@ def has_permission(feature: str) -> bool:
     if getattr(g, "user_nivel", None) == 1:
         return True
     perfil_id = getattr(g, "user_perfil_id", None)
-    if not perfil_id:
+    nivel = getattr(g, "user_nivel", None)
+    if not perfil_id and nivel is None:
         return False
     try:
-        exists = (
-            db.session.query(PerfilPermissao.id)
-            .filter(PerfilPermissao.perfil_id == perfil_id, PerfilPermissao.feature == feature)
-            .first()
-        )
-        return bool(exists)
+        if perfil_id:
+            exists = (
+                db.session.query(PerfilPermissao.id)
+                .filter(PerfilPermissao.perfil_id == perfil_id, PerfilPermissao.feature == feature)
+                .first()
+            )
+            if exists:
+                return True
     except ProgrammingError:
         db.session.rollback()
-        return False
+    try:
+        if nivel is not None:
+            exists = (
+                db.session.query(NivelPermissao.id)
+                .filter(NivelPermissao.nivel == nivel, NivelPermissao.feature == feature)
+                .first()
+            )
+            return bool(exists)
+    except ProgrammingError:
+        db.session.rollback()
+    return False
 
 
-def _permissoes_with_parents(perfil_id: int | None):
-    locked = [f["id"] for f in FEATURES if f.get("locked")]
+def _load_permissoes_perfil(perfil_id: int | None):
     if perfil_id is None:
-        return locked
-    parent_map = build_parent_map()
+        return []
     try:
-        feats = []
-        for pp in (
-            PerfilPermissao.query.filter(
-                PerfilPermissao.perfil_id == perfil_id,
-                PerfilPermissao.ativo == True,  # noqa: E712
-                PerfilPermissao.feature.isnot(None),
-            ).all()
-            or []
-        ):
-            feat_id = getattr(pp, "feature", None)
-            if feat_id:
-                feats.append(feat_id)
+        return [
+            pp.feature
+            for pp in (
+                PerfilPermissao.query.filter(
+                    PerfilPermissao.perfil_id == perfil_id,
+                    PerfilPermissao.ativo == True,  # noqa: E712
+                    PerfilPermissao.feature.isnot(None),
+                ).all()
+                or []
+            )
+            if getattr(pp, "feature", None)
+        ]
     except ProgrammingError:
         db.session.rollback()
-        feats = []
-    # include parents of children
+        return []
+
+
+def _load_permissoes_nivel(nivel: int | None):
+    if nivel is None:
+        return []
+    try:
+        return [
+            np.feature
+            for np in (
+                NivelPermissao.query.filter(
+                    NivelPermissao.nivel == nivel,
+                    NivelPermissao.ativo == True,  # noqa: E712
+                    NivelPermissao.feature.isnot(None),
+                ).all()
+                or []
+            )
+            if getattr(np, "feature", None)
+        ]
+    except ProgrammingError:
+        db.session.rollback()
+        return []
+
+
+def _add_parent_features(features: list[str]) -> list[str]:
+    parent_map = build_parent_map()
+    feats = list(features)
     for feat in list(feats):
         parent = parent_map.get(feat)
         if parent and parent not in feats:
             feats.append(parent)
+    return feats
+
+
+def _load_permissoes_por_nivel_perfis(nivel: int):
+    try:
+        perfis = Perfil.query.filter(Perfil.nivel == nivel).all()
+        perfil_ids = [p.id for p in perfis]
+        if not perfil_ids:
+            return []
+        feats = [
+            pp.feature
+            for pp in (
+                PerfilPermissao.query.filter(
+                    PerfilPermissao.perfil_id.in_(perfil_ids),
+                    PerfilPermissao.ativo == True,  # noqa: E712
+                    PerfilPermissao.feature.isnot(None),
+                ).all()
+                or []
+            )
+            if getattr(pp, "feature", None)
+        ]
+        return _add_parent_features(list(set(feats)))
+    except ProgrammingError:
+        db.session.rollback()
+        return []
+
+
+def _permissoes_with_parents(perfil_id: int | None, nivel: int | None = None):
+    locked = [f["id"] for f in FEATURES if f.get("locked")]
+    parent_map = build_parent_map()
+    feats = _load_permissoes_perfil(perfil_id) + _load_permissoes_nivel(nivel)
+    # include parents of children
+    feats = _add_parent_features(feats)
     # add locked always
     for l in locked:
         if l not in feats:
@@ -416,29 +491,21 @@ def partial_painel():
     if not has_permission("painel"):
         abort(403)
     perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
-    allowed_map: dict[int, list[str]] = {}
-    try:
-        permissoes = (
-            db.session.query(PerfilPermissao.perfil_id, PerfilPermissao.feature)
-            .filter(PerfilPermissao.feature.isnot(None), PerfilPermissao.ativo == True)  # noqa: E712
-            .all()
-        )
-        for p_id, feat in permissoes:
-            if feat:
-                allowed_map.setdefault(p_id, []).append(feat)
-    except ProgrammingError:
-        db.session.rollback()
     features = FEATURES
-    allowed = {}
+    allowed_perfil = {}
     for perfil in perfis:
-        feats = allowed_map.get(perfil.id) or []
-        # inclui pais e locked
-        allowed[perfil.id] = _permissoes_with_parents(perfil.id)
+        allowed_perfil[perfil.id] = _load_permissoes_perfil(perfil.id)
+    niveis = [1, 2, 3, 4, 5]
+    allowed_nivel = {}
+    for nivel in niveis:
+        allowed_nivel[nivel] = _load_permissoes_nivel(nivel)
     return render_template(
         "partials/painel.html",
         perfis=perfis,
         features=features,
-        allowed=allowed,
+        allowed_perfil=allowed_perfil,
+        allowed_nivel=allowed_nivel,
+        niveis=niveis,
     )
 
 
@@ -495,23 +562,40 @@ def partial_cadastrar_dotacao():
         .order_by(Dotacao.id.desc())
         .all()
     )
+    usuarios_ids = [dot.usuarios_id for dot, _ in rows if getattr(dot, 'usuarios_id', None)]
+    usuarios_map = {}
+    if usuarios_ids:
+        usuarios = Usuario.query.filter(Usuario.id.in_(usuarios_ids)).all()
+        usuarios_map = {u.id: u.nome for u in usuarios}
+
     dotacoes = []
     for dot, adj_abreviacao in rows:
         dotacoes.append(
             {
+                "id": dot.id,
                 "exercicio": dot.exercicio,
+                "adj_id": dot.adj_id,
                 "adj_abreviacao": adj_abreviacao or "",
                 "chave_planejamento": dot.chave_planejamento,
+                "chave_dotacao": dot.chave_dotacao,
                 "uo": dot.uo,
+                "programa": dot.programa,
+                "acao_paoe": dot.acao_paoe,
+                "produto": dot.produto,
+                "ug": dot.ug,
                 "regiao": dot.regiao,
                 "subacao_entrega": dot.subacao_entrega,
                 "etapa": dot.etapa,
                 "natureza_despesa": dot.natureza_despesa,
                 "elemento": dot.elemento,
+                "subelemento": dot.subelemento,
                 "fonte": dot.fonte,
                 "iduso": dot.iduso,
                 "valor_dotacao": dot.valor_dotacao,
                 "justificativa_historico": dot.justificativa_historico,
+                "usuario_nome": usuarios_map.get(dot.usuarios_id, ""),
+                "criado_em": dot.criado_em.isoformat() if dot.criado_em else "",
+                "alterado_em": dot.alterado_em.isoformat() if dot.alterado_em else "",
             }
         )
     return render_template("partials/cadastrar_dotacao.html", dotacoes=dotacoes)
@@ -595,17 +679,12 @@ def api_permissoes(perfil_id):
 
     if request.method == "GET":
         try:
-            feats = [
-                pp.feature
-                for pp in PerfilPermissao.query.filter_by(perfil_id=perfil_id, ativo=True).all()
-            ]
-            for f in FEATURES:
-                if f.get("locked") and f["id"] not in feats:
-                    feats.append(f["id"])
-            return jsonify({"features": feats})
+            feats = _load_permissoes_perfil(perfil_id)
+            nivel_feats = _load_permissoes_nivel(perfil.nivel)
+            return jsonify({"features": feats, "nivel_features": nivel_feats, "nivel": perfil.nivel})
         except ProgrammingError:
             db.session.rollback()
-            return jsonify({"features": []})
+            return jsonify({"features": [], "nivel_features": [], "nivel": perfil.nivel})
 
     data = request.get_json() or {}
     feats = data.get("features") or []
@@ -638,6 +717,51 @@ def api_permissoes(perfil_id):
     return jsonify({"ok": True, "message": "Permissoes atualizadas."})
 
 
+@home_bp.route("/api/permissoes/nivel/<int:nivel>", methods=["GET", "POST"])
+@login_required
+def api_permissoes_nivel(nivel):
+    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+        return jsonify({"error": "Sem permissao."}), 403
+    if nivel < 1 or nivel > 5:
+        return jsonify({"error": "Nivel invalido."}), 400
+
+    if request.method == "GET":
+        try:
+            feats = _load_permissoes_nivel(nivel)
+            perfil_feats = _load_permissoes_por_nivel_perfis(nivel)
+            return jsonify({"features": feats, "perfil_features": perfil_feats})
+        except ProgrammingError:
+            db.session.rollback()
+            return jsonify({"features": [], "perfil_features": []})
+
+    data = request.get_json() or {}
+    feats = data.get("features") or []
+    if not isinstance(feats, list):
+        return jsonify({"error": "Formato invalido."}), 400
+    clean_feats = []
+    seen = set()
+    for f in feats:
+        if not isinstance(f, str):
+            continue
+        fid = f.strip()
+        if not fid or fid in seen:
+            continue
+        seen.add(fid)
+        clean_feats.append(fid)
+    locked_feats = {f["id"] for f in FEATURES if f.get("locked")}
+    clean_feats = [f for f in clean_feats if f not in locked_feats]
+    try:
+        NivelPermissao.query.filter_by(nivel=nivel).update({"ativo": False, "updated_at": datetime.utcnow()})
+        NivelPermissao.query.filter(NivelPermissao.feature == None).delete(synchronize_session=False)  # noqa: E711
+        for f in clean_feats:
+            db.session.add(NivelPermissao(nivel=nivel, feature=f, ativo=True))
+        db.session.commit()
+    except ProgrammingError:
+        db.session.rollback()
+        return jsonify({"error": "Tabela nivel_permissoes inexistente. Crie a tabela antes de salvar."}), 500
+    return jsonify({"ok": True, "message": "Permissoes atualizadas."})
+
+
 @home_bp.route("/api/permissoes/current", methods=["GET"])
 @login_required
 def api_permissoes_current():
@@ -651,7 +775,7 @@ def api_permissoes_current():
             # atualiza session para futuras chamadas
             user_session["perfil_id"] = perfil.id
             session["user"] = user_session
-    feats = _permissoes_with_parents(perfil_id)
+    feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
     return jsonify({"features": feats})
 
 
@@ -677,6 +801,16 @@ def _dec_or_zero(value):
     return parsed if parsed is not None else Decimal("0")
 
 
+def _extract_justificativa_text(raw: str) -> str:
+    if not raw:
+        return ""
+    text = str(raw).strip()
+    match = re.search(r"^DOT\\.[^.]*\\.[^.]*\\.\\d+(?:\\s+(.*))?$", text)
+    if match:
+        return (match.group(1) or "").strip()
+    return text
+
+
 def _natureza_prefix(value: str) -> str:
     if not value:
         return ""
@@ -684,6 +818,58 @@ def _natureza_prefix(value: str) -> str:
     if len(parts) >= 3:
         return ".".join(parts[:3])
     return str(value).strip()
+
+
+def _dotacao_payload(registro: Dotacao, adj_label: str) -> dict:
+    return {
+        "id": registro.id,
+        "exercicio": registro.exercicio,
+        "adjunta": adj_label,
+        "chave_planejamento": registro.chave_planejamento,
+        "uo": registro.uo,
+        "programa": registro.programa,
+        "acao_paoe": registro.acao_paoe,
+        "produto": registro.produto,
+        "ug": registro.ug,
+        "regiao": registro.regiao,
+        "subacao_entrega": registro.subacao_entrega,
+        "etapa": registro.etapa,
+        "natureza_despesa": registro.natureza_despesa,
+        "elemento": registro.elemento,
+        "subelemento": registro.subelemento,
+        "fonte": registro.fonte,
+        "iduso": registro.iduso,
+        "justificativa_historico": registro.justificativa_historico,
+        "valor_dotacao": str(registro.valor_dotacao or ""),
+        "chave_dotacao": registro.chave_dotacao,
+        "usuario_nome": getattr(registro, "usuario_nome", ""),
+        "criado_em": registro.criado_em.isoformat() if registro.criado_em else "",
+        "alterado_em": registro.alterado_em.isoformat() if registro.alterado_em else "",
+    }
+
+
+def _resolve_usuario_id():
+    user = session.get("user") or {}
+    email = (user.get("email") or "").strip()
+    if not email:
+        return None
+    usuario = Usuario.query.filter_by(email=email).first()
+    return getattr(usuario, "id", None) if usuario else None
+
+
+def _now_local():
+    tz = pytz.timezone("America/Manaus")
+    return datetime.now(tz).replace(tzinfo=None)
+
+
+def _attach_usuario_nome(registro: Dotacao) -> Dotacao:
+    usuarios_id = getattr(registro, "usuarios_id", None)
+    if not usuarios_id:
+        registro.usuario_nome = ""
+        return registro
+    usuario = db.session.get(Usuario, usuarios_id)
+    registro.usuario_nome = (getattr(usuario, "nome", "") or getattr(usuario, "email", "") or "").strip() if usuario else ""
+    return registro
 
 
 def _leading_token(value: str) -> str:
@@ -723,6 +909,7 @@ def _normalize_chave(value: str) -> str:
 @login_required
 @require_feature("cadastrar/dotacao")
 def api_dotacao_options():
+    current_year = str(_now_local().year)
     fields = {
         "exercicio": Plan21Nger.exercicio,
         "chave_planejamento": Plan21Nger.chave_planejamento,
@@ -735,6 +922,8 @@ def api_dotacao_options():
         "subacao_entrega": Plan21Nger.subacao_entrega,
         "etapa": Plan21Nger.etapa,
         "natureza_despesa": Plan21Nger.natureza,
+        "elemento": Plan21Nger.elemento,
+        "subelemento": Plan21Nger.subelemento,
         "fonte": Plan21Nger.fonte,
         "iduso": Plan21Nger.idu,
     }
@@ -743,10 +932,12 @@ def api_dotacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
+    if "exercicio" not in selected:
+        selected["exercicio"] = current_year
 
     options = {}
     for key, col in fields.items():
-        query = db.session.query(col).distinct()
+        query = db.session.query(col).distinct().filter(Plan21Nger.ativo == True)  # noqa: E712
         for s_key, s_val in selected.items():
             if s_key == key:
                 continue
@@ -765,10 +956,12 @@ def api_dotacao_options():
             if key == "natureza_despesa":
                 s = _natureza_prefix(s)
             values.append(s)
-        values = sorted(set(values), key=lambda v: v.lower())
-        options[key] = values
+        if key == "exercicio":
+            options[key] = [current_year]
+        else:
+            options[key] = sorted(set(values), key=lambda v: v.lower())
 
-    adjs = Adj.query.order_by(Adj.abreviacao).all()
+    adjs = Adj.query.filter(Adj.ativo == True).order_by(Adj.abreviacao).all()  # noqa: E712
     adj_options = [{"id": a.id, "label": a.abreviacao} for a in adjs if a.abreviacao]
     return jsonify({"options": options, "adj": adj_options})
 
@@ -793,8 +986,10 @@ def api_dotacao_create():
     iduso = (data.get("iduso") or "").strip()
     adj_raw = (data.get("adj_id") or "").strip()
     elemento_raw = (data.get("elemento") or "").strip()
+    subelemento = (data.get("subelemento") or "").strip()
     valor_raw = (data.get("valor_dotacao") or "").strip()
-    justificativa = (data.get("justificativa_historico") or "").strip()
+    justificativa_raw = (data.get("justificativa_historico") or "").strip()
+    justificativa = _extract_justificativa_text(justificativa_raw)
 
     required = {
         "exercicio": exercicio,
@@ -808,10 +1003,11 @@ def api_dotacao_create():
         "subacao_entrega": subacao_entrega,
         "etapa": etapa,
         "natureza_despesa": natureza_despesa,
+        "elemento": elemento_raw,
+        "subelemento": subelemento,
         "fonte": fonte,
         "iduso": iduso,
         "adj_id": adj_raw,
-        "elemento": elemento_raw,
         "valor_dotacao": valor_raw,
         "justificativa_historico": justificativa,
     }
@@ -823,7 +1019,8 @@ def api_dotacao_create():
         adj_id = int(adj_raw)
     except ValueError:
         return jsonify({"error": "Adjunta Responsavel invalida."}), 400
-    if not db.session.get(Adj, adj_id):
+    adj_row = db.session.get(Adj, adj_id)
+    if not adj_row:
         return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
 
     try:
@@ -835,6 +1032,29 @@ def api_dotacao_create():
     if valor_dotacao is None:
         return jsonify({"error": "Valor da dotacao invalido."}), 400
 
+    saldo_info = _calc_dotacao_saldo(
+        exercicio,
+        programa,
+        acao_paoe,
+        produto,
+        ug,
+        uo,
+        regiao,
+        subacao_entrega,
+        etapa,
+        natureza_despesa,
+        elemento_raw,
+        subelemento,
+        fonte,
+        iduso,
+        chave_planejamento,
+    )
+    saldo_disponivel = saldo_info["saldo"]
+    saldo_disponivel = _dec_or_zero(saldo_disponivel).quantize(Decimal("0.01"))
+    valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
+    if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
+        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
+
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
     query = query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
@@ -844,9 +1064,15 @@ def api_dotacao_create():
     query = query.filter(Plan21Nger.produto == produto)
     query = query.filter(Plan21Nger.ug == ug)
     query = query.filter(Plan21Nger.regiao == regiao)
-    query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
-    query = query.filter(Plan21Nger.etapa == etapa)
-    query = query.filter(Plan21Nger.natureza.like(f"{natureza_despesa}%"))
+    if subacao_entrega:
+        query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
+    if etapa:
+        query = query.filter(Plan21Nger.etapa == etapa)
+    if natureza_despesa:
+        query = query.filter(Plan21Nger.natureza.like(f"{natureza_despesa}%"))
+    query = query.filter(Plan21Nger.elemento == elemento_raw)
+    if subelemento:
+        query = query.filter(Plan21Nger.subelemento == subelemento)
     query = query.filter(Plan21Nger.fonte == fonte)
     query = query.filter(Plan21Nger.idu == iduso)
     rows = query.limit(2).all()
@@ -855,6 +1081,10 @@ def api_dotacao_create():
     if len(rows) > 1:
         return jsonify({"error": "Selecao ambigua no plan21_nger. Ajuste os filtros."}), 400
     plan = rows[0]
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
 
     registro = Dotacao(
         plan21_nger_id=plan.id,
@@ -871,41 +1101,268 @@ def api_dotacao_create():
         etapa=etapa,
         natureza_despesa=natureza_despesa,
         elemento=elemento,
+        subelemento=subelemento,
         fonte=fonte,
         iduso=iduso,
         valor_dotacao=valor_dotacao,
-        justificativa_historico=justificativa,
+        justificativa_historico="",
+        chave_dotacao="",
+        usuarios_id=usuarios_id,
+        criado_em=_now_local(),
+        alterado_em=None,
         ativo=True,
     )
     db.session.add(registro)
+    try:
+        db.session.flush()
+        adj_label = (adj_row.abreviacao or str(adj_id)).strip()
+        chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}"
+        justificativa_full = f"{chave_dotacao} {justificativa}".strip()
+        db.session.execute(
+            Dotacao.__table__.update()
+            .where(Dotacao.id == registro.id)
+            .values(
+                chave_dotacao=chave_dotacao,
+                justificativa_historico=justificativa_full,
+                alterado_em=None,
+            )
+        )
+        db.session.commit()
+        db.session.refresh(registro)
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar dotacao: {exc}"}), 500
+
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "message": "Dotacao cadastrada.",
+                "dotacao": _dotacao_payload(_attach_usuario_nome(registro), adj_label),
+            }
+        ),
+        201,
+    )
+
+
+@home_bp.route("/api/dotacao/<int:dotacao_id>", methods=["PUT"])
+@login_required
+@require_feature("cadastrar/dotacao")
+def api_dotacao_update(dotacao_id):
+    registro = db.session.get(Dotacao, dotacao_id)
+    if not registro:
+        return jsonify({"error": "Dotacao nao encontrada."}), 404
+
+    data = request.get_json() or {}
+    exercicio = (data.get("exercicio") or "").strip()
+    chave_planejamento = (data.get("chave_planejamento") or "").strip()
+    uo = (data.get("uo") or "").strip()
+    programa = (data.get("programa") or "").strip()
+    acao_paoe = (data.get("acao_paoe") or "").strip()
+    produto = (data.get("produto") or "").strip()
+    ug = (data.get("ug") or "").strip()
+    regiao = (data.get("regiao") or "").strip()
+    subacao_entrega = (data.get("subacao_entrega") or "").strip()
+    etapa = (data.get("etapa") or "").strip()
+    natureza_despesa = (data.get("natureza_despesa") or "").strip()
+    fonte = (data.get("fonte") or "").strip()
+    iduso = (data.get("iduso") or "").strip()
+    adj_raw = (data.get("adj_id") or "").strip()
+    elemento_raw = (data.get("elemento") or "").strip()
+    subelemento = (data.get("subelemento") or "").strip()
+    valor_raw = (data.get("valor_dotacao") or "").strip()
+    justificativa_raw = (data.get("justificativa_historico") or "").strip()
+    justificativa = _extract_justificativa_text(justificativa_raw)
+
+    required = {
+        "exercicio": exercicio,
+        "chave_planejamento": chave_planejamento,
+        "uo": uo,
+        "programa": programa,
+        "acao_paoe": acao_paoe,
+        "produto": produto,
+        "ug": ug,
+        "regiao": regiao,
+        "subacao_entrega": subacao_entrega,
+        "etapa": etapa,
+        "natureza_despesa": natureza_despesa,
+        "elemento": elemento_raw,
+        "subelemento": subelemento,
+        "fonte": fonte,
+        "iduso": iduso,
+        "adj_id": adj_raw,
+        "valor_dotacao": valor_raw,
+        "justificativa_historico": justificativa,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+
+    try:
+        adj_id = int(adj_raw)
+    except ValueError:
+        return jsonify({"error": "Adjunta Responsavel invalida."}), 400
+    adj_row = db.session.get(Adj, adj_id)
+    if not adj_row:
+        return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
+
+    try:
+        elemento = int(elemento_raw)
+    except ValueError:
+        return jsonify({"error": "Elemento invalido."}), 400
+
+    valor_dotacao = _parse_decimal(valor_raw)
+    if valor_dotacao is None:
+        return jsonify({"error": "Valor da dotacao invalido."}), 400
+
+    saldo_info = _calc_dotacao_saldo(
+        exercicio,
+        programa,
+        acao_paoe,
+        produto,
+        ug,
+        uo,
+        regiao,
+        subacao_entrega,
+        etapa,
+        natureza_despesa,
+        elemento_raw,
+        subelemento,
+        fonte,
+        iduso,
+        chave_planejamento,
+    )
+    saldo_disponivel = saldo_info["saldo"]
+    saldo_disponivel = _dec_or_zero(saldo_disponivel).quantize(Decimal("0.01"))
+    valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
+    saldo_disponivel += _dec_or_zero(registro.valor_dotacao)
+    if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
+        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
+
+    query = Plan21Nger.query
+    query = query.filter(Plan21Nger.exercicio == exercicio)
+    query = query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
+    query = query.filter(Plan21Nger.uo == uo)
+    query = query.filter(Plan21Nger.programa == programa)
+    query = query.filter(Plan21Nger.acao_paoe == acao_paoe)
+    query = query.filter(Plan21Nger.produto == produto)
+    query = query.filter(Plan21Nger.ug == ug)
+    query = query.filter(Plan21Nger.regiao == regiao)
+    if subacao_entrega:
+        query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
+    if etapa:
+        query = query.filter(Plan21Nger.etapa == etapa)
+    if natureza_despesa:
+        query = query.filter(Plan21Nger.natureza.like(f"{natureza_despesa}%"))
+    query = query.filter(Plan21Nger.elemento == elemento_raw)
+    if subelemento:
+        query = query.filter(Plan21Nger.subelemento == subelemento)
+    query = query.filter(Plan21Nger.fonte == fonte)
+    query = query.filter(Plan21Nger.idu == iduso)
+    rows = query.limit(2).all()
+    if not rows:
+        return jsonify({"error": "Nenhum registro do plan21_nger encontrado para esta selecao."}), 400
+    if len(rows) > 1:
+        return jsonify({"error": "Selecao ambigua no plan21_nger. Ajuste os filtros."}), 400
+    plan = rows[0]
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+
+    registro.plan21_nger_id = plan.id
+    registro.exercicio = exercicio
+    registro.adj_id = adj_id
+    registro.chave_planejamento = chave_planejamento
+    registro.uo = uo
+    registro.programa = getattr(plan, "programa", None)
+    registro.acao_paoe = getattr(plan, "acao_paoe", None)
+    registro.produto = getattr(plan, "produto", None)
+    registro.ug = getattr(plan, "ug", None)
+    registro.regiao = regiao
+    registro.subacao_entrega = subacao_entrega
+    registro.etapa = etapa
+    registro.natureza_despesa = natureza_despesa
+    registro.elemento = elemento
+    registro.subelemento = subelemento
+    registro.fonte = fonte
+    registro.iduso = iduso
+    registro.valor_dotacao = valor_dotacao
+    registro.usuarios_id = usuarios_id
+    registro.alterado_em = _now_local()
+    adj_label = (adj_row.abreviacao or str(adj_id)).strip()
+    chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}"
+    registro.chave_dotacao = chave_dotacao
+    registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
     try:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao salvar dotacao: {exc}"}), 500
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Dotacao atualizada.",
+            "dotacao": _dotacao_payload(_attach_usuario_nome(registro), adj_label),
+        }
+    )
 
-    return jsonify({"ok": True, "message": "Dotacao cadastrada."}), 201
 
-
-@home_bp.route("/api/dotacao/saldo", methods=["GET"])
+@home_bp.route("/api/dotacao/<int:dotacao_id>", methods=["DELETE"])
 @login_required
 @require_feature("cadastrar/dotacao")
-def api_dotacao_saldo():
-    exercicio = (request.args.get("exercicio") or "").strip()
-    programa = (request.args.get("programa") or "").strip()
-    acao_paoe = (request.args.get("acao_paoe") or "").strip()
-    produto = (request.args.get("produto") or "").strip()
-    ug = (request.args.get("ug") or "").strip()
-    uo = (request.args.get("uo") or "").strip()
-    regiao = (request.args.get("regiao") or "").strip()
-    subacao_entrega = (request.args.get("subacao_entrega") or "").strip()
-    etapa = (request.args.get("etapa") or "").strip()
-    fonte = (request.args.get("fonte") or "").strip()
-    iduso = (request.args.get("iduso") or "").strip()
-    chave_planejamento = (request.args.get("chave_planejamento") or "").strip()
+def api_dotacao_delete(dotacao_id):
+    registro = db.session.get(Dotacao, dotacao_id)
+    if not registro:
+        return jsonify({"error": "Dotacao nao encontrada."}), 404
 
+    registro.ativo = False
+    registro.excluido_em = _now_local()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir dotacao: {exc}"}), 500
+
+    return jsonify({"ok": True, "message": "Dotacao excluida."})
+
+
+def _calc_dotacao_saldo(
+    exercicio,
+    programa,
+    acao_paoe,
+    produto,
+    ug,
+    uo,
+    regiao,
+    subacao_entrega,
+    etapa,
+    natureza,
+    elemento,
+    subelemento,
+    fonte,
+    iduso,
+    chave_planejamento,
+):
     if not exercicio or not chave_planejamento:
-        return jsonify({"saldo": 0})
+        return {
+            "saldo": Decimal("0"),
+            "valor_atual": Decimal("0"),
+            "valor_dotacao": Decimal("0"),
+            "valor_ped": Decimal("0"),
+            "valor_emp_liquido": Decimal("0"),
+            "plan21_count": 0,
+            "dotacao_count": 0,
+            "ped_count": 0,
+            "emp_count": 0,
+        }
+
+    elemento_int = None
+    if elemento:
+        try:
+            elemento_int = int(elemento)
+        except ValueError:
+            elemento_int = None
 
     plan21_filters = [Plan21Nger.ativo == True]  # noqa: E712
     if exercicio:
@@ -926,6 +1383,12 @@ def api_dotacao_saldo():
         plan21_filters.append(Plan21Nger.subacao_entrega == subacao_entrega)
     if etapa:
         plan21_filters.append(Plan21Nger.etapa == etapa)
+    if natureza:
+        plan21_filters.append(Plan21Nger.natureza.like(f"{natureza}%"))
+    if elemento:
+        plan21_filters.append(Plan21Nger.elemento == elemento)
+    if subelemento:
+        plan21_filters.append(Plan21Nger.subelemento == subelemento)
     if fonte:
         plan21_filters.append(Plan21Nger.fonte == fonte)
     if iduso:
@@ -942,23 +1405,63 @@ def api_dotacao_saldo():
     )
     valor_atual = _dec_or_zero(valor_atual)
 
-    valor_dotacao = (
-        db.session.query(func.coalesce(func.sum(Dotacao.valor_dotacao), 0))
-        .filter(
-            Dotacao.ativo == True,  # noqa: E712
-            *( [Dotacao.exercicio == exercicio] if exercicio else [] ),
-            *( [Dotacao.programa == programa] if programa else [] ),
-            *( [Dotacao.acao_paoe == acao_paoe] if acao_paoe else [] ),
-            *( [Dotacao.produto == produto] if produto else [] ),
-            *( [Dotacao.ug == ug] if ug else [] ),
-            *( [Dotacao.uo == uo] if uo else [] ),
-            *( [Dotacao.regiao == regiao] if regiao else [] ),
-            *( [Dotacao.fonte == fonte] if fonte else [] ),
-            *( [Dotacao.iduso == iduso] if iduso else [] ),
-            *( [Dotacao.chave_planejamento == chave_planejamento] if chave_planejamento else [] ),
+    dot_filters = [Dotacao.ativo == True]  # noqa: E712
+    if exercicio:
+        dot_filters.append(Dotacao.exercicio == exercicio)
+    if programa:
+        dot_filters.append(Dotacao.programa == programa)
+    if acao_paoe:
+        dot_filters.append(Dotacao.acao_paoe == acao_paoe)
+    if produto:
+        dot_filters.append(Dotacao.produto == produto)
+    if ug:
+        dot_filters.append(Dotacao.ug == ug)
+    if etapa:
+        dot_filters.append(Dotacao.etapa == etapa)
+    if natureza:
+        dot_filters.append(Dotacao.natureza_despesa.like(f"{natureza}%"))
+    if uo:
+        dot_filters.append(Dotacao.uo == uo)
+    if regiao:
+        dot_filters.append(Dotacao.regiao == regiao)
+    if elemento_int is not None:
+        dot_filters.append(Dotacao.elemento == elemento_int)
+    if subelemento:
+        dot_filters.append(Dotacao.subelemento == subelemento)
+    if fonte:
+        dot_filters.append(Dotacao.fonte == fonte)
+    if iduso:
+        dot_filters.append(Dotacao.iduso == iduso)
+    if chave_planejamento:
+        dot_filters.append(Dotacao.chave_planejamento == chave_planejamento)
+
+    if subacao_entrega:
+        subacao_norm = _normalize_chave(subacao_entrega)
+        dot_rows = (
+            Dotacao.query.with_entities(Dotacao.valor_dotacao, Dotacao.subacao_entrega)
+            .filter(*dot_filters)
+            .all()
         )
-        .scalar()
-    )
+        valor_dotacao = sum(
+            (
+                _dec_or_zero(r.valor_dotacao)
+                for r in dot_rows
+                if _normalize_chave(r.subacao_entrega) == subacao_norm
+            ),
+            Decimal("0"),
+        )
+        if valor_dotacao == 0:
+            valor_dotacao = (
+                db.session.query(func.coalesce(func.sum(Dotacao.valor_dotacao), 0))
+                .filter(*dot_filters)
+                .scalar()
+            )
+    else:
+        valor_dotacao = (
+            db.session.query(func.coalesce(func.sum(Dotacao.valor_dotacao), 0))
+            .filter(*dot_filters)
+            .scalar()
+        )
     valor_dotacao = _dec_or_zero(valor_dotacao)
 
     programa_key = _leading_token(programa)
@@ -1059,34 +1562,74 @@ def api_dotacao_saldo():
     valor_emp_liquido = _dec_or_zero(valor_emp_liquido)
 
     saldo = valor_atual - valor_dotacao - valor_ped - valor_emp_liquido
+    dotacao_count = (
+        db.session.query(func.count(Dotacao.id))
+        .filter(*dot_filters)
+        .scalar()
+        or 0
+    )
+    return {
+        "saldo": saldo,
+        "valor_atual": valor_atual,
+        "valor_dotacao": valor_dotacao,
+        "valor_ped": valor_ped,
+        "valor_emp_liquido": valor_emp_liquido,
+        "plan21_count": plan21_count,
+        "dotacao_count": dotacao_count,
+        "ped_count": ped_count,
+        "emp_count": emp_count,
+    }
+
+
+@home_bp.route("/api/dotacao/saldo", methods=["GET"])
+@login_required
+@require_feature("cadastrar/dotacao")
+def api_dotacao_saldo():
+    exercicio = (request.args.get("exercicio") or "").strip()
+    programa = (request.args.get("programa") or "").strip()
+    acao_paoe = (request.args.get("acao_paoe") or "").strip()
+    produto = (request.args.get("produto") or "").strip()
+    ug = (request.args.get("ug") or "").strip()
+    uo = (request.args.get("uo") or "").strip()
+    regiao = (request.args.get("regiao") or "").strip()
+    subacao_entrega = (request.args.get("subacao_entrega") or "").strip()
+    etapa = (request.args.get("etapa") or "").strip()
+    natureza = (request.args.get("natureza_despesa") or "").strip()
+    elemento = (request.args.get("elemento") or "").strip()
+    subelemento = (request.args.get("subelemento") or "").strip()
+    fonte = (request.args.get("fonte") or "").strip()
+    iduso = (request.args.get("iduso") or "").strip()
+    chave_planejamento = (request.args.get("chave_planejamento") or "").strip()
+
+    result = _calc_dotacao_saldo(
+        exercicio,
+        programa,
+        acao_paoe,
+        produto,
+        ug,
+        uo,
+        regiao,
+        subacao_entrega,
+        etapa,
+        natureza,
+        elemento,
+        subelemento,
+        fonte,
+        iduso,
+        chave_planejamento,
+    )
+
     return jsonify(
         {
-            "saldo": float(saldo),
-            "valor_atual": float(valor_atual),
-            "valor_dotacao": float(valor_dotacao),
-            "valor_ped": float(valor_ped),
-            "valor_emp_liquido": float(valor_emp_liquido),
-            "plan21_count": plan21_count,
-            "dotacao_count": int(
-                db.session.query(func.count(Dotacao.id))
-                .filter(
-                    Dotacao.ativo == True,  # noqa: E712
-                    *( [Dotacao.exercicio == exercicio] if exercicio else [] ),
-                    *( [Dotacao.programa == programa] if programa else [] ),
-                    *( [Dotacao.acao_paoe == acao_paoe] if acao_paoe else [] ),
-                    *( [Dotacao.produto == produto] if produto else [] ),
-                    *( [Dotacao.ug == ug] if ug else [] ),
-                    *( [Dotacao.uo == uo] if uo else [] ),
-                    *( [Dotacao.regiao == regiao] if regiao else [] ),
-                    *( [Dotacao.fonte == fonte] if fonte else [] ),
-                    *( [Dotacao.iduso == iduso] if iduso else [] ),
-                    *( [Dotacao.chave_planejamento == chave_planejamento] if chave_planejamento else [] ),
-                )
-                .scalar()
-                or 0
-            ),
-            "ped_count": ped_count,
-            "emp_count": emp_count,
+            "saldo": float(result["saldo"]),
+            "valor_atual": float(result["valor_atual"]),
+            "valor_dotacao": float(result["valor_dotacao"]),
+            "valor_ped": float(result["valor_ped"]),
+            "valor_emp_liquido": float(result["valor_emp_liquido"]),
+            "plan21_count": result["plan21_count"],
+            "dotacao_count": result["dotacao_count"],
+            "ped_count": result["ped_count"],
+            "emp_count": result["emp_count"],
         }
     )
 
@@ -4167,8 +4710,8 @@ def api_perfis():
         nivel_int = int(nivel)
     except (TypeError, ValueError):
         return jsonify({"error": "Nivel invalido."}), 400
-    if nivel_int < 1 or nivel_int > 4:
-        return jsonify({"error": "Nivel deve estar entre 1 e 4."}), 400
+    if nivel_int < 1 or nivel_int > 5:
+        return jsonify({"error": "Nivel deve estar entre 1 e 5."}), 400
     perfil = Perfil(id=_next_pk(Perfil), nome=nome, nivel=nivel_int, ativo=ativo)
     db.session.add(perfil)
     try:
@@ -4211,8 +4754,8 @@ def api_perfil(perfil_id):
         nivel_int = int(nivel)
     except (TypeError, ValueError):
         return jsonify({"error": "Nivel invalido."}), 400
-    if nivel_int < 1 or nivel_int > 4:
-        return jsonify({"error": "Nivel deve estar entre 1 e 4."}), 400
+    if nivel_int < 1 or nivel_int > 5:
+        return jsonify({"error": "Nivel deve estar entre 1 e 5."}), 400
 
     perfil.nome = nome
     perfil.nivel = nivel_int
@@ -4260,4 +4803,3 @@ def api_perfil(perfil_id):
         )
     valor_ped = sum((_dec_or_zero(r.valor_ped) for r in ped_rows), Decimal("0"))
     ped_count = len(ped_rows)
-

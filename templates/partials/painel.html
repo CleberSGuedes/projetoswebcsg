@@ -1,16 +1,32 @@
 <div class="grid">
   <div class="card">
     <div class="card-title">Painel de Acesso</div>
-    <p class="muted">Escolha um perfil e marque quais áreas/submenus ele pode acessar.</p>
+    <p class="muted">Escolha um perfil ou nivel e marque quais áreas/submenus ele pode acessar.</p>
 
     <div class="form" id="painel-acesso">
       <div class="form-grid">
         <label class="field">
+          <span>Tipo</span>
+          <select id="painel-tipo">
+            <option value="perfil">Perfil</option>
+            <option value="nivel">Nivel</option>
+          </select>
+        </label>
+        <label class="field" id="painel-perfil-field">
           <span>Perfil</span>
           <select id="painel-perfil">
             <option value="">Selecione um perfil</option>
             {% for p in perfis %}
             <option value="{{ p.id }}">{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field" id="painel-nivel-field" style="display:none;">
+          <span>Nivel</span>
+          <select id="painel-nivel">
+            <option value="">Selecione um nivel</option>
+            {% for n in niveis %}
+            <option value="{{ n }}">{{ n }}</option>
             {% endfor %}
           </select>
         </label>
@@ -22,7 +38,7 @@
           <div id="painel-tree" class="tree-list"></div>
         </div>
         <div class="card mini">
-          <div class="card-title" style="margin-bottom:6px;">Ativos para o perfil</div>
+          <div class="card-title" id="painel-ativos-title" style="margin-bottom:6px;">Ativos para o perfil</div>
           <ul id="painel-ativos" class="pill-list"></ul>
         </div>
       </div>
@@ -38,5 +54,6 @@
 <script id="painel-data"
         type="application/json"
         data-features='{{ features|tojson }}'
-        data-allowed='{{ allowed|tojson }}'>
+        data-allowed-perfil='{{ allowed_perfil|tojson }}'
+        data-allowed-nivel='{{ allowed_nivel|tojson }}'>
 </script>

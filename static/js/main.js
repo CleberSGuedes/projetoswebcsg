@@ -172,12 +172,12 @@
           msg.classList.add("text-error");
           return;
         }
-        msg.textContent = "UsuÃ¡rio criado.";
+        msg.textContent = "Usu+írio criado.";
         form.reset();
         await loadPage("usuarios");
       } catch (err) {
         console.error(err);
-        msg.textContent = "Falha na requisiÃ§Ã£o.";
+        msg.textContent = "Falha na requisi+º+úo.";
         msg.classList.add("text-error");
       }
     });
@@ -214,7 +214,7 @@
       msg.classList.remove("text-error");
       const email = document.getElementById("edit-email").value;
       if (!email) {
-        msg.textContent = "Selecione um usuÃ¡rio na lista.";
+        msg.textContent = "Selecione um usu+írio na lista.";
         msg.classList.add("text-error");
         return;
       }
@@ -235,10 +235,10 @@
         try {
           data = JSON.parse(raw || "{}");
         } catch {
-          // se nÃ£o for JSON, usa texto bruto na mensagem de erro
+          // se n+úo for JSON, usa texto bruto na mensagem de erro
         }
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
-        msg.textContent = data.message || "UsuÃ¡rio atualizado.";
+        msg.textContent = data.message || "Usu+írio atualizado.";
         document.getElementById("edit-senha").value = "";
         const row = document.querySelector(`tr[data-email="${email}"]`);
         if (row) {
@@ -249,7 +249,7 @@
           if (cells.length >= 4) {
             cells[1].textContent = payload.nome || cells[1].textContent;
             cells[2].textContent = payload.perfil || cells[2].textContent;
-            cells[3].textContent = payload.ativo ? "Sim" : "NÃ£o";
+            cells[3].textContent = payload.ativo ? "Sim" : "N+úo";
           }
         }
       } catch (err) {
@@ -367,7 +367,7 @@
 
   async function fetchCurrentPermissions() {
     if (userNivel === "1") {
-      // admin: libera tudo visÃ­vel no menu
+      // admin: libera tudo vis+¡vel no menu
       const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
         el.getAttribute("data-route")
       );
@@ -392,21 +392,31 @@
     const dataScript = document.getElementById("painel-data");
     const treeEl = document.getElementById("painel-tree");
     const ativosEl = document.getElementById("painel-ativos");
+    const ativosTitle = document.getElementById("painel-ativos-title");
+    const selectTipo = document.getElementById("painel-tipo");
     const selectPerfil = document.getElementById("painel-perfil");
+    const selectNivel = document.getElementById("painel-nivel");
+    const fieldPerfil = document.getElementById("painel-perfil-field");
+    const fieldNivel = document.getElementById("painel-nivel-field");
     const btnSalvar = document.getElementById("painel-salvar");
     const btnCancelar = document.getElementById("painel-cancelar");
     const msg = document.getElementById("painel-msg");
-    if (!dataScript || !treeEl || !ativosEl || !selectPerfil) return;
+    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectTipo) return;
     if (treeEl.dataset.bound === "1") return;
     treeEl.dataset.bound = "1";
 
     const features = JSON.parse(dataScript.dataset.features || "[]");
-    const allowedRaw = JSON.parse(dataScript.dataset.allowed || "{}");
-    const allowed = {};
-    Object.entries(allowedRaw).forEach(([k, v]) => {
-      allowed[String(k)] = v;
+    const allowedPerfilRaw = JSON.parse(dataScript.dataset.allowedPerfil || "{}");
+    const allowedNivelRaw = JSON.parse(dataScript.dataset.allowedNivel || "{}");
+    const allowedPerfil = {};
+    const allowedNivel = {};
+    Object.entries(allowedPerfilRaw).forEach(([k, v]) => {
+      allowedPerfil[String(k)] = v;
     });
-    const locked = new Set(features.filter((f) => f.locked).map((f) => f.id));
+    Object.entries(allowedNivelRaw).forEach(([k, v]) => {
+      allowedNivel[String(k)] = v;
+    });
+    const lockedBase = new Set(features.filter((f) => f.locked).map((f) => f.id));
     const sortFeatures = (items) =>
       (items || [])
         .map((f) => ({
@@ -415,10 +425,30 @@
         }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
     const sortedFeatures = sortFeatures(features);
-    let original = {};
-    Object.entries(allowed).forEach(([k, v]) => {
-      original[k] = [...v];
+    let originalPerfil = {};
+    let originalNivel = {};
+    Object.entries(allowedPerfil).forEach(([k, v]) => {
+      originalPerfil[k] = [...v];
     });
+    Object.entries(allowedNivel).forEach(([k, v]) => {
+      originalNivel[k] = [...v];
+    });
+    let nivelLocked = new Set();
+    let profileLocked = new Set();
+    let currentMode = selectTipo.value || "perfil";
+
+    const getAllowedMap = () => (currentMode === "nivel" ? allowedNivel : allowedPerfil);
+    const getOriginalMap = () => (currentMode === "nivel" ? originalNivel : originalPerfil);
+    const getSelectedKey = () => String(currentMode === "nivel" ? selectNivel.value || "" : selectPerfil.value || "");
+    const getLockedSet = () => {
+      const locked = new Set(lockedBase);
+      if (currentMode === "perfil") {
+        nivelLocked.forEach((id) => locked.add(id));
+      } else {
+        profileLocked.forEach((id) => locked.add(id));
+      }
+      return locked;
+    };
 
     const renderAtivos = (list) => {
       ativosEl.innerHTML = "";
@@ -429,16 +459,30 @@
       });
     };
 
-    const buildTree = (perfil) => {
+    const buildTree = (key) => {
       treeEl.innerHTML = "";
-      const currentAllowed = new Set(allowed[perfil] || []);
-      locked.forEach((f) => currentAllowed.add(f));
+      if (!key) {
+        ativosEl.innerHTML = "";
+        return;
+      }
+      const allowedMap = getAllowedMap();
+      const currentAllowed = new Set(allowedMap[key] || []);
+      lockedBase.forEach((f) => currentAllowed.add(f));
+      if (currentMode === "perfil") {
+        nivelLocked.forEach((f) => currentAllowed.add(f));
+      } else {
+        profileLocked.forEach((f) => currentAllowed.add(f));
+      }
+      const lockedAll = getLockedSet();
 
       const toggleChildren = (node, checked) => {
         node.querySelectorAll("input[type='checkbox']").forEach((cb) => {
-          cb.checked = checked;
           const id = cb.dataset.id;
-          if (locked.has(id)) return;
+          if (lockedAll.has(id)) {
+            cb.checked = true;
+            return;
+          }
+          cb.checked = checked;
           if (checked) currentAllowed.add(id);
           else currentAllowed.delete(id);
         });
@@ -473,7 +517,7 @@
         cb.type = "checkbox";
         cb.checked = currentAllowed.has(feat.id);
         cb.dataset.id = feat.id;
-        cb.disabled = locked.has(feat.id);
+        cb.disabled = lockedAll.has(feat.id);
         controls.appendChild(cb);
         const label = document.createElement("span");
         label.textContent = feat.nome;
@@ -491,15 +535,15 @@
               }
             }
           } else {
-            if (!locked.has(feat.id)) currentAllowed.delete(feat.id);
-            // desmarca filhos
+            if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
             if (feat.children && feat.children.length) {
               const subtree = wrapper.querySelector(".tree-children");
               if (subtree) toggleChildren(subtree, false);
             }
           }
-          allowed[perfil] = Array.from(currentAllowed);
-          renderAtivos(allowed[perfil]);
+          const updated = Array.from(currentAllowed).filter((id) => !lockedAll.has(id));
+          allowedMap[key] = updated;
+          renderAtivos(Array.from(currentAllowed));
         });
 
         if (feat.children && feat.children.length) {
@@ -522,55 +566,130 @@
         const node = createNode(f);
         treeEl.appendChild(node);
       });
-      renderAtivos(allowed[perfil] || []);
+      renderAtivos(Array.from(currentAllowed));
     };
 
     const loadPerfilPermissions = async (perfil) => {
-      if (!perfil) return [];
+      if (!perfil) return { features: [], nivelFeatures: [], nivel: "" };
       try {
         const res = await fetch(`/api/permissoes/${perfil}`, { headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissÃµes.");
-        return Array.isArray(data.features) ? data.features : [];
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissoes.");
+        return {
+          features: Array.isArray(data.features) ? data.features : [],
+          nivelFeatures: Array.isArray(data.nivel_features) ? data.nivel_features : [],
+          nivel: data.nivel,
+        };
       } catch (err) {
         console.error(err);
         if (msg) {
           msg.textContent = err.message;
           msg.classList.add("text-error");
         }
-        return [];
+        return { features: [], nivelFeatures: [], nivel: "" };
       }
     };
 
+    const loadNivelPermissions = async (nivel) => {
+      if (!nivel) return { features: [], perfilFeatures: [] };
+      try {
+        const res = await fetch(`/api/permissoes/nivel/${nivel}`, { headers: { "X-Requested-With": "fetch" } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissoes.");
+        return {
+          features: Array.isArray(data.features) ? data.features : [],
+          perfilFeatures: Array.isArray(data.perfil_features) ? data.perfil_features : [],
+        };
+      } catch (err) {
+        console.error(err);
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        return { features: [], perfilFeatures: [] };
+      }
+    };
+
+    const updateMode = async () => {
+      currentMode = selectTipo.value || "perfil";
+      if (fieldPerfil) fieldPerfil.style.display = currentMode === "perfil" ? "" : "none";
+      if (fieldNivel) fieldNivel.style.display = currentMode === "nivel" ? "" : "none";
+      if (ativosTitle) {
+        ativosTitle.textContent = currentMode === "nivel" ? "Ativos para o nivel" : "Ativos para o perfil";
+      }
+      treeEl.innerHTML = "";
+      ativosEl.innerHTML = "";
+      if (msg) {
+        msg.textContent = "";
+        msg.classList.remove("text-error");
+      }
+      const key = getSelectedKey();
+      if (!key) {
+        nivelLocked = new Set();
+        profileLocked = new Set();
+        return;
+      }
+      if (currentMode === "perfil") {
+        const result = await loadPerfilPermissions(key);
+        allowedPerfil[key] = result.features.filter((f) => typeof f === "string");
+        originalPerfil[key] = [...allowedPerfil[key]];
+        nivelLocked = new Set(result.nivelFeatures.filter((f) => typeof f === "string"));
+        profileLocked = new Set();
+      } else {
+        const result = await loadNivelPermissions(key);
+        allowedNivel[key] = result.features.filter((f) => typeof f === "string");
+        originalNivel[key] = [...allowedNivel[key]];
+        nivelLocked = new Set();
+        profileLocked = new Set(result.perfilFeatures.filter((f) => typeof f === "string"));
+      }
+      buildTree(key);
+    };
+
+    selectTipo.addEventListener("change", updateMode);
+
     selectPerfil.addEventListener("change", async () => {
+      if (currentMode !== "perfil") return;
       const perfil = String(selectPerfil.value || "");
       if (!perfil) {
         treeEl.innerHTML = "";
         ativosEl.innerHTML = "";
         return;
       }
-      // sempre recarrega do backend para refletir banco
-      const feats = await loadPerfilPermissions(perfil);
-      allowed[perfil] = feats.filter((f) => typeof f === "string");
-      locked.forEach((f) => {
-        if (!allowed[perfil].includes(f)) allowed[perfil].push(f);
-      });
+      const result = await loadPerfilPermissions(perfil);
+      allowedPerfil[perfil] = result.features.filter((f) => typeof f === "string");
+      originalPerfil[perfil] = [...allowedPerfil[perfil]];
+      nivelLocked = new Set(result.nivelFeatures.filter((f) => typeof f === "string"));
       buildTree(perfil);
     });
 
-    const handleSalvar = async () => {
-      const perfil = String(selectPerfil.value || "");
-      if (!perfil) {
-        if (msg) msg.textContent = "Selecione um perfil.";
+    selectNivel.addEventListener("change", async () => {
+      if (currentMode !== "nivel") return;
+      const nivel = String(selectNivel.value || "");
+      if (!nivel) {
+        treeEl.innerHTML = "";
+        ativosEl.innerHTML = "";
         return;
       }
-      const feats = allowed[perfil] || [];
-      locked.forEach((f) => {
-        if (!feats.includes(f)) feats.push(f);
-      });
+      const result = await loadNivelPermissions(nivel);
+      allowedNivel[nivel] = result.features.filter((f) => typeof f === "string");
+      originalNivel[nivel] = [...allowedNivel[nivel]];
+      nivelLocked = new Set();
+      profileLocked = new Set(result.perfilFeatures.filter((f) => typeof f === "string"));
+      buildTree(nivel);
+    });
+
+    const handleSalvar = async () => {
+      const key = getSelectedKey();
+      if (!key) {
+        if (msg) msg.textContent = currentMode === "nivel" ? "Selecione um nivel." : "Selecione um perfil.";
+        return;
+      }
+      const allowedMap = getAllowedMap();
+      const feats = allowedMap[key] || [];
       if (msg) msg.textContent = "Salvando...";
       try {
-        const res = await fetch(`/api/permissoes/${perfil}`, {
+        const url = currentMode === "nivel" ? `/api/permissoes/nivel/${key}` : `/api/permissoes/${key}`;
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
           body: JSON.stringify({ features: feats }),
@@ -580,8 +699,9 @@
           throw new Error(text || `Erro ${res.status}`);
         }
         const data = await res.json();
-        original[perfil] = [...feats];
-        if (msg) msg.textContent = data.message || "PermissÃµes salvas.";
+        const originalMap = getOriginalMap();
+        originalMap[key] = [...feats];
+        if (msg) msg.textContent = data.message || "Permissoes salvas.";
       } catch (err) {
         console.error(err);
         if (msg) {
@@ -592,10 +712,12 @@
     };
 
     const handleCancelar = () => {
-      const perfil = selectPerfil.value;
-      if (!perfil) return;
-      allowed[perfil] = [...(original[perfil] || [])];
-      buildTree(perfil);
+      const key = getSelectedKey();
+      if (!key) return;
+      const allowedMap = getAllowedMap();
+      const originalMap = getOriginalMap();
+      allowedMap[key] = [...(originalMap[key] || [])];
+      buildTree(key);
       if (msg) {
         msg.textContent = "";
         msg.classList.remove("text-error");
@@ -604,6 +726,7 @@
 
     if (btnSalvar) btnSalvar.addEventListener("click", handleSalvar);
     if (btnCancelar) btnCancelar.addEventListener("click", handleCancelar);
+    updateMode();
   }
 
   function initUsuariosSenha() {
@@ -715,7 +838,7 @@
       if (!res.ok) throw new Error("Erro ao consultar status");
       const data = await res.json();
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
         return;
       }
       const last = data.last;
@@ -726,7 +849,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -742,7 +865,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -758,12 +881,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -785,7 +908,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -817,7 +940,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
       }
       return last.status || null;
     } catch (err) {
@@ -835,7 +958,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -856,7 +979,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -878,7 +1001,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
         return null;
       }
       const last = data.last;
@@ -905,7 +1028,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
       }
       return last.status || null;
     } catch (err) {
@@ -954,7 +1077,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver RelatÃ³rio";
+  const viewLabel = "Ver Relat+¦rio";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1004,7 +1127,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload conclu+¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1045,7 +1168,7 @@
     const reprocessBtn = document.getElementById("ped-reprocess");
     const cancelBtn = document.getElementById("ped-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relat+¦rio";
     const goToReport = () => {
       setActive("relatorios/ped");
       loadPage("relatorios/ped");
@@ -1150,7 +1273,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload conclu+¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1192,7 +1315,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relat+¦rio";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1338,7 +1461,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relat+¦rio";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1432,7 +1555,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relat+¦rio";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");
@@ -1573,7 +1696,7 @@
     const loading = document.getElementById("plan20-loading");
   const submitBtn = document.getElementById("plan20-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver RelatÃ³rio";
+  const viewLabel = "Ver Relat+¦rio";
   const goToRelatorio = () => {
     setActive("relatorios/plan20-seduc");
     loadPage("relatorios/plan20-seduc");
@@ -1591,7 +1714,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
         if (!data.last) {
-          statusBox.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+          statusBox.textContent = "Nenhuma atualiza+º+úo encontrada.";
           return;
         }
         const last = data.last;
@@ -1602,7 +1725,7 @@
           <div><strong>Upload em:</strong> ${uploaded}</div>
           <div><strong>Data do download:</strong> ${dataArquivo}</div>
           <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-          <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+          <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
         `;
         if (submitBtn && data.last && data.last.output_filename) {
           submitBtn.dataset.mode = "view";
@@ -1654,7 +1777,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload conclu+¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1687,6 +1810,7 @@
   function initDotacao() {
     const form = document.getElementById("form-dotacao");
     const msg = document.getElementById("dotacao-msg");
+    const idInput = document.getElementById("dotacao-id");
     if (!form || !msg) return;
     if (form.dataset.bound === "1") return;
     form.dataset.bound = "1";
@@ -1703,30 +1827,530 @@
       subacao_entrega: document.getElementById("dotacao-subacao"),
       etapa: document.getElementById("dotacao-etapa"),
       natureza_despesa: document.getElementById("dotacao-natureza"),
+      elemento: document.getElementById("dotacao-elemento"),
+      subelemento: document.getElementById("dotacao-subelemento"),
       fonte: document.getElementById("dotacao-fonte"),
       iduso: document.getElementById("dotacao-iduso"),
     };
     const adjSelect = document.getElementById("dotacao-adj");
-    const elementoInput = document.getElementById("dotacao-elemento");
+    const elementoInput = selects.elemento;
     const valorInput = document.getElementById("dotacao-valor");
     const saldoInput = document.getElementById("dotacao-saldo");
     const saldoInfo = document.getElementById("dotacao-saldo-info");
     const saldoDebug = document.getElementById("dotacao-saldo-debug");
+    const prefixInput = document.getElementById("dotacao-chave-prefixo");
     const justificativaInput = document.getElementById("dotacao-justificativa");
     const clearBtn = document.getElementById("dotacao-clear");
+    const filterForm = document.getElementById("dotacao-filtro-form");
+    const filterField = document.getElementById("dotacao-filtro-campo");
+    const filterOp = document.getElementById("dotacao-filtro-operador");
+    const filterValue = document.getElementById("dotacao-filtro-valor");
+    const filterAdd = document.getElementById("dotacao-filtro-add");
+    const filterList = document.getElementById("dotacao-filtro-list");
+    const filterRemove = document.getElementById("dotacao-filtro-remove");
+    const filterClear = document.getElementById("dotacao-filtro-clear");
+    const filterCancel = document.getElementById("dotacao-filtro-cancel");
+    const filterApply = document.getElementById("dotacao-filtro-apply");
+    const filterMsg = document.getElementById("dotacao-filtro-msg");
+    const dotacaoSummary = document.getElementById("dotacao-summary");
+    const summaryBody = document.querySelector("#dotacao-summary-table tbody");
+    const pageSizeSelect = document.getElementById("dotacao-page-size");
+    const paginationEl = document.getElementById("dotacao-pagination");
+    const editBtn = document.getElementById("dotacao-edit");
+    const deleteBtn = document.getElementById("dotacao-delete");
+    const printBtn = document.getElementById("dotacao-print");
 
     const hasAllSelects = Object.values(selects).every((el) => el);
     if (!hasAllSelects || !adjSelect) return;
 
     let updating = false;
+    const baseSaldoKeys = new Set(["exercicio", "chave_planejamento"]);
 
-    const currentFilters = () => {
+    const currentOptionFilters = () => {
       const params = {};
       Object.entries(selects).forEach(([key, el]) => {
         const val = el.value;
-        if (val) params[key] = val;
+        if (!val) return;
+        if (baseSaldoKeys.has(key) || el.dataset.touched === "1") {
+          params[key] = val;
+        }
       });
       return params;
+    };
+
+    const currentSaldoFilters = () => {
+      const params = {};
+      Object.entries(selects).forEach(([key, el]) => {
+        const val = el.value;
+        if (!val) return;
+        params[key] = val;
+      });
+      return params;
+    };
+
+    const getAdjLabel = () => {
+      const opt = adjSelect.options[adjSelect.selectedIndex];
+      return opt ? String(opt.textContent || "").trim() : "";
+    };
+
+    const buildDotacaoPrefix = () => {
+      const exercicio = selects.exercicio.value || "";
+      const adjLabel = getAdjLabel();
+      return `DOT.${exercicio}.${adjLabel}.`;
+    };
+
+    const updateJustificativaPrefix = () => {
+      if (prefixInput) prefixInput.value = buildDotacaoPrefix();
+    };
+
+    const criteria = [];
+    let criteriaSelected = -1;
+    const fieldLabels = {
+      exercicio: "Exerc\u00edcio",
+      adjunta: "Adjunta Respons\u00e1vel",
+      programa: "Programa",
+      paoe: "A\u00e7\u00e3o/PAOE",
+    };
+    const opLabels = {
+      eq: "Igual a",
+      gt: "Maior que",
+      lt: "Menor que",
+      gte: "Maior igual a",
+      lte: "Menor igual a",
+    };
+
+    const setFilterMsg = (text, isError = false) => {
+      if (!filterMsg) return;
+      filterMsg.textContent = text || "";
+      if (isError) filterMsg.classList.add("text-error");
+      else filterMsg.classList.remove("text-error");
+    };
+
+    const flashSummaryWarning = () => {
+      if (!dotacaoSummary) return;
+      dotacaoSummary.classList.add("dotacao-summary-warn");
+      setTimeout(() => {
+        dotacaoSummary.classList.remove("dotacao-summary-warn");
+      }, 1200);
+    };
+
+    const renderCriteria = () => {
+      if (!filterList) return;
+      filterList.innerHTML = "";
+      criteria.forEach((c, idx) => {
+        const li = document.createElement("li");
+        const label = fieldLabels[c.field] || c.field;
+        const op = opLabels[c.op] || c.op;
+        li.textContent = `${label} ${op} ${c.value}`;
+        li.dataset.index = String(idx);
+        if (idx === criteriaSelected) {
+          li.style.borderColor = "var(--primary)";
+        }
+        li.addEventListener("click", () => {
+          criteriaSelected = idx;
+          renderCriteria();
+        });
+        filterList.appendChild(li);
+      });
+    };
+
+    const formatPtBr = (value) => {
+      const n = Number(value || 0);
+      if (Number.isNaN(n)) return "";
+      return new Intl.NumberFormat("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    };
+
+    const parsePtBr = (value) => {
+      if (value === null || value === undefined) return null;
+      const raw = String(value).trim();
+      if (!raw) return null;
+      if (raw.includes(",")) {
+        const cleaned = raw.replace(/\./g, "").replace(",", ".");
+        const num = Number(cleaned);
+        return Number.isNaN(num) ? null : num;
+      }
+      const num = Number(raw);
+      return Number.isNaN(num) ? null : num;
+    };
+
+    const formatValorDotacaoInput = () => {
+      if (!valorInput) return;
+      const digits = String(valorInput.value || "").replace(/\D/g, "");
+      if (!digits) {
+        valorInput.value = "";
+        return;
+      }
+      const num = Number(digits) / 100;
+      valorInput.value = formatPtBr(num);
+    };
+
+    const parseMaybeNumber = (value) => {
+      if (value === null || value === undefined) return { raw: "", num: null };
+      const raw = String(value).trim();
+      if (!raw) return { raw, num: null };
+      const num = Number(raw.replace(",", "."));
+      return Number.isNaN(num) ? { raw, num: null } : { raw, num };
+    };
+
+    const compareValues = (left, right, op) => {
+      const l = parseMaybeNumber(left);
+      const r = parseMaybeNumber(right);
+      if (l.num !== null && r.num !== null) {
+        if (op === "eq") return l.num === r.num;
+        if (op === "gt") return l.num > r.num;
+        if (op === "lt") return l.num < r.num;
+        if (op === "gte") return l.num >= r.num;
+        if (op === "lte") return l.num <= r.num;
+      }
+      const lraw = l.raw.toLowerCase();
+      const rraw = r.raw.toLowerCase();
+      const cmp = lraw.localeCompare(rraw, "pt-BR", { sensitivity: "base" });
+      if (op === "eq") return cmp === 0;
+      if (op === "gt") return cmp > 0;
+      if (op === "lt") return cmp < 0;
+      if (op === "gte") return cmp >= 0;
+      if (op === "lte") return cmp <= 0;
+      return false;
+    };
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+
+    const getRows = () => {
+      if (!summaryBody) return [];
+      return Array.from(summaryBody.querySelectorAll(".dotacao-summary-row"));
+    };
+
+    const clearPagination = () => {
+      if (paginationEl) paginationEl.innerHTML = "";
+    };
+
+    const setResultsVisible = (show) => {
+      if (!dotacaoSummary) return;
+      dotacaoSummary.style.display = show ? "" : "none";
+      if (!show) {
+        getRows().forEach((row) => row.classList.remove("selected"));
+        clearPagination();
+      }
+    };
+
+    const getFilteredRows = () => {
+      const rows = getRows();
+      if (!criteria.length) return rows;
+      return rows.filter((row) =>
+        criteria.every((c) => {
+          const field = c.field;
+          const rowVal = row.dataset[field] || "";
+          return compareValues(rowVal, c.value, c.op);
+        })
+      );
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderSummaryPage();
+          setFilterMsg("");
+        });
+        paginationEl.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p++) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        paginationEl.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const renderSummaryPage = () => {
+      const allRows = getRows();
+      const filtered = getFilteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = filtered.slice(startIdx, startIdx + pageSize);
+      allRows.forEach((row) => {
+        row.style.display = "none";
+        row.classList.remove("selected");
+      });
+      pageRows.forEach((row) => {
+        row.style.display = "";
+      });
+      renderPagination(totalPages);
+    };
+
+    const applyCriteriaToResults = (resetPage = true) => {
+      if (resetPage) currentPage = 1;
+      renderSummaryPage();
+    };
+
+    const normalizeOptionValue = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+    const setSelectValueFallback = (select, value) => {
+      if (!select) return;
+      select.value = value;
+      if (select.value === value) return;
+      const target = normalizeOptionValue(value);
+      if (!target) return;
+      const option = Array.from(select.options).find((opt) => {
+        const optVal = normalizeOptionValue(opt.value);
+        const optText = normalizeOptionValue(opt.textContent || "");
+        return optVal === target || optText === target;
+      });
+      if (option) select.value = option.value;
+    };
+
+    const extractJustificativaOnly = (value) => {
+      const text = String(value || "").trim();
+      const match = text.match(/^DOT\.[^.]*\.[^.]*\.\d+(?:\s+(.*))?$/);
+      if (match) return match[1] || "";
+      return text;
+    };
+
+    const selectRow = (row) => {
+      getRows().forEach((el) => el.classList.remove("selected"));
+      if (row) row.classList.add("selected");
+    };
+
+    const bindRowSelection = () => {
+      getRows().forEach((row) => {
+        row.addEventListener("click", () => {
+          selectRow(row);
+          setFilterMsg("");
+        });
+      });
+    };
+
+    const fillFormFromRow = async (row) => {
+      if (!row) return;
+      if (idInput) idInput.value = row.dataset.id || "";
+      selects.exercicio.value = row.dataset.exercicio || "";
+      adjSelect.value = row.dataset.adjId || "";
+      selects.chave_planejamento.value = row.dataset.chave || "";
+      selects.uo.value = row.dataset.uo || "";
+      selects.programa.value = row.dataset.programaRaw || "";
+      selects.acao_paoe.value = row.dataset.acaoPaoe || "";
+      selects.produto.value = row.dataset.produto || "";
+      selects.ug.value = row.dataset.ug || "";
+      selects.regiao.value = row.dataset.regiao || "";
+      setSelectValueFallback(selects.subacao_entrega, row.dataset.subacao || "");
+      selects.etapa.value = row.dataset.etapa || "";
+      selects.natureza_despesa.value = row.dataset.natureza || "";
+      setSelectValueFallback(selects.elemento, row.dataset.elemento || "");
+      setSelectValueFallback(selects.subelemento, row.dataset.subelemento || "");
+      selects.fonte.value = row.dataset.fonte || "";
+      selects.iduso.value = row.dataset.iduso || "";
+      setSelectValueFallback(selects.elemento, row.dataset.elemento || "");
+      setSelectValueFallback(selects.subelemento, row.dataset.subelemento || "");
+      if (valorInput) valorInput.value = formatPtBr(parsePtBr(row.dataset.valor) || 0);
+      if (justificativaInput) {
+        justificativaInput.value = extractJustificativaOnly(row.dataset.justificativa || "");
+      }
+      updateJustificativaPrefix();
+      await loadOptions();
+      selects.exercicio.value = row.dataset.exercicio || "";
+      adjSelect.value = row.dataset.adjId || "";
+      selects.chave_planejamento.value = row.dataset.chave || "";
+      selects.uo.value = row.dataset.uo || "";
+      selects.programa.value = row.dataset.programaRaw || "";
+      selects.acao_paoe.value = row.dataset.acaoPaoe || "";
+      selects.produto.value = row.dataset.produto || "";
+      selects.ug.value = row.dataset.ug || "";
+      selects.regiao.value = row.dataset.regiao || "";
+      setSelectValueFallback(selects.subacao_entrega, row.dataset.subacao || "");
+      selects.etapa.value = row.dataset.etapa || "";
+      selects.natureza_despesa.value = row.dataset.natureza || "";
+      setSelectValueFallback(selects.elemento, row.dataset.elemento || "");
+      setSelectValueFallback(selects.subelemento, row.dataset.subelemento || "");
+      selects.fonte.value = row.dataset.fonte || "";
+      selects.iduso.value = row.dataset.iduso || "";
+      updateJustificativaPrefix();
+      loadSaldo();
+    };
+
+    const escapeHtml = (value) => {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    };
+
+    const buildRowFromPayload = (data) => {
+      return {
+        dataset: {
+          exercicio: data.exercicio || "",
+          adjunta: data.adjunta || "",
+          chave: data.chave_planejamento || "",
+          uo: data.uo || "",
+          programaRaw: data.programa || "",
+          acaoPaoe: data.acao_paoe || "",
+          produto: data.produto || "",
+          ug: data.ug || "",
+          regiao: data.regiao || "",
+          subacao: data.subacao_entrega || "",
+          etapa: data.etapa || "",
+          natureza: data.natureza_despesa || "",
+          elemento: data.elemento || "",
+          subelemento: data.subelemento || "",
+          fonte: data.fonte || "",
+          iduso: data.iduso || "",
+          justificativa: data.justificativa_historico || "",
+          valor: data.valor_dotacao || "",
+          chaveDotacao: data.chave_dotacao || "",
+          usuarioNome: data.usuario_nome || "",
+          criadoEm: data.criado_em || "",
+          alteradoEm: data.alterado_em || "",
+        },
+      };
+    };
+
+    const buildPrintTable = (row) => {
+      const fields = [
+        ["Exerc&#237;cio", row.dataset.exercicio],
+        ["Adjunta Respons&#225;vel", row.dataset.adjunta],
+        ["Chave de Planejamento", row.dataset.chave],
+        ["UO", row.dataset.uo],
+        ["Programa", row.dataset.programaRaw],
+        ["A&#231;&#227;o/PAOE", row.dataset.acaoPaoe],
+        ["Produto", row.dataset.produto],
+        ["UG", row.dataset.ug],
+        ["Regi&#227;o", row.dataset.regiao],
+        ["Suba&#231;&#227;o/Entrega", row.dataset.subacao],
+        ["Etapa", row.dataset.etapa],
+        ["Natureza de Despesa", row.dataset.natureza],
+        ["Elemento de Despesa", row.dataset.elemento],
+        ["Subelemento", row.dataset.subelemento],
+        ["Fonte", row.dataset.fonte],
+        ["Iduso", row.dataset.iduso],
+        ["Justificativa/Hist&#243;rico", row.dataset.justificativa],
+        ["Valor da Dota&#231;&#227;o", formatPtBr(parsePtBr(row.dataset.valor) || 0)],
+      ];
+      const rowsHtml = fields
+        .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
+        .join("");
+      return `
+        <table class="print-table">
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      `;
+    };
+
+    const formatPrintDate = (value) => {
+      if (!value) return "";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return value;
+      return d.toLocaleString("pt-BR");
+    };
+
+    const buildFooterText = (row) => {
+      const nome = row?.dataset?.usuarioNome || "";
+      const criado = row?.dataset?.criadoEm || "";
+      const alterado = row?.dataset?.alteradoEm || "";
+      const chave = row?.dataset?.chaveDotacao || "";
+      let label = "criado em";
+      let dataRef = criado;
+      if (alterado && criado && alterado !== criado) {
+        label = "alterado em";
+        dataRef = alterado;
+      } else if (alterado && !criado) {
+        label = "alterado em";
+        dataRef = alterado;
+      }
+      const dataFmt = formatPrintDate(dataRef);
+      const parts = [];
+      if (nome) parts.push(nome);
+      if (dataFmt) parts.push(`${label} ${dataFmt}`);
+      if (chave) parts.push(chave);
+      return parts.join(" - ");
+    };
+
+    const openPrintPopup = (rows) => {
+      const content = rows.map((row) => buildPrintTable(row)).join('<div class="print-gap"></div>');
+      const footerText = buildFooterText(rows[0]);
+      const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dota&#231;&#227;o Cadastrada</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #000; margin: 24px; }
+    .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #000; }
+    .print-brand { display: flex; align-items: center; gap: 12px; }
+    .print-brand img { height: 48px; }
+    .print-brand-title { font-weight: 700; font-size: 16px; }
+    .print-brand-subtitle { font-size: 12px; color: #333; }
+    .print-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+    .print-title { text-align: center; font-weight: 700; flex: 1; text-transform: uppercase; }
+    .print-title-key { min-width: 200px; font-size: 12px; }
+    .print-title-date { min-width: 200px; text-align: right; font-size: 12px; }
+    .print-footer { margin-top: 16px; border-top: 1px dashed #000; font-size: 12px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .print-footer img { height: 36px; }
+    .print-footer-text { flex: 1; text-align: center; }
+    .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
+    .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 8px; vertical-align: top; word-break: break-word; }
+    .print-table th { width: 220px; background: #f1f1f1; text-transform: uppercase; }
+    .print-gap { height: 10px; }
+  </style>
+</head>
+<body>
+  <div class="print-header">
+    <div class="print-brand">
+      <img src="/static/img/logo.jpg" alt="Logo" />
+      <div class="print-brand-text">
+        <div class="print-brand-title">Sistema de Planejamento e Or&#231;amento</div>
+        <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
+      </div>
+    </div>
+  </div>
+  <div class="print-title-row">
+    <div class="print-title-key">${escapeHtml(rows[0]?.dataset?.chaveDotacao || "")}</div>
+    <div class="print-title">DOTA&#199;&#195;O CADASTRADA</div>
+    <div class="print-title-date">${formatPrintDate((rows[0]?.dataset?.alteradoEm && rows[0]?.dataset?.alteradoEm !== rows[0]?.dataset?.criadoEm) ? rows[0]?.dataset?.alteradoEm : rows[0]?.dataset?.criadoEm)}</div>
+  </div>
+  ${content}
+  <div class="print-footer">
+    <img src="/static/img/logo.jpg" alt="Logo" />
+    <div class="print-footer-text">${footerText}</div>
+    <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
+  </div>
+</body>
+</html>`;
+      const win = window.open("", "_blank");
+      if (!win) {
+        setFilterMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+      }, 300);
     };
 
     const setSelectOptions = (select, options, current) => {
@@ -1754,7 +2378,7 @@
     };
 
     const loadOptions = async () => {
-      const params = currentFilters();
+      const params = currentSaldoFilters();
       const url = new URL("/api/dotacao/options", window.location.origin);
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
       try {
@@ -1769,6 +2393,7 @@
         if (Array.isArray(data.adj)) {
           setAdjOptions(data.adj, adjSelect.value);
         }
+        updateJustificativaPrefix();
       } catch (err) {
         console.error(err);
       } finally {
@@ -1776,18 +2401,9 @@
       }
     };
 
-    const formatSaldo = (value) => {
-      const n = Number(value || 0);
-      if (Number.isNaN(n)) return "";
-      return new Intl.NumberFormat("pt-BR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(n);
-    };
-
     const loadSaldo = async () => {
       if (!saldoInput) return;
-      const params = currentFilters();
+      const params = currentSaldoFilters();
       const requiredKeys = ["exercicio", "chave_planejamento"];
       const missing = requiredKeys.some((k) => !params[k]);
       if (missing) {
@@ -1802,7 +2418,7 @@
         const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao calcular saldo.");
-        saldoInput.value = formatSaldo(data.saldo);
+        saldoInput.value = formatPtBr(data.saldo);
         if (saldoInfo) {
           saldoInfo.textContent = "";
         }
@@ -1810,12 +2426,12 @@
           const pedCount = data.ped_count ?? 0;
           const empCount = data.emp_count ?? 0;
           const dotCount = data.dotacao_count ?? 0;
-          const pedSum = formatSaldo(data.valor_ped ?? 0);
-          const empSum = formatSaldo(data.valor_emp_liquido ?? 0);
-          const dotSum = formatSaldo(data.valor_dotacao ?? 0);
-          const planSum = formatSaldo(data.valor_atual ?? 0);
+          const pedSum = formatPtBr(data.valor_ped ?? 0);
+          const empSum = formatPtBr(data.valor_emp_liquido ?? 0);
+          const dotSum = formatPtBr(data.valor_dotacao ?? 0);
+          const planSum = formatPtBr(data.valor_atual ?? 0);
           saldoDebug.textContent =
-            `Plan21: ${planSum} | DotaÃ§Ã£o: ${dotSum} | PED: ${pedSum} (${pedCount}) | EMP: ${empSum} (${empCount})`;
+            `Plan21: ${planSum} | Dotacao: ${dotSum} | PED: ${pedSum} (${pedCount}) | EMP: ${empSum} (${empCount})`;
         }
       } catch (err) {
         console.error(err);
@@ -1825,17 +2441,178 @@
       }
     };
 
-    Object.values(selects).forEach((el) => {
+    Object.entries(selects).forEach(([key, el]) => {
       el.addEventListener("change", () => {
         if (updating) return;
+        if (!baseSaldoKeys.has(key)) {
+          el.dataset.touched = "1";
+        }
         loadOptions();
         loadSaldo();
+        updateJustificativaPrefix();
       });
     });
+    adjSelect.addEventListener("change", updateJustificativaPrefix);
+    if (valorInput) {
+      valorInput.addEventListener("input", formatValorDotacaoInput);
+      valorInput.addEventListener("blur", formatValorDotacaoInput);
+    }
+
+    if (filterForm) {
+      renderCriteria();
+      if (filterAdd) {
+        filterAdd.addEventListener("click", () => {
+          const field = String(filterField?.value || "");
+          const op = String(filterOp?.value || "eq");
+          const value = String(filterValue?.value || "").trim();
+          if (!field) {
+            setFilterMsg("Selecione um campo.", true);
+            return;
+          }
+          if (!value) {
+            setFilterMsg("Informe um valor.", true);
+            return;
+          }
+          if (field !== "exercicio" && !criteria.some((c) => c.field === "exercicio")) {
+            setFilterMsg("Informe um crit\u00e9rio de Exerc\u00edcio antes dos demais.", true);
+            return;
+          }
+          criteria.push({ field, op, value });
+          criteriaSelected = criteria.length - 1;
+          renderCriteria();
+          setFilterMsg("");
+          if (filterValue) filterValue.value = "";
+        });
+      }
+      if (filterRemove) {
+        filterRemove.addEventListener("click", () => {
+          if (criteriaSelected < 0 || criteriaSelected >= criteria.length) {
+            setFilterMsg("Selecione um criterio para remover.", true);
+            return;
+          }
+          criteria.splice(criteriaSelected, 1);
+          criteriaSelected = -1;
+          renderCriteria();
+          if (criteria.length) {
+            applyCriteriaToResults(false);
+          }
+          setFilterMsg("");
+        });
+      }
+      if (filterClear) {
+        filterClear.addEventListener("click", () => {
+          criteria.length = 0;
+          criteriaSelected = -1;
+          renderCriteria();
+          setResultsVisible(false);
+          setFilterMsg("");
+        });
+      }
+      if (filterCancel) {
+        filterCancel.addEventListener("click", () => {
+          criteria.length = 0;
+          criteriaSelected = -1;
+          renderCriteria();
+          setResultsVisible(false);
+          if (filterField) filterField.value = "";
+          if (filterOp) filterOp.value = "eq";
+          if (filterValue) filterValue.value = "";
+          setFilterMsg("");
+        });
+      }
+      if (filterApply) {
+        filterApply.addEventListener("click", () => {
+          if (!criteria.some((c) => c.field == "exercicio")) {
+            setFilterMsg("Informe o crit\u00e9rio de Exerc\u00edcio antes de consultar.", true);
+            return;
+          }
+          setResultsVisible(true);
+          applyCriteriaToResults(true);
+          setFilterMsg("");
+        });
+      }
+    }
+
+    const formatSummaryValues = () => {
+      getRows().forEach((row) => {
+        const cell = row.querySelector(".dotacao-summary-valor");
+        if (!cell) return;
+        const raw = row.dataset.valor || cell.textContent || "";
+        cell.textContent = formatPtBr(parsePtBr(raw) || 0);
+      });
+    };
+
+    bindRowSelection();
+    formatSummaryValues();
+
+    if (editBtn) {
+      editBtn.addEventListener("click", async () => {
+        if (dotacaoSummary && dotacaoSummary.style.display === "none") {
+          setFilterMsg("Consulte antes de editar.", true);
+          return;
+        }
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para editar.", true);
+          return;
+        }
+        await fillFormFromRow(selected);
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        if (dotacaoSummary && dotacaoSummary.style.display === "none") {
+          setFilterMsg("Consulte antes de excluir.", true);
+          return;
+        }
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para excluir.", true);
+          return;
+        }
+        const dotacaoId = selected.dataset.id;
+        if (!dotacaoId) {
+          setFilterMsg("Registro inv?lido para exclus?o.", true);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/dotacao/${encodeURIComponent(dotacaoId)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
+          selected.remove();
+          renderSummaryPage();
+          setFilterMsg(data.message || "Dota??o exclu?da.", false);
+        } catch (err) {
+          console.error(err);
+          setFilterMsg(err.message || "Falha ao excluir.", true);
+        }
+      });
+    }
+
+    if (printBtn) {
+      printBtn.addEventListener("click", () => {
+        if (dotacaoSummary && dotacaoSummary.style.display === "none") {
+          setFilterMsg("Consulte antes de imprimir.", true);
+          return;
+        }
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para imprimir.", true);
+          flashSummaryWarning();
+          return;
+        }
+        openPrintPopup([selected]);
+      });
+    }
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      msg.textContent = "Salvando...";
+      const dotacaoId = idInput ? String(idInput.value || "") : "";
+      msg.textContent = dotacaoId ? "Atualizando..." : "Salvando...";
       msg.classList.remove("text-error");
       const payload = {
         exercicio: selects.exercicio.value,
@@ -1851,22 +2628,32 @@
         etapa: selects.etapa.value,
         natureza_despesa: selects.natureza_despesa.value,
         elemento: elementoInput.value,
+        subelemento: selects.subelemento.value,
         fonte: selects.fonte.value,
         iduso: selects.iduso.value,
         valor_dotacao: valorInput.value,
         justificativa_historico: justificativaInput.value,
       };
       try {
-        const res = await fetch("/api/dotacao", {
-          method: "POST",
+        const url = dotacaoId ? `/api/dotacao/${encodeURIComponent(dotacaoId)}` : "/api/dotacao";
+        const method = dotacaoId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
           headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
           body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
-        msg.textContent = data.message || "DotaÃ§Ã£o cadastrada.";
+        msg.textContent = data.message || (dotacaoId ? "Dotacao atualizada." : "Dotacao cadastrada.");
+        if (data.dotacao) {
+          openPrintPopup([buildRowFromPayload(data.dotacao)]);
+        }
         form.reset();
+        if (idInput) idInput.value = "";
         if (saldoInput) saldoInput.value = "";
+        Object.values(selects).forEach((el) => {
+          delete el.dataset.touched;
+        });
         await loadPage("cadastrar/dotacao");
       } catch (err) {
         console.error(err);
@@ -1878,17 +2665,33 @@
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
         form.reset();
+        if (idInput) idInput.value = "";
         msg.textContent = "";
         msg.classList.remove("text-error");
         if (saldoInput) saldoInput.value = "";
         if (saldoInfo) saldoInfo.textContent = "";
         if (saldoDebug) saldoDebug.textContent = "";
+        Object.values(selects).forEach((el) => {
+          delete el.dataset.touched;
+        });
         loadOptions();
+        updateJustificativaPrefix();
       });
     }
 
     loadOptions();
     loadSaldo();
+    updateJustificativaPrefix();
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        if (dotacaoSummary && dotacaoSummary.style.display !== "none") {
+          renderSummaryPage();
+        }
+      });
+    }
+
+    setResultsVisible(false);
   }
 
   function initRelatorioFip() {
@@ -2077,7 +2880,7 @@
         if (paoeSet.size === 0) {
           paoeEl.textContent = "-";
         } else if (paoeSet.size > 10) {
-          paoeEl.textContent = "VÃ¡rios PAOEs";
+          paoeEl.textContent = "V+írios PAOEs";
         } else {
           paoeEl.textContent = Array.from(paoeSet).join(" * ");
         }
@@ -2411,7 +3214,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -2938,7 +3741,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -3438,7 +4241,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -3935,7 +4738,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4480,7 +5283,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4974,7 +5777,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>+Ültima atualiza+º+úo</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5125,7 +5928,6 @@
       "empenhado",
     ]);
     const adjustVal = (k, v) => (negateCols.has(k) ? Number(v || 0) * -1 : Number(v || 0));
-
 
 
 
