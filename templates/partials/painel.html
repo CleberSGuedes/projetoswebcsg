@@ -54,6 +54,6 @@
 <script id="painel-data"
         type="application/json"
         data-features='{{ features|tojson }}'
-        data-allowed-perfil='{{ allowed_perfil|tojson }}'
-        data-allowed-nivel='{{ allowed_nivel|tojson }}'>
+        data-allowed-perfil='{{ (allowed_perfil or [])|tojson }}'
+        data-allowed-nivel='{{ (allowed_nivel or [])|tojson }}'>
 </script>

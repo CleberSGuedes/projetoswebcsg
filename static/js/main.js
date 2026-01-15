@@ -2377,6 +2377,12 @@
       if (keep) adjSelect.value = keep;
     };
 
+    const getCurrentYear = () => {
+      return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Manaus", year: "numeric" }).format(
+        new Date()
+      );
+    };
+
     const loadOptions = async () => {
       const params = currentSaldoFilters();
       const url = new URL("/api/dotacao/options", window.location.origin);
@@ -2387,7 +2393,10 @@
         if (!res.ok) throw new Error(data.error || "Falha ao carregar opcoes.");
         updating = true;
         Object.entries(selects).forEach(([key, el]) => {
-          const opts = (data.options && data.options[key]) || [];
+          let opts = (data.options && data.options[key]) || [];
+          if (key === "exercicio") {
+            opts = [getCurrentYear()];
+          }
           setSelectOptions(el, opts, el.value);
         });
         if (Array.isArray(data.adj)) {
