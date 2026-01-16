@@ -338,7 +338,7 @@ def adicionar_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in novas_colunas_planejamento:
         if col not in df.columns and ex_col:
-            df.insert(df.columns.get_loc(ex_col), col, "N??O INFORMADO")
+            df.insert(df.columns.get_loc(ex_col), col, "N?O INFORMADO")
 
     if "Dotação Orçamentária" in df.columns:
         posicao_insercao = df.columns.get_loc("Dotação Orçamentária") + 1

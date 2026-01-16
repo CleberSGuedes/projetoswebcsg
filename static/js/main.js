@@ -172,12 +172,12 @@
           msg.classList.add("text-error");
           return;
         }
-        msg.textContent = "Usu+írio criado.";
+        msg.textContent = "UsuÃ¡rio criado.";
         form.reset();
         await loadPage("usuarios");
       } catch (err) {
         console.error(err);
-        msg.textContent = "Falha na requisi+º+úo.";
+        msg.textContent = "Falha na requisiÃ§Ã£o.";
         msg.classList.add("text-error");
       }
     });
@@ -214,7 +214,7 @@
       msg.classList.remove("text-error");
       const email = document.getElementById("edit-email").value;
       if (!email) {
-        msg.textContent = "Selecione um usu+írio na lista.";
+        msg.textContent = "Selecione um usuÃ¡rio na lista.";
         msg.classList.add("text-error");
         return;
       }
@@ -235,10 +235,10 @@
         try {
           data = JSON.parse(raw || "{}");
         } catch {
-          // se n+úo for JSON, usa texto bruto na mensagem de erro
+          // se n+Ãºo for JSON, usa texto bruto na mensagem de erro
         }
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
-        msg.textContent = data.message || "Usu+írio atualizado.";
+        msg.textContent = data.message || "UsuÃ¡rio atualizado.";
         document.getElementById("edit-senha").value = "";
         const row = document.querySelector(`tr[data-email="${email}"]`);
         if (row) {
@@ -249,7 +249,7 @@
           if (cells.length >= 4) {
             cells[1].textContent = payload.nome || cells[1].textContent;
             cells[2].textContent = payload.perfil || cells[2].textContent;
-            cells[3].textContent = payload.ativo ? "Sim" : "N+úo";
+            cells[3].textContent = payload.ativo ? "Sim" : "N+Ãºo";
           }
         }
       } catch (err) {
@@ -367,7 +367,7 @@
 
   async function fetchCurrentPermissions() {
     if (userNivel === "1") {
-      // admin: libera tudo vis+¡vel no menu
+      // admin: libera tudo vis+Â¡vel no menu
       const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
         el.getAttribute("data-route")
       );
@@ -838,7 +838,7 @@
       if (!res.ok) throw new Error("Erro ao consultar status");
       const data = await res.json();
       if (!data.last) {
-        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         return;
       }
       const last = data.last;
@@ -849,7 +849,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Sa+Â¡da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -865,7 +865,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -881,12 +881,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Sa+Â¡da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relat+Â¦rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -908,7 +908,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -940,7 +940,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relat+Â¦rio";
       }
       return last.status || null;
     } catch (err) {
@@ -958,7 +958,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -979,7 +979,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relat+Â¦rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -1001,7 +1001,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualiza+º+úo encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         return null;
       }
       const last = data.last;
@@ -1028,7 +1028,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relat+Â¦rio";
       }
       return last.status || null;
     } catch (err) {
@@ -1077,7 +1077,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relat+¦rio";
+  const viewLabel = "Ver Relat+Â¦rio";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1127,7 +1127,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload conclu+Â¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1168,7 +1168,7 @@
     const reprocessBtn = document.getElementById("ped-reprocess");
     const cancelBtn = document.getElementById("ped-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relat+Â¦rio";
     const goToReport = () => {
       setActive("relatorios/ped");
       loadPage("relatorios/ped");
@@ -1273,7 +1273,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload conclu+Â¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1315,7 +1315,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relat+Â¦rio";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1461,7 +1461,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relat+Â¦rio";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1555,7 +1555,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relat+Â¦rio";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");
@@ -1696,7 +1696,7 @@
     const loading = document.getElementById("plan20-loading");
   const submitBtn = document.getElementById("plan20-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relat+¦rio";
+  const viewLabel = "Ver Relat+Â¦rio";
   const goToRelatorio = () => {
     setActive("relatorios/plan20-seduc");
     loadPage("relatorios/plan20-seduc");
@@ -1714,7 +1714,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
         if (!data.last) {
-          statusBox.textContent = "Nenhuma atualiza+º+úo encontrada.";
+          statusBox.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
           return;
         }
         const last = data.last;
@@ -1725,7 +1725,7 @@
           <div><strong>Upload em:</strong> ${uploaded}</div>
           <div><strong>Data do download:</strong> ${dataArquivo}</div>
           <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-          <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+          <div><strong>Sa+Â¡da gerada:</strong> ${last.output_filename || "-"}</div>
         `;
         if (submitBtn && data.last && data.last.output_filename) {
           submitBtn.dataset.mode = "view";
@@ -1777,7 +1777,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload conclu+Â¡do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -2594,7 +2594,7 @@
           if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
           selected.remove();
           renderSummaryPage();
-          setFilterMsg(data.message || "Dota??o exclu?da.", false);
+          setFilterMsg(data.message || "DotaÃ§Ã£o excluÃ­da.", false);
         } catch (err) {
           console.error(err);
           setFilterMsg(err.message || "Falha ao excluir.", true);
@@ -2889,7 +2889,7 @@
         if (paoeSet.size === 0) {
           paoeEl.textContent = "-";
         } else if (paoeSet.size > 10) {
-          paoeEl.textContent = "V+írios PAOEs";
+          paoeEl.textContent = "VÃ¡rios PAOEs";
         } else {
           paoeEl.textContent = Array.from(paoeSet).join(" * ");
         }
@@ -3223,7 +3223,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -3750,7 +3750,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4250,7 +4250,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4747,7 +4747,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5292,7 +5292,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5786,7 +5786,7 @@
           const user = data.user_email || "-";
           const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
           meta.innerHTML = `
-            <div><strong>+Ültima atualiza+º+úo</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
