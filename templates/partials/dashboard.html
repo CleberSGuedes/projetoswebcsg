@@ -2,6 +2,9 @@
   <div class="card highlight">
     <div class="card-title">Bem-vindo</div>
     <p>Use o menu ao lado para navegar. Itens carregam sem sair da Home.</p>
+    {% if ped_dotacao_missing %}
+      <p class="text-error">Controle de Dota&#231;&#227;o do PED n&#227;o encontrado: {{ ped_dotacao_missing | join(', ') }}</p>
+    {% endif %}
   </div>
   <div class="card">
     <div class="card-title">Status</div>

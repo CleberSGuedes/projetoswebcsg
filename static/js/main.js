@@ -818,6 +818,8 @@
     }
   }
 
+  const AMAZON_TZ = "America/Manaus";
+
   const parseUtc = (value) => {
     if (!value) return null;
     const text = String(value);
@@ -825,9 +827,21 @@
     return new Date(`${text}Z`);
   };
 
+  const parseManausLocal = (value) => {
+    if (!value) return null;
+    const text = String(value);
+    if (/[zZ]|[+-]\d{2}:\d{2}$/.test(text)) return new Date(text);
+    return new Date(`${text}-04:00`);
+  };
+
   const formatAmazonTime = (value) => {
     const date = parseUtc(value);
-    return date ? date.toLocaleString("pt-BR", { timeZone: "America/Manaus" }) : "-";
+    return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
+  };
+
+  const formatAmazonLocalTime = (value) => {
+    const date = parseManausLocal(value);
+    return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
   };
 
   async function loadFipStatus(target) {
@@ -843,7 +857,7 @@
       }
       const last = data.last;
       const uploaded = formatAmazonTime(last.uploaded_at);
-      const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
       target.innerHTML = `
         <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
         <div><strong>Upload em:</strong> ${uploaded}</div>
@@ -875,7 +889,7 @@
       }
       const last = data.last;
       const uploaded = formatAmazonTime(last.uploaded_at);
-      const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
       target.innerHTML = `
         <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
         <div><strong>Upload em:</strong> ${uploaded}</div>
@@ -918,7 +932,7 @@
       }
       const last = data.last;
       const uploaded = formatAmazonTime(last.uploaded_at);
-      const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
       const statusText = last.status || "-";
       const statusMsg = last.status_message || "";
         const statusUpdated = formatAmazonTime(last.status_updated_at);
@@ -968,7 +982,7 @@
       }
       const last = data.last;
       const uploaded = formatAmazonTime(last.uploaded_at);
-      const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
       target.innerHTML = `
         <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
         <div><strong>Upload em:</strong> ${uploaded}</div>
@@ -1006,7 +1020,7 @@
       }
       const last = data.last;
       const uploaded = formatAmazonTime(last.uploaded_at);
-      const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
       const statusText = last.status || "-";
       const statusMsg = last.status_message || "";
         const statusUpdated = formatAmazonTime(last.status_updated_at);
@@ -1718,8 +1732,8 @@
           return;
         }
         const last = data.last;
-        const uploaded = last.uploaded_at ? new Date(last.uploaded_at).toLocaleString("pt-BR") : "-";
-        const dataArquivo = last.data_arquivo ? new Date(last.data_arquivo).toLocaleString("pt-BR") : "-";
+        const uploaded = formatAmazonTime(last.uploaded_at);
+        const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
         statusBox.innerHTML = `
           <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
           <div><strong>Upload em:</strong> ${uploaded}</div>
@@ -1900,14 +1914,15 @@
     };
 
     const updateJustificativaPrefix = () => {
-      if (prefixInput) prefixInput.value = buildDotacaoPrefix();
+      if (prefixInput) prefixInput.value = `${buildDotacaoPrefix()}*`;
     };
 
     const criteria = [];
     let criteriaSelected = -1;
     const fieldLabels = {
       exercicio: "Exerc\u00edcio",
-      adjunta: "Adjunta Respons\u00e1vel",
+      chaveDotacao: "Controle de Dota\u00e7\u00e3o",
+      adjunta: "Adjunta Solicitante",
       programa: "Programa",
       paoe: "A\u00e7\u00e3o/PAOE",
     };
@@ -2030,7 +2045,7 @@
 
     const setResultsVisible = (show) => {
       if (!dotacaoSummary) return;
-      dotacaoSummary.style.display = show ? "" : "none";
+      dotacaoSummary.classList.toggle("dotacao-summary-hidden", !show);
       if (!show) {
         getRows().forEach((row) => row.classList.remove("selected"));
         clearPagination();
@@ -2231,7 +2246,7 @@
     const buildPrintTable = (row) => {
       const fields = [
         ["Exerc&#237;cio", row.dataset.exercicio],
-        ["Adjunta Respons&#225;vel", row.dataset.adjunta],
+        ["Adjunta Solicitante", row.dataset.adjunta],
         ["Chave de Planejamento", row.dataset.chave],
         ["UO", row.dataset.uo],
         ["Programa", row.dataset.programaRaw],
@@ -2310,9 +2325,9 @@
     .print-footer { margin-top: 16px; border-top: 1px dashed #000; font-size: 12px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .print-footer img { height: 36px; }
     .print-footer-text { flex: 1; text-align: center; }
-    .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
+    .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
     .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 8px; vertical-align: top; word-break: break-word; }
-    .print-table th { width: 220px; background: #f1f1f1; text-transform: uppercase; }
+    .print-table th { width: auto; white-space: nowrap; background: #f1f1f1; text-transform: uppercase; }
     .print-gap { height: 10px; }
   </style>
 </head>
@@ -3219,9 +3234,9 @@
         filteredRows = allData.rows;
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
@@ -3746,9 +3761,9 @@
         filteredRows = allData.rows;
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
@@ -4246,9 +4261,9 @@
         setOptions(allData.rows);
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
@@ -4743,9 +4758,9 @@
         filteredRows = allData.rows;
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
@@ -5288,9 +5303,9 @@
         setOptions(allData.rows);
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
@@ -5782,9 +5797,9 @@
         setOptions(allData.rows);
         render();
         if (meta) {
-          const dt = data.data_arquivo ? new Date(data.data_arquivo).toLocaleString("pt-BR") : "-";
+          const dt = formatAmazonLocalTime(data.data_arquivo);
           const user = data.user_email || "-";
-          const uploaded = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString("pt-BR") : "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
             <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>

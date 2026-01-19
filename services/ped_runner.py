@@ -6,6 +6,7 @@ import time
 import unicodedata
 import warnings
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ from rapidfuzz import fuzz, process
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import db
+from models import db, Dotacao
 
 # Evita warnings de downcasting silencioso em replace
 pd.set_option("future.no_silent_downcasting", True)
@@ -113,6 +114,10 @@ def contar_partes_chave(chave: Any) -> int:
     texto = chave.strip()
     if texto in ("", "-", "NÃO INFORMADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÇO IDENTIFICADO"):
         return 0
+    if texto.upper().startswith("DOT."):
+        base = texto.rstrip("*")
+        partes = [p for p in base.split(".") if p.strip()]
+        return len(partes)
     partes = [p.strip() for p in texto.split("*") if p.strip()]
     return len(partes)
 
@@ -127,6 +132,64 @@ def encontrar_coluna_prefixo(df: pd.DataFrame, prefixo: str) -> str | None:
         if isinstance(col, str) and col.lower().startswith(prefixo):
             return col
     return None
+
+
+def _normalize_dotacao_key(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = re.sub(r"\s+", "", str(value)).rstrip("*")
+    return cleaned.upper()
+
+
+def _to_decimal(value: Any) -> Decimal:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return Decimal("0")
+    raw = str(value).strip()
+    if not raw:
+        return Decimal("0")
+    cleaned = raw.replace(".", "").replace(",", ".")
+    try:
+        return Decimal(cleaned)
+    except Exception:
+        return Decimal("0")
+
+
+def _find_valor_ped_col(df: pd.DataFrame) -> str | None:
+    for col in df.columns:
+        if not isinstance(col, str):
+            continue
+        base = unicodedata.normalize("NFKD", col)
+        base = "".join(ch for ch in base if not unicodedata.combining(ch))
+        base = re.sub(r"[^A-Z0-9]+", "", base.upper())
+        if base == "VALORPED":
+            return col
+    return None
+
+
+def _update_dotacao_from_ped(df: pd.DataFrame) -> None:
+    if "Chave" not in df.columns:
+        return
+    valor_col = _find_valor_ped_col(df)
+    if not valor_col:
+        return
+    ped_sums: dict[str, Decimal] = {}
+    for _, row in df.iterrows():
+        chave = row.get("Chave")
+        if not isinstance(chave, str):
+            continue
+        if not chave.strip().upper().startswith("DOT."):
+            continue
+        key = _normalize_dotacao_key(chave)
+        ped_sums[key] = ped_sums.get(key, Decimal("0")) + _to_decimal(row.get(valor_col))
+
+    dotacoes = Dotacao.query.filter(Dotacao.ativo == True).all()  # noqa: E712
+    for dot in dotacoes:
+        key = _normalize_dotacao_key(dot.chave_dotacao or "")
+        ped_sum = ped_sums.get(key, Decimal("0"))
+        dot_val = _to_decimal(dot.valor_dotacao)
+        dot.valor_ped_emp = ped_sum
+        dot.valor_atual = dot_val - ped_sum
+    db.session.commit()
 
 
 def carregar_chaves_planejamento(json_path: Path) -> list[str]:
@@ -204,6 +267,12 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
         if hist == "NÃO INFORMADO":
             return "NÃO IDENTIFICADO"
 
+        hist_text = str(hist or "")
+        dot_match = re.search(r"\bDOT\.(\d{4})\.([A-Z0-9_-]+)\.(\d+)\*", hist_text, re.IGNORECASE)
+        if dot_match:
+            ano_dot, adj, id_dot = dot_match.groups()
+            return f"DOT.{ano_dot}.{adj.upper()}.{id_dot}*"
+
         hist_limpo = re.sub(r"\s+", " ", hist).strip()
         if not hist_limpo.startswith("*"):
             hist_limpo = "* " + hist_limpo
@@ -219,7 +288,7 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
             ano = partes_hist[i + 2]
             id_dot = partes_hist[i + 3]
             if re.fullmatch(r"\d{4}", ano) and re.fullmatch(r"\d+", id_dot):
-                return f"* DOT * {adj} * {ano} * {id_dot} *"
+                return f"DOT.{ano}.{adj.upper()}.{id_dot}*"
 
         chaves_preferidas = [c for c in chaves_planejamento if contar_partes_chave(c) == partes_planejamento]
         chave_direta = extrair_chave_valida_do_historico(hist_limpo, chaves_preferidas)
@@ -937,7 +1006,36 @@ def update_database(df: pd.DataFrame, data_arquivo: datetime, user_email: str, u
     return total
 
 
-def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int) -> tuple[int, Path]:
+def _normalize_dotacao_key(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = re.sub(r"\s+", "", str(value)).rstrip("*")
+    return cleaned.upper()
+
+
+def _find_missing_dotacao_keys(df: pd.DataFrame) -> list[str]:
+    if "Chave" not in df.columns:
+        return []
+    dot_keys = {
+        _normalize_dotacao_key(val)
+        for val in df["Chave"]
+        if isinstance(val, str) and val.strip().upper().startswith("DOT.")
+    }
+    dot_keys = {k for k in dot_keys if k}
+    if not dot_keys:
+        return []
+    db_keys = (
+        db.session.query(Dotacao.chave_dotacao)
+        .filter(Dotacao.chave_dotacao.isnot(None))
+        .all()
+    )
+    db_norm = {_normalize_dotacao_key(k[0]) for k in db_keys if k and k[0]}
+    return sorted([k for k in dot_keys if k not in db_norm])
+
+
+def run_ped(
+    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
+) -> tuple[int, Path, list[str]]:
     ensure_dirs()
     chaves_planejamento = carregar_chaves_planejamento(JSON_CHAVES_PLANEJAMENTO)
     casos_especificos = carregar_casos_especificos(JSON_CASOS_ESPECIFICOS)
@@ -951,6 +1049,7 @@ def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id:
     if tratado_df is None:
         raise RuntimeError("Falha ao tratar a planilha PED.")
 
+    missing_dotacao_keys = _find_missing_dotacao_keys(tratado_df)
     tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
     output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
     try:
@@ -965,4 +1064,5 @@ def run_ped(file_path: Path, data_arquivo: datetime, user_email: str, upload_id:
             total = update_database(tratado_df, data_arquivo, user_email, upload_id)
         else:
             raise
-    return total, output_path
+    _update_dotacao_from_ped(tratado_df)
+    return total, output_path, missing_dotacao_keys

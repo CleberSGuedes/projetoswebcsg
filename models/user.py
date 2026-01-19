@@ -457,6 +457,8 @@ class Dotacao(db.Model):
     fonte = db.Column(db.String(50))
     iduso = db.Column(db.String(50))
     valor_dotacao = db.Column(db.Numeric(18, 2))
+    valor_ped_emp = db.Column(db.Numeric(18, 2))
+    valor_atual = db.Column(db.Numeric(18, 2))
     chave_dotacao = db.Column(db.String(255))
     justificativa_historico = db.Column(db.Text)
     usuarios_id = db.Column(db.BigInteger)

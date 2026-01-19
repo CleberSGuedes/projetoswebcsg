@@ -11,7 +11,7 @@
           </select>
         </label>
         <label class="field">
-          <span>*Adjunta Respons&#225;vel</span>
+          <span>*Adjunta Solicitante</span>
           <select id="dotacao-adj" name="adj_id" required>
             <option value="">Carregando...</option>
           </select>
@@ -116,7 +116,7 @@
         </label>
         <label class="field">
           <span>*Justificativa/Hist&#243;rico</span>
-          <input type="text" name="justificativa_historico" id="dotacao-justificativa" required />
+          <textarea name="justificativa_historico" id="dotacao-justificativa" rows="3" required></textarea>
         </label>
       </div>
       <div class="actions">
@@ -136,9 +136,10 @@
           <select id="dotacao-filtro-campo">
             <option value="">Selecione...</option>
             <option value="exercicio">*Exerc&#237;cio</option>
-            <option value="adjunta">Adjunta Respons&#225;vel</option>
-            <option value="programa">Programa</option>
             <option value="paoe">A&#231;&#227;o/PAOE</option>
+            <option value="adjunta">Adjunta Solicitante</option>
+            <option value="chaveDotacao">Controle de Dota&#231;&#227;o</option>
+            <option value="programa">Programa</option>
           </select>
         </label>
         <label class="field">
@@ -161,7 +162,7 @@
       </div>
       <div class="card-title" style="margin:16px 0 8px;">Crit&#233;rios definidos para a consulta:</div>
       <div class="form-grid dotacao-criteria-row">
-        <div class="field">
+        <div class="field dotacao-criteria-box">
           <ul id="dotacao-filtro-list" class="pill-list" style="min-height:40px;"></ul>
         </div>
         <div class="actions" style="justify-content:flex-end; flex-direction:column;">
@@ -169,7 +170,7 @@
           <button class="btn btn-secondary sm" type="button" id="dotacao-filtro-clear">Limpar</button>
         </div>
       </div>
-      <div class="actions">
+      <div class="actions dotacao-criteria-actions">
         <button class="btn btn-danger sm" type="button" id="dotacao-filtro-cancel">Cancelar</button>
         <button class="btn btn-primary sm" type="button" id="dotacao-filtro-apply">Consultar</button>
         <div id="dotacao-filtro-msg" class="muted"></div>
@@ -183,7 +184,7 @@
               <th>Controle de Dota&#231;&#227;o</th>
               <th>Justificativa/Hist&#243;rico</th>
               <th>Valor da Dota&#231;&#227;o</th>
-              <th>Adjunta Respons&#225;vel</th>
+              <th>Adjunta Solicitante</th>
               <th>Chave de Planejamento</th>
               <th>Programa</th>
               <th>A&#231;&#227;o/PAOE</th>

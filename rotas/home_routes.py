@@ -280,10 +280,33 @@ def partial_dashboard():
                     "last_activity": s.last_activity,
                 }
             )
+    ped_dotacao_missing = session.get("ped_dotacao_missing", [])
+    if not ped_dotacao_missing:
+        ped_keys = (
+            PedRegistro.query.with_entities(PedRegistro.chave)
+            .filter(PedRegistro.ativo == True)  # noqa: E712
+            .all()
+        )
+        ped_keys = [
+            _normalize_dotacao_key(k[0])
+            for k in ped_keys
+            if k and k[0] and str(k[0]).strip().upper().startswith("DOT.")
+        ]
+        ped_keys = {k for k in ped_keys if k}
+        if ped_keys:
+            dotacao_keys = (
+                Dotacao.query.with_entities(Dotacao.chave_dotacao)
+                .filter(Dotacao.chave_dotacao.isnot(None))
+                .all()
+            )
+            dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
+            missing = sorted([k for k in ped_keys if k not in dotacao_keys])
+            ped_dotacao_missing = missing
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
+        ped_dotacao_missing=ped_dotacao_missing,
     )
 
 
@@ -916,6 +939,31 @@ def _normalize_chave(value: str) -> str:
     return "".join(ch for ch in value if ch.isalnum() or ch == "*").upper()
 
 
+def _normalize_dotacao_key(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = str(value).strip()
+    cleaned = re.sub(r"\s+", "", cleaned)
+    cleaned = cleaned.rstrip("*")
+    return cleaned.upper()
+
+
+def _calc_ped_sum_for_dotacao(chave_dotacao: str) -> Decimal:
+    key_norm = _normalize_dotacao_key(chave_dotacao)
+    if not key_norm:
+        return Decimal("0")
+    rows = (
+        PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
+        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    total = Decimal("0")
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) == key_norm:
+            total += _dec_or_zero(row.valor_ped)
+    return total
+
+
 @home_bp.route("/api/dotacao/options", methods=["GET"])
 @login_required
 @require_feature("cadastrar/dotacao")
@@ -1127,14 +1175,18 @@ def api_dotacao_create():
     try:
         db.session.flush()
         adj_label = (adj_row.abreviacao or str(adj_id)).strip()
-        chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}"
+        chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
         justificativa_full = f"{chave_dotacao} {justificativa}".strip()
+        ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
+        valor_atual = _dec_or_zero(valor_dotacao) - ped_sum
         db.session.execute(
             Dotacao.__table__.update()
             .where(Dotacao.id == registro.id)
             .values(
                 chave_dotacao=chave_dotacao,
                 justificativa_historico=justificativa_full,
+                valor_ped_emp=ped_sum,
+                valor_atual=valor_atual,
                 alterado_em=None,
             )
         )
@@ -1302,9 +1354,12 @@ def api_dotacao_update(dotacao_id):
     registro.usuarios_id = usuarios_id
     registro.alterado_em = _now_local()
     adj_label = (adj_row.abreviacao or str(adj_id)).strip()
-    chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}"
+    chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
     registro.chave_dotacao = chave_dotacao
     registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
+    ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
+    registro.valor_ped_emp = ped_sum
+    registro.valor_atual = _dec_or_zero(valor_dotacao) - ped_sum
     try:
         db.session.commit()
     except Exception as exc:
@@ -1449,13 +1504,15 @@ def _calc_dotacao_saldo(
     if subacao_entrega:
         subacao_norm = _normalize_chave(subacao_entrega)
         dot_rows = (
-            Dotacao.query.with_entities(Dotacao.valor_dotacao, Dotacao.subacao_entrega)
+            Dotacao.query.with_entities(
+                Dotacao.valor_dotacao, Dotacao.valor_atual, Dotacao.subacao_entrega
+            )
             .filter(*dot_filters)
             .all()
         )
         valor_dotacao = sum(
             (
-                _dec_or_zero(r.valor_dotacao)
+                _dec_or_zero(r.valor_atual if r.valor_atual is not None else r.valor_dotacao)
                 for r in dot_rows
                 if _normalize_chave(r.subacao_entrega) == subacao_norm
             ),
@@ -1463,17 +1520,26 @@ def _calc_dotacao_saldo(
         )
         if valor_dotacao == 0:
             valor_dotacao = (
-                db.session.query(func.coalesce(func.sum(Dotacao.valor_dotacao), 0))
+                db.session.query(
+                    func.coalesce(func.sum(func.coalesce(Dotacao.valor_atual, Dotacao.valor_dotacao)), 0)
+                )
                 .filter(*dot_filters)
                 .scalar()
             )
     else:
         valor_dotacao = (
-            db.session.query(func.coalesce(func.sum(Dotacao.valor_dotacao), 0))
+            db.session.query(
+                func.coalesce(func.sum(func.coalesce(Dotacao.valor_atual, Dotacao.valor_dotacao)), 0)
+            )
             .filter(*dot_filters)
             .scalar()
         )
     valor_dotacao = _dec_or_zero(valor_dotacao)
+
+    def _count_chave_parts(value: str) -> int:
+        if not value:
+            return 0
+        return len([p for p in str(value).split("*") if p.strip()])
 
     programa_key = _leading_token(programa)
     acao_paoe_key = _leading_token(acao_paoe)
@@ -1483,26 +1549,58 @@ def _calc_dotacao_saldo(
         exercicio_int = int(str(exercicio).split(".")[0])
     except ValueError:
         exercicio_int = None
-    chave_field = "chave_planejamento" if exercicio_int and exercicio_int <= 2025 else "chave"
+    chave_parts = _count_chave_parts(chave_planejamento)
+    if exercicio_int and exercicio_int <= 2025:
+        chave_field = "chave_planejamento"
+    elif chave_parts >= 8:
+        chave_field = "chave_planejamento"
+    elif chave_parts == 4:
+        chave_field = "chave"
+    else:
+        chave_field = "chave"
     chave_norm = _normalize_chave(chave_planejamento)
 
-    ped_base = [PedRegistro.ativo == True]  # noqa: E712
+    ped_base_common = [PedRegistro.ativo == True]  # noqa: E712
     if exercicio:
-        ped_base.append(PedRegistro.exercicio == exercicio)
+        ped_base_common.append(PedRegistro.exercicio == exercicio)
     if programa_key:
-        ped_base.append(PedRegistro.programa_governo == programa_key)
+        ped_base_common.append(PedRegistro.programa_governo == programa_key)
     if acao_paoe_key:
-        ped_base.append(PedRegistro.paoe == acao_paoe_key)
+        ped_base_common.append(PedRegistro.paoe == acao_paoe_key)
     if fonte:
-        ped_base.append(PedRegistro.fonte == fonte)
+        ped_base_common.append(PedRegistro.fonte == fonte)
     if iduso:
-        ped_base.append(PedRegistro.iduso == iduso)
+        ped_base_common.append(PedRegistro.iduso == iduso)
+    if elemento:
+        ped_base_common.append(PedRegistro.elemento == elemento)
     if uo_norm:
-        ped_base.append(PedRegistro.uo == uo_norm)
+        ped_base_common.append(PedRegistro.uo == uo_norm)
     if ug_norm:
-        ped_base.append(PedRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
+        ped_base_common.append(PedRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
     if regiao:
-        ped_base.append(PedRegistro.regiao == regiao)
+        ped_base_common.append(PedRegistro.regiao == regiao)
+
+    emp_base_common = [EmpRegistro.ativo == True]  # noqa: E712
+    if exercicio:
+        emp_base_common.append(EmpRegistro.exercicio == exercicio)
+    if programa_key:
+        emp_base_common.append(EmpRegistro.programa_governo == programa_key)
+    if acao_paoe_key:
+        emp_base_common.append(EmpRegistro.paoe == acao_paoe_key)
+    if fonte:
+        emp_base_common.append(EmpRegistro.fonte == fonte)
+    if iduso:
+        emp_base_common.append(EmpRegistro.iduso == iduso)
+    if elemento:
+        emp_base_common.append(EmpRegistro.elemento == elemento)
+    if uo_norm:
+        emp_base_common.append(EmpRegistro.uo == uo_norm)
+    if ug_norm:
+        emp_base_common.append(EmpRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
+    if regiao:
+        emp_base_common.append(EmpRegistro.regiao == regiao)
+
+    ped_base = list(ped_base_common)
     if chave_planejamento:
         if chave_field == "chave_planejamento":
             ped_base.append(PedRegistro.chave_planejamento == chave_planejamento)
@@ -1515,6 +1613,14 @@ def _calc_dotacao_saldo(
         .filter(*ped_base)
         .all()
     )
+    if not ped_rows and chave_planejamento:
+        ped_rows = (
+            PedRegistro.query.with_entities(
+                PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
+            )
+            .filter(*ped_base_common)
+            .all()
+        )
     ped_filtered = []
     for row in ped_rows:
         chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
@@ -1523,23 +1629,7 @@ def _calc_dotacao_saldo(
     valor_ped = sum((_dec_or_zero(r.valor_ped) for r in ped_filtered), Decimal("0"))
     ped_count = len(ped_filtered)
 
-    emp_base = [EmpRegistro.ativo == True]  # noqa: E712
-    if exercicio:
-        emp_base.append(EmpRegistro.exercicio == exercicio)
-    if programa_key:
-        emp_base.append(EmpRegistro.programa_governo == programa_key)
-    if acao_paoe_key:
-        emp_base.append(EmpRegistro.paoe == acao_paoe_key)
-    if fonte:
-        emp_base.append(EmpRegistro.fonte == fonte)
-    if iduso:
-        emp_base.append(EmpRegistro.iduso == iduso)
-    if uo_norm:
-        emp_base.append(EmpRegistro.uo == uo_norm)
-    if ug_norm:
-        emp_base.append(EmpRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
-    if regiao:
-        emp_base.append(EmpRegistro.regiao == regiao)
+    emp_base = list(emp_base_common)
     if chave_planejamento:
         if chave_field == "chave_planejamento":
             emp_base.append(EmpRegistro.chave_planejamento == chave_planejamento)
@@ -1552,6 +1642,14 @@ def _calc_dotacao_saldo(
         .filter(*emp_base)
         .all()
     )
+    if not emp_rows and chave_planejamento:
+        emp_rows = (
+            EmpRegistro.query.with_entities(
+                EmpRegistro.numero_emp, EmpRegistro.chave_planejamento, EmpRegistro.chave
+            )
+            .filter(*emp_base_common)
+            .all()
+        )
     emp_nums = []
     for row in emp_rows:
         chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
@@ -1582,7 +1680,7 @@ def _calc_dotacao_saldo(
     return {
         "saldo": saldo,
         "valor_atual": valor_atual,
-        "valor_dotacao": valor_dotacao,
+        "valor_dotacao": valor_dotacao_eff,
         "valor_ped": valor_ped,
         "valor_emp_liquido": valor_emp_liquido,
         "plan21_count": plan21_count,
@@ -1760,13 +1858,9 @@ def api_relatorio_fip613():
 
     try:
         rows = Fip613Registro.query.filter_by(ativo=True).all()
-        last_upload = (
-            Fip613Registro.query.filter_by(ativo=True)
-            .order_by(Fip613Registro.created_at.desc())
-            .first()
-        )
+        last_upload = Fip613Upload.query.order_by(Fip613Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(last_upload.data_arquivo) if last_upload else None
-        uploaded_at = _as_iso(last_upload.created_at) if last_upload else None
+        uploaded_at = _as_iso(last_upload.uploaded_at) if last_upload else None
         user_email = last_upload.user_email if last_upload else None
         data = []
         for r in rows:
@@ -1980,7 +2074,17 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_ped(save_path, data_arquivo, user_email, registro.id)
+        total, output_path, missing_dotacao_keys = run_ped(
+            save_path, data_arquivo, user_email, registro.id
+        )
+
+        if missing_dotacao_keys:
+            session["ped_dotacao_missing"] = missing_dotacao_keys
+            session.modified = True
+        else:
+            if "ped_dotacao_missing" in session:
+                session["ped_dotacao_missing"] = []
+                session.modified = True
 
         registro.output_filename = str(output_path.name)
         db.session.commit()
@@ -3440,13 +3544,9 @@ def api_relatorio_emp():
             .mappings()
             .all()
         )
-        last_upload = (
-            EmpRegistro.query.filter_by(ativo=True)
-            .order_by(EmpRegistro.created_at.desc())
-            .first()
-        )
+        last_upload = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(last_upload.data_arquivo) if last_upload else None
-        uploaded_at = _as_iso(last_upload.created_at) if last_upload else None
+        uploaded_at = _as_iso(last_upload.uploaded_at) if last_upload else None
         user_email = last_upload.user_email if last_upload else None
         data = []
         for r in rows:
