@@ -483,6 +483,16 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> tuple[int, int] | None:
         if len(posicoes) == len(required):
             return idx, posicoes["exercicio"]
 
+    # Fallback: aceita a linha se todos os campos obrigatorios aparecem em qualquer ordem.
+    for idx, row in df_raw.iterrows():
+        valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(row))]
+        if any("EXERCICIO IGUAL A" in v for v in valores):
+            continue
+        tipos = [classificar(v) for v in valores]
+        posicoes = {req: next((i for i, t in enumerate(tipos) if t == req), None) for req in required}
+        if all(p is not None for p in posicoes.values()):
+            return idx, min(posicoes.values())
+
     print("DEBUG: cabecalho esperado (normalizado):", HEADER_PADRAO_NORMALIZADO)
     limite = min(10, len(df_raw))
     for idx in range(limite):
