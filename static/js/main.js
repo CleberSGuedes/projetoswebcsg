@@ -886,7 +886,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -940,7 +940,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       return last.status || null;
     } catch (err) {
@@ -979,7 +979,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -1028,7 +1028,7 @@
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relat+¦rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       return last.status || null;
     } catch (err) {
@@ -1168,7 +1168,7 @@
     const reprocessBtn = document.getElementById("ped-reprocess");
     const cancelBtn = document.getElementById("ped-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/ped");
       loadPage("relatorios/ped");
@@ -1315,7 +1315,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1461,7 +1461,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1555,7 +1555,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relat+¦rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");

@@ -122,6 +122,17 @@ def _move_existing_to_tmp(base_dir: Path) -> None:
             pass
 
 
+def _send_excel_bytes(buffer: BytesIO, filename: str):
+    buffer.seek(0)
+    resp = current_app.response_class(
+        buffer.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 def _next_pk(model) -> int:
     max_id = db.session.query(func.max(model.id)).scalar() or 0
     return int(max_id) + 1
@@ -1832,11 +1843,11 @@ def api_relatorio_fip613_download():
                     "Valor a Pagar": float(r.valor_a_pagar or 0),
                 }
             )
+        db.session.close()
         df = None
         try:
             import pandas as pd
             from io import BytesIO
-            from flask import send_file
             from openpyxl import load_workbook
             from openpyxl.styles import Font
             import unicodedata
@@ -1881,12 +1892,7 @@ def api_relatorio_fip613_download():
             styled.seek(0)
 
             filename = f"fip613_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            return send_file(
-                styled,
-                as_attachment=True,
-                download_name=filename,
-                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            return _send_excel_bytes(styled, filename)
         except Exception as exc:
             return jsonify({"error": f"Falha ao preparar planilha: {exc}"}), 500
     except Exception as exc:
@@ -2697,6 +2703,7 @@ def api_relatorio_ped_download():
         )
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
 
         df = pd.DataFrame(rows)
 
@@ -2871,12 +2878,7 @@ def api_relatorio_ped_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"ped_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
 
@@ -3862,6 +3864,7 @@ def api_relatorio_nob_download():
         )
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
 
         df = pd.DataFrame(rows)
         for col in ("valor_nob", "devolucao_gcv", "valor_nob_gcv"):
@@ -3969,12 +3972,7 @@ def api_relatorio_nob_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"nob_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
 
@@ -4060,6 +4058,7 @@ def api_relatorio_emp_download():
         )
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
 
         df = pd.DataFrame(rows)
 
@@ -4190,12 +4189,7 @@ def api_relatorio_emp_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
 
@@ -4261,6 +4255,7 @@ def api_relatorio_est_emp_download():
         )
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
 
         df = pd.DataFrame(rows)
         for col in (
@@ -4345,12 +4340,7 @@ def api_relatorio_est_emp_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"est_emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
 
@@ -4437,6 +4427,9 @@ def api_relatorio_plan20_download():
             .mappings()
             .all()
         )
+        if not rows:
+            return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
 
         headers = [
             ("Exercício", "exercicio"),
@@ -4508,7 +4501,6 @@ def api_relatorio_plan20_download():
         try:
             import pandas as pd
             from io import BytesIO
-            from flask import send_file
             from openpyxl import load_workbook
             from openpyxl.styles import Font
 
@@ -4545,12 +4537,7 @@ def api_relatorio_plan20_download():
             styled.seek(0)
 
             filename = f"plan20_seduc_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            return send_file(
-                styled,
-                as_attachment=True,
-                download_name=filename,
-                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            return _send_excel_bytes(styled, filename)
         except Exception as exc:
             return jsonify({"error": f"Falha ao preparar planilha: {exc}"}), 500
     except Exception as exc:
