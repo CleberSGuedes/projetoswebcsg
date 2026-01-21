@@ -540,11 +540,13 @@ function carregarCasosEspecificos(jsonPath) {
     for (const [k, v] of Object.entries(casos)) {
       const chaveSaida = canonicalizarChave(corrigirTermosCorrompidos(String(v)));
       const kCorrigido = corrigirTermosCorrompidos(k);
-      const kNorm = normalizeForComparison(kCorrigido);
+      const kNorm = normalizeSimple(kCorrigido);
       out[kNorm] = chaveSaida;
     }
+    console.error(`[emp] chave_arrumar carregado: ${Object.keys(out).length} itens`);
     return out;
   } catch {
+    console.error("[emp] chave_arrumar nao carregado");
     return {};
   }
 }
@@ -650,10 +652,11 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     if (!histLimpo.endsWith("*")) histLimpo = `${histLimpo} *`;
     histLimpo = histLimpo.replace(/\s*\*\s*/g, " * ");
 
-    const histPipe = paraPipe(histLimpo);
-    const histPipeComp = normalizeForComparison(histPipe);
+    const histCanon = canonicalizarChave(histLimpo);
+    const histPipe = paraPipe(histCanon);
+    const histPipeComp = normalizeSimple(histPipe);
 
-    const chaveDireta = extrairChaveValidaDoHistorico(histLimpo, chavesBase);
+    const chaveDireta = extrairChaveValidaDoHistorico(histCanon, chavesBase);
     if (chaveDireta) {
       resultados.push(canonicalizarChave(chaveDireta));
       continue;
@@ -665,7 +668,7 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     }
 
     let casoEncontrado = null;
-    const histComp = normalizeForComparison(histLimpo);
+    const histComp = normalizeSimple(histCanon);
     for (const [casoNorm, chave] of Object.entries(casosEspecificos)) {
       if (casoNorm && (histComp.includes(casoNorm) || histPipeComp.includes(casoNorm))) {
         if (contarPartesChave(chave) === partesLinha) {
@@ -675,11 +678,12 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
       }
     }
     if (casoEncontrado) {
+      console.error(`[emp] chave_arrumar aplicada: ${casoEncontrado}`);
       resultados.push(canonicalizarChave(casoEncontrado));
       continue;
     }
 
-    const partes = histLimpo.split("*").map((p) => p.trim()).filter(Boolean);
+    const partes = histCanon.split("*").map((p) => p.trim()).filter(Boolean);
     let chaveJanela = "NÃO IDENTIFICADO";
     const tamanhoJanela = Math.max(1, partesLinha);
     if (partes.length >= tamanhoJanela) {
@@ -1046,6 +1050,7 @@ async function carregarPlanilha(filePath) {
         row[col] = String(val).trim();
       }
     });
+    row.__linha = idx;
     rows.push(row);
   }
 
@@ -1111,6 +1116,18 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   df = removerEmpenhosEstornados(df).dataset;
   dfEmpBase.rows = removerEmpenhosEstornados(dfEmpBase).dataset.rows;
 
+  const missingPlanejamentoLines = [];
+  for (let i = 0; i < df.rows.length; i += 1) {
+    const row = df.rows[i];
+    const value = String(row[keyColName] || "").trim();
+    if (!value || ["NÇO IDENTIFICADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÃO INFORMADO", "-"].includes(value)) {
+      missingPlanejamentoLines.push(i + 2); // header na linha 1, dados a partir da linha 2
+    }
+  }
+  updateStatusFields("emp", uploadId, {
+    planejamento_missing_lines: missingPlanejamentoLines,
+  });
+
   df = atualizarTipoDespesa(df);
   df.columns = moverColunas(
     df.columns,
@@ -1130,7 +1147,10 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     }
   }
 
-  const outputFile = path.join(OUTPUT_DIR, `${path.basename(filePath, path.extname(filePath))}_Tratado.xlsx`);
+  const outputFile = path.join(
+    OUTPUT_DIR,
+    `${path.basename(filePath, path.extname(filePath))}_Tratado_${Date.now()}.xlsx`
+  );
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: outputFile });
   const sheetEmp = workbook.addWorksheet("emp");
   const sheetTratado = workbook.addWorksheet("emp_tratado");

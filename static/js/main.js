@@ -235,7 +235,7 @@
         try {
           data = JSON.parse(raw || "{}");
         } catch {
-          // se n+úo for JSON, usa texto bruto na mensagem de erro
+          // se não for JSON, usa texto bruto na mensagem de erro
         }
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
         msg.textContent = data.message || "Usuário atualizado.";
@@ -249,7 +249,7 @@
           if (cells.length >= 4) {
             cells[1].textContent = payload.nome || cells[1].textContent;
             cells[2].textContent = payload.perfil || cells[2].textContent;
-            cells[3].textContent = payload.ativo ? "Sim" : "N+úo";
+            cells[3].textContent = payload.ativo ? "Sim" : "Não";
           }
         }
       } catch (err) {
@@ -367,7 +367,7 @@
 
   async function fetchCurrentPermissions() {
     if (userNivel === "1") {
-      // admin: libera tudo vis+¡vel no menu
+      // admin: libera tudo visível no menu
       const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
         el.getAttribute("data-route")
       );
@@ -863,7 +863,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -895,7 +895,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
@@ -949,7 +949,7 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>Saida gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
@@ -988,7 +988,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Saida gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
@@ -1037,7 +1037,7 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>Saida gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
@@ -1091,7 +1091,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relat+¦rio";
+  const viewLabel = "Ver Relatório";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1141,7 +1141,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1287,7 +1287,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1710,7 +1710,7 @@
     const loading = document.getElementById("plan20-loading");
   const submitBtn = document.getElementById("plan20-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relat+¦rio";
+  const viewLabel = "Ver Relatório";
   const goToRelatorio = () => {
     setActive("relatorios/plan20-seduc");
     loadPage("relatorios/plan20-seduc");
@@ -1739,7 +1739,7 @@
           <div><strong>Upload em:</strong> ${uploaded}</div>
           <div><strong>Data do download:</strong> ${dataArquivo}</div>
           <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-          <div><strong>Sa+¡da gerada:</strong> ${last.output_filename || "-"}</div>
+          <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
         `;
         if (submitBtn && data.last && data.last.output_filename) {
           submitBtn.dataset.mode = "view";
@@ -1791,7 +1791,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload conclu+¡do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1897,7 +1897,9 @@
       Object.entries(selects).forEach(([key, el]) => {
         const val = el.value;
         if (!val) return;
-        params[key] = val;
+        if (baseSaldoKeys.has(key) || el.dataset.touched === "1") {
+          params[key] = val;
+        }
       });
       return params;
     };

@@ -302,11 +302,22 @@ def partial_dashboard():
             dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
             missing = sorted([k for k in ped_keys if k not in dotacao_keys])
             ped_dotacao_missing = missing
+    emp_planejamento_missing_lines: list[int] = []
+    try:
+        last_emp = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
+        if last_emp:
+            status_data = read_status("emp", last_emp.id) or {}
+            raw_lines = status_data.get("planejamento_missing_lines") or []
+            if isinstance(raw_lines, list):
+                emp_planejamento_missing_lines = [int(v) for v in raw_lines if str(v).isdigit()]
+    except Exception:
+        emp_planejamento_missing_lines = []
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
         ped_dotacao_missing=ped_dotacao_missing,
+        emp_planejamento_missing_lines=emp_planejamento_missing_lines,
     )
 
 
@@ -912,14 +923,17 @@ def _leading_token(value: str) -> str:
     return str(value).strip().split(" ", 1)[0]
 
 
-def _normalize_ug(value: str) -> str:
-    token = _leading_token(value)
-    if not token:
+def _normalize_codigo_num(value: str) -> str:
+    if not value:
         return ""
-    try:
-        return str(int(token))
-    except ValueError:
-        return token
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if digits:
+        return str(int(digits))
+    return _leading_token(value)
+
+
+def _normalize_ug(value: str) -> str:
+    return _normalize_codigo_num(value)
 
 
 def _normalize_uo(value: str) -> str:
@@ -928,6 +942,26 @@ def _normalize_uo(value: str) -> str:
     token = _leading_token(value)
     digits = "".join(ch for ch in token if ch.isdigit())
     return digits or token
+
+
+def _normalize_iduso(value: str) -> str:
+    if not value:
+        return ""
+    token = str(value).strip()
+    digits = "".join(ch for ch in token if ch.isdigit())
+    if digits:
+        return str(int(digits))
+    return _leading_token(token)
+
+
+def _iduso_variants(value: str) -> list[str]:
+    base = _normalize_iduso(value)
+    if base == "":
+        return []
+    variants = {base}
+    for width in (2, 3, 4):
+        variants.add(base.zfill(width))
+    return sorted(variants)
 
 
 def _normalize_chave(value: str) -> str:
@@ -1541,8 +1575,8 @@ def _calc_dotacao_saldo(
             return 0
         return len([p for p in str(value).split("*") if p.strip()])
 
-    programa_key = _leading_token(programa)
-    acao_paoe_key = _leading_token(acao_paoe)
+    programa_key = _normalize_codigo_num(programa)
+    acao_paoe_key = _normalize_codigo_num(acao_paoe)
     ug_norm = _normalize_ug(ug)
     uo_norm = _normalize_uo(uo)
     try:
@@ -1570,7 +1604,9 @@ def _calc_dotacao_saldo(
     if fonte:
         ped_base_common.append(PedRegistro.fonte == fonte)
     if iduso:
-        ped_base_common.append(PedRegistro.iduso == iduso)
+        variants = _iduso_variants(iduso)
+        if variants:
+            ped_base_common.append(PedRegistro.iduso.in_(variants))
     if elemento:
         ped_base_common.append(PedRegistro.elemento == elemento)
     if uo_norm:
@@ -1590,7 +1626,9 @@ def _calc_dotacao_saldo(
     if fonte:
         emp_base_common.append(EmpRegistro.fonte == fonte)
     if iduso:
-        emp_base_common.append(EmpRegistro.iduso == iduso)
+        variants = _iduso_variants(iduso)
+        if variants:
+            emp_base_common.append(EmpRegistro.iduso.in_(variants))
     if elemento:
         emp_base_common.append(EmpRegistro.elemento == elemento)
     if uo_norm:
@@ -1680,7 +1718,7 @@ def _calc_dotacao_saldo(
     return {
         "saldo": saldo,
         "valor_atual": valor_atual,
-        "valor_dotacao": valor_dotacao_eff,
+        "valor_dotacao": valor_dotacao,
         "valor_ped": valor_ped,
         "valor_emp_liquido": valor_emp_liquido,
         "plan21_count": plan21_count,

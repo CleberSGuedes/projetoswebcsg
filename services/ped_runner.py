@@ -534,12 +534,19 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> tuple[int, int] | None:
         return None
 
     required = ["exercicio", "ped", "ped_estorno", "emp", "cad", "noblist"]
+    emp_only = {"exercicio", "emp", "ped"}
+    emp_only_headers = False
 
-    for idx, row in df_raw.iterrows():
+    max_rows = min(20, len(df_raw))
+    for idx in range(max_rows):
+        row = df_raw.iloc[idx]
         valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(row))]
         if any("EXERCICIO IGUAL A" in v for v in valores):
             continue
         tipos = [classificar(v) for v in valores]
+        tipos_set = {t for t in tipos if t}
+        if emp_only.issubset(tipos_set):
+            emp_only_headers = True
         posicoes: dict[str, int] = {}
         last_idx = -1
         for req in required:
@@ -553,7 +560,8 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> tuple[int, int] | None:
             return idx, posicoes["exercicio"]
 
     # Fallback: aceita a linha se todos os campos obrigatorios aparecem em qualquer ordem.
-    for idx, row in df_raw.iterrows():
+    for idx in range(max_rows):
+        row = df_raw.iloc[idx]
         valores = [normalizar(row[i]) if pd.notna(row[i]) else "" for i in range(len(row))]
         if any("EXERCICIO IGUAL A" in v for v in valores):
             continue
@@ -561,6 +569,9 @@ def encontrar_linha_cabecalho(df_raw: pd.DataFrame) -> tuple[int, int] | None:
         posicoes = {req: next((i for i, t in enumerate(tipos) if t == req), None) for req in required}
         if all(p is not None for p in posicoes.values()):
             return idx, min(posicoes.values())
+
+    if emp_only_headers:
+        raise RuntimeError("Arquivo não parece ser PED (cabeçalho de EMP detectado).")
 
     print("DEBUG: cabecalho esperado (normalizado):", HEADER_PADRAO_NORMALIZADO)
     limite = min(10, len(df_raw))
@@ -587,9 +598,35 @@ def preparar_aba_ped(file_path: Path) -> pd.DataFrame | None:
         except Exception:
             pass
 
+        if active_title:
+            df_raw = pd.read_excel(xls, sheet_name=active_title, header=None, dtype=str)
+            try:
+                resultado = encontrar_linha_cabecalho(df_raw)
+            except RuntimeError:
+                raise
+            if resultado is not None:
+                idx_cabecalho, col_inicio = resultado
+                cabecalho = [
+                    str(c).strip() if pd.notna(c) else "" for c in df_raw.iloc[idx_cabecalho, col_inicio:].tolist()
+                ]
+                last_non_empty = 0
+                for i in range(len(cabecalho) - 1, -1, -1):
+                    if cabecalho[i]:
+                        last_non_empty = i
+                        break
+                cabecalho = cabecalho[: last_non_empty + 1]
+                df = df_raw.iloc[idx_cabecalho + 1 :, col_inicio : col_inicio + len(cabecalho)].copy()
+                df.columns = cabecalho
+                df = df.dropna(how="all")
+                df = normalizar_colunas(df)
+                return df
+
         for sheet_name in sheet_names:
             df_raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=str)
-            resultado = encontrar_linha_cabecalho(df_raw)
+            try:
+                resultado = encontrar_linha_cabecalho(df_raw)
+            except RuntimeError:
+                raise
             if resultado is None:
                 continue
             idx_cabecalho, col_inicio = resultado

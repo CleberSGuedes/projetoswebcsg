@@ -12,7 +12,7 @@ from pathlib import Path
 from app import create_app
 from models import db, EmpUpload, NobUpload
 from sqlalchemy.exc import SQLAlchemyError
-from services.job_status import clear_cancel_flag, write_status
+from services.job_status import clear_cancel_flag, update_status_fields, write_status
 
 EMP_INPUT_DIR = Path("upload/emp")
 NOB_INPUT_DIR = Path("upload/nob")
@@ -53,6 +53,8 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
         except Exception:
             args.extend(["--data-arquivo", str(data_arquivo)])
     proc = subprocess.run(args, capture_output=True, text=True, cwd=str(NODE_RUNNER.parent))
+    if proc.stderr:
+        print(proc.stderr, file=sys.stderr)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip()
         raise RuntimeError(f"Node runner falhou: {err or 'erro desconhecido'}")
@@ -106,12 +108,12 @@ def _run_emp(upload_id: int) -> None:
         raise RuntimeError(f"Arquivo EMP nao encontrado: {Path(EMP_INPUT_DIR) / upload.stored_filename}")
     payload = _run_node("emp", file_path, upload.user_email, upload.data_arquivo, upload.id)
     _commit_upload_filename(EmpUpload, upload_id, payload.get("output_filename"))
-    write_status(
+    update_status_fields(
         "emp",
         upload_id,
-        "processamento finalizado",
-        f"Processado com sucesso. Registros: {payload.get('total')}.",
-        payload.get("output_filename"),
+        state="processamento finalizado",
+        message=f"Processado com sucesso. Registros: {payload.get('total')}.",
+        output_filename=payload.get("output_filename"),
     )
 
 

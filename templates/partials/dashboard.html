@@ -5,6 +5,9 @@
     {% if ped_dotacao_missing %}
       <p class="text-error">Controle de Dota&#231;&#227;o do PED n&#227;o encontrado: {{ ped_dotacao_missing | join(', ') }}</p>
     {% endif %}
+    {% if emp_planejamento_missing_lines %}
+      <p class="text-error">Chave do Planejamento n&#227;o identificada (n&#186; da linha): {{ emp_planejamento_missing_lines | join(', ') }}</p>
+    {% endif %}
   </div>
   <div class="card">
     <div class="card-title">Status</div>
