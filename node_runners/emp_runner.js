@@ -29,6 +29,7 @@ const JSON_CASOS_PATH = path.join(BASE_DIR, "static", "js", "chave_arrumar.json"
 const JSON_FORCAR_PATH = path.join(BASE_DIR, "static", "js", "forcar_chave.json");
 
 const OUTPUT_HEADER_LIST = [
+  "Chave",
   "Chave de Planejamento",
   "Regi\u00e3o",
   "Subfun\u00e7\u00e3o + UG",
@@ -580,11 +581,20 @@ function contarPartesChave(chave) {
   if (!texto || ["-", "NÃO INFORMADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÇO IDENTIFICADO"].includes(texto)) {
     return 0;
   }
+  if (texto.toUpperCase().startsWith("DOT.")) {
+    const base = texto.replace(/\*+$/, "");
+    return base.split(".").map((p) => p.trim()).filter(Boolean).length;
+  }
   return texto.split("*").map((p) => p.trim()).filter(Boolean).length;
 }
 
 function extrairChaveDotDoHistorico(hist) {
   if (typeof hist !== "string") return null;
+  const dotMatch = hist.match(/\bDOT\.(\d{4})\.([A-Z0-9_-]+)\.(\d+)\*?/i);
+  if (dotMatch) {
+    const [, ano, adj, idDot] = dotMatch;
+    return `DOT.${ano}.${String(adj).toUpperCase()}.${idDot}*`;
+  }
   let histLimpo = String(hist).trim();
   histLimpo = histLimpo.replace(/\*/g, " * ");
   histLimpo = histLimpo.replace(/\s+\*\s+/g, " * ");
@@ -599,7 +609,7 @@ function extrairChaveDotDoHistorico(hist) {
     const ano = partes[i + 2];
     const idDot = partes[i + 3];
     if (/^\d{4}$/.test(String(ano)) && /^\d+$/.test(String(idDot))) {
-      return `* DOT * ${adj} * ${ano} * ${idDot} *`;
+      return `DOT.${ano}.${String(adj).toUpperCase()}.${idDot}*`;
     }
   }
   return null;
@@ -608,6 +618,116 @@ function extrairChaveDotDoHistorico(hist) {
 function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath, keyColName, partesChave) {
   const casosEspecificos = carregarCasosEspecificos(jsonCasosPath);
   const chavesNorm = chavesPlanejamento.map((c) => canonicalizarChave(c));
+
+  const levenshteinDistance = (a, b) => {
+    if (a === b) return 0;
+    const alen = a.length;
+    const blen = b.length;
+    if (alen === 0) return blen;
+    if (blen === 0) return alen;
+    const prev = new Array(blen + 1);
+    const curr = new Array(blen + 1);
+    for (let j = 0; j <= blen; j += 1) prev[j] = j;
+    for (let i = 1; i <= alen; i += 1) {
+      curr[0] = i;
+      const ai = a.charCodeAt(i - 1);
+      for (let j = 1; j <= blen; j += 1) {
+        const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+        const del = prev[j] + 1;
+        const ins = curr[j - 1] + 1;
+        const sub = prev[j - 1] + cost;
+        curr[j] = Math.min(del, ins, sub);
+      }
+      for (let j = 0; j <= blen; j += 1) prev[j] = curr[j];
+    }
+    return prev[blen];
+  };
+
+  const ratio = (a, b) => {
+    if (!a && !b) return 100;
+    if (!a || !b) return 0;
+    const dist = levenshteinDistance(a, b);
+    const maxLen = Math.max(a.length, b.length);
+    return maxLen ? Math.round((1 - dist / maxLen) * 100) : 0;
+  };
+
+  const partialRatio = (a, b) => {
+    if (!a && !b) return 100;
+    if (!a || !b) return 0;
+    const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+    const len = shorter.length;
+    if (len === 0) return 0;
+    let best = 0;
+    for (let i = 0; i <= longer.length - len; i += 1) {
+      const sub = longer.slice(i, i + len);
+      const score = ratio(shorter, sub);
+      if (score > best) {
+        best = score;
+        if (best === 100) break;
+      }
+    }
+    return best;
+  };
+
+  const tokenize = (text) =>
+    String(text || "")
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+  const tokenSortRatio = (a, b) => {
+    const aTok = tokenize(a).sort().join(" ");
+    const bTok = tokenize(b).sort().join(" ");
+    return ratio(aTok, bTok);
+  };
+
+  const tokenSetRatio = (a, b) => {
+    const aSet = new Set(tokenize(a));
+    const bSet = new Set(tokenize(b));
+    const inter = [];
+    const diffA = [];
+    const diffB = [];
+    for (const t of aSet) (bSet.has(t) ? inter : diffA).push(t);
+    for (const t of bSet) if (!aSet.has(t)) diffB.push(t);
+    const interStr = inter.sort().join(" ");
+    const combA = [...inter, ...diffA].sort().join(" ");
+    const combB = [...inter, ...diffB].sort().join(" ");
+    const r1 = ratio(interStr, combA);
+    const r2 = ratio(interStr, combB);
+    const r3 = ratio(combA, combB);
+    return Math.max(r1, r2, r3);
+  };
+
+  const wRatio = (a, b) => {
+    const aNorm = normalizeForComparison(a);
+    const bNorm = normalizeForComparison(b);
+    if (!aNorm || !bNorm) return 0;
+    const base = ratio(aNorm, bNorm);
+    const lenRatio = Math.max(aNorm.length, bNorm.length) / Math.max(1, Math.min(aNorm.length, bNorm.length));
+    const partial = partialRatio(aNorm, bNorm);
+    const tsr = tokenSortRatio(aNorm, bNorm);
+    const tser = tokenSetRatio(aNorm, bNorm);
+    let best = Math.max(base, tsr * 0.95, tser * 0.95);
+    if (lenRatio >= 1.5) {
+      best = Math.max(best, partial * 0.9, tokenSortRatio(aNorm, bNorm) * 0.9 * 0.95);
+    } else {
+      best = Math.max(best, partial * 0.9);
+    }
+    return Math.round(best);
+  };
+
+  const extractOne = (query, candidates) => {
+    let best = null;
+    let bestScore = 0;
+    for (const cand of candidates) {
+      const score = wRatio(query, cand);
+      if (score > bestScore) {
+        bestScore = score;
+        best = cand;
+      }
+    }
+    return best ? { match: best, score: bestScore } : null;
+  };
 
   const obterExercicioLinha = (row) => {
     for (const key of Object.keys(row || {})) {
@@ -698,6 +818,16 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
           chaveJanela = canonicalizarChave(janelaPipe.replace(/\|/g, "*"));
           break;
         }
+      }
+    }
+    if (chaveJanela === "NÃO IDENTIFICADO" && partes.length >= tamanhoJanela) {
+      const trecho = partes.slice(0, tamanhoJanela).join(" * ");
+      const base = chavesBase.length ? chavesBase : chavesNorm;
+      const fuzzy = extractOne(trecho, base);
+      if (fuzzy && fuzzy.score >= 95) {
+        console.error(`[emp] chave aproximada identificada por fuzzy: ${fuzzy.match}`);
+        resultados.push(canonicalizarChave(fuzzy.match));
+        continue;
       }
     }
     resultados.push(chaveJanela === "NÃO IDENTIFICADO" ? chaveJanela : canonicalizarChave(chaveJanela));
@@ -940,19 +1070,6 @@ function moverColunasParaDireita(columns, colsToMove, referencia) {
   return [...restantes.slice(0, idx + 1), ...existentes, ...restantes.slice(idx + 1)];
 }
 
-function atualizarTipoDespesa(dataset) {
-  if (!dataset.columns.includes("Hist\u00f3rico") || !dataset.columns.includes("Tipo de Despesa")) {
-    return dataset;
-  }
-  for (const row of dataset.rows) {
-    const hist = String(row["Hist\u00f3rico"] || "").toLowerCase();
-    if (/\bbolsas?\b/.test(hist)) {
-      row["Tipo de Despesa"] = "Bolsa";
-    }
-  }
-  return dataset;
-}
-
 function calcularValorLiquido(dataset) {
   if (!dataset.columns.includes("Valor EMP") || !dataset.columns.includes("Devolu\u00e7\u00e3o GCV")) {
     return dataset;
@@ -973,6 +1090,171 @@ function calcularValorLiquido(dataset) {
   return dataset;
 }
 
+function normalizeDotacaoKey(value) {
+  if (!value) return "";
+  const cleaned = String(value).replace(/\s+/g, "").replace(/\*+$/, "");
+  return cleaned.toUpperCase();
+}
+
+function ajustarChavesPorFormato(dataset, keyColName, partesPlanejamento) {
+  if (!dataset.columns.includes("Chave")) {
+    dataset.columns = ["Chave", ...dataset.columns];
+    for (const row of dataset.rows) {
+      if (!("Chave" in row)) row.Chave = "";
+    }
+  }
+  if (!dataset.columns.includes(keyColName)) {
+    dataset.columns = [keyColName, ...dataset.columns];
+    for (const row of dataset.rows) {
+      if (!(keyColName in row)) row[keyColName] = "";
+    }
+  }
+  for (const row of dataset.rows) {
+    if (row.__forcar_chave) continue;
+    const chaveVal = row.Chave || "";
+    const chavePlan = row[keyColName] || "";
+    const chaveFonte = String(chaveVal || chavePlan || "").trim();
+    const partes = contarPartesChave(chaveFonte);
+    if (partes === partesPlanejamento) {
+      row[keyColName] = chaveFonte || "-";
+      row.Chave = "-";
+      continue;
+    }
+    if (partes === 4) {
+      row.Chave = chaveFonte || "-";
+      row[keyColName] = "-";
+      continue;
+    }
+    if (!row.Chave) row.Chave = "-";
+    if (!row[keyColName]) row[keyColName] = "-";
+  }
+  return dataset;
+}
+
+function buildColumnWidths(columns, rows, historicoWidth) {
+  const widths = new Map();
+  const histKey = "Hist\u00f3rico";
+  for (const col of columns) {
+    let maxLen = String(col || "").length;
+    for (const row of rows) {
+      const value = row && Object.prototype.hasOwnProperty.call(row, col) ? row[col] : "";
+      const len = String(value ?? "").length;
+      if (len > maxLen) maxLen = len;
+    }
+    const padded = Math.max(10, maxLen + 2);
+    widths.set(col, col === histKey ? historicoWidth : Math.min(padded, historicoWidth));
+  }
+  return widths;
+}
+
+function coletarDotSums(rows) {
+  const sums = new Map();
+  for (const row of rows) {
+    const rawChave = row["Chave"] || row["Chave de Planejamento"];
+    const key = normalizeDotacaoKey(rawChave);
+    if (!key || !key.startsWith("DOT.")) continue;
+    const valor = parseValorDb(row["Valor EMP-Devolu\u00e7\u00e3o GCV"]);
+    const atual = sums.get(key) || 0;
+    const num = Number.isFinite(valor) ? valor : 0;
+    sums.set(key, atual + num);
+  }
+  return sums;
+}
+
+async function carregarDotacoes(db) {
+  if (db.kind === "mssql") {
+    const result = await db.pool
+      .request()
+      .query("SELECT chave_dotacao, valor_dotacao FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1");
+    return result.recordset || [];
+  }
+  const [rows] = await db.pool.query(
+    "SELECT chave_dotacao, valor_dotacao FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1"
+  );
+  return rows || [];
+}
+
+async function carregarPedSums(db) {
+  if (db.kind === "mssql") {
+    const result = await db.pool
+      .request()
+      .query(
+        "SELECT chave, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave"
+      );
+    return result.recordset || [];
+  }
+  const [rows] = await db.pool.query(
+    "SELECT chave, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave"
+  );
+  return rows || [];
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const num = Number(value);
+  if (Number.isFinite(num)) return num;
+  return parseValorDb(value) || 0;
+}
+
+async function atualizarDotacaoComEmp(db, empSums) {
+  const dotacoes = await carregarDotacoes(db);
+  const pedRows = await carregarPedSums(db);
+  const pedSums = new Map();
+  for (const row of pedRows) {
+    const key = normalizeDotacaoKey(row.chave);
+    if (!key) continue;
+    const total = toNumber(row.total);
+    pedSums.set(key, (pedSums.get(key) || 0) + total);
+  }
+  const dotKeys = new Set();
+  for (const dot of dotacoes) {
+    const key = normalizeDotacaoKey(dot.chave_dotacao);
+    if (key) dotKeys.add(key);
+  }
+
+  const missing = [];
+  for (const key of empSums.keys()) {
+    if (!dotKeys.has(key)) missing.push(key);
+  }
+
+  if (db.kind === "mssql") {
+    for (const dot of dotacoes) {
+      const key = normalizeDotacaoKey(dot.chave_dotacao);
+      const somaEmp = empSums.get(key) || 0;
+      const somaPed = pedSums.get(key) || 0;
+      const soma = somaPed + somaEmp;
+      const valorDot = Number.isFinite(Number(dot.valor_dotacao))
+        ? Number(dot.valor_dotacao)
+        : parseValorDb(dot.valor_dotacao) || 0;
+      const valorAtual = valorDot - soma;
+      const req = db.pool.request();
+      req.input("valor_ped_emp", soma);
+      req.input("valor_atual", valorAtual);
+      req.input("chave_dotacao", dot.chave_dotacao);
+      await req.query(
+        "UPDATE dotacao SET valor_ped_emp = @valor_ped_emp, valor_atual = @valor_atual WHERE chave_dotacao = @chave_dotacao"
+      );
+    }
+  } else {
+    for (const dot of dotacoes) {
+      const key = normalizeDotacaoKey(dot.chave_dotacao);
+      const somaEmp = empSums.get(key) || 0;
+      const somaPed = pedSums.get(key) || 0;
+      const soma = somaPed + somaEmp;
+      const valorDot = Number.isFinite(Number(dot.valor_dotacao))
+        ? Number(dot.valor_dotacao)
+        : parseValorDb(dot.valor_dotacao) || 0;
+      const valorAtual = valorDot - soma;
+      await db.pool.query(
+        "UPDATE dotacao SET valor_ped_emp = ?, valor_atual = ? WHERE chave_dotacao = ?",
+        [soma, valorAtual, dot.chave_dotacao]
+      );
+    }
+  }
+
+  return missing.sort();
+}
+
 function montarRegistrosParaDb(dataset, dataArquivo, userEmail, uploadId) {
   const registros = [];
   for (const row of dataset.rows) {
@@ -985,15 +1267,26 @@ function montarRegistrosParaDb(dataset, dataArquivo, userEmail, uploadId) {
     }
 
     const ano = parseAno(payload.exercicio);
+    const partesPlanejamento = ano && ano >= 2026 ? 8 : 7;
+    const chaveValor = payload.chave || null;
+    const chavePlanejamentoValor = payload.chave_planejamento || null;
+    const chaveFonte = chaveValor || chavePlanejamentoValor;
+
     if (row.__forcar_chave) {
-      payload.chave = payload.chave || null;
-      payload.chave_planejamento = payload.chave_planejamento || null;
+      payload.chave = chaveValor || null;
+      payload.chave_planejamento = chavePlanejamentoValor || null;
     } else {
-      const partesPlanejamento = ano && ano >= 2026 ? 8 : 7;
-      const chavePartes = contarPartesChave(payload.chave);
-      const planejamentoPartes = contarPartesChave(payload.chave_planejamento);
-      payload.chave = chavePartes === 4 ? payload.chave : null;
-      payload.chave_planejamento = planejamentoPartes === partesPlanejamento ? payload.chave_planejamento : null;
+      const partesFonte = contarPartesChave(chaveFonte);
+      if (partesFonte === partesPlanejamento) {
+        payload.chave_planejamento = chaveFonte || null;
+        payload.chave = null;
+      } else if (partesFonte === 4) {
+        payload.chave = chaveFonte || null;
+        payload.chave_planejamento = null;
+      } else {
+        payload.chave = chaveValor || null;
+        payload.chave_planejamento = chavePlanejamentoValor || null;
+      }
     }
 
     for (const col of ["valor_emp", "devolucao_gcv", "valor_emp_devolucao_gcv"]) {
@@ -1109,9 +1402,11 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   for (const row of df.rows) {
     const chaveDot = extrairChaveDotDoHistorico(row["Hist\u00f3rico"] || "");
     if (chaveDot) {
-      row.Chave = canonicalizarChave(chaveDot);
+      row.Chave = chaveDot;
     }
   }
+
+  df = ajustarChavesPorFormato(df, keyColName, partesPlanejamento);
 
   df = removerEmpenhosEstornados(df).dataset;
   dfEmpBase.rows = removerEmpenhosEstornados(dfEmpBase).dataset.rows;
@@ -1119,6 +1414,8 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   const missingPlanejamentoLines = [];
   for (let i = 0; i < df.rows.length; i += 1) {
     const row = df.rows[i];
+    const chaveDot = String(row.Chave || "").trim().toUpperCase();
+    if (chaveDot.startsWith("DOT.")) continue;
     const value = String(row[keyColName] || "").trim();
     if (!value || ["NÇO IDENTIFICADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÃO INFORMADO", "-"].includes(value)) {
       missingPlanejamentoLines.push(i + 2); // header na linha 1, dados a partir da linha 2
@@ -1128,7 +1425,6 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     planejamento_missing_lines: missingPlanejamentoLines,
   });
 
-  df = atualizarTipoDespesa(df);
   df.columns = moverColunas(
     df.columns,
     ["Data emiss\u00e3o", "Data cria\u00e7\u00e3o", "N\u00ba Contrato", "N\u00ba Conv\u00eanio"],
@@ -1147,6 +1443,8 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     }
   }
 
+  const empDotSums = coletarDotSums(dfSaida.rows);
+
   const outputFile = path.join(
     OUTPUT_DIR,
     `${path.basename(filePath, path.extname(filePath))}_Tratado_${Date.now()}.xlsx`
@@ -1154,8 +1452,17 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: outputFile });
   const sheetEmp = workbook.addWorksheet("emp");
   const sheetTratado = workbook.addWorksheet("emp_tratado");
-  sheetEmp.columns = dfEmpBase.columns.map((col) => ({ header: fixOutputHeader(col), key: col }));
-  sheetTratado.columns = buildTratadoColumns(dfSaida.columns);
+  const empWidths = buildColumnWidths(dfEmpBase.columns, dfEmpBase.rows, 60);
+  const tratadoWidths = buildColumnWidths(dfSaida.columns, dfSaida.rows, 120);
+  sheetEmp.columns = dfEmpBase.columns.map((col) => ({
+    header: fixOutputHeader(col),
+    key: col,
+    width: empWidths.get(col),
+  }));
+  sheetTratado.columns = buildTratadoColumns(dfSaida.columns).map((col) => ({
+    ...col,
+    width: tratadoWidths.get(col.key) || tratadoWidths.get(col.header),
+  }));
 
   for (const row of dfEmpBase.rows) {
     const values = dfEmpBase.columns.map((col) => row[col] ?? "");
@@ -1200,6 +1507,11 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
       message: `Gravando registros no banco (${total}/${registros.length}).`,
     });
   }
+
+  const missingDotacaoKeys = await atualizarDotacaoComEmp(db, empDotSums);
+  updateStatusFields("emp", uploadId, {
+    dotacao_missing_keys: missingDotacaoKeys,
+  });
 
   if (db.kind === "mssql") {
     await db.pool.close();

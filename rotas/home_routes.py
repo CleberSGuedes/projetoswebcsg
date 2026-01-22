@@ -303,6 +303,7 @@ def partial_dashboard():
             missing = sorted([k for k in ped_keys if k not in dotacao_keys])
             ped_dotacao_missing = missing
     emp_planejamento_missing_lines: list[int] = []
+    emp_dotacao_missing: list[str] = []
     try:
         last_emp = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
         if last_emp:
@@ -310,14 +311,19 @@ def partial_dashboard():
             raw_lines = status_data.get("planejamento_missing_lines") or []
             if isinstance(raw_lines, list):
                 emp_planejamento_missing_lines = [int(v) for v in raw_lines if str(v).isdigit()]
+            raw_dot = status_data.get("dotacao_missing_keys") or []
+            if isinstance(raw_dot, list):
+                emp_dotacao_missing = [str(v) for v in raw_dot if str(v).strip()]
     except Exception:
         emp_planejamento_missing_lines = []
+        emp_dotacao_missing = []
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
         ped_dotacao_missing=ped_dotacao_missing,
         emp_planejamento_missing_lines=emp_planejamento_missing_lines,
+        emp_dotacao_missing=emp_dotacao_missing,
     )
 
 
@@ -614,7 +620,19 @@ def partial_cadastrar_dotacao():
         usuarios_map = {u.id: u.nome for u in usuarios}
 
     dotacoes = []
+    atualizar_ids: list[int] = []
+    atualizar_ped_emp: list[Decimal] = []
+    atualizar_atual: list[Decimal] = []
     for dot, adj_abreviacao in rows:
+        ped_sum = _calc_ped_sum_for_dotacao(dot.chave_dotacao)
+        emp_sum = _calc_emp_sum_for_dotacao(dot.chave_dotacao)
+        ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
+        valor_dot = _dec_or_zero(dot.valor_dotacao)
+        valor_atual = valor_dot - ped_emp_sum
+        if _dec_or_zero(dot.valor_ped_emp) != ped_emp_sum or _dec_or_zero(dot.valor_atual) != valor_atual:
+            atualizar_ids.append(dot.id)
+            atualizar_ped_emp.append(ped_emp_sum)
+            atualizar_atual.append(valor_atual)
         dotacoes.append(
             {
                 "id": dot.id,
@@ -643,6 +661,21 @@ def partial_cadastrar_dotacao():
                 "alterado_em": dot.alterado_em.isoformat() if dot.alterado_em else "",
             }
         )
+    if atualizar_ids:
+        try:
+            for idx, dot_id in enumerate(atualizar_ids):
+                db.session.execute(
+                    Dotacao.__table__.update()
+                    .where(Dotacao.id == dot_id)
+                    .values(
+                        valor_ped_emp=atualizar_ped_emp[idx],
+                        valor_atual=atualizar_atual[idx],
+                        alterado_em=_now_local(),
+                    )
+                )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     return render_template("partials/cadastrar_dotacao.html", dotacoes=dotacoes)
 
 
@@ -998,6 +1031,95 @@ def _calc_ped_sum_for_dotacao(chave_dotacao: str) -> Decimal:
     return total
 
 
+def _calc_emp_sum_for_dotacao(chave_dotacao: str) -> Decimal:
+    key_norm = _normalize_dotacao_key(chave_dotacao)
+    if not key_norm:
+        return Decimal("0")
+    rows = (
+        EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave)
+        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    total = Decimal("0")
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) == key_norm:
+            total += _dec_or_zero(row.valor_emp_devolucao_gcv)
+    return total
+
+
+def _calc_ped_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
+    if not keys:
+        return Decimal("0"), 0
+    rows = (
+        PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
+        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    total = Decimal("0")
+    count = 0
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) in keys:
+            total += _dec_or_zero(row.valor_ped)
+            count += 1
+    return total, count
+
+
+def _collect_ped_rows_for_dotacao_keys(keys: set[str]) -> dict[int, Decimal]:
+    if not keys:
+        return {}
+    rows = (
+        PedRegistro.query.with_entities(PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave)
+        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    matched: dict[int, Decimal] = {}
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) in keys:
+            matched[row.id] = _dec_or_zero(row.valor_ped)
+    return matched
+
+
+def _calc_emp_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
+    if not keys:
+        return Decimal("0"), 0
+    rows = (
+        EmpRegistro.query.with_entities(
+            EmpRegistro.numero_emp, EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave
+        )
+        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    total = Decimal("0")
+    emp_nums = []
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) in keys:
+            total += _dec_or_zero(row.valor_emp_devolucao_gcv)
+            if row.numero_emp:
+                emp_nums.append(row.numero_emp)
+    emp_nums = list(dict.fromkeys(emp_nums))
+    return total, len(emp_nums)
+
+
+def _collect_emp_rows_for_dotacao_keys(keys: set[str]) -> dict[int, tuple[Decimal, str]]:
+    if not keys:
+        return {}
+    rows = (
+        EmpRegistro.query.with_entities(
+            EmpRegistro.id,
+            EmpRegistro.numero_emp,
+            EmpRegistro.valor_emp_devolucao_gcv,
+            EmpRegistro.chave,
+        )
+        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    matched: dict[int, tuple[Decimal, str]] = {}
+    for row in rows:
+        if _normalize_dotacao_key(row.chave) in keys:
+            matched[row.id] = (_dec_or_zero(row.valor_emp_devolucao_gcv), row.numero_emp or "")
+    return matched
+
+
 @home_bp.route("/api/dotacao/options", methods=["GET"])
 @login_required
 @require_feature("cadastrar/dotacao")
@@ -1212,14 +1334,16 @@ def api_dotacao_create():
         chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
         justificativa_full = f"{chave_dotacao} {justificativa}".strip()
         ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
-        valor_atual = _dec_or_zero(valor_dotacao) - ped_sum
+        emp_sum = _calc_emp_sum_for_dotacao(chave_dotacao)
+        ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
+        valor_atual = _dec_or_zero(valor_dotacao) - ped_emp_sum
         db.session.execute(
             Dotacao.__table__.update()
             .where(Dotacao.id == registro.id)
             .values(
                 chave_dotacao=chave_dotacao,
                 justificativa_historico=justificativa_full,
-                valor_ped_emp=ped_sum,
+                valor_ped_emp=ped_emp_sum,
                 valor_atual=valor_atual,
                 alterado_em=None,
             )
@@ -1392,8 +1516,10 @@ def api_dotacao_update(dotacao_id):
     registro.chave_dotacao = chave_dotacao
     registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
     ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
-    registro.valor_ped_emp = ped_sum
-    registro.valor_atual = _dec_or_zero(valor_dotacao) - ped_sum
+    emp_sum = _calc_emp_sum_for_dotacao(chave_dotacao)
+    ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
+    registro.valor_ped_emp = ped_emp_sum
+    registro.valor_atual = _dec_or_zero(valor_dotacao) - ped_emp_sum
     try:
         db.session.commit()
     except Exception as exc:
@@ -1535,39 +1661,25 @@ def _calc_dotacao_saldo(
     if chave_planejamento:
         dot_filters.append(Dotacao.chave_planejamento == chave_planejamento)
 
+    dot_rows = (
+        Dotacao.query.with_entities(
+            Dotacao.valor_dotacao,
+            Dotacao.valor_atual,
+            Dotacao.subacao_entrega,
+            Dotacao.chave_dotacao,
+        )
+        .filter(*dot_filters)
+        .all()
+    )
+
     if subacao_entrega:
         subacao_norm = _normalize_chave(subacao_entrega)
-        dot_rows = (
-            Dotacao.query.with_entities(
-                Dotacao.valor_dotacao, Dotacao.valor_atual, Dotacao.subacao_entrega
-            )
-            .filter(*dot_filters)
-            .all()
-        )
-        valor_dotacao = sum(
-            (
-                _dec_or_zero(r.valor_atual if r.valor_atual is not None else r.valor_dotacao)
-                for r in dot_rows
-                if _normalize_chave(r.subacao_entrega) == subacao_norm
-            ),
-            Decimal("0"),
-        )
-        if valor_dotacao == 0:
-            valor_dotacao = (
-                db.session.query(
-                    func.coalesce(func.sum(func.coalesce(Dotacao.valor_atual, Dotacao.valor_dotacao)), 0)
-                )
-                .filter(*dot_filters)
-                .scalar()
-            )
-    else:
-        valor_dotacao = (
-            db.session.query(
-                func.coalesce(func.sum(func.coalesce(Dotacao.valor_atual, Dotacao.valor_dotacao)), 0)
-            )
-            .filter(*dot_filters)
-            .scalar()
-        )
+        dot_rows = [r for r in dot_rows if _normalize_chave(r.subacao_entrega) == subacao_norm]
+
+    valor_dotacao = sum(
+        (_dec_or_zero(r.valor_atual if r.valor_atual is not None else r.valor_dotacao) for r in dot_rows),
+        Decimal("0"),
+    )
     valor_dotacao = _dec_or_zero(valor_dotacao)
 
     def _count_chave_parts(value: str) -> int:
@@ -1638,6 +1750,9 @@ def _calc_dotacao_saldo(
     if regiao:
         emp_base_common.append(EmpRegistro.regiao == regiao)
 
+    dotacao_keys = {
+        _normalize_dotacao_key(r.chave_dotacao) for r in dot_rows if _normalize_dotacao_key(r.chave_dotacao)
+    }
     ped_base = list(ped_base_common)
     if chave_planejamento:
         if chave_field == "chave_planejamento":
@@ -1659,14 +1774,40 @@ def _calc_dotacao_saldo(
             .filter(*ped_base_common)
             .all()
         )
-    ped_filtered = []
+    plan_map: dict[int, Decimal] = {}
     for row in ped_rows:
+        if not chave_planejamento:
+            continue
         chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
         if _normalize_chave(chave_val) == chave_norm:
-            ped_filtered.append(row)
-    valor_ped = sum((_dec_or_zero(r.valor_ped) for r in ped_filtered), Decimal("0"))
-    ped_count = len(ped_filtered)
+            plan_map[row.id] = _dec_or_zero(row.valor_ped)
 
+    dot_map = _collect_ped_rows_for_dotacao_keys(dotacao_keys) if dotacao_keys else {}
+    merged = dict(dot_map)
+    for row_id, valor in plan_map.items():
+        if row_id not in merged:
+            merged[row_id] = valor
+
+    valor_ped = sum(merged.values(), Decimal("0"))
+    ped_count = len(merged)
+    if ped_count == 0 and chave_planejamento:
+        ped_fallback = [PedRegistro.ativo == True]  # noqa: E712
+        if exercicio:
+            ped_fallback.append(PedRegistro.exercicio == exercicio)
+        ped_rows = (
+            PedRegistro.query.with_entities(
+                PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
+            )
+            .filter(*ped_fallback)
+            .all()
+        )
+        for row in ped_rows:
+            if _normalize_chave(row.chave_planejamento) == chave_norm or _normalize_chave(row.chave) == chave_norm:
+                merged[row.id] = _dec_or_zero(row.valor_ped)
+        valor_ped = sum(merged.values(), Decimal("0"))
+        ped_count = len(merged)
+
+    plan_emp_map: dict[int, tuple[Decimal, str]] = {}
     emp_base = list(emp_base_common)
     if chave_planejamento:
         if chave_field == "chave_planejamento":
@@ -1675,7 +1816,11 @@ def _calc_dotacao_saldo(
             emp_base.append(EmpRegistro.chave == chave_planejamento)
     emp_rows = (
         EmpRegistro.query.with_entities(
-            EmpRegistro.numero_emp, EmpRegistro.chave_planejamento, EmpRegistro.chave
+            EmpRegistro.id,
+            EmpRegistro.numero_emp,
+            EmpRegistro.chave_planejamento,
+            EmpRegistro.chave,
+            EmpRegistro.valor_emp_devolucao_gcv,
         )
         .filter(*emp_base)
         .all()
@@ -1683,30 +1828,32 @@ def _calc_dotacao_saldo(
     if not emp_rows and chave_planejamento:
         emp_rows = (
             EmpRegistro.query.with_entities(
-                EmpRegistro.numero_emp, EmpRegistro.chave_planejamento, EmpRegistro.chave
+                EmpRegistro.id,
+                EmpRegistro.numero_emp,
+                EmpRegistro.chave_planejamento,
+                EmpRegistro.chave,
+                EmpRegistro.valor_emp_devolucao_gcv,
             )
             .filter(*emp_base_common)
             .all()
         )
-    emp_nums = []
     for row in emp_rows:
+        if not chave_planejamento:
+            continue
         chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
-        if _normalize_chave(chave_val) == chave_norm and row.numero_emp:
-            emp_nums.append(row.numero_emp)
+        if _normalize_chave(chave_val) == chave_norm:
+            plan_emp_map[row.id] = (_dec_or_zero(row.valor_emp_devolucao_gcv), row.numero_emp or "")
+
+    dot_emp_map = _collect_emp_rows_for_dotacao_keys(dotacao_keys) if dotacao_keys else {}
+    merged_emp = dict(dot_emp_map)
+    for row_id, data in plan_emp_map.items():
+        if row_id not in merged_emp:
+            merged_emp[row_id] = data
+
+    valor_emp_liquido = sum((v for v, _ in merged_emp.values()), Decimal("0"))
+    emp_nums = [n for _, n in merged_emp.values() if n]
     emp_nums = list(dict.fromkeys(emp_nums))
     emp_count = len(emp_nums)
-    if emp_nums:
-        valor_emp_liquido = (
-            db.session.query(func.coalesce(func.sum(EstEmpRegistro.valor_emp_liquido), 0))
-            .filter(
-                EstEmpRegistro.ativo == True,  # noqa: E712
-                EstEmpRegistro.numero_emp.in_(emp_nums),
-            )
-            .scalar()
-        )
-    else:
-        valor_emp_liquido = Decimal("0")
-    valor_emp_liquido = _dec_or_zero(valor_emp_liquido)
 
     saldo = valor_atual - valor_dotacao - valor_ped - valor_emp_liquido
     dotacao_count = (

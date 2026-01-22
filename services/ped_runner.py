@@ -15,7 +15,7 @@ from rapidfuzz import fuzz, process
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import db, Dotacao
+from models import db, Dotacao, EmpRegistro
 
 # Evita warnings de downcasting silencioso em replace
 pd.set_option("future.no_silent_downcasting", True)
@@ -182,13 +182,27 @@ def _update_dotacao_from_ped(df: pd.DataFrame) -> None:
         key = _normalize_dotacao_key(chave)
         ped_sums[key] = ped_sums.get(key, Decimal("0")) + _to_decimal(row.get(valor_col))
 
+    emp_rows = (
+        EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave)
+        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .all()
+    )
+    emp_sums: dict[str, Decimal] = {}
+    for row in emp_rows:
+        key = _normalize_dotacao_key(row.chave or "")
+        if not key:
+            continue
+        emp_sums[key] = emp_sums.get(key, Decimal("0")) + _to_decimal(row.valor_emp_devolucao_gcv)
+
     dotacoes = Dotacao.query.filter(Dotacao.ativo == True).all()  # noqa: E712
     for dot in dotacoes:
         key = _normalize_dotacao_key(dot.chave_dotacao or "")
         ped_sum = ped_sums.get(key, Decimal("0"))
+        emp_sum = emp_sums.get(key, Decimal("0"))
         dot_val = _to_decimal(dot.valor_dotacao)
-        dot.valor_ped_emp = ped_sum
-        dot.valor_atual = dot_val - ped_sum
+        total = ped_sum + emp_sum
+        dot.valor_ped_emp = total
+        dot.valor_atual = dot_val - total
     db.session.commit()
 
 

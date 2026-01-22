@@ -2457,7 +2457,7 @@
           const dotSum = formatPtBr(data.valor_dotacao ?? 0);
           const planSum = formatPtBr(data.valor_atual ?? 0);
           saldoDebug.textContent =
-            `Plan21: ${planSum} | Dotacao: ${dotSum} | PED: ${pedSum} (${pedCount}) | EMP: ${empSum} (${empCount})`;
+            `Plan21: ${planSum} | Dotacao: ${dotSum} (${dotCount}) | PED: ${pedSum} (${pedCount}) | EMP: ${empSum} (${empCount})`;
         }
       } catch (err) {
         console.error(err);
