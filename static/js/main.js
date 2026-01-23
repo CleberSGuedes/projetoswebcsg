@@ -1930,6 +1930,7 @@
     };
     const opLabels = {
       eq: "Igual a",
+      contains: "Cont\u00e9m",
       gt: "Maior que",
       lt: "Menor que",
       gte: "Maior igual a",
@@ -2026,6 +2027,7 @@
       const rraw = r.raw.toLowerCase();
       const cmp = lraw.localeCompare(rraw, "pt-BR", { sensitivity: "base" });
       if (op === "eq") return cmp === 0;
+      if (op === "contains") return lraw.includes(rraw);
       if (op === "gt") return cmp > 0;
       if (op === "lt") return cmp < 0;
       if (op === "gte") return cmp >= 0;
@@ -2249,7 +2251,7 @@
       const fields = [
         ["Exerc&#237;cio", row.dataset.exercicio],
         ["Adjunta Solicitante", row.dataset.adjunta],
-        ["Chave de Planejamento", row.dataset.chave],
+        ["Chave do Planejamento", row.dataset.chave],
         ["UO", row.dataset.uo],
         ["Programa", row.dataset.programaRaw],
         ["A&#231;&#227;o/PAOE", row.dataset.acaoPaoe],
@@ -2435,7 +2437,10 @@
       if (missing) {
         saldoInput.value = "";
         if (saldoInfo) saldoInfo.textContent = "";
-        if (saldoDebug) saldoDebug.textContent = "";
+        if (saldoDebug) {
+          saldoDebug.textContent = "";
+          saldoDebug.classList.remove("dotacao-saldo-debug-active");
+        }
         return;
       }
       const url = new URL("/api/dotacao/saldo", window.location.origin);
@@ -2458,12 +2463,20 @@
           const planSum = formatPtBr(data.valor_atual ?? 0);
           saldoDebug.textContent =
             `Plan21: ${planSum} | Dotacao: ${dotSum} (${dotCount}) | PED: ${pedSum} (${pedCount}) | EMP: ${empSum} (${empCount})`;
+          if (saldoDebug.textContent.trim()) {
+            saldoDebug.classList.add("dotacao-saldo-debug-active");
+          } else {
+            saldoDebug.classList.remove("dotacao-saldo-debug-active");
+          }
         }
       } catch (err) {
         console.error(err);
         saldoInput.value = "";
         if (saldoInfo) saldoInfo.textContent = "";
-        if (saldoDebug) saldoDebug.textContent = "";
+        if (saldoDebug) {
+          saldoDebug.textContent = "";
+          saldoDebug.classList.remove("dotacao-saldo-debug-active");
+        }
       }
     };
 

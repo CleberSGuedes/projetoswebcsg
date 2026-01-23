@@ -1133,7 +1133,7 @@ def api_dotacao_options():
         "acao_paoe": Plan21Nger.acao_paoe,
         "produto": Plan21Nger.produto,
         "ug": Plan21Nger.ug,
-        "regiao": Plan21Nger.regiao,
+        "regiao": Plan21Nger.regiao_etapa,
         "subacao_entrega": Plan21Nger.subacao_entrega,
         "etapa": Plan21Nger.etapa,
         "natureza_despesa": Plan21Nger.natureza,
@@ -1278,7 +1278,7 @@ def api_dotacao_create():
     query = query.filter(Plan21Nger.acao_paoe == acao_paoe)
     query = query.filter(Plan21Nger.produto == produto)
     query = query.filter(Plan21Nger.ug == ug)
-    query = query.filter(Plan21Nger.regiao == regiao)
+    query = query.filter(Plan21Nger.regiao_etapa == regiao)
     if subacao_entrega:
         query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
     if etapa:
@@ -1468,7 +1468,7 @@ def api_dotacao_update(dotacao_id):
     query = query.filter(Plan21Nger.acao_paoe == acao_paoe)
     query = query.filter(Plan21Nger.produto == produto)
     query = query.filter(Plan21Nger.ug == ug)
-    query = query.filter(Plan21Nger.regiao == regiao)
+    query = query.filter(Plan21Nger.regiao_etapa == regiao)
     if subacao_entrega:
         query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
     if etapa:
@@ -1604,7 +1604,7 @@ def _calc_dotacao_saldo(
     if uo:
         plan21_filters.append(Plan21Nger.uo == uo)
     if regiao:
-        plan21_filters.append(Plan21Nger.regiao == regiao)
+        plan21_filters.append(Plan21Nger.regiao_etapa == regiao)
     if subacao_entrega:
         plan21_filters.append(Plan21Nger.subacao_entrega == subacao_entrega)
     if etapa:

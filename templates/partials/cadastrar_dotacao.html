@@ -41,8 +41,8 @@
           </select>
         </label>
         <label class="field">
-          <span>*UG</span>
-          <select id="dotacao-ug" name="ug" required>
+          <span>*Chave do Planejamento</span>
+          <select id="dotacao-chave" name="chave_planejamento" required>
             <option value="">Carregando...</option>
           </select>
         </label>
@@ -53,20 +53,8 @@
           </select>
         </label>
         <label class="field">
-          <span>*Chave de Planejamento</span>
-          <select id="dotacao-chave" name="chave_planejamento" required>
-            <option value="">Carregando...</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>*Suba&#231;&#227;o/Entrega</span>
-          <select id="dotacao-subacao" name="subacao_entrega" required>
-            <option value="">Carregando...</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>*Etapa</span>
-          <select id="dotacao-etapa" name="etapa" required>
+          <span>*UG</span>
+          <select id="dotacao-ug" name="ug" required>
             <option value="">Carregando...</option>
           </select>
         </label>
@@ -97,6 +85,18 @@
         <label class="field">
           <span>*Iduso</span>
           <select id="dotacao-iduso" name="iduso" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Suba&#231;&#227;o/Entrega</span>
+          <select id="dotacao-subacao" name="subacao_entrega" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Etapa</span>
+          <select id="dotacao-etapa" name="etapa" required>
             <option value="">Carregando...</option>
           </select>
         </label>
@@ -146,6 +146,7 @@
           <span>Operador</span>
           <select id="dotacao-filtro-operador">
             <option value="eq">Igual a</option>
+            <option value="contains">Contém</option>
             <option value="gt">Maior que</option>
             <option value="lt">Menor que</option>
             <option value="gte">Maior igual a</option>
@@ -185,7 +186,7 @@
               <th>Justificativa/Hist&#243;rico</th>
               <th>Valor da Dota&#231;&#227;o</th>
               <th>Adjunta Solicitante</th>
-              <th>Chave de Planejamento</th>
+              <th>Chave do Planejamento</th>
               <th>Programa</th>
               <th>A&#231;&#227;o/PAOE</th>
               <th>Produto</th>

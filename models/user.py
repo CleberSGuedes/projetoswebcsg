@@ -416,6 +416,7 @@ class Plan21Nger(db.Model):
     produto = db.Column("produto_acao", db.String(255))
     ug = db.Column("unid_gestora", db.String(255))
     regiao = db.Column(db.String(255))
+    regiao_etapa = db.Column(db.String(255))
     subacao_entrega = db.Column(db.String(255))
     etapa = db.Column(db.String(255))
     elemento = db.Column(db.String(50))
