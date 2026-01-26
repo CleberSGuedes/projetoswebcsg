@@ -7,6 +7,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from models import db
+from openpyxl import load_workbook
 from openpyxl.styles import Font
 
 BATCH_SIZE = 200
@@ -30,7 +31,19 @@ def move_existing_to_tmp(base_dir: Path):
             pass
 
 
-def get_year_from_file(file_path, sheet_name="FIPLAN"):
+def get_active_sheet_name(file_path: Path) -> str | None:
+    try:
+        wb = load_workbook(file_path, read_only=True, data_only=True)
+        return wb.active.title if wb.active else None
+    except Exception:
+        return None
+
+
+def get_year_from_file(file_path, sheet_name: str | None = None):
+    if sheet_name is None:
+        sheet_name = get_active_sheet_name(file_path)
+    if not sheet_name:
+        return None
     try:
         raw_data = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
         for _, row in raw_data.iterrows():
@@ -43,7 +56,11 @@ def get_year_from_file(file_path, sheet_name="FIPLAN"):
     return None
 
 
-def load_clean_data(file_path, sheet_name="FIPLAN"):
+def load_clean_data(file_path, sheet_name: str | None = None):
+    if sheet_name is None:
+        sheet_name = get_active_sheet_name(file_path)
+    if not sheet_name:
+        return None
     raw_data = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
     header_row_index = None
     for i, row in raw_data.iterrows():

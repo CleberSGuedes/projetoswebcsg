@@ -439,6 +439,25 @@ function parseDateFlexible(value) {
   return Number.isNaN(asDate.getTime()) ? null : asDate;
 }
 
+function isValidDataRow(record) {
+  const exercicioRaw = record["Exercício"];
+  const exercicio = String(exercicioRaw ?? "").trim();
+  if (!exercicio) return false;
+  if (exercicio.toLowerCase() === "exercício" || exercicio.toLowerCase() === "exercicio") {
+    return false;
+  }
+  if (!/^\d{4}(\.0)?$/.test(exercicio)) {
+    return false;
+  }
+  const meaningful = Object.values(record).filter((val) => {
+    if (val === null || val === undefined) return false;
+    const text = String(val).trim();
+    if (!text) return false;
+    return !/^n[aã]o informado$/i.test(text);
+  }).length;
+  return meaningful >= 2;
+}
+
 function cleanTextFields(row) {
   const cleaned = { ...row };
   for (const key of Object.keys(cleaned)) {
@@ -530,53 +549,35 @@ async function loadSheetData(filePath) {
   if (!worksheet) throw new Error("Planilha sem conteudo.");
 
   const cachedRows = [];
-  const maxScan = Math.min(400, worksheet.rowCount);
+  const maxScan = Math.min(15, worksheet.rowCount);
   for (let idx = 1; idx <= maxScan; idx += 1) {
     const row = worksheet.getRow(idx);
     const values = row.values.slice(1).map((cell) => (cell === null ? "" : cell));
     cachedRows.push(values);
   }
 
+  const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
   let headerRowIdx = null;
   let headerValues = [];
-  if (cachedRows.length >= 5) {
-    const row5 = cachedRows[4];
-    if (row5.some((c) => typeof c === "string" && c.toLowerCase().includes("exerc"))) {
-      headerRowIdx = 5;
-      headerValues = row5.map((c) => (c === null ? "" : String(c).trim()));
+  let bestMatchCount = 0;
+
+  for (let idx = 0; idx < cachedRows.length; idx += 1) {
+    const row = cachedRows[idx];
+    const rawValues = row.map((c) => (c === null ? "" : String(c).trim()));
+    const normValues = normalizeColumns(rawValues);
+    const matchCount = normValues.filter((name) => requiredCanon.has(name)).length;
+    if (matchCount > bestMatchCount) {
+      bestMatchCount = matchCount;
+      headerRowIdx = idx + 1;
+      headerValues = rawValues;
     }
   }
 
-  if (!headerRowIdx) {
-    let candidateSingle = null;
-    for (let idx = 0; idx < cachedRows.length; idx += 1) {
-      const row = cachedRows[idx];
-      const nonempty = row.filter((c) => c !== null && c !== "").length;
-      const hasExerc = row.some((c) => typeof c === "string" && c.toLowerCase().includes("exerc"));
-      if (hasExerc && nonempty >= 3) {
-        headerRowIdx = idx + 1;
-        headerValues = row.map((c) => (c === null ? "" : String(c).trim()));
-        break;
-      }
-      if (hasExerc && nonempty === 1 && candidateSingle === null) {
-        candidateSingle = idx + 1;
-      }
-    }
-    if (!headerRowIdx && candidateSingle) {
-      const nextIdx = candidateSingle + 1;
-      if (nextIdx <= cachedRows.length) {
-        headerRowIdx = nextIdx;
-        headerValues = cachedRows[nextIdx - 1].map((c) => (c === null ? "" : String(c).trim()));
-      }
-    }
-  }
-
-  if (!headerRowIdx) {
-    throw new Error("Cabecalho com 'Exercicio' nao encontrado nas primeiras 400 linhas.");
+  if (!headerRowIdx || bestMatchCount < 3) {
+    throw new Error("Cabecalho com colunas necessarias nao encontrado nas primeiras 15 linhas.");
   }
 
   const headerNorm = normalizeColumns(headerValues);
-  const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
   const keepIndices = [];
   const keepNames = [];
   headerNorm.forEach((name, pos) => {
@@ -634,40 +635,25 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   const bufferRows = [];
 
   const detectHeader = (cachedRows) => {
+    const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
     let foundRowIdx = null;
     let foundValues = [];
+    let bestMatchCount = 0;
 
-    if (cachedRows.length >= 5) {
-      const row5 = cachedRows[4];
-      if (row5.some((c) => typeof c === "string" && c.toLowerCase().includes("exerc"))) {
-        foundRowIdx = 5;
-        foundValues = row5.map((c) => (c === null ? "" : String(c).trim()));
-        return { foundRowIdx, foundValues };
-      }
-    }
-
-    let candidateSingle = null;
     for (let idx = 0; idx < cachedRows.length; idx += 1) {
       const row = cachedRows[idx];
-      const nonempty = row.filter((c) => c !== null && c !== "").length;
-      const hasExerc = row.some((c) => typeof c === "string" && c.toLowerCase().includes("exerc"));
-      if (hasExerc && nonempty >= 3) {
+      const rawValues = row.map((c) => (c === null ? "" : String(c).trim()));
+      const normValues = normalizeColumns(rawValues);
+      const matchCount = normValues.filter((name) => requiredCanon.has(name)).length;
+      if (matchCount > bestMatchCount) {
+        bestMatchCount = matchCount;
         foundRowIdx = idx + 1;
-        foundValues = row.map((c) => (c === null ? "" : String(c).trim()));
-        return { foundRowIdx, foundValues };
-      }
-      if (hasExerc && nonempty === 1 && candidateSingle === null) {
-        candidateSingle = idx + 1;
+        foundValues = rawValues;
       }
     }
-    if (!foundRowIdx && candidateSingle) {
-      const nextIdx = candidateSingle + 1;
-      if (nextIdx <= cachedRows.length) {
-        foundRowIdx = nextIdx;
-        foundValues = cachedRows[nextIdx - 1].map((c) => (c === null ? "" : String(c).trim()));
-      }
-    }
-    return foundRowIdx ? { foundRowIdx, foundValues } : null;
+
+    if (!foundRowIdx || bestMatchCount < 3) return null;
+    return { foundRowIdx, foundValues };
   };
 
   const initHeader = (foundIdx, foundValues) => {
@@ -701,6 +687,10 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     keepNames.forEach((name, i) => {
       record[name] = selected[i];
     });
+
+    if (!isValidDataRow(record)) {
+      return;
+    }
 
     for (const col of COLUMNS_TO_DROP) {
       delete record[col];
@@ -765,7 +755,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     for await (const row of worksheetReader) {
       const values = row.values ? row.values.slice(1) : [];
       if (!headerRowIdx) {
-        if (bufferRows.length < 400) {
+        if (bufferRows.length < 15) {
           bufferRows.push({ number: row.number, values });
           const cached = bufferRows.map((r) => r.values);
           const detected = detectHeader(cached);
@@ -778,7 +768,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
             }
           }
         } else {
-          throw new Error("Cabecalho com 'Exercicio' nao encontrado nas primeiras 400 linhas.");
+          throw new Error("Cabecalho com colunas necessarias nao encontrado nas primeiras 15 linhas.");
         }
         continue;
       }
@@ -787,7 +777,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     }
   }
   if (!headerRowIdx) {
-    throw new Error("Cabecalho com 'Exercicio' nao encontrado nas primeiras 400 linhas.");
+    throw new Error("Cabecalho com colunas necessarias nao encontrado nas primeiras 15 linhas.");
   }
 
   if (batch.length) {
