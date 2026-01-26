@@ -1847,6 +1847,9 @@
       iduso: document.getElementById("dotacao-iduso"),
     };
     const adjSelect = document.getElementById("dotacao-adj");
+    const emprestadaRadios = document.querySelectorAll("input[name='dotacao-emprestada']");
+    const adjConcedenteWrap = document.getElementById("dotacao-adj-concedente-wrap");
+    const adjConcedenteSelect = document.getElementById("dotacao-adj-concedente");
     const elementoInput = selects.elemento;
     const valorInput = document.getElementById("dotacao-valor");
     const saldoInput = document.getElementById("dotacao-saldo");
@@ -1870,15 +1873,24 @@
     const summaryBody = document.querySelector("#dotacao-summary-table tbody");
     const pageSizeSelect = document.getElementById("dotacao-page-size");
     const paginationEl = document.getElementById("dotacao-pagination");
+    const approveBtn = document.getElementById("dotacao-approve");
     const editBtn = document.getElementById("dotacao-edit");
     const deleteBtn = document.getElementById("dotacao-delete");
     const printBtn = document.getElementById("dotacao-print");
+    const approvalFields = document.getElementById("dotacao-aprovacao-fields");
+    const approvalJustificativa = document.getElementById("dotacao-justificativa-aprovacao");
+    const approvalRadios = document.querySelectorAll("input[name='dotacao-aprovada']");
+    const dotacaoPage = document.getElementById("dotacao-page");
+    const currentUserPerfil = dotacaoPage?.dataset?.userPerfil || "";
+    const currentUserId = dotacaoPage?.dataset?.userId || "";
+    const currentUserNome = dotacaoPage?.dataset?.userNome || "";
 
     const hasAllSelects = Object.values(selects).every((el) => el);
     if (!hasAllSelects || !adjSelect) return;
 
     let updating = false;
     const baseSaldoKeys = new Set(["exercicio", "chave_planejamento"]);
+    let approvalMode = false;
 
     const currentOptionFilters = () => {
       const params = {};
@@ -1909,10 +1921,57 @@
       return opt ? String(opt.textContent || "").trim() : "";
     };
 
+    const getEmprestadaValue = () => {
+      const found = Array.from(emprestadaRadios).find((r) => r.checked);
+      return found ? found.value : "nao";
+    };
+
+    const isEmprestada = () => getEmprestadaValue() === "sim";
+
+    const toggleAdjConcedente = () => {
+      if (!adjConcedenteSelect || !adjConcedenteWrap) return;
+      const show = isEmprestada();
+      adjConcedenteWrap.style.display = show ? "" : "none";
+      adjConcedenteSelect.required = show;
+      if (!show) {
+        adjConcedenteSelect.value = "";
+      }
+    };
+
     const buildDotacaoPrefix = () => {
       const exercicio = selects.exercicio.value || "";
       const adjLabel = getAdjLabel();
       return `DOT.${exercicio}.${adjLabel}.`;
+    };
+
+    const setFormDisabled = (disabled) => {
+      Object.values(selects).forEach((el) => {
+        el.disabled = disabled;
+      });
+      if (adjSelect) adjSelect.disabled = disabled;
+      if (valorInput) valorInput.disabled = disabled;
+      if (justificativaInput) justificativaInput.disabled = disabled;
+      if (adjConcedenteSelect) adjConcedenteSelect.disabled = disabled;
+      if (emprestadaRadios.length) {
+        emprestadaRadios.forEach((r) => {
+          r.disabled = disabled;
+        });
+      }
+    };
+
+    const setApprovalMode = (enabled) => {
+      approvalMode = enabled;
+      if (approvalFields) approvalFields.style.display = enabled ? "" : "none";
+      if (approvalJustificativa) approvalJustificativa.required = enabled;
+      if (enabled) {
+        setFormDisabled(true);
+      } else {
+        setFormDisabled(false);
+        if (approvalJustificativa) approvalJustificativa.value = "";
+        approvalRadios.forEach((r) => {
+          r.checked = r.value === "sim";
+        });
+      }
     };
 
     const updateJustificativaPrefix = () => {
@@ -1923,6 +1982,7 @@
     let criteriaSelected = -1;
     const fieldLabels = {
       exercicio: "Exerc\u00edcio",
+      statusAprovacao: "Status da Dota\u00e7\u00e3o",
       chaveDotacao: "Controle de Dota\u00e7\u00e3o",
       adjunta: "Adjunta Solicitante",
       programa: "Programa",
@@ -2164,6 +2224,16 @@
 
     const fillFormFromRow = async (row) => {
       if (!row) return;
+      const adjConcedente = row.dataset.adjConcedente || "";
+      const adjSolicitante = row.dataset.adjunta || "";
+      const emprestada = adjConcedente && adjSolicitante && adjConcedente !== adjSolicitante;
+      emprestadaRadios.forEach((radio) => {
+        radio.checked = radio.value === (emprestada ? "sim" : "nao");
+      });
+      toggleAdjConcedente();
+      if (adjConcedenteSelect && emprestada) {
+        adjConcedenteSelect.value = adjConcedente;
+      }
       if (idInput) idInput.value = row.dataset.id || "";
       selects.exercicio.value = row.dataset.exercicio || "";
       adjSelect.value = row.dataset.adjId || "";
@@ -2183,12 +2253,19 @@
       selects.iduso.value = row.dataset.iduso || "";
       setSelectValueFallback(selects.elemento, row.dataset.elemento || "");
       setSelectValueFallback(selects.subelemento, row.dataset.subelemento || "");
+      Object.values(selects).forEach((el) => {
+        if (el && el.value) el.dataset.touched = "1";
+      });
       if (valorInput) valorInput.value = formatPtBr(parsePtBr(row.dataset.valor) || 0);
       if (justificativaInput) {
         justificativaInput.value = extractJustificativaOnly(row.dataset.justificativa || "");
       }
       updateJustificativaPrefix();
       await loadOptions();
+      toggleAdjConcedente();
+      if (adjConcedenteSelect && emprestada) {
+        setSelectValueFallback(adjConcedenteSelect, adjConcedente);
+      }
       selects.exercicio.value = row.dataset.exercicio || "";
       adjSelect.value = row.dataset.adjId || "";
       selects.chave_planejamento.value = row.dataset.chave || "";
@@ -2205,6 +2282,9 @@
       setSelectValueFallback(selects.subelemento, row.dataset.subelemento || "");
       selects.fonte.value = row.dataset.fonte || "";
       selects.iduso.value = row.dataset.iduso || "";
+      Object.values(selects).forEach((el) => {
+        if (el && el.value) el.dataset.touched = "1";
+      });
       updateJustificativaPrefix();
       loadSaldo();
     };
@@ -2240,7 +2320,15 @@
           justificativa: data.justificativa_historico || "",
           valor: data.valor_dotacao || "",
           chaveDotacao: data.chave_dotacao || "",
+          adjConcedente: data.adj_concedente || "",
+          statusAprovacao: data.status_aprovacao || "",
+          aprovadoPor: data.aprovado_por || "",
+          aprovadoPorNome: data.aprovado_por_nome || "",
+          aprovadoPorPerfil: data.aprovado_por_perfil || "",
+          dataAprovacao: data.data_aprovacao || "",
+          motivoRejeicao: data.motivo_rejeicao || "",
           usuarioNome: data.usuario_nome || "",
+          usuarioPerfil: data.usuario_perfil || "",
           criadoEm: data.criado_em || "",
           alteradoEm: data.alterado_em || "",
         },
@@ -2248,9 +2336,13 @@
     };
 
     const buildPrintTable = (row) => {
+      const adjSolic = row.dataset.adjunta || "";
+      const adjConc = row.dataset.adjConcedente || "";
+      const isEmp = adjConc && adjConc !== adjSolic;
       const fields = [
         ["Exerc&#237;cio", row.dataset.exercicio],
         ["Adjunta Solicitante", row.dataset.adjunta],
+        ...(isEmp ? [["Adjunta Concedente", adjConc]] : []),
         ["Chave do Planejamento", row.dataset.chave],
         ["UO", row.dataset.uo],
         ["Programa", row.dataset.programaRaw],
@@ -2287,6 +2379,7 @@
 
     const buildFooterText = (row) => {
       const nome = row?.dataset?.usuarioNome || "";
+      const perfil = row?.dataset?.usuarioPerfil || "";
       const criado = row?.dataset?.criadoEm || "";
       const alterado = row?.dataset?.alteradoEm || "";
       const chave = row?.dataset?.chaveDotacao || "";
@@ -2301,23 +2394,51 @@
       }
       const dataFmt = formatPrintDate(dataRef);
       const parts = [];
-      if (nome) parts.push(nome);
+      if (nome) {
+        if (perfil) parts.push(`${nome} - ${perfil.toUpperCase()}`);
+        else parts.push(nome);
+      }
       if (dataFmt) parts.push(`${label} ${dataFmt}`);
       if (chave) parts.push(chave);
       return parts.join(" - ");
     };
 
+    const buildApprovalText = (row) => {
+      const status = String(row?.dataset?.statusAprovacao || "").trim().toLowerCase();
+      const aprovadorNome = row?.dataset?.aprovadoPorNome || "";
+      const aprovadorPerfil = row?.dataset?.aprovadoPorPerfil || "";
+      const aprovador = aprovadorNome || row?.dataset?.aprovadoPor || "";
+      const data = row?.dataset?.dataAprovacao || "";
+      const dataFmt = formatPrintDate(data);
+      if (status !== "aprovado" && status !== "rejeitado") return "";
+      if (!aprovador && !dataFmt) return "";
+      const parts = [];
+      const aprovadorFull = aprovadorPerfil ? `${aprovador} - ${aprovadorPerfil.toUpperCase()}` : aprovador;
+      if (status === "aprovado") {
+        if (aprovador) parts.push(`Aprovado por ${aprovadorFull}`);
+      } else {
+        if (aprovador) parts.push(`Rejeitado por ${aprovadorFull}`);
+      }
+      if (dataFmt) parts.push(`- em ${dataFmt}`);
+      return parts.join(" ");
+    };
+
     const openPrintPopup = (rows) => {
       const content = rows.map((row) => buildPrintTable(row)).join('<div class="print-gap"></div>');
       const footerText = buildFooterText(rows[0]);
+      const approvalText = buildApprovalText(rows[0]);
+      const status = String(rows[0]?.dataset?.statusAprovacao || "").trim().toLowerCase();
+      let watermarkText = "";
+      if (status === "aguardando") watermarkText = "Aguardando Aprova\u00e7\u00e3o";
+      if (status === "rejeitado") watermarkText = "Sem Validade";
       const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>Dota&#231;&#227;o Cadastrada</title>
   <style>
-    body { font-family: Arial, sans-serif; color: #000; margin: 24px; }
-    .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #000; }
+    body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 70px; }
+    .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
     .print-brand { display: flex; align-items: center; gap: 12px; }
     .print-brand img { height: 48px; }
     .print-brand-title { font-weight: 700; font-size: 16px; }
@@ -2326,16 +2447,19 @@
     .print-title { text-align: center; font-weight: 700; flex: 1; text-transform: uppercase; }
     .print-title-key { min-width: 200px; font-size: 12px; }
     .print-title-date { min-width: 200px; text-align: right; font-size: 12px; }
-    .print-footer { margin-top: 16px; border-top: 1px dashed #000; font-size: 12px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .print-footer { position: fixed; left: 20px; right: 20px; bottom: 12px; border-top: 1px dashed #000; font-size: 12px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .print-footer img { height: 36px; }
-    .print-footer-text { flex: 1; text-align: center; }
+    .print-footer-text { flex: 1; text-align: center; line-height: 1.3; }
+    .print-footer-approval { margin-top: 4px; font-weight: 400; }
     .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
     .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 8px; vertical-align: top; word-break: break-word; }
     .print-table th { width: auto; white-space: nowrap; background: #f1f1f1; text-transform: uppercase; }
     .print-gap { height: 10px; }
+    .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 65px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
   </style>
 </head>
 <body>
+  ${watermarkText ? `<div class="print-watermark">${watermarkText}</div>` : ""}
   <div class="print-header">
     <div class="print-brand">
       <img src="/static/img/logo.jpg" alt="Logo" />
@@ -2353,7 +2477,10 @@
   ${content}
   <div class="print-footer">
     <img src="/static/img/logo.jpg" alt="Logo" />
-    <div class="print-footer-text">${footerText}</div>
+    <div class="print-footer-text">
+      <div>${footerText}</div>
+      ${approvalText ? `<div class="print-footer-approval">${approvalText}</div>` : ""}
+    </div>
     <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
   </div>
 </body>
@@ -2396,6 +2523,19 @@
       if (keep) adjSelect.value = keep;
     };
 
+    const setPerfilOptions = (select, options, current) => {
+      if (!select) return;
+      const keep = options.includes(current) ? current : "";
+      select.innerHTML = '<option value="">Selecione...</option>';
+      options.forEach((opt) => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        select.appendChild(o);
+      });
+      if (keep) select.value = keep;
+    };
+
     const getCurrentYear = () => {
       return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Manaus", year: "numeric" }).format(
         new Date()
@@ -2420,6 +2560,9 @@
         });
         if (Array.isArray(data.adj)) {
           setAdjOptions(data.adj, adjSelect.value);
+        }
+        if (Array.isArray(data.perfis) && adjConcedenteSelect) {
+          setPerfilOptions(adjConcedenteSelect, data.perfis, adjConcedenteSelect.value);
         }
         updateJustificativaPrefix();
       } catch (err) {
@@ -2492,6 +2635,11 @@
       });
     });
     adjSelect.addEventListener("change", updateJustificativaPrefix);
+    emprestadaRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        toggleAdjConcedente();
+      });
+    });
     if (valorInput) {
       valorInput.addEventListener("input", formatValorDotacaoInput);
       valorInput.addEventListener("blur", formatValorDotacaoInput);
@@ -2532,9 +2680,7 @@
           criteria.splice(criteriaSelected, 1);
           criteriaSelected = -1;
           renderCriteria();
-          if (criteria.length) {
-            applyCriteriaToResults(false);
-          }
+          setResultsVisible(false);
           setFilterMsg("");
         });
       }
@@ -2595,6 +2741,12 @@
           setFilterMsg("Selecione um registro para editar.", true);
           return;
         }
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status && status !== "aguardando") {
+          setFilterMsg("Somente dotacoes com status Aguardando podem ser editadas.", true);
+          return;
+        }
+        setApprovalMode(false);
         await fillFormFromRow(selected);
       });
     }
@@ -2608,6 +2760,11 @@
         const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
         if (!selected) {
           setFilterMsg("Selecione um registro para excluir.", true);
+          return;
+        }
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status && status !== "aguardando") {
+          setFilterMsg("Somente dotacoes com status Aguardando podem ser excluidas.", true);
           return;
         }
         const dotacaoId = selected.dataset.id;
@@ -2651,11 +2808,60 @@
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const dotacaoId = idInput ? String(idInput.value || "") : "";
-      msg.textContent = dotacaoId ? "Atualizando..." : "Salvando...";
+      msg.textContent = approvalMode ? "Aprovando..." : dotacaoId ? "Atualizando..." : "Salvando...";
       msg.classList.remove("text-error");
+      if (approvalMode) {
+        if (!dotacaoId) {
+          msg.textContent = "Registro inválido para aprovação.";
+          msg.classList.add("text-error");
+          return;
+        }
+        const aprovado = Array.from(approvalRadios).find((r) => r.checked)?.value || "sim";
+        const justificativa = String(approvalJustificativa?.value || "").trim();
+        if (!justificativa) {
+          msg.textContent = "Justificativa obrigatória.";
+          msg.classList.add("text-error");
+          return;
+        }
+        try {
+          const res = await fetch(`/api/dotacao/${encodeURIComponent(dotacaoId)}/aprovar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify({
+              dotacao_aprovada: aprovado,
+              motivo_rejeicao: justificativa,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao aprovar.");
+          msg.textContent = data.message || "Dotação atualizada.";
+          if (data.dotacao) {
+            openPrintPopup([buildRowFromPayload(data.dotacao)]);
+          }
+          setApprovalMode(false);
+          form.reset();
+          if (idInput) idInput.value = "";
+          if (saldoInput) saldoInput.value = "";
+          Object.values(selects).forEach((el) => {
+            delete el.dataset.touched;
+          });
+          emprestadaRadios.forEach((radio) => {
+            radio.checked = radio.value === "nao";
+          });
+          toggleAdjConcedente();
+          await loadPage("cadastrar/dotacao");
+        } catch (err) {
+          console.error(err);
+          msg.textContent = err.message || "Falha ao aprovar.";
+          msg.classList.add("text-error");
+        }
+        return;
+      }
       const payload = {
         exercicio: selects.exercicio.value,
         adj_id: adjSelect.value,
+        dotacao_emprestada: isEmprestada() ? "sim" : "nao",
+        adj_concedente: isEmprestada() ? adjConcedenteSelect?.value || "" : getAdjLabel(),
         chave_planejamento: selects.chave_planejamento.value,
         uo: selects.uo.value,
         programa: selects.programa.value,
@@ -2693,6 +2899,11 @@
         Object.values(selects).forEach((el) => {
           delete el.dataset.touched;
         });
+        emprestadaRadios.forEach((radio) => {
+          radio.checked = radio.value === "nao";
+        });
+        setApprovalMode(false);
+        toggleAdjConcedente();
         await loadPage("cadastrar/dotacao");
       } catch (err) {
         console.error(err);
@@ -2713,14 +2924,52 @@
         Object.values(selects).forEach((el) => {
           delete el.dataset.touched;
         });
+        emprestadaRadios.forEach((radio) => {
+          radio.checked = radio.value === "nao";
+        });
+        setApprovalMode(false);
+        toggleAdjConcedente();
         loadOptions();
         updateJustificativaPrefix();
+      });
+    }
+
+    if (approveBtn) {
+      approveBtn.addEventListener("click", async () => {
+        if (dotacaoSummary && dotacaoSummary.style.display === "none") {
+          setFilterMsg("Consulte antes de aprovar.", true);
+          return;
+        }
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para aprovar.", true);
+          return;
+        }
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status && status !== "aguardando") {
+          setFilterMsg("Somente dotações com status Aguardando podem ser aprovadas.", true);
+          return;
+        }
+        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
+        if (!adjConcedente) {
+          setFilterMsg("Adjunta Concedente não definida.", true);
+          return;
+        }
+        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+          setFilterMsg("Usuário sem permissão para aprovar a dotação atual.", true);
+          return;
+        }
+        setApprovalMode(true);
+        await fillFormFromRow(selected);
+        if (approvalJustificativa) approvalJustificativa.value = "";
       });
     }
 
     loadOptions();
     loadSaldo();
     updateJustificativaPrefix();
+    toggleAdjConcedente();
+    setApprovalMode(false);
     if (pageSizeSelect) {
       pageSizeSelect.addEventListener("change", () => {
         pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
@@ -5865,6 +6114,9 @@
   }
 
   function initRoute(route) {
+    if (route === "dashboard") {
+      initDashboard();
+    }
     if (route === "usuarios" || route === "usuarios/cadastrar") {
       initUsuariosForm();
     }
@@ -5921,6 +6173,27 @@
     }
   }
 
+  function initDashboard({ forceShow = false } = {}) {
+    const modal = document.getElementById("dotacao-aguardando-modal");
+    if (!modal) return;
+    const hasItems = modal.dataset.hasItems === "1";
+    const closeBtn = document.getElementById("dotacao-aguardando-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        modal.style.display = "none";
+      });
+    }
+    if (forceShow) {
+      if (hasItems) modal.style.display = "flex";
+      return;
+    }
+    const nav = performance.getEntriesByType("navigation")[0];
+    const isReload = nav && nav.type === "reload";
+    if (!isReload && hasItems) {
+      modal.style.display = "flex";
+    }
+  }
+
   if (menu) {
     menu.addEventListener("click", (ev) => {
       const parentToggle = ev.target.closest(".menu-parent[data-submenu]");
@@ -5947,7 +6220,11 @@
       ev.preventDefault();
       const route = link.getAttribute("data-route");
       setActive(route);
-      loadPage(route);
+      loadPage(route).then(() => {
+        if (route === "dashboard") {
+          initDashboard({ forceShow: true });
+        }
+      });
     });
   }
 

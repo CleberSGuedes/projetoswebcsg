@@ -1,9 +1,31 @@
-<div class="grid">
+<div class="grid" id="dotacao-page"
+     data-user-perfil="{{ user_perfil }}"
+     data-user-id="{{ user_id }}"
+     data-user-nome="{{ user_nome }}">
   <div class="card no-print">
     <div class="card-title">Cadastrar Dota&#231;&#227;o</div>
     <form id="form-dotacao" class="form">
       <input type="hidden" id="dotacao-id" />
       <div class="form-grid">
+        <label class="field">
+          <span>*Dota&#231;&#227;o Emprestada</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="nao" checked />
+              <span>N&#227;o</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="sim" />
+              <span>Sim</span>
+            </label>
+          </div>
+        </label>
+        <label class="field" id="dotacao-adj-concedente-wrap" style="display:none;">
+          <span>*Adjunta Concedente</span>
+          <select id="dotacao-adj-concedente" name="adj_concedente">
+            <option value="">Carregando...</option>
+          </select>
+        </label>
         <label class="field">
           <span>*Exerc&#237;cio</span>
           <select id="dotacao-exercicio" name="exercicio" required>
@@ -118,6 +140,27 @@
           <span>*Justificativa/Hist&#243;rico</span>
           <textarea name="justificativa_historico" id="dotacao-justificativa" rows="3" required></textarea>
         </label>
+        <div id="dotacao-aprovacao-fields" style="display:none;">
+          <div class="form-grid" style="margin-top:8px;">
+            <label class="field">
+              <span>*Aprovar a Dota&#231;&#227;o?</span>
+              <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+                <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                  <input type="radio" name="dotacao-aprovada" value="sim" checked />
+                  <span>Sim</span>
+                </label>
+                <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                  <input type="radio" name="dotacao-aprovada" value="nao" />
+                  <span>N&#227;o</span>
+                </label>
+              </div>
+            </label>
+            <label class="field">
+              <span>*Justificativa</span>
+              <textarea name="motivo_rejeicao" id="dotacao-justificativa-aprovacao" rows="3"></textarea>
+            </label>
+          </div>
+        </div>
       </div>
       <div class="actions">
         <button class="btn btn-primary sm" type="submit">Salvar</button>
@@ -136,6 +179,7 @@
           <select id="dotacao-filtro-campo">
             <option value="">Selecione...</option>
             <option value="exercicio">*Exerc&#237;cio</option>
+            <option value="statusAprovacao">Status da Dota&#231;&#227;o</option>
             <option value="paoe">A&#231;&#227;o/PAOE</option>
             <option value="adjunta">Adjunta Solicitante</option>
             <option value="chaveDotacao">Controle de Dota&#231;&#227;o</option>
@@ -182,10 +226,12 @@
         <table class="table" id="dotacao-summary-table">
           <thead>
             <tr>
+              <th>Status</th>
               <th>Controle de Dota&#231;&#227;o</th>
               <th>Justificativa/Hist&#243;rico</th>
               <th>Valor da Dota&#231;&#227;o</th>
               <th>Adjunta Solicitante</th>
+              <th>Adjunta Concedente</th>
               <th>Chave do Planejamento</th>
               <th>Programa</th>
               <th>A&#231;&#227;o/PAOE</th>
@@ -214,17 +260,27 @@
                 data-adj-id="{{ d.adj_id }}"
                 data-chave="{{ d.chave_planejamento }}"
                 data-chave-dotacao="{{ d.chave_dotacao }}"
+                data-adj-concedente="{{ d.adj_concedente }}"
+                data-status-aprovacao="{{ d.status_aprovacao }}"
+                data-aprovado-por="{{ d.aprovado_por }}"
+                data-aprovado-por-nome="{{ d.aprovado_por_nome }}"
+                data-aprovado-por-perfil="{{ d.aprovado_por_perfil }}"
+                data-data-aprovacao="{{ d.data_aprovacao }}"
+                data-motivo-rejeicao="{{ d.motivo_rejeicao }}"
                 data-usuario-nome="{{ d.usuario_nome }}"
+                data-usuario-perfil="{{ d.usuario_perfil }}"
                 data-criado-em="{{ d.criado_em }}"
                 data-alterado-em="{{ d.alterado_em }}"
                 data-produto="{{ d.produto }}"
                 data-ug="{{ d.ug }}"
                 data-programa-raw="{{ d.programa }}"
                 data-acao-paoe="{{ d.acao_paoe }}">
+              <td>{{ d.status_aprovacao }}</td>
               <td>{{ d.chave_dotacao }}</td>
               <td>{{ d.justificativa_historico }}</td>
               <td class="dotacao-summary-valor">{{ d.valor_dotacao }}</td>
               <td>{{ d.adj_abreviacao }}</td>
+              <td>{{ d.adj_concedente }}</td>
               <td>{{ d.chave_planejamento }}</td>
               <td>{{ d.programa }}</td>
               <td>{{ d.acao_paoe }}</td>
@@ -248,6 +304,7 @@
       </div>
     </div>
     <div class="actions no-print dotacao-actions">
+      <button class="btn btn-primary sm" type="button" id="dotacao-approve">Aprovar</button>
       <button class="btn btn-secondary sm" type="button" id="dotacao-edit">Editar</button>
       <button class="btn btn-danger sm" type="button" id="dotacao-delete">Excluir</button>
       <button class="btn btn-primary sm" type="button" id="dotacao-print">Imprimir</button>

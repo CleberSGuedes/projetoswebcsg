@@ -53,7 +53,7 @@ from services.est_emp_runner import (
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from pathlib import Path
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_
 
 home_bp = Blueprint("home", __name__)
 
@@ -317,6 +317,32 @@ def partial_dashboard():
     except Exception:
         emp_planejamento_missing_lines = []
         emp_dotacao_missing = []
+    pendentes_raw = (
+        Dotacao.query.with_entities(
+            Dotacao.chave_dotacao,
+            Dotacao.valor_atual,
+            Dotacao.valor_dotacao,
+            Dotacao.status_aprovacao,
+            Dotacao.adj_concedente,
+        )
+        .filter(Dotacao.ativo == True)  # noqa: E712
+        .filter(func.lower(Dotacao.status_aprovacao) == "aguardando")
+        .order_by(Dotacao.id.desc())
+        .all()
+    )
+    pendentes = []
+    for chave, valor_atual, valor_dot, status, adj_concedente in pendentes_raw:
+        valor_base = valor_atual if valor_atual is not None else valor_dot
+        valor_fmt = _dec_or_zero(valor_base)
+        valor_str = f"{valor_fmt:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        pendentes.append(
+            {
+                "chave_dotacao": chave or "",
+                "valor_atual": valor_str,
+                "status_aprovacao": status or "",
+                "adj_concedente": adj_concedente or "",
+            }
+        )
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
@@ -324,6 +350,7 @@ def partial_dashboard():
         ped_dotacao_missing=ped_dotacao_missing,
         emp_planejamento_missing_lines=emp_planejamento_missing_lines,
         emp_dotacao_missing=emp_dotacao_missing,
+        dotacoes_aguardando=pendentes,
     )
 
 
@@ -606,24 +633,60 @@ def partial_atualizar_plan20():
 @login_required
 @require_feature("cadastrar/dotacao")
 def partial_cadastrar_dotacao():
+    user_session = session.get("user") or {}
+    user_perfil = (user_session.get("perfil") or "").strip()
+    user_email = (user_session.get("email") or "").strip()
+    user_nome = ""
+    user_id = ""
+    if user_email:
+        usuario_row = Usuario.query.filter_by(email=user_email).first()
+        if usuario_row:
+            user_nome = (usuario_row.nome or "").strip()
+            user_id = str(usuario_row.id or "")
     rows = (
-        db.session.query(Dotacao, Adj.abreviacao)
-        .outerjoin(Adj, Dotacao.adj_id == Adj.id)
-        .filter(Dotacao.ativo == True)  # noqa: E712
+        db.session.query(Dotacao)
+        .filter(
+            or_(
+                Dotacao.ativo == True,  # noqa: E712
+                func.lower(Dotacao.status_aprovacao) == "rejeitado",
+            )
+        )
         .order_by(Dotacao.id.desc())
         .all()
     )
-    usuarios_ids = [dot.usuarios_id for dot, _ in rows if getattr(dot, 'usuarios_id', None)]
+    adj_ids = [dot.adj_id for dot in rows if getattr(dot, "adj_id", None)]
+    adj_map = {}
+    if adj_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+    usuarios_ids = [dot.usuarios_id for dot in rows if getattr(dot, "usuarios_id", None)]
     usuarios_map = {}
+    usuarios_perfil_map = {}
     if usuarios_ids:
         usuarios = Usuario.query.filter(Usuario.id.in_(usuarios_ids)).all()
         usuarios_map = {u.id: u.nome for u in usuarios}
+        usuarios_perfil_map = {u.id: u.perfil for u in usuarios if getattr(u, "perfil", None)}
 
     dotacoes = []
     atualizar_ids: list[int] = []
     atualizar_ped_emp: list[Decimal] = []
     atualizar_atual: list[Decimal] = []
-    for dot, adj_abreviacao in rows:
+    aprovado_ids: set[int] = set()
+    for dot in rows:
+        if getattr(dot, "aprovado_por", None):
+            try:
+                aprovado_ids.add(int(dot.aprovado_por))
+            except Exception:
+                pass
+    aprovado_map = {}
+    aprovado_perfil_map = {}
+    if aprovado_ids:
+        usuarios_aprov = Usuario.query.filter(Usuario.id.in_(aprovado_ids)).all()
+        aprovado_map = {u.id: u.nome for u in usuarios_aprov}
+        aprovado_perfil_map = {u.id: u.perfil for u in usuarios_aprov if getattr(u, "perfil", None)}
+
+    for dot in rows:
+        adj_nome = (adj_map.get(dot.adj_id) or "").strip()
         ped_sum = _calc_ped_sum_for_dotacao(dot.chave_dotacao)
         emp_sum = _calc_emp_sum_for_dotacao(dot.chave_dotacao)
         ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
@@ -638,9 +701,16 @@ def partial_cadastrar_dotacao():
                 "id": dot.id,
                 "exercicio": dot.exercicio,
                 "adj_id": dot.adj_id,
-                "adj_abreviacao": adj_abreviacao or "",
+                "adj_abreviacao": adj_nome,
                 "chave_planejamento": dot.chave_planejamento,
                 "chave_dotacao": dot.chave_dotacao,
+                "adj_concedente": getattr(dot, "adj_concedente", "") or "",
+                "status_aprovacao": getattr(dot, "status_aprovacao", "") or "",
+                "aprovado_por": getattr(dot, "aprovado_por", "") or "",
+                "aprovado_por_nome": aprovado_map.get(getattr(dot, "aprovado_por", None), ""),
+                "aprovado_por_perfil": aprovado_perfil_map.get(getattr(dot, "aprovado_por", None), ""),
+                "data_aprovacao": dot.data_aprovacao.isoformat() if getattr(dot, "data_aprovacao", None) else "",
+                "motivo_rejeicao": getattr(dot, "motivo_rejeicao", "") or "",
                 "uo": dot.uo,
                 "programa": dot.programa,
                 "acao_paoe": dot.acao_paoe,
@@ -657,6 +727,7 @@ def partial_cadastrar_dotacao():
                 "valor_dotacao": dot.valor_dotacao,
                 "justificativa_historico": dot.justificativa_historico,
                 "usuario_nome": usuarios_map.get(dot.usuarios_id, ""),
+                "usuario_perfil": usuarios_perfil_map.get(dot.usuarios_id, ""),
                 "criado_em": dot.criado_em.isoformat() if dot.criado_em else "",
                 "alterado_em": dot.alterado_em.isoformat() if dot.alterado_em else "",
             }
@@ -676,7 +747,13 @@ def partial_cadastrar_dotacao():
             db.session.commit()
         except Exception:
             db.session.rollback()
-    return render_template("partials/cadastrar_dotacao.html", dotacoes=dotacoes)
+    return render_template(
+        "partials/cadastrar_dotacao.html",
+        dotacoes=dotacoes,
+        user_perfil=user_perfil,
+        user_id=user_id,
+        user_nome=user_nome,
+    )
 
 
 @home_bp.route("/partial/institucional/diretrizes")
@@ -899,11 +976,35 @@ def _natureza_prefix(value: str) -> str:
 
 
 def _dotacao_payload(registro: Dotacao, adj_label: str) -> dict:
+    aprovado_nome = ""
+    aprovado_perfil = ""
+    aprovado_id = getattr(registro, "aprovado_por", None)
+    if aprovado_id:
+        try:
+            aprovado_id = int(aprovado_id)
+        except Exception:
+            aprovado_id = None
+    if aprovado_id:
+        usuario_aprov = Usuario.query.filter_by(id=aprovado_id).first()
+        aprovado_nome = (usuario_aprov.nome or "").strip() if usuario_aprov else ""
+        aprovado_perfil = (usuario_aprov.perfil or "").strip() if usuario_aprov else ""
+    usuario_perfil = ""
+    usuarios_id = getattr(registro, "usuarios_id", None)
+    if usuarios_id:
+        usuario_row = Usuario.query.filter_by(id=usuarios_id).first()
+        usuario_perfil = (usuario_row.perfil or "").strip() if usuario_row else ""
     return {
         "id": registro.id,
         "exercicio": registro.exercicio,
         "adjunta": adj_label,
         "chave_planejamento": registro.chave_planejamento,
+        "adj_concedente": getattr(registro, "adj_concedente", "") or "",
+        "status_aprovacao": getattr(registro, "status_aprovacao", "") or "",
+        "aprovado_por": getattr(registro, "aprovado_por", "") or "",
+        "aprovado_por_nome": aprovado_nome,
+        "aprovado_por_perfil": aprovado_perfil,
+        "data_aprovacao": registro.data_aprovacao.isoformat() if getattr(registro, "data_aprovacao", None) else "",
+        "motivo_rejeicao": getattr(registro, "motivo_rejeicao", "") or "",
         "uo": registro.uo,
         "programa": registro.programa,
         "acao_paoe": registro.acao_paoe,
@@ -921,6 +1022,7 @@ def _dotacao_payload(registro: Dotacao, adj_label: str) -> dict:
         "valor_dotacao": str(registro.valor_dotacao or ""),
         "chave_dotacao": registro.chave_dotacao,
         "usuario_nome": getattr(registro, "usuario_nome", ""),
+        "usuario_perfil": usuario_perfil,
         "criado_em": registro.criado_em.isoformat() if registro.criado_em else "",
         "alterado_em": registro.alterado_em.isoformat() if registro.alterado_em else "",
     }
@@ -945,7 +1047,7 @@ def _attach_usuario_nome(registro: Dotacao) -> Dotacao:
     if not usuarios_id:
         registro.usuario_nome = ""
         return registro
-    usuario = db.session.get(Usuario, usuarios_id)
+    usuario = Usuario.query.filter_by(id=usuarios_id).first()
     registro.usuario_nome = (getattr(usuario, "nome", "") or getattr(usuario, "email", "") or "").strip() if usuario else ""
     return registro
 
@@ -1176,9 +1278,21 @@ def api_dotacao_options():
         else:
             options[key] = sorted(set(values), key=lambda v: v.lower())
 
-    adjs = Adj.query.filter(Adj.ativo == True).order_by(Adj.abreviacao).all()  # noqa: E712
-    adj_options = [{"id": a.id, "label": a.abreviacao} for a in adjs if a.abreviacao]
-    return jsonify({"options": options, "adj": adj_options})
+    perfis_raw = (
+        Perfil.query.filter(Perfil.ativo == True)  # noqa: E712
+        .order_by(Perfil.nome)
+        .all()
+    )
+    adj_options = []
+    for p in perfis_raw:
+        nome = (p.nome or "").strip()
+        if not nome:
+            continue
+        if nome.lower() in {"admin", "consultor"}:
+            continue
+        adj_options.append({"id": p.id, "label": nome})
+    perfis = [o["label"] for o in adj_options]
+    return jsonify({"options": options, "adj": adj_options, "perfis": perfis})
 
 
 @home_bp.route("/api/dotacao", methods=["POST"])
@@ -1200,6 +1314,8 @@ def api_dotacao_create():
     fonte = (data.get("fonte") or "").strip()
     iduso = (data.get("iduso") or "").strip()
     adj_raw = (data.get("adj_id") or "").strip()
+    emprestada_raw = (data.get("dotacao_emprestada") or "").strip().lower()
+    adj_concedente_raw = (data.get("adj_concedente") or "").strip()
     elemento_raw = (data.get("elemento") or "").strip()
     subelemento = (data.get("subelemento") or "").strip()
     valor_raw = (data.get("valor_dotacao") or "").strip()
@@ -1234,9 +1350,25 @@ def api_dotacao_create():
         adj_id = int(adj_raw)
     except ValueError:
         return jsonify({"error": "Adjunta Responsavel invalida."}), 400
-    adj_row = db.session.get(Adj, adj_id)
-    if not adj_row:
+    adj_row = db.session.get(Perfil, adj_id)
+    if not adj_row or (adj_row.nome or "").strip().lower() in {"admin", "consultor"}:
         return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
+
+    emprestada = emprestada_raw == "sim"
+    adj_concedente = ""
+    if emprestada:
+        if not adj_concedente_raw:
+            return jsonify({"error": "Adjunta Concedente obrigatoria para dotacao emprestada."}), 400
+        perfil = (
+            Perfil.query.filter(Perfil.ativo == True)  # noqa: E712
+            .filter(Perfil.nome == adj_concedente_raw)
+            .first()
+        )
+        if not perfil or adj_concedente_raw.lower() in {"admin", "consultor"}:
+            return jsonify({"error": "Adjunta Concedente invalida."}), 400
+        adj_concedente = adj_concedente_raw
+    else:
+        adj_concedente = (adj_row.nome or str(adj_id)).strip()
 
     try:
         elemento = int(elemento_raw)
@@ -1320,6 +1452,10 @@ def api_dotacao_create():
         fonte=fonte,
         iduso=iduso,
         valor_dotacao=valor_dotacao,
+        adj_concedente=adj_concedente,
+        status_aprovacao="Aguardando",
+        aprovado_por=None,
+        data_aprovacao=None,
         justificativa_historico="",
         chave_dotacao="",
         usuarios_id=usuarios_id,
@@ -1330,7 +1466,7 @@ def api_dotacao_create():
     db.session.add(registro)
     try:
         db.session.flush()
-        adj_label = (adj_row.abreviacao or str(adj_id)).strip()
+        adj_label = (adj_row.nome or str(adj_id)).strip()
         chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
         justificativa_full = f"{chave_dotacao} {justificativa}".strip()
         ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
@@ -1389,6 +1525,8 @@ def api_dotacao_update(dotacao_id):
     fonte = (data.get("fonte") or "").strip()
     iduso = (data.get("iduso") or "").strip()
     adj_raw = (data.get("adj_id") or "").strip()
+    emprestada_raw = (data.get("dotacao_emprestada") or "").strip().lower()
+    adj_concedente_raw = (data.get("adj_concedente") or "").strip()
     elemento_raw = (data.get("elemento") or "").strip()
     subelemento = (data.get("subelemento") or "").strip()
     valor_raw = (data.get("valor_dotacao") or "").strip()
@@ -1423,9 +1561,25 @@ def api_dotacao_update(dotacao_id):
         adj_id = int(adj_raw)
     except ValueError:
         return jsonify({"error": "Adjunta Responsavel invalida."}), 400
-    adj_row = db.session.get(Adj, adj_id)
-    if not adj_row:
+    adj_row = db.session.get(Perfil, adj_id)
+    if not adj_row or (adj_row.nome or "").strip().lower() in {"admin", "consultor"}:
         return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
+
+    emprestada = emprestada_raw == "sim"
+    adj_concedente = ""
+    if emprestada:
+        if not adj_concedente_raw:
+            return jsonify({"error": "Adjunta Concedente obrigatoria para dotacao emprestada."}), 400
+        perfil = (
+            Perfil.query.filter(Perfil.ativo == True)  # noqa: E712
+            .filter(Perfil.nome == adj_concedente_raw)
+            .first()
+        )
+        if not perfil or adj_concedente_raw.lower() in {"admin", "consultor"}:
+            return jsonify({"error": "Adjunta Concedente invalida."}), 400
+        adj_concedente = adj_concedente_raw
+    else:
+        adj_concedente = (adj_row.nome or str(adj_id)).strip()
 
     try:
         elemento = int(elemento_raw)
@@ -1511,7 +1665,10 @@ def api_dotacao_update(dotacao_id):
     registro.valor_dotacao = valor_dotacao
     registro.usuarios_id = usuarios_id
     registro.alterado_em = _now_local()
-    adj_label = (adj_row.abreviacao or str(adj_id)).strip()
+    registro.adj_concedente = adj_concedente
+    if not getattr(registro, "status_aprovacao", None):
+        registro.status_aprovacao = "Aguardando"
+    adj_label = (adj_row.nome or str(adj_id)).strip()
     chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
     registro.chave_dotacao = chave_dotacao
     registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
@@ -1551,6 +1708,70 @@ def api_dotacao_delete(dotacao_id):
         return jsonify({"error": f"Falha ao excluir dotacao: {exc}"}), 500
 
     return jsonify({"ok": True, "message": "Dotacao excluida."})
+
+
+@home_bp.route("/api/dotacao/<int:dotacao_id>/aprovar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/dotacao")
+def api_dotacao_aprovar(dotacao_id):
+    registro = db.session.get(Dotacao, dotacao_id)
+    if not registro:
+        return jsonify({"error": "Dotacao nao encontrada."}), 404
+
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Dotacao ja foi processada."}), 400
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    if not perfil_usuario:
+        return jsonify({"error": "Perfil do usuario nao encontrado."}), 400
+
+    adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
+    if not adj_concedente:
+        return jsonify({"error": "Adjunta Concedente nao definida."}), 400
+    if perfil_usuario.lower() != adj_concedente.lower():
+        return jsonify({"error": "Usuario sem permissao para aprovar a dotacao atual."}), 403
+
+    data = request.get_json() or {}
+    aprovado_raw = (data.get("dotacao_aprovada") or "").strip().lower()
+    motivo = (data.get("motivo_rejeicao") or "").strip()
+    if not motivo:
+        return jsonify({"error": "Justificativa obrigatoria."}), 400
+
+    if aprovado_raw == "sim":
+        registro.status_aprovacao = "Aprovado"
+    else:
+        registro.status_aprovacao = "Rejeitado"
+        registro.ativo = False
+        registro.excluido_em = _now_local()
+    registro.motivo_rejeicao = motivo
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+    registro.aprovado_por = str(usuarios_id)
+    registro.data_aprovacao = _now_local()
+    registro.alterado_em = _now_local()
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao aprovar dotacao: {exc}"}), 500
+
+    adj_label = ""
+    if registro.adj_id:
+        adj_row = db.session.get(Perfil, registro.adj_id)
+        adj_label = (adj_row.nome or str(registro.adj_id)).strip() if adj_row else ""
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Dotacao atualizada.",
+            "dotacao": _dotacao_payload(_attach_usuario_nome(registro), adj_label),
+        }
+    )
 
 
 def _calc_dotacao_saldo(
@@ -1726,7 +1947,17 @@ def _calc_dotacao_saldo(
     if ug_norm:
         ped_base_common.append(PedRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
     if regiao:
-        ped_base_common.append(PedRegistro.regiao == regiao)
+        regiao_key = _normalize_codigo_num(regiao)
+        if regiao_key:
+            ped_base_common.append(
+                or_(
+                    PedRegistro.regiao == regiao,
+                    PedRegistro.regiao == regiao_key,
+                    PedRegistro.regiao == f"R{regiao_key}",
+                )
+            )
+        else:
+            ped_base_common.append(PedRegistro.regiao == regiao)
 
     emp_base_common = [EmpRegistro.ativo == True]  # noqa: E712
     if exercicio:
@@ -1748,7 +1979,17 @@ def _calc_dotacao_saldo(
     if ug_norm:
         emp_base_common.append(EmpRegistro.subfuncao_ug.like(f"%.{ug_norm}"))
     if regiao:
-        emp_base_common.append(EmpRegistro.regiao == regiao)
+        regiao_key = _normalize_codigo_num(regiao)
+        if regiao_key:
+            emp_base_common.append(
+                or_(
+                    EmpRegistro.regiao == regiao,
+                    EmpRegistro.regiao == regiao_key,
+                    EmpRegistro.regiao == f"R{regiao_key}",
+                )
+            )
+        else:
+            emp_base_common.append(EmpRegistro.regiao == regiao)
 
     dotacao_keys = {
         _normalize_dotacao_key(r.chave_dotacao) for r in dot_rows if _normalize_dotacao_key(r.chave_dotacao)

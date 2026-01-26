@@ -38,3 +38,47 @@
     </ul>
   </div>
 </div>
+
+<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if dotacoes_aguardando else 0 }}" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+      <div class="modal-header-text">
+        <div class="modal-header-title">Sistema de Planejamento e Or&#231;amento</div>
+        <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-title">Dota&#231;&#245;es Aguardando Aprova&#231;&#227;o</div>
+      {% if dotacoes_aguardando %}
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Controle de Dota&#231;&#227;o</th>
+                <th>Valor da Dota&#231;&#227;o</th>
+                <th>Status</th>
+                <th>Aprovar por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in dotacoes_aguardando %}
+                <tr>
+                  <td>{{ d.chave_dotacao }}</td>
+                  <td>{{ d.valor_atual }}</td>
+                  <td>{{ d.status_aprovacao }}</td>
+                  <td>{{ d.adj_concedente }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="muted">Nenhuma dota&#231;&#227;o aguardando.</div>
+      {% endif %}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary sm" type="button" id="dotacao-aguardando-close">Fechar</button>
+    </div>
+  </div>
+</div>
