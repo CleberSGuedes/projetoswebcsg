@@ -1,0 +1,276 @@
+<div class="grid" id="est-dotacao-page"
+     data-user-perfil="{{ user_perfil }}"
+     data-user-id="{{ user_id }}"
+     data-user-nome="{{ user_nome }}">
+  <div class="card">
+    <div class="form no-print" id="est-dotacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Crit&#233;rios para filtro de resultados</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Tipo de Consulta</span>
+          <select id="est-dotacao-tipo">
+            <option value="dotacao" selected>Dotação</option>
+            <option value="estorno">Estorno de Dotação</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Campo</span>
+          <select id="est-dotacao-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="exercicio">*Exerc&#237;cio</option>
+            <option value="paoe">A&#231;&#227;o/PAOE</option>
+            <option value="adjunta">Adjunta Solicitante</option>
+            <option value="chaveDotacao">Controle de Dota&#231;&#227;o</option>
+            <option value="programa">Programa</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="est-dotacao-filtro-operador">
+            <option value="eq">Igual a</option>
+            <option value="contains">Cont&#233;m</option>
+            <option value="gt">Maior que</option>
+            <option value="lt">Menor que</option>
+            <option value="gte">Maior igual a</option>
+            <option value="lte">Menor igual a</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="est-dotacao-filtro-valor" />
+        </label>
+        <div class="actions" style="align-items:flex-end;">
+          <button class="btn btn-primary sm" type="button" id="est-dotacao-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Crit&#233;rios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field dotacao-criteria-box">
+          <ul id="est-dotacao-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
+          <button class="btn btn-danger sm" type="button" id="est-dotacao-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="est-dotacao-filtro-clear">Limpar</button>
+        </div>
+      </div>
+      <div class="actions dotacao-criteria-actions">
+        <button class="btn btn-danger sm" type="button" id="est-dotacao-filtro-cancel">Cancelar</button>
+        <button class="btn btn-primary sm" type="button" id="est-dotacao-filtro-apply">Consultar</button>
+        <div id="est-dotacao-filtro-msg" class="muted"></div>
+      </div>
+    </div>
+    <div class="dotacao-summary no-print" id="est-dotacao-summary">
+      <div class="table-responsive">
+        <table class="table" id="est-dotacao-summary-table-dotacao">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Controle de Dota&#231;&#227;o</th>
+              <th>Justificativa/Hist&#243;rico</th>
+              <th>Valor da Dota&#231;&#227;o</th>
+              <th>Adjunta Solicitante</th>
+              <th>Chave do Planejamento</th>
+              <th>Programa</th>
+              <th>A&#231;&#227;o/PAOE</th>
+              <th>Produto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in dotacoes %}
+            <tr class="dotacao-summary-row"
+                data-kind="dotacao"
+                data-id="{{ d.id }}"
+                data-exercicio="{{ d.exercicio }}"
+                data-adjunta="{{ d.adj_abreviacao }}"
+                data-programa="{{ d.programa or '' }}"
+                data-paoe="{{ d.acao_paoe or '' }}"
+                data-produto="{{ d.produto or '' }}"
+                data-chave-dotacao="{{ d.chave_dotacao }}"
+                data-chave-planejamento="{{ d.chave_planejamento }}"
+                data-uo="{{ d.uo }}"
+                data-ug="{{ d.ug }}"
+                data-regiao="{{ d.regiao }}"
+                data-subacao="{{ d.subacao_entrega }}"
+                data-etapa="{{ d.etapa }}"
+                data-natureza="{{ d.natureza_despesa }}"
+                data-elemento="{{ d.elemento }}"
+                data-subelemento="{{ d.subelemento }}"
+                data-fonte="{{ d.fonte }}"
+                data-iduso="{{ d.iduso }}"
+                data-valor="{{ d.valor_atual }}"
+                data-status-aprovacao="{{ d.status_aprovacao }}">
+              <td>{{ d.status_aprovacao }}</td>
+              <td>{{ d.chave_dotacao }}</td>
+              <td>{{ d.justificativa_historico }}</td>
+              <td class="dotacao-summary-valor">{{ d.valor_atual }}</td>
+              <td>{{ d.adj_abreviacao }}</td>
+              <td>{{ d.chave_planejamento }}</td>
+              <td>{{ d.programa }}</td>
+              <td>{{ d.acao_paoe }}</td>
+              <td>{{ d.produto }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <table class="table" id="est-dotacao-summary-table-estorno" style="display:none;">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Controle de Dota&#231;&#227;o</th>
+              <th>Justificativa de Estorno</th>
+              <th>Valor da Dota&#231;&#227;o</th>
+              <th>Valor do Estorno</th>
+              <th>Saldo do Estorno</th>
+              <th>Adjunta Solicitante</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in estornos %}
+            <tr class="dotacao-summary-row"
+                data-kind="estorno"
+                data-status="{{ e.status }}"
+                data-chave-dotacao="{{ e.chave_dotacao }}"
+                data-justificativa="{{ e.justificativa_estorno }}"
+                data-valordotacao="{{ e.valor_dotacao }}"
+                data-valorestorno="{{ e.valor_estorno }}"
+                data-saldoestorno="{{ e.saldo_estorno }}"
+                data-adjunta="{{ e.adjunta_solicitante }}"
+                data-exercicio="{{ e.exercicio }}"
+                data-programa="{{ e.programa }}"
+                data-paoe="{{ e.paoe }}">
+              <td>{{ e.status }}</td>
+              <td>{{ e.chave_dotacao }}</td>
+              <td>{{ e.justificativa_estorno }}</td>
+              <td class="dotacao-summary-valor">{{ e.valor_dotacao }}</td>
+              <td>{{ e.valor_estorno }}</td>
+              <td>{{ e.saldo_estorno }}</td>
+              <td>{{ e.adjunta_solicitante }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-foot no-print">
+        <div class="page-size">
+          <label for="est-dotacao-page-size">Itens por p&#225;gina</label>
+          <select id="est-dotacao-page-size" class="input">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div id="est-dotacao-pagination" class="pagination"></div>
+      </div>
+    </div>
+    <div class="actions no-print dotacao-actions">
+      <button class="btn btn-primary sm" type="button" id="est-dotacao-cadastrar">Cadastrar Estorno</button>
+      <button class="btn btn-secondary sm" type="button" id="est-dotacao-print" style="display:none;">Imprimir</button>
+      <button class="btn btn-secondary sm" type="button" id="est-dotacao-edit" style="display:none;">Editar</button>
+      <button class="btn btn-danger sm" type="button" id="est-dotacao-delete" style="display:none;">Excluir</button>
+      <button class="btn btn-primary sm" type="button" id="est-dotacao-approve" style="display:none;">Aprovar</button>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <div class="card-title">Cadastrar Estorno de Dota&#231;&#227;o</div>
+    <form id="est-dotacao-form" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>*Situa&#231;&#227;o</span>
+          <select id="est-dotacao-situacao" name="situacao" required>
+            <option value="" selected>Selecione...</option>
+            <option value="Estorno parcial">Estorno parcial</option>
+            <option value="Estorno Total">Estorno Total</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Exerc&#237;cio</span>
+          <select id="est-dotacao-exercicio" name="exercicio" required>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Adjunta Solicitante</span>
+          <input type="text" id="est-dotacao-adjunta" readonly />
+        </label>
+        <label class="field">
+          <span>*UO</span>
+          <input type="text" id="est-dotacao-uo" readonly />
+        </label>
+        <label class="field">
+          <span>*Programa</span>
+          <input type="text" id="est-dotacao-programa" readonly />
+        </label>
+        <label class="field">
+          <span>*A&#231;&#227;o/PAOE</span>
+          <input type="text" id="est-dotacao-acao" readonly />
+        </label>
+        <label class="field">
+          <span>*Produto</span>
+          <input type="text" id="est-dotacao-produto" readonly />
+        </label>
+        <label class="field">
+          <span>*Chave do Planejamento</span>
+          <input type="text" id="est-dotacao-chave" readonly />
+        </label>
+        <label class="field">
+          <span>*Regi&#227;o</span>
+          <input type="text" id="est-dotacao-regiao" readonly />
+        </label>
+        <label class="field">
+          <span>*UG</span>
+          <input type="text" id="est-dotacao-ug" readonly />
+        </label>
+        <label class="field">
+          <span>*Natureza de Despesa</span>
+          <input type="text" id="est-dotacao-natureza" readonly />
+        </label>
+        <label class="field">
+          <span>*Elemento de Despesa</span>
+          <input type="text" id="est-dotacao-elemento" readonly />
+        </label>
+        <label class="field">
+          <span>*Subelemento</span>
+          <input type="text" id="est-dotacao-subelemento" readonly />
+        </label>
+        <label class="field">
+          <span>*Fonte</span>
+          <input type="text" id="est-dotacao-fonte" readonly />
+        </label>
+        <label class="field">
+          <span>*Iduso</span>
+          <input type="text" id="est-dotacao-iduso" readonly />
+        </label>
+        <label class="field">
+          <span>*Suba&#231;&#227;o/Entrega</span>
+          <input type="text" id="est-dotacao-subacao" readonly />
+        </label>
+        <label class="field">
+          <span>*Etapa</span>
+          <input type="text" id="est-dotacao-etapa" readonly />
+        </label>
+        <label class="field">
+          <span>*Valor da Dota&#231;&#227;o</span>
+          <input type="text" id="est-dotacao-valor-dotacao" readonly />
+        </label>
+        <label class="field">
+          <span>*Valor do Estorno</span>
+          <input type="text" id="est-dotacao-valor-estorno" required />
+        </label>
+        <label class="field">
+          <span>Saldo de Dota&#231;&#227;o</span>
+          <input type="text" id="est-dotacao-saldo" readonly />
+        </label>
+        <label class="field">
+          <span>*Justificativa de Estorno</span>
+          <textarea id="est-dotacao-justificativa" rows="3" required></textarea>
+        </label>
+      </div>
+      <div class="actions" style="justify-content:flex-end;">
+        <div id="est-dotacao-msg" class="muted" style="margin-right:auto;"></div>
+        <button class="btn btn-primary sm" type="submit" id="est-dotacao-save">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>

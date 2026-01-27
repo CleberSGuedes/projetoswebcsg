@@ -2428,9 +2428,13 @@
       const footerText = buildFooterText(rows[0]);
       const approvalText = buildApprovalText(rows[0]);
       const status = String(rows[0]?.dataset?.statusAprovacao || "").trim().toLowerCase();
+      const adjSolic = rows[0]?.dataset?.adjunta || "";
+      const adjConc = rows[0]?.dataset?.adjConcedente || "";
+      const isEmprestada = adjConc && adjConc !== adjSolic;
       let watermarkText = "";
       if (status === "aguardando") watermarkText = "Aguardando Aprova\u00e7\u00e3o";
       if (status === "rejeitado") watermarkText = "Sem Validade";
+      const showRegularizacao = isEmprestada && status !== "rejeitado";
       const html = `<!doctype html>
 <html>
 <head>
@@ -2451,6 +2455,7 @@
     .print-footer img { height: 36px; }
     .print-footer-text { flex: 1; text-align: center; line-height: 1.3; }
     .print-footer-approval { margin-top: 4px; font-weight: 400; }
+    .print-footer-note { margin-top: 4px; font-size: 10px; font-weight: 400; }
     .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
     .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 8px; vertical-align: top; word-break: break-word; }
     .print-table th { width: auto; white-space: nowrap; background: #f1f1f1; text-transform: uppercase; }
@@ -2474,12 +2479,14 @@
     <div class="print-title">DOTA&#199;&#195;O CADASTRADA</div>
     <div class="print-title-date">${formatPrintDate((rows[0]?.dataset?.alteradoEm && rows[0]?.dataset?.alteradoEm !== rows[0]?.dataset?.criadoEm) ? rows[0]?.dataset?.alteradoEm : rows[0]?.dataset?.criadoEm)}</div>
   </div>
+  <div style="height: 36px;"></div>
   ${content}
   <div class="print-footer">
     <img src="/static/img/logo.jpg" alt="Logo" />
     <div class="print-footer-text">
       <div>${footerText}</div>
       ${approvalText ? `<div class="print-footer-approval">${approvalText}</div>` : ""}
+      ${showRegularizacao ? `<div class="print-footer-note">Dota\u00e7\u00e3o estar\u00e1 sujeita a regulariza\u00e7\u00e3o</div>` : ""}
     </div>
     <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
   </div>
@@ -2741,9 +2748,18 @@
           setFilterMsg("Selecione um registro para editar.", true);
           return;
         }
+        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
+        if (!adjConcedente) {
+          setFilterMsg("Adjunta Concedente não definida.", true);
+          return;
+        }
+        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+          setFilterMsg("Usuário sem permissão para editar a dotação atual.", true);
+          return;
+        }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotacoes com status Aguardando podem ser editadas.", true);
+          setFilterMsg("Somente dotações com status Aguardando podem ser editadas.", true);
           return;
         }
         setApprovalMode(false);
@@ -2762,14 +2778,23 @@
           setFilterMsg("Selecione um registro para excluir.", true);
           return;
         }
+        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
+        if (!adjConcedente) {
+          setFilterMsg("Adjunta Concedente não definida.", true);
+          return;
+        }
+        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+          setFilterMsg("Usuário sem permissão para excluir a dotação atual.", true);
+          return;
+        }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotacoes com status Aguardando podem ser excluidas.", true);
+          setFilterMsg("Somente dotações com status Aguardando podem ser excluídas.", true);
           return;
         }
         const dotacaoId = selected.dataset.id;
         if (!dotacaoId) {
-          setFilterMsg("Registro inv?lido para exclus?o.", true);
+          setFilterMsg("Registro inv\u00e1lido para exclus\u00e3o.", true);
           return;
         }
         try {
@@ -6153,6 +6178,9 @@
     if (route === "cadastrar/dotacao") {
       initDotacao();
     }
+    if (route === "cadastrar/est-dotacao") {
+      initEstDotacao();
+    }
     if (route === "relatorios/fip613") {
       initRelatorioFip();
     }
@@ -6170,6 +6198,501 @@
     }
     if (route === "relatorios/plan20-seduc") {
       initRelatorioPlan20();
+    }
+  }
+
+  function initEstDotacao() {
+    const tipoSelect = document.getElementById("est-dotacao-tipo");
+    const filterField = document.getElementById("est-dotacao-filtro-campo");
+    const filterOp = document.getElementById("est-dotacao-filtro-operador");
+    const filterValue = document.getElementById("est-dotacao-filtro-valor");
+    const filterAdd = document.getElementById("est-dotacao-filtro-add");
+    const filterList = document.getElementById("est-dotacao-filtro-list");
+    const filterRemove = document.getElementById("est-dotacao-filtro-remove");
+    const filterClear = document.getElementById("est-dotacao-filtro-clear");
+    const filterCancel = document.getElementById("est-dotacao-filtro-cancel");
+    const filterApply = document.getElementById("est-dotacao-filtro-apply");
+    const filterMsg = document.getElementById("est-dotacao-filtro-msg");
+    const dotacaoTable = document.getElementById("est-dotacao-summary-table-dotacao");
+    const estornoTable = document.getElementById("est-dotacao-summary-table-estorno");
+    const summaryBody = dotacaoTable ? dotacaoTable.querySelector("tbody") : null;
+    const cadastrarBtn = document.getElementById("est-dotacao-cadastrar");
+    const printBtn = document.getElementById("est-dotacao-print");
+    const editBtn = document.getElementById("est-dotacao-edit");
+    const deleteBtn = document.getElementById("est-dotacao-delete");
+    const approveBtn = document.getElementById("est-dotacao-approve");
+    const form = document.getElementById("est-dotacao-form");
+    const situacaoSelect = document.getElementById("est-dotacao-situacao");
+    const exercicioSelect = document.getElementById("est-dotacao-exercicio");
+    const adjuntaInput = document.getElementById("est-dotacao-adjunta");
+    const uoInput = document.getElementById("est-dotacao-uo");
+    const programaInput = document.getElementById("est-dotacao-programa");
+    const acaoInput = document.getElementById("est-dotacao-acao");
+    const produtoInput = document.getElementById("est-dotacao-produto");
+    const chaveInput = document.getElementById("est-dotacao-chave");
+    const regiaoInput = document.getElementById("est-dotacao-regiao");
+    const ugInput = document.getElementById("est-dotacao-ug");
+    const naturezaInput = document.getElementById("est-dotacao-natureza");
+    const elementoInput = document.getElementById("est-dotacao-elemento");
+    const subelementoInput = document.getElementById("est-dotacao-subelemento");
+    const fonteInput = document.getElementById("est-dotacao-fonte");
+    const idusoInput = document.getElementById("est-dotacao-iduso");
+    const subacaoInput = document.getElementById("est-dotacao-subacao");
+    const etapaInput = document.getElementById("est-dotacao-etapa");
+    const valorDotacaoInput = document.getElementById("est-dotacao-valor-dotacao");
+    const valorEstornoInput = document.getElementById("est-dotacao-valor-estorno");
+    const saldoInput = document.getElementById("est-dotacao-saldo");
+    const justificativaInput = document.getElementById("est-dotacao-justificativa");
+    const msg = document.getElementById("est-dotacao-msg");
+    const estPage = document.getElementById("est-dotacao-page");
+    const currentUserPerfil = estPage?.dataset?.userPerfil || "";
+    const currentUserId = estPage?.dataset?.userId || "";
+    const pageSizeSelect = document.getElementById("est-dotacao-page-size");
+    const paginationEl = document.getElementById("est-dotacao-pagination");
+    const summaryBox = document.getElementById("est-dotacao-summary");
+    if (!summaryBody || !dotacaoTable || !estornoTable) return;
+
+    const criteria = [];
+    let criteriaSelected = -1;
+    const fieldLabels = {
+      exercicio: "Exerc\u00edcio",
+      chaveDotacao: "Controle de Dota\u00e7\u00e3o",
+      adjunta: "Adjunta Solicitante",
+      programa: "Programa",
+      paoe: "A\u00e7\u00e3o/PAOE",
+    };
+    const opLabels = {
+      eq: "Igual a",
+      contains: "Cont\u00e9m",
+      gt: "Maior que",
+      lt: "Menor que",
+      gte: "Maior igual a",
+      lte: "Menor igual a",
+    };
+
+    const setFilterMsg = (text, isError = false) => {
+      if (!filterMsg) return;
+      filterMsg.textContent = text || "";
+      if (isError) filterMsg.classList.add("text-error");
+      else filterMsg.classList.remove("text-error");
+    };
+
+    const parseMaybeNumber = (value) => {
+      if (value === null || value === undefined) return { raw: "", num: null };
+      const raw = String(value).trim();
+      if (!raw) return { raw, num: null };
+      const num = Number(raw.replace(",", "."));
+      return Number.isNaN(num) ? { raw, num: null } : { raw, num };
+    };
+
+    const compareValues = (left, right, op) => {
+      const l = parseMaybeNumber(left);
+      const r = parseMaybeNumber(right);
+      if (l.num !== null && r.num !== null) {
+        if (op === "eq") return l.num === r.num;
+        if (op === "gt") return l.num > r.num;
+        if (op === "lt") return l.num < r.num;
+        if (op === "gte") return l.num >= r.num;
+        if (op === "lte") return l.num <= r.num;
+      }
+      const lraw = l.raw.toLowerCase();
+      const rraw = r.raw.toLowerCase();
+      const cmp = lraw.localeCompare(rraw, "pt-BR", { sensitivity: "base" });
+      if (op === "eq") return cmp === 0;
+      if (op === "contains") return lraw.includes(rraw);
+      if (op === "gt") return cmp > 0;
+      if (op === "lt") return cmp < 0;
+      if (op === "gte") return cmp >= 0;
+      if (op === "lte") return cmp <= 0;
+      return false;
+    };
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+
+    const getActiveTable = () => (tipoSelect?.value === "estorno" ? estornoTable : dotacaoTable);
+    const getRows = () => Array.from(getActiveTable().querySelectorAll(".dotacao-summary-row"));
+    const getAllRows = () => Array.from(document.querySelectorAll("#est-dotacao-summary .dotacao-summary-row"));
+
+    const renderCriteria = () => {
+      if (!filterList) return;
+      filterList.innerHTML = "";
+      criteria.forEach((c, idx) => {
+        const li = document.createElement("li");
+        const label = fieldLabels[c.field] || c.field;
+        const op = opLabels[c.op] || c.op;
+        li.textContent = `${label} ${op} ${c.value}`;
+        li.dataset.index = String(idx);
+        if (idx === criteriaSelected) {
+          li.style.borderColor = "var(--primary)";
+        }
+        li.addEventListener("click", () => {
+          criteriaSelected = idx;
+          renderCriteria();
+        });
+        filterList.appendChild(li);
+      });
+    };
+
+    const getFilteredRows = () => {
+      const rows = getRows();
+      if (!criteria.length) return rows;
+      return rows.filter((row) =>
+        criteria.every((c) => {
+          const field = c.field;
+          const rowVal = row.dataset[field] || "";
+          return compareValues(rowVal, c.value, c.op);
+        })
+      );
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderSummaryPage();
+          setFilterMsg("");
+        });
+        paginationEl.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p++) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        paginationEl.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const renderSummaryPage = () => {
+      const allRows = getRows();
+      const filtered = getFilteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = filtered.slice(startIdx, startIdx + pageSize);
+      allRows.forEach((row) => {
+        row.style.display = "none";
+        row.classList.remove("selected");
+      });
+      pageRows.forEach((row) => {
+        row.style.display = "";
+      });
+      renderPagination(totalPages);
+    };
+
+    const setResultsVisible = (show) => {
+      if (!summaryBox) return;
+      summaryBox.classList.toggle("dotacao-summary-hidden", !show);
+      if (!show && paginationEl) paginationEl.innerHTML = "";
+    };
+
+    const applyCriteriaToResults = () => {
+      currentPage = 1;
+      renderSummaryPage();
+    };
+
+    const formatSummaryValues = () => {
+      getAllRows().forEach((row) => {
+        const cell = row.querySelector(".dotacao-summary-valor");
+        if (!cell) return;
+        const raw = row.dataset.valor || cell.textContent || "";
+        cell.textContent = formatPtBr(parsePtBr(raw) || 0);
+      });
+    };
+
+    const formatPtBr = (value) => {
+      const n = Number(value || 0);
+      if (Number.isNaN(n)) return "";
+      return new Intl.NumberFormat("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    };
+
+    const parsePtBr = (value) => {
+      if (value === null || value === undefined) return null;
+      const raw = String(value).trim();
+      if (!raw) return null;
+      if (raw.includes(",")) {
+        const cleaned = raw.replace(/\./g, "").replace(",", ".");
+        const num = Number(cleaned);
+        return Number.isNaN(num) ? null : num;
+      }
+      const num = Number(raw);
+      return Number.isNaN(num) ? null : num;
+    };
+
+    const setCurrentYear = () => {
+      if (!exercicioSelect) return;
+      const year = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Manaus", year: "numeric" }).format(
+        new Date()
+      );
+      exercicioSelect.innerHTML = `<option value="">Selecione...</option><option value="${year}">${year}</option>`;
+      exercicioSelect.value = "";
+    };
+
+    const updateSaldo = () => {
+      const vDot = parsePtBr(valorDotacaoInput?.value || "") || 0;
+      const vEst = parsePtBr(valorEstornoInput?.value || "") || 0;
+      if (saldoInput) saldoInput.value = formatPtBr(vDot - vEst);
+    };
+
+    const updateEstornoMode = () => {
+      if (!situacaoSelect || !valorEstornoInput) return;
+      const total = situacaoSelect.value === "Estorno Total";
+      if (total) {
+        valorEstornoInput.value = valorDotacaoInput?.value || "";
+        valorEstornoInput.disabled = true;
+      } else {
+        valorEstornoInput.disabled = false;
+      }
+      updateSaldo();
+    };
+
+    const applyTipo = () => {
+      const isEstorno = tipoSelect?.value === "estorno";
+      dotacaoTable.style.display = isEstorno ? "none" : "";
+      estornoTable.style.display = isEstorno ? "" : "none";
+      if (cadastrarBtn) cadastrarBtn.style.display = isEstorno ? "none" : "";
+      if (printBtn) printBtn.style.display = isEstorno ? "" : "none";
+      if (editBtn) editBtn.style.display = isEstorno ? "" : "none";
+      if (deleteBtn) deleteBtn.style.display = isEstorno ? "" : "none";
+      if (approveBtn) approveBtn.style.display = isEstorno ? "" : "none";
+      setResultsVisible(false);
+      renderCriteria();
+    };
+
+    formatSummaryValues();
+    applyTipo();
+    setCurrentYear();
+
+    if (situacaoSelect) {
+      situacaoSelect.addEventListener("change", updateEstornoMode);
+    }
+    if (valorEstornoInput) {
+      valorEstornoInput.addEventListener("input", updateSaldo);
+      valorEstornoInput.addEventListener("blur", () => {
+        const num = parsePtBr(valorEstornoInput.value || "");
+        valorEstornoInput.value = num === null ? "" : formatPtBr(num);
+        updateSaldo();
+      });
+    }
+
+    const selectRow = (row) => {
+      getAllRows().forEach((el) => el.classList.remove("selected"));
+      if (row) row.classList.add("selected");
+    };
+
+    getAllRows().forEach((row) => {
+      row.addEventListener("click", () => {
+        selectRow(row);
+      });
+    });
+    setResultsVisible(false);
+
+    if (filterAdd) {
+      filterAdd.addEventListener("click", () => {
+        const field = String(filterField?.value || "");
+        const op = String(filterOp?.value || "eq");
+        const value = String(filterValue?.value || "").trim();
+        if (!field) {
+          setFilterMsg("Selecione um campo.", true);
+          return;
+        }
+        if (!value) {
+          setFilterMsg("Informe um valor.", true);
+          return;
+        }
+        if (field !== "exercicio" && !criteria.some((c) => c.field === "exercicio")) {
+          setFilterMsg("Informe um crit\u00e9rio de Exerc\u00edcio antes dos demais.", true);
+          return;
+        }
+        criteria.push({ field, op, value });
+        criteriaSelected = criteria.length - 1;
+        renderCriteria();
+        setFilterMsg("");
+        if (filterValue) filterValue.value = "";
+      });
+    }
+
+    if (filterRemove) {
+      filterRemove.addEventListener("click", () => {
+        if (criteriaSelected < 0 || criteriaSelected >= criteria.length) {
+          setFilterMsg("Selecione um crit\u00e9rio para remover.", true);
+          return;
+        }
+        criteria.splice(criteriaSelected, 1);
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        setFilterMsg("");
+      });
+    }
+
+    if (filterClear) {
+      filterClear.addEventListener("click", () => {
+        criteria.length = 0;
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        setFilterMsg("");
+      });
+    }
+
+    if (filterCancel) {
+      filterCancel.addEventListener("click", () => {
+        criteria.length = 0;
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        if (filterField) filterField.value = "";
+        if (filterOp) filterOp.value = "eq";
+        if (filterValue) filterValue.value = "";
+        setFilterMsg("");
+      });
+    }
+
+    if (filterApply) {
+      filterApply.addEventListener("click", () => {
+        if (!criteria.some((c) => c.field == "exercicio")) {
+          setFilterMsg("Informe o crit\u00e9rio de Exerc\u00edcio antes de consultar.", true);
+          return;
+        }
+        setResultsVisible(true);
+        applyCriteriaToResults();
+        setFilterMsg("");
+      });
+    }
+
+    if (tipoSelect) {
+      tipoSelect.addEventListener("change", () => {
+        applyTipo();
+      });
+    }
+
+    if (cadastrarBtn) {
+      cadastrarBtn.addEventListener("click", () => {
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para cadastrar estorno.", true);
+          return;
+        }
+        const adjunta = String(selected.dataset.adjunta || "").trim();
+        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+          setFilterMsg("Usu\u00e1rio sem permiss\u00e3o de cadastrar estorno.", true);
+          return;
+        }
+        if (adjuntaInput) adjuntaInput.value = adjunta;
+        if (uoInput) uoInput.value = selected.dataset.uo || "";
+        if (programaInput) programaInput.value = selected.dataset.programa || "";
+        if (acaoInput) acaoInput.value = selected.dataset.paoe || "";
+        if (produtoInput) produtoInput.value = selected.dataset.produto || "";
+        if (chaveInput) chaveInput.value = selected.dataset.chavePlanejamento || "";
+        if (regiaoInput) regiaoInput.value = selected.dataset.regiao || "";
+        if (ugInput) ugInput.value = selected.dataset.ug || "";
+        if (naturezaInput) naturezaInput.value = selected.dataset.natureza || "";
+        if (elementoInput) elementoInput.value = selected.dataset.elemento || "";
+        if (subelementoInput) subelementoInput.value = selected.dataset.subelemento || "";
+        if (fonteInput) fonteInput.value = selected.dataset.fonte || "";
+        if (idusoInput) idusoInput.value = selected.dataset.iduso || "";
+        if (subacaoInput) subacaoInput.value = selected.dataset.subacao || "";
+        if (etapaInput) etapaInput.value = selected.dataset.etapa || "";
+        if (valorDotacaoInput) {
+          const v = selected.dataset.valor || "";
+          const num = parsePtBr(v);
+          valorDotacaoInput.value = num === null ? v : formatPtBr(num);
+        }
+        updateEstornoMode();
+        if (justificativaInput) justificativaInput.value = "";
+        setCurrentYear();
+        if (msg) msg.textContent = "";
+        setFilterMsg("");
+      });
+    }
+
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
+        if (!selected || selected.dataset.kind !== "dotacao") {
+          if (msg) {
+            msg.textContent = "Carregue uma dota\u00e7\u00e3o antes de salvar o estorno.";
+            msg.classList.add("text-error");
+          }
+          return;
+        }
+        if (msg) {
+          msg.textContent = "Salvando...";
+          msg.classList.remove("text-error");
+        }
+        const payload = {
+          exercicio: exercicioSelect?.value || "",
+          adjunta: adjuntaInput?.value || "",
+          chave_planejamento: chaveInput?.value || "",
+          chave_dotacao: summaryBody?.querySelector(".dotacao-summary-row.selected")?.dataset.chaveDotacao || "",
+          uo: uoInput?.value || "",
+          programa: programaInput?.value || "",
+          acao_paoe: acaoInput?.value || "",
+          produto: produtoInput?.value || "",
+          ug: ugInput?.value || "",
+          regiao: regiaoInput?.value || "",
+          subacao_entrega: subacaoInput?.value || "",
+          etapa: etapaInput?.value || "",
+          natureza_despesa: naturezaInput?.value || "",
+          elemento: elementoInput?.value || "",
+          subelemento: subelementoInput?.value || "",
+          fonte: fonteInput?.value || "",
+          iduso: idusoInput?.value || "",
+          valor_dotacao: valorDotacaoInput?.value || "",
+          valor_a_ser_est: valorEstornoInput?.value || "",
+          saldo_dotacao_apos: saldoInput?.value || "",
+          justificativa: justificativaInput?.value || "",
+          situacao: situacaoSelect?.value || "",
+        };
+        try {
+          const res = await fetch("/api/est-dotacao", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
+          if (msg) msg.textContent = data.message || "Estorno cadastrado.";
+          await loadPage("cadastrar/est-dotacao");
+        } catch (err) {
+          if (msg) {
+            msg.textContent = err.message || "Falha ao salvar.";
+            msg.classList.add("text-error");
+          }
+        }
+      });
+    }
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        if (summaryBox && summaryBox.style.display !== "none") {
+          renderSummaryPage();
+        }
+      });
     }
   }
 

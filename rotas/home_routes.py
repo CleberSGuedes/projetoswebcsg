@@ -670,7 +670,10 @@ def partial_cadastrar_dotacao():
     dotacoes = []
     atualizar_ids: list[int] = []
     atualizar_ped_emp: list[Decimal] = []
+    atualizar_estorno: list[Decimal] = []
+    atualizar_situacao: list[str] = []
     atualizar_atual: list[Decimal] = []
+    est_map, situacao_map = _build_estorno_maps()
     aprovado_ids: set[int] = set()
     for dot in rows:
         if getattr(dot, "aprovado_por", None):
@@ -689,12 +692,22 @@ def partial_cadastrar_dotacao():
         adj_nome = (adj_map.get(dot.adj_id) or "").strip()
         ped_sum = _calc_ped_sum_for_dotacao(dot.chave_dotacao)
         emp_sum = _calc_emp_sum_for_dotacao(dot.chave_dotacao)
+        key_norm = _normalize_dotacao_key(dot.chave_dotacao)
+        est_sum = est_map.get(key_norm, Decimal("0"))
+        est_situacao = situacao_map.get(key_norm, "")
         ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
         valor_dot = _dec_or_zero(dot.valor_dotacao)
-        valor_atual = valor_dot - ped_emp_sum
-        if _dec_or_zero(dot.valor_ped_emp) != ped_emp_sum or _dec_or_zero(dot.valor_atual) != valor_atual:
+        valor_atual = valor_dot - _dec_or_zero(est_sum) - ped_emp_sum
+        if (
+            _dec_or_zero(dot.valor_ped_emp) != ped_emp_sum
+            or _dec_or_zero(dot.valor_estorno) != _dec_or_zero(est_sum)
+            or _dec_or_zero(dot.valor_atual) != valor_atual
+            or (est_situacao and (dot.situacao or "").strip() != est_situacao)
+        ):
             atualizar_ids.append(dot.id)
             atualizar_ped_emp.append(ped_emp_sum)
+            atualizar_estorno.append(_dec_or_zero(est_sum))
+            atualizar_situacao.append(est_situacao)
             atualizar_atual.append(valor_atual)
         dotacoes.append(
             {
@@ -725,6 +738,7 @@ def partial_cadastrar_dotacao():
                 "fonte": dot.fonte,
                 "iduso": dot.iduso,
                 "valor_dotacao": dot.valor_dotacao,
+                "valor_atual": valor_atual,
                 "justificativa_historico": dot.justificativa_historico,
                 "usuario_nome": usuarios_map.get(dot.usuarios_id, ""),
                 "usuario_perfil": usuarios_perfil_map.get(dot.usuarios_id, ""),
@@ -740,6 +754,8 @@ def partial_cadastrar_dotacao():
                     .where(Dotacao.id == dot_id)
                     .values(
                         valor_ped_emp=atualizar_ped_emp[idx],
+                        valor_estorno=atualizar_estorno[idx],
+                        situacao=atualizar_situacao[idx],
                         valor_atual=atualizar_atual[idx],
                         alterado_em=_now_local(),
                     )
@@ -750,6 +766,124 @@ def partial_cadastrar_dotacao():
     return render_template(
         "partials/cadastrar_dotacao.html",
         dotacoes=dotacoes,
+        user_perfil=user_perfil,
+        user_id=user_id,
+        user_nome=user_nome,
+    )
+
+
+@home_bp.route("/partial/cadastrar/est-dotacao")
+@login_required
+@require_feature("cadastrar/est-dotacao")
+def partial_cadastrar_est_dotacao():
+    user_session = session.get("user") or {}
+    user_perfil = (user_session.get("perfil") or "").strip()
+    user_email = (user_session.get("email") or "").strip()
+    user_nome = ""
+    user_id = ""
+    if user_email:
+        usuario_row = Usuario.query.filter_by(email=user_email).first()
+        if usuario_row:
+            user_nome = (usuario_row.nome or "").strip()
+            user_id = str(usuario_row.id or "")
+    rows = (
+        db.session.query(Dotacao)
+        .filter(Dotacao.ativo == True)  # noqa: E712
+        .filter(func.lower(Dotacao.status_aprovacao) == "aprovado")
+        .order_by(Dotacao.id.desc())
+        .all()
+    )
+    adj_ids = [dot.adj_id for dot in rows if getattr(dot, "adj_id", None)]
+    adj_map = {}
+    if adj_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+
+    dotacoes = []
+    for dot in rows:
+        adj_nome = (adj_map.get(dot.adj_id) or "").strip()
+        dotacoes.append(
+            {
+                "id": dot.id,
+                "exercicio": dot.exercicio,
+                "adj_id": dot.adj_id,
+                "adj_abreviacao": adj_nome,
+                "chave_planejamento": dot.chave_planejamento,
+                "chave_dotacao": dot.chave_dotacao,
+                "status_aprovacao": getattr(dot, "status_aprovacao", "") or "",
+                "uo": dot.uo,
+                "programa": dot.programa,
+                "acao_paoe": dot.acao_paoe,
+                "produto": dot.produto,
+                "ug": dot.ug,
+                "regiao": dot.regiao,
+                "subacao_entrega": dot.subacao_entrega,
+                "etapa": dot.etapa,
+                "natureza_despesa": dot.natureza_despesa,
+                "elemento": dot.elemento,
+                "subelemento": dot.subelemento,
+                "fonte": dot.fonte,
+                "iduso": dot.iduso,
+                "valor_dotacao": dot.valor_dotacao,
+                "valor_atual": dot.valor_atual,
+                "justificativa_historico": dot.justificativa_historico,
+            }
+        )
+
+    estorno_rows = []
+    try:
+        raw = db.session.execute(text("SELECT * FROM est_dotacao")).mappings().all()
+    except Exception:
+        raw = []
+    est_adj_ids = {r.get("adj_id") for r in raw if r.get("adj_id")}
+    est_adj_map = {}
+    if est_adj_ids:
+        est_perfis = Perfil.query.filter(Perfil.id.in_(est_adj_ids)).all()
+        est_adj_map = {p.id: p.nome for p in est_perfis if p and p.nome}
+    for r in raw:
+        def pick(*keys):
+            for k in keys:
+                if k in r and r[k] is not None:
+                    return r[k]
+            return ""
+
+        chave = pick("chave_dotacao", "chave", "controle_dotacao")
+        status = pick("status_aprovacao", "status")
+        justificativa = pick("justificativa_estorno", "justificativa", "historico", "motivo", "observacao")
+        valor_dot = pick("valor_dotacao", "valor")
+        valor_est = pick("valor_a_ser_est", "valor_estorno", "estorno")
+        saldo_est = pick("saldo_dotacao_apos", "saldo_estorno", "saldo")
+        adj_solic = pick("adjunta_solicitante", "adj_solicitante", "adjunta", "adj")
+        exercicio = pick("exercicio", "ano")
+        programa = pick("programa", "programa_governo")
+        paoe = pick("paoe", "acao_paoe")
+        if not adj_solic:
+            adj_id = r.get("adj_id")
+            adj_solic = est_adj_map.get(adj_id, "")
+
+        def fmt_num(val):
+            v = _parse_decimal_value(val)
+            return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        estorno_rows.append(
+            {
+                "status": str(status or ""),
+                "chave_dotacao": str(chave or ""),
+                "justificativa_estorno": str(justificativa or ""),
+                "valor_dotacao": fmt_num(valor_dot),
+                "valor_estorno": fmt_num(valor_est),
+                "saldo_estorno": fmt_num(saldo_est),
+                "adjunta_solicitante": str(adj_solic or ""),
+                "exercicio": str(exercicio or ""),
+                "programa": str(programa or ""),
+                "paoe": str(paoe or ""),
+            }
+        )
+
+    return render_template(
+        "partials/cadastrar_est_dotacao.html",
+        dotacoes=dotacoes,
+        estornos=estorno_rows,
         user_perfil=user_perfil,
         user_id=user_id,
         user_nome=user_nome,
@@ -1149,6 +1283,92 @@ def _calc_emp_sum_for_dotacao(chave_dotacao: str) -> Decimal:
     return total
 
 
+def _parse_decimal_value(value) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return _dec_or_zero(value)
+    try:
+        return _dec_or_zero(_parse_decimal(value))
+    except Exception:
+        return Decimal("0")
+
+
+def _fetch_estorno_rows() -> list[tuple[str, Decimal]]:
+    try:
+        rows = db.session.execute(text("SELECT chave_dotacao, valor_a_ser_est FROM est_dotacao")).fetchall()
+        return [(r[0], _parse_decimal_value(r[1])) for r in rows]
+    except Exception:
+        try:
+            rows = db.session.execute(text("SELECT chave_dotacao, valor_estorno FROM est_dotacao")).fetchall()
+            return [(r[0], _parse_decimal_value(r[1])) for r in rows]
+        except Exception:
+            try:
+                rows = db.session.execute(text("SELECT chave, valor_a_ser_est FROM est_dotacao")).fetchall()
+                return [(r[0], _parse_decimal_value(r[1])) for r in rows]
+            except Exception:
+                try:
+                    rows = db.session.execute(text("SELECT chave, valor_estorno FROM est_dotacao")).fetchall()
+                    return [(r[0], _parse_decimal_value(r[1])) for r in rows]
+                except Exception:
+                    return []
+
+
+def _fetch_estorno_rows_full() -> list[tuple[str, Decimal, str]]:
+    try:
+        rows = db.session.execute(
+            text("SELECT chave_dotacao, valor_a_ser_est, situacao FROM est_dotacao")
+        ).fetchall()
+        return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
+    except Exception:
+        try:
+            rows = db.session.execute(
+                text("SELECT chave_dotacao, valor_estorno, situacao FROM est_dotacao")
+            ).fetchall()
+            return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
+        except Exception:
+            try:
+                rows = db.session.execute(
+                    text("SELECT chave, valor_a_ser_est, situacao FROM est_dotacao")
+                ).fetchall()
+                return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
+            except Exception:
+                try:
+                    rows = db.session.execute(text("SELECT chave, valor_estorno, situacao FROM est_dotacao")).fetchall()
+                    return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
+                except Exception:
+                    return []
+
+
+def _calc_estorno_sum_for_dotacao(chave_dotacao: str) -> Decimal:
+    key_norm = _normalize_dotacao_key(chave_dotacao)
+    if not key_norm:
+        return Decimal("0")
+    total = Decimal("0")
+    for chave, valor in _fetch_estorno_rows():
+        if _normalize_dotacao_key(chave) == key_norm:
+            total += _dec_or_zero(valor)
+    return total
+
+
+def _build_estorno_maps() -> tuple[dict[str, Decimal], dict[str, str]]:
+    est_map: dict[str, Decimal] = {}
+    situacao_map: dict[str, str] = {}
+    for chave, valor, situacao in _fetch_estorno_rows_full():
+        key_norm = _normalize_dotacao_key(chave)
+        if not key_norm:
+            continue
+        est_map[key_norm] = _dec_or_zero(est_map.get(key_norm)) + _dec_or_zero(valor)
+        if situacao:
+            situacao_map[key_norm] = str(situacao).strip()
+    return est_map, situacao_map
+
+
+def _build_estorno_map() -> dict[str, Decimal]:
+    est_map, _ = _build_estorno_maps()
+    return est_map
+
+
 def _calc_ped_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
     if not keys:
         return Decimal("0"), 0
@@ -1471,8 +1691,11 @@ def api_dotacao_create():
         justificativa_full = f"{chave_dotacao} {justificativa}".strip()
         ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
         emp_sum = _calc_emp_sum_for_dotacao(chave_dotacao)
+        est_sum = _calc_estorno_sum_for_dotacao(chave_dotacao)
+        _, situacao_map = _build_estorno_maps()
+        est_situacao = situacao_map.get(_normalize_dotacao_key(chave_dotacao), "")
         ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
-        valor_atual = _dec_or_zero(valor_dotacao) - ped_emp_sum
+        valor_atual = _dec_or_zero(valor_dotacao) - _dec_or_zero(est_sum) - ped_emp_sum
         db.session.execute(
             Dotacao.__table__.update()
             .where(Dotacao.id == registro.id)
@@ -1480,6 +1703,8 @@ def api_dotacao_create():
                 chave_dotacao=chave_dotacao,
                 justificativa_historico=justificativa_full,
                 valor_ped_emp=ped_emp_sum,
+                valor_estorno=_dec_or_zero(est_sum),
+                situacao=est_situacao,
                 valor_atual=valor_atual,
                 alterado_em=None,
             )
@@ -1509,6 +1734,17 @@ def api_dotacao_update(dotacao_id):
     registro = db.session.get(Dotacao, dotacao_id)
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
+    if not adj_concedente:
+        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
+    if not perfil_usuario or perfil_usuario.lower() != adj_concedente.lower():
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar a dota\u00e7\u00e3o atual."}), 403
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Somente dota\u00e7\u00f5es com status Aguardando podem ser editadas."}), 400
 
     data = request.get_json() or {}
     exercicio = (data.get("exercicio") or "").strip()
@@ -1674,9 +1910,14 @@ def api_dotacao_update(dotacao_id):
     registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
     ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
     emp_sum = _calc_emp_sum_for_dotacao(chave_dotacao)
+    est_sum = _calc_estorno_sum_for_dotacao(chave_dotacao)
+    _, situacao_map = _build_estorno_maps()
+    est_situacao = situacao_map.get(_normalize_dotacao_key(chave_dotacao), "")
     ped_emp_sum = _dec_or_zero(ped_sum) + _dec_or_zero(emp_sum)
     registro.valor_ped_emp = ped_emp_sum
-    registro.valor_atual = _dec_or_zero(valor_dotacao) - ped_emp_sum
+    registro.valor_estorno = _dec_or_zero(est_sum)
+    registro.situacao = est_situacao
+    registro.valor_atual = _dec_or_zero(valor_dotacao) - _dec_or_zero(est_sum) - ped_emp_sum
     try:
         db.session.commit()
     except Exception as exc:
@@ -1698,6 +1939,17 @@ def api_dotacao_delete(dotacao_id):
     registro = db.session.get(Dotacao, dotacao_id)
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
+    if not adj_concedente:
+        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
+    if not perfil_usuario or perfil_usuario.lower() != adj_concedente.lower():
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir a dota\u00e7\u00e3o atual."}), 403
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Somente dota\u00e7\u00f5es com status Aguardando podem ser exclu\u00eddas."}), 400
 
     registro.ativo = False
     registro.excluido_em = _now_local()
@@ -1772,6 +2024,160 @@ def api_dotacao_aprovar(dotacao_id):
             "dotacao": _dotacao_payload(_attach_usuario_nome(registro), adj_label),
         }
     )
+
+
+@home_bp.route("/api/est-dotacao", methods=["POST"])
+@login_required
+@require_feature("cadastrar/est-dotacao")
+def api_est_dotacao_create():
+    data = request.get_json() or {}
+    exercicio = (data.get("exercicio") or "").strip()
+    adjunta = (data.get("adjunta") or "").strip()
+    chave_planejamento = (data.get("chave_planejamento") or "").strip()
+    chave_dotacao = (data.get("chave_dotacao") or "").strip()
+    uo = (data.get("uo") or "").strip()
+    programa = (data.get("programa") or "").strip()
+    acao_paoe = (data.get("acao_paoe") or "").strip()
+    produto = (data.get("produto") or "").strip()
+    ug = (data.get("ug") or "").strip()
+    regiao = (data.get("regiao") or "").strip()
+    subacao_entrega = (data.get("subacao_entrega") or "").strip()
+    etapa = (data.get("etapa") or "").strip()
+    natureza_despesa = (data.get("natureza_despesa") or "").strip()
+    elemento = (data.get("elemento") or "").strip()
+    subelemento = (data.get("subelemento") or "").strip()
+    fonte = (data.get("fonte") or "").strip()
+    iduso = (data.get("iduso") or "").strip()
+    valor_dotacao_raw = (data.get("valor_dotacao") or "").strip()
+    valor_est_raw = (data.get("valor_a_ser_est") or "").strip()
+    saldo_raw = (data.get("saldo_dotacao_apos") or "").strip()
+    justificativa = (data.get("justificativa") or "").strip()
+    situacao = (data.get("situacao") or "").strip()
+
+    required = {
+        "exercicio": exercicio,
+        "adjunta": adjunta,
+        "chave_planejamento": chave_planejamento,
+        "chave_dotacao": chave_dotacao,
+        "valor_dotacao": valor_dotacao_raw,
+        "valor_a_ser_est": valor_est_raw,
+        "saldo_dotacao_apos": saldo_raw,
+        "justificativa": justificativa,
+        "situacao": situacao,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return jsonify({"error": f"Campos obrigatórios ausentes: {', '.join(missing)}."}), 400
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    if not perfil_usuario or perfil_usuario.lower() != adjunta.lower():
+        return jsonify({"error": "Usuário sem permissão de cadastrar estorno."}), 403
+
+    valor_dotacao = _parse_decimal(valor_dotacao_raw)
+    valor_est = _parse_decimal(valor_est_raw)
+    saldo = _parse_decimal(saldo_raw)
+    if valor_dotacao is None or valor_est is None or saldo is None:
+        return jsonify({"error": "Valores monetários inválidos."}), 400
+
+    adj_row = Perfil.query.filter(Perfil.nome == adjunta).first()
+    if not adj_row:
+        return jsonify({"error": "Adjunta Solicitante não encontrada."}), 400
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuário não encontrado."}), 400
+
+    now = _now_local()
+    try:
+        db.session.execute(
+            text(
+                """
+                INSERT INTO est_dotacao (
+                    exercicio, adj_id, chave_planejamento, chave_dotacao, uo, programa, acao_paoe, produto,
+                    ug, regiao, subacao_entrega, etapa, natureza_despesa, elemento, subelemento, fonte, iduso,
+                    valor_dotacao, valor_a_ser_est, saldo_dotacao_apos, justificativa, usuarios_id, ativo,
+                    status_aprovacao, situacao, aprovado_por, data_aprovacao, motivo_rejeicao, alterado_em,
+                    excluido_em, criado_em
+                )
+                VALUES (
+                    :exercicio, :adj_id, :chave_planejamento, :chave_dotacao, :uo, :programa, :acao_paoe, :produto,
+                    :ug, :regiao, :subacao_entrega, :etapa, :natureza_despesa, :elemento, :subelemento, :fonte, :iduso,
+                    :valor_dotacao, :valor_a_ser_est, :saldo_dotacao_apos, :justificativa, :usuarios_id, :ativo,
+                    :status_aprovacao, :situacao, :aprovado_por, :data_aprovacao, :motivo_rejeicao, :alterado_em,
+                    :excluido_em, :criado_em
+                )
+                """
+            ),
+            {
+                "exercicio": exercicio,
+                "adj_id": adj_row.id,
+                "chave_planejamento": chave_planejamento,
+                "chave_dotacao": chave_dotacao,
+                "uo": uo,
+                "programa": programa,
+                "acao_paoe": acao_paoe,
+                "produto": produto,
+                "ug": ug,
+                "regiao": regiao,
+                "subacao_entrega": subacao_entrega,
+                "etapa": etapa,
+                "natureza_despesa": natureza_despesa,
+                "elemento": elemento,
+                "subelemento": subelemento,
+                "fonte": fonte,
+                "iduso": iduso,
+                "valor_dotacao": valor_dotacao,
+                "valor_a_ser_est": valor_est,
+                "saldo_dotacao_apos": saldo,
+                "justificativa": justificativa,
+                "usuarios_id": usuarios_id,
+                "ativo": True,
+                "status_aprovacao": "Aguardando",
+                "situacao": situacao,
+                "aprovado_por": None,
+                "data_aprovacao": None,
+                "motivo_rejeicao": None,
+                "alterado_em": None,
+                "excluido_em": None,
+                "criado_em": now,
+            },
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar estorno: {exc}"}), 500
+
+    try:
+        dotacao_row = Dotacao.query.filter(Dotacao.chave_dotacao == chave_dotacao).first()
+        if not dotacao_row and chave_dotacao:
+            key_norm = _normalize_dotacao_key(chave_dotacao)
+            dotacao_row = next(
+                (
+                    d
+                    for d in Dotacao.query.filter(Dotacao.chave_dotacao.isnot(None)).all()
+                    if _normalize_dotacao_key(d.chave_dotacao) == key_norm
+                ),
+                None,
+            )
+        if dotacao_row:
+            est_sum = _calc_estorno_sum_for_dotacao(chave_dotacao)
+            ped_sum = _calc_ped_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+            emp_sum = _calc_emp_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+            dotacao_row.valor_estorno = _dec_or_zero(est_sum)
+            dotacao_row.situacao = situacao
+            dotacao_row.valor_atual = (
+                _dec_or_zero(dotacao_row.valor_dotacao)
+                - _dec_or_zero(est_sum)
+                - _dec_or_zero(ped_sum)
+                - _dec_or_zero(emp_sum)
+            )
+            dotacao_row.alterado_em = _now_local()
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    return jsonify({"ok": True, "message": "Estorno cadastrado."}), 201
 
 
 def _calc_dotacao_saldo(
@@ -1886,19 +2292,31 @@ def _calc_dotacao_saldo(
         Dotacao.query.with_entities(
             Dotacao.valor_dotacao,
             Dotacao.valor_atual,
+            Dotacao.valor_estorno,
+            Dotacao.valor_ped_emp,
             Dotacao.subacao_entrega,
             Dotacao.chave_dotacao,
         )
         .filter(*dot_filters)
         .all()
     )
+    est_map, _ = _build_estorno_maps()
 
     if subacao_entrega:
         subacao_norm = _normalize_chave(subacao_entrega)
         dot_rows = [r for r in dot_rows if _normalize_chave(r.subacao_entrega) == subacao_norm]
 
     valor_dotacao = sum(
-        (_dec_or_zero(r.valor_atual if r.valor_atual is not None else r.valor_dotacao) for r in dot_rows),
+        (
+            _dec_or_zero(
+                r.valor_atual
+                if r.valor_atual is not None
+                else _dec_or_zero(r.valor_dotacao)
+                - _dec_or_zero(est_map.get(_normalize_dotacao_key(r.chave_dotacao), r.valor_estorno))
+                - _dec_or_zero(r.valor_ped_emp)
+            )
+            for r in dot_rows
+        ),
         Decimal("0"),
     )
     valor_dotacao = _dec_or_zero(valor_dotacao)

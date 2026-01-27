@@ -43,6 +43,7 @@ FEATURES = [
         "nome": "Cadastrar",
         "children": [
             {"id": "cadastrar/dotacao", "nome": "Dotacao"},
+            {"id": "cadastrar/est-dotacao", "nome": "Estorno de Dotacao"},
         ],
     },
     {
