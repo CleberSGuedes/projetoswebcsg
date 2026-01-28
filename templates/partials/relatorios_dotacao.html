@@ -1,0 +1,100 @@
+<div class="grid">
+  <div class="card plan20-card">
+    <div class="card-title">Relat&#243;rio de Dota&#231;&#227;o</div>
+    <div class="actions relatorio-top" style="padding-right:0; align-items:center; justify-content:flex-end;">
+      <div class="actions" style="gap:8px;">
+        <button class="btn sm compact" id="dotacao-relatorio-reset" type="button">
+          <i class="bi bi-eraser"></i><span>Limpar Filtros</span>
+        </button>
+        <button class="btn sm compact" id="dotacao-relatorio-download" type="button">
+          <i class="bi bi-download"></i><span>Baixar Excel</span>
+        </button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="dotacao-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>Exerc&#237;cio</th>
+            <th>Status</th>
+            <th>Adjunta Solicitante</th>
+            <th>Adjunta Concedente</th>
+            <th>Controle de Dota&#231;&#227;o</th>
+            <th>Chave de Planejamento</th>
+            <th>Valor da Dota&#231;&#227;o</th>
+            <th>Valor do Estorno</th>
+            <th>Valor do PED/EMP</th>
+            <th>Valor da Dota&#231;&#227;o Atualizada</th>
+            <th>Situa&#231;&#227;o</th>
+            <th>UO</th>
+            <th>Programa</th>
+            <th>A&#231;&#227;o/PAOE</th>
+            <th>Produto</th>
+            <th>UG</th>
+            <th>Regi&#227;o</th>
+            <th>Suba&#231;&#227;o/Entrega</th>
+            <th>Etapa</th>
+            <th>Natureza de Despesa</th>
+            <th>Elemento</th>
+            <th>Subelemento</th>
+            <th>Fonte</th>
+            <th>Iduso</th>
+            <th>Justificativa/Hist&#243;rico</th>
+            <th>Criado/Alterado por</th>
+            <th>Criado em</th>
+            <th>Alterado em</th>
+            <th>Aprovado por</th>
+            <th>Data da Aprova&#231;&#227;o</th>
+            <th>Justificativa do Estorno</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="status_aprovacao"></div></th>
+            <th><div class="multi-filter" data-col="adjunta_solicitante"></div></th>
+            <th><div class="multi-filter" data-col="adj_concedente"></div></th>
+            <th><div class="multi-filter" data-col="chave_dotacao"></div></th>
+            <th><div class="multi-filter" data-col="chave_planejamento"></div></th>
+            <th><div class="multi-filter" data-col="valor_dotacao"></div></th>
+            <th><div class="multi-filter" data-col="valor_estorno"></div></th>
+            <th><div class="multi-filter" data-col="valor_ped_emp"></div></th>
+            <th><div class="multi-filter" data-col="valor_atual"></div></th>
+            <th><div class="multi-filter" data-col="situacao"></div></th>
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="programa"></div></th>
+            <th><div class="multi-filter" data-col="acao_paoe"></div></th>
+            <th><div class="multi-filter" data-col="produto"></div></th>
+            <th><div class="multi-filter" data-col="ug"></div></th>
+            <th><div class="multi-filter" data-col="regiao"></div></th>
+            <th><div class="multi-filter" data-col="subacao_entrega"></div></th>
+            <th><div class="multi-filter" data-col="etapa"></div></th>
+            <th><div class="multi-filter" data-col="natureza_despesa"></div></th>
+            <th><div class="multi-filter" data-col="elemento"></div></th>
+            <th><div class="multi-filter" data-col="subelemento"></div></th>
+            <th><div class="multi-filter" data-col="fonte"></div></th>
+            <th><div class="multi-filter" data-col="iduso"></div></th>
+            <th><div class="multi-filter" data-col="justificativa_historico"></div></th>
+            <th><div class="multi-filter" data-col="usuario_nome_perfil"></div></th>
+            <th><div class="multi-filter" data-col="criado_em"></div></th>
+            <th><div class="multi-filter" data-col="alterado_em"></div></th>
+            <th><div class="multi-filter" data-col="aprovado_por_nome_perfil"></div></th>
+            <th><div class="multi-filter" data-col="data_aprovacao"></div></th>
+            <th><div class="multi-filter" data-col="motivo_rejeicao"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="dotacao-page-size">Itens por p&#225;gina</label>
+        <select id="dotacao-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="dotacao-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

@@ -128,6 +128,7 @@
             {% for e in estornos %}
             <tr class="dotacao-summary-row"
                 data-kind="estorno"
+                data-id="{{ e.id }}"
                 data-status="{{ e.status }}"
                 data-chave-dotacao="{{ e.chave_dotacao }}"
                 data-justificativa="{{ e.justificativa_estorno }}"
@@ -137,7 +138,20 @@
                 data-adjunta="{{ e.adjunta_solicitante }}"
                 data-exercicio="{{ e.exercicio }}"
                 data-programa="{{ e.programa }}"
-                data-paoe="{{ e.paoe }}">
+                data-paoe="{{ e.paoe }}"
+                data-chave-planejamento="{{ e.chave_planejamento }}"
+                data-uo="{{ e.uo }}"
+                data-ug="{{ e.ug }}"
+                data-regiao="{{ e.regiao }}"
+                data-subacao="{{ e.subacao_entrega }}"
+                data-etapa="{{ e.etapa }}"
+                data-natureza="{{ e.natureza_despesa }}"
+                data-elemento="{{ e.elemento }}"
+                data-subelemento="{{ e.subelemento }}"
+                data-fonte="{{ e.fonte }}"
+                data-iduso="{{ e.iduso }}"
+                data-produto="{{ e.produto }}"
+                data-situacao="{{ e.situacao }}">
               <td>{{ e.status }}</td>
               <td>{{ e.chave_dotacao }}</td>
               <td>{{ e.justificativa_estorno }}</td>
@@ -165,7 +179,6 @@
     </div>
     <div class="actions no-print dotacao-actions">
       <button class="btn btn-primary sm" type="button" id="est-dotacao-cadastrar">Cadastrar Estorno</button>
-      <button class="btn btn-secondary sm" type="button" id="est-dotacao-print" style="display:none;">Imprimir</button>
       <button class="btn btn-secondary sm" type="button" id="est-dotacao-edit" style="display:none;">Editar</button>
       <button class="btn btn-danger sm" type="button" id="est-dotacao-delete" style="display:none;">Excluir</button>
       <button class="btn btn-primary sm" type="button" id="est-dotacao-approve" style="display:none;">Aprovar</button>
@@ -175,6 +188,7 @@
   <div class="card no-print">
     <div class="card-title">Cadastrar Estorno de Dota&#231;&#227;o</div>
     <form id="est-dotacao-form" class="form">
+      <input type="hidden" id="est-dotacao-id" />
       <div class="form-grid">
         <label class="field">
           <span>*Situa&#231;&#227;o</span>
@@ -266,6 +280,27 @@
           <span>*Justificativa de Estorno</span>
           <textarea id="est-dotacao-justificativa" rows="3" required></textarea>
         </label>
+        <div id="est-dotacao-aprovacao-fields" style="display:none;">
+          <div class="form-grid" style="margin-top:8px;">
+            <label class="field">
+              <span>*Aprovar a Dota&#231;&#227;o?</span>
+              <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+                <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                  <input type="radio" name="estorno-aprovado" value="sim" checked />
+                  <span>Sim</span>
+                </label>
+                <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                  <input type="radio" name="estorno-aprovado" value="nao" />
+                  <span>N&#227;o</span>
+                </label>
+              </div>
+            </label>
+            <label class="field">
+              <span>*Justificativa</span>
+              <textarea id="est-dotacao-justificativa-aprovacao" rows="3"></textarea>
+            </label>
+          </div>
+        </div>
       </div>
       <div class="actions" style="justify-content:flex-end;">
         <div id="est-dotacao-msg" class="muted" style="margin-right:auto;"></div>

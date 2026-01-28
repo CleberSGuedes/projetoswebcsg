@@ -6187,6 +6187,9 @@
     if (route === "relatorios/emp") {
       initRelatorioEmp();
     }
+    if (route === "relatorios/dotacao") {
+      initRelatorioDotacao();
+    }
     if (route === "relatorios/est-emp") {
       initRelatorioEstEmp();
     }
@@ -6198,6 +6201,465 @@
     }
     if (route === "relatorios/plan20-seduc") {
       initRelatorioPlan20();
+    }
+  }
+
+  function initRelatorioDotacao() {
+    const table = document.getElementById("dotacao-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const pager = document.getElementById("dotacao-pagination");
+    const pageSizeSelect = document.getElementById("dotacao-page-size");
+    const btnDownload = document.getElementById("dotacao-relatorio-download");
+    const btnReset = document.getElementById("dotacao-relatorio-reset");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const fmtNum = (v) => {
+      const n = Number(v);
+      if (Number.isNaN(n)) return v ?? "";
+      return numFmt.format(n);
+    };
+    const fmtDateTime = (val) => {
+      if (!val) return "";
+      const d = new Date(val);
+      if (Number.isNaN(d.getTime())) return val;
+      return d.toLocaleString("pt-BR");
+    };
+
+    const colKeys = [
+      "exercicio",
+      "status_aprovacao",
+      "adjunta_solicitante",
+      "adj_concedente",
+      "chave_dotacao",
+      "chave_planejamento",
+      "valor_dotacao",
+      "valor_estorno",
+      "valor_ped_emp",
+      "valor_atual",
+      "situacao",
+      "uo",
+      "programa",
+      "acao_paoe",
+      "produto",
+      "ug",
+      "regiao",
+      "subacao_entrega",
+      "etapa",
+      "natureza_despesa",
+      "elemento",
+      "subelemento",
+      "fonte",
+      "iduso",
+      "justificativa_historico",
+      "usuario_nome_perfil",
+      "criado_em",
+      "alterado_em",
+      "aprovado_por_nome_perfil",
+      "data_aprovacao",
+      "motivo_rejeicao",
+    ];
+
+    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
+    const allData = { rows: [] };
+    const filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+    const filterControls = {};
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((v) => map[v] || v)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      container.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        const allVisibleSelected = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+        selectVisibleCb.checked = allVisibleSelected;
+      };
+
+      const applyTempToFilters = () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((v) => set.add(v));
+        updateDisplay(key);
+        renderFiltered();
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        allCb.checked = tempSelected.size === 0;
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+            allCb.checked = false;
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          const match = txt.textContent.toLowerCase().includes(term);
+          row.style.display = match ? "" : "none";
+        });
+        const allMatch = "(todos)".includes(term) || term === "";
+        allRow.style.display = allMatch ? "" : "none";
+        selectVisibleRow.style.display = "";
+        syncUIFromTemp();
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((v) => tempSelected.add(v));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        applyTempToFilters();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          panel.style.width = "";
+          panel.style.height = "";
+          tempSelected.clear();
+          filters[key].forEach((v) => tempSelected.add(v));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((c) => c.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((r) => {
+        colKeys.forEach((k, idx) => {
+          const v = r[k];
+          if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx]).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      const addBtn = (label, page, disabled, active = false) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "page-btn";
+        if (active) btn.classList.add("active");
+        btn.disabled = disabled;
+        btn.textContent = label;
+        btn.addEventListener("click", () => {
+          currentPage = page;
+          render();
+        });
+        pager.appendChild(btn);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxBtns = 5;
+      let startPage = Math.max(1, currentPage - Math.floor(maxBtns / 2));
+      let endPage = Math.min(totalPages, startPage + maxBtns - 1);
+      if (endPage - startPage + 1 < maxBtns) {
+        startPage = Math.max(1, endPage - maxBtns + 1);
+      }
+      if (startPage > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (startPage > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          pager.appendChild(ellipsis);
+        }
+      }
+      for (let p = startPage; p <= endPage; p += 1) {
+        addBtn(String(p), p, false, currentPage === p);
+      }
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          pager.appendChild(ellipsis);
+        }
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.exercicio ?? ""}</td>
+          <td>${r.status_aprovacao ?? ""}</td>
+          <td>${r.adjunta_solicitante ?? ""}</td>
+          <td>${r.adj_concedente ?? ""}</td>
+          <td>${r.chave_dotacao ?? ""}</td>
+          <td>${r.chave_planejamento ?? ""}</td>
+          <td class="num">${fmtNum(r.valor_dotacao)}</td>
+          <td class="num">${fmtNum(r.valor_estorno)}</td>
+          <td class="num">${fmtNum(r.valor_ped_emp)}</td>
+          <td class="num">${fmtNum(r.valor_atual)}</td>
+          <td>${r.situacao ?? ""}</td>
+          <td>${r.uo ?? ""}</td>
+          <td>${r.programa ?? ""}</td>
+          <td>${r.acao_paoe ?? ""}</td>
+          <td>${r.produto ?? ""}</td>
+          <td>${r.ug ?? ""}</td>
+          <td>${r.regiao ?? ""}</td>
+          <td>${r.subacao_entrega ?? ""}</td>
+          <td>${r.etapa ?? ""}</td>
+          <td>${r.natureza_despesa ?? ""}</td>
+          <td>${r.elemento ?? ""}</td>
+          <td>${r.subelemento ?? ""}</td>
+          <td>${r.fonte ?? ""}</td>
+          <td>${r.iduso ?? ""}</td>
+          <td>${r.justificativa_historico ?? ""}</td>
+          <td>${r.usuario_nome_perfil ?? ""}</td>
+          <td>${fmtDateTime(r.criado_em)}</td>
+          <td>${fmtDateTime(r.alterado_em)}</td>
+          <td>${r.aprovado_por_nome_perfil ?? ""}</td>
+          <td>${fmtDateTime(r.data_aprovacao)}</td>
+          <td>${r.motivo_rejeicao ?? ""}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((r) =>
+        colKeys.every((k) => {
+          const set = filters[k];
+          if (!set || set.size === 0) return true;
+          const val = r[k];
+          const cmp = val === null || val === undefined ? "" : String(val).toLowerCase();
+          return set.has(cmp);
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/relatorios/dotacao");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        allData.rows = data.data || [];
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        render();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    load();
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        Object.keys(filters).forEach((k) => filters[k].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        const val = parseInt(pageSizeSelect.value || "20", 10);
+        pageSize = Number.isNaN(val) ? 20 : val;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/dotacao/download", "_blank");
+      });
     }
   }
 
@@ -6217,11 +6679,14 @@
     const estornoTable = document.getElementById("est-dotacao-summary-table-estorno");
     const summaryBody = dotacaoTable ? dotacaoTable.querySelector("tbody") : null;
     const cadastrarBtn = document.getElementById("est-dotacao-cadastrar");
-    const printBtn = document.getElementById("est-dotacao-print");
     const editBtn = document.getElementById("est-dotacao-edit");
     const deleteBtn = document.getElementById("est-dotacao-delete");
     const approveBtn = document.getElementById("est-dotacao-approve");
     const form = document.getElementById("est-dotacao-form");
+    const estIdInput = document.getElementById("est-dotacao-id");
+    const approvalFields = document.getElementById("est-dotacao-aprovacao-fields");
+    const approvalRadios = form ? Array.from(form.querySelectorAll('input[name="estorno-aprovado"]')) : [];
+    const approvalJustificativa = document.getElementById("est-dotacao-justificativa-aprovacao");
     const situacaoSelect = document.getElementById("est-dotacao-situacao");
     const exercicioSelect = document.getElementById("est-dotacao-exercicio");
     const adjuntaInput = document.getElementById("est-dotacao-adjunta");
@@ -6309,6 +6774,8 @@
 
     let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
     let currentPage = 1;
+    let isEditMode = false;
+    let isApprovalMode = false;
 
     const getActiveTable = () => (tipoSelect?.value === "estorno" ? estornoTable : dotacaoTable);
     const getRows = () => Array.from(getActiveTable().querySelectorAll(".dotacao-summary-row"));
@@ -6449,6 +6916,20 @@
       exercicioSelect.value = "";
     };
 
+    const setExercicioValue = (value) => {
+      if (!exercicioSelect) return;
+      const v = String(value || "").trim();
+      if (!v) {
+        exercicioSelect.value = "";
+        return;
+      }
+      const has = Array.from(exercicioSelect.options).some((opt) => opt.value === v);
+      if (!has) {
+        exercicioSelect.insertAdjacentHTML("beforeend", `<option value="${v}">${v}</option>`);
+      }
+      exercicioSelect.value = v;
+    };
+
     const updateSaldo = () => {
       const vDot = parsePtBr(valorDotacaoInput?.value || "") || 0;
       const vEst = parsePtBr(valorEstornoInput?.value || "") || 0;
@@ -6467,12 +6948,28 @@
       updateSaldo();
     };
 
+    const setEditFieldsEnabled = (enabled) => {
+      if (situacaoSelect) situacaoSelect.disabled = !enabled;
+      if (exercicioSelect) exercicioSelect.disabled = !enabled;
+      if (valorEstornoInput) valorEstornoInput.disabled = !enabled;
+      if (justificativaInput) justificativaInput.readOnly = !enabled;
+      if (enabled) updateEstornoMode();
+    };
+
+    const setApprovalMode = (enabled) => {
+      isApprovalMode = enabled;
+      if (approvalFields) approvalFields.style.display = enabled ? "" : "none";
+      if (approvalJustificativa) approvalJustificativa.value = "";
+      if (approvalRadios.length) approvalRadios[0].checked = true;
+      setEditFieldsEnabled(!enabled);
+      if (approvalJustificativa) approvalJustificativa.disabled = !enabled;
+    };
+
     const applyTipo = () => {
       const isEstorno = tipoSelect?.value === "estorno";
       dotacaoTable.style.display = isEstorno ? "none" : "";
       estornoTable.style.display = isEstorno ? "" : "none";
       if (cadastrarBtn) cadastrarBtn.style.display = isEstorno ? "none" : "";
-      if (printBtn) printBtn.style.display = isEstorno ? "" : "none";
       if (editBtn) editBtn.style.display = isEstorno ? "" : "none";
       if (deleteBtn) deleteBtn.style.display = isEstorno ? "" : "none";
       if (approveBtn) approveBtn.style.display = isEstorno ? "" : "none";
@@ -6620,11 +7117,136 @@
           const num = parsePtBr(v);
           valorDotacaoInput.value = num === null ? v : formatPtBr(num);
         }
+        if (form) form.dataset.chaveDotacao = selected.dataset.chaveDotacao || "";
         updateEstornoMode();
         if (justificativaInput) justificativaInput.value = "";
         setCurrentYear();
+        if (estIdInput) estIdInput.value = "";
+        isEditMode = false;
+        setApprovalMode(false);
         if (msg) msg.textContent = "";
         setFilterMsg("");
+      });
+    }
+
+    const fillFormFromEstorno = (row) => {
+      if (!row) return;
+      if (estIdInput) estIdInput.value = row.dataset.id || "";
+      isEditMode = true;
+      setApprovalMode(false);
+      if (adjuntaInput) adjuntaInput.value = row.dataset.adjunta || "";
+      if (uoInput) uoInput.value = row.dataset.uo || "";
+      if (programaInput) programaInput.value = row.dataset.programa || "";
+      if (acaoInput) acaoInput.value = row.dataset.paoe || "";
+      if (produtoInput) produtoInput.value = row.dataset.produto || "";
+      if (chaveInput) chaveInput.value = row.dataset.chavePlanejamento || "";
+      if (regiaoInput) regiaoInput.value = row.dataset.regiao || "";
+      if (ugInput) ugInput.value = row.dataset.ug || "";
+      if (naturezaInput) naturezaInput.value = row.dataset.natureza || "";
+      if (elementoInput) elementoInput.value = row.dataset.elemento || "";
+      if (subelementoInput) subelementoInput.value = row.dataset.subelemento || "";
+      if (fonteInput) fonteInput.value = row.dataset.fonte || "";
+      if (idusoInput) idusoInput.value = row.dataset.iduso || "";
+      if (subacaoInput) subacaoInput.value = row.dataset.subacao || "";
+      if (etapaInput) etapaInput.value = row.dataset.etapa || "";
+      if (valorDotacaoInput) {
+        const v = row.dataset.valordotacao || "";
+        const num = parsePtBr(v);
+        valorDotacaoInput.value = num === null ? v : formatPtBr(num);
+      }
+      if (form) form.dataset.chaveDotacao = row.dataset.chaveDotacao || "";
+      if (valorEstornoInput) {
+        const v = row.dataset.valorestorno || "";
+        const num = parsePtBr(v);
+        valorEstornoInput.value = num === null ? v : formatPtBr(num);
+      }
+      if (saldoInput) {
+        const v = row.dataset.saldoestorno || "";
+        const num = parsePtBr(v);
+        saldoInput.value = num === null ? v : formatPtBr(num);
+      }
+      if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
+      if (situacaoSelect) situacaoSelect.value = row.dataset.situacao || "";
+      setExercicioValue(row.dataset.exercicio || "");
+      updateEstornoMode();
+      if (msg) msg.textContent = "";
+      setFilterMsg("");
+    };
+
+    const canEditOrDeleteEstorno = (row) => {
+      if (!row) return false;
+      const status = String(row.dataset.status || "").trim().toLowerCase();
+      if (status && status !== "aguardando") {
+        setFilterMsg("Somente estornos com status Aguardando podem ser alterados.", true);
+        return false;
+      }
+      const adjunta = String(row.dataset.adjunta || "").trim();
+      if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+        setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
+        return false;
+      }
+      return true;
+    };
+
+    if (editBtn) {
+      editBtn.addEventListener("click", () => {
+        const selected = estornoTable?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para editar.", true);
+          return;
+        }
+        if (!canEditOrDeleteEstorno(selected)) return;
+        fillFormFromEstorno(selected);
+        setEditFieldsEnabled(true);
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        const selected = estornoTable?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para excluir.", true);
+          return;
+        }
+        if (!canEditOrDeleteEstorno(selected)) return;
+        const estId = selected.dataset.id;
+        if (!estId) {
+          setFilterMsg("Registro inválido para exclusão.", true);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/est-dotacao/${encodeURIComponent(estId)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
+          await loadPage("cadastrar/est-dotacao");
+        } catch (err) {
+          setFilterMsg(err.message || "Falha ao excluir.", true);
+        }
+      });
+    }
+
+    if (approveBtn) {
+      approveBtn.addEventListener("click", () => {
+        const selected = estornoTable?.querySelector(".dotacao-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para aprovar.", true);
+          return;
+        }
+        const status = String(selected.dataset.status || "").trim().toLowerCase();
+        if (status && status !== "aguardando") {
+          setFilterMsg("Somente estornos com status Aguardando podem ser aprovados.", true);
+          return;
+        }
+        const adjunta = String(selected.dataset.adjunta || "").trim();
+        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+          setFilterMsg("Usuário sem permissão para aprovar o estorno atual.", true);
+          return;
+        }
+        fillFormFromEstorno(selected);
+        setApprovalMode(true);
       });
     }
 
@@ -6632,9 +7254,46 @@
       form.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
-        if (!selected || selected.dataset.kind !== "dotacao") {
+        const editId = String(estIdInput?.value || "").trim();
+        const useEdit = isEditMode && editId;
+        if (isApprovalMode) {
+          if (!editId) {
+            if (msg) {
+              msg.textContent = "Registro inválido para aprovação.";
+              msg.classList.add("text-error");
+            }
+            return;
+          }
+          const aprovado = approvalRadios.find((r) => r.checked)?.value || "sim";
+          const justificativa = String(approvalJustificativa?.value || "").trim();
+          if (!justificativa) {
+            if (msg) {
+              msg.textContent = "Justificativa obrigatória.";
+              msg.classList.add("text-error");
+            }
+            return;
+          }
+          try {
+            const res = await fetch(`/api/est-dotacao/${encodeURIComponent(editId)}/aprovar`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+              body: JSON.stringify({ estorno_aprovado: aprovado, motivo_rejeicao: justificativa }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Falha ao aprovar.");
+            if (msg) msg.textContent = data.message || "Estorno atualizado.";
+            await loadPage("cadastrar/est-dotacao");
+          } catch (err) {
+            if (msg) {
+              msg.textContent = err.message || "Falha ao aprovar.";
+              msg.classList.add("text-error");
+            }
+          }
+          return;
+        }
+        if (!useEdit && (!selected || selected.dataset.kind !== "dotacao")) {
           if (msg) {
-            msg.textContent = "Carregue uma dota\u00e7\u00e3o antes de salvar o estorno.";
+            msg.textContent = "Carregue uma dotação antes de salvar o estorno.";
             msg.classList.add("text-error");
           }
           return;
@@ -6647,7 +7306,9 @@
           exercicio: exercicioSelect?.value || "",
           adjunta: adjuntaInput?.value || "",
           chave_planejamento: chaveInput?.value || "",
-          chave_dotacao: summaryBody?.querySelector(".dotacao-summary-row.selected")?.dataset.chaveDotacao || "",
+          chave_dotacao: useEdit
+            ? form?.dataset?.chaveDotacao || ""
+            : summaryBody?.querySelector(".dotacao-summary-row.selected")?.dataset.chaveDotacao || "",
           uo: uoInput?.value || "",
           programa: programaInput?.value || "",
           acao_paoe: acaoInput?.value || "",
@@ -6668,8 +7329,10 @@
           situacao: situacaoSelect?.value || "",
         };
         try {
-          const res = await fetch("/api/est-dotacao", {
-            method: "POST",
+          const url = useEdit ? `/api/est-dotacao/${encodeURIComponent(editId)}` : "/api/est-dotacao";
+          const method = useEdit ? "PUT" : "POST";
+          const res = await fetch(url, {
+            method,
             headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
             body: JSON.stringify(payload),
           });

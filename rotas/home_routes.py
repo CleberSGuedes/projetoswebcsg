@@ -343,6 +343,42 @@ def partial_dashboard():
                 "adj_concedente": adj_concedente or "",
             }
         )
+    estornos_aguardando = []
+    try:
+        est_raw = db.session.execute(
+            text(
+                """
+                SELECT id, chave_dotacao, valor_a_ser_est, valor_dotacao, status_aprovacao, adj_id
+                FROM est_dotacao
+                WHERE ativo = 1 AND lower(status_aprovacao) = 'aguardando'
+                ORDER BY id DESC
+                """
+            )
+        ).fetchall()
+    except Exception:
+        est_raw = []
+    est_adj_ids = [r[5] for r in est_raw if len(r) > 5 and r[5]]
+    est_adj_map = {}
+    if est_adj_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(est_adj_ids)).all()
+        est_adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+    for row in est_raw:
+        chave = row[1] if len(row) > 1 else ""
+        valor_est = row[2] if len(row) > 2 else None
+        valor_dot = row[3] if len(row) > 3 else None
+        status = row[4] if len(row) > 4 else ""
+        adj_id = row[5] if len(row) > 5 else None
+        valor_base = valor_est if valor_est is not None else valor_dot
+        valor_fmt = _dec_or_zero(valor_base)
+        valor_str = f"{valor_fmt:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        estornos_aguardando.append(
+            {
+                "chave_dotacao": chave or "",
+                "valor_estorno": valor_str,
+                "status_aprovacao": status or "",
+                "adj_solicitante": est_adj_map.get(adj_id, ""),
+            }
+        )
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
@@ -351,6 +387,7 @@ def partial_dashboard():
         emp_planejamento_missing_lines=emp_planejamento_missing_lines,
         emp_dotacao_missing=emp_dotacao_missing,
         dotacoes_aguardando=pendentes,
+        estornos_aguardando=estornos_aguardando,
     )
 
 
@@ -832,7 +869,7 @@ def partial_cadastrar_est_dotacao():
 
     estorno_rows = []
     try:
-        raw = db.session.execute(text("SELECT * FROM est_dotacao")).mappings().all()
+        raw = db.session.execute(text("SELECT * FROM est_dotacao WHERE ativo = 1")).mappings().all()
     except Exception:
         raw = []
     est_adj_ids = {r.get("adj_id") for r in raw if r.get("adj_id")}
@@ -847,6 +884,7 @@ def partial_cadastrar_est_dotacao():
                     return r[k]
             return ""
 
+        est_id = pick("id")
         chave = pick("chave_dotacao", "chave", "controle_dotacao")
         status = pick("status_aprovacao", "status")
         justificativa = pick("justificativa_estorno", "justificativa", "historico", "motivo", "observacao")
@@ -857,6 +895,19 @@ def partial_cadastrar_est_dotacao():
         exercicio = pick("exercicio", "ano")
         programa = pick("programa", "programa_governo")
         paoe = pick("paoe", "acao_paoe")
+        chave_planejamento = pick("chave_planejamento")
+        uo = pick("uo")
+        ug = pick("ug")
+        regiao = pick("regiao")
+        subacao_entrega = pick("subacao_entrega")
+        etapa = pick("etapa")
+        natureza_despesa = pick("natureza_despesa")
+        elemento = pick("elemento")
+        subelemento = pick("subelemento")
+        fonte = pick("fonte")
+        iduso = pick("iduso")
+        produto = pick("produto")
+        situacao = pick("situacao")
         if not adj_solic:
             adj_id = r.get("adj_id")
             adj_solic = est_adj_map.get(adj_id, "")
@@ -867,6 +918,7 @@ def partial_cadastrar_est_dotacao():
 
         estorno_rows.append(
             {
+                "id": str(est_id or ""),
                 "status": str(status or ""),
                 "chave_dotacao": str(chave or ""),
                 "justificativa_estorno": str(justificativa or ""),
@@ -877,6 +929,19 @@ def partial_cadastrar_est_dotacao():
                 "exercicio": str(exercicio or ""),
                 "programa": str(programa or ""),
                 "paoe": str(paoe or ""),
+                "chave_planejamento": str(chave_planejamento or ""),
+                "uo": str(uo or ""),
+                "ug": str(ug or ""),
+                "regiao": str(regiao or ""),
+                "subacao_entrega": str(subacao_entrega or ""),
+                "etapa": str(etapa or ""),
+                "natureza_despesa": str(natureza_despesa or ""),
+                "elemento": str(elemento or ""),
+                "subelemento": str(subelemento or ""),
+                "fonte": str(fonte or ""),
+                "iduso": str(iduso or ""),
+                "produto": str(produto or ""),
+                "situacao": str(situacao or ""),
             }
         )
 
@@ -933,6 +998,13 @@ def partial_relatorios_ped():
 @require_feature("relatorios/emp")
 def partial_relatorios_emp():
     return render_template("partials/relatorios_emp.html")
+
+
+@home_bp.route("/partial/relatorios/dotacao")
+@login_required
+@require_feature("relatorios/dotacao")
+def partial_relatorios_dotacao():
+    return render_template("partials/relatorios_dotacao.html")
 
 
 @home_bp.route("/partial/relatorios/est-emp")
@@ -1296,19 +1368,27 @@ def _parse_decimal_value(value) -> Decimal:
 
 def _fetch_estorno_rows() -> list[tuple[str, Decimal]]:
     try:
-        rows = db.session.execute(text("SELECT chave_dotacao, valor_a_ser_est FROM est_dotacao")).fetchall()
+        rows = db.session.execute(
+            text("SELECT chave_dotacao, valor_a_ser_est FROM est_dotacao WHERE ativo = 1")
+        ).fetchall()
         return [(r[0], _parse_decimal_value(r[1])) for r in rows]
     except Exception:
         try:
-            rows = db.session.execute(text("SELECT chave_dotacao, valor_estorno FROM est_dotacao")).fetchall()
+            rows = db.session.execute(
+                text("SELECT chave_dotacao, valor_estorno FROM est_dotacao WHERE ativo = 1")
+            ).fetchall()
             return [(r[0], _parse_decimal_value(r[1])) for r in rows]
         except Exception:
             try:
-                rows = db.session.execute(text("SELECT chave, valor_a_ser_est FROM est_dotacao")).fetchall()
+                rows = db.session.execute(
+                    text("SELECT chave, valor_a_ser_est FROM est_dotacao WHERE ativo = 1")
+                ).fetchall()
                 return [(r[0], _parse_decimal_value(r[1])) for r in rows]
             except Exception:
                 try:
-                    rows = db.session.execute(text("SELECT chave, valor_estorno FROM est_dotacao")).fetchall()
+                    rows = db.session.execute(
+                        text("SELECT chave, valor_estorno FROM est_dotacao WHERE ativo = 1")
+                    ).fetchall()
                     return [(r[0], _parse_decimal_value(r[1])) for r in rows]
                 except Exception:
                     return []
@@ -1317,24 +1397,28 @@ def _fetch_estorno_rows() -> list[tuple[str, Decimal]]:
 def _fetch_estorno_rows_full() -> list[tuple[str, Decimal, str]]:
     try:
         rows = db.session.execute(
-            text("SELECT chave_dotacao, valor_a_ser_est, situacao FROM est_dotacao")
+            text(
+                "SELECT chave_dotacao, valor_a_ser_est, situacao FROM est_dotacao WHERE ativo = 1"
+            )
         ).fetchall()
         return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
     except Exception:
         try:
             rows = db.session.execute(
-                text("SELECT chave_dotacao, valor_estorno, situacao FROM est_dotacao")
+                text("SELECT chave_dotacao, valor_estorno, situacao FROM est_dotacao WHERE ativo = 1")
             ).fetchall()
             return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
         except Exception:
             try:
                 rows = db.session.execute(
-                    text("SELECT chave, valor_a_ser_est, situacao FROM est_dotacao")
+                    text("SELECT chave, valor_a_ser_est, situacao FROM est_dotacao WHERE ativo = 1")
                 ).fetchall()
                 return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
             except Exception:
                 try:
-                    rows = db.session.execute(text("SELECT chave, valor_estorno, situacao FROM est_dotacao")).fetchall()
+                    rows = db.session.execute(
+                        text("SELECT chave, valor_estorno, situacao FROM est_dotacao WHERE ativo = 1")
+                    ).fetchall()
                     return [(r[0], _parse_decimal_value(r[1]), r[2] if len(r) > 2 else "") for r in rows]
                 except Exception:
                     return []
@@ -2178,6 +2262,236 @@ def api_est_dotacao_create():
         db.session.rollback()
 
     return jsonify({"ok": True, "message": "Estorno cadastrado."}), 201
+
+
+@home_bp.route("/api/est-dotacao/<int:est_id>", methods=["PUT"])
+@login_required
+@require_feature("cadastrar/est-dotacao")
+def api_est_dotacao_update(est_id):
+    row = db.session.execute(
+        text("SELECT * FROM est_dotacao WHERE id = :id"),
+        {"id": est_id},
+    ).mappings().first()
+    if not row:
+        return jsonify({"error": "Estorno n\u00e3o encontrado."}), 404
+    if row.get("ativo") is not None and int(row.get("ativo") or 0) != 1:
+        return jsonify({"error": "Estorno inativo."}), 400
+
+    status_atual = str(row.get("status_aprovacao") or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Somente estornos com status Aguardando podem ser alterados."}), 400
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    adj_id = row.get("adj_id")
+    adj_nome = ""
+    if adj_id:
+        adj_row = db.session.get(Perfil, adj_id)
+        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
+    if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar o estorno atual."}), 403
+
+    data = request.get_json() or {}
+    exercicio = (data.get("exercicio") or "").strip()
+    situacao = (data.get("situacao") or "").strip()
+    justificativa = (data.get("justificativa") or "").strip()
+    valor_est_raw = (data.get("valor_a_ser_est") or "").strip()
+
+    if not exercicio or not situacao or not justificativa or not valor_est_raw:
+        return jsonify({"error": "Campos obrigat\u00f3rios ausentes."}), 400
+
+    valor_est = _parse_decimal(valor_est_raw)
+    if valor_est is None:
+        return jsonify({"error": "Valor do Estorno inv\u00e1lido."}), 400
+
+    valor_dotacao = row.get("valor_dotacao")
+    if valor_dotacao is None:
+        valor_dotacao = _parse_decimal(data.get("valor_dotacao") or "")
+    valor_dotacao = _dec_or_zero(valor_dotacao)
+    saldo = _dec_or_zero(valor_dotacao) - _dec_or_zero(valor_est)
+
+    try:
+        db.session.execute(
+            text(
+                """
+                UPDATE est_dotacao
+                SET exercicio = :exercicio,
+                    valor_a_ser_est = :valor_est,
+                    saldo_dotacao_apos = :saldo,
+                    justificativa = :justificativa,
+                    situacao = :situacao,
+                    alterado_em = :alterado_em
+                WHERE id = :id
+                """
+            ),
+            {
+                "exercicio": exercicio,
+                "valor_est": valor_est,
+                "saldo": saldo,
+                "justificativa": justificativa,
+                "situacao": situacao,
+                "alterado_em": _now_local(),
+                "id": est_id,
+            },
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao atualizar estorno: {exc}"}), 500
+
+    chave_dotacao = (row.get("chave_dotacao") or "").strip()
+    if chave_dotacao:
+        try:
+            dotacao_row = Dotacao.query.filter(Dotacao.chave_dotacao == chave_dotacao).first()
+            if dotacao_row:
+                est_sum = _calc_estorno_sum_for_dotacao(chave_dotacao)
+                ped_sum = _calc_ped_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+                emp_sum = _calc_emp_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+                dotacao_row.valor_estorno = _dec_or_zero(est_sum)
+                dotacao_row.situacao = situacao
+                dotacao_row.valor_atual = (
+                    _dec_or_zero(dotacao_row.valor_dotacao)
+                    - _dec_or_zero(est_sum)
+                    - _dec_or_zero(ped_sum)
+                    - _dec_or_zero(emp_sum)
+                )
+                dotacao_row.alterado_em = _now_local()
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    return jsonify({"ok": True, "message": "Estorno atualizado."}), 200
+
+
+@home_bp.route("/api/est-dotacao/<int:est_id>", methods=["DELETE"])
+@login_required
+@require_feature("cadastrar/est-dotacao")
+def api_est_dotacao_delete(est_id):
+    row = db.session.execute(
+        text("SELECT * FROM est_dotacao WHERE id = :id"),
+        {"id": est_id},
+    ).mappings().first()
+    if not row:
+        return jsonify({"error": "Estorno n\u00e3o encontrado."}), 404
+    if row.get("ativo") is not None and int(row.get("ativo") or 0) != 1:
+        return jsonify({"error": "Estorno inativo."}), 400
+
+    status_atual = str(row.get("status_aprovacao") or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Somente estornos com status Aguardando podem ser exclu\u00eddos."}), 400
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    adj_id = row.get("adj_id")
+    adj_nome = ""
+    if adj_id:
+        adj_row = db.session.get(Perfil, adj_id)
+        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
+    if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir o estorno atual."}), 403
+
+    try:
+        db.session.execute(
+            text("UPDATE est_dotacao SET ativo = 0, excluido_em = :excluido_em WHERE id = :id"),
+            {"excluido_em": _now_local(), "id": est_id},
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir estorno: {exc}"}), 500
+
+    chave_dotacao = (row.get("chave_dotacao") or "").strip()
+    if chave_dotacao:
+        try:
+            dotacao_row = Dotacao.query.filter(Dotacao.chave_dotacao == chave_dotacao).first()
+            if dotacao_row:
+                est_sum = _calc_estorno_sum_for_dotacao(chave_dotacao)
+                ped_sum = _calc_ped_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+                emp_sum = _calc_emp_sum_for_dotacao(dotacao_row.chave_dotacao or chave_dotacao)
+                dotacao_row.valor_estorno = _dec_or_zero(est_sum)
+                dotacao_row.valor_atual = (
+                    _dec_or_zero(dotacao_row.valor_dotacao)
+                    - _dec_or_zero(est_sum)
+                    - _dec_or_zero(ped_sum)
+                    - _dec_or_zero(emp_sum)
+                )
+                dotacao_row.alterado_em = _now_local()
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    return jsonify({"ok": True, "message": "Estorno exclu\u00eddo."}), 200
+
+
+@home_bp.route("/api/est-dotacao/<int:est_id>/aprovar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/est-dotacao")
+def api_est_dotacao_aprovar(est_id):
+    row = db.session.execute(
+        text("SELECT * FROM est_dotacao WHERE id = :id"),
+        {"id": est_id},
+    ).mappings().first()
+    if not row:
+        return jsonify({"error": "Estorno n\u00e3o encontrado."}), 404
+    if row.get("ativo") is not None and int(row.get("ativo") or 0) != 1:
+        return jsonify({"error": "Estorno inativo."}), 400
+
+    status_atual = str(row.get("status_aprovacao") or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Estorno j\u00e1 foi processado."}), 400
+
+    user_session = session.get("user") or {}
+    perfil_usuario = (user_session.get("perfil") or "").strip()
+    if not perfil_usuario:
+        return jsonify({"error": "Perfil do usu\u00e1rio n\u00e3o encontrado."}), 400
+
+    adj_id = row.get("adj_id")
+    adj_nome = ""
+    if adj_id:
+        adj_row = db.session.get(Perfil, adj_id)
+        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
+    if not adj_nome or perfil_usuario.lower() != adj_nome.lower():
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para aprovar o estorno atual."}), 403
+
+    data = request.get_json() or {}
+    aprovado_raw = (data.get("estorno_aprovado") or "").strip().lower()
+    motivo = (data.get("motivo_rejeicao") or "").strip()
+    if not motivo:
+        return jsonify({"error": "Justificativa obrigat\u00f3ria."}), 400
+
+    status_novo = "Aprovado" if aprovado_raw == "sim" else "Rejeitado"
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usu\u00e1rio n\u00e3o encontrado."}), 400
+
+    try:
+        db.session.execute(
+            text(
+                """
+                UPDATE est_dotacao
+                SET status_aprovacao = :status,
+                    aprovado_por = :aprovado_por,
+                    data_aprovacao = :data_aprovacao,
+                    motivo_rejeicao = :motivo,
+                    alterado_em = :alterado_em
+                WHERE id = :id
+                """
+            ),
+            {
+                "status": status_novo,
+                "aprovado_por": str(usuarios_id),
+                "data_aprovacao": _now_local(),
+                "motivo": motivo,
+                "alterado_em": _now_local(),
+                "id": est_id,
+            },
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao aprovar estorno: {exc}"}), 500
+
+    return jsonify({"ok": True, "message": "Estorno atualizado."}), 200
 
 
 def _calc_dotacao_saldo(
@@ -4454,6 +4768,121 @@ def api_relatorio_emp():
         return jsonify({"error": f"Falha ao buscar dados do EMP: {exc}"}), 500
 
 
+@home_bp.route("/api/relatorios/dotacao", methods=["GET"])
+@login_required
+@require_feature("relatorios/dotacao")
+def api_relatorio_dotacao():
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _as_iso(value):
+        if value in (None, ""):
+            return None
+        if hasattr(value, "isoformat"):
+            try:
+                return value.isoformat()
+            except Exception:
+                return str(value)
+        return str(value)
+
+    try:
+        rows = (
+            Dotacao.query.filter(
+                or_(
+                    Dotacao.ativo == True,  # noqa: E712
+                    func.lower(Dotacao.status_aprovacao) == "rejeitado",
+                )
+            )
+            .order_by(Dotacao.id.desc())
+            .all()
+        )
+        if not rows:
+            return jsonify({"ok": True, "data": []})
+
+        adj_ids = [r.adj_id for r in rows if getattr(r, "adj_id", None)]
+        adj_map = {}
+        if adj_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+            adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+
+        user_ids = [r.usuarios_id for r in rows if getattr(r, "usuarios_id", None)]
+        aprov_ids = []
+        for r in rows:
+            try:
+                if getattr(r, "aprovado_por", None):
+                    aprov_ids.append(int(r.aprovado_por))
+            except Exception:
+                pass
+        user_ids = list({*user_ids, *aprov_ids})
+        user_map = {}
+        if user_ids:
+            usuarios = Usuario.query.filter(Usuario.id.in_(user_ids)).all()
+            user_map = {u.id: (u.nome or "", u.perfil or "") for u in usuarios}
+
+        data = []
+        for r in rows:
+            adj_nome = (adj_map.get(r.adj_id) or "").strip()
+            criado_nome, criado_perfil = user_map.get(getattr(r, "usuarios_id", None), ("", ""))
+            aprov_nome, aprov_perfil = ("", "")
+            try:
+                aprov_nome, aprov_perfil = user_map.get(int(r.aprovado_por), ("", ""))
+            except Exception:
+                aprov_nome, aprov_perfil = ("", "")
+            usuario_nome_perfil = ""
+            if criado_nome:
+                usuario_nome_perfil = f"{criado_nome} - {criado_perfil}".strip(" -")
+            aprovado_nome_perfil = ""
+            if aprov_nome:
+                aprovado_nome_perfil = f"{aprov_nome} - {aprov_perfil}".strip(" -")
+            data.append(
+                {
+                    "exercicio": r.exercicio,
+                    "status_aprovacao": r.status_aprovacao,
+                    "adjunta_solicitante": adj_nome,
+                    "adj_concedente": r.adj_concedente,
+                    "chave_dotacao": r.chave_dotacao,
+                    "chave_planejamento": r.chave_planejamento,
+                    "valor_dotacao": _to_float(r.valor_dotacao),
+                    "valor_estorno": _to_float(r.valor_estorno),
+                    "valor_ped_emp": _to_float(r.valor_ped_emp),
+                    "valor_atual": _to_float(r.valor_atual),
+                    "situacao": r.situacao,
+                    "uo": r.uo,
+                    "programa": r.programa,
+                    "acao_paoe": r.acao_paoe,
+                    "produto": r.produto,
+                    "ug": r.ug,
+                    "regiao": r.regiao,
+                    "subacao_entrega": r.subacao_entrega,
+                    "etapa": r.etapa,
+                    "natureza_despesa": r.natureza_despesa,
+                    "elemento": r.elemento,
+                    "subelemento": r.subelemento,
+                    "fonte": r.fonte,
+                    "iduso": r.iduso,
+                    "justificativa_historico": r.justificativa_historico,
+                    "usuario_nome_perfil": usuario_nome_perfil,
+                    "criado_em": _as_iso(r.criado_em),
+                    "alterado_em": _as_iso(r.alterado_em),
+                    "aprovado_por_nome_perfil": aprovado_nome_perfil,
+                    "data_aprovacao": _as_iso(r.data_aprovacao),
+                    "motivo_rejeicao": r.motivo_rejeicao,
+                }
+            )
+
+        return jsonify({"ok": True, "data": data})
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao buscar dados da Dota\u00e7\u00e3o: {exc}"}), 500
+
+
 @home_bp.route("/api/relatorios/est-emp", methods=["GET"])
 @login_required
 @require_feature("relatorios/est-emp")
@@ -5133,6 +5562,196 @@ def api_relatorio_emp_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return _send_excel_bytes(output, filename)
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
+
+
+@home_bp.route("/api/relatorios/dotacao/download", methods=["GET"])
+@login_required
+@require_feature("relatorios/dotacao")
+def api_relatorio_dotacao_download():
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _format_dt(val):
+        if not val:
+            return None
+        if hasattr(val, "strftime"):
+            return val.strftime("%d/%m/%Y %H:%M:%S")
+        return str(val)
+
+    try:
+        rows = Dotacao.query.order_by(Dotacao.id.desc()).all()
+        if not rows:
+            return jsonify({"error": "Nenhum dado para exportar."}), 404
+
+        adj_ids = [r.adj_id for r in rows if getattr(r, "adj_id", None)]
+        adj_map = {}
+        if adj_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+            adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+
+        user_ids = [r.usuarios_id for r in rows if getattr(r, "usuarios_id", None)]
+        aprov_ids = []
+        for r in rows:
+            try:
+                if getattr(r, "aprovado_por", None):
+                    aprov_ids.append(int(r.aprovado_por))
+            except Exception:
+                pass
+        user_ids = list({*user_ids, *aprov_ids})
+        user_map = {}
+        if user_ids:
+            usuarios = Usuario.query.filter(Usuario.id.in_(user_ids)).all()
+            user_map = {u.id: (u.nome or "", u.perfil or "") for u in usuarios}
+
+        data = []
+        for r in rows:
+            adj_nome = (adj_map.get(r.adj_id) or "").strip()
+            criado_nome, criado_perfil = user_map.get(getattr(r, "usuarios_id", None), ("", ""))
+            aprov_nome, aprov_perfil = ("", "")
+            try:
+                aprov_nome, aprov_perfil = user_map.get(int(r.aprovado_por), ("", ""))
+            except Exception:
+                aprov_nome, aprov_perfil = ("", "")
+            usuario_nome_perfil = ""
+            if criado_nome:
+                usuario_nome_perfil = f"{criado_nome} - {criado_perfil}".strip(" -")
+            aprovado_nome_perfil = ""
+            if aprov_nome:
+                aprovado_nome_perfil = f"{aprov_nome} - {aprov_perfil}".strip(" -")
+            data.append(
+                {
+                    "exercicio": r.exercicio,
+                    "status_aprovacao": r.status_aprovacao,
+                    "adjunta_solicitante": adj_nome,
+                    "adj_concedente": r.adj_concedente,
+                    "chave_dotacao": r.chave_dotacao,
+                    "chave_planejamento": r.chave_planejamento,
+                    "valor_dotacao": _to_float(r.valor_dotacao),
+                    "valor_estorno": _to_float(r.valor_estorno),
+                    "valor_ped_emp": _to_float(r.valor_ped_emp),
+                    "valor_atual": _to_float(r.valor_atual),
+                    "situacao": r.situacao,
+                    "uo": r.uo,
+                    "programa": r.programa,
+                    "acao_paoe": r.acao_paoe,
+                    "produto": r.produto,
+                    "ug": r.ug,
+                    "regiao": r.regiao,
+                    "subacao_entrega": r.subacao_entrega,
+                    "etapa": r.etapa,
+                    "natureza_despesa": r.natureza_despesa,
+                    "elemento": r.elemento,
+                    "subelemento": r.subelemento,
+                    "fonte": r.fonte,
+                    "iduso": r.iduso,
+                    "justificativa_historico": r.justificativa_historico,
+                    "usuario_nome_perfil": usuario_nome_perfil,
+                    "criado_em": _format_dt(r.criado_em),
+                    "alterado_em": _format_dt(r.alterado_em),
+                    "aprovado_por_nome_perfil": aprovado_nome_perfil,
+                    "data_aprovacao": _format_dt(r.data_aprovacao),
+                    "motivo_rejeicao": r.motivo_rejeicao,
+                }
+            )
+
+        df = pd.DataFrame(data)
+        rename_map = {
+            "exercicio": "Exercício",
+            "status_aprovacao": "Status",
+            "adjunta_solicitante": "Adjunta Solicitante",
+            "adj_concedente": "Adjunta Concedente",
+            "chave_dotacao": "Controle de Dotação",
+            "chave_planejamento": "Chave de Planejamento",
+            "valor_dotacao": "Valor da Dotação",
+            "valor_estorno": "Valor do Estorno",
+            "valor_ped_emp": "Valor do PED/EMP",
+            "valor_atual": "Valor da Dotação Atualizada",
+            "situacao": "Situação",
+            "uo": "UO",
+            "programa": "Programa",
+            "acao_paoe": "Ação/PAOE",
+            "produto": "Produto",
+            "ug": "UG",
+            "regiao": "Região",
+            "subacao_entrega": "Subação/Entrega",
+            "etapa": "Etapa",
+            "natureza_despesa": "Natureza de Despesa",
+            "elemento": "Elemento",
+            "subelemento": "Subelemento",
+            "fonte": "Fonte",
+            "iduso": "Iduso",
+            "justificativa_historico": "Justificativa/Histórico",
+            "usuario_nome_perfil": "Criado/Alterado por",
+            "criado_em": "Criado em",
+            "alterado_em": "Alterado em",
+            "aprovado_por_nome_perfil": "Aprovado por",
+            "data_aprovacao": "Data da Aprovação",
+            "motivo_rejeicao": "Justificativa do Estorno",
+        }
+        df.rename(columns=rename_map, inplace=True)
+
+        col_order = [
+            "Exercício",
+            "Status",
+            "Adjunta Solicitante",
+            "Adjunta Concedente",
+            "Controle de Dotação",
+            "Chave de Planejamento",
+            "Valor da Dotação",
+            "Valor do Estorno",
+            "Valor do PED/EMP",
+            "Valor da Dotação Atualizada",
+            "Situação",
+            "UO",
+            "Programa",
+            "Ação/PAOE",
+            "Produto",
+            "UG",
+            "Região",
+            "Subação/Entrega",
+            "Etapa",
+            "Natureza de Despesa",
+            "Elemento",
+            "Subelemento",
+            "Fonte",
+            "Iduso",
+            "Justificativa/Histórico",
+            "Criado/Alterado por",
+            "Criado em",
+            "Alterado em",
+            "Aprovado por",
+            "Data da Aprovação",
+            "Justificativa do Estorno",
+        ]
+        col_order = [c for c in col_order if c in df.columns]
+        if col_order:
+            df = df[col_order]
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Dotacao", header=False, startrow=1)
+            workbook = writer.book
+            worksheet = writer.sheets["Dotacao"]
+            cell_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8})
+            header_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8})
+            worksheet.set_default_row(12, cell_fmt)
+            if len(df.columns) > 0:
+                worksheet.set_column(0, len(df.columns) - 1, None, cell_fmt)
+                worksheet.write_row(0, 0, df.columns, header_fmt)
+                worksheet.set_row(0, None, header_fmt)
+        output.seek(0)
+        filename = f"dotacao_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
         return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500

@@ -66,6 +66,7 @@ FEATURES = [
             {"id": "relatorios/emp", "nome": "EMP"},
             {"id": "relatorios/est-emp", "nome": "Est Emp"},
             {"id": "relatorios/nob", "nome": "NOB"},
+            {"id": "relatorios/dotacao", "nome": "Dotação"},
         ],
     },
 ]
