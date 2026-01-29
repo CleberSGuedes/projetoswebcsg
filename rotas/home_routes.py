@@ -1007,6 +1007,13 @@ def partial_relatorios_dotacao():
     return render_template("partials/relatorios_dotacao.html")
 
 
+@home_bp.route("/partial/relatorios/est-dotacao")
+@login_required
+@require_feature("relatorios/est-dotacao")
+def partial_relatorios_est_dotacao():
+    return render_template("partials/relatorios_est_dotacao.html")
+
+
 @home_bp.route("/partial/relatorios/est-emp")
 @login_required
 @require_feature("relatorios/est-emp")
@@ -4883,6 +4890,119 @@ def api_relatorio_dotacao():
         return jsonify({"error": f"Falha ao buscar dados da Dota\u00e7\u00e3o: {exc}"}), 500
 
 
+@home_bp.route("/api/relatorios/est-dotacao", methods=["GET"])
+@login_required
+@require_feature("relatorios/est-dotacao")
+def api_relatorio_est_dotacao():
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _as_iso(value):
+        if value in (None, ""):
+            return None
+        if hasattr(value, "isoformat"):
+            try:
+                return value.isoformat()
+            except Exception:
+                return str(value)
+        return str(value)
+
+    try:
+        rows = db.session.execute(
+            text(
+                """
+                SELECT *
+                FROM est_dotacao
+                WHERE ativo = 1 OR lower(status_aprovacao) = 'rejeitado'
+                ORDER BY id DESC
+                """
+            )
+        ).mappings().all()
+        if not rows:
+            return jsonify({"ok": True, "data": []})
+
+        adj_ids = [r.get("adj_id") for r in rows if r.get("adj_id")]
+        adj_map = {}
+        if adj_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+            adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+
+        user_ids = [r.get("usuarios_id") for r in rows if r.get("usuarios_id")]
+        aprov_ids = []
+        for r in rows:
+            try:
+                if r.get("aprovado_por"):
+                    aprov_ids.append(int(r.get("aprovado_por")))
+            except Exception:
+                pass
+        user_ids = list({*user_ids, *aprov_ids})
+        user_map = {}
+        if user_ids:
+            usuarios = Usuario.query.filter(Usuario.id.in_(user_ids)).all()
+            user_map = {u.id: (u.nome or "", u.perfil or "") for u in usuarios}
+
+        data = []
+        for r in rows:
+            adj_nome = (adj_map.get(r.get("adj_id")) or "").strip()
+            criado_nome, criado_perfil = user_map.get(r.get("usuarios_id"), ("", ""))
+            aprov_nome, aprov_perfil = ("", "")
+            try:
+                aprov_nome, aprov_perfil = user_map.get(int(r.get("aprovado_por")), ("", ""))
+            except Exception:
+                aprov_nome, aprov_perfil = ("", "")
+            usuario_nome_perfil = ""
+            if criado_nome:
+                usuario_nome_perfil = f"{criado_nome} - {criado_perfil}".strip(" -")
+            aprovado_nome_perfil = ""
+            if aprov_nome:
+                aprovado_nome_perfil = f"{aprov_nome} - {aprov_perfil}".strip(" -")
+            data.append(
+                {
+                    "exercicio": r.get("exercicio"),
+                    "status_aprovacao": r.get("status_aprovacao"),
+                    "adjunta_solicitante": adj_nome,
+                    "chave_dotacao": r.get("chave_dotacao"),
+                    "chave_planejamento": r.get("chave_planejamento"),
+                    "valor_dotacao": _to_float(r.get("valor_dotacao")),
+                    "valor_a_ser_est": _to_float(r.get("valor_a_ser_est")),
+                    "saldo_dotacao_apos": _to_float(r.get("saldo_dotacao_apos")),
+                    "situacao": r.get("situacao"),
+                    "uo": r.get("uo"),
+                    "programa": r.get("programa"),
+                    "acao_paoe": r.get("acao_paoe"),
+                    "produto": r.get("produto"),
+                    "ug": r.get("ug"),
+                    "regiao": r.get("regiao"),
+                    "subacao_entrega": r.get("subacao_entrega"),
+                    "etapa": r.get("etapa"),
+                    "natureza_despesa": r.get("natureza_despesa"),
+                    "elemento": r.get("elemento"),
+                    "subelemento": r.get("subelemento"),
+                    "fonte": r.get("fonte"),
+                    "iduso": r.get("iduso"),
+                    "justificativa": r.get("justificativa"),
+                    "usuario_nome_perfil": usuario_nome_perfil,
+                    "criado_em": _as_iso(r.get("criado_em")),
+                    "alterado_em": _as_iso(r.get("alterado_em")),
+                    "aprovado_por_nome_perfil": aprovado_nome_perfil,
+                    "data_aprovacao": _as_iso(r.get("data_aprovacao")),
+                    "motivo_rejeicao": r.get("motivo_rejeicao"),
+                }
+            )
+
+        return jsonify({"ok": True, "data": data})
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao buscar dados do Estorno: {exc}"}), 500
+
+
 @home_bp.route("/api/relatorios/est-emp", methods=["GET"])
 @login_required
 @require_feature("relatorios/est-emp")
@@ -5590,7 +5710,16 @@ def api_relatorio_dotacao_download():
         return str(val)
 
     try:
-        rows = Dotacao.query.order_by(Dotacao.id.desc()).all()
+        rows = (
+            Dotacao.query.filter(
+                or_(
+                    Dotacao.ativo == True,  # noqa: E712
+                    func.lower(Dotacao.status_aprovacao) == "rejeitado",
+                )
+            )
+            .order_by(Dotacao.id.desc())
+            .all()
+        )
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
 
@@ -5697,7 +5826,7 @@ def api_relatorio_dotacao_download():
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
             "data_aprovacao": "Data da Aprovação",
-            "motivo_rejeicao": "Justificativa do Estorno",
+            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -5732,7 +5861,7 @@ def api_relatorio_dotacao_download():
             "Alterado em",
             "Aprovado por",
             "Data da Aprovação",
-            "Justificativa do Estorno",
+            "Justificativa da Aprovação/Rejeição",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -5752,6 +5881,199 @@ def api_relatorio_dotacao_download():
                 worksheet.set_row(0, None, header_fmt)
         output.seek(0)
         filename = f"dotacao_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return _send_excel_bytes(output, filename)
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
+
+
+@home_bp.route("/api/relatorios/est-dotacao/download", methods=["GET"])
+@login_required
+@require_feature("relatorios/est-dotacao")
+def api_relatorio_est_dotacao_download():
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _format_dt(val):
+        if not val:
+            return None
+        if hasattr(val, "strftime"):
+            return val.strftime("%d/%m/%Y %H:%M:%S")
+        return str(val)
+
+    try:
+        rows = db.session.execute(
+            text(
+                """
+                SELECT *
+                FROM est_dotacao
+                WHERE ativo = 1 OR lower(status_aprovacao) = 'rejeitado'
+                ORDER BY id DESC
+                """
+            )
+        ).mappings().all()
+        if not rows:
+            return jsonify({"error": "Nenhum dado para exportar."}), 404
+
+        adj_ids = [r.get("adj_id") for r in rows if r.get("adj_id")]
+        adj_map = {}
+        if adj_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+            adj_map = {p.id: p.nome for p in perfis if p and p.nome}
+
+        user_ids = [r.get("usuarios_id") for r in rows if r.get("usuarios_id")]
+        aprov_ids = []
+        for r in rows:
+            try:
+                if r.get("aprovado_por"):
+                    aprov_ids.append(int(r.get("aprovado_por")))
+            except Exception:
+                pass
+        user_ids = list({*user_ids, *aprov_ids})
+        user_map = {}
+        if user_ids:
+            usuarios = Usuario.query.filter(Usuario.id.in_(user_ids)).all()
+            user_map = {u.id: (u.nome or "", u.perfil or "") for u in usuarios}
+
+        data = []
+        for r in rows:
+            adj_nome = (adj_map.get(r.get("adj_id")) or "").strip()
+            criado_nome, criado_perfil = user_map.get(r.get("usuarios_id"), ("", ""))
+            aprov_nome, aprov_perfil = ("", "")
+            try:
+                aprov_nome, aprov_perfil = user_map.get(int(r.get("aprovado_por")), ("", ""))
+            except Exception:
+                aprov_nome, aprov_perfil = ("", "")
+            usuario_nome_perfil = ""
+            if criado_nome:
+                usuario_nome_perfil = f"{criado_nome} - {criado_perfil}".strip(" -")
+            aprovado_nome_perfil = ""
+            if aprov_nome:
+                aprovado_nome_perfil = f"{aprov_nome} - {aprov_perfil}".strip(" -")
+            data.append(
+                {
+                    "exercicio": r.get("exercicio"),
+                    "status_aprovacao": r.get("status_aprovacao"),
+                    "adjunta_solicitante": adj_nome,
+                    "chave_dotacao": r.get("chave_dotacao"),
+                    "chave_planejamento": r.get("chave_planejamento"),
+                    "valor_dotacao": _to_float(r.get("valor_dotacao")),
+                    "valor_a_ser_est": _to_float(r.get("valor_a_ser_est")),
+                    "saldo_dotacao_apos": _to_float(r.get("saldo_dotacao_apos")),
+                    "situacao": r.get("situacao"),
+                    "uo": r.get("uo"),
+                    "programa": r.get("programa"),
+                    "acao_paoe": r.get("acao_paoe"),
+                    "produto": r.get("produto"),
+                    "ug": r.get("ug"),
+                    "regiao": r.get("regiao"),
+                    "subacao_entrega": r.get("subacao_entrega"),
+                    "etapa": r.get("etapa"),
+                    "natureza_despesa": r.get("natureza_despesa"),
+                    "elemento": r.get("elemento"),
+                    "subelemento": r.get("subelemento"),
+                    "fonte": r.get("fonte"),
+                    "iduso": r.get("iduso"),
+                    "justificativa": r.get("justificativa"),
+                    "usuario_nome_perfil": usuario_nome_perfil,
+                    "criado_em": _format_dt(r.get("criado_em")),
+                    "alterado_em": _format_dt(r.get("alterado_em")),
+                    "aprovado_por_nome_perfil": aprovado_nome_perfil,
+                    "data_aprovacao": _format_dt(r.get("data_aprovacao")),
+                    "motivo_rejeicao": r.get("motivo_rejeicao"),
+                }
+            )
+
+        df = pd.DataFrame(data)
+        rename_map = {
+            "exercicio": "Exercício",
+            "status_aprovacao": "Status",
+            "adjunta_solicitante": "Adjunta Solicitante",
+            "chave_dotacao": "Controle de Dotação",
+            "chave_planejamento": "Chave de Planejamento",
+            "valor_dotacao": "Valor da Dotação",
+            "valor_a_ser_est": "Valor do Estorno",
+            "saldo_dotacao_apos": "Saldo de Dotação",
+            "situacao": "Situação",
+            "uo": "UO",
+            "programa": "Programa",
+            "acao_paoe": "Ação/PAOE",
+            "produto": "Produto",
+            "ug": "UG",
+            "regiao": "Região",
+            "subacao_entrega": "Subação/Entrega",
+            "etapa": "Etapa",
+            "natureza_despesa": "Natureza de Despesa",
+            "elemento": "Elemento",
+            "subelemento": "Subelemento",
+            "fonte": "Fonte",
+            "iduso": "Iduso",
+            "justificativa": "Justificativa do Estorno",
+            "usuario_nome_perfil": "Criado/Alterado por",
+            "criado_em": "Criado em",
+            "alterado_em": "Alterado em",
+            "aprovado_por_nome_perfil": "Aprovado por",
+            "data_aprovacao": "Data da Aprovação",
+            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
+        }
+        df.rename(columns=rename_map, inplace=True)
+
+        col_order = [
+            "Exercício",
+            "Status",
+            "Adjunta Solicitante",
+            "Controle de Dotação",
+            "Chave de Planejamento",
+            "Valor da Dotação",
+            "Valor do Estorno",
+            "Saldo de Dotação",
+            "Situação",
+            "UO",
+            "Programa",
+            "Ação/PAOE",
+            "Produto",
+            "UG",
+            "Região",
+            "Subação/Entrega",
+            "Etapa",
+            "Natureza de Despesa",
+            "Elemento",
+            "Subelemento",
+            "Fonte",
+            "Iduso",
+            "Justificativa do Estorno",
+            "Criado/Alterado por",
+            "Criado em",
+            "Alterado em",
+            "Aprovado por",
+            "Data da Aprovação",
+            "Justificativa da Aprovação/Rejeição",
+        ]
+        col_order = [c for c in col_order if c in df.columns]
+        if col_order:
+            df = df[col_order]
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Estorno", header=False, startrow=1)
+            workbook = writer.book
+            worksheet = writer.sheets["Estorno"]
+            cell_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8})
+            header_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8})
+            worksheet.set_default_row(12, cell_fmt)
+            if len(df.columns) > 0:
+                worksheet.set_column(0, len(df.columns) - 1, None, cell_fmt)
+                worksheet.write_row(0, 0, df.columns, header_fmt)
+                worksheet.set_row(0, None, header_fmt)
+        output.seek(0)
+        filename = f"estorno_dotacao_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
         return _send_excel_bytes(output, filename)
     except Exception as exc:
         return jsonify({"error": f"Falha ao exportar: {exc}"}), 500

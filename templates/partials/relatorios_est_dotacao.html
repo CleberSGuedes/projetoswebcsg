@@ -1,30 +1,28 @@
 <div class="grid">
   <div class="card plan20-card">
-    <div class="card-title">Relat&#243;rio de Dota&#231;&#227;o</div>
+    <div class="card-title">Relat&#243;rio Estorno de Dota&#231;&#227;o</div>
     <div class="actions relatorio-top" style="padding-right:0; align-items:center; justify-content:flex-end;">
       <div class="actions" style="gap:8px;">
-        <button class="btn sm compact" id="dotacao-relatorio-reset" type="button">
+        <button class="btn sm compact" id="est-dotacao-relatorio-reset" type="button">
           <i class="bi bi-eraser"></i><span>Limpar Filtros</span>
         </button>
-        <button class="btn sm compact" id="dotacao-relatorio-download" type="button">
+        <button class="btn sm compact" id="est-dotacao-relatorio-download" type="button">
           <i class="bi bi-download"></i><span>Baixar Excel</span>
         </button>
       </div>
     </div>
     <div class="table-responsive">
-      <table class="table plan20-table" id="dotacao-relatorio-tabela">
+      <table class="table plan20-table" id="est-dotacao-relatorio-tabela">
         <thead>
           <tr>
             <th>Exerc&#237;cio</th>
             <th>Status</th>
             <th>Adjunta Solicitante</th>
-            <th>Adjunta Concedente</th>
             <th>Controle de Dota&#231;&#227;o</th>
             <th>Chave de Planejamento</th>
             <th>Valor da Dota&#231;&#227;o</th>
             <th>Valor do Estorno</th>
-            <th>Valor do PED/EMP</th>
-            <th>Valor da Dota&#231;&#227;o Atualizada</th>
+            <th>Saldo de Dota&#231;&#227;o</th>
             <th>Situa&#231;&#227;o</th>
             <th>UO</th>
             <th>Programa</th>
@@ -39,7 +37,7 @@
             <th>Subelemento</th>
             <th>Fonte</th>
             <th>Iduso</th>
-            <th>Justificativa/Hist&#243;rico</th>
+            <th>Justificativa do Estorno</th>
             <th>Criado/Alterado por</th>
             <th>Criado em</th>
             <th>Alterado em</th>
@@ -51,13 +49,11 @@
             <th><div class="multi-filter" data-col="exercicio"></div></th>
             <th><div class="multi-filter" data-col="status_aprovacao"></div></th>
             <th><div class="multi-filter" data-col="adjunta_solicitante"></div></th>
-            <th><div class="multi-filter" data-col="adj_concedente"></div></th>
             <th><div class="multi-filter" data-col="chave_dotacao"></div></th>
             <th><div class="multi-filter" data-col="chave_planejamento"></div></th>
             <th><div class="multi-filter" data-col="valor_dotacao"></div></th>
-            <th><div class="multi-filter" data-col="valor_estorno"></div></th>
-            <th><div class="multi-filter" data-col="valor_ped_emp"></div></th>
-            <th><div class="multi-filter" data-col="valor_atual"></div></th>
+            <th><div class="multi-filter" data-col="valor_a_ser_est"></div></th>
+            <th><div class="multi-filter" data-col="saldo_dotacao_apos"></div></th>
             <th><div class="multi-filter" data-col="situacao"></div></th>
             <th><div class="multi-filter" data-col="uo"></div></th>
             <th><div class="multi-filter" data-col="programa"></div></th>
@@ -72,7 +68,7 @@
             <th><div class="multi-filter" data-col="subelemento"></div></th>
             <th><div class="multi-filter" data-col="fonte"></div></th>
             <th><div class="multi-filter" data-col="iduso"></div></th>
-            <th><div class="multi-filter" data-col="justificativa_historico"></div></th>
+            <th><div class="multi-filter" data-col="justificativa"></div></th>
             <th><div class="multi-filter" data-col="usuario_nome_perfil"></div></th>
             <th><div class="multi-filter" data-col="criado_em"></div></th>
             <th><div class="multi-filter" data-col="alterado_em"></div></th>
@@ -86,15 +82,15 @@
     </div>
     <div class="table-foot">
       <div class="page-size">
-        <label for="dotacao-page-size">Itens por p&#225;gina</label>
-        <select id="dotacao-page-size" class="input">
+        <label for="est-dotacao-page-size">Itens por p&#225;gina</label>
+        <select id="est-dotacao-page-size" class="input">
           <option value="10">10</option>
           <option value="20" selected>20</option>
           <option value="50">50</option>
           <option value="100">100</option>
         </select>
       </div>
-      <div id="dotacao-pagination" class="pagination"></div>
+      <div id="est-dotacao-pagination" class="pagination"></div>
     </div>
   </div>
 </div>
