@@ -2741,7 +2741,7 @@ def _calc_dotacao_saldo(
             ped_base.append(PedRegistro.chave == chave_planejamento)
     ped_rows = (
         PedRegistro.query.with_entities(
-            PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
+            PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
         )
         .filter(*ped_base)
         .all()
@@ -2749,7 +2749,7 @@ def _calc_dotacao_saldo(
     if not ped_rows and chave_planejamento:
         ped_rows = (
             PedRegistro.query.with_entities(
-                PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
+                PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave_planejamento, PedRegistro.chave
             )
             .filter(*ped_base_common)
             .all()
