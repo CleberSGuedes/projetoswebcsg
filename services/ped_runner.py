@@ -1084,9 +1084,32 @@ def _find_missing_dotacao_keys(df: pd.DataFrame) -> list[str]:
     return sorted([k for k in dot_keys if k not in db_norm])
 
 
+def _is_missing_chave(value: Any) -> bool:
+    if value is None:
+        return True
+    text = str(value).strip()
+    if text == "":
+        return True
+    upper = text.upper()
+    return upper in {"-", "NÃO INFORMADO", "NÃO IDENTIFICADO", "NAO INFORMADO", "NAO IDENTIFICADO"}
+
+
+def _find_missing_planejamento_lines(df: pd.DataFrame) -> list[int]:
+    if "Chave" not in df.columns and "Chave de Planejamento" not in df.columns:
+        return []
+    df_norm = df.reset_index(drop=True)
+    missing_lines: list[int] = []
+    for idx, row in df_norm.iterrows():
+        chave = row.get("Chave")
+        chave_planejamento = row.get("Chave de Planejamento")
+        if _is_missing_chave(chave) and _is_missing_chave(chave_planejamento):
+            missing_lines.append(idx + 2)
+    return missing_lines
+
+
 def run_ped(
     file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
-) -> tuple[int, Path, list[str]]:
+) -> tuple[int, Path, list[str], list[int]]:
     ensure_dirs()
     chaves_planejamento = carregar_chaves_planejamento(JSON_CHAVES_PLANEJAMENTO)
     casos_especificos = carregar_casos_especificos(JSON_CASOS_ESPECIFICOS)
@@ -1101,6 +1124,7 @@ def run_ped(
         raise RuntimeError("Falha ao tratar a planilha PED.")
 
     missing_dotacao_keys = _find_missing_dotacao_keys(tratado_df)
+    missing_planejamento_lines = _find_missing_planejamento_lines(tratado_df)
     tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
     output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
     try:
@@ -1116,4 +1140,4 @@ def run_ped(
         else:
             raise
     _update_dotacao_from_ped(tratado_df)
-    return total, output_path, missing_dotacao_keys
+    return total, output_path, missing_dotacao_keys, missing_planejamento_lines

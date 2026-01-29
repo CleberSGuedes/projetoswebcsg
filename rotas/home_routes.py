@@ -281,6 +281,7 @@ def partial_dashboard():
                 }
             )
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
+    ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
     if not ped_dotacao_missing:
         ped_keys = (
             PedRegistro.query.with_entities(PedRegistro.chave)
@@ -384,6 +385,7 @@ def partial_dashboard():
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
         ped_dotacao_missing=ped_dotacao_missing,
+        ped_planejamento_missing_lines=ped_planejamento_missing_lines,
         emp_planejamento_missing_lines=emp_planejamento_missing_lines,
         emp_dotacao_missing=emp_dotacao_missing,
         dotacoes_aguardando=pendentes,
@@ -1310,6 +1312,20 @@ def _iduso_variants(value: str) -> list[str]:
     for width in (2, 3, 4):
         variants.add(base.zfill(width))
     return sorted(variants)
+
+
+def _codigo_variants(value: str) -> list[str]:
+    if not value:
+        return []
+    raw = str(value).strip()
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    variants = [raw]
+    if digits:
+        norm = str(int(digits))
+        variants.append(norm)
+        for width in (2, 3):
+            variants.append(norm.zfill(width))
+    return list(dict.fromkeys([v for v in variants if v]))
 
 
 def _normalize_chave(value: str) -> str:
@@ -2538,6 +2554,9 @@ def _calc_dotacao_saldo(
         except ValueError:
             elemento_int = None
 
+    elemento_variants = _codigo_variants(elemento)
+    subelemento_variants = _codigo_variants(subelemento)
+
     plan21_filters = [Plan21Nger.ativo == True]  # noqa: E712
     if exercicio:
         plan21_filters.append(Plan21Nger.exercicio == exercicio)
@@ -2559,10 +2578,10 @@ def _calc_dotacao_saldo(
         plan21_filters.append(Plan21Nger.etapa == etapa)
     if natureza:
         plan21_filters.append(Plan21Nger.natureza.like(f"{natureza}%"))
-    if elemento:
-        plan21_filters.append(Plan21Nger.elemento == elemento)
-    if subelemento:
-        plan21_filters.append(Plan21Nger.subelemento == subelemento)
+    if elemento_variants:
+        plan21_filters.append(Plan21Nger.elemento.in_(elemento_variants))
+    if subelemento_variants:
+        plan21_filters.append(Plan21Nger.subelemento.in_(subelemento_variants))
     if fonte:
         plan21_filters.append(Plan21Nger.fonte == fonte)
     if iduso:
@@ -2600,8 +2619,8 @@ def _calc_dotacao_saldo(
         dot_filters.append(Dotacao.regiao == regiao)
     if elemento_int is not None:
         dot_filters.append(Dotacao.elemento == elemento_int)
-    if subelemento:
-        dot_filters.append(Dotacao.subelemento == subelemento)
+    if subelemento_variants:
+        dot_filters.append(Dotacao.subelemento.in_(subelemento_variants))
     if fonte:
         dot_filters.append(Dotacao.fonte == fonte)
     if iduso:
@@ -2679,8 +2698,8 @@ def _calc_dotacao_saldo(
         variants = _iduso_variants(iduso)
         if variants:
             ped_base_common.append(PedRegistro.iduso.in_(variants))
-    if elemento:
-        ped_base_common.append(PedRegistro.elemento == elemento)
+    if elemento_variants:
+        ped_base_common.append(PedRegistro.elemento.in_(elemento_variants))
     if uo_norm:
         ped_base_common.append(PedRegistro.uo == uo_norm)
     if ug_norm:
@@ -2711,8 +2730,8 @@ def _calc_dotacao_saldo(
         variants = _iduso_variants(iduso)
         if variants:
             emp_base_common.append(EmpRegistro.iduso.in_(variants))
-    if elemento:
-        emp_base_common.append(EmpRegistro.elemento == elemento)
+    if elemento_variants:
+        emp_base_common.append(EmpRegistro.elemento.in_(elemento_variants))
     if uo_norm:
         emp_base_common.append(EmpRegistro.uo == uo_norm)
     if ug_norm:
@@ -3239,7 +3258,7 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path, missing_dotacao_keys = run_ped(
+        total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
             save_path, data_arquivo, user_email, registro.id
         )
 
@@ -3249,6 +3268,13 @@ def api_ped_upload():
         else:
             if "ped_dotacao_missing" in session:
                 session["ped_dotacao_missing"] = []
+                session.modified = True
+        if missing_planejamento_lines:
+            session["ped_planejamento_missing_lines"] = missing_planejamento_lines
+            session.modified = True
+        else:
+            if "ped_planejamento_missing_lines" in session:
+                session["ped_planejamento_missing_lines"] = []
                 session.modified = True
 
         registro.output_filename = str(output_path.name)
