@@ -1412,12 +1412,16 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   dfEmpBase.rows = removerEmpenhosEstornados(dfEmpBase).dataset.rows;
 
   const missingPlanejamentoLines = [];
+  const isMissingKey = (value) => {
+    const text = String(value || "").trim();
+    return !text || ["NÇO IDENTIFICADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÃO INFORMADO", "-"].includes(text);
+  };
   for (let i = 0; i < df.rows.length; i += 1) {
     const row = df.rows[i];
-    const chaveDot = String(row.Chave || "").trim().toUpperCase();
-    if (chaveDot.startsWith("DOT.")) continue;
-    const value = String(row[keyColName] || "").trim();
-    if (!value || ["NÇO IDENTIFICADO", "NÃO IDENTIFICADO", "NÇO INFORMADO", "NÃO INFORMADO", "-"].includes(value)) {
+    const historico = row["Hist\u00f3rico"] || "";
+    const chavePlan = String(row[keyColName] || "").trim();
+    const chaveDot = extrairChaveDotDoHistorico(historico);
+    if (isMissingKey(chavePlan) && isMissingKey(chaveDot)) {
       missingPlanejamentoLines.push(i + 2); // header na linha 1, dados a partir da linha 2
     }
   }

@@ -956,6 +956,7 @@
         submitBtn.dataset.output = last.output_filename;
         submitBtn.textContent = viewLabel || "Ver relatório";
       }
+      if (last.output_filename) return "done";
       return last.status || null;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -1044,6 +1045,7 @@
         submitBtn.dataset.output = last.output_filename;
         submitBtn.textContent = viewLabel || "Ver relatório";
       }
+      if (last.output_filename) return "done";
       return last.status || null;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
