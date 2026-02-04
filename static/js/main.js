@@ -2250,7 +2250,7 @@
       }
       if (idInput) idInput.value = row.dataset.id || "";
       selects.exercicio.value = row.dataset.exercicio || "";
-      adjSelect.value = row.dataset.adjId || "";
+      adjSelect.value = row.dataset.perfilId || "";
       selects.chave_planejamento.value = row.dataset.chave || "";
       selects.uo.value = row.dataset.uo || "";
       selects.programa.value = row.dataset.programaRaw || "";
@@ -2281,7 +2281,7 @@
         setSelectValueFallback(adjConcedenteSelect, adjConcedente);
       }
       selects.exercicio.value = row.dataset.exercicio || "";
-      adjSelect.value = row.dataset.adjId || "";
+      adjSelect.value = row.dataset.perfilId || "";
       selects.chave_planejamento.value = row.dataset.chave || "";
       selects.uo.value = row.dataset.uo || "";
       selects.programa.value = row.dataset.programaRaw || "";
@@ -2898,7 +2898,7 @@
       }
       const payload = {
         exercicio: selects.exercicio.value,
-        adj_id: adjSelect.value,
+        perfil_id: adjSelect.value,
         dotacao_emprestada: isEmprestada() ? "sim" : "nao",
         adj_concedente: isEmprestada() ? adjConcedenteSelect?.value || "" : getAdjLabel(),
         chave_planejamento: selects.chave_planejamento.value,

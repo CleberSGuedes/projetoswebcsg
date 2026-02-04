@@ -53,6 +53,33 @@ const INPUT_DIR = path.resolve(__dirname, "..", "upload", "nob");
 const OUTPUT_DIR = path.resolve(__dirname, "..", "outputs", "td_nob");
 const SAVE_NOB_SHEET = false;
 
+async function fileExists(filePath) {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function moveOldOutputs(outputDir) {
+  ensureDir(outputDir);
+  const tmpDir = path.join(outputDir, "tmp");
+  ensureDir(tmpDir);
+  const entries = await fs.promises.readdir(outputDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "tmp" || !entry.isFile()) continue;
+    const src = path.join(outputDir, entry.name);
+    let dest = path.join(tmpDir, entry.name);
+    if (await fileExists(dest)) {
+      const ext = path.extname(entry.name);
+      const base = path.basename(entry.name, ext);
+      dest = path.join(tmpDir, `${base}_${Date.now()}${ext}`);
+    }
+    await fs.promises.rename(src, dest);
+  }
+}
+
 const COLUMN_ALIASES = {
   "n nob": "N\u00ba NOB",
   "n nob estorno estornado": "N\u00ba NOB Estorno/Estornado",
@@ -613,6 +640,7 @@ async function loadSheetData(filePath) {
 
 async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   ensureDir(OUTPUT_DIR);
+  await moveOldOutputs(OUTPUT_DIR);
   const outputFile = path.join(OUTPUT_DIR, `${path.basename(filePath, path.extname(filePath))}_tratado.xlsx`);
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: outputFile });
   const sheet = workbook.addWorksheet("nob_tratado");

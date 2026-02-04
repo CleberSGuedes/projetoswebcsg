@@ -349,7 +349,7 @@ def partial_dashboard():
         est_raw = db.session.execute(
             text(
                 """
-                SELECT id, chave_dotacao, valor_a_ser_est, valor_dotacao, status_aprovacao, adj_id
+                SELECT id, chave_dotacao, valor_a_ser_est, valor_dotacao, status_aprovacao, perfil_id
                 FROM est_dotacao
                 WHERE ativo = 1 AND lower(status_aprovacao) = 'aguardando'
                 ORDER BY id DESC
@@ -358,17 +358,17 @@ def partial_dashboard():
         ).fetchall()
     except Exception:
         est_raw = []
-    est_adj_ids = [r[5] for r in est_raw if len(r) > 5 and r[5]]
+    est_perfil_ids = [r[5] for r in est_raw if len(r) > 5 and r[5]]
     est_adj_map = {}
-    if est_adj_ids:
-        perfis = Perfil.query.filter(Perfil.id.in_(est_adj_ids)).all()
+    if est_perfil_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(est_perfil_ids)).all()
         est_adj_map = {p.id: p.nome for p in perfis if p and p.nome}
     for row in est_raw:
         chave = row[1] if len(row) > 1 else ""
         valor_est = row[2] if len(row) > 2 else None
         valor_dot = row[3] if len(row) > 3 else None
         status = row[4] if len(row) > 4 else ""
-        adj_id = row[5] if len(row) > 5 else None
+        perfil_id = row[5] if len(row) > 5 else None
         valor_base = valor_est if valor_est is not None else valor_dot
         valor_fmt = _dec_or_zero(valor_base)
         valor_str = f"{valor_fmt:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -377,7 +377,7 @@ def partial_dashboard():
                 "chave_dotacao": chave or "",
                 "valor_estorno": valor_str,
                 "status_aprovacao": status or "",
-                "adj_solicitante": est_adj_map.get(adj_id, ""),
+                "adj_solicitante": est_adj_map.get(perfil_id, ""),
             }
         )
     return render_template(
@@ -693,10 +693,10 @@ def partial_cadastrar_dotacao():
         .order_by(Dotacao.id.desc())
         .all()
     )
-    adj_ids = [dot.adj_id for dot in rows if getattr(dot, "adj_id", None)]
+    perfil_ids = [dot.perfil_id for dot in rows if getattr(dot, "perfil_id", None)]
     adj_map = {}
-    if adj_ids:
-        perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+    if perfil_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
         adj_map = {p.id: p.nome for p in perfis if p and p.nome}
     usuarios_ids = [dot.usuarios_id for dot in rows if getattr(dot, "usuarios_id", None)]
     usuarios_map = {}
@@ -728,7 +728,7 @@ def partial_cadastrar_dotacao():
         aprovado_perfil_map = {u.id: u.perfil for u in usuarios_aprov if getattr(u, "perfil", None)}
 
     for dot in rows:
-        adj_nome = (adj_map.get(dot.adj_id) or "").strip()
+        adj_nome = (adj_map.get(dot.perfil_id) or "").strip()
         ped_sum = _calc_ped_sum_for_dotacao(dot.chave_dotacao)
         emp_sum = _calc_emp_sum_for_dotacao(dot.chave_dotacao)
         key_norm = _normalize_dotacao_key(dot.chave_dotacao)
@@ -752,7 +752,7 @@ def partial_cadastrar_dotacao():
             {
                 "id": dot.id,
                 "exercicio": dot.exercicio,
-                "adj_id": dot.adj_id,
+                "perfil_id": dot.perfil_id,
                 "adj_abreviacao": adj_nome,
                 "chave_planejamento": dot.chave_planejamento,
                 "chave_dotacao": dot.chave_dotacao,
@@ -832,20 +832,20 @@ def partial_cadastrar_est_dotacao():
         .order_by(Dotacao.id.desc())
         .all()
     )
-    adj_ids = [dot.adj_id for dot in rows if getattr(dot, "adj_id", None)]
+    perfil_ids = [dot.perfil_id for dot in rows if getattr(dot, "perfil_id", None)]
     adj_map = {}
-    if adj_ids:
-        perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+    if perfil_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
         adj_map = {p.id: p.nome for p in perfis if p and p.nome}
 
     dotacoes = []
     for dot in rows:
-        adj_nome = (adj_map.get(dot.adj_id) or "").strip()
+        adj_nome = (adj_map.get(dot.perfil_id) or "").strip()
         dotacoes.append(
             {
                 "id": dot.id,
                 "exercicio": dot.exercicio,
-                "adj_id": dot.adj_id,
+                "perfil_id": dot.perfil_id,
                 "adj_abreviacao": adj_nome,
                 "chave_planejamento": dot.chave_planejamento,
                 "chave_dotacao": dot.chave_dotacao,
@@ -874,10 +874,10 @@ def partial_cadastrar_est_dotacao():
         raw = db.session.execute(text("SELECT * FROM est_dotacao WHERE ativo = 1")).mappings().all()
     except Exception:
         raw = []
-    est_adj_ids = {r.get("adj_id") for r in raw if r.get("adj_id")}
+    est_perfil_ids = {r.get("perfil_id") for r in raw if r.get("perfil_id")}
     est_adj_map = {}
-    if est_adj_ids:
-        est_perfis = Perfil.query.filter(Perfil.id.in_(est_adj_ids)).all()
+    if est_perfil_ids:
+        est_perfis = Perfil.query.filter(Perfil.id.in_(est_perfil_ids)).all()
         est_adj_map = {p.id: p.nome for p in est_perfis if p and p.nome}
     for r in raw:
         def pick(*keys):
@@ -911,8 +911,8 @@ def partial_cadastrar_est_dotacao():
         produto = pick("produto")
         situacao = pick("situacao")
         if not adj_solic:
-            adj_id = r.get("adj_id")
-            adj_solic = est_adj_map.get(adj_id, "")
+            perfil_id = r.get("perfil_id")
+            adj_solic = est_adj_map.get(perfil_id, "")
 
         def fmt_num(val):
             v = _parse_decimal_value(val)
@@ -1640,7 +1640,7 @@ def api_dotacao_create():
     natureza_despesa = (data.get("natureza_despesa") or "").strip()
     fonte = (data.get("fonte") or "").strip()
     iduso = (data.get("iduso") or "").strip()
-    adj_raw = (data.get("adj_id") or "").strip()
+    adj_raw = (data.get("perfil_id") or "").strip()
     emprestada_raw = (data.get("dotacao_emprestada") or "").strip().lower()
     adj_concedente_raw = (data.get("adj_concedente") or "").strip()
     elemento_raw = (data.get("elemento") or "").strip()
@@ -1665,7 +1665,7 @@ def api_dotacao_create():
         "subelemento": subelemento,
         "fonte": fonte,
         "iduso": iduso,
-        "adj_id": adj_raw,
+        "perfil_id": adj_raw,
         "valor_dotacao": valor_raw,
         "justificativa_historico": justificativa,
     }
@@ -1674,10 +1674,10 @@ def api_dotacao_create():
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
 
     try:
-        adj_id = int(adj_raw)
+        perfil_id = int(adj_raw)
     except ValueError:
         return jsonify({"error": "Adjunta Responsavel invalida."}), 400
-    adj_row = db.session.get(Perfil, adj_id)
+    adj_row = db.session.get(Perfil, perfil_id)
     if not adj_row or (adj_row.nome or "").strip().lower() in {"admin", "consultor"}:
         return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
 
@@ -1695,7 +1695,7 @@ def api_dotacao_create():
             return jsonify({"error": "Adjunta Concedente invalida."}), 400
         adj_concedente = adj_concedente_raw
     else:
-        adj_concedente = (adj_row.nome or str(adj_id)).strip()
+        adj_concedente = (adj_row.nome or str(perfil_id)).strip()
 
     try:
         elemento = int(elemento_raw)
@@ -1763,7 +1763,7 @@ def api_dotacao_create():
     registro = Dotacao(
         plan21_nger_id=plan.id,
         exercicio=exercicio,
-        adj_id=adj_id,
+        perfil_id=perfil_id,
         chave_planejamento=chave_planejamento,
         uo=uo,
         programa=getattr(plan, "programa", None),
@@ -1793,7 +1793,7 @@ def api_dotacao_create():
     db.session.add(registro)
     try:
         db.session.flush()
-        adj_label = (adj_row.nome or str(adj_id)).strip()
+        adj_label = (adj_row.nome or str(perfil_id)).strip()
         chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
         justificativa_full = f"{chave_dotacao} {justificativa}".strip()
         ped_sum = _calc_ped_sum_for_dotacao(chave_dotacao)
@@ -1867,7 +1867,7 @@ def api_dotacao_update(dotacao_id):
     natureza_despesa = (data.get("natureza_despesa") or "").strip()
     fonte = (data.get("fonte") or "").strip()
     iduso = (data.get("iduso") or "").strip()
-    adj_raw = (data.get("adj_id") or "").strip()
+    adj_raw = (data.get("perfil_id") or "").strip()
     emprestada_raw = (data.get("dotacao_emprestada") or "").strip().lower()
     adj_concedente_raw = (data.get("adj_concedente") or "").strip()
     elemento_raw = (data.get("elemento") or "").strip()
@@ -1892,7 +1892,7 @@ def api_dotacao_update(dotacao_id):
         "subelemento": subelemento,
         "fonte": fonte,
         "iduso": iduso,
-        "adj_id": adj_raw,
+        "perfil_id": adj_raw,
         "valor_dotacao": valor_raw,
         "justificativa_historico": justificativa,
     }
@@ -1901,10 +1901,10 @@ def api_dotacao_update(dotacao_id):
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
 
     try:
-        adj_id = int(adj_raw)
+        perfil_id = int(adj_raw)
     except ValueError:
         return jsonify({"error": "Adjunta Responsavel invalida."}), 400
-    adj_row = db.session.get(Perfil, adj_id)
+    adj_row = db.session.get(Perfil, perfil_id)
     if not adj_row or (adj_row.nome or "").strip().lower() in {"admin", "consultor"}:
         return jsonify({"error": "Adjunta Responsavel nao encontrada."}), 400
 
@@ -1922,7 +1922,7 @@ def api_dotacao_update(dotacao_id):
             return jsonify({"error": "Adjunta Concedente invalida."}), 400
         adj_concedente = adj_concedente_raw
     else:
-        adj_concedente = (adj_row.nome or str(adj_id)).strip()
+        adj_concedente = (adj_row.nome or str(perfil_id)).strip()
 
     try:
         elemento = int(elemento_raw)
@@ -1990,7 +1990,7 @@ def api_dotacao_update(dotacao_id):
 
     registro.plan21_nger_id = plan.id
     registro.exercicio = exercicio
-    registro.adj_id = adj_id
+    registro.perfil_id = perfil_id
     registro.chave_planejamento = chave_planejamento
     registro.uo = uo
     registro.programa = getattr(plan, "programa", None)
@@ -2011,7 +2011,7 @@ def api_dotacao_update(dotacao_id):
     registro.adj_concedente = adj_concedente
     if not getattr(registro, "status_aprovacao", None):
         registro.status_aprovacao = "Aguardando"
-    adj_label = (adj_row.nome or str(adj_id)).strip()
+    adj_label = (adj_row.nome or str(perfil_id)).strip()
     chave_dotacao = f"DOT.{exercicio}.{adj_label}.{registro.id}*"
     registro.chave_dotacao = chave_dotacao
     registro.justificativa_historico = f"{chave_dotacao} {justificativa}".strip()
@@ -2120,9 +2120,9 @@ def api_dotacao_aprovar(dotacao_id):
         return jsonify({"error": f"Falha ao aprovar dotacao: {exc}"}), 500
 
     adj_label = ""
-    if registro.adj_id:
-        adj_row = db.session.get(Perfil, registro.adj_id)
-        adj_label = (adj_row.nome or str(registro.adj_id)).strip() if adj_row else ""
+    if registro.perfil_id:
+        adj_row = db.session.get(Perfil, registro.perfil_id)
+        adj_label = (adj_row.nome or str(registro.perfil_id)).strip() if adj_row else ""
 
     return jsonify(
         {
@@ -2201,14 +2201,14 @@ def api_est_dotacao_create():
             text(
                 """
                 INSERT INTO est_dotacao (
-                    exercicio, adj_id, chave_planejamento, chave_dotacao, uo, programa, acao_paoe, produto,
+                    exercicio, perfil_id, chave_planejamento, chave_dotacao, uo, programa, acao_paoe, produto,
                     ug, regiao, subacao_entrega, etapa, natureza_despesa, elemento, subelemento, fonte, iduso,
                     valor_dotacao, valor_a_ser_est, saldo_dotacao_apos, justificativa, usuarios_id, ativo,
                     status_aprovacao, situacao, aprovado_por, data_aprovacao, motivo_rejeicao, alterado_em,
                     excluido_em, criado_em
                 )
                 VALUES (
-                    :exercicio, :adj_id, :chave_planejamento, :chave_dotacao, :uo, :programa, :acao_paoe, :produto,
+                    :exercicio, :perfil_id, :chave_planejamento, :chave_dotacao, :uo, :programa, :acao_paoe, :produto,
                     :ug, :regiao, :subacao_entrega, :etapa, :natureza_despesa, :elemento, :subelemento, :fonte, :iduso,
                     :valor_dotacao, :valor_a_ser_est, :saldo_dotacao_apos, :justificativa, :usuarios_id, :ativo,
                     :status_aprovacao, :situacao, :aprovado_por, :data_aprovacao, :motivo_rejeicao, :alterado_em,
@@ -2218,7 +2218,7 @@ def api_est_dotacao_create():
             ),
             {
                 "exercicio": exercicio,
-                "adj_id": adj_row.id,
+                "perfil_id": adj_row.id,
                 "chave_planejamento": chave_planejamento,
                 "chave_dotacao": chave_dotacao,
                 "uo": uo,
@@ -2306,10 +2306,10 @@ def api_est_dotacao_update(est_id):
 
     user_session = session.get("user") or {}
     perfil_usuario = (user_session.get("perfil") or "").strip()
-    adj_id = row.get("adj_id")
+    perfil_id = row.get("perfil_id")
     adj_nome = ""
-    if adj_id:
-        adj_row = db.session.get(Perfil, adj_id)
+    if perfil_id:
+        adj_row = db.session.get(Perfil, perfil_id)
         adj_nome = (adj_row.nome or "").strip() if adj_row else ""
     if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar o estorno atual."}), 403
@@ -2405,10 +2405,10 @@ def api_est_dotacao_delete(est_id):
 
     user_session = session.get("user") or {}
     perfil_usuario = (user_session.get("perfil") or "").strip()
-    adj_id = row.get("adj_id")
+    perfil_id = row.get("perfil_id")
     adj_nome = ""
-    if adj_id:
-        adj_row = db.session.get(Perfil, adj_id)
+    if perfil_id:
+        adj_row = db.session.get(Perfil, perfil_id)
         adj_nome = (adj_row.nome or "").strip() if adj_row else ""
     if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir o estorno atual."}), 403
@@ -2468,10 +2468,10 @@ def api_est_dotacao_aprovar(est_id):
     if not perfil_usuario:
         return jsonify({"error": "Perfil do usu\u00e1rio n\u00e3o encontrado."}), 400
 
-    adj_id = row.get("adj_id")
+    perfil_id = row.get("perfil_id")
     adj_nome = ""
-    if adj_id:
-        adj_row = db.session.get(Perfil, adj_id)
+    if perfil_id:
+        adj_row = db.session.get(Perfil, perfil_id)
         adj_nome = (adj_row.nome or "").strip() if adj_row else ""
     if not adj_nome or perfil_usuario.lower() != adj_nome.lower():
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para aprovar o estorno atual."}), 403
@@ -4840,10 +4840,10 @@ def api_relatorio_dotacao():
         if not rows:
             return jsonify({"ok": True, "data": []})
 
-        adj_ids = [r.adj_id for r in rows if getattr(r, "adj_id", None)]
+        perfil_ids = [r.perfil_id for r in rows if getattr(r, "perfil_id", None)]
         adj_map = {}
-        if adj_ids:
-            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
             adj_map = {p.id: p.nome for p in perfis if p and p.nome}
 
         user_ids = [r.usuarios_id for r in rows if getattr(r, "usuarios_id", None)]
@@ -4862,7 +4862,7 @@ def api_relatorio_dotacao():
 
         data = []
         for r in rows:
-            adj_nome = (adj_map.get(r.adj_id) or "").strip()
+            adj_nome = (adj_map.get(r.perfil_id) or "").strip()
             criado_nome, criado_perfil = user_map.get(getattr(r, "usuarios_id", None), ("", ""))
             aprov_nome, aprov_perfil = ("", "")
             try:
@@ -4955,10 +4955,10 @@ def api_relatorio_est_dotacao():
         if not rows:
             return jsonify({"ok": True, "data": []})
 
-        adj_ids = [r.get("adj_id") for r in rows if r.get("adj_id")]
+        perfil_ids = [r.get("perfil_id") for r in rows if r.get("perfil_id")]
         adj_map = {}
-        if adj_ids:
-            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
             adj_map = {p.id: p.nome for p in perfis if p and p.nome}
 
         user_ids = [r.get("usuarios_id") for r in rows if r.get("usuarios_id")]
@@ -4977,7 +4977,7 @@ def api_relatorio_est_dotacao():
 
         data = []
         for r in rows:
-            adj_nome = (adj_map.get(r.get("adj_id")) or "").strip()
+            adj_nome = (adj_map.get(r.get("perfil_id")) or "").strip()
             criado_nome, criado_perfil = user_map.get(r.get("usuarios_id"), ("", ""))
             aprov_nome, aprov_perfil = ("", "")
             try:
@@ -5749,10 +5749,10 @@ def api_relatorio_dotacao_download():
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
 
-        adj_ids = [r.adj_id for r in rows if getattr(r, "adj_id", None)]
+        perfil_ids = [r.perfil_id for r in rows if getattr(r, "perfil_id", None)]
         adj_map = {}
-        if adj_ids:
-            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
             adj_map = {p.id: p.nome for p in perfis if p and p.nome}
 
         user_ids = [r.usuarios_id for r in rows if getattr(r, "usuarios_id", None)]
@@ -5771,7 +5771,7 @@ def api_relatorio_dotacao_download():
 
         data = []
         for r in rows:
-            adj_nome = (adj_map.get(r.adj_id) or "").strip()
+            adj_nome = (adj_map.get(r.perfil_id) or "").strip()
             criado_nome, criado_perfil = user_map.get(getattr(r, "usuarios_id", None), ("", ""))
             aprov_nome, aprov_perfil = ("", "")
             try:
@@ -5948,10 +5948,10 @@ def api_relatorio_est_dotacao_download():
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
 
-        adj_ids = [r.get("adj_id") for r in rows if r.get("adj_id")]
+        perfil_ids = [r.get("perfil_id") for r in rows if r.get("perfil_id")]
         adj_map = {}
-        if adj_ids:
-            perfis = Perfil.query.filter(Perfil.id.in_(adj_ids)).all()
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
             adj_map = {p.id: p.nome for p in perfis if p and p.nome}
 
         user_ids = [r.get("usuarios_id") for r in rows if r.get("usuarios_id")]
@@ -5970,7 +5970,7 @@ def api_relatorio_est_dotacao_download():
 
         data = []
         for r in rows:
-            adj_nome = (adj_map.get(r.get("adj_id")) or "").strip()
+            adj_nome = (adj_map.get(r.get("perfil_id")) or "").strip()
             criado_nome, criado_perfil = user_map.get(r.get("usuarios_id"), ("", ""))
             aprov_nome, aprov_perfil = ("", "")
             try:

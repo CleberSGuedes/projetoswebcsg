@@ -442,7 +442,7 @@ class Dotacao(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     plan21_nger_id = db.Column(db.BigInteger)
     exercicio = db.Column(db.String(50))
-    adj_id = db.Column(db.BigInteger)
+    perfil_id = db.Column(db.BigInteger)
     chave_planejamento = db.Column(db.String(255))
     uo = db.Column(db.String(50))
     programa = db.Column(db.String(255))

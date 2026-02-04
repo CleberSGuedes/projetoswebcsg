@@ -1,5 +1,6 @@
 ﻿
 const path = require("path");
+const fs = require("fs");
 const ExcelJS = require("exceljs");
 const { connect, bulkInsert } = require("./db");
 const {
@@ -92,6 +93,33 @@ const OUTPUT_HEADER_LIST = [
   "N\u00ba NLA",
   "Valor EMP",
 ];
+
+async function fileExists(filePath) {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function moveOldOutputs(outputDir) {
+  ensureDir(outputDir);
+  const tmpDir = path.join(outputDir, "tmp");
+  ensureDir(tmpDir);
+  const entries = await fs.promises.readdir(outputDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "tmp" || !entry.isFile()) continue;
+    const src = path.join(outputDir, entry.name);
+    let dest = path.join(tmpDir, entry.name);
+    if (await fileExists(dest)) {
+      const ext = path.extname(entry.name);
+      const base = path.basename(entry.name, ext);
+      dest = path.join(tmpDir, `${base}_${Date.now()}${ext}`);
+    }
+    await fs.promises.rename(src, dest);
+  }
+}
 
 function normalizeHeaderKey(label) {
   let key = normalizeSimple(label);
@@ -1352,6 +1380,7 @@ async function carregarPlanilha(filePath) {
 
 async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   ensureDir(OUTPUT_DIR);
+  await moveOldOutputs(OUTPUT_DIR);
 
   const raw = await carregarPlanilha(filePath);
   const dfEmpBase = {
