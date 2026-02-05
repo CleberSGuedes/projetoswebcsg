@@ -30,6 +30,58 @@
   </div>
 </div>
 
+<div
+  id="emp-record-modal"
+  class="modal-overlay emp-record-modal"
+  data-show-login="1"
+  data-dias="{{ emp_record.dias_sem_erro }}"
+  data-recorde="{{ emp_record.recorde }}"
+  data-ult="{{ emp_record.ult_upload_at or '' }}"
+  data-penult="{{ emp_record.penult_upload_at or '' }}"
+  style="display:none;"
+>
+  <div class="emp-record-card">
+    <button class="emp-record-close-icon" type="button" id="emp-record-close" aria-label="Fechar">×</button>
+    <div class="emp-record-header">
+      <div class="emp-record-sign">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Alerta">
+          <polygon points="60,8 114,108 6,108" fill="#ffffff" stroke="#d9150c" stroke-width="10" />
+          <rect x="55" y="38" width="10" height="36" rx="4" fill="#111111" />
+          <circle cx="60" cy="88" r="6" fill="#111111" />
+        </svg>
+      </div>
+      <div class="emp-record-title">ALERTA</div>
+      <div class="emp-record-logo">
+        <img src="/static/img/logo.jpg" alt="Logo" />
+      </div>
+    </div>
+    <div class="emp-record-body">
+      <div class="emp-record-message">ESTAMOS SEM ERROS NA CHAVE DE PLANEJAMENTO HÁ</div>
+      <div class="emp-record-count">
+        <div class="emp-record-sign small">
+          <img src="/static/img/carro.jpg" alt="Alerta de pista" />
+        </div>
+        <div class="emp-record-digits" data-value="{{ emp_record.dias_sem_erro }}" data-min-len="3"></div>
+        <div class="emp-record-label">DIAS</div>
+      </div>
+      <div class="emp-record-row">
+        <div class="emp-record-record-text">NOSSO RECORDE É DE</div>
+        <div class="emp-record-digits small" data-value="{{ emp_record.recorde }}" data-min-len="3"></div>
+        <div class="emp-record-label small">DIAS</div>
+      </div>
+      <div class="emp-record-audit" data-penult="{{ emp_record.penult_upload_at or '' }}" data-ult="{{ emp_record.ult_upload_at or '' }}">
+        Atualizado de - a -
+      </div>
+      <div class="emp-record-footer">
+        <div class="emp-record-footer-text">COLABORE PARA MELHORAR ESTE ÍNDICE</div>
+        <div class="emp-record-work">
+          <img src="/static/img/homens_trabalhando.jpg" alt="Trabalhos na via" />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or ped_dotacao_missing or ped_planejamento_missing_lines or emp_planejamento_missing_lines or emp_dotacao_missing) else 0 }}" style="display:none;">
   <div class="modal-card">
     <div class="modal-header">

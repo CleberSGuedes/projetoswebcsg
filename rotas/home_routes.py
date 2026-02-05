@@ -36,6 +36,7 @@ from models import (
 )
 from sqlalchemy.exc import ProgrammingError, IntegrityError
 from services.auth import login_required, role_required, current_user
+from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20
@@ -256,6 +257,23 @@ def index():
 @home_bp.route("/partial/dashboard")
 @login_required
 def partial_dashboard():
+    def _as_iso(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, str) and value.startswith("0000-00-00"):
+            return None
+        if hasattr(value, "isoformat"):
+            try:
+                return value.isoformat()
+            except Exception:
+                return str(value)
+        try:
+            from datetime import datetime
+
+            return datetime.fromisoformat(str(value)).isoformat()
+        except Exception:
+            return str(value)
+
     nivel_raw = getattr(g, "user_nivel", 99)
     try:
         nivel_int = int(nivel_raw)
@@ -380,6 +398,16 @@ def partial_dashboard():
                 "adj_solicitante": est_adj_map.get(perfil_id, ""),
             }
         )
+    try:
+        emp_record = get_emp_record_snapshot()
+    except Exception:
+        emp_record = {}
+    emp_record_payload = {
+        "dias_sem_erro": int(emp_record.get("dias_sem_erro") or 0),
+        "recorde": int(emp_record.get("recorde") or 0),
+        "ult_upload_at": _as_iso(emp_record.get("ult_upload_at")),
+        "penult_upload_at": _as_iso(emp_record.get("penult_upload_at")),
+    }
     return render_template(
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
@@ -390,6 +418,7 @@ def partial_dashboard():
         emp_dotacao_missing=emp_dotacao_missing,
         dotacoes_aguardando=pendentes,
         estornos_aguardando=estornos_aguardando,
+        emp_record=emp_record_payload,
     )
 
 

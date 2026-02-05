@@ -240,6 +240,26 @@ class EmpUpload(db.Model):
     output_filename = db.Column(db.String(255), nullable=True)
     data_arquivo = db.Column(db.DateTime, nullable=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alerta_emp = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+
+
+class EmpStatusDiario(db.Model):
+    __tablename__ = "emp_status_diario"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    dia = db.Column(db.Date, nullable=False, unique=True)
+    houve_alerta = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+    dias_sem_erro = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    recorde = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    ult_upload_at = db.Column(db.DateTime, nullable=True)
+    penult_upload_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+    )
 
 
 class EmpRegistro(db.Model):

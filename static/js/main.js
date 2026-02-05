@@ -7881,23 +7881,98 @@
   }
 
   function initDashboard({ forceShow = false } = {}) {
+    const recordModal = document.getElementById("emp-record-modal");
+    if (recordModal) {
+      const renderDigits = (container) => {
+        if (!container) return;
+        const rawVal = container.dataset.value ?? "0";
+        const minLen = parseInt(container.dataset.minLen || "3", 10) || 3;
+        let text = String(rawVal);
+        if (!/^\d+$/.test(text)) text = "0";
+        if (text.length < minLen) text = text.padStart(minLen, "0");
+        container.innerHTML = "";
+        for (const ch of text) {
+          const span = document.createElement("span");
+          span.className = "digit";
+          span.textContent = ch;
+          container.appendChild(span);
+        }
+      };
+
+      const formatEmpRecordStamp = (value) => {
+        const date = parseUtc(value);
+        if (!date) return "-";
+        const parts = new Intl.DateTimeFormat("pt-BR", {
+          timeZone: AMAZON_TZ,
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(date);
+        const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+        const dia = `${map.day}/${map.month}/${map.year}`;
+        const hora = `${map.hour}h${map.minute}m`;
+        return `${dia} às ${hora}`;
+      };
+
+      const diasEl = recordModal.querySelector(".emp-record-digits");
+      const recEl = recordModal.querySelector(".emp-record-digits.small");
+      renderDigits(diasEl);
+      renderDigits(recEl);
+
+      const auditEl = recordModal.querySelector(".emp-record-audit");
+      if (auditEl) {
+        const penult = recordModal.dataset.penult || auditEl.dataset.penult;
+        const ult = recordModal.dataset.ult || auditEl.dataset.ult;
+        if (penult || ult) {
+          const penultText = penult ? formatEmpRecordStamp(penult) : "-";
+          const ultText = ult ? formatEmpRecordStamp(ult) : "-";
+          auditEl.textContent = `Atualizado de ${penultText} a ${ultText}`;
+        } else {
+          auditEl.textContent = "Nenhuma atualizacao registrada.";
+        }
+      }
+    }
+
     const modal = document.getElementById("dotacao-aguardando-modal");
-    if (!modal) return;
-    const hasItems = modal.dataset.hasItems === "1";
-    const closeBtn = document.getElementById("dotacao-aguardando-close");
-    if (closeBtn) {
+    const hasItems = modal ? modal.dataset.hasItems === "1" : false;
+    const closeBtn = modal ? document.getElementById("dotacao-aguardando-close") : null;
+    if (closeBtn && modal) {
       closeBtn.addEventListener("click", () => {
         modal.style.display = "none";
       });
     }
+    const showDotacaoModal = () => {
+      if (modal && hasItems) modal.style.display = "flex";
+    };
+
+    if (recordModal) {
+      const recordClose = document.getElementById("emp-record-close");
+      if (recordClose) {
+        recordClose.addEventListener("click", () => {
+          recordModal.style.display = "none";
+          showDotacaoModal();
+        });
+      }
+    }
+
     if (forceShow) {
-      if (hasItems) modal.style.display = "flex";
+      if (recordModal) {
+        recordModal.style.display = "none";
+      }
+      showDotacaoModal();
       return;
     }
     const nav = performance.getEntriesByType("navigation")[0];
     const isReload = nav && nav.type === "reload";
-    if (!isReload && hasItems) {
-      modal.style.display = "flex";
+    if (!isReload) {
+      if (recordModal && recordModal.dataset.showLogin === "1") {
+        recordModal.style.display = "flex";
+      } else {
+        showDotacaoModal();
+      }
     }
   }
 

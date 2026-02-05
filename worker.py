@@ -12,6 +12,7 @@ from pathlib import Path
 from app import create_app
 from models import db, EmpUpload, NobUpload
 from sqlalchemy.exc import SQLAlchemyError
+from services.emp_record import update_emp_record_from_status
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
 
 EMP_INPUT_DIR = Path("upload/emp")
@@ -115,6 +116,10 @@ def _run_emp(upload_id: int) -> None:
         message=f"Processado com sucesso. Registros: {payload.get('total')}.",
         output_filename=payload.get("output_filename"),
     )
+    try:
+        update_emp_record_from_status(upload_id)
+    except Exception as exc:
+        print(f"Falha ao atualizar recorde EMP: {exc}", file=sys.stderr)
 
 
 def _run_nob(upload_id: int) -> None:

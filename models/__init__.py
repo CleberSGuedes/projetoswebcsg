@@ -12,6 +12,7 @@ from .user import (
     PedUpload,
     PedRegistro,
     EmpUpload,
+    EmpStatusDiario,
     EmpRegistro,
     EstEmpUpload,
     EstEmpRegistro,
