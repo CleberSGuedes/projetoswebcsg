@@ -23,7 +23,8 @@ def update_emp_record_from_status(upload_id: int) -> None:
 
     upload.alerta_emp = bool(has_alert)
 
-    dia = (upload.uploaded_at or datetime.utcnow()).date()
+    base_dt = upload.data_arquivo or upload.uploaded_at or datetime.utcnow()
+    dia = base_dt.date()
     status = EmpStatusDiario.query.filter_by(dia=dia).first()
 
     prev = (
@@ -49,9 +50,7 @@ def update_emp_record_from_status(upload_id: int) -> None:
     status.dias_sem_erro = dias_sem_erro
     status.recorde = recorde
 
-    last_two = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).limit(2).all()
-    status.ult_upload_at = last_two[0].uploaded_at if len(last_two) > 0 else None
-    status.penult_upload_at = last_two[1].uploaded_at if len(last_two) > 1 else None
+    status.ult_upload_at, status.penult_upload_at = _get_last_two_distinct_days()
 
     db.session.commit()
 
@@ -64,11 +63,7 @@ def get_emp_record_snapshot() -> dict:
     penult = status.penult_upload_at if status else None
 
     if not ult or not penult:
-        last_two = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).limit(2).all()
-        if last_two:
-            ult = last_two[0].uploaded_at
-        if len(last_two) > 1:
-            penult = last_two[1].uploaded_at
+        ult, penult = _get_last_two_distinct_days()
 
     return {
         "dias_sem_erro": dias,
@@ -76,3 +71,27 @@ def get_emp_record_snapshot() -> dict:
         "ult_upload_at": ult,
         "penult_upload_at": penult,
     }
+
+
+def _get_last_two_distinct_days() -> tuple[datetime | None, datetime | None]:
+    registros = (
+        EmpUpload.query.filter(EmpUpload.data_arquivo.isnot(None))
+        .order_by(EmpUpload.data_arquivo.desc())
+        .all()
+    )
+    vistos: set[str] = set()
+    datas: list[datetime] = []
+    for reg in registros:
+        dt = reg.data_arquivo or reg.uploaded_at
+        if not dt:
+            continue
+        chave = dt.date().isoformat()
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        datas.append(dt)
+        if len(datas) >= 2:
+            break
+    ult = datas[0] if len(datas) > 0 else None
+    penult = datas[1] if len(datas) > 1 else None
+    return ult, penult

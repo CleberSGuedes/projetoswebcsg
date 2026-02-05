@@ -7900,7 +7900,7 @@
       };
 
       const formatEmpRecordStamp = (value) => {
-        const date = parseUtc(value);
+        const date = parseManausLocal(value);
         if (!date) return "-";
         const parts = new Intl.DateTimeFormat("pt-BR", {
           timeZone: AMAZON_TZ,
