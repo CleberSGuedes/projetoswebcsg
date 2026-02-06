@@ -55,6 +55,7 @@ from services.est_emp_runner import (
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from pathlib import Path
 from sqlalchemy import text, func, or_
+from urllib.parse import unquote
 
 home_bp = Blueprint("home", __name__)
 
@@ -6518,10 +6519,15 @@ def api_criar_usuario():
 @home_bp.route("/api/usuarios/<email>", methods=["GET", "PUT", "DELETE", "POST"])
 @login_required
 def api_usuario(email):
+    def _safe_unquote(value: str) -> str:
+        v1 = unquote(value or "")
+        v2 = unquote(v1)
+        return v2
+
     def _normalize_email(value: str) -> str:
         return re.sub(r"[\s\u00a0\u200b\u200c\u200d\ufeff]+", "", value or "").lower()
 
-    email_raw = email or ""
+    email_raw = _safe_unquote(email or "")
     email_norm = email_raw.strip().lower()
     email_compact = _normalize_email(email_raw)
     usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
@@ -6589,10 +6595,15 @@ def api_usuario(email):
 @home_bp.route("/api/usuarios/<email>/senha", methods=["POST"])
 @login_required
 def api_usuario_senha(email):
+    def _safe_unquote(value: str) -> str:
+        v1 = unquote(value or "")
+        v2 = unquote(v1)
+        return v2
+
     def _normalize_email(value: str) -> str:
         return re.sub(r"[\s\u00a0\u200b\u200c\u200d\ufeff]+", "", value or "").lower()
 
-    email_raw = email or ""
+    email_raw = _safe_unquote(email or "")
     email_norm = email_raw.strip().lower()
     email_compact = _normalize_email(email_raw)
     usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
