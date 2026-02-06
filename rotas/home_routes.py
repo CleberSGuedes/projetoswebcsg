@@ -6519,7 +6519,7 @@ def api_criar_usuario():
 @login_required
 def api_usuario(email):
     email_norm = (email or "").strip().lower()
-    usuario = Usuario.query.filter(db.func.lower(Usuario.email) == email_norm).first()
+    usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
 
@@ -6575,7 +6575,7 @@ def api_usuario(email):
 @login_required
 def api_usuario_senha(email):
     email_norm = (email or "").strip().lower()
-    usuario = Usuario.query.filter(db.func.lower(Usuario.email) == email_norm).first()
+    usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
     caller_nivel = getattr(g, "user_nivel", None)
