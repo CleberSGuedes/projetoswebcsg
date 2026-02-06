@@ -6518,8 +6518,15 @@ def api_criar_usuario():
 @home_bp.route("/api/usuarios/<email>", methods=["GET", "PUT", "DELETE", "POST"])
 @login_required
 def api_usuario(email):
-    email_norm = (email or "").strip().lower()
+    email_raw = email or ""
+    email_norm = email_raw.strip().lower()
+    email_compact = re.sub(r"[\s\u200b\u200c\u200d\ufeff]+", "", email_raw).lower()
     usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
+    if not usuario and email_compact:
+        expr = func.lower(Usuario.email)
+        for ch in (" ", "\t", "\n", "\r", "\u00a0", "\u200b", "\u200c", "\u200d", "\ufeff"):
+            expr = func.replace(expr, ch, "")
+        usuario = Usuario.query.filter(expr == email_compact).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
 
@@ -6574,8 +6581,15 @@ def api_usuario(email):
 @home_bp.route("/api/usuarios/<email>/senha", methods=["POST"])
 @login_required
 def api_usuario_senha(email):
-    email_norm = (email or "").strip().lower()
+    email_raw = email or ""
+    email_norm = email_raw.strip().lower()
+    email_compact = re.sub(r"[\s\u200b\u200c\u200d\ufeff]+", "", email_raw).lower()
     usuario = Usuario.query.filter(func.lower(func.trim(Usuario.email)) == email_norm).first()
+    if not usuario and email_compact:
+        expr = func.lower(Usuario.email)
+        for ch in (" ", "\t", "\n", "\r", "\u00a0", "\u200b", "\u200c", "\u200d", "\ufeff"):
+            expr = func.replace(expr, ch, "")
+        usuario = Usuario.query.filter(expr == email_compact).first()
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
     caller_nivel = getattr(g, "user_nivel", None)
