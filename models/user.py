@@ -7,6 +7,7 @@ class Usuario(db.Model):
     id = db.Column(db.BigInteger)
     email = db.Column(db.String(255), primary_key=True)
     nome = db.Column(db.String(255), nullable=False)
+    perfil_id = db.Column(db.Integer, db.ForeignKey("perfil.id"), nullable=False)
     perfil = db.Column(db.String(50), nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     password_hash = db.Column(db.String(255), nullable=False)

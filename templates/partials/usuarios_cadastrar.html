@@ -13,10 +13,10 @@
         </label>
         <label class="field">
           <span>Perfil</span>
-          <select name="perfil" id="perfil-select" required>
+          <select name="perfil_id" id="perfil-select" required>
             <option value="" disabled selected>Selecione um perfil</option>
             {% for p in perfis %}
-            <option value="{{ p.nome }}">{{ p.nome }}</option>
+            <option value="{{ p.id }}">{{ p.nome }}</option>
             {% endfor %}
           </select>
         </label>

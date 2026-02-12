@@ -187,11 +187,12 @@
     const form = document.getElementById("form-editar-usuario");
     const msg = document.getElementById("editar-usuario-msg");
     const fillFromRow = (row) => {
+      const id = row.dataset.id || "";
       const email = row.dataset.email || "";
+      document.getElementById("edit-id").value = id;
       document.getElementById("edit-email").value = email;
-      document.getElementById("edit-email-display").value = email;
       document.getElementById("edit-nome").value = row.dataset.nome || "";
-      document.getElementById("edit-perfil").value = row.dataset.perfil || "";
+      document.getElementById("edit-perfil").value = row.dataset.perfilId || "";
       document.getElementById("edit-senha").value = "";
       document.getElementById("edit-ativo").checked = row.dataset.ativo === "1";
     };
@@ -203,7 +204,7 @@
 
     document.querySelectorAll(".select-usuario").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const row = btn.closest("tr[data-email]");
+        const row = btn.closest("tr[data-id]");
         if (row) fillFromRow(row);
       });
     });
@@ -212,20 +213,24 @@
       ev.preventDefault();
       msg.textContent = "Salvando...";
       msg.classList.remove("text-error");
+      const id = document.getElementById("edit-id").value;
       const email = document.getElementById("edit-email").value;
-      if (!email) {
+      if (!id) {
         msg.textContent = "Selecione um usuário na lista.";
         msg.classList.add("text-error");
         return;
       }
       const payload = {
+        email: email,
         nome: document.getElementById("edit-nome").value,
-        perfil: document.getElementById("edit-perfil").value,
+        perfil_id: document.getElementById("edit-perfil").value,
         senha: document.getElementById("edit-senha").value,
         ativo: document.getElementById("edit-ativo").checked,
       };
+      const perfilSelect = document.getElementById("edit-perfil");
+      const perfilText = perfilSelect?.selectedOptions?.[0]?.textContent?.trim() || "";
       try {
-        const res = await fetch(`/api/usuarios/${encodeURIComponent(email)}`, {
+        const res = await fetch(`/api/usuarios/id/${encodeURIComponent(id)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
           body: JSON.stringify(payload),
@@ -240,15 +245,18 @@
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
         msg.textContent = data.message || "Usuário atualizado.";
         document.getElementById("edit-senha").value = "";
-        const row = document.querySelector(`tr[data-email="${email}"]`);
+        const row = document.querySelector(`tr[data-id="${id}"]`);
         if (row) {
+          row.dataset.email = email || row.dataset.email || "";
           row.dataset.nome = payload.nome || row.dataset.nome || "";
-          row.dataset.perfil = payload.perfil || row.dataset.perfil || "";
+          row.dataset.perfil = perfilText || row.dataset.perfil || "";
+          row.dataset.perfilId = payload.perfil_id || row.dataset.perfilId || "";
           row.dataset.ativo = payload.ativo ? "1" : "0";
           const cells = row.querySelectorAll("td");
           if (cells.length >= 4) {
+            cells[0].textContent = email || cells[0].textContent;
             cells[1].textContent = payload.nome || cells[1].textContent;
-            cells[2].textContent = payload.perfil || cells[2].textContent;
+            cells[2].textContent = perfilText || cells[2].textContent;
             cells[3].textContent = payload.ativo ? "Sim" : "Não";
           }
         }
@@ -1883,7 +1891,7 @@
     const approvalJustificativa = document.getElementById("dotacao-justificativa-aprovacao");
     const approvalRadios = document.querySelectorAll("input[name='dotacao-aprovada']");
     const dotacaoPage = document.getElementById("dotacao-page");
-    const currentUserPerfil = dotacaoPage?.dataset?.userPerfil || "";
+    const currentUserPerfilId = String(dotacaoPage?.dataset?.userPerfilId || userPerfilId || "").trim();
     const currentUserId = dotacaoPage?.dataset?.userId || "";
     const currentUserNome = dotacaoPage?.dataset?.userNome || "";
 
@@ -2333,8 +2341,10 @@
           iduso: data.iduso || "",
           justificativa: data.justificativa_historico || "",
           valor: data.valor_dotacao || "",
+          perfilId: data.perfil_id || "",
           chaveDotacao: data.chave_dotacao || "",
           adjConcedente: data.adj_concedente || "",
+          adjConcedenteId: data.adj_concedente_id || "",
           statusAprovacao: data.status_aprovacao || "",
           aprovadoPor: data.aprovado_por || "",
           aprovadoPorNome: data.aprovado_por_nome || "",
@@ -2762,12 +2772,12 @@
           setFilterMsg("Selecione um registro para editar.", true);
           return;
         }
-        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
-        if (!adjConcedente) {
+        const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
+        if (!adjConcedenteId) {
           setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
-        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
           setFilterMsg("Usuário sem permissão para editar a dotação atual.", true);
           return;
         }
@@ -2792,12 +2802,12 @@
           setFilterMsg("Selecione um registro para excluir.", true);
           return;
         }
-        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
-        if (!adjConcedente) {
+        const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
+        if (!adjConcedenteId) {
           setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
-        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
           setFilterMsg("Usuário sem permissão para excluir a dotação atual.", true);
           return;
         }
@@ -2989,12 +2999,12 @@
           setFilterMsg("Somente dotações com status Aguardando podem ser aprovadas.", true);
           return;
         }
-        const adjConcedente = String(selected.dataset.adjConcedente || "").trim();
-        if (!adjConcedente) {
+        const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
+        if (!adjConcedenteId) {
           setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
-        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjConcedente.toLowerCase()) {
+        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
           setFilterMsg("Usuário sem permissão para aprovar a dotação atual.", true);
           return;
         }
@@ -7219,7 +7229,7 @@
     const justificativaInput = document.getElementById("est-dotacao-justificativa");
     const msg = document.getElementById("est-dotacao-msg");
     const estPage = document.getElementById("est-dotacao-page");
-    const currentUserPerfil = estPage?.dataset?.userPerfil || "";
+    const currentUserPerfilId = String(estPage?.dataset?.userPerfilId || userPerfilId || "").trim();
     const currentUserId = estPage?.dataset?.userId || "";
     const pageSizeSelect = document.getElementById("est-dotacao-page-size");
     const paginationEl = document.getElementById("est-dotacao-pagination");
@@ -7614,7 +7624,7 @@
           return;
         }
         const adjunta = String(selected.dataset.adjunta || "").trim();
-        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
           setFilterMsg("Usu\u00e1rio sem permiss\u00e3o de cadastrar estorno.", true);
           return;
         }
@@ -7702,7 +7712,7 @@
         return false;
       }
       const adjunta = String(row.dataset.adjunta || "").trim();
-      if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+      if (!currentUserPerfilId || currentUserPerfilId !== String(row.dataset.perfilId || "").trim()) {
         setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
         return false;
       }
@@ -7762,7 +7772,7 @@
           return;
         }
         const adjunta = String(selected.dataset.adjunta || "").trim();
-        if (!currentUserPerfil || currentUserPerfil.toLowerCase() !== adjunta.toLowerCase()) {
+        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
           setFilterMsg("Usuário sem permissão para aprovar o estorno atual.", true);
           return;
         }

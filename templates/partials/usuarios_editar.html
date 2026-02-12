@@ -2,11 +2,11 @@
   <div class="card">
     <div class="card-title">Editar Usuário</div>
     <form id="form-editar-usuario" class="form">
-      <input type="hidden" name="email" id="edit-email" />
+      <input type="hidden" name="id" id="edit-id" />
       <div class="form-grid">
         <label class="field">
           <span>Email</span>
-          <input type="email" id="edit-email-display" disabled />
+          <input type="email" id="edit-email" required />
         </label>
         <label class="field">
           <span>Nome</span>
@@ -17,7 +17,7 @@
           <select id="edit-perfil" required>
             <option value="">Selecione um perfil</option>
             {% for p in perfis %}
-            <option value="{{ p.nome }}">{{ p.nome }}</option>
+            <option value="{{ p.id }}">{{ p.nome }}</option>
             {% endfor %}
           </select>
         </label>
@@ -57,20 +57,18 @@
         </thead>
         <tbody>
           {% for u in usuarios %}
-          {% set is_admin = (u.perfil or '').lower() == 'admin' %}
-          {% set caller_perfil = (g.user.perfil or '').lower() if g.user else '' %}
-          <tr data-email="{{ u.email }}"
+          <tr data-id="{{ u.id }}"
+              data-email="{{ u.email }}"
               data-nome="{{ u.nome }}"
               data-perfil="{{ u.perfil }}"
+              data-perfil-id="{{ u.perfil_id or '' }}"
               data-ativo="{{ '1' if u.ativo else '0' }}">
             <td>{{ u.email }}</td>
             <td>{{ u.nome }}</td>
             <td>{{ u.perfil }}</td>
             <td>{{ 'Sim' if u.ativo else 'Não' }}</td>
             <td>
-              {% if not (caller_perfil == 'gestor' and is_admin) %}
               <button class="icon-btn sm select-usuario" data-email="{{ u.email }}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
-              {% endif %}
             </td>
           </tr>
           {% endfor %}

@@ -140,6 +140,24 @@ def _next_pk(model) -> int:
     return int(max_id) + 1
 
 
+def _row_value(row, key: str, index: int | None = None):
+    if row is None:
+        return None
+    mapping = getattr(row, "_mapping", None)
+    if mapping is not None and key in mapping:
+        return mapping[key]
+    try:
+        return getattr(row, key)
+    except Exception:
+        pass
+    if index is not None:
+        try:
+            return row[index]
+        except Exception:
+            return None
+    return None
+
+
 def _process_emp_upload(upload_id: int) -> None:
     registro = db.session.get(EmpUpload, upload_id)
     if not registro:
@@ -575,12 +593,23 @@ def _perfil_by_nome(nome: str | None):
     )
 
 
-def _is_nivel1(perfil_nome: str | None) -> bool:
-    perfil_row = _perfil_by_nome(perfil_nome)
-    if perfil_row:
-        return perfil_row.nivel == 1
-    # fallback se nao achar registro (ex: nome antigo hardcoded)
-    return (perfil_nome or "").lower() == "admin"
+def _perfil_id_by_nome(nome: str | None) -> int | None:
+    perfil = _perfil_by_nome(nome)
+    return perfil.id if perfil else None
+
+
+def _perfil_by_id(perfil_id) -> Perfil | None:
+    if perfil_id is None:
+        return None
+    try:
+        return db.session.get(Perfil, int(perfil_id))
+    except Exception:
+        return None
+
+
+def _is_nivel1(perfil_id=None) -> bool:
+    perfil_row = _perfil_by_id(perfil_id)
+    return bool(perfil_row and perfil_row.nivel == 1)
 
 
 @home_bp.route("/partial/usuarios")
@@ -703,7 +732,6 @@ def partial_atualizar_plan20():
 @require_feature("cadastrar/dotacao")
 def partial_cadastrar_dotacao():
     user_session = session.get("user") or {}
-    user_perfil = (user_session.get("perfil") or "").strip()
     user_email = (user_session.get("email") or "").strip()
     user_nome = ""
     user_id = ""
@@ -787,6 +815,7 @@ def partial_cadastrar_dotacao():
                 "chave_planejamento": dot.chave_planejamento,
                 "chave_dotacao": dot.chave_dotacao,
                 "adj_concedente": getattr(dot, "adj_concedente", "") or "",
+                "adj_concedente_id": _perfil_id_by_nome(getattr(dot, "adj_concedente", "") or ""),
                 "status_aprovacao": getattr(dot, "status_aprovacao", "") or "",
                 "aprovado_por": getattr(dot, "aprovado_por", "") or "",
                 "aprovado_por_nome": aprovado_map.get(getattr(dot, "aprovado_por", None), ""),
@@ -835,7 +864,6 @@ def partial_cadastrar_dotacao():
     return render_template(
         "partials/cadastrar_dotacao.html",
         dotacoes=dotacoes,
-        user_perfil=user_perfil,
         user_id=user_id,
         user_nome=user_nome,
     )
@@ -846,7 +874,6 @@ def partial_cadastrar_dotacao():
 @require_feature("cadastrar/est-dotacao")
 def partial_cadastrar_est_dotacao():
     user_session = session.get("user") or {}
-    user_perfil = (user_session.get("perfil") or "").strip()
     user_email = (user_session.get("email") or "").strip()
     user_nome = ""
     user_id = ""
@@ -951,6 +978,7 @@ def partial_cadastrar_est_dotacao():
         estorno_rows.append(
             {
                 "id": str(est_id or ""),
+                "perfil_id": str(r.get("perfil_id") or ""),
                 "status": str(status or ""),
                 "chave_dotacao": str(chave or ""),
                 "justificativa_estorno": str(justificativa or ""),
@@ -981,7 +1009,6 @@ def partial_cadastrar_est_dotacao():
         "partials/cadastrar_est_dotacao.html",
         dotacoes=dotacoes,
         estornos=estorno_rows,
-        user_perfil=user_perfil,
         user_id=user_id,
         user_nome=user_nome,
     )
@@ -1167,14 +1194,6 @@ def api_permissoes_nivel(nivel):
 def api_permissoes_current():
     user_session = session.get("user") or {}
     perfil_id = getattr(g, "user_perfil_id", None) or user_session.get("perfil_id")
-    if perfil_id is None:
-        perfil_nome = user_session.get("perfil")
-        perfil = _perfil_by_nome(perfil_nome)
-        if perfil:
-            perfil_id = perfil.id
-            # atualiza session para futuras chamadas
-            user_session["perfil_id"] = perfil.id
-            session["user"] = user_session
     feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
     return jsonify({"features": feats})
 
@@ -1241,9 +1260,11 @@ def _dotacao_payload(registro: Dotacao, adj_label: str) -> dict:
     return {
         "id": registro.id,
         "exercicio": registro.exercicio,
+        "perfil_id": getattr(registro, "perfil_id", None),
         "adjunta": adj_label,
         "chave_planejamento": registro.chave_planejamento,
         "adj_concedente": getattr(registro, "adj_concedente", "") or "",
+        "adj_concedente_id": _perfil_id_by_nome(getattr(registro, "adj_concedente", "") or ""),
         "status_aprovacao": getattr(registro, "status_aprovacao", "") or "",
         "aprovado_por": getattr(registro, "aprovado_por", "") or "",
         "aprovado_por_nome": aprovado_nome,
@@ -1280,6 +1301,30 @@ def _resolve_usuario_id():
         return None
     usuario = Usuario.query.filter_by(email=email).first()
     return getattr(usuario, "id", None) if usuario else None
+
+
+def _resolve_usuario_perfil_id():
+    perfil_id = getattr(g, "user_perfil_id", None)
+    if perfil_id:
+        return int(perfil_id)
+    user = session.get("user") or {}
+    perfil_id = user.get("perfil_id")
+    if perfil_id:
+        try:
+            return int(perfil_id)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _current_user_matches_perfil(perfil_id) -> bool:
+    current_perfil_id = _resolve_usuario_perfil_id()
+    if not current_perfil_id or not perfil_id:
+        return False
+    try:
+        return int(current_perfil_id) == int(perfil_id)
+    except (TypeError, ValueError):
+        return False
 
 
 def _now_local():
@@ -1533,8 +1578,13 @@ def _collect_ped_rows_for_dotacao_keys(keys: set[str]) -> dict[int, Decimal]:
     )
     matched: dict[int, Decimal] = {}
     for row in rows:
-        if _normalize_dotacao_key(row.chave) in keys:
-            matched[row.id] = _dec_or_zero(row.valor_ped)
+        row_id = _row_value(row, "id", 0)
+        row_chave = _row_value(row, "chave", 2)
+        row_valor = _row_value(row, "valor_ped", 1)
+        if row_id is None:
+            continue
+        if _normalize_dotacao_key(row_chave) in keys:
+            matched[int(row_id)] = _dec_or_zero(row_valor)
     return matched
 
 
@@ -1574,8 +1624,14 @@ def _collect_emp_rows_for_dotacao_keys(keys: set[str]) -> dict[int, tuple[Decima
     )
     matched: dict[int, tuple[Decimal, str]] = {}
     for row in rows:
-        if _normalize_dotacao_key(row.chave) in keys:
-            matched[row.id] = (_dec_or_zero(row.valor_emp_devolucao_gcv), row.numero_emp or "")
+        row_id = _row_value(row, "id", 0)
+        row_num = _row_value(row, "numero_emp", 1)
+        row_valor = _row_value(row, "valor_emp_devolucao_gcv", 2)
+        row_chave = _row_value(row, "chave", 3)
+        if row_id is None:
+            continue
+        if _normalize_dotacao_key(row_chave) in keys:
+            matched[int(row_id)] = (_dec_or_zero(row_valor), row_num or "")
     return matched
 
 
@@ -1872,12 +1928,13 @@ def api_dotacao_update(dotacao_id):
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
     adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
     if not adj_concedente:
         return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    if not perfil_usuario or perfil_usuario.lower() != adj_concedente.lower():
+    adj_concedente_id = _perfil_id_by_nome(adj_concedente)
+    if not adj_concedente_id:
+        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
+    if not _current_user_matches_perfil(adj_concedente_id):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar a dota\u00e7\u00e3o atual."}), 403
     status_atual = (registro.status_aprovacao or "").strip().lower()
     if status_atual and status_atual != "aguardando":
@@ -2077,12 +2134,13 @@ def api_dotacao_delete(dotacao_id):
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
     adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
     if not adj_concedente:
         return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    if not perfil_usuario or perfil_usuario.lower() != adj_concedente.lower():
+    adj_concedente_id = _perfil_id_by_nome(adj_concedente)
+    if not adj_concedente_id:
+        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
+    if not _current_user_matches_perfil(adj_concedente_id):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir a dota\u00e7\u00e3o atual."}), 403
     status_atual = (registro.status_aprovacao or "").strip().lower()
     if status_atual and status_atual != "aguardando":
@@ -2111,15 +2169,13 @@ def api_dotacao_aprovar(dotacao_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Dotacao ja foi processada."}), 400
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
-    if not perfil_usuario:
-        return jsonify({"error": "Perfil do usuario nao encontrado."}), 400
-
     adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
     if not adj_concedente:
         return jsonify({"error": "Adjunta Concedente nao definida."}), 400
-    if perfil_usuario.lower() != adj_concedente.lower():
+    adj_concedente_id = _perfil_id_by_nome(adj_concedente)
+    if not adj_concedente_id:
+        return jsonify({"error": "Adjunta Concedente nao definida."}), 400
+    if not _current_user_matches_perfil(adj_concedente_id):
         return jsonify({"error": "Usuario sem permissao para aprovar a dotacao atual."}), 403
 
     data = request.get_json() or {}
@@ -2206,9 +2262,7 @@ def api_est_dotacao_create():
     if missing:
         return jsonify({"error": f"Campos obrigatórios ausentes: {', '.join(missing)}."}), 400
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
-    if not perfil_usuario or perfil_usuario.lower() != adjunta.lower():
+    if not _current_user_matches_perfil(_perfil_id_by_nome(adjunta)):
         return jsonify({"error": "Usuário sem permissão de cadastrar estorno."}), 403
 
     valor_dotacao = _parse_decimal(valor_dotacao_raw)
@@ -2334,14 +2388,8 @@ def api_est_dotacao_update(est_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente estornos com status Aguardando podem ser alterados."}), 400
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
     perfil_id = row.get("perfil_id")
-    adj_nome = ""
-    if perfil_id:
-        adj_row = db.session.get(Perfil, perfil_id)
-        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
-    if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
+    if not _current_user_matches_perfil(perfil_id):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar o estorno atual."}), 403
 
     data = request.get_json() or {}
@@ -2433,14 +2481,8 @@ def api_est_dotacao_delete(est_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente estornos com status Aguardando podem ser exclu\u00eddos."}), 400
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
     perfil_id = row.get("perfil_id")
-    adj_nome = ""
-    if perfil_id:
-        adj_row = db.session.get(Perfil, perfil_id)
-        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
-    if not adj_nome or not perfil_usuario or perfil_usuario.lower() != adj_nome.lower():
+    if not _current_user_matches_perfil(perfil_id):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir o estorno atual."}), 403
 
     try:
@@ -2493,17 +2535,8 @@ def api_est_dotacao_aprovar(est_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Estorno j\u00e1 foi processado."}), 400
 
-    user_session = session.get("user") or {}
-    perfil_usuario = (user_session.get("perfil") or "").strip()
-    if not perfil_usuario:
-        return jsonify({"error": "Perfil do usu\u00e1rio n\u00e3o encontrado."}), 400
-
     perfil_id = row.get("perfil_id")
-    adj_nome = ""
-    if perfil_id:
-        adj_row = db.session.get(Perfil, perfil_id)
-        adj_nome = (adj_row.nome or "").strip() if adj_row else ""
-    if not adj_nome or perfil_usuario.lower() != adj_nome.lower():
+    if not _current_user_matches_perfil(perfil_id):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para aprovar o estorno atual."}), 403
 
     data = request.get_json() or {}
@@ -2807,9 +2840,15 @@ def _calc_dotacao_saldo(
     for row in ped_rows:
         if not chave_planejamento:
             continue
-        chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
+        row_id = _row_value(row, "id", 0)
+        row_valor = _row_value(row, "valor_ped", 1)
+        row_chave_planejamento = _row_value(row, "chave_planejamento", 2)
+        row_chave = _row_value(row, "chave", 3)
+        if row_id is None:
+            continue
+        chave_val = row_chave_planejamento if chave_field == "chave_planejamento" else row_chave
         if _normalize_chave(chave_val) == chave_norm:
-            plan_map[row.id] = _dec_or_zero(row.valor_ped)
+            plan_map[int(row_id)] = _dec_or_zero(row_valor)
 
     dot_map = _collect_ped_rows_for_dotacao_keys(dotacao_keys) if dotacao_keys else {}
     merged = dict(dot_map)
@@ -2831,8 +2870,14 @@ def _calc_dotacao_saldo(
             .all()
         )
         for row in ped_rows:
-            if _normalize_chave(row.chave_planejamento) == chave_norm or _normalize_chave(row.chave) == chave_norm:
-                merged[row.id] = _dec_or_zero(row.valor_ped)
+            row_id = _row_value(row, "id", 0)
+            row_valor = _row_value(row, "valor_ped", 1)
+            row_chave_planejamento = _row_value(row, "chave_planejamento", 2)
+            row_chave = _row_value(row, "chave", 3)
+            if row_id is None:
+                continue
+            if _normalize_chave(row_chave_planejamento) == chave_norm or _normalize_chave(row_chave) == chave_norm:
+                merged[int(row_id)] = _dec_or_zero(row_valor)
         valor_ped = sum(merged.values(), Decimal("0"))
         ped_count = len(merged)
 
@@ -2869,9 +2914,16 @@ def _calc_dotacao_saldo(
     for row in emp_rows:
         if not chave_planejamento:
             continue
-        chave_val = row.chave_planejamento if chave_field == "chave_planejamento" else row.chave
+        row_id = _row_value(row, "id", 0)
+        row_num = _row_value(row, "numero_emp", 1)
+        row_chave_planejamento = _row_value(row, "chave_planejamento", 2)
+        row_chave = _row_value(row, "chave", 3)
+        row_valor = _row_value(row, "valor_emp_devolucao_gcv", 4)
+        if row_id is None:
+            continue
+        chave_val = row_chave_planejamento if chave_field == "chave_planejamento" else row_chave
         if _normalize_chave(chave_val) == chave_norm:
-            plan_emp_map[row.id] = (_dec_or_zero(row.valor_emp_devolucao_gcv), row.numero_emp or "")
+            plan_emp_map[int(row_id)] = (_dec_or_zero(row_valor), row_num or "")
 
     dot_emp_map = _collect_emp_rows_for_dotacao_keys(dotacao_keys) if dotacao_keys else {}
     merged_emp = dict(dot_emp_map)
@@ -6492,23 +6544,39 @@ def api_criar_usuario():
     data = request.get_json() or {}
     email = (data.get("email") or "").lower().strip()
     nome = (data.get("nome") or "").strip()
-    perfil = (data.get("perfil") or "").strip()
+    perfil_id_raw = data.get("perfil_id")
     senha = (data.get("senha") or "").strip()
     ativo = bool(data.get("ativo", True))
 
-    if not email or not nome or not perfil or not senha:
+    if not email or not nome or not senha:
         return jsonify({"error": "Campos obrigatorios ausentes."}), 400
+
+    perfil_row = None
+    if perfil_id_raw in (None, ""):
+        return jsonify({"error": "Perfil obrigatorio."}), 400
+    try:
+        perfil_row = db.session.get(Perfil, int(perfil_id_raw))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Perfil invalido."}), 400
+    if not perfil_row:
+        return jsonify({"error": "Perfil nao encontrado."}), 400
 
     caller_nivel = getattr(g, "user_nivel", None)
     # Apenas nivel 1 pode criar usuario com perfil nivel 1
-    if caller_nivel != 1 and _is_nivel1(perfil):
+    if caller_nivel != 1 and _is_nivel1(perfil_id=perfil_row.id):
         return jsonify({"error": "Apenas admin pode criar perfil admin."}), 403
 
     existing = Usuario.query.filter_by(email=email).first()
     if existing:
         return jsonify({"error": "Usuario ja existe."}), 400
 
-    usuario = Usuario(email=email, nome=nome, perfil=perfil, ativo=ativo)
+    usuario = Usuario(
+        email=email,
+        nome=nome,
+        perfil_id=perfil_row.id,
+        perfil=(perfil_row.nome or "").strip(),
+        ativo=ativo,
+    )
     usuario.set_password(senha)
     db.session.add(usuario)
     db.session.commit()
@@ -6545,7 +6613,7 @@ def api_usuario(email):
         return jsonify({"error": "Usuario nao encontrado."}), 404
 
     caller_nivel = getattr(g, "user_nivel", None)
-    target_is_nivel1 = _is_nivel1(usuario.perfil)
+    target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
@@ -6557,6 +6625,7 @@ def api_usuario(email):
                 "email": usuario.email,
                 "nome": usuario.nome,
                 "perfil": usuario.perfil,
+                "perfil_id": getattr(usuario, "perfil_id", None),
                 "ativo": usuario.ativo,
             }
         )
@@ -6576,10 +6645,94 @@ def api_usuario(email):
 
     data = request.get_json() or {}
     usuario.nome = (data.get("nome") or usuario.nome).strip()
-    novo_perfil = (data.get("perfil") or usuario.perfil).strip()
-    if caller_nivel != 1 and _is_nivel1(novo_perfil):
+    novo_perfil_id_raw = data.get("perfil_id")
+    novo_perfil_row = None
+    if novo_perfil_id_raw in (None, ""):
+        return jsonify({"error": "Perfil obrigatorio."}), 400
+    try:
+        novo_perfil_row = db.session.get(Perfil, int(novo_perfil_id_raw))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Perfil invalido."}), 400
+    if not novo_perfil_row:
+        return jsonify({"error": "Perfil nao encontrado."}), 400
+    if caller_nivel != 1 and _is_nivel1(perfil_id=novo_perfil_row.id):
         return jsonify({"error": "Apenas admin pode definir perfil admin."}), 403
-    usuario.perfil = novo_perfil
+    usuario.perfil_id = novo_perfil_row.id
+    usuario.perfil = (novo_perfil_row.nome or "").strip()
+    usuario.ativo = bool(data.get("ativo", usuario.ativo))
+    nova_senha = (data.get("senha") or "").strip()
+    if nova_senha:
+        usuario.set_password(nova_senha)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao atualizar: {exc}"}), 500
+    return jsonify({"ok": True, "message": "Usuario atualizado."})
+
+
+@home_bp.route("/api/usuarios/id/<int:user_id>", methods=["GET", "PUT", "DELETE", "POST"])
+@login_required
+def api_usuario_por_id(user_id: int):
+    usuario = Usuario.query.filter(Usuario.id == user_id).first()
+    if not usuario:
+        return jsonify({"error": "Usuario nao encontrado."}), 404
+
+    caller_nivel = getattr(g, "user_nivel", None)
+    target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
+    if caller_nivel != 1 and target_is_nivel1:
+        return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
+
+    if request.method == "GET":
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+            return jsonify({"error": "Sem permissao."}), 403
+        return jsonify(
+            {
+                "id": usuario.id,
+                "email": usuario.email,
+                "nome": usuario.nome,
+                "perfil": usuario.perfil,
+                "perfil_id": getattr(usuario, "perfil_id", None),
+                "ativo": usuario.ativo,
+            }
+        )
+
+    if request.method == "DELETE":
+        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+            return jsonify({"error": "Sem permissao."}), 403
+        usuario.ativo = False
+        db.session.commit()
+        return jsonify({"ok": True, "message": "Usuario desativado."})
+
+    if request.method not in ("PUT", "POST"):
+        return jsonify({"error": "Metodo nao permitido."}), 405
+
+    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        return jsonify({"error": "Sem permissao."}), 403
+
+    data = request.get_json() or {}
+    novo_email = (data.get("email") or "").strip().lower()
+    if novo_email and novo_email != (usuario.email or "").lower():
+        existing = Usuario.query.filter(func.lower(Usuario.email) == novo_email).first()
+        if existing:
+            return jsonify({"error": "Email ja em uso."}), 400
+        usuario.email = novo_email
+
+    usuario.nome = (data.get("nome") or usuario.nome).strip()
+    novo_perfil_id_raw = data.get("perfil_id")
+    novo_perfil_row = None
+    if novo_perfil_id_raw in (None, ""):
+        return jsonify({"error": "Perfil obrigatorio."}), 400
+    try:
+        novo_perfil_row = db.session.get(Perfil, int(novo_perfil_id_raw))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Perfil invalido."}), 400
+    if not novo_perfil_row:
+        return jsonify({"error": "Perfil nao encontrado."}), 400
+    if caller_nivel != 1 and _is_nivel1(perfil_id=novo_perfil_row.id):
+        return jsonify({"error": "Apenas admin pode definir perfil admin."}), 403
+    usuario.perfil_id = novo_perfil_row.id
+    usuario.perfil = (novo_perfil_row.nome or "").strip()
     usuario.ativo = bool(data.get("ativo", usuario.ativo))
     nova_senha = (data.get("senha") or "").strip()
     if nova_senha:
@@ -6620,7 +6773,37 @@ def api_usuario_senha(email):
     if not usuario:
         return jsonify({"error": "Usuario nao encontrado."}), 404
     caller_nivel = getattr(g, "user_nivel", None)
-    target_is_nivel1 = _is_nivel1(usuario.perfil)
+    target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
+    if caller_nivel != 1 and target_is_nivel1:
+        return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
+    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        return jsonify({"error": "Sem permissao."}), 403
+
+    data = request.get_json() or {}
+    senha_atual = (data.get("senha_atual") or "").strip()
+    senha_nova = (data.get("senha_nova") or "").strip()
+    senha_confirmar = (data.get("senha_confirmar") or "").strip()
+
+    if not senha_atual or not senha_nova or not senha_confirmar:
+        return jsonify({"error": "Preencha todos os campos de senha."}), 400
+    if senha_nova != senha_confirmar:
+        return jsonify({"error": "Confirmacao diferente da nova senha."}), 400
+    if not usuario.check_password(senha_atual):
+        return jsonify({"error": "Senha atual incorreta."}), 400
+
+    usuario.set_password(senha_nova)
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Senha atualizada."})
+
+
+@home_bp.route("/api/usuarios/id/<int:user_id>/senha", methods=["POST"])
+@login_required
+def api_usuario_senha_por_id(user_id: int):
+    usuario = Usuario.query.filter(Usuario.id == user_id).first()
+    if not usuario:
+        return jsonify({"error": "Usuario nao encontrado."}), 404
+    caller_nivel = getattr(g, "user_nivel", None)
+    target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
     if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):

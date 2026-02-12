@@ -1,5 +1,5 @@
 <div class="grid" id="est-dotacao-page"
-     data-user-perfil="{{ user_perfil }}"
+     data-user-perfil-id="{{ g.user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
      data-user-nome="{{ user_nome }}">
   <div class="card">
@@ -98,6 +98,7 @@
                 data-fonte="{{ d.fonte }}"
                 data-iduso="{{ d.iduso }}"
                 data-valor="{{ d.valor_atual }}"
+                data-perfil-id="{{ d.perfil_id }}"
                 data-status-aprovacao="{{ d.status_aprovacao }}">
               <td>{{ d.status_aprovacao }}</td>
               <td>{{ d.chave_dotacao }}</td>
@@ -136,6 +137,7 @@
                 data-valorestorno="{{ e.valor_estorno }}"
                 data-saldoestorno="{{ e.saldo_estorno }}"
                 data-adjunta="{{ e.adjunta_solicitante }}"
+                data-perfil-id="{{ e.perfil_id }}"
                 data-exercicio="{{ e.exercicio }}"
                 data-programa="{{ e.programa }}"
                 data-paoe="{{ e.paoe }}"

@@ -18,7 +18,6 @@
       </div>
       <nav class="menu" id="menu">
         <a href="#" data-route="dashboard" class="menu-item active" title="Início"><i class="bi bi-house"></i> <span>Início</span></a>
-        {% set perfil_atual = (g.user.perfil or '').lower() if g.user else '' %}
         {% set nivel_atual = g.user_nivel or 99 %}
         {% if g.user %}
         <div class="menu-group" id="menu-atualizar">
@@ -108,7 +107,7 @@
       <main id="content-area" data-initial="{{ initial_content or 'dashboard' }}"></main>
 
       <footer class="footer">
-        (c) 2025 SEDUC-MT | Nucleo de Gestao Estrategica para Resultados - NGER | Sistema de Planejamento e Orçamento | Desenvolvido por Cleber S. Guedes | RELEASE_2_2026_02_05.3
+        (c) 2025 SEDUC-MT | Nucleo de Gestao Estrategica para Resultados - NGER | Sistema de Planejamento e Orçamento | Desenvolvido por Cleber S. Guedes | RELEASE_2_2026_02_12.1
       </footer>
     </div>
   </div>

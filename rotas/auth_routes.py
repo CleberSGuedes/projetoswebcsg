@@ -5,7 +5,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import check_password_hash
-from models import db, Usuario, LogLogin, ActiveSession
+from models import db, Usuario, LogLogin, ActiveSession, Perfil
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -102,22 +102,20 @@ def login():
                 flash("Usuario ja conectado em outra sessao. Confirme para continuar.", "error")
                 return redirect(url_for("auth.login"))
 
-            # Anexa perfil_id para evitar divergencia de nome/case
-            perfil_row = None
-            if usuario.perfil:
-                from models import Perfil  # import local para evitar ciclo no topo
-                from sqlalchemy import func
-
-                normalized = func.lower(func.ltrim(func.rtrim(Perfil.nome)))
-                perfil_row = (
-                    Perfil.query.filter(normalized == usuario.perfil.lower()).first()
-                    or Perfil.query.filter(Perfil.nome.ilike(usuario.perfil)).first()
-                )
+            # Usa perfil_id como fonte de verdade.
+            perfil_id = getattr(usuario, "perfil_id", None)
+            perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
+            if not perfil_row:
+                _log_login(email, "erro", "perfil_id invalido no usuario")
+                if is_fetch:
+                    return {"error": "Perfil do usuario invalido."}, 403
+                flash("Perfil do usuario invalido.", "error")
+                return redirect(url_for("auth.login"))
             session["user"] = {
                 "email": usuario.email,
                 "nome": usuario.nome,
-                "perfil": usuario.perfil,
-                "perfil_id": perfil_row.id if perfil_row else None,
+                "perfil": (perfil_row.nome or "").strip(),
+                "perfil_id": perfil_row.id,
             }
             _set_active_session(usuario.email)
             _log_login(email, "sucesso", None)

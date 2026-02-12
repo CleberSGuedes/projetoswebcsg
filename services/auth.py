@@ -26,12 +26,17 @@ def role_required(*roles):
                 if request.headers.get("X-Requested-With"):
                     return ("", 401)
                 return redirect(url_for("auth.login"))
-            perfil = (user.get("perfil") or "").lower()
-            if perfil not in roles_normalized:
+            nivel = getattr(g, "user_nivel", None)
+            # Regras por papel baseadas em nivel/perfil_id.
+            if "admin" in roles_normalized:
+                if nivel == 1:
+                    return view(*args, **kwargs)
                 if request.headers.get("X-Requested-With"):
                     return ("", 403)
                 abort(403)
-            return view(*args, **kwargs)
+            if request.headers.get("X-Requested-With"):
+                return ("", 403)
+            abort(403)
 
         return wrapped
 

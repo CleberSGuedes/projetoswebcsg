@@ -12,7 +12,6 @@ from flask import Flask, g, session, request, jsonify
 from flask_mail import Mail
 from config import Config
 from models import db, ActiveSession, Perfil
-from sqlalchemy import func
 from rotas import register_blueprints
 
 mail = Mail()
@@ -95,20 +94,14 @@ def create_app():
         active.last_activity = now
         db.session.commit()
         g.user = user
-        perfil_row = None
         perfil_id = user.get("perfil_id")
-        if perfil_id:
-            perfil_row = db.session.get(Perfil, perfil_id)
+        perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
         if not perfil_row:
-            perfil_nome = (user.get("perfil") or "").strip()
-            if perfil_nome:
-                normalized = func.lower(func.ltrim(func.rtrim(Perfil.nome)))
-                perfil_row = Perfil.query.filter(normalized == perfil_nome.lower()).first()
-                if not perfil_row:
-                    perfil_row = Perfil.query.filter(Perfil.nome.ilike(perfil_nome)).first()
-        if perfil_row and not perfil_id:
-            # atualiza sessao com id resolvido
-            user["perfil_id"] = perfil_row.id
+            session.clear()
+            return
+        if perfil_row:
+            # mantem nome do perfil sincronizado para exibicao/compatibilidade.
+            user["perfil"] = (perfil_row.nome or "").strip()
             session["user"] = user
         if perfil_row:
             g.user_perfil_id = perfil_row.id

@@ -1,5 +1,5 @@
 <div class="grid" id="dotacao-page"
-     data-user-perfil="{{ user_perfil }}"
+     data-user-perfil-id="{{ g.user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
      data-user-nome="{{ user_nome }}">
   <div class="card no-print">
@@ -261,6 +261,7 @@
                 data-chave="{{ d.chave_planejamento }}"
                 data-chave-dotacao="{{ d.chave_dotacao }}"
                 data-adj-concedente="{{ d.adj_concedente }}"
+                data-adj-concedente-id="{{ d.adj_concedente_id or '' }}"
                 data-status-aprovacao="{{ d.status_aprovacao }}"
                 data-aprovado-por="{{ d.aprovado_por }}"
                 data-aprovado-por-nome="{{ d.aprovado_por_nome }}"
