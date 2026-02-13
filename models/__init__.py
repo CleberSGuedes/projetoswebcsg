@@ -21,4 +21,5 @@ from .user import (
     Plan21Nger,
     Adj,
     Dotacao,
+    CadastrarSubacao,
 )

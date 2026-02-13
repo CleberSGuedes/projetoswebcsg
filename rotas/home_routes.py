@@ -31,6 +31,7 @@ from models import (
     Plan21Nger,
     Adj,
     Dotacao,
+    CadastrarSubacao,
     ActiveSession,
     db,
 )
@@ -54,7 +55,7 @@ from services.est_emp_runner import (
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from pathlib import Path
-from sqlalchemy import text, func, or_
+from sqlalchemy import text, func, or_, select
 from urllib.parse import unquote
 
 home_bp = Blueprint("home", __name__)
@@ -321,14 +322,16 @@ def partial_dashboard():
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
     if not ped_dotacao_missing:
         ped_keys = (
-            PedRegistro.query.with_entities(PedRegistro.chave)
-            .filter(PedRegistro.ativo == True)  # noqa: E712
+            db.session.execute(
+                select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
+            )
+            .scalars()
             .all()
         )
         ped_keys = [
-            _normalize_dotacao_key(k[0])
+            _normalize_dotacao_key(k)
             for k in ped_keys
-            if k and k[0] and str(k[0]).strip().upper().startswith("DOT.")
+            if k and str(k).strip().upper().startswith("DOT.")
         ]
         ped_keys = {k for k in ped_keys if k}
         if ped_keys:
@@ -481,18 +484,18 @@ def _load_permissoes_perfil(perfil_id: int | None):
     if perfil_id is None:
         return []
     try:
-        return [
-            pp.feature
-            for pp in (
-                PerfilPermissao.query.filter(
+        rows = (
+            db.session.execute(
+                select(PerfilPermissao.feature).where(
                     PerfilPermissao.perfil_id == perfil_id,
                     PerfilPermissao.ativo == True,  # noqa: E712
                     PerfilPermissao.feature.isnot(None),
-                ).all()
-                or []
+                )
             )
-            if getattr(pp, "feature", None)
-        ]
+            .scalars()
+            .all()
+        )
+        return [f for f in rows if f]
     except ProgrammingError:
         db.session.rollback()
         return []
@@ -502,18 +505,18 @@ def _load_permissoes_nivel(nivel: int | None):
     if nivel is None:
         return []
     try:
-        return [
-            np.feature
-            for np in (
-                NivelPermissao.query.filter(
+        rows = (
+            db.session.execute(
+                select(NivelPermissao.feature).where(
                     NivelPermissao.nivel == nivel,
                     NivelPermissao.ativo == True,  # noqa: E712
                     NivelPermissao.feature.isnot(None),
-                ).all()
-                or []
+                )
             )
-            if getattr(np, "feature", None)
-        ]
+            .scalars()
+            .all()
+        )
+        return [f for f in rows if f]
     except ProgrammingError:
         db.session.rollback()
         return []
@@ -535,18 +538,18 @@ def _load_permissoes_por_nivel_perfis(nivel: int):
         perfil_ids = [p.id for p in perfis]
         if not perfil_ids:
             return []
-        feats = [
-            pp.feature
-            for pp in (
-                PerfilPermissao.query.filter(
+        feats = (
+            db.session.execute(
+                select(PerfilPermissao.feature).where(
                     PerfilPermissao.perfil_id.in_(perfil_ids),
                     PerfilPermissao.ativo == True,  # noqa: E712
                     PerfilPermissao.feature.isnot(None),
-                ).all()
-                or []
+                )
             )
-            if getattr(pp, "feature", None)
-        ]
+            .scalars()
+            .all()
+        )
+        feats = [f for f in feats if f]
         return _add_parent_features(list(set(feats)))
     except ProgrammingError:
         db.session.rollback()
@@ -864,6 +867,26 @@ def partial_cadastrar_dotacao():
     return render_template(
         "partials/cadastrar_dotacao.html",
         dotacoes=dotacoes,
+        user_id=user_id,
+        user_nome=user_nome,
+    )
+
+
+@home_bp.route("/partial/cadastrar/plan_21-nger/subacao")
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def partial_cadastrar_plan21_subacao():
+    user_id = _resolve_usuario_id() or ""
+    user_session = session.get("user") or {}
+    user_nome = (user_session.get("nome") or "").strip()
+    subacoes = (
+        CadastrarSubacao.query.filter(CadastrarSubacao.excluido_em.is_(None))
+        .order_by(CadastrarSubacao.id.desc())
+        .all()
+    )
+    return render_template(
+        "partials/cadastrar_plan21_nger_subacao.html",
+        subacoes=subacoes,
         user_id=user_id,
         user_nome=user_nome,
     )
@@ -1369,6 +1392,68 @@ def _normalize_uo(value: str) -> str:
     return digits or token
 
 
+def _safe_query_mappings(sql: str, params: dict | None = None):
+    try:
+        return db.session.execute(text(sql), params or {}).mappings().all()
+    except Exception:
+        db.session.rollback()
+        return []
+
+
+def _options_code_name(rows, code_key: str, name_key: str, value_key: str = "value"):
+    options = []
+    for row in rows:
+        code = row.get(code_key)
+        name = row.get(name_key)
+        if code is None or name is None:
+            continue
+        label = f"{code} - {name}".strip()
+        value = code if value_key == "value" else row.get(value_key)
+        options.append({"value": str(value), "label": label})
+    return options
+
+
+def _options_abrev_nome(rows, abrev_key: str, name_key: str):
+    options = []
+    for row in rows:
+        abrev = row.get(abrev_key)
+        name = row.get(name_key)
+        if abrev is None:
+            continue
+        label = f"{abrev} - {name}".strip() if name else str(abrev)
+        options.append({"value": str(abrev), "label": label})
+    return options
+
+
+def _find_plan21_nger_row(
+    exercicio: str,
+    uo: str,
+    programa: str,
+    acao_paoe: str,
+    responsavel_acao: str,
+    produto_acao: str,
+):
+    query = Plan21Nger.query
+    if exercicio:
+        query = query.filter(Plan21Nger.exercicio == exercicio)
+    if uo:
+        query = query.filter(Plan21Nger.uo == uo)
+    if programa:
+        query = query.filter(Plan21Nger.programa == programa)
+    if acao_paoe:
+        query = query.filter(Plan21Nger.acao_paoe == acao_paoe)
+    if responsavel_acao:
+        query = query.filter(Plan21Nger.responsavel_acao == responsavel_acao)
+    if produto_acao:
+        query = query.filter(Plan21Nger.produto == produto_acao)
+    rows = query.all()
+    if not rows:
+        return None, "Nenhum registro do plan21_nger encontrado para esta selecao."
+    if len(rows) > 1:
+        return None, "Selecao ambigua no plan21_nger. Ajuste os filtros."
+    return rows[0], None
+
+
 def _normalize_iduso(value: str) -> str:
     if not value:
         return ""
@@ -1706,6 +1791,515 @@ def api_dotacao_options():
         adj_options.append({"id": p.id, "label": nome})
     perfis = [o["label"] for o in adj_options]
     return jsonify({"options": options, "adj": adj_options, "perfis": perfis})
+
+
+@home_bp.route("/api/subacao/options", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_options():
+    current_year = str(_now_local().year)
+    plan_fields = {
+        "exercicio": Plan21Nger.exercicio,
+        "uo": Plan21Nger.uo,
+        "programa": Plan21Nger.programa,
+        "acao_paoe": Plan21Nger.acao_paoe,
+        "responsavel_acao": Plan21Nger.responsavel_acao,
+        "produto_acao": Plan21Nger.produto,
+    }
+    selected = {}
+    for key in plan_fields:
+        val = (request.args.get(key) or "").strip()
+        if val:
+            selected[key] = val
+    if "exercicio" not in selected:
+        selected["exercicio"] = current_year
+
+    plan_options = {}
+    for key, col in plan_fields.items():
+        query = db.session.query(col).distinct().filter(Plan21Nger.ativo == True)  # noqa: E712
+        for s_key, s_val in selected.items():
+            if s_key == key:
+                continue
+            query = query.filter(plan_fields[s_key] == s_val)
+        rows = query.all()
+        values = []
+        for (val,) in rows:
+            if val is None:
+                continue
+            s = str(val).strip()
+            if s:
+                values.append(s)
+        if key == "exercicio":
+            plan_options[key] = [current_year]
+        else:
+            plan_options[key] = sorted(set(values), key=lambda v: v.lower())
+
+    regiao_rows = _safe_query_mappings(
+        "SELECT codigo, nome FROM regiao ORDER BY codigo"
+    )
+    regioes = _options_code_name(regiao_rows, "codigo", "nome")
+
+    subfuncao_rows = _safe_query_mappings(
+        "SELECT codigo, nome FROM subfuncao ORDER BY codigo"
+    )
+    subfuncoes = _options_code_name(subfuncao_rows, "codigo", "nome")
+
+    ug_rows = _safe_query_mappings("SELECT codigo, nome FROM ug ORDER BY codigo")
+    ugs = _options_code_name(ug_rows, "codigo", "nome")
+
+    subfuncao_selected = _normalize_codigo_num(request.args.get("subfuncao") or "")
+    ug_selected = _normalize_codigo_num(request.args.get("ug") or "")
+    if ug_selected:
+        rows = _safe_query_mappings(
+            "SELECT DISTINCT subfuncao FROM ug_subfuncao WHERE ug = :ug",
+            {"ug": ug_selected},
+        )
+        allowed = {str(_normalize_codigo_num(r.get("subfuncao"))) for r in rows if r.get("subfuncao")}
+        if allowed:
+            subfuncoes = [s for s in subfuncoes if _normalize_codigo_num(s["value"]) in allowed]
+    if subfuncao_selected:
+        rows = _safe_query_mappings(
+            "SELECT DISTINCT ug FROM ug_subfuncao WHERE subfuncao = :sub",
+            {"sub": subfuncao_selected},
+        )
+        allowed = {str(_normalize_codigo_num(r.get("ug"))) for r in rows if r.get("ug")}
+        if allowed:
+            ugs = [u for u in ugs if _normalize_codigo_num(u["value"]) in allowed]
+
+    adj_rows = _safe_query_mappings("SELECT abreviacao, nome FROM adj ORDER BY abreviacao")
+    adjs = _options_abrev_nome(adj_rows, "abreviacao", "nome")
+
+    adj_selected = (request.args.get("adj") or "").strip()
+    macropoliticas = []
+    if adj_selected:
+        macropoliticas = _options_abrev_nome(
+            _safe_query_mappings(
+                """
+                SELECT m.abreviacao, m.nome
+                FROM macropolitica m
+                JOIN macropolitica_adj ma ON ma.macropolitica_id = m.id
+                JOIN adj a ON a.id = ma.adj_id
+                WHERE a.abreviacao = :adj
+                ORDER BY m.abreviacao
+                """,
+                {"adj": adj_selected},
+            ),
+            "abreviacao",
+            "nome",
+        )
+    if not macropoliticas:
+        macropoliticas = _options_abrev_nome(
+            _safe_query_mappings("SELECT abreviacao, nome FROM macropolitica ORDER BY abreviacao"),
+            "abreviacao",
+            "nome",
+        )
+
+    pilar_rows = []
+    macropolitica_selected = (request.args.get("macropolitica") or "").strip()
+    if adj_selected or macropolitica_selected:
+        base_sql = """
+            SELECT DISTINCT p.abreviacao, p.nome
+            FROM pilar p
+            {joins}
+            {where}
+            ORDER BY p.abreviacao
+        """
+        joins = []
+        wheres = []
+        params = {}
+        if adj_selected:
+            joins.append("JOIN pilar_adj pa ON pa.pilar_id = p.id JOIN adj a ON a.id = pa.adj_id")
+            wheres.append("a.abreviacao = :adj")
+            params["adj"] = adj_selected
+        if macropolitica_selected:
+            joins.append("JOIN macropolitica_pilar mp ON mp.pilar_id = p.id JOIN macropolitica m ON m.id = mp.macropolitica_id")
+            wheres.append("m.abreviacao = :macro")
+            params["macro"] = macropolitica_selected
+        sql = base_sql.format(
+            joins=" ".join(joins),
+            where=f"WHERE {' AND '.join(wheres)}" if wheres else "",
+        )
+        pilar_rows = _safe_query_mappings(sql, params)
+    pilares = _options_abrev_nome(pilar_rows, "abreviacao", "nome")
+    if not pilares:
+        pilares = _options_abrev_nome(
+            _safe_query_mappings("SELECT abreviacao, nome FROM pilar ORDER BY abreviacao"),
+            "abreviacao",
+            "nome",
+        )
+
+    eixo_rows = []
+    if adj_selected:
+        eixo_rows = _safe_query_mappings(
+            """
+            SELECT e.abreviacao, e.nome
+            FROM eixo e
+            JOIN eixo_adj ea ON ea.eixo_id = e.id
+            JOIN adj a ON a.id = ea.adj_id
+            WHERE a.abreviacao = :adj
+            ORDER BY e.abreviacao
+            """,
+            {"adj": adj_selected},
+        )
+    eixos = _options_abrev_nome(eixo_rows, "abreviacao", "nome")
+    if not eixos:
+        eixos = _options_abrev_nome(
+            _safe_query_mappings("SELECT abreviacao, nome FROM eixo ORDER BY abreviacao"),
+            "abreviacao",
+            "nome",
+        )
+
+    politica_rows = []
+    eixo_selected = (request.args.get("eixo") or "").strip()
+    if adj_selected or eixo_selected:
+        base_sql = """
+            SELECT DISTINCT p.abreviacao, p.nome
+            FROM politica_decr p
+            {joins}
+            {where}
+            ORDER BY p.abreviacao
+        """
+        joins = []
+        wheres = []
+        params = {}
+        if adj_selected:
+            joins.append("JOIN politica_decr_adj pa ON pa.politica_decr_id = p.id JOIN adj a ON a.id = pa.adj_id")
+            wheres.append("a.abreviacao = :adj")
+            params["adj"] = adj_selected
+        if eixo_selected:
+            joins.append("JOIN politica_decr_eixo pe ON pe.politica_decr_id = p.id JOIN eixo e ON e.id = pe.eixo_id")
+            wheres.append("e.abreviacao = :eixo")
+            params["eixo"] = eixo_selected
+        sql = base_sql.format(
+            joins=" ".join(joins),
+            where=f"WHERE {' AND '.join(wheres)}" if wheres else "",
+        )
+        politica_rows = _safe_query_mappings(sql, params)
+    politicas = _options_abrev_nome(politica_rows, "abreviacao", "nome")
+    if not politicas:
+        politicas = _options_abrev_nome(
+            _safe_query_mappings("SELECT abreviacao, nome FROM politica_decr ORDER BY abreviacao"),
+            "abreviacao",
+            "nome",
+        )
+
+    publico_rows = _safe_query_mappings(
+        "SELECT codigo, nome FROM publico_transversal ORDER BY codigo"
+    )
+    publicos = _options_code_name(publico_rows, "codigo", "nome")
+
+    municipio_rows = _safe_query_mappings(
+        "SELECT codigo_ibge, nome FROM municipio ORDER BY nome"
+    )
+    municipios = []
+    for row in municipio_rows:
+        codigo = row.get("codigo_ibge")
+        nome = row.get("nome")
+        if codigo is None or nome is None:
+            continue
+        municipios.append(
+            {
+                "codigo": str(codigo),
+                "nome": str(nome),
+                "label": f"{codigo} - {nome}",
+            }
+        )
+
+    return jsonify(
+        {
+            "plan21": plan_options,
+            "regioes": regioes,
+            "subfuncoes": subfuncoes,
+            "ugs": ugs,
+            "adjs": adjs,
+            "macropoliticas": macropoliticas,
+            "pilares": pilares,
+            "eixos": eixos,
+            "politicas": politicas,
+            "publicos": publicos,
+            "municipios": municipios,
+        }
+    )
+
+
+def _subacao_payload(registro: CadastrarSubacao) -> dict:
+    return {
+        "id": registro.id,
+        "exercicio": registro.exercicio,
+        "unidade_orcamentaria": registro.unidade_orcamentaria,
+        "programa": registro.programa,
+        "acao_paoe": registro.acao_paoe,
+        "responsavel_acao": registro.responsavel_acao,
+        "produto_acao": registro.produto_acao,
+        "chave_planejamento": registro.chave_planejamento,
+        "subacao_entrega": registro.subacao_entrega,
+        "responsavel": registro.responsavel,
+        "cpf_responsavel": registro.cpf_responsavel,
+        "prazo": registro.prazo,
+        "unid_gestora": registro.unid_gestora,
+        "unidade_setorial_planejamento": registro.unidade_setorial_planejamento,
+        "produto_subacao": registro.produto_subacao,
+        "unidade_medida": registro.unidade_medida,
+        "regiao_subacao": registro.regiao_subacao,
+        "codigo": registro.codigo,
+        "municipios_entrega": registro.municipios_entrega,
+        "meta_subacao": str(registro.meta_subacao or ""),
+        "detalhamento_produto": registro.detalhamento_produto,
+        "etapa": registro.etapa,
+        "justificativa": registro.justificativa,
+        "responsavel_nger": registro.responsavel_nger,
+    }
+
+
+@home_bp.route("/api/subacao", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_create():
+    data = request.get_json() or {}
+    exercicio_raw = (data.get("exercicio") or "").strip()
+    unidade_orcamentaria = (data.get("unidade_orcamentaria") or "").strip()
+    programa = (data.get("programa") or "").strip()
+    acao_paoe = (data.get("acao_paoe") or "").strip()
+    responsavel_acao = (data.get("responsavel_acao") or "").strip()
+    produto_acao = (data.get("produto_acao") or "").strip()
+    chave_planejamento = (data.get("chave_planejamento") or "").strip()
+    subacao_entrega_raw = (data.get("subacao_entrega") or "").strip()
+    responsavel = (data.get("responsavel") or "").strip()
+    cpf_responsavel = (data.get("cpf_responsavel") or "").strip()
+    prazo_inicio = (data.get("prazo_inicio") or "").strip()
+    prazo_fim = (data.get("prazo_fim") or "").strip()
+    unid_gestora = (data.get("unid_gestora") or "").strip()
+    unidade_setorial_planejamento = (data.get("unidade_setorial_planejamento") or "").strip()
+    produto_subacao = (data.get("produto_subacao") or "").strip()
+    unidade_medida = (data.get("unidade_medida") or "").strip()
+    regiao_subacao = (data.get("regiao_subacao") or "").strip()
+    codigo = (data.get("codigo") or "").strip()
+    municipios_entrega = (data.get("municipios_entrega") or "").strip()
+    meta_raw = (data.get("meta_subacao") or "").strip()
+    detalhamento_produto = (data.get("detalhamento_produto") or "").strip()
+    etapa = (data.get("etapa") or "").strip()
+    justificativa = (data.get("justificativa") or "").strip()
+    responsavel_nger = (data.get("responsavel_nger") or "").strip()
+
+    required = {
+        "exercicio": exercicio_raw,
+        "unidade_orcamentaria": unidade_orcamentaria,
+        "programa": programa,
+        "acao_paoe": acao_paoe,
+        "responsavel_acao": responsavel_acao,
+        "produto_acao": produto_acao,
+        "chave_planejamento": chave_planejamento,
+        "subacao_entrega": subacao_entrega_raw,
+        "responsavel": responsavel,
+        "cpf_responsavel": cpf_responsavel,
+        "prazo_inicio": prazo_inicio,
+        "prazo_fim": prazo_fim,
+        "unid_gestora": unid_gestora,
+        "unidade_setorial_planejamento": unidade_setorial_planejamento,
+        "produto_subacao": produto_subacao,
+        "unidade_medida": unidade_medida,
+        "regiao_subacao": regiao_subacao,
+        "codigo": codigo,
+        "municipios_entrega": municipios_entrega,
+        "meta_subacao": meta_raw,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+
+    try:
+        exercicio = int(exercicio_raw)
+    except ValueError:
+        return jsonify({"error": "Exercicio invalido."}), 400
+
+    meta_subacao = _parse_decimal(meta_raw)
+    if meta_subacao is None:
+        return jsonify({"error": "Meta da subacao invalida."}), 400
+
+    plan_row, plan_err = _find_plan21_nger_row(
+        str(exercicio),
+        unidade_orcamentaria,
+        programa,
+        acao_paoe,
+        responsavel_acao,
+        produto_acao,
+    )
+    if plan_err:
+        return jsonify({"error": plan_err}), 400
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+
+    prazo = f"{prazo_inicio} a {prazo_fim}".strip()
+    subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
+
+    registro = CadastrarSubacao(
+        exercicio=exercicio,
+        unidade_orcamentaria=unidade_orcamentaria,
+        programa=programa,
+        acao_paoe=acao_paoe,
+        responsavel_acao=responsavel_acao,
+        produto_acao=produto_acao,
+        chave_planejamento=chave_planejamento,
+        subacao_entrega=subacao_entrega,
+        responsavel=responsavel,
+        cpf_responsavel=cpf_responsavel,
+        prazo=prazo,
+        unid_gestora=unid_gestora,
+        unidade_setorial_planejamento=unidade_setorial_planejamento,
+        produto_subacao=produto_subacao,
+        unidade_medida=unidade_medida,
+        regiao_subacao=regiao_subacao,
+        codigo=codigo,
+        municipios_entrega=municipios_entrega,
+        meta_subacao=meta_subacao,
+        detalhamento_produto=detalhamento_produto,
+        etapa=etapa,
+        justificativa=justificativa,
+        responsavel_nger=responsavel_nger,
+        plan21_nger_id=plan_row.id if plan_row else None,
+        usuario_id=usuarios_id,
+        criado_em=_now_local(),
+    )
+    db.session.add(registro)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar subacao: {exc}"}), 500
+    return jsonify({"subacao": _subacao_payload(registro)})
+
+
+@home_bp.route("/api/subacao/<int:subacao_id>", methods=["PUT"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_update(subacao_id):
+    registro = db.session.get(CadastrarSubacao, subacao_id)
+    if not registro or registro.excluido_em is not None:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+    data = request.get_json() or {}
+    exercicio_raw = (data.get("exercicio") or "").strip()
+    unidade_orcamentaria = (data.get("unidade_orcamentaria") or "").strip()
+    programa = (data.get("programa") or "").strip()
+    acao_paoe = (data.get("acao_paoe") or "").strip()
+    responsavel_acao = (data.get("responsavel_acao") or "").strip()
+    produto_acao = (data.get("produto_acao") or "").strip()
+    chave_planejamento = (data.get("chave_planejamento") or "").strip()
+    subacao_entrega_raw = (data.get("subacao_entrega") or "").strip()
+    responsavel = (data.get("responsavel") or "").strip()
+    cpf_responsavel = (data.get("cpf_responsavel") or "").strip()
+    prazo_inicio = (data.get("prazo_inicio") or "").strip()
+    prazo_fim = (data.get("prazo_fim") or "").strip()
+    unid_gestora = (data.get("unid_gestora") or "").strip()
+    unidade_setorial_planejamento = (data.get("unidade_setorial_planejamento") or "").strip()
+    produto_subacao = (data.get("produto_subacao") or "").strip()
+    unidade_medida = (data.get("unidade_medida") or "").strip()
+    regiao_subacao = (data.get("regiao_subacao") or "").strip()
+    codigo = (data.get("codigo") or "").strip()
+    municipios_entrega = (data.get("municipios_entrega") or "").strip()
+    meta_raw = (data.get("meta_subacao") or "").strip()
+    detalhamento_produto = (data.get("detalhamento_produto") or "").strip()
+    etapa = (data.get("etapa") or "").strip()
+    justificativa = (data.get("justificativa") or "").strip()
+    responsavel_nger = (data.get("responsavel_nger") or "").strip()
+
+    required = {
+        "exercicio": exercicio_raw,
+        "unidade_orcamentaria": unidade_orcamentaria,
+        "programa": programa,
+        "acao_paoe": acao_paoe,
+        "responsavel_acao": responsavel_acao,
+        "produto_acao": produto_acao,
+        "chave_planejamento": chave_planejamento,
+        "subacao_entrega": subacao_entrega_raw,
+        "responsavel": responsavel,
+        "cpf_responsavel": cpf_responsavel,
+        "prazo_inicio": prazo_inicio,
+        "prazo_fim": prazo_fim,
+        "unid_gestora": unid_gestora,
+        "unidade_setorial_planejamento": unidade_setorial_planejamento,
+        "produto_subacao": produto_subacao,
+        "unidade_medida": unidade_medida,
+        "regiao_subacao": regiao_subacao,
+        "codigo": codigo,
+        "municipios_entrega": municipios_entrega,
+        "meta_subacao": meta_raw,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+
+    try:
+        exercicio = int(exercicio_raw)
+    except ValueError:
+        return jsonify({"error": "Exercicio invalido."}), 400
+
+    meta_subacao = _parse_decimal(meta_raw)
+    if meta_subacao is None:
+        return jsonify({"error": "Meta da subacao invalida."}), 400
+
+    plan_row, plan_err = _find_plan21_nger_row(
+        str(exercicio),
+        unidade_orcamentaria,
+        programa,
+        acao_paoe,
+        responsavel_acao,
+        produto_acao,
+    )
+    if plan_err:
+        return jsonify({"error": plan_err}), 400
+
+    prazo = f"{prazo_inicio} a {prazo_fim}".strip()
+    subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
+
+    registro.exercicio = exercicio
+    registro.unidade_orcamentaria = unidade_orcamentaria
+    registro.programa = programa
+    registro.acao_paoe = acao_paoe
+    registro.responsavel_acao = responsavel_acao
+    registro.produto_acao = produto_acao
+    registro.chave_planejamento = chave_planejamento
+    registro.subacao_entrega = subacao_entrega
+    registro.responsavel = responsavel
+    registro.cpf_responsavel = cpf_responsavel
+    registro.prazo = prazo
+    registro.unid_gestora = unid_gestora
+    registro.unidade_setorial_planejamento = unidade_setorial_planejamento
+    registro.produto_subacao = produto_subacao
+    registro.unidade_medida = unidade_medida
+    registro.regiao_subacao = regiao_subacao
+    registro.codigo = codigo
+    registro.municipios_entrega = municipios_entrega
+    registro.meta_subacao = meta_subacao
+    registro.detalhamento_produto = detalhamento_produto
+    registro.etapa = etapa
+    registro.justificativa = justificativa
+    registro.responsavel_nger = responsavel_nger
+    registro.plan21_nger_id = plan_row.id if plan_row else None
+    registro.alterado_em = _now_local()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar subacao: {exc}"}), 500
+    return jsonify({"subacao": _subacao_payload(registro)})
+
+
+@home_bp.route("/api/subacao/<int:subacao_id>", methods=["DELETE"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_delete(subacao_id):
+    registro = db.session.get(CadastrarSubacao, subacao_id)
+    if not registro or registro.excluido_em is not None:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+    registro.excluido_em = _now_local()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir subacao: {exc}"}), 500
+    return jsonify({"ok": True})
 
 
 @home_bp.route("/api/dotacao", methods=["POST"])

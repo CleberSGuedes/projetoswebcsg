@@ -81,15 +81,16 @@
       }
     });
 
-    // expand parent submenu for active route
-    document.querySelectorAll(".menu-group").forEach((group) => {
-      const submenu = group.querySelector(".submenu");
-      if (!submenu) return;
-      const hasActive = Array.from(submenu.querySelectorAll("[data-route]")).some(
-        (item) => item.getAttribute("data-route") === route
-      );
-      group.classList.toggle("open", hasActive);
-    });
+    // expand only the ancestors of the active route (avoid opening nested by default)
+    document.querySelectorAll(".menu-group").forEach((group) => group.classList.remove("open"));
+    const activeLink = document.querySelector(`.menu-item[data-route="${route}"]`);
+    if (activeLink) {
+      let parentGroup = activeLink.closest(".menu-group");
+      while (parentGroup) {
+        parentGroup.classList.add("open");
+        parentGroup = parentGroup.parentElement?.closest(".menu-group");
+      }
+    }
   }
 
   async function logout() {
@@ -6242,6 +6243,9 @@
     if (route === "cadastrar/est-dotacao") {
       initEstDotacao();
     }
+    if (route === "cadastrar/plan_21-nger/subacao") {
+      initSubacaoPlan21();
+    }
     if (route === "relatorios/fip613") {
       initRelatorioFip();
     }
@@ -7984,6 +7988,539 @@
         showDotacaoModal();
       }
     }
+  }
+
+  function initSubacaoPlan21() {
+    const form = document.getElementById("form-subacao");
+    const msg = document.getElementById("subacao-msg");
+    if (!form || !msg) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const modeSelect = document.getElementById("subacao-formulario");
+    const idInput = document.getElementById("subacao-id");
+    const clearBtn = document.getElementById("subacao-clear");
+
+    const planSelects = {
+      exercicio: document.getElementById("subacao-exercicio"),
+      uo: document.getElementById("subacao-uo"),
+      programa: document.getElementById("subacao-programa"),
+      acao_paoe: document.getElementById("subacao-acao"),
+      responsavel_acao: document.getElementById("subacao-responsavel-acao"),
+      produto_acao: document.getElementById("subacao-produto-acao"),
+    };
+
+    const chaveSelects = {
+      regiao: document.getElementById("subacao-regiao"),
+      subfuncao: document.getElementById("subacao-subfuncao"),
+      ug: document.getElementById("subacao-ug"),
+      adj: document.getElementById("subacao-adj"),
+      macropolitica: document.getElementById("subacao-macropolitica"),
+      pilar: document.getElementById("subacao-pilar"),
+      eixo: document.getElementById("subacao-eixo"),
+      politica_decr: document.getElementById("subacao-politica"),
+      publico_transversal: document.getElementById("subacao-publico"),
+    };
+
+    const chaveInput = document.getElementById("subacao-chave");
+    const subacaoEntregaInput = document.getElementById("subacao-entrega");
+    const responsavelInput = document.getElementById("subacao-responsavel");
+    const cpfInput = document.getElementById("subacao-cpf");
+    const dataInicioInput = document.getElementById("subacao-data-inicio");
+    const dataFimInput = document.getElementById("subacao-data-fim");
+    const unidGestoraSelect = document.getElementById("subacao-unid-gestora");
+    const unidadeSetorialSelect = document.getElementById("subacao-unidade-setorial");
+    const produtoSubacaoSelect = document.getElementById("subacao-produto");
+    const unidadeMedidaSelect = document.getElementById("subacao-unidade-medida");
+    const regiaoEntregaSelect = document.getElementById("subacao-regiao-entrega");
+    const codigoSelect = document.getElementById("subacao-codigo");
+    const municipioSelect = document.getElementById("subacao-municipio");
+    const metaInput = document.getElementById("subacao-meta");
+    const detalhamentoInput = document.getElementById("subacao-detalhamento");
+    const etapaInput = document.getElementById("subacao-etapa");
+    const justificativaInput = document.getElementById("subacao-justificativa");
+    const responsavelNgerInput = document.getElementById("subacao-responsavel-nger");
+
+    const summaryBody = document.querySelector("#subacao-summary-table tbody");
+    const pageSizeSelect = document.getElementById("subacao-page-size");
+    const paginationEl = document.getElementById("subacao-pagination");
+    const editBtn = document.getElementById("subacao-edit");
+    const deleteBtn = document.getElementById("subacao-delete");
+    const printBtn = document.getElementById("subacao-print");
+    const subacaoSummary = document.getElementById("subacao-summary");
+
+    const hasAllPlanSelects = Object.values(planSelects).every((el) => el);
+    const hasAllKeySelects = Object.values(chaveSelects).every((el) => el);
+    if (!hasAllPlanSelects || !hasAllKeySelects) return;
+
+    const setMsg = (text, isError = false) => {
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", isError);
+    };
+
+    const normalizeDigits = (value) => {
+      const digits = String(value || "").replace(/\D/g, "");
+      return digits ? String(parseInt(digits, 10)) : "";
+    };
+
+    const formatKey = () => {
+      const regiao = normalizeDigits(chaveSelects.regiao.value);
+      const subfuncao = normalizeDigits(chaveSelects.subfuncao.value);
+      const ugRaw = normalizeDigits(chaveSelects.ug.value);
+      const ug = ugRaw ? String(parseInt(ugRaw, 10)) : "";
+      const adj = chaveSelects.adj.value || "";
+      const macro = chaveSelects.macropolitica.value || "";
+      const pilar = chaveSelects.pilar.value || "";
+      const eixo = chaveSelects.eixo.value || "";
+      const politica = chaveSelects.politica_decr.value || "";
+      const publico = chaveSelects.publico_transversal.value || "";
+      if (!regiao || !subfuncao || !ug || !adj || !macro || !pilar || !eixo || !politica || !publico) {
+        if (chaveInput) chaveInput.value = "";
+        return;
+      }
+      const subfuncaoUg = `${subfuncao}.${ug}`;
+      const parts = [
+        `R${regiao}`,
+        subfuncaoUg,
+        adj,
+        macro,
+        pilar,
+        eixo,
+        politica,
+        publico,
+      ];
+      if (chaveInput) {
+        chaveInput.value = `* ${parts.join(" * ")} *`;
+      }
+    };
+
+    const maskDate = (input) => {
+      if (!input) return;
+      const raw = String(input.value || "").replace(/\D/g, "");
+      const d = raw.slice(0, 2);
+      const m = raw.slice(2, 4);
+      const y = raw.slice(4, 8);
+      let out = d;
+      if (m) out += `/${m}`;
+      if (y) out += `/${y}`;
+      input.value = out;
+    };
+
+    const formatPtBr = (value) => {
+      const n = Number(value || 0);
+      if (Number.isNaN(n)) return "";
+      return new Intl.NumberFormat("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    };
+
+    const formatMetaInput = () => {
+      if (!metaInput) return;
+      const digits = String(metaInput.value || "").replace(/\D/g, "");
+      if (!digits) {
+        metaInput.value = "";
+        return;
+      }
+      const num = Number(digits) / 100;
+      metaInput.value = formatPtBr(num);
+    };
+
+    const setOptions = (select, items, placeholder, valueKey = "value", labelKey = "label") => {
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = "";
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = placeholder || "Selecione...";
+      select.appendChild(opt);
+      items.forEach((item) => {
+        const o = document.createElement("option");
+        o.value = item[valueKey] ?? "";
+        o.textContent = item[labelKey] ?? item[valueKey] ?? "";
+        select.appendChild(o);
+      });
+      if (current) select.value = current;
+    };
+
+    const setOptionsFromLabel = (select, items, placeholder) => {
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = "";
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = placeholder || "Selecione...";
+      select.appendChild(opt);
+      items.forEach((item) => {
+        const o = document.createElement("option");
+        o.value = item.label ?? "";
+        o.textContent = item.label ?? "";
+        select.appendChild(o);
+      });
+      if (current) select.value = current;
+    };
+
+    const loadOptions = async () => {
+      const url = new URL("/api/subacao/options", window.location.origin);
+      Object.entries(planSelects).forEach(([key, el]) => {
+        if (el?.value) url.searchParams.set(key, el.value);
+      });
+      Object.entries(chaveSelects).forEach(([key, el]) => {
+        if (el?.value) url.searchParams.set(key, el.value);
+      });
+      try {
+        const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const plan = data.plan21 || {};
+        setOptions(planSelects.exercicio, plan.exercicio || [], "Selecione...");
+        setOptions(planSelects.uo, plan.uo || [], "Selecione...");
+        setOptions(planSelects.programa, plan.programa || [], "Selecione...");
+        setOptions(planSelects.acao_paoe, plan.acao_paoe || [], "Selecione...");
+        setOptions(planSelects.responsavel_acao, plan.responsavel_acao || [], "Selecione...");
+        setOptions(planSelects.produto_acao, plan.produto_acao || [], "Selecione...");
+
+        setOptions(chaveSelects.regiao, data.regioes || [], "Selecione...");
+        setOptions(chaveSelects.subfuncao, data.subfuncoes || [], "Selecione...");
+        setOptions(chaveSelects.ug, data.ugs || [], "Selecione...");
+        setOptions(chaveSelects.adj, data.adjs || [], "Selecione...");
+        setOptions(chaveSelects.macropolitica, data.macropoliticas || [], "Selecione...");
+        setOptions(chaveSelects.pilar, data.pilares || [], "Selecione...");
+        setOptions(chaveSelects.eixo, data.eixos || [], "Selecione...");
+        setOptions(chaveSelects.politica_decr, data.politicas || [], "Selecione...");
+        setOptions(chaveSelects.publico_transversal, data.publicos || [], "Selecione...");
+
+        setOptionsFromLabel(regiaoEntregaSelect, data.regioes || [], "Selecione...");
+        setOptions(codigoSelect, data.municipios || [], "Selecione...", "codigo", "label");
+        setOptions(municipioSelect, data.municipios || [], "Selecione...", "nome", "label");
+        formatKey();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const clearForm = () => {
+      form.reset();
+      if (idInput) idInput.value = "";
+      if (chaveInput) chaveInput.value = "";
+      setMsg("");
+      loadOptions();
+    };
+
+    const getRows = () => {
+      if (!summaryBody) return [];
+      return Array.from(summaryBody.querySelectorAll(".dotacao-summary-row"));
+    };
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+
+    const clearPagination = () => {
+      if (paginationEl) paginationEl.innerHTML = "";
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "page-btn";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderSummaryPage();
+        });
+        paginationEl.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      if (start > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          paginationEl.appendChild(ellipsis);
+        }
+      }
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        paginationEl.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const renderSummaryPage = () => {
+      const rows = getRows();
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+      rows.forEach((row) => {
+        row.style.display = "none";
+        row.classList.remove("selected");
+      });
+      pageRows.forEach((row) => {
+        row.style.display = "";
+      });
+      renderPagination(totalPages);
+    };
+
+    const parseChaveParts = (chave) => {
+      const raw = String(chave || "").trim();
+      if (!raw) return {};
+      const parts = raw
+        .split("*")
+        .map((p) => p.trim())
+        .filter((p) => p);
+      if (parts.length < 8) return {};
+      const regiao = parts[0].replace(/^R/i, "").trim();
+      const subfuncaoUg = parts[1] || "";
+      const [subfuncao, ug] = subfuncaoUg.split(".").map((p) => p.trim());
+      return {
+        regiao,
+        subfuncao,
+        ug,
+        adj: parts[2] || "",
+        macropolitica: parts[3] || "",
+        pilar: parts[4] || "",
+        eixo: parts[5] || "",
+        politica: parts[6] || "",
+        publico: parts[7] || "",
+      };
+    };
+
+    const setSelectedRow = (row) => {
+      getRows().forEach((r) => r.classList.remove("selected"));
+      if (row) row.classList.add("selected");
+    };
+
+    const fillFormFromRow = (row) => {
+      if (!row) return;
+      const chave = row.dataset.chave || "";
+      const chaveParts = parseChaveParts(chave);
+      const subacaoEntregaFull = row.dataset.subacaoEntrega || "";
+      let subacaoEntregaRaw = subacaoEntregaFull;
+      if (chave && subacaoEntregaFull.startsWith(chave)) {
+        subacaoEntregaRaw = subacaoEntregaFull.slice(chave.length).trim();
+      }
+      const prazo = row.dataset.prazo || "";
+      const prazoParts = prazo.split(" a ");
+      if (planSelects.exercicio) planSelects.exercicio.value = row.dataset.exercicio || "";
+      if (planSelects.uo) planSelects.uo.value = row.dataset.uo || "";
+      if (planSelects.programa) planSelects.programa.value = row.dataset.programa || "";
+      if (planSelects.acao_paoe) planSelects.acao_paoe.value = row.dataset.acaoPaoe || "";
+      if (planSelects.responsavel_acao) planSelects.responsavel_acao.value = row.dataset.responsavelAcao || "";
+      if (planSelects.produto_acao) planSelects.produto_acao.value = row.dataset.produtoAcao || "";
+
+      chaveSelects.regiao.value = chaveParts.regiao || "";
+      chaveSelects.subfuncao.value = chaveParts.subfuncao || "";
+      if (chaveParts.ug) {
+        chaveSelects.ug.value = String(chaveParts.ug).padStart(4, "0");
+      }
+      chaveSelects.adj.value = chaveParts.adj || "";
+      chaveSelects.macropolitica.value = chaveParts.macropolitica || "";
+      chaveSelects.pilar.value = chaveParts.pilar || "";
+      chaveSelects.eixo.value = chaveParts.eixo || "";
+      chaveSelects.politica_decr.value = chaveParts.politica || "";
+      chaveSelects.publico_transversal.value = chaveParts.publico || "";
+      if (chaveInput) chaveInput.value = chave;
+
+      if (subacaoEntregaInput) subacaoEntregaInput.value = subacaoEntregaRaw || "";
+      if (responsavelInput) responsavelInput.value = row.dataset.responsavel || "";
+      if (cpfInput) cpfInput.value = row.dataset.cpf || "";
+      if (dataInicioInput) dataInicioInput.value = prazoParts[0] || "";
+      if (dataFimInput) dataFimInput.value = prazoParts[1] || "";
+      if (unidGestoraSelect) unidGestoraSelect.value = row.dataset.unidGestora || "";
+      if (unidadeSetorialSelect) unidadeSetorialSelect.value = row.dataset.unidadeSetorial || "";
+      if (produtoSubacaoSelect) produtoSubacaoSelect.value = row.dataset.produtoSubacao || "";
+      if (unidadeMedidaSelect) unidadeMedidaSelect.value = row.dataset.unidadeMedida || "";
+      if (regiaoEntregaSelect) regiaoEntregaSelect.value = row.dataset.regiaoSubacao || "";
+      if (codigoSelect) codigoSelect.value = row.dataset.codigo || "";
+      if (municipioSelect) municipioSelect.value = row.dataset.municipio || "";
+      if (metaInput) metaInput.value = row.dataset.meta || "";
+      if (detalhamentoInput) detalhamentoInput.value = row.dataset.detalhamento || "";
+      if (etapaInput) etapaInput.value = row.dataset.etapa || "";
+      if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
+      if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
+      formatMetaInput();
+      loadOptions();
+    };
+
+    const getSelectedRow = () => summaryBody?.querySelector(".dotacao-summary-row.selected");
+
+    Object.values(planSelects).forEach((el) => {
+      if (!el) return;
+      el.addEventListener("change", () => {
+        el.dataset.touched = "1";
+        loadOptions();
+      });
+    });
+    Object.values(chaveSelects).forEach((el) => {
+      if (!el) return;
+      el.addEventListener("change", () => {
+        el.dataset.touched = "1";
+        loadOptions();
+        formatKey();
+      });
+    });
+    if (dataInicioInput) dataInicioInput.addEventListener("input", () => maskDate(dataInicioInput));
+    if (dataFimInput) dataFimInput.addEventListener("input", () => maskDate(dataFimInput));
+    if (metaInput) metaInput.addEventListener("input", formatMetaInput);
+    if (clearBtn) clearBtn.addEventListener("click", clearForm);
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        currentPage = 1;
+        renderSummaryPage();
+      });
+    }
+
+    if (summaryBody) {
+      summaryBody.addEventListener("click", (ev) => {
+        const row = ev.target.closest(".dotacao-summary-row");
+        if (!row) return;
+        setSelectedRow(row);
+        setMsg("");
+      });
+    }
+
+    if (editBtn) {
+      editBtn.addEventListener("click", () => {
+        const row = getSelectedRow();
+        if (!row) {
+          setMsg("Selecione um registro para editar.", true);
+          return;
+        }
+        if (modeSelect) modeSelect.value = "editar";
+        if (idInput) idInput.value = row.dataset.id || "";
+        fillFormFromRow(row);
+        setMsg("");
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        const row = getSelectedRow();
+        if (!row) {
+          setMsg("Selecione um registro para excluir.", true);
+          return;
+        }
+        const id = row.dataset.id || "";
+        if (!id) return;
+        try {
+          const res = await fetch(`/api/subacao/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setMsg(data.error || "Falha ao excluir.", true);
+            return;
+          }
+          await loadPage("cadastrar/plan_21-nger/subacao");
+        } catch (err) {
+          console.error(err);
+          setMsg("Falha ao excluir.", true);
+        }
+      });
+    }
+
+    if (printBtn) {
+      printBtn.addEventListener("click", () => window.print());
+    }
+
+    if (modeSelect) {
+      modeSelect.addEventListener("change", () => {
+        if (modeSelect.value === "cadastrar") {
+          if (idInput) idInput.value = "";
+          if (subacaoSummary) subacaoSummary.classList.remove("dotacao-summary-warn");
+        }
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      setMsg("");
+      const mode = modeSelect?.value || "cadastrar";
+      const subacaoId = idInput?.value || "";
+      if (mode === "editar" && !subacaoId) {
+        setMsg("Selecione um registro para editar.", true);
+        return;
+      }
+      const chavePlanejamento = chaveInput?.value || "";
+      const prazoInicio = dataInicioInput?.value || "";
+      const prazoFim = dataFimInput?.value || "";
+      const payload = {
+        exercicio: planSelects.exercicio?.value || "",
+        unidade_orcamentaria: planSelects.uo?.value || "",
+        programa: planSelects.programa?.value || "",
+        acao_paoe: planSelects.acao_paoe?.value || "",
+        responsavel_acao: planSelects.responsavel_acao?.value || "",
+        produto_acao: planSelects.produto_acao?.value || "",
+        chave_planejamento: chavePlanejamento,
+        subacao_entrega: subacaoEntregaInput?.value || "",
+        responsavel: responsavelInput?.value || "",
+        cpf_responsavel: cpfInput?.value || "",
+        prazo_inicio: prazoInicio,
+        prazo_fim: prazoFim,
+        unid_gestora: unidGestoraSelect?.value || "",
+        unidade_setorial_planejamento: unidadeSetorialSelect?.value || "",
+        produto_subacao: produtoSubacaoSelect?.value || "",
+        unidade_medida: unidadeMedidaSelect?.value || "",
+        regiao_subacao: regiaoEntregaSelect?.value || "",
+        codigo: codigoSelect?.value || "",
+        municipios_entrega: municipioSelect?.value || "",
+        meta_subacao: metaInput?.value || "",
+        detalhamento_produto: detalhamentoInput?.value || "",
+        etapa: etapaInput?.value || "",
+        justificativa: justificativaInput?.value || "",
+        responsavel_nger: responsavelNgerInput?.value || "",
+      };
+      const url = mode === "editar" ? `/api/subacao/${encodeURIComponent(subacaoId)}` : "/api/subacao";
+      const method = mode === "editar" ? "PUT" : "POST";
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setMsg(data.error || "Falha ao salvar.", true);
+          return;
+        }
+        await loadPage("cadastrar/plan_21-nger/subacao");
+      } catch (err) {
+        console.error(err);
+        setMsg("Falha ao salvar.", true);
+      }
+    });
+
+    if (subacaoSummary) {
+      subacaoSummary.classList.toggle("dotacao-summary-hidden", getRows().length === 0);
+    }
+    loadOptions();
+    renderSummaryPage();
   }
 
   if (menu) {

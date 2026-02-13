@@ -18,14 +18,17 @@ def update_emp_record_from_status(upload_id: int) -> None:
     if not upload:
         return
 
-    status_data = read_status("emp", upload_id) or {}
-    has_alert = _has_emp_alert(status_data)
-
-    upload.alerta_emp = bool(has_alert)
-
     base_dt = upload.data_arquivo or upload.uploaded_at or datetime.utcnow()
     dia = base_dt.date()
     status = EmpStatusDiario.query.filter_by(dia=dia).first()
+
+    status_data = read_status("emp", upload_id) or {}
+    has_alert_raw = _has_emp_alert(status_data)
+    has_alert = has_alert_raw
+    if status and status.houve_alerta:
+        has_alert = True
+
+    upload.alerta_emp = bool(has_alert_raw)
 
     prev = (
         EmpStatusDiario.query.filter(EmpStatusDiario.dia < dia)
