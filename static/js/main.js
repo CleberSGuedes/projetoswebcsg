@@ -8094,17 +8094,69 @@
       }
     };
 
+    const syncSelectByCodigo = (select, codigo) => {
+      if (!select || !codigo) return;
+      const codigoNorm = normalizeDigits(codigo);
+      if (!codigoNorm) return;
+      const options = Array.from(select.options || []);
+      const match = options.find((opt) => {
+        const val = normalizeDigits(opt.value || opt.textContent || "");
+        return val === codigoNorm;
+      });
+      if (match) select.value = match.value;
+    };
+
+    const syncBridges = () => {
+      if (chaveSelects.ug && unidGestoraSelect) {
+        syncSelectByCodigo(unidGestoraSelect, chaveSelects.ug.value || "");
+      }
+      if (chaveSelects.regiao && regiaoEntregaSelect) {
+        syncSelectByCodigo(regiaoEntregaSelect, chaveSelects.regiao.value || "");
+      }
+    };
+
     const maskDate = (input) => {
       if (!input) return;
       const raw = String(input.value || "").replace(/\D/g, "");
-      const d = raw.slice(0, 2);
-      const m = raw.slice(2, 4);
-      const y = raw.slice(4, 8);
-      let out = d;
-      if (m) out += `/${m}`;
-      if (y) out += `/${y}`;
-      input.value = out;
-    };
+        const d = raw.slice(0, 2);
+        const m = raw.slice(2, 4);
+        const y = raw.slice(4, 8);
+        let out = d;
+        if (m) out += `/${m}`;
+        if (y) out += `/${y}`;
+        input.value = out;
+      };
+
+      const maskCpf = (input) => {
+        if (!input) return;
+        const digits = String(input.value || "").replace(/\D/g, "").slice(0, 11);
+        const part1 = digits.slice(0, 3);
+        const part2 = digits.slice(3, 6);
+        const part3 = digits.slice(6, 9);
+        const part4 = digits.slice(9, 11);
+        let out = part1;
+        if (part2) out += `.${part2}`;
+        if (part3) out += `.${part3}`;
+        if (part4) out += `-${part4}`;
+        input.value = out;
+      };
+
+      const isValidCpf = (value) => {
+        const cpf = String(value || "").replace(/\D/g, "");
+        if (cpf.length !== 11) return false;
+        if (/^(\d)\1{10}$/.test(cpf)) return false;
+        const calc = (base) => {
+          let sum = 0;
+          for (let i = 0; i < base.length; i += 1) {
+            sum += Number(base[i]) * (base.length + 1 - i);
+          }
+          const mod = sum % 11;
+          return mod < 2 ? 0 : 11 - mod;
+        };
+        const d1 = calc(cpf.slice(0, 9));
+        const d2 = calc(cpf.slice(0, 9) + d1);
+        return cpf === cpf.slice(0, 9) + String(d1) + String(d2);
+      };
 
     const formatPtBr = (value) => {
       const n = Number(value || 0);
@@ -8135,9 +8187,15 @@
       opt.textContent = placeholder || "Selecione...";
       select.appendChild(opt);
       items.forEach((item) => {
+        const isPrimitive = typeof item === "string" || typeof item === "number";
         const o = document.createElement("option");
-        o.value = item[valueKey] ?? "";
-        o.textContent = item[labelKey] ?? item[valueKey] ?? "";
+        if (isPrimitive) {
+          o.value = String(item);
+          o.textContent = String(item);
+        } else {
+          o.value = item?.[valueKey] ?? "";
+          o.textContent = item?.[labelKey] ?? item?.[valueKey] ?? "";
+        }
         select.appendChild(o);
       });
       if (current) select.value = current;
@@ -8168,6 +8226,12 @@
       Object.entries(chaveSelects).forEach(([key, el]) => {
         if (el?.value) url.searchParams.set(key, el.value);
       });
+      if (regiaoEntregaSelect?.value) {
+        url.searchParams.set("regiao_subacao", regiaoEntregaSelect.value);
+      }
+      if (codigoSelect?.value) {
+        url.searchParams.set("codigo", codigoSelect.value);
+      }
       try {
         const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
         if (!res.ok) return;
@@ -8194,6 +8258,7 @@
         setOptions(codigoSelect, data.municipios || [], "Selecione...", "codigo", "label");
         setOptions(municipioSelect, data.municipios || [], "Selecione...", "nome", "label");
         formatKey();
+        syncBridges();
       } catch (err) {
         console.error(err);
       }
@@ -8358,6 +8423,7 @@
       if (etapaInput) etapaInput.value = row.dataset.etapa || "";
       if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
       if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
+      syncBridges();
       formatMetaInput();
       loadOptions();
     };
@@ -8377,10 +8443,37 @@
         el.dataset.touched = "1";
         loadOptions();
         formatKey();
+        syncBridges();
       });
     });
     if (dataInicioInput) dataInicioInput.addEventListener("input", () => maskDate(dataInicioInput));
     if (dataFimInput) dataFimInput.addEventListener("input", () => maskDate(dataFimInput));
+    if (cpfInput) cpfInput.addEventListener("input", () => maskCpf(cpfInput));
+    if (regiaoEntregaSelect) {
+      regiaoEntregaSelect.addEventListener("change", () => {
+        loadOptions();
+      });
+    }
+    if (codigoSelect) {
+      codigoSelect.addEventListener("change", () => {
+        const selectedCodigo = codigoSelect.value || "";
+        const match = Array.from(municipioSelect?.options || []).find((opt) => {
+          const optCodigo = normalizeDigits(opt.textContent || "");
+          return optCodigo === normalizeDigits(selectedCodigo);
+        });
+        if (match && municipioSelect) municipioSelect.value = match.value;
+      });
+    }
+    if (municipioSelect) {
+      municipioSelect.addEventListener("change", () => {
+        const selectedNome = municipioSelect.value || "";
+        const match = Array.from(codigoSelect?.options || []).find((opt) => {
+          const label = opt.textContent || "";
+          return label.endsWith(selectedNome) || label.includes(`- ${selectedNome}`);
+        });
+        if (match && codigoSelect) codigoSelect.value = match.value;
+      });
+    }
     if (metaInput) metaInput.addEventListener("input", formatMetaInput);
     if (clearBtn) clearBtn.addEventListener("click", clearForm);
     if (pageSizeSelect) {
@@ -8460,6 +8553,11 @@
         form.reportValidity();
         return;
       }
+      if (cpfInput && !isValidCpf(cpfInput.value)) {
+        setMsg("CPF do responsável inválido.", true);
+        cpfInput.focus();
+        return;
+      }
       setMsg("");
       const mode = modeSelect?.value || "cadastrar";
       const subacaoId = idInput?.value || "";
@@ -8530,9 +8628,6 @@
         const targetId = parentToggle.getAttribute("data-submenu");
         const group = parentToggle.closest(".menu-group");
         const isOpen = group?.classList.contains("open");
-        document.querySelectorAll(".menu-group").forEach((g) => {
-          if (g !== group) g.classList.remove("open");
-        });
         if (group) {
           if (isOpen) {
             group.classList.remove("open");

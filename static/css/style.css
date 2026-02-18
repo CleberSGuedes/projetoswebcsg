@@ -73,11 +73,11 @@ a { color: inherit; text-decoration: none; }
 .sidebar.collapsed { width: 78px; }
 .sidebar.collapsed .menu-item span { display: none; }
 .sidebar .submenu { padding-left: 12px; display: none; flex-direction: column; gap: 4px; }
-.sidebar .menu-group.open .submenu { display: flex; }
+.sidebar .menu-group.open > .submenu { display: flex; }
 .sidebar .submenu .menu-item { padding-left: 10px; font-size: 13px; }
-.sidebar .submenu .menu-group { padding-left: 6px; }
-.sidebar .submenu .menu-group .submenu { padding-left: 14px; }
-.sidebar .submenu .menu-group .menu-item { font-size: 12px; }
+.sidebar .submenu .menu-group { padding-left: 0; }
+.sidebar .submenu .menu-group .submenu { padding-left: 12px; }
+.sidebar .submenu .menu-group .menu-item { padding-left: 10px; font-size: 13px; }
 .menu-group { display: flex; flex-direction: column; gap: 4px; }
 .menu-parent { cursor: default; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

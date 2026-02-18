@@ -1392,6 +1392,22 @@ def _normalize_uo(value: str) -> str:
     return digits or token
 
 
+def _is_valid_cpf(value: str) -> bool:
+    digits = re.sub(r"\D", "", value or "")
+    if len(digits) != 11:
+        return False
+    if digits == digits[0] * 11:
+        return False
+    nums = [int(d) for d in digits]
+    sum1 = sum((10 - i) * nums[i] for i in range(9))
+    d1 = 0 if (sum1 % 11) < 2 else 11 - (sum1 % 11)
+    if nums[9] != d1:
+        return False
+    sum2 = sum((11 - i) * nums[i] for i in range(10))
+    d2 = 0 if (sum2 % 11) < 2 else 11 - (sum2 % 11)
+    return nums[10] == d2
+
+
 def _safe_query_mappings(sql: str, params: dict | None = None):
     try:
         return db.session.execute(text(sql), params or {}).mappings().all()
@@ -1811,12 +1827,11 @@ def api_subacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
-    if "exercicio" not in selected:
-        selected["exercicio"] = current_year
-
+    # força o exercicio ao ano atual
+    selected["exercicio"] = current_year
     plan_options = {}
     for key, col in plan_fields.items():
-        query = db.session.query(col).distinct().filter(Plan21Nger.ativo == True)  # noqa: E712
+        query = db.session.query(col).distinct()
         for s_key, s_val in selected.items():
             if s_key == key:
                 continue
@@ -1833,6 +1848,67 @@ def api_subacao_options():
             plan_options[key] = [current_year]
         else:
             plan_options[key] = sorted(set(values), key=lambda v: v.lower())
+
+    # Ponte com plan21_nger para filtrar parte da chave do planejamento
+    ponte_params = {}
+    ponte_where = []
+    ponte_map = {
+        "exercicio": "exercicio",
+        "uo": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+    }
+    for key, col in ponte_map.items():
+        val = (selected.get(key) or "").strip()
+        if val:
+            ponte_where.append(f"{col} = :{key}")
+            ponte_params[key] = val
+    ponte_sql = """
+        SELECT DISTINCT subfuncao_ug, adj, macropolitica, pilar, eixo, politica_decreto
+        FROM plan21_nger
+    """
+    if ponte_where:
+        ponte_sql += " WHERE " + " AND ".join(ponte_where)
+    ponte_rows = _safe_query_mappings(ponte_sql, ponte_params)
+    allowed_subfuncao = set()
+    allowed_ug = set()
+    allowed_adj = set()
+    allowed_macro = set()
+    allowed_pilar = set()
+    allowed_eixo = set()
+    allowed_politica = set()
+    for row in ponte_rows:
+        sub_ug = (row.get("subfuncao_ug") or "").strip()
+        if sub_ug:
+            if "." in sub_ug:
+                sub_part, ug_part = sub_ug.split(".", 1)
+                sub_norm = _normalize_codigo_num(sub_part)
+                ug_norm = _normalize_codigo_num(ug_part)
+                if sub_norm:
+                    allowed_subfuncao.add(sub_norm)
+                if ug_norm:
+                    allowed_ug.add(ug_norm)
+            else:
+                sub_norm = _normalize_codigo_num(sub_ug)
+                if sub_norm:
+                    allowed_subfuncao.add(sub_norm)
+        adj_val = (row.get("adj") or "").strip()
+        if adj_val:
+            allowed_adj.add(adj_val)
+        macro_val = (row.get("macropolitica") or "").strip()
+        if macro_val:
+            allowed_macro.add(macro_val)
+        pilar_val = (row.get("pilar") or "").strip()
+        if pilar_val:
+            allowed_pilar.add(pilar_val)
+        eixo_val = (row.get("eixo") or "").strip()
+        if eixo_val:
+            allowed_eixo.add(eixo_val)
+        politica_val = (row.get("politica_decreto") or "").strip()
+        if politica_val:
+            allowed_politica.add(politica_val)
 
     regiao_rows = _safe_query_mappings(
         "SELECT codigo, nome FROM regiao ORDER BY codigo"
@@ -1865,9 +1941,15 @@ def api_subacao_options():
         allowed = {str(_normalize_codigo_num(r.get("ug"))) for r in rows if r.get("ug")}
         if allowed:
             ugs = [u for u in ugs if _normalize_codigo_num(u["value"]) in allowed]
+    if allowed_subfuncao:
+        subfuncoes = [s for s in subfuncoes if _normalize_codigo_num(s["value"]) in allowed_subfuncao]
+    if allowed_ug:
+        ugs = [u for u in ugs if _normalize_codigo_num(u["value"]) in allowed_ug]
 
     adj_rows = _safe_query_mappings("SELECT abreviacao, nome FROM adj ORDER BY abreviacao")
     adjs = _options_abrev_nome(adj_rows, "abreviacao", "nome")
+    if allowed_adj:
+        adjs = [a for a in adjs if (a.get("value") or "") in allowed_adj]
 
     adj_selected = (request.args.get("adj") or "").strip()
     macropoliticas = []
@@ -1893,6 +1975,8 @@ def api_subacao_options():
             "abreviacao",
             "nome",
         )
+    if allowed_macro:
+        macropoliticas = [m for m in macropoliticas if (m.get("value") or "") in allowed_macro]
 
     pilar_rows = []
     macropolitica_selected = (request.args.get("macropolitica") or "").strip()
@@ -1927,6 +2011,8 @@ def api_subacao_options():
             "abreviacao",
             "nome",
         )
+    if allowed_pilar:
+        pilares = [p for p in pilares if (p.get("value") or "") in allowed_pilar]
 
     eixo_rows = []
     if adj_selected:
@@ -1948,6 +2034,8 @@ def api_subacao_options():
             "abreviacao",
             "nome",
         )
+    if allowed_eixo:
+        eixos = [e for e in eixos if (e.get("value") or "") in allowed_eixo]
 
     politica_rows = []
     eixo_selected = (request.args.get("eixo") or "").strip()
@@ -1982,15 +2070,35 @@ def api_subacao_options():
             "abreviacao",
             "nome",
         )
+    if allowed_politica:
+        politicas = [p for p in politicas if (p.get("value") or "") in allowed_politica]
 
     publico_rows = _safe_query_mappings(
         "SELECT codigo, nome FROM publico_transversal ORDER BY codigo"
     )
     publicos = _options_code_name(publico_rows, "codigo", "nome")
 
-    municipio_rows = _safe_query_mappings(
-        "SELECT codigo_ibge, nome FROM municipio ORDER BY nome"
-    )
+    municipio_params = {}
+    municipio_where = []
+    regiao_subacao = _normalize_codigo_num(request.args.get("regiao_subacao") or "")
+    if regiao_subacao:
+        reg_row = _safe_query_mappings(
+            "SELECT id FROM regiao WHERE codigo = :codigo",
+            {"codigo": regiao_subacao},
+        )
+        reg_id = reg_row[0]["id"] if reg_row else None
+        if reg_id is not None:
+            municipio_where.append("m.regiao_id = :regiao_id")
+            municipio_params["regiao_id"] = reg_id
+    codigo_municipio = _normalize_codigo_num(request.args.get("codigo") or "")
+    if codigo_municipio:
+        municipio_where.append("m.codigo_ibge = :codigo_ibge")
+        municipio_params["codigo_ibge"] = codigo_municipio
+    municipio_sql = "SELECT m.codigo_ibge, m.nome FROM municipio m"
+    if municipio_where:
+        municipio_sql += " WHERE " + " AND ".join(municipio_where)
+    municipio_sql += " ORDER BY m.nome"
+    municipio_rows = _safe_query_mappings(municipio_sql, municipio_params)
     municipios = []
     for row in municipio_rows:
         codigo = row.get("codigo_ibge")
@@ -2065,7 +2173,8 @@ def api_subacao_create():
     chave_planejamento = (data.get("chave_planejamento") or "").strip()
     subacao_entrega_raw = (data.get("subacao_entrega") or "").strip()
     responsavel = (data.get("responsavel") or "").strip()
-    cpf_responsavel = (data.get("cpf_responsavel") or "").strip()
+    cpf_responsavel_raw = (data.get("cpf_responsavel") or "").strip()
+    cpf_responsavel = re.sub(r"\D", "", cpf_responsavel_raw)
     prazo_inicio = (data.get("prazo_inicio") or "").strip()
     prazo_fim = (data.get("prazo_fim") or "").strip()
     unid_gestora = (data.get("unid_gestora") or "").strip()
@@ -2106,6 +2215,8 @@ def api_subacao_create():
     missing = [k for k, v in required.items() if not v]
     if missing:
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+    if not _is_valid_cpf(cpf_responsavel):
+        return jsonify({"error": "CPF do responsavel invalido."}), 400
 
     try:
         exercicio = int(exercicio_raw)
@@ -2188,7 +2299,8 @@ def api_subacao_update(subacao_id):
     chave_planejamento = (data.get("chave_planejamento") or "").strip()
     subacao_entrega_raw = (data.get("subacao_entrega") or "").strip()
     responsavel = (data.get("responsavel") or "").strip()
-    cpf_responsavel = (data.get("cpf_responsavel") or "").strip()
+    cpf_responsavel_raw = (data.get("cpf_responsavel") or "").strip()
+    cpf_responsavel = re.sub(r"\D", "", cpf_responsavel_raw)
     prazo_inicio = (data.get("prazo_inicio") or "").strip()
     prazo_fim = (data.get("prazo_fim") or "").strip()
     unid_gestora = (data.get("unid_gestora") or "").strip()
@@ -2229,6 +2341,8 @@ def api_subacao_update(subacao_id):
     missing = [k for k, v in required.items() if not v]
     if missing:
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+    if not _is_valid_cpf(cpf_responsavel):
+        return jsonify({"error": "CPF do responsavel invalido."}), 400
 
     try:
         exercicio = int(exercicio_raw)

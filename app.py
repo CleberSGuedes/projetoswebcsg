@@ -8,6 +8,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import uuid
 from werkzeug.exceptions import HTTPException
+from sqlalchemy import update
+from sqlalchemy.orm.exc import StaleDataError
 from flask import Flask, g, session, request, jsonify
 from flask_mail import Mail
 from config import Config
@@ -91,8 +93,28 @@ def create_app():
             session.clear()
             return
 
-        active.last_activity = now
-        db.session.commit()
+        try:
+            active.last_activity = now
+            db.session.commit()
+        except StaleDataError:
+            db.session.rollback()
+            try:
+                result = db.session.execute(
+                    update(ActiveSession)
+                    .where(
+                        ActiveSession.email == user.get("email"),
+                        ActiveSession.session_token == token,
+                    )
+                    .values(last_activity=now)
+                )
+                db.session.commit()
+                if result.rowcount == 0:
+                    session.clear()
+                    return
+            except Exception:
+                db.session.rollback()
+                session.clear()
+                return
         g.user = user
         perfil_id = user.get("perfil_id")
         perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
