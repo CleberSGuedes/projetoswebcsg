@@ -8,8 +8,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import uuid
 from werkzeug.exceptions import HTTPException
-from sqlalchemy import update
+from sqlalchemy import update, select, delete, func
 from sqlalchemy.orm.exc import StaleDataError
+from sqlalchemy.exc import SQLAlchemyError
 from flask import Flask, g, session, request, jsonify
 from flask_mail import Mail
 from config import Config
@@ -74,13 +75,28 @@ def create_app():
 
         now = datetime.utcnow()
         cutoff = now - SESSION_TIMEOUT
-        active = ActiveSession.query.filter_by(email=user.get("email")).first()
-
-        if not active or active.session_token != token:
+        try:
+            active_row = (
+                db.session.execute(
+                    select(
+                        ActiveSession.email,
+                        ActiveSession.session_token,
+                        ActiveSession.last_activity,
+                    ).where(ActiveSession.email == user.get("email"))
+                )
+                .mappings()
+                .first()
+            )
+        except SQLAlchemyError:
+            db.session.rollback()
             session.clear()
             return
 
-        last_activity = active.last_activity
+        if not active_row or active_row.get("session_token") != token:
+            session.clear()
+            return
+
+        last_activity = active_row.get("last_activity")
         if isinstance(last_activity, str):
             try:
                 last_activity = datetime.fromisoformat(last_activity)
@@ -88,36 +104,44 @@ def create_app():
                 last_activity = None
 
         if last_activity and last_activity < cutoff:
-            db.session.delete(active)
-            db.session.commit()
+            try:
+                db.session.execute(
+                    delete(ActiveSession).where(
+                        ActiveSession.email == user.get("email"),
+                        ActiveSession.session_token == token,
+                    )
+                )
+                db.session.commit()
+            except SQLAlchemyError:
+                db.session.rollback()
             session.clear()
             return
 
         try:
-            active.last_activity = now
-            db.session.commit()
-        except StaleDataError:
-            db.session.rollback()
-            try:
-                result = db.session.execute(
-                    update(ActiveSession)
-                    .where(
-                        ActiveSession.email == user.get("email"),
-                        ActiveSession.session_token == token,
-                    )
-                    .values(last_activity=now)
+            result = db.session.execute(
+                update(ActiveSession)
+                .where(
+                    ActiveSession.email == user.get("email"),
+                    ActiveSession.session_token == token,
                 )
-                db.session.commit()
-                if result.rowcount == 0:
-                    session.clear()
-                    return
-            except Exception:
-                db.session.rollback()
+                .values(last_activity=now)
+            )
+            db.session.commit()
+            if result.rowcount == 0:
                 session.clear()
                 return
+        except SQLAlchemyError:
+            db.session.rollback()
+            session.clear()
+            return
         g.user = user
         perfil_id = user.get("perfil_id")
-        perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
+        try:
+            perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
+        except SQLAlchemyError:
+            db.session.rollback()
+            session.clear()
+            return
         if not perfil_row:
             session.clear()
             return
@@ -128,9 +152,19 @@ def create_app():
         if perfil_row:
             g.user_perfil_id = perfil_row.id
             g.user_nivel = perfil_row.nivel
-        g.active_sessions_count = ActiveSession.query.filter(
-            ActiveSession.last_activity >= cutoff
-        ).count()
+        try:
+            g.active_sessions_count = (
+                db.session.execute(
+                    select(func.count())
+                    .select_from(ActiveSession)
+                    .where(ActiveSession.last_activity >= cutoff)
+                ).scalar()
+                or 0
+            )
+        except SQLAlchemyError:
+            db.session.rollback()
+            session.clear()
+            return
 
     register_blueprints(app)
     return app

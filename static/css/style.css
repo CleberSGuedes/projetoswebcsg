@@ -439,6 +439,36 @@ a { color: inherit; text-decoration: none; }
 
 .form { display: flex; flex-direction: column; gap: 12px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(31,155,126,0.08);
+}
+.wizard-step-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.wizard-step-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+.wizard-step-btn:focus {
+  outline: 2px solid rgba(31,155,126,0.4);
+  outline-offset: 2px;
+}
+.wizard-step { display: none; }
+.wizard-step.active { display: block; }
 .form-section {
   border: 1px dashed var(--border);
   border-radius: 12px;
@@ -460,8 +490,41 @@ a { color: inherit; text-decoration: none; }
 .field textarea { resize: both; min-height: 80px; }
 .field input:focus { outline: 1px solid var(--accent); }
 .field.inline { flex-direction: row; align-items: center; gap: 8px; }
+.field-inline { display: flex; align-items: center; }
+.field-inline.align-end { justify-content: flex-end; }
 .actions { display: flex; align-items: center; gap: 12px; }
 .text-error { color: #fca5a5; }
+.char-counter {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+.municipio-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--surface);
+}
+.municipio-list-head {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.municipio-list-body { display: flex; flex-direction: column; gap: 6px; }
+.municipio-item {
+  display: grid;
+  grid-template-columns: 1.2fr 2.4fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(31,155,126,0.05);
+}
+.municipio-item small { color: var(--muted); font-size: 11px; }
+.municipio-empty { color: var(--muted); font-size: 12px; }
 .relatorio-top { justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
 .relatorio-top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 320px; max-width: 520px; }
 .btn.compact { padding: 6px 10px; font-size: 13px; }

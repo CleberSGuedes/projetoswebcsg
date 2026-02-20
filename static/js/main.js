@@ -7997,6 +7997,14 @@
     if (form.dataset.bound === "1") return;
     form.dataset.bound = "1";
 
+    const stepButtons = Array.from(form.querySelectorAll(".wizard-step-btn"));
+    const stepPanels = Array.from(form.querySelectorAll(".wizard-step"));
+    const prevBtn = document.getElementById("subacao-prev");
+    const nextBtn = document.getElementById("subacao-next");
+    const saveBtn = document.getElementById("subacao-save");
+    const totalSteps = stepPanels.length || 1;
+    let currentStep = 1;
+
     const modeSelect = document.getElementById("subacao-formulario");
     const idInput = document.getElementById("subacao-id");
     const clearBtn = document.getElementById("subacao-clear");
@@ -8038,8 +8046,25 @@
     const metaInput = document.getElementById("subacao-meta");
     const detalhamentoInput = document.getElementById("subacao-detalhamento");
     const etapaInput = document.getElementById("subacao-etapa");
+    const etapaMunicipioSelect = document.getElementById("subacao-etapa-municipio");
+    const etapaCounter = document.getElementById("subacao-etapa-counter");
+    const addEtapaBtn = document.getElementById("subacao-add-etapa");
+    const responsavelEtapaInput = document.getElementById("subacao-responsavel-etapa");
+    const cpfEtapaInput = document.getElementById("subacao-cpf-etapa");
+    const regiaoMemoriaInput = document.getElementById("subacao-regiao-memoria");
+    const naturezaInput = document.getElementById("subacao-natureza");
+    const fonteSelect = document.getElementById("subacao-fonte");
+    const idusoSelect = document.getElementById("subacao-iduso");
+    const descricaoInput = document.getElementById("subacao-descricao");
+    const unidadeEtapaSelect = document.getElementById("subacao-unidade-etapa");
+    const quantidadeInput = document.getElementById("subacao-quantidade");
+    const valorUnitarioInput = document.getElementById("subacao-valor-unitario");
+    const valorTotalInput = document.getElementById("subacao-valor-total");
     const justificativaInput = document.getElementById("subacao-justificativa");
     const responsavelNgerInput = document.getElementById("subacao-responsavel-nger");
+    const municipioAddBtn = document.getElementById("subacao-municipio-add");
+    const municipioListWrap = document.getElementById("subacao-municipio-list-wrap");
+    const municipioListEl = document.getElementById("subacao-municipio-list");
 
     const summaryBody = document.querySelector("#subacao-summary-table tbody");
     const pageSizeSelect = document.getElementById("subacao-page-size");
@@ -8056,6 +8081,44 @@
     const setMsg = (text, isError = false) => {
       msg.textContent = text || "";
       msg.classList.toggle("text-error", isError);
+    };
+
+    const getStepPanel = (step) => stepPanels.find((panel) => Number(panel.dataset.step) === step);
+
+    const validateStep = (step) => {
+      const panel = getStepPanel(step);
+      if (!panel) return true;
+      const fields = panel.querySelectorAll("input, select, textarea");
+      for (const field of fields) {
+        if (field.disabled) continue;
+        if (field.type === "hidden") continue;
+        if (municipioItems.length) {
+          if (field === codigoSelect || field === municipioSelect || field === metaInput) {
+            continue;
+          }
+        }
+        if (!field.checkValidity()) {
+          field.reportValidity();
+          field.focus();
+          return false;
+        }
+      }
+      return true;
+    };
+
+    const setStep = (step) => {
+      if (!stepPanels.length) return;
+      const clamped = Math.min(Math.max(step, 1), totalSteps);
+      currentStep = clamped;
+      stepPanels.forEach((panel) => {
+        panel.classList.toggle("active", Number(panel.dataset.step) === clamped);
+      });
+      stepButtons.forEach((btn) => {
+        btn.classList.toggle("active", Number(btn.dataset.step) === clamped);
+      });
+      if (prevBtn) prevBtn.disabled = clamped === 1;
+      if (nextBtn) nextBtn.style.display = clamped === totalSteps ? "none" : "inline-flex";
+      if (saveBtn) saveBtn.style.display = clamped === totalSteps ? "inline-flex" : "none";
     };
 
     const normalizeDigits = (value) => {
@@ -8112,6 +8175,9 @@
       }
       if (chaveSelects.regiao && regiaoEntregaSelect) {
         syncSelectByCodigo(regiaoEntregaSelect, chaveSelects.regiao.value || "");
+      }
+      if (chaveSelects.regiao && regiaoMemoriaInput) {
+        regiaoMemoriaInput.value = getSelectLabel(chaveSelects.regiao);
       }
     };
 
@@ -8176,6 +8242,183 @@
       }
       const num = Number(digits) / 100;
       metaInput.value = formatPtBr(num);
+    };
+
+    const formatDecimalInput = (input) => {
+      if (!input) return;
+      const digits = String(input.value || "").replace(/\D/g, "");
+      if (!digits) {
+        input.value = "";
+        return;
+      }
+      const num = Number(digits) / 100;
+      input.value = formatPtBr(num);
+    };
+
+    const municipioItems = [];
+    const etapaItems = [];
+
+    function getSelectLabel(select) {
+      if (!select) return "";
+      const opt = select.options?.[select.selectedIndex];
+      return (opt?.textContent || "").trim();
+    }
+
+    const syncEtapaMunicipioOptions = () => {
+      if (!etapaMunicipioSelect) return;
+      etapaMunicipioSelect.innerHTML = "<option value=\"\">Selecione...</option>";
+      municipioItems.forEach((item) => {
+        const opt = document.createElement("option");
+        opt.value = item.municipios_entrega;
+        opt.textContent = item.municipioLabel || item.municipios_entrega;
+        etapaMunicipioSelect.appendChild(opt);
+      });
+      if (etapaMunicipioSelect.options.length > 1) {
+        etapaMunicipioSelect.selectedIndex = 1;
+      }
+    };
+
+    const renderMunicipioList = () => {
+      if (!municipioListEl) return;
+      municipioListEl.innerHTML = "";
+      if (!municipioItems.length) {
+        const empty = document.createElement("div");
+        empty.className = "municipio-empty";
+        empty.textContent = "Nenhum munic\u00edpio adicionado.";
+        municipioListEl.appendChild(empty);
+        return;
+      }
+      municipioItems.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "municipio-item";
+        row.innerHTML = `
+          <div>
+            <small>C\u00f3digo</small>
+            <div>${item.codigoLabel || item.codigo}</div>
+          </div>
+          <div>
+            <small>Munic\u00edpio</small>
+            <div>${item.municipioLabel || item.municipios_entrega}</div>
+          </div>
+          <div>
+            <small>Meta</small>
+            <div>${item.meta_subacao}</div>
+          </div>
+          <div>
+            <button class="btn btn-danger sm" type="button" data-remove-index="${idx}">Remover</button>
+          </div>
+        `;
+        municipioListEl.appendChild(row);
+      });
+      if (addEtapaBtn) {
+        addEtapaBtn.style.display = municipioItems.length > 1 ? "inline-flex" : "none";
+      }
+      syncEtapaMunicipioOptions();
+    };
+
+    const addMunicipioItem = (opts = {}) => {
+      const codigo = codigoSelect?.value || "";
+      const municipio = municipioSelect?.value || "";
+      const meta = metaInput?.value || "";
+      if (!codigo || !municipio || !meta) {
+        if (!opts.silent) setMsg("Informe c\u00f3digo, munic\u00edpio e meta para adicionar.", true);
+        return false;
+      }
+      const key = `${codigo}::${municipio}`;
+      const exists = municipioItems.some((item) => `${item.codigo}::${item.municipios_entrega}` === key);
+      if (exists) {
+        if (!opts.silent) setMsg("Este munic\u00edpio j\u00e1 foi adicionado.", true);
+        return false;
+      }
+      municipioItems.push({
+        codigo,
+        municipios_entrega: municipio,
+        meta_subacao: meta,
+        codigoLabel: getSelectLabel(codigoSelect),
+        municipioLabel: getSelectLabel(municipioSelect),
+      });
+      if (codigoSelect) codigoSelect.value = "";
+      if (municipioSelect) municipioSelect.value = "";
+      if (metaInput) metaInput.value = "";
+      setMsg("");
+      renderMunicipioList();
+      updateEtapaStepLabel();
+      fillEtapaNomePrefix();
+      return true;
+    };
+
+    const buildEtapaLabelPrefix = (municipioLabel) => {
+      const label = String(municipioLabel || "").trim();
+      return label ? `${label} * ` : "";
+    };
+
+    const syncEtapaCounter = () => {
+      if (!etapaCounter || !etapaInput) return;
+      etapaCounter.textContent = `${(etapaInput.value || "").length}/900`;
+    };
+
+    const fillEtapaNomePrefix = () => {
+      if (!etapaInput || !etapaMunicipioSelect) return;
+      const prefix = buildEtapaLabelPrefix(getSelectLabel(etapaMunicipioSelect));
+      if (!prefix) return;
+      if (!etapaInput.value || !etapaInput.value.startsWith(prefix)) {
+        etapaInput.value = prefix;
+      }
+      syncEtapaCounter();
+    };
+
+    const clearEtapaFields = () => {
+      if (etapaInput) etapaInput.value = "";
+      if (responsavelEtapaInput) responsavelEtapaInput.value = "";
+      if (cpfEtapaInput) cpfEtapaInput.value = "";
+      if (naturezaInput) naturezaInput.value = "";
+      if (fonteSelect) fonteSelect.value = "";
+      if (idusoSelect) idusoSelect.value = "";
+      if (descricaoInput) descricaoInput.value = "";
+      if (unidadeEtapaSelect) unidadeEtapaSelect.value = unidadeEtapaSelect.options?.[0]?.value || "Real (R$)";
+      if (quantidadeInput) quantidadeInput.value = "";
+      if (valorUnitarioInput) valorUnitarioInput.value = "";
+      if (valorTotalInput) valorTotalInput.value = "";
+      if (justificativaInput) justificativaInput.value = "";
+      if (responsavelNgerInput) responsavelNgerInput.value = "";
+      syncEtapaCounter();
+    };
+
+    const captureEtapaPayload = () => ({
+      municipio: etapaMunicipioSelect?.value || "",
+      nome_etapa: etapaInput?.value || "",
+      responsavel_etapa: responsavelEtapaInput?.value || "",
+      cpf_responsavel_etapa: cpfEtapaInput?.value || "",
+      regiao_memoria: regiaoMemoriaInput?.value || "",
+      natureza: naturezaInput?.value || "",
+      fonte: fonteSelect?.value || "",
+      idu: idusoSelect?.value || "",
+      descricao: descricaoInput?.value || "",
+      unidade_etapa: unidadeEtapaSelect?.value || "",
+      quantidade: quantidadeInput?.value || "",
+      valor_unitario: valorUnitarioInput?.value || "",
+      valor_total: valorTotalInput?.value || "",
+      justificativa: justificativaInput?.value || "",
+      responsavel_nger: responsavelNgerInput?.value || "",
+    });
+
+    const validateEtapaBlock = () => {
+      if (!etapaMunicipioSelect || !etapaMunicipioSelect.value) {
+        setMsg("Selecione o munic\u00edpio da etapa.", true);
+        etapaMunicipioSelect?.focus();
+        return false;
+      }
+      if (!etapaInput?.value || etapaInput.value.length > 900) {
+        setMsg("Informe o nome da etapa (at\u00e9 900 caracteres).", true);
+        etapaInput?.focus();
+        return false;
+      }
+      if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
+        setMsg("CPF do respons\u00e1vel da etapa inv\u00e1lido.", true);
+        cpfEtapaInput.focus();
+        return false;
+      }
+      return true;
     };
 
     const setOptions = (select, items, placeholder, valueKey = "value", labelKey = "label") => {
@@ -8270,6 +8513,14 @@
       if (chaveInput) chaveInput.value = "";
       setMsg("");
       loadOptions();
+      setStep(1);
+      municipioItems.length = 0;
+      etapaItems.length = 0;
+      renderMunicipioList();
+      if (etapaMunicipioSelect) {
+        etapaMunicipioSelect.innerHTML = "<option value=\"\">Selecione...</option>";
+      }
+      clearEtapaFields();
     };
 
     const getRows = () => {
@@ -8421,11 +8672,33 @@
       if (metaInput) metaInput.value = row.dataset.meta || "";
       if (detalhamentoInput) detalhamentoInput.value = row.dataset.detalhamento || "";
       if (etapaInput) etapaInput.value = row.dataset.etapa || "";
+      if (responsavelEtapaInput) responsavelEtapaInput.value = row.dataset.responsavelEtapa || "";
+      if (cpfEtapaInput) cpfEtapaInput.value = row.dataset.cpfResponsavelEtapa || "";
+      if (regiaoMemoriaInput) regiaoMemoriaInput.value = row.dataset.regiaoMemoria || "";
+      if (naturezaInput) naturezaInput.value = row.dataset.natureza || "";
+      if (fonteSelect) fonteSelect.value = row.dataset.fonte || "";
+      if (idusoSelect) idusoSelect.value = row.dataset.idu || "";
+      if (descricaoInput) descricaoInput.value = row.dataset.descricao || "";
+      if (unidadeEtapaSelect) unidadeEtapaSelect.value = row.dataset.unidadeEtapa || "";
+      if (quantidadeInput) quantidadeInput.value = row.dataset.quantidade || "";
+      if (valorUnitarioInput) valorUnitarioInput.value = row.dataset.valorUnitario || "";
+      if (valorTotalInput) valorTotalInput.value = row.dataset.valorTotal || "";
       if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
       if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
       syncBridges();
       formatMetaInput();
+      formatDecimalInput(quantidadeInput);
+      formatDecimalInput(valorUnitarioInput);
+      formatDecimalInput(valorTotalInput);
       loadOptions();
+      setStep(1);
+      municipioItems.length = 0;
+      etapaItems.length = 0;
+      renderMunicipioList();
+      if (etapaMunicipioSelect) {
+        etapaMunicipioSelect.innerHTML = "<option value=\"\">Selecione...</option>";
+      }
+      clearEtapaFields();
     };
 
     const getSelectedRow = () => summaryBody?.querySelector(".dotacao-summary-row.selected");
@@ -8449,6 +8722,7 @@
     if (dataInicioInput) dataInicioInput.addEventListener("input", () => maskDate(dataInicioInput));
     if (dataFimInput) dataFimInput.addEventListener("input", () => maskDate(dataFimInput));
     if (cpfInput) cpfInput.addEventListener("input", () => maskCpf(cpfInput));
+    if (cpfEtapaInput) cpfEtapaInput.addEventListener("input", () => maskCpf(cpfEtapaInput));
     if (regiaoEntregaSelect) {
       regiaoEntregaSelect.addEventListener("change", () => {
         loadOptions();
@@ -8475,7 +8749,34 @@
       });
     }
     if (metaInput) metaInput.addEventListener("input", formatMetaInput);
+    if (etapaInput) {
+      etapaInput.setAttribute("maxlength", "900");
+      etapaInput.addEventListener("input", syncEtapaCounter);
+    }
+    if (etapaMunicipioSelect) {
+      etapaMunicipioSelect.addEventListener("change", () => {
+        fillEtapaNomePrefix();
+      });
+    }
+    if (quantidadeInput) quantidadeInput.addEventListener("input", () => formatDecimalInput(quantidadeInput));
+    if (valorUnitarioInput) valorUnitarioInput.addEventListener("input", () => formatDecimalInput(valorUnitarioInput));
+    if (valorTotalInput) valorTotalInput.addEventListener("input", () => formatDecimalInput(valorTotalInput));
     if (clearBtn) clearBtn.addEventListener("click", clearForm);
+    if (municipioAddBtn) {
+      municipioAddBtn.addEventListener("click", () => {
+        addMunicipioItem();
+      });
+    }
+    if (municipioListEl) {
+      municipioListEl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("[data-remove-index]");
+        if (!btn) return;
+        const idx = Number(btn.getAttribute("data-remove-index"));
+        if (Number.isNaN(idx)) return;
+        municipioItems.splice(idx, 1);
+        renderMunicipioList();
+      });
+    }
     if (pageSizeSelect) {
       pageSizeSelect.addEventListener("change", () => {
         pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
@@ -8543,19 +8844,102 @@
         if (modeSelect.value === "cadastrar") {
           if (idInput) idInput.value = "";
           if (subacaoSummary) subacaoSummary.classList.remove("dotacao-summary-warn");
+          if (municipioAddBtn) municipioAddBtn.disabled = false;
+          if (municipioListWrap) municipioListWrap.style.display = "";
         }
+        if (modeSelect.value === "editar") {
+          municipioItems.length = 0;
+          etapaItems.length = 0;
+          renderMunicipioList();
+          if (municipioAddBtn) municipioAddBtn.disabled = true;
+          if (municipioListWrap) municipioListWrap.style.display = "none";
+          if (addEtapaBtn) addEtapaBtn.style.display = "none";
+        }
+      });
+    }
+
+    const updateEtapaStepLabel = () => {
+      if (!stepButtons.length) return;
+      const idx = etapaItems.length + 1;
+      stepButtons.forEach((btn) => {
+        if (Number(btn.dataset.step) === 3) {
+          btn.textContent = idx > 1 ? `3.${idx} Etapa` : "3. Etapa";
+        }
+      });
+    };
+
+    if (addEtapaBtn) {
+      addEtapaBtn.addEventListener("click", () => {
+        if (!validateEtapaBlock()) return;
+        const payload = captureEtapaPayload();
+        etapaItems.push(payload);
+        const usedMunicipio = payload.municipio;
+        if (etapaMunicipioSelect) {
+          const options = Array.from(etapaMunicipioSelect.options || []);
+          const opt = options.find((o) => o.value === usedMunicipio);
+          if (opt) opt.remove();
+          if (etapaMunicipioSelect.options.length > 1) {
+            etapaMunicipioSelect.selectedIndex = 1;
+          }
+        }
+        clearEtapaFields();
+        fillEtapaNomePrefix();
+        const remaining = (etapaMunicipioSelect?.options?.length || 0) - 1;
+        if (remaining <= 1 && addEtapaBtn) {
+          addEtapaBtn.style.display = "none";
+        }
+        updateEtapaStepLabel();
+      });
+    }
+
+    if (prevBtn) {
+      prevBtn.addEventListener("click", () => {
+        setStep(currentStep - 1);
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener("click", () => {
+        if (!validateStep(currentStep)) return;
+        setStep(currentStep + 1);
+      });
+    }
+
+    if (stepButtons.length) {
+      stepButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = Number(btn.dataset.step || "1");
+          if (target > currentStep && !validateStep(currentStep)) return;
+          setStep(target);
+        });
       });
     }
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      if (!form.checkValidity()) {
+      if (totalSteps > 1) {
+        if (currentStep < totalSteps) {
+          if (!validateStep(currentStep)) return;
+          setStep(currentStep + 1);
+          return;
+        }
+        if (!validateStep(1)) {
+          setStep(1);
+          return;
+        }
+        if (!validateStep(totalSteps)) return;
+      } else if (!form.checkValidity()) {
         form.reportValidity();
         return;
       }
       if (cpfInput && !isValidCpf(cpfInput.value)) {
         setMsg("CPF do responsável inválido.", true);
         cpfInput.focus();
+        return;
+      }
+      if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
+        setMsg("CPF do responsável da etapa inválido.", true);
+        cpfEtapaInput.focus();
         return;
       }
       setMsg("");
@@ -8568,6 +8952,10 @@
       const chavePlanejamento = chaveInput?.value || "";
       const prazoInicio = dataInicioInput?.value || "";
       const prazoFim = dataFimInput?.value || "";
+      if (mode === "cadastrar") {
+        const hasPending = Boolean(codigoSelect?.value || municipioSelect?.value || metaInput?.value);
+        if (hasPending) addMunicipioItem({ silent: true });
+      }
       const payload = {
         exercicio: planSelects.exercicio?.value || "",
         unidade_orcamentaria: planSelects.uo?.value || "",
@@ -8591,9 +8979,37 @@
         meta_subacao: metaInput?.value || "",
         detalhamento_produto: detalhamentoInput?.value || "",
         etapa: etapaInput?.value || "",
+        responsavel_etapa: responsavelEtapaInput?.value || "",
+        cpf_responsavel_etapa: cpfEtapaInput?.value || "",
+        regiao_memoria: regiaoMemoriaInput?.value || "",
+        natureza: naturezaInput?.value || "",
+        fonte: fonteSelect?.value || "",
+        idu: idusoSelect?.value || "",
+        descricao: descricaoInput?.value || "",
+        unidade_etapa: unidadeEtapaSelect?.value || "",
+        quantidade: quantidadeInput?.value || "",
+        valor_unitario: valorUnitarioInput?.value || "",
+        valor_total: valorTotalInput?.value || "",
         justificativa: justificativaInput?.value || "",
         responsavel_nger: responsavelNgerInput?.value || "",
       };
+      if (municipioItems.length) {
+        if (!validateEtapaBlock()) return;
+        const last = captureEtapaPayload();
+        const all = [...etapaItems, last];
+        if (all.length < municipioItems.length) {
+          setMsg("Adicione etapas para todos os munic\u00edpios antes de salvar.", true);
+          return;
+        }
+        payload.etapas_items = all;
+      }
+      if (mode === "cadastrar" && municipioItems.length) {
+        payload.municipios_items = municipioItems.map((item) => ({
+          codigo: item.codigo,
+          municipios_entrega: item.municipios_entrega,
+          meta_subacao: item.meta_subacao,
+        }));
+      }
       const url = mode === "editar" ? `/api/subacao/${encodeURIComponent(subacaoId)}` : "/api/subacao";
       const method = mode === "editar" ? "PUT" : "POST";
       try {
@@ -8617,8 +9033,17 @@
     if (subacaoSummary) {
       subacaoSummary.classList.toggle("dotacao-summary-hidden", getRows().length === 0);
     }
+    setStep(1);
+    renderMunicipioList();
+    updateEtapaStepLabel();
+    if (modeSelect && modeSelect.value === "editar") {
+      if (municipioAddBtn) municipioAddBtn.disabled = true;
+      if (municipioListWrap) municipioListWrap.style.display = "none";
+    }
     loadOptions();
     renderSummaryPage();
+    syncEtapaCounter();
+    fillEtapaNomePrefix();
   }
 
   if (menu) {

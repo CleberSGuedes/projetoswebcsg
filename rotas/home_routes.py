@@ -321,28 +321,32 @@ def partial_dashboard():
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
     if not ped_dotacao_missing:
-        ped_keys = (
-            db.session.execute(
-                select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
-            )
-            .scalars()
-            .all()
-        )
-        ped_keys = [
-            _normalize_dotacao_key(k)
-            for k in ped_keys
-            if k and str(k).strip().upper().startswith("DOT.")
-        ]
-        ped_keys = {k for k in ped_keys if k}
-        if ped_keys:
-            dotacao_keys = (
-                Dotacao.query.with_entities(Dotacao.chave_dotacao)
-                .filter(Dotacao.chave_dotacao.isnot(None))
+        try:
+            ped_keys = (
+                db.session.execute(
+                    select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
+                )
+                .scalars()
                 .all()
             )
-            dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
-            missing = sorted([k for k in ped_keys if k not in dotacao_keys])
-            ped_dotacao_missing = missing
+            ped_keys = [
+                _normalize_dotacao_key(k)
+                for k in ped_keys
+                if k and str(k).strip().upper().startswith("DOT.")
+            ]
+            ped_keys = {k for k in ped_keys if k}
+            if ped_keys:
+                dotacao_keys = (
+                    Dotacao.query.with_entities(Dotacao.chave_dotacao)
+                    .filter(Dotacao.chave_dotacao.isnot(None))
+                    .all()
+                )
+                dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
+                missing = sorted([k for k in ped_keys if k not in dotacao_keys])
+                ped_dotacao_missing = missing
+        except Exception:
+            db.session.rollback()
+            ped_dotacao_missing = []
     emp_planejamento_missing_lines: list[int] = []
     emp_dotacao_missing: list[str] = []
     try:
@@ -2154,6 +2158,17 @@ def _subacao_payload(registro: CadastrarSubacao) -> dict:
         "meta_subacao": str(registro.meta_subacao or ""),
         "detalhamento_produto": registro.detalhamento_produto,
         "etapa": registro.etapa,
+        "responsavel_etapa": registro.responsavel_etapa,
+        "cpf_responsavel_etapa": registro.cpf_responsavel_etapa,
+        "regiao_memoria": registro.regiao_memoria,
+        "natureza": registro.natureza,
+        "fonte": registro.fonte,
+        "idu": registro.idu,
+        "descricao": registro.descricao,
+        "unidade_etapa": registro.unidade_etapa,
+        "quantidade": str(registro.quantidade or ""),
+        "valor_unitario": str(registro.valor_unitario or ""),
+        "valor_total": str(registro.valor_total or ""),
         "justificativa": registro.justificativa,
         "responsavel_nger": registro.responsavel_nger,
     }
@@ -2185,10 +2200,24 @@ def api_subacao_create():
     codigo = (data.get("codigo") or "").strip()
     municipios_entrega = (data.get("municipios_entrega") or "").strip()
     meta_raw = (data.get("meta_subacao") or "").strip()
+    municipios_items = data.get("municipios_items") or []
     detalhamento_produto = (data.get("detalhamento_produto") or "").strip()
     etapa = (data.get("etapa") or "").strip()
+    responsavel_etapa = (data.get("responsavel_etapa") or "").strip()
+    cpf_responsavel_etapa_raw = (data.get("cpf_responsavel_etapa") or "").strip()
+    cpf_responsavel_etapa = re.sub(r"\D", "", cpf_responsavel_etapa_raw)
+    regiao_memoria = (data.get("regiao_memoria") or "").strip()
+    natureza = (data.get("natureza") or "").strip()
+    fonte = (data.get("fonte") or "").strip()
+    idu = (data.get("idu") or "").strip()
+    descricao = (data.get("descricao") or "").strip()
+    unidade_etapa = (data.get("unidade_etapa") or "").strip()
+    quantidade_raw = (data.get("quantidade") or "").strip()
+    valor_unitario_raw = (data.get("valor_unitario") or "").strip()
+    valor_total_raw = (data.get("valor_total") or "").strip()
     justificativa = (data.get("justificativa") or "").strip()
     responsavel_nger = (data.get("responsavel_nger") or "").strip()
+    etapas_items = data.get("etapas_items") or []
 
     required = {
         "exercicio": exercicio_raw,
@@ -2208,24 +2237,88 @@ def api_subacao_create():
         "produto_subacao": produto_subacao,
         "unidade_medida": unidade_medida,
         "regiao_subacao": regiao_subacao,
-        "codigo": codigo,
-        "municipios_entrega": municipios_entrega,
-        "meta_subacao": meta_raw,
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
     if not _is_valid_cpf(cpf_responsavel):
         return jsonify({"error": "CPF do responsavel invalido."}), 400
+    if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
+        return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
+    if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
+        return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
+    if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
+        return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
 
     try:
         exercicio = int(exercicio_raw)
     except ValueError:
         return jsonify({"error": "Exercicio invalido."}), 400
 
-    meta_subacao = _parse_decimal(meta_raw)
-    if meta_subacao is None:
-        return jsonify({"error": "Meta da subacao invalida."}), 400
+    items: list[dict] = []
+    if isinstance(municipios_items, list) and municipios_items:
+        for item in municipios_items:
+            codigo_i = (item.get("codigo") or "").strip()
+            municipio_i = (item.get("municipios_entrega") or "").strip()
+            meta_i = (item.get("meta_subacao") or "").strip()
+            if not codigo_i or not municipio_i or not meta_i:
+                return jsonify({"error": "Informe codigo, municipio e meta para todos os itens."}), 400
+            meta_i_dec = _parse_decimal(meta_i)
+            if meta_i_dec is None:
+                return jsonify({"error": "Meta da subacao invalida."}), 400
+            items.append(
+                {
+                    "codigo": codigo_i,
+                    "municipios_entrega": municipio_i,
+                    "meta_subacao": meta_i_dec,
+                }
+            )
+    else:
+        if not codigo or not municipios_entrega or not meta_raw:
+            return jsonify({"error": "Codigo, municipio e meta sao obrigatorios."}), 400
+        meta_subacao = _parse_decimal(meta_raw)
+        if meta_subacao is None:
+            return jsonify({"error": "Meta da subacao invalida."}), 400
+        items.append(
+            {
+                "codigo": codigo,
+                "municipios_entrega": municipios_entrega,
+                "meta_subacao": meta_subacao,
+            }
+        )
+
+    etapa_by_municipio = {}
+    if isinstance(etapas_items, list) and etapas_items:
+        for item in etapas_items:
+            muni = (item.get("municipio") or "").strip()
+            nome = (item.get("nome_etapa") or "").strip()
+            if not muni or not nome:
+                return jsonify({"error": "Etapas incompletas para municipios."}), 400
+            etapa_by_municipio[muni] = {
+                "etapa": nome,
+                "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
+                "cpf_responsavel_etapa": re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or "")),
+                "regiao_memoria": (item.get("regiao_memoria") or "").strip(),
+                "natureza": (item.get("natureza") or "").strip(),
+                "fonte": (item.get("fonte") or "").strip(),
+                "idu": (item.get("idu") or "").strip(),
+                "descricao": (item.get("descricao") or "").strip(),
+                "unidade_etapa": (item.get("unidade_etapa") or "").strip(),
+                "quantidade": _parse_decimal(item.get("quantidade")) if item.get("quantidade") else None,
+                "valor_unitario": _parse_decimal(item.get("valor_unitario")) if item.get("valor_unitario") else None,
+                "valor_total": _parse_decimal(item.get("valor_total")) if item.get("valor_total") else None,
+                "justificativa": (item.get("justificativa") or "").strip(),
+                "responsavel_nger": (item.get("responsavel_nger") or "").strip(),
+            }
+    quantidade = _parse_decimal(quantidade_raw) if quantidade_raw else None
+    if quantidade_raw and quantidade is None:
+        return jsonify({"error": "Quantidade invalida."}), 400
+    valor_unitario = _parse_decimal(valor_unitario_raw) if valor_unitario_raw else None
+    if valor_unitario_raw and valor_unitario is None:
+        return jsonify({"error": "Valor unitario invalido."}), 400
+    valor_total = _parse_decimal(valor_total_raw) if valor_total_raw else None
+    if valor_total_raw and valor_total is None:
+        return jsonify({"error": "Valor total invalido."}), 400
 
     plan_row, plan_err = _find_plan21_nger_row(
         str(exercicio),
@@ -2245,41 +2338,57 @@ def api_subacao_create():
     prazo = f"{prazo_inicio} a {prazo_fim}".strip()
     subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
 
-    registro = CadastrarSubacao(
-        exercicio=exercicio,
-        unidade_orcamentaria=unidade_orcamentaria,
-        programa=programa,
-        acao_paoe=acao_paoe,
-        responsavel_acao=responsavel_acao,
-        produto_acao=produto_acao,
-        chave_planejamento=chave_planejamento,
-        subacao_entrega=subacao_entrega,
-        responsavel=responsavel,
-        cpf_responsavel=cpf_responsavel,
-        prazo=prazo,
-        unid_gestora=unid_gestora,
-        unidade_setorial_planejamento=unidade_setorial_planejamento,
-        produto_subacao=produto_subacao,
-        unidade_medida=unidade_medida,
-        regiao_subacao=regiao_subacao,
-        codigo=codigo,
-        municipios_entrega=municipios_entrega,
-        meta_subacao=meta_subacao,
-        detalhamento_produto=detalhamento_produto,
-        etapa=etapa,
-        justificativa=justificativa,
-        responsavel_nger=responsavel_nger,
-        plan21_nger_id=plan_row.id if plan_row else None,
-        usuario_id=usuarios_id,
-        criado_em=_now_local(),
-    )
-    db.session.add(registro)
+    registros = []
+    for item in items:
+        etapa_data = etapa_by_municipio.get(item["municipios_entrega"], {})
+        registro = CadastrarSubacao(
+            exercicio=exercicio,
+            unidade_orcamentaria=unidade_orcamentaria,
+            programa=programa,
+            acao_paoe=acao_paoe,
+            responsavel_acao=responsavel_acao,
+            produto_acao=produto_acao,
+            chave_planejamento=chave_planejamento,
+            subacao_entrega=subacao_entrega,
+            responsavel=responsavel,
+            cpf_responsavel=cpf_responsavel,
+            prazo=prazo,
+            unid_gestora=unid_gestora,
+            unidade_setorial_planejamento=unidade_setorial_planejamento,
+            produto_subacao=produto_subacao,
+            unidade_medida=unidade_medida,
+            regiao_subacao=regiao_subacao,
+            codigo=item["codigo"],
+            municipios_entrega=item["municipios_entrega"],
+            meta_subacao=item["meta_subacao"],
+            detalhamento_produto=detalhamento_produto,
+            etapa=etapa_data.get("etapa") or etapa,
+            responsavel_etapa=etapa_data.get("responsavel_etapa") or responsavel_etapa,
+            cpf_responsavel_etapa=etapa_data.get("cpf_responsavel_etapa") or cpf_responsavel_etapa,
+            regiao_memoria=etapa_data.get("regiao_memoria") or regiao_memoria,
+            natureza=etapa_data.get("natureza") or natureza,
+            fonte=etapa_data.get("fonte") or fonte,
+            idu=etapa_data.get("idu") or idu,
+            descricao=etapa_data.get("descricao") or descricao,
+            unidade_etapa=etapa_data.get("unidade_etapa") or unidade_etapa,
+            quantidade=etapa_data.get("quantidade") or quantidade,
+            valor_unitario=etapa_data.get("valor_unitario") or valor_unitario,
+            valor_total=etapa_data.get("valor_total") or valor_total,
+            justificativa=etapa_data.get("justificativa") or justificativa,
+            responsavel_nger=etapa_data.get("responsavel_nger") or responsavel_nger,
+            plan21_nger_id=plan_row.id if plan_row else None,
+            usuario_id=usuarios_id,
+            status_aprovacao="aguardando",
+            criado_em=_now_local(),
+        )
+        registros.append(registro)
+        db.session.add(registro)
     try:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao salvar subacao: {exc}"}), 500
-    return jsonify({"subacao": _subacao_payload(registro)})
+    return jsonify({"subacoes": [_subacao_payload(r) for r in registros]})
 
 
 @home_bp.route("/api/subacao/<int:subacao_id>", methods=["PUT"])
@@ -2313,6 +2422,18 @@ def api_subacao_update(subacao_id):
     meta_raw = (data.get("meta_subacao") or "").strip()
     detalhamento_produto = (data.get("detalhamento_produto") or "").strip()
     etapa = (data.get("etapa") or "").strip()
+    responsavel_etapa = (data.get("responsavel_etapa") or "").strip()
+    cpf_responsavel_etapa_raw = (data.get("cpf_responsavel_etapa") or "").strip()
+    cpf_responsavel_etapa = re.sub(r"\D", "", cpf_responsavel_etapa_raw)
+    regiao_memoria = (data.get("regiao_memoria") or "").strip()
+    natureza = (data.get("natureza") or "").strip()
+    fonte = (data.get("fonte") or "").strip()
+    idu = (data.get("idu") or "").strip()
+    descricao = (data.get("descricao") or "").strip()
+    unidade_etapa = (data.get("unidade_etapa") or "").strip()
+    quantidade_raw = (data.get("quantidade") or "").strip()
+    valor_unitario_raw = (data.get("valor_unitario") or "").strip()
+    valor_total_raw = (data.get("valor_total") or "").strip()
     justificativa = (data.get("justificativa") or "").strip()
     responsavel_nger = (data.get("responsavel_nger") or "").strip()
 
@@ -2352,6 +2473,15 @@ def api_subacao_update(subacao_id):
     meta_subacao = _parse_decimal(meta_raw)
     if meta_subacao is None:
         return jsonify({"error": "Meta da subacao invalida."}), 400
+    quantidade = _parse_decimal(quantidade_raw) if quantidade_raw else None
+    if quantidade_raw and quantidade is None:
+        return jsonify({"error": "Quantidade invalida."}), 400
+    valor_unitario = _parse_decimal(valor_unitario_raw) if valor_unitario_raw else None
+    if valor_unitario_raw and valor_unitario is None:
+        return jsonify({"error": "Valor unitario invalido."}), 400
+    valor_total = _parse_decimal(valor_total_raw) if valor_total_raw else None
+    if valor_total_raw and valor_total is None:
+        return jsonify({"error": "Valor total invalido."}), 400
 
     plan_row, plan_err = _find_plan21_nger_row(
         str(exercicio),
@@ -2388,6 +2518,17 @@ def api_subacao_update(subacao_id):
     registro.meta_subacao = meta_subacao
     registro.detalhamento_produto = detalhamento_produto
     registro.etapa = etapa
+    registro.responsavel_etapa = responsavel_etapa
+    registro.cpf_responsavel_etapa = cpf_responsavel_etapa
+    registro.regiao_memoria = regiao_memoria
+    registro.natureza = natureza
+    registro.fonte = fonte
+    registro.idu = idu
+    registro.descricao = descricao
+    registro.unidade_etapa = unidade_etapa
+    registro.quantidade = quantidade
+    registro.valor_unitario = valor_unitario
+    registro.valor_total = valor_total
     registro.justificativa = justificativa
     registro.responsavel_nger = responsavel_nger
     registro.plan21_nger_id = plan_row.id if plan_row else None

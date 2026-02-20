@@ -61,9 +61,12 @@ def _clear_active_session(email: str) -> None:
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    wants_json = request.is_json or "application/json" in (request.headers.get("Accept") or "").lower()
+    is_fetch = request.headers.get("X-Requested-With") == "fetch" or wants_json
     if session.get("user"):
+        if is_fetch:
+            return {"ok": True, "redirect": url_for("home.index")}
         return redirect(url_for("home.index"))
-    is_fetch = request.headers.get("X-Requested-With") == "fetch"
     if request.method == "POST":
         try:
             data = request.get_json(silent=True) if is_fetch else request.form
