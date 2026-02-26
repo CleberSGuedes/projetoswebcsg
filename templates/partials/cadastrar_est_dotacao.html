@@ -4,7 +4,7 @@
      data-user-nome="{{ user_nome }}">
   <div class="card">
     <div class="form no-print" id="est-dotacao-filtro-form">
-      <div class="card-title" style="margin-bottom:10px;">Crit&#233;rios para filtro de resultados</div>
+      <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">
           <span>Tipo de Consulta</span>
@@ -17,10 +17,10 @@
           <span>Campo</span>
           <select id="est-dotacao-filtro-campo">
             <option value="">Selecione...</option>
-            <option value="exercicio">*Exerc&#237;cio</option>
-            <option value="paoe">A&#231;&#227;o/PAOE</option>
+            <option value="exercicio">*Exercício</option>
+            <option value="paoe">Ação/PAOE</option>
             <option value="adjunta">Adjunta Solicitante</option>
-            <option value="chaveDotacao">Controle de Dota&#231;&#227;o</option>
+            <option value="chaveDotacao">Controle de Dotação</option>
             <option value="programa">Programa</option>
           </select>
         </label>
@@ -28,7 +28,7 @@
           <span>Operador</span>
           <select id="est-dotacao-filtro-operador">
             <option value="eq">Igual a</option>
-            <option value="contains">Cont&#233;m</option>
+            <option value="contains">Contém</option>
             <option value="gt">Maior que</option>
             <option value="lt">Menor que</option>
             <option value="gte">Maior igual a</option>
@@ -43,7 +43,7 @@
           <button class="btn btn-primary sm" type="button" id="est-dotacao-filtro-add">Adicionar</button>
         </div>
       </div>
-      <div class="card-title" style="margin:16px 0 8px;">Crit&#233;rios definidos para a consulta:</div>
+      <div class="card-title" style="margin:16px 0 8px;">Critérios definidos para a consulta:</div>
       <div class="form-grid dotacao-criteria-row">
         <div class="field dotacao-criteria-box">
           <ul id="est-dotacao-filtro-list" class="pill-list" style="min-height:40px;"></ul>
@@ -65,13 +65,13 @@
           <thead>
             <tr>
               <th>Status</th>
-              <th>Controle de Dota&#231;&#227;o</th>
-              <th>Justificativa/Hist&#243;rico</th>
-              <th>Valor da Dota&#231;&#227;o</th>
+              <th>Controle de Dotação</th>
+              <th>Justificativa/Histórico</th>
+              <th>Valor da Dotação</th>
               <th>Adjunta Solicitante</th>
               <th>Chave do Planejamento</th>
               <th>Programa</th>
-              <th>A&#231;&#227;o/PAOE</th>
+              <th>Ação/PAOE</th>
               <th>Produto</th>
             </tr>
           </thead>
@@ -117,9 +117,9 @@
           <thead>
             <tr>
               <th>Status</th>
-              <th>Controle de Dota&#231;&#227;o</th>
+              <th>Controle de Dotação</th>
               <th>Justificativa de Estorno</th>
-              <th>Valor da Dota&#231;&#227;o</th>
+              <th>Valor da Dotação</th>
               <th>Valor do Estorno</th>
               <th>Saldo do Estorno</th>
               <th>Adjunta Solicitante</th>
@@ -168,7 +168,7 @@
       </div>
       <div class="table-foot no-print">
         <div class="page-size">
-          <label for="est-dotacao-page-size">Itens por p&#225;gina</label>
+          <label for="est-dotacao-page-size">Itens por página</label>
           <select id="est-dotacao-page-size" class="input">
             <option value="10">10</option>
             <option value="20" selected>20</option>
@@ -188,12 +188,12 @@
   </div>
 
   <div class="card no-print">
-    <div class="card-title">Cadastrar Estorno de Dota&#231;&#227;o</div>
+    <div class="card-title">Cadastrar Estorno de Dotação</div>
     <form id="est-dotacao-form" class="form">
       <input type="hidden" id="est-dotacao-id" />
       <div class="form-grid">
         <label class="field">
-          <span>*Situa&#231;&#227;o</span>
+          <span>*Situação</span>
           <select id="est-dotacao-situacao" name="situacao" required>
             <option value="" selected>Selecione...</option>
             <option value="Estorno parcial">Estorno parcial</option>
@@ -201,7 +201,7 @@
           </select>
         </label>
         <label class="field">
-          <span>*Exerc&#237;cio</span>
+          <span>*Exercício</span>
           <select id="est-dotacao-exercicio" name="exercicio" required>
             <option value="">Selecione...</option>
           </select>
@@ -219,7 +219,7 @@
           <input type="text" id="est-dotacao-programa" readonly />
         </label>
         <label class="field">
-          <span>*A&#231;&#227;o/PAOE</span>
+          <span>*Ação/PAOE</span>
           <input type="text" id="est-dotacao-acao" readonly />
         </label>
         <label class="field">
@@ -231,7 +231,7 @@
           <input type="text" id="est-dotacao-chave" readonly />
         </label>
         <label class="field">
-          <span>*Regi&#227;o</span>
+          <span>*Região</span>
           <input type="text" id="est-dotacao-regiao" readonly />
         </label>
         <label class="field">
@@ -259,7 +259,7 @@
           <input type="text" id="est-dotacao-iduso" readonly />
         </label>
         <label class="field">
-          <span>*Suba&#231;&#227;o/Entrega</span>
+          <span>*Subação/Entrega</span>
           <input type="text" id="est-dotacao-subacao" readonly />
         </label>
         <label class="field">
@@ -267,7 +267,7 @@
           <input type="text" id="est-dotacao-etapa" readonly />
         </label>
         <label class="field">
-          <span>*Valor da Dota&#231;&#227;o</span>
+          <span>*Valor da Dotação</span>
           <input type="text" id="est-dotacao-valor-dotacao" readonly />
         </label>
         <label class="field">
@@ -275,7 +275,7 @@
           <input type="text" id="est-dotacao-valor-estorno" required />
         </label>
         <label class="field">
-          <span>Saldo de Dota&#231;&#227;o</span>
+          <span>Saldo de Dotação</span>
           <input type="text" id="est-dotacao-saldo" readonly />
         </label>
         <label class="field">
@@ -285,7 +285,7 @@
         <div id="est-dotacao-aprovacao-fields" style="display:none;">
           <div class="form-grid" style="margin-top:8px;">
             <label class="field">
-              <span>*Aprovar a Dota&#231;&#227;o?</span>
+              <span>*Aprovar a Dotação?</span>
               <div class="input-group" style="display:flex; gap:12px; align-items:center;">
                 <label style="display:flex; gap:6px; align-items:center; margin:0;">
                   <input type="radio" name="estorno-aprovado" value="sim" checked />
@@ -293,7 +293,7 @@
                 </label>
                 <label style="display:flex; gap:6px; align-items:center; margin:0;">
                   <input type="radio" name="estorno-aprovado" value="nao" />
-                  <span>N&#227;o</span>
+                  <span>Não</span>
                 </label>
               </div>
             </label>

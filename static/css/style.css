@@ -494,6 +494,31 @@ a { color: inherit; text-decoration: none; }
 .field-inline.align-end { justify-content: flex-end; }
 .actions { display: flex; align-items: center; gap: 12px; }
 .text-error { color: #fca5a5; }
+.toast-container {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+.toast {
+  min-width: 240px;
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+.toast-success {
+  border-color: rgba(16,185,129,0.4);
+  background: rgba(16,185,129,0.12);
+  color: #064e3b;
+}
 .char-counter {
   margin-top: 4px;
   font-size: 11px;
@@ -525,6 +550,33 @@ a { color: inherit; text-decoration: none; }
 }
 .municipio-item small { color: var(--muted); font-size: 11px; }
 .municipio-empty { color: var(--muted); font-size: 12px; }
+.etapa-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--surface);
+  margin-top: 10px;
+}
+.etapa-list-head {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.etapa-list-body { display: flex; flex-direction: column; gap: 6px; }
+.etapa-actions #subacao-add-etapa { margin-top: 12px; }
+.etapa-item {
+  display: grid;
+  grid-template-columns: 1.4fr 2.6fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(31,155,126,0.05);
+}
+.etapa-item small { color: var(--muted); font-size: 11px; }
+.etapa-empty { color: var(--muted); font-size: 12px; }
 .relatorio-top { justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
 .relatorio-top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 320px; max-width: 520px; }
 .btn.compact { padding: 6px 10px; font-size: 13px; }

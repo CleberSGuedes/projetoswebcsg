@@ -94,6 +94,7 @@ function parseDataDb(value) {
   const candidate = text.replace(/-/g, "/");
   const formats = [
     /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
+    /^\d{2}\/\d{2}\/\d{4} \d{6}$/,
     /^\d{2}\/\d{2}\/\d{4}$/,
     /^\d{4}-\d{2}-\d{2}$/,
   ];
@@ -101,6 +102,14 @@ function parseDataDb(value) {
     const [datePart, timePart] = candidate.split(" ");
     const [d, m, y] = datePart.split("/").map(Number);
     const [hh, mm, ss] = timePart.split(":").map(Number);
+    return new Date(y, m - 1, d, hh, mm, ss);
+  }
+  if (formats[1].test(candidate)) {
+    const [datePart, timePart] = candidate.split(" ");
+    const [d, m, y] = datePart.split("/").map(Number);
+    const hh = Number(timePart.slice(0, 2));
+    const mm = Number(timePart.slice(2, 4));
+    const ss = Number(timePart.slice(4, 6));
     return new Date(y, m - 1, d, hh, mm, ss);
   }
   if (formats[1].test(candidate)) {

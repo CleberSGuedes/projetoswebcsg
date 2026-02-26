@@ -35,7 +35,7 @@ from models import (
     ActiveSession,
     db,
 )
-from sqlalchemy.exc import ProgrammingError, IntegrityError
+from sqlalchemy.exc import ProgrammingError, IntegrityError, NoSuchColumnError
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
@@ -303,21 +303,28 @@ def partial_dashboard():
     active_sessions = []
     if can_view_sessions:
         cutoff = datetime.utcnow() - timedelta(hours=2)
-        sessions = (
-            ActiveSession.query.filter(ActiveSession.last_activity >= cutoff)
-            .order_by(ActiveSession.last_activity.desc())
-            .all()
-        )
-        emails = [s.email for s in sessions]
-        usuarios = {u.email: u.nome for u in Usuario.query.filter(Usuario.email.in_(emails)).all()}
-        for s in sessions:
-            active_sessions.append(
-                {
-                    "email": s.email,
-                    "nome": usuarios.get(s.email, s.email),
-                    "last_activity": s.last_activity,
-                }
+        try:
+            rows = (
+                db.session.execute(
+                    select(ActiveSession.email, ActiveSession.last_activity)
+                    .where(ActiveSession.last_activity >= cutoff)
+                    .order_by(ActiveSession.last_activity.desc())
+                )
+                .all()
             )
+            emails = [r.email for r in rows]
+            usuarios = {u.email: u.nome for u in Usuario.query.filter(Usuario.email.in_(emails)).all()}
+            for r in rows:
+                active_sessions.append(
+                    {
+                        "email": r.email,
+                        "nome": usuarios.get(r.email, r.email),
+                        "last_activity": r.last_activity,
+                    }
+                )
+        except (ProgrammingError, NoSuchColumnError):
+            db.session.rollback()
+            active_sessions = []
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
     if not ped_dotacao_missing:
@@ -500,7 +507,7 @@ def _load_permissoes_perfil(perfil_id: int | None):
             .all()
         )
         return [f for f in rows if f]
-    except ProgrammingError:
+    except (ProgrammingError, NoSuchColumnError):
         db.session.rollback()
         return []
 
@@ -521,7 +528,7 @@ def _load_permissoes_nivel(nivel: int | None):
             .all()
         )
         return [f for f in rows if f]
-    except ProgrammingError:
+    except (ProgrammingError, NoSuchColumnError):
         db.session.rollback()
         return []
 
@@ -555,7 +562,7 @@ def _load_permissoes_por_nivel_perfis(nivel: int):
         )
         feats = [f for f in feats if f]
         return _add_parent_features(list(set(feats)))
-    except ProgrammingError:
+    except (ProgrammingError, NoSuchColumnError):
         db.session.rollback()
         return []
 
@@ -1452,6 +1459,7 @@ def _find_plan21_nger_row(
     acao_paoe: str,
     responsavel_acao: str,
     produto_acao: str,
+    chave_planejamento: str | None = None,
 ):
     query = Plan21Nger.query
     if exercicio:
@@ -1466,11 +1474,14 @@ def _find_plan21_nger_row(
         query = query.filter(Plan21Nger.responsavel_acao == responsavel_acao)
     if produto_acao:
         query = query.filter(Plan21Nger.produto == produto_acao)
-    rows = query.all()
+    if chave_planejamento:
+        query = query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
+    rows = query.order_by(Plan21Nger.id.desc()).all()
     if not rows:
-        return None, "Nenhum registro do plan21_nger encontrado para esta selecao."
+        return None, "Regi\u00e3o n\u00e3o encontrada no PTA. Por favor, antes de criar esta Suba\u00e7\u00e3o, cadastre uma nova regi\u00e3o do produto e sua respectiva meta f\u00edsica."
     if len(rows) > 1:
-        return None, "Selecao ambigua no plan21_nger. Ajuste os filtros."
+        # Seleciona o registro mais recente quando houver ambiguidade.
+        return rows[0], None
     return rows[0], None
 
 
@@ -2174,6 +2185,111 @@ def _subacao_payload(registro: CadastrarSubacao) -> dict:
     }
 
 
+@home_bp.route("/api/subacao/plan21-edit-options", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_plan21_edit_options():
+    current_year = str(_now_local().year)
+    plan_fields = {
+        "exercicio": "exercicio",
+        "uo": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+    }
+    edit_fields = {
+        "chave_planejamento": "chave_planejamento",
+        "subacao_entrega": "subacao_entrega",
+        "responsavel": "responsavel",
+        "prazo": "prazo",
+        "unid_gestora": "unid_gestora",
+        "unidade_setorial_planejamento": "unidade_setorial_planejamento",
+        "produto_subacao": "produto_subacao",
+        "unidade_medida": "unidade_medida",
+        "regiao_subacao": "regiao_subacao",
+        "codigo": "codigo",
+        "municipios_entrega": "municipios_entrega",
+        "meta_subacao": "meta_subacao",
+        "detalhamento_produto": "detalhamento_produto",
+    }
+    selected = {}
+    for key in list(plan_fields.keys()) + list(edit_fields.keys()):
+        val = (request.args.get(key) or "").strip()
+        if val:
+            selected[key] = val
+    if "exercicio" not in selected:
+        selected["exercicio"] = current_year
+
+    def build_options(field_key: str) -> list[str]:
+        col = edit_fields[field_key]
+        where = ["ativo = 1"]
+        params = {}
+        for k, col_name in plan_fields.items():
+            if k == field_key:
+                continue
+            val = selected.get(k, "")
+            if val:
+                where.append(f"{col_name} = :{k}")
+                params[k] = val
+        for k, col_name in edit_fields.items():
+            if k == field_key:
+                continue
+            val = selected.get(k, "")
+            if val:
+                where.append(f"{col_name} = :{k}")
+                params[k] = val
+        sql = f"SELECT DISTINCT {col} AS value FROM plan21_nger"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        rows = _safe_query_mappings(sql, params)
+        values = []
+        for row in rows:
+            val = row.get("value")
+            if val is None:
+                continue
+            s = str(val).strip()
+            if s:
+                values.append(s)
+        return sorted(set(values), key=lambda v: v.lower())
+
+    options = {key: build_options(key) for key in edit_fields.keys()}
+
+    pair_where = ["ativo = 1"]
+    pair_params = {}
+    for k, col_name in plan_fields.items():
+        val = selected.get(k, "")
+        if val:
+            pair_where.append(f"{col_name} = :{k}")
+            pair_params[k] = val
+    for k, col_name in edit_fields.items():
+        if k in {"codigo", "municipios_entrega"}:
+            continue
+        val = selected.get(k, "")
+        if val:
+            pair_where.append(f"{col_name} = :{k}")
+            pair_params[k] = val
+    pair_sql = "SELECT DISTINCT codigo, municipios_entrega, meta_subacao FROM plan21_nger"
+    if pair_where:
+        pair_sql += " WHERE " + " AND ".join(pair_where)
+    pair_rows = _safe_query_mappings(pair_sql, pair_params)
+    pairs = []
+    for row in pair_rows:
+        codigo = row.get("codigo")
+        municipio = row.get("municipios_entrega")
+        meta = row.get("meta_subacao")
+        if codigo is None or municipio is None:
+            continue
+        codigo_s = str(codigo).strip()
+        municipio_s = str(municipio).strip()
+        if not codigo_s or not municipio_s:
+            continue
+        meta_s = "" if meta is None else str(meta).strip()
+        pairs.append({"codigo": codigo_s, "municipio": municipio_s, "meta": meta_s})
+
+    return jsonify({"options": options, "pairs": pairs})
+
+
 @home_bp.route("/api/subacao", methods=["POST"])
 @login_required
 @require_feature("cadastrar/plan_21-nger/subacao")
@@ -2327,6 +2443,7 @@ def api_subacao_create():
         acao_paoe,
         responsavel_acao,
         produto_acao,
+        chave_planejamento,
     )
     if plan_err:
         return jsonify({"error": plan_err}), 400
@@ -2490,6 +2607,7 @@ def api_subacao_update(subacao_id):
         acao_paoe,
         responsavel_acao,
         produto_acao,
+        chave_planejamento,
     )
     if plan_err:
         return jsonify({"error": plan_err}), 400
@@ -2686,7 +2804,7 @@ def api_dotacao_create():
     query = query.filter(Plan21Nger.idu == iduso)
     rows = query.limit(2).all()
     if not rows:
-        return jsonify({"error": "Nenhum registro do plan21_nger encontrado para esta selecao."}), 400
+        return jsonify({"error": "Regi\u00e3o n\u00e3o encontrada no PTA. Por favor, antes de criar esta Suba\u00e7\u00e3o, cadastre uma nova regi\u00e3o do produto e sua respectiva meta f\u00edsica."}), 400
     if len(rows) > 1:
         return jsonify({"error": "Selecao ambigua no plan21_nger. Ajuste os filtros."}), 400
     plan = rows[0]
@@ -2915,7 +3033,7 @@ def api_dotacao_update(dotacao_id):
     query = query.filter(Plan21Nger.idu == iduso)
     rows = query.limit(2).all()
     if not rows:
-        return jsonify({"error": "Nenhum registro do plan21_nger encontrado para esta selecao."}), 400
+        return jsonify({"error": "Regi\u00e3o n\u00e3o encontrada no PTA. Por favor, antes de criar esta Suba\u00e7\u00e3o, cadastre uma nova regi\u00e3o do produto e sua respectiva meta f\u00edsica."}), 400
     if len(rows) > 1:
         return jsonify({"error": "Selecao ambigua no plan21_nger. Ajuste os filtros."}), 400
     plan = rows[0]

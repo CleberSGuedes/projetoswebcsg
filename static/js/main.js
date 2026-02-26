@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
@@ -173,12 +173,12 @@
           msg.classList.add("text-error");
           return;
         }
-        msg.textContent = "Usuário criado.";
+        msg.textContent = "UsuÃ¡rio criado.";
         form.reset();
         await loadPage("usuarios");
       } catch (err) {
         console.error(err);
-        msg.textContent = "Falha na requisição.";
+        msg.textContent = "Falha na requisiÃ§Ã£o.";
         msg.classList.add("text-error");
       }
     });
@@ -217,7 +217,7 @@
       const id = document.getElementById("edit-id").value;
       const email = document.getElementById("edit-email").value;
       if (!id) {
-        msg.textContent = "Selecione um usuário na lista.";
+        msg.textContent = "Selecione um usuÃ¡rio na lista.";
         msg.classList.add("text-error");
         return;
       }
@@ -241,10 +241,10 @@
         try {
           data = JSON.parse(raw || "{}");
         } catch {
-          // se não for JSON, usa texto bruto na mensagem de erro
+          // se nÃ£o for JSON, usa texto bruto na mensagem de erro
         }
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
-        msg.textContent = data.message || "Usuário atualizado.";
+        msg.textContent = data.message || "UsuÃ¡rio atualizado.";
         document.getElementById("edit-senha").value = "";
         const row = document.querySelector(`tr[data-id="${id}"]`);
         if (row) {
@@ -258,7 +258,7 @@
             cells[0].textContent = email || cells[0].textContent;
             cells[1].textContent = payload.nome || cells[1].textContent;
             cells[2].textContent = perfilText || cells[2].textContent;
-            cells[3].textContent = payload.ativo ? "Sim" : "Não";
+            cells[3].textContent = payload.ativo ? "Sim" : "NÃ£o";
           }
         }
       } catch (err) {
@@ -374,9 +374,29 @@
     });
   }
 
+  function showToast(message, type = "success", timeout = 3500) {
+    if (!message) return;
+    let container = document.querySelector(".toast-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.className = "toast-container";
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+      if (container && container.children.length === 0) {
+        container.remove();
+      }
+    }, timeout);
+  }
+
   async function fetchCurrentPermissions() {
     if (userNivel === "1") {
-      // admin: libera tudo visível no menu
+      // admin: libera tudo visÃ­vel no menu
       const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
         el.getAttribute("data-route")
       );
@@ -861,7 +881,7 @@
       if (!res.ok) throw new Error("Erro ao consultar status");
       const data = await res.json();
       if (!data.last) {
-        target.textContent = "Nenhuma atualização encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         return;
       }
       const last = data.last;
@@ -872,7 +892,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -888,7 +908,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualização encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -904,12 +924,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatório";
+        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -931,7 +951,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualização encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -958,12 +978,12 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatório";
+        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
       }
       if (last.output_filename) return "done";
       return last.status || null;
@@ -982,7 +1002,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualização encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -998,12 +1018,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatório";
+        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -1025,7 +1045,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualização encontrada.";
+        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
         return null;
       }
       const last = data.last;
@@ -1047,12 +1067,12 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatório";
+        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
       }
       if (last.output_filename) return "done";
       return last.status || null;
@@ -1102,7 +1122,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relatório";
+  const viewLabel = "Ver RelatÃ³rio";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1152,7 +1172,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluído.";
+          msg.textContent = data.message || "Upload concluÃ­do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1193,7 +1213,7 @@
     const reprocessBtn = document.getElementById("ped-reprocess");
     const cancelBtn = document.getElementById("ped-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatório";
+    const viewLabel = "Ver relatÃ³rio";
     const goToReport = () => {
       setActive("relatorios/ped");
       loadPage("relatorios/ped");
@@ -1298,7 +1318,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluído.";
+          msg.textContent = data.message || "Upload concluÃ­do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1340,7 +1360,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatório";
+    const viewLabel = "Ver relatÃ³rio";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1486,7 +1506,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatório";
+    const viewLabel = "Ver relatÃ³rio";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1580,7 +1600,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatório";
+    const viewLabel = "Ver relatÃ³rio";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");
@@ -1721,7 +1741,7 @@
     const loading = document.getElementById("plan20-loading");
   const submitBtn = document.getElementById("plan20-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver Relatório";
+  const viewLabel = "Ver RelatÃ³rio";
   const goToRelatorio = () => {
     setActive("relatorios/plan20-seduc");
     loadPage("relatorios/plan20-seduc");
@@ -1739,7 +1759,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
         if (!data.last) {
-          statusBox.textContent = "Nenhuma atualização encontrada.";
+          statusBox.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
           return;
         }
         const last = data.last;
@@ -1750,7 +1770,7 @@
           <div><strong>Upload em:</strong> ${uploaded}</div>
           <div><strong>Data do download:</strong> ${dataArquivo}</div>
           <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-          <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+          <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
         `;
         if (submitBtn && data.last && data.last.output_filename) {
           submitBtn.dataset.mode = "view";
@@ -1802,7 +1822,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluído.";
+          msg.textContent = data.message || "Upload concluÃ­do.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -2365,25 +2385,25 @@
       const adjConc = row.dataset.adjConcedente || "";
       const isEmp = adjConc && adjConc !== adjSolic;
       const fields = [
-        ["Exerc&#237;cio", row.dataset.exercicio],
+        ["ExercÃ­cio", row.dataset.exercicio],
         ["Adjunta Solicitante", row.dataset.adjunta],
         ...(isEmp ? [["Adjunta Concedente", adjConc]] : []),
         ["Chave do Planejamento", row.dataset.chave],
         ["UO", row.dataset.uo],
         ["Programa", row.dataset.programaRaw],
-        ["A&#231;&#227;o/PAOE", row.dataset.acaoPaoe],
+        ["AÃ§Ã£o/PAOE", row.dataset.acaoPaoe],
         ["Produto", row.dataset.produto],
         ["UG", row.dataset.ug],
-        ["Regi&#227;o", row.dataset.regiao],
-        ["Suba&#231;&#227;o/Entrega", row.dataset.subacao],
+        ["RegiÃ£o", row.dataset.regiao],
+        ["SubaÃ§Ã£o/Entrega", row.dataset.subacao],
         ["Etapa", row.dataset.etapa],
         ["Natureza de Despesa", row.dataset.natureza],
         ["Elemento de Despesa", row.dataset.elemento],
         ["Subelemento", row.dataset.subelemento],
         ["Fonte", row.dataset.fonte],
         ["Iduso", row.dataset.iduso],
-        ["Justificativa/Hist&#243;rico", row.dataset.justificativa],
-        ["Valor da Dota&#231;&#227;o", formatPtBr(parsePtBr(row.dataset.valor) || 0)],
+        ["Justificativa/HistÃ³rico", row.dataset.justificativa],
+        ["Valor da DotaÃ§Ã£o", formatPtBr(parsePtBr(row.dataset.valor) || 0)],
       ];
       const rowsHtml = fields
         .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
@@ -2464,7 +2484,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dota&#231;&#227;o Cadastrada</title>
+  <title>DotaÃ§Ã£o Cadastrada</title>
   <style>
     body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 70px; }
     .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
@@ -2494,14 +2514,14 @@
     <div class="print-brand">
       <img src="/static/img/logo.jpg" alt="Logo" />
       <div class="print-brand-text">
-        <div class="print-brand-title">Sistema de Planejamento e Or&#231;amento</div>
+        <div class="print-brand-title">Sistema de Planejamento e OrÃ§amento</div>
         <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
       </div>
     </div>
   </div>
   <div class="print-title-row">
     <div class="print-title-key">${escapeHtml(rows[0]?.dataset?.chaveDotacao || "")}</div>
-    <div class="print-title">DOTA&#199;&#195;O CADASTRADA</div>
+    <div class="print-title">DOTAÃ‡ÃƒO CADASTRADA</div>
     <div class="print-title-date">${formatPrintDate((rows[0]?.dataset?.alteradoEm && rows[0]?.dataset?.alteradoEm !== rows[0]?.dataset?.criadoEm) ? rows[0]?.dataset?.alteradoEm : rows[0]?.dataset?.criadoEm)}</div>
   </div>
   <div style="height: 36px;"></div>
@@ -2775,16 +2795,16 @@
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente não definida.", true);
+          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("Usuário sem permissão para editar a dotação atual.", true);
+          setFilterMsg("UsuÃ¡rio sem permissÃ£o para editar a dotaÃ§Ã£o atual.", true);
           return;
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotações com status Aguardando podem ser editadas.", true);
+          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser editadas.", true);
           return;
         }
         setApprovalMode(false);
@@ -2805,16 +2825,16 @@
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente não definida.", true);
+          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("Usuário sem permissão para excluir a dotação atual.", true);
+          setFilterMsg("UsuÃ¡rio sem permissÃ£o para excluir a dotaÃ§Ã£o atual.", true);
           return;
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotações com status Aguardando podem ser excluídas.", true);
+          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser excluÃ­das.", true);
           return;
         }
         const dotacaoId = selected.dataset.id;
@@ -2831,7 +2851,7 @@
           if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
           selected.remove();
           renderSummaryPage();
-          setFilterMsg(data.message || "Dotação excluída.", false);
+          setFilterMsg(data.message || "DotaÃ§Ã£o excluÃ­da.", false);
         } catch (err) {
           console.error(err);
           setFilterMsg(err.message || "Falha ao excluir.", true);
@@ -2862,14 +2882,14 @@
       msg.classList.remove("text-error");
       if (approvalMode) {
         if (!dotacaoId) {
-          msg.textContent = "Registro inválido para aprovação.";
+          msg.textContent = "Registro invÃ¡lido para aprovaÃ§Ã£o.";
           msg.classList.add("text-error");
           return;
         }
         const aprovado = Array.from(approvalRadios).find((r) => r.checked)?.value || "sim";
         const justificativa = String(approvalJustificativa?.value || "").trim();
         if (!justificativa) {
-          msg.textContent = "Justificativa obrigatória.";
+          msg.textContent = "Justificativa obrigatÃ³ria.";
           msg.classList.add("text-error");
           return;
         }
@@ -2884,7 +2904,7 @@
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao aprovar.");
-          msg.textContent = data.message || "Dotação atualizada.";
+          msg.textContent = data.message || "DotaÃ§Ã£o atualizada.";
           if (data.dotacao) {
             openPrintPopup([buildRowFromPayload(data.dotacao)]);
           }
@@ -2997,16 +3017,16 @@
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotações com status Aguardando podem ser aprovadas.", true);
+          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser aprovadas.", true);
           return;
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente não definida.", true);
+          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("Usuário sem permissão para aprovar a dotação atual.", true);
+          setFilterMsg("UsuÃ¡rio sem permissÃ£o para aprovar a dotaÃ§Ã£o atual.", true);
           return;
         }
         setApprovalMode(true);
@@ -3218,7 +3238,7 @@
         if (paoeSet.size === 0) {
           paoeEl.textContent = "-";
         } else if (paoeSet.size > 10) {
-          paoeEl.textContent = "Vários PAOEs";
+          paoeEl.textContent = "VÃ¡rios PAOEs";
         } else {
           paoeEl.textContent = Array.from(paoeSet).join(" * ");
         }
@@ -3552,7 +3572,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4079,7 +4099,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4591,7 +4611,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5089,7 +5109,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5646,7 +5666,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -6152,7 +6172,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
+            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -7717,7 +7737,7 @@
       }
       const adjunta = String(row.dataset.adjunta || "").trim();
       if (!currentUserPerfilId || currentUserPerfilId !== String(row.dataset.perfilId || "").trim()) {
-        setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
+        setFilterMsg("UsuÃ¡rio sem permissÃ£o para alterar o estorno atual.", true);
         return false;
       }
       return true;
@@ -7746,7 +7766,7 @@
         if (!canEditOrDeleteEstorno(selected)) return;
         const estId = selected.dataset.id;
         if (!estId) {
-          setFilterMsg("Registro inválido para exclusão.", true);
+          setFilterMsg("Registro invÃ¡lido para exclusÃ£o.", true);
           return;
         }
         try {
@@ -7777,7 +7797,7 @@
         }
         const adjunta = String(selected.dataset.adjunta || "").trim();
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
-          setFilterMsg("Usuário sem permissão para aprovar o estorno atual.", true);
+          setFilterMsg("UsuÃ¡rio sem permissÃ£o para aprovar o estorno atual.", true);
           return;
         }
         fillFormFromEstorno(selected);
@@ -7794,7 +7814,7 @@
         if (isApprovalMode) {
           if (!editId) {
             if (msg) {
-              msg.textContent = "Registro inválido para aprovação.";
+              msg.textContent = "Registro invÃ¡lido para aprovaÃ§Ã£o.";
               msg.classList.add("text-error");
             }
             return;
@@ -7803,7 +7823,7 @@
           const justificativa = String(approvalJustificativa?.value || "").trim();
           if (!justificativa) {
             if (msg) {
-              msg.textContent = "Justificativa obrigatória.";
+              msg.textContent = "Justificativa obrigatÃ³ria.";
               msg.classList.add("text-error");
             }
             return;
@@ -7828,7 +7848,7 @@
         }
         if (!useEdit && (!selected || selected.dataset.kind !== "dotacao")) {
           if (msg) {
-            msg.textContent = "Carregue uma dotação antes de salvar o estorno.";
+            msg.textContent = "Carregue uma dotaÃ§Ã£o antes de salvar o estorno.";
             msg.classList.add("text-error");
           }
           return;
@@ -7928,7 +7948,7 @@
         const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
         const dia = `${map.day}/${map.month}/${map.year}`;
         const hora = `${map.hour}h${map.minute}m`;
-        return `${dia} às ${hora}`;
+        return `${dia} Ã s ${hora}`;
       };
 
       const diasEl = recordModal.querySelector(".emp-record-digits");
@@ -8031,6 +8051,10 @@
     };
 
     const chaveInput = document.getElementById("subacao-chave");
+    const chaveTitle = document.getElementById("subacao-chave-title");
+    const chaveSection = document.getElementById("subacao-chave-section");
+    const cadastrarGrid = document.getElementById("subacao-cadastrar-grid");
+    const editarGrid = document.getElementById("subacao-editar-grid");
     const subacaoEntregaInput = document.getElementById("subacao-entrega");
     const responsavelInput = document.getElementById("subacao-responsavel");
     const cpfInput = document.getElementById("subacao-cpf");
@@ -8049,10 +8073,15 @@
     const etapaMunicipioSelect = document.getElementById("subacao-etapa-municipio");
     const etapaCounter = document.getElementById("subacao-etapa-counter");
     const addEtapaBtn = document.getElementById("subacao-add-etapa");
+    const etapaListWrap = document.getElementById("subacao-etapa-list-wrap");
+    const etapaListEl = document.getElementById("subacao-etapa-list");
     const responsavelEtapaInput = document.getElementById("subacao-responsavel-etapa");
     const cpfEtapaInput = document.getElementById("subacao-cpf-etapa");
     const regiaoMemoriaInput = document.getElementById("subacao-regiao-memoria");
     const naturezaInput = document.getElementById("subacao-natureza");
+    const fonteSuperavitInputs = Array.from(
+      form.querySelectorAll("input[name='fonte_superavit']")
+    );
     const fonteSelect = document.getElementById("subacao-fonte");
     const idusoSelect = document.getElementById("subacao-iduso");
     const descricaoInput = document.getElementById("subacao-descricao");
@@ -8065,6 +8094,32 @@
     const municipioAddBtn = document.getElementById("subacao-municipio-add");
     const municipioListWrap = document.getElementById("subacao-municipio-list-wrap");
     const municipioListEl = document.getElementById("subacao-municipio-list");
+    const editChaveSelect = document.getElementById("subacao-edit-chave");
+    const editSubacaoSelect = document.getElementById("subacao-edit-subacao-select");
+    const editSubacaoInput = document.getElementById("subacao-edit-subacao-input");
+    const editResponsavelSelect = document.getElementById("subacao-edit-responsavel-select");
+    const editResponsavelInput = document.getElementById("subacao-edit-responsavel-input");
+    const editCpfInput = document.getElementById("subacao-edit-cpf");
+    const editPrazoSelect = document.getElementById("subacao-edit-prazo");
+    const editUnidGestoraSelect = document.getElementById("subacao-edit-unid-gestora");
+    const editUnidadeSetorialSelect = document.getElementById("subacao-edit-unidade-setorial");
+    const editProdutoSelect = document.getElementById("subacao-edit-produto-select");
+    const editProdutoInput = document.getElementById("subacao-edit-produto-input");
+    const editUnidadeMedidaSelect = document.getElementById("subacao-edit-unidade-medida");
+    const editRegiaoSelect = document.getElementById("subacao-edit-regiao");
+    const editCodigoSelect = document.getElementById("subacao-edit-codigo");
+    const editMunicipioSelect = document.getElementById("subacao-edit-municipio");
+    const editMetaSelect = document.getElementById("subacao-edit-meta");
+    const editDetalhamentoSelect = document.getElementById("subacao-edit-detalhamento-select");
+    const editDetalhamentoInput = document.getElementById("subacao-edit-detalhamento-input");
+    const editMunicipioToggle = document.getElementById("subacao-edit-municipio-toggle");
+    const editMunicipioWrap = document.getElementById("subacao-edit-municipio-wrap");
+    const editMunicipioAddBtn = document.getElementById("subacao-edit-municipio-add");
+    const editMunicipioListWrap = document.getElementById("subacao-edit-municipio-list-wrap");
+    const editMunicipioListEl = document.getElementById("subacao-edit-municipio-list");
+    const editCodigoNovoSelect = document.getElementById("subacao-edit-codigo-novo");
+    const editMunicipioNovoSelect = document.getElementById("subacao-edit-municipio-novo");
+    const editMetaNovoInput = document.getElementById("subacao-edit-meta-novo");
 
     const summaryBody = document.querySelector("#subacao-summary-table tbody");
     const pageSizeSelect = document.getElementById("subacao-page-size");
@@ -8078,12 +8133,55 @@
     const hasAllKeySelects = Object.values(chaveSelects).every((el) => el);
     if (!hasAllPlanSelects || !hasAllKeySelects) return;
 
+    let lastRegiaoValue = planSelects.regiao?.value || "";
+
     const setMsg = (text, isError = false) => {
       msg.textContent = text || "";
       msg.classList.toggle("text-error", isError);
+      if (text && msg.scrollIntoView) {
+        msg.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     };
 
+    const subacaoEntregaCounter = document.getElementById("subacao-entrega-counter");
+
     const getStepPanel = (step) => stepPanels.find((panel) => Number(panel.dataset.step) === step);
+
+    const toggleMode = () => {
+      const isEdit = (modeSelect?.value || "").toLowerCase() === "editar";
+      if (chaveTitle) chaveTitle.style.display = isEdit ? "none" : "";
+      if (chaveSection) chaveSection.style.display = isEdit ? "none" : "";
+      if (cadastrarGrid) cadastrarGrid.style.display = isEdit ? "none" : "";
+      if (editarGrid) editarGrid.style.display = isEdit ? "" : "none";
+      if (municipioListWrap) municipioListWrap.style.display = isEdit ? "none" : "";
+      if (municipioAddBtn) municipioAddBtn.style.display = isEdit ? "none" : "";
+      if (editMunicipioToggle) editMunicipioToggle.style.display = isEdit ? "" : "none";
+      if (editMunicipioWrap) editMunicipioWrap.style.display = "none";
+
+      const toggleFields = (root, enable) => {
+        if (!root) return;
+        root.querySelectorAll("input, select, textarea").forEach((el) => {
+          if (enable) {
+            if (el.dataset.readonly === "1") return;
+            el.disabled = false;
+          } else {
+            el.disabled = true;
+          }
+        });
+      };
+      toggleFields(chaveSection, !isEdit);
+      toggleFields(cadastrarGrid, !isEdit);
+      toggleFields(editarGrid, isEdit);
+    };
+
+    if (modeSelect) {
+      modeSelect.addEventListener("change", () => {
+        toggleMode();
+        if ((modeSelect.value || "").toLowerCase() === "editar") {
+          loadEditOptions();
+        }
+      });
+    }
 
     const validateStep = (step) => {
       const panel = getStepPanel(step);
@@ -8098,9 +8196,44 @@
           }
         }
         if (!field.checkValidity()) {
+          if (field === metaInput && municipioItems.length) {
+            continue;
+          }
           field.reportValidity();
           field.focus();
           return false;
+        }
+      }
+      const isEditMode = (modeSelect?.value || "").toLowerCase() === "editar";
+      if (step === 2 && !isEditMode && cpfInput && cpfInput.value && !isValidCpf(cpfInput.value)) {
+        setMsg("CPF do responsável inválido.", true);
+        cpfInput.focus();
+        return false;
+      }
+      if (step === 2 && isEditMode && editCpfInput && editCpfInput.value && !isValidCpf(editCpfInput.value)) {
+        setMsg("CPF do responsável inválido.", true);
+        editCpfInput.focus();
+        return false;
+      }
+      if (step === 2 && !isEditMode) {
+        if (dataInicioInput && !isValidDateBR(dataInicioInput.value)) {
+          setMsg("Data início inválida.", true);
+          dataInicioInput.focus();
+          return false;
+        }
+        if (dataFimInput && !isValidDateBR(dataFimInput.value)) {
+          setMsg("Data final inválida.", true);
+          dataFimInput.focus();
+          return false;
+        }
+        if (dataInicioInput && dataFimInput) {
+          const di = parseDateBR(dataInicioInput.value);
+          const df = parseDateBR(dataFimInput.value);
+          if (di && df && df < di) {
+            setMsg("Data final deve ser maior ou igual Ã  data inÃ­cio.", true);
+            dataFimInput.focus();
+            return false;
+          }
         }
       }
       return true;
@@ -8126,7 +8259,19 @@
       return digits ? String(parseInt(digits, 10)) : "";
     };
 
+    const syncSubacaoEntregaCounter = () => {
+      if (!subacaoEntregaCounter || !subacaoEntregaInput) return;
+      subacaoEntregaCounter.textContent = `${(subacaoEntregaInput.value || "").length}/260`;
+    };
+
     const formatKey = () => {
+      if (municipioItems.length && chaveSelects.regiao) {
+        const currentRegiao = chaveSelects.regiao.value || "";
+        if (currentRegiao && lastRegiaoValue && currentRegiao !== lastRegiaoValue) {
+          setMsg("Remova todos os munic\u00edpios antes de trocar a regi\u00e3o.", true);
+          chaveSelects.regiao.value = lastRegiaoValue;
+        }
+      }
       const regiao = normalizeDigits(chaveSelects.regiao.value);
       const subfuncao = normalizeDigits(chaveSelects.subfuncao.value);
       const ugRaw = normalizeDigits(chaveSelects.ug.value);
@@ -8155,6 +8300,7 @@
       if (chaveInput) {
         chaveInput.value = `* ${parts.join(" * ")} *`;
       }
+      syncSubacaoEntregaCounter();
     };
 
     const syncSelectByCodigo = (select, codigo) => {
@@ -8178,6 +8324,16 @@
       }
       if (chaveSelects.regiao && regiaoMemoriaInput) {
         regiaoMemoriaInput.value = getSelectLabel(chaveSelects.regiao);
+      }
+      if (regiaoEntregaSelect) {
+        const newRegiao = regiaoEntregaSelect.value || "";
+        const lastRegiao = regiaoEntregaSelect.dataset.bridgeValue || "";
+        if (newRegiao && newRegiao !== lastRegiao) {
+          regiaoEntregaSelect.dataset.bridgeValue = newRegiao;
+          if (codigoSelect) codigoSelect.value = "";
+          if (municipioSelect) municipioSelect.value = "";
+          loadOptions();
+        }
       }
     };
 
@@ -8244,6 +8400,101 @@
       metaInput.value = formatPtBr(num);
     };
 
+    const fontesNao = [
+      "15000000 - Recursos nÃ£o vinculados de Impostos",
+      "15001001 - Recursos destinados Ã  ManutenÃ§Ã£o e Desenvolvimento do Ensino",
+      "15010000 - Outros Recursos nÃ£o Vinculados",
+      "15010100 - Outros Recursos nÃ£o vinculados destinados ao Tesouro",
+      "15021001 - Recursos nÃ£o vinculados da compensaÃ§Ã£o de impostos - Destinado ao Ensino",
+      "15400000 - TransferÃªncia de recursos do FUNDEB desenvolvimento do Ensino",
+      "15401070 - TransferÃªncia de recursos do FUNDEB RemuneraÃ§Ã£o EducaÃ§Ã£o BÃ¡sica",
+      "15401071 - TransferÃªncia de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
+      "15401072 - TransferÃªncia de recursos do FUNDEB - RemuneraÃ§Ã£o Profissionais ETI",
+      "15460000 - TransferÃªncias do FUNDEB - ComplementaÃ§Ã£o da UniÃ£o - ETI",
+      "15500000 - Recursos da ContribuiÃ§Ã£o ao SalÃ¡rio EducaÃ§Ã£o",
+      "15510000 - TransferÃªncias de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
+      "15520000 - TransferÃªncias de Recursos do FNDE referente ao Programa Nacional de AlimentaÃ§Ã£o Escolar (PNAE)",
+      "15530000 - TransferÃªncias de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
+      "15690000 - Outras TransferÃªncias de Recursos do FNDE",
+      "15700000 - TransferÃªncias do Governo Federal ref. a ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o",
+      "15703110 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Individual",
+      "15703120 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Bancada",
+      "15740000 - Recursos de OperaÃ§Ãµes de CrÃ©dito EducaÃ§Ã£o",
+    ];
+
+    const fontesSim = [
+      "25000000 - Recursos nÃ£o vinculados de Impostos",
+      "25001001 - Recursos destinados Ã  ManutenÃ§Ã£o e Desenvolvimento do Ensino",
+      "25010000 - Outros Recursos nÃ£o Vinculados",
+      "25010100 - Outros Recursos nÃ£o vinculados destinados ao Tesouro",
+      "25021001 - Recursos nÃ£o vinculados da compensaÃ§Ã£o de impostos - Destinado ao Ensino",
+      "25400000 - TransferÃªncia de recursos do FUNDEB desenvolvimento do Ensino",
+      "25401070 - TransferÃªncia de recursos do FUNDEB RemuneraÃ§Ã£o EducaÃ§Ã£o BÃ¡sica",
+      "25401071 - TransferÃªncia de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
+      "25401072 - TransferÃªncia de recursos do FUNDEB - RemuneraÃ§Ã£o Profissionais ETI",
+      "25460000 - TransferÃªncias do FUNDEB - ComplementaÃ§Ã£o da UniÃ£o - ETI",
+      "25500000 - Recursos da ContribuiÃ§Ã£o ao SalÃ¡rio EducaÃ§Ã£o",
+      "25510000 - TransferÃªncias de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
+      "25520000 - TransferÃªncias de Recursos do FNDE referente ao Programa Nacional de AlimentaÃ§Ã£o Escolar (PNAE)",
+      "25530000 - TransferÃªncias de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
+      "25690000 - Outras TransferÃªncias de Recursos do FNDE",
+      "25700000 - TransferÃªncias do Governo Federal ref. a ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o",
+      "25703110 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Individual",
+      "25703120 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Bancada",
+      "25740000 - Recursos de OperaÃ§Ãµes de CrÃ©dito EducaÃ§Ã£o",
+    ];
+
+    const setFonteOptions = (items) => {
+      if (!fonteSelect) return;
+      const current = fonteSelect.value || "";
+      fonteSelect.innerHTML = "";
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Selecione";
+      fonteSelect.appendChild(opt);
+      items.forEach((item) => {
+        const o = document.createElement("option");
+        o.value = item;
+        o.textContent = item;
+        fonteSelect.appendChild(o);
+      });
+      if (current) fonteSelect.value = current;
+    };
+
+    const isValidDateBR = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return false;
+      const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!m) return false;
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      const year = Number(m[3]);
+      if (month < 1 || month > 12) return false;
+      if (day < 1 || day > 31) return false;
+      const dt = new Date(year, month - 1, day);
+      return (
+        dt.getFullYear() === year &&
+        dt.getMonth() === month - 1 &&
+        dt.getDate() === day
+      );
+    };
+
+    const parseDateBR = (value) => {
+      const raw = String(value || "").trim();
+      const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!m) return null;
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      const year = Number(m[3]);
+      if (month < 1 || month > 12) return null;
+      if (day < 1 || day > 31) return null;
+      const dt = new Date(year, month - 1, day);
+      if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) {
+        return null;
+      }
+      return dt;
+    };
+
     const formatDecimalInput = (input) => {
       if (!input) return;
       const digits = String(input.value || "").replace(/\D/g, "");
@@ -8263,6 +8514,19 @@
       const opt = select.options?.[select.selectedIndex];
       return (opt?.textContent || "").trim();
     }
+
+    const extractMunicipioName = (label, value) => {
+      const raw = String(label || "").trim();
+      if (!raw) return "";
+      if (String(value || "").trim().startsWith("5100000")) {
+        return "";
+      }
+      const parts = raw.split(" - ");
+      if (parts.length >= 2 && /^\d+/.test(parts[0].trim())) {
+        return parts.slice(1).join(" - ").trim();
+      }
+      return raw;
+    };
 
     const syncEtapaMunicipioOptions = () => {
       if (!etapaMunicipioSelect) return;
@@ -8313,8 +8577,31 @@
       if (addEtapaBtn) {
         addEtapaBtn.style.display = municipioItems.length > 1 ? "inline-flex" : "none";
       }
+      const hasItems = municipioItems.length > 0;
+      if (codigoSelect) codigoSelect.required = !hasItems;
+      if (municipioSelect) municipioSelect.required = !hasItems;
+      if (metaInput) metaInput.required = !hasItems;
       syncEtapaMunicipioOptions();
     };
+
+    const handleRegiaoChange = () => {
+      if (!planSelects.regiao) return;
+      if (municipioItems.length) {
+        setMsg("Remova todos os municÃ­pios antes de trocar a regiÃ£o.", true);
+        planSelects.regiao.value = lastRegiaoValue || "";
+        planSelects.regiao.blur();
+        return;
+      }
+      lastRegiaoValue = planSelects.regiao.value;
+    };
+
+    if (planSelects.regiao) {
+      planSelects.regiao.addEventListener("change", handleRegiaoChange);
+      planSelects.regiao.addEventListener("input", handleRegiaoChange);
+      form.addEventListener("change", (ev) => {
+        if (ev.target === planSelects.regiao) handleRegiaoChange();
+      });
+    }
 
     const addMunicipioItem = (opts = {}) => {
       const codigo = codigoSelect?.value || "";
@@ -8324,9 +8611,34 @@
         if (!opts.silent) setMsg("Informe c\u00f3digo, munic\u00edpio e meta para adicionar.", true);
         return false;
       }
+      const regiaoAtual = regiaoEntregaSelect?.value || "";
+      const regiaoChave = chaveSelects.regiao?.value || "";
+      const regiaoAtualNorm = normalizeDigits(regiaoAtual);
+      const regiaoChaveNorm = normalizeDigits(regiaoChave);
+      if (regiaoChaveNorm && regiaoAtualNorm && regiaoChaveNorm !== regiaoAtualNorm) {
+        if (!opts.silent) {
+          setMsg("A regi\u00e3o da Suba\u00e7\u00e3o/Entrega n\u00e3o confere com a regi\u00e3o da chave.", true);
+        }
+        return false;
+      }
+      if (municipioItems.length) {
+        const baseRegiao = municipioItems[0].regiao_subacao || "";
+        const baseRegiaoNorm = normalizeDigits(baseRegiao);
+        if (baseRegiaoNorm && regiaoAtualNorm && baseRegiaoNorm !== regiaoAtualNorm) {
+          if (!opts.silent) {
+            setMsg("Remova todos os munic\u00edpios antes de trocar a regi\u00e3o.", true);
+          }
+          return false;
+        }
+      }
       const key = `${codigo}::${municipio}`;
       const exists = municipioItems.some((item) => `${item.codigo}::${item.municipios_entrega}` === key);
+      const municipioExists = municipioItems.some((item) => item.municipios_entrega === municipio);
       if (exists) {
+        if (!opts.silent) setMsg("Este munic\u00edpio j\u00e1 foi adicionado.", true);
+        return false;
+      }
+      if (municipioExists) {
         if (!opts.silent) setMsg("Este munic\u00edpio j\u00e1 foi adicionado.", true);
         return false;
       }
@@ -8334,9 +8646,11 @@
         codigo,
         municipios_entrega: municipio,
         meta_subacao: meta,
+        regiao_subacao: regiaoAtual,
         codigoLabel: getSelectLabel(codigoSelect),
         municipioLabel: getSelectLabel(municipioSelect),
       });
+      if (!opts.silent) setMsg("");
       if (codigoSelect) codigoSelect.value = "";
       if (municipioSelect) municipioSelect.value = "";
       if (metaInput) metaInput.value = "";
@@ -8347,20 +8661,151 @@
       return true;
     };
 
-    const buildEtapaLabelPrefix = (municipioLabel) => {
-      const label = String(municipioLabel || "").trim();
+    const buildEtapaLabelPrefix = (municipioLabel, municipioValue) => {
+      if (!String(municipioValue || "").trim()) return "";
+      const rawLabel = String(municipioLabel || "").trim().toLowerCase();
+      if (rawLabel.startsWith("selecione")) return "";
+      const label = extractMunicipioName(municipioLabel, municipioValue);
       return label ? `${label} * ` : "";
+    };
+
+    const editMunicipioItems = [];
+
+    const renderEditMunicipioList = () => {
+      if (!editMunicipioListEl) return;
+      editMunicipioListEl.innerHTML = "";
+      if (!editMunicipioItems.length) {
+        const empty = document.createElement("div");
+        empty.className = "municipio-empty";
+        empty.textContent = "Nenhum municÃ­pio adicionado.";
+        editMunicipioListEl.appendChild(empty);
+        if (editMunicipioListWrap) editMunicipioListWrap.style.display = "none";
+        return;
+      }
+      if (editMunicipioListWrap) editMunicipioListWrap.style.display = "";
+      editMunicipioItems.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "municipio-item";
+        row.innerHTML = `
+          <div>
+            <small>CÃ³digo</small>
+            <div>${item.codigoLabel || item.codigo}</div>
+          </div>
+          <div>
+            <small>MunicÃ­pio</small>
+            <div>${item.municipioLabel || item.municipios_entrega}</div>
+          </div>
+          <div>
+            <small>Meta</small>
+            <div>${item.meta_subacao}</div>
+          </div>
+          <div>
+            <button class="btn btn-danger sm" type="button" data-edit-remove-index="${idx}">Remover</button>
+          </div>
+        `;
+        editMunicipioListEl.appendChild(row);
+      });
+    };
+
+    const addEditMunicipioItem = () => {
+      const codigo = editCodigoNovoSelect?.value || "";
+      const municipio = editMunicipioNovoSelect?.value || "";
+      const meta = editMetaNovoInput?.value || "";
+      if (!codigo || !municipio || !meta) {
+        setMsg("Informe cÃ³digo, municÃ­pio e meta para adicionar.", true);
+        return false;
+      }
+      const key = `${codigo}::${municipio}`;
+      const exists = editMunicipioItems.some(
+        (item) => `${item.codigo}::${item.municipios_entrega}` === key
+      );
+      if (exists) {
+        setMsg("Este municÃ­pio jÃ¡ foi adicionado.", true);
+        return false;
+      }
+      editMunicipioItems.push({
+        codigo,
+        municipios_entrega: municipio,
+        meta_subacao: meta,
+        codigoLabel: getSelectLabel(editCodigoNovoSelect),
+        municipioLabel: getSelectLabel(editMunicipioNovoSelect),
+      });
+      if (editCodigoNovoSelect) editCodigoNovoSelect.value = "";
+      if (editMunicipioNovoSelect) editMunicipioNovoSelect.value = "";
+      if (editMetaNovoInput) editMetaNovoInput.value = "";
+      setMsg("");
+      renderEditMunicipioList();
+      return true;
     };
 
     const syncEtapaCounter = () => {
       if (!etapaCounter || !etapaInput) return;
-      etapaCounter.textContent = `${(etapaInput.value || "").length}/900`;
+      etapaCounter.textContent = `${(etapaInput.value || "").length}/260`;
+    };
+
+    const parseDecimalInput = (value) => {
+      const digits = String(value || "").replace(/\D/g, "");
+      if (!digits) return 0;
+      return Number(digits) / 100;
+    };
+
+    const updateValorTotal = () => {
+      if (!quantidadeInput || !valorUnitarioInput || !valorTotalInput) return;
+      if (!quantidadeInput.value || !valorUnitarioInput.value) {
+        valorTotalInput.value = "";
+        return;
+      }
+      const total = parseDecimalInput(quantidadeInput.value) * parseDecimalInput(valorUnitarioInput.value);
+      valorTotalInput.value = formatPtBr(total);
     };
 
     const fillEtapaNomePrefix = () => {
       if (!etapaInput || !etapaMunicipioSelect) return;
-      const prefix = buildEtapaLabelPrefix(getSelectLabel(etapaMunicipioSelect));
-      if (!prefix) return;
+      const label = getSelectLabel(etapaMunicipioSelect);
+      const value = etapaMunicipioSelect.value;
+      if (!String(value || "").trim()) {
+        const current = String(etapaInput.value || "");
+        if (current.toLowerCase().startsWith("selecione")) {
+          etapaInput.value = "";
+        }
+        syncEtapaCounter();
+        return;
+      }
+      const valueRaw = String(value || "").trim();
+      const labelRaw = String(label || "").toLowerCase();
+      const isEstadoMt =
+        valueRaw.startsWith("5100000") ||
+        labelRaw.includes("estado mato grosso");
+      if (isEstadoMt) {
+        const raw = String(label || "").trim();
+        const parts = raw.split(" - ");
+        const name = parts.length >= 2 ? parts.slice(1).join(" - ").trim() : raw;
+        const current = String(etapaInput.value || "");
+        if (current.toLowerCase().startsWith("selecione")) {
+          etapaInput.value = "";
+          syncEtapaCounter();
+          return;
+        }
+        const needle = name ? `${name} * ` : "";
+        if (needle && current.startsWith(needle)) {
+          etapaInput.value = current.slice(needle.length).trim();
+        }
+        syncEtapaCounter();
+        return;
+      }
+      const prefix = buildEtapaLabelPrefix(label, value);
+      if (!prefix) {
+        const raw = String(label || "").trim();
+        const parts = raw.split(" - ");
+        const name = parts.length >= 2 ? parts.slice(1).join(" - ").trim() : raw;
+        const current = String(etapaInput.value || "");
+        const needle = name ? `${name} * ` : "";
+        if (needle && current.startsWith(needle)) {
+          etapaInput.value = current.slice(needle.length).trim();
+        }
+        syncEtapaCounter();
+        return;
+      }
       if (!etapaInput.value || !etapaInput.value.startsWith(prefix)) {
         etapaInput.value = prefix;
       }
@@ -8386,6 +8831,7 @@
 
     const captureEtapaPayload = () => ({
       municipio: etapaMunicipioSelect?.value || "",
+      municipio_label: getSelectLabel(etapaMunicipioSelect),
       nome_etapa: etapaInput?.value || "",
       responsavel_etapa: responsavelEtapaInput?.value || "",
       cpf_responsavel_etapa: cpfEtapaInput?.value || "",
@@ -8402,14 +8848,64 @@
       responsavel_nger: responsavelNgerInput?.value || "",
     });
 
+    const renderEtapaList = () => {
+      if (!etapaListEl) return;
+      etapaListEl.innerHTML = "";
+      if (!etapaItems.length) {
+        const empty = document.createElement("div");
+        empty.className = "etapa-empty";
+        empty.textContent = "Nenhuma etapa adicionada.";
+        etapaListEl.appendChild(empty);
+        if (etapaListWrap) etapaListWrap.style.display = "none";
+        return;
+      }
+      if (etapaListWrap) etapaListWrap.style.display = "";
+      etapaItems.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "etapa-item";
+        row.innerHTML = `
+          <div>
+            <small>Munic\u00edpio</small>
+            <div>${extractMunicipioName(item.municipio_label || item.municipio)}</div>
+          </div>
+          <div>
+            <small>Nome da Etapa</small>
+            <div>${item.nome_etapa}</div>
+          </div>
+          <div>
+            <small>Respons\u00e1vel</small>
+            <div>${item.responsavel_etapa || "-"}</div>
+          </div>
+          <div>
+            <button class="btn btn-danger sm" type="button" data-remove-etapa="${idx}">Remover</button>
+          </div>
+        `;
+        etapaListEl.appendChild(row);
+      });
+    };
+
+    const removeEtapasByMunicipio = (municipioValue) => {
+      if (!municipioValue) return;
+      const before = etapaItems.length;
+      for (let i = etapaItems.length - 1; i >= 0; i -= 1) {
+        if (etapaItems[i].municipio === municipioValue) {
+          etapaItems.splice(i, 1);
+        }
+      }
+      if (before !== etapaItems.length) {
+        renderEtapaList();
+        updateEtapaStepLabel();
+      }
+    };
+
     const validateEtapaBlock = () => {
       if (!etapaMunicipioSelect || !etapaMunicipioSelect.value) {
         setMsg("Selecione o munic\u00edpio da etapa.", true);
         etapaMunicipioSelect?.focus();
         return false;
       }
-      if (!etapaInput?.value || etapaInput.value.length > 900) {
-        setMsg("Informe o nome da etapa (at\u00e9 900 caracteres).", true);
+      if (!etapaInput?.value || etapaInput.value.length > 260) {
+        setMsg("Informe o nome da etapa (at\u00e9 260 caracteres).", true);
         etapaInput?.focus();
         return false;
       }
@@ -8461,7 +8957,14 @@
       if (current) select.value = current;
     };
 
+    let pendingOptionsAbort = null;
+    let optionsSeq = 0;
     const loadOptions = async () => {
+      const seq = ++optionsSeq;
+      if (pendingOptionsAbort) {
+        pendingOptionsAbort.abort();
+      }
+      pendingOptionsAbort = new AbortController();
       const url = new URL("/api/subacao/options", window.location.origin);
       Object.entries(planSelects).forEach(([key, el]) => {
         if (el?.value) url.searchParams.set(key, el.value);
@@ -8476,9 +8979,13 @@
         url.searchParams.set("codigo", codigoSelect.value);
       }
       try {
-        const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        const res = await fetch(url, {
+          headers: { "X-Requested-With": "fetch" },
+          signal: pendingOptionsAbort.signal,
+        });
         if (!res.ok) return;
         const data = await res.json();
+        if (seq !== optionsSeq) return;
         const plan = data.plan21 || {};
         setOptions(planSelects.exercicio, plan.exercicio || [], "Selecione...");
         setOptions(planSelects.uo, plan.uo || [], "Selecione...");
@@ -8488,6 +8995,9 @@
         setOptions(planSelects.produto_acao, plan.produto_acao || [], "Selecione...");
 
         setOptions(chaveSelects.regiao, data.regioes || [], "Selecione...");
+        if (chaveSelects.regiao) {
+          lastRegiaoValue = chaveSelects.regiao.value || lastRegiaoValue;
+        }
         setOptions(chaveSelects.subfuncao, data.subfuncoes || [], "Selecione...");
         setOptions(chaveSelects.ug, data.ugs || [], "Selecione...");
         setOptions(chaveSelects.adj, data.adjs || [], "Selecione...");
@@ -8500,27 +9010,243 @@
         setOptionsFromLabel(regiaoEntregaSelect, data.regioes || [], "Selecione...");
         setOptions(codigoSelect, data.municipios || [], "Selecione...", "codigo", "label");
         setOptions(municipioSelect, data.municipios || [], "Selecione...", "nome", "label");
+        if (editCodigoNovoSelect) {
+          setOptions(editCodigoNovoSelect, data.municipios || [], "Selecione...", "codigo", "label");
+        }
+        if (editMunicipioNovoSelect) {
+          setOptions(editMunicipioNovoSelect, data.municipios || [], "Selecione...", "nome", "label");
+        }
         formatKey();
         syncBridges();
       } catch (err) {
-        console.error(err);
+        if (err.name !== "AbortError") console.error(err);
       }
     };
 
-    const clearForm = () => {
-      form.reset();
-      if (idInput) idInput.value = "";
+    let pendingEditAbort = null;
+    let editOptionsSeq = 0;
+    let editMunicipioPairs = [];
+    const syncEditMunicipioPair = (source) => {
+      if (!editCodigoSelect || !editMunicipioSelect) return;
+      if (!editMunicipioPairs.length) return;
+      const byCodigo = new Map();
+      const byMunicipio = new Map();
+      editMunicipioPairs.forEach((pair) => {
+        if (pair?.codigo && !byCodigo.has(pair.codigo)) {
+          byCodigo.set(pair.codigo, { municipio: pair.municipio, meta: pair.meta || "" });
+        }
+        if (pair?.municipio && !byMunicipio.has(pair.municipio)) {
+          byMunicipio.set(pair.municipio, { codigo: pair.codigo, meta: pair.meta || "" });
+        }
+      });
+      const setMetaValue = (metaValue) => {
+        if (!editMetaSelect || !metaValue) return;
+        const existing = [...editMetaSelect.options].some((opt) => opt.value === metaValue);
+        if (!existing) {
+          const opt = document.createElement("option");
+          opt.value = metaValue;
+          opt.textContent = metaValue;
+          editMetaSelect.appendChild(opt);
+        }
+        editMetaSelect.value = metaValue;
+      };
+      if (source === "codigo") {
+        const match = byCodigo.get(editCodigoSelect.value);
+        if (match?.municipio) editMunicipioSelect.value = match.municipio;
+        if (match?.meta) setMetaValue(match.meta);
+      } else if (source === "municipio") {
+        const match = byMunicipio.get(editMunicipioSelect.value);
+        if (match?.codigo) editCodigoSelect.value = match.codigo;
+        if (match?.meta) setMetaValue(match.meta);
+      } else if (source === "meta") {
+        const metaValue = editMetaSelect?.value || "";
+        if (!metaValue) return;
+        let match = editMunicipioPairs.find((pair) => pair.meta === metaValue && pair.codigo === editCodigoSelect.value);
+        if (!match) {
+          match = editMunicipioPairs.find((pair) => pair.meta === metaValue && pair.municipio === editMunicipioSelect.value);
+        }
+        if (!match) {
+          match = editMunicipioPairs.find((pair) => pair.meta === metaValue);
+        }
+        if (match?.codigo) editCodigoSelect.value = match.codigo;
+        if (match?.municipio) editMunicipioSelect.value = match.municipio;
+      }
+    };
+    const loadEditOptions = async () => {
+      if (!editarGrid) return;
+      const seq = ++editOptionsSeq;
+      if (pendingEditAbort) {
+        pendingEditAbort.abort();
+      }
+      pendingEditAbort = new AbortController();
+      const url = new URL("/api/subacao/plan21-edit-options", window.location.origin);
+      Object.entries(planSelects).forEach(([key, el]) => {
+        if (el?.value) url.searchParams.set(key, el.value);
+      });
+      const editSelectMap = {
+        chave_planejamento: editChaveSelect,
+        subacao_entrega: editSubacaoSelect,
+        responsavel: editResponsavelSelect,
+        prazo: editPrazoSelect,
+        unid_gestora: editUnidGestoraSelect,
+        unidade_setorial_planejamento: editUnidadeSetorialSelect,
+        produto_subacao: editProdutoSelect,
+        unidade_medida: editUnidadeMedidaSelect,
+        regiao_subacao: editRegiaoSelect,
+        codigo: editCodigoSelect,
+        municipios_entrega: editMunicipioSelect,
+        meta_subacao: editMetaSelect,
+        detalhamento_produto: editDetalhamentoSelect,
+      };
+        Object.entries(editSelectMap).forEach(([key, el]) => {
+          if (!el?.value) return;
+          if (el.dataset.readonly === "soft") return;
+          url.searchParams.set(key, el.value);
+        });
+      try {
+        const res = await fetch(url, {
+          headers: { "X-Requested-With": "fetch" },
+          signal: pendingEditAbort.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (seq !== editOptionsSeq) return;
+        const options = data.options || {};
+        editMunicipioPairs = Array.isArray(data.pairs) ? data.pairs : [];
+        Object.entries(editSelectMap).forEach(([key, el]) => {
+          if (!el) return;
+          setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...");
+        });
+        const softSelects = [
+          editPrazoSelect,
+          editUnidGestoraSelect,
+          editUnidadeSetorialSelect,
+          editUnidadeMedidaSelect,
+          editRegiaoSelect,
+          editCodigoSelect,
+          editMunicipioSelect,
+          editMetaSelect,
+        ];
+        softSelects.forEach((el) => {
+          if (!el) return;
+          const count = el.options.length;
+          if (!el.value && count === 2) {
+            el.value = el.options[1].value;
+          }
+          el.disabled = count <= 2;
+        });
+        if (editSubacaoSelect && editSubacaoInput) {
+          editSubacaoInput.value = editSubacaoSelect.value || "";
+        }
+        if (editResponsavelSelect && editResponsavelInput) {
+          editResponsavelInput.value = editResponsavelSelect.value || "";
+        }
+        if (editDetalhamentoSelect && editDetalhamentoInput) {
+          editDetalhamentoInput.value = editDetalhamentoSelect.value || "";
+        }
+        const muniCount = editMunicipioSelect?.options?.length || 0;
+        if (editMunicipioToggle) {
+          editMunicipioToggle.style.display = muniCount > 2 ? "" : "none";
+        }
+        if (editCodigoSelect?.value) {
+          syncEditMunicipioPair("codigo");
+        } else if (editMunicipioSelect?.value) {
+          syncEditMunicipioPair("municipio");
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") console.error(err);
+      }
+    };
+
+    const clearStepOne = () => {
+      Object.values(planSelects).forEach((el) => {
+        if (el) el.value = "";
+      });
+      Object.values(chaveSelects).forEach((el) => {
+        if (el) el.value = "";
+      });
       if (chaveInput) chaveInput.value = "";
       setMsg("");
       loadOptions();
-      setStep(1);
+    };
+
+      const clearStepTwo = () => {
+      if (subacaoEntregaInput) subacaoEntregaInput.value = "";
+      if (responsavelInput) responsavelInput.value = "";
+      if (cpfInput) cpfInput.value = "";
+      if (dataInicioInput) dataInicioInput.value = "";
+      if (dataFimInput) dataFimInput.value = "";
+      if (unidGestoraSelect) unidGestoraSelect.value = "";
+      if (unidadeSetorialSelect) unidadeSetorialSelect.value = "";
+      if (produtoSubacaoSelect) produtoSubacaoSelect.value = "";
+      if (unidadeMedidaSelect) unidadeMedidaSelect.value = "";
+      if (regiaoEntregaSelect) regiaoEntregaSelect.value = "";
+      if (codigoSelect) codigoSelect.value = "";
+      if (municipioSelect) municipioSelect.value = "";
+      if (metaInput) metaInput.value = "";
+      if (detalhamentoInput) detalhamentoInput.value = "";
+      if (editChaveSelect) editChaveSelect.value = "";
+      if (editSubacaoSelect) editSubacaoSelect.value = "";
+      if (editSubacaoInput) editSubacaoInput.value = "";
+      if (editResponsavelSelect) editResponsavelSelect.value = "";
+      if (editResponsavelInput) editResponsavelInput.value = "";
+      if (editCpfInput) editCpfInput.value = "";
+      if (editPrazoSelect) editPrazoSelect.value = "";
+      if (editUnidGestoraSelect) editUnidGestoraSelect.value = "";
+      if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.value = "";
+      if (editProdutoSelect) editProdutoSelect.value = "";
+      if (editProdutoInput) editProdutoInput.value = "";
+      if (editUnidadeMedidaSelect) editUnidadeMedidaSelect.value = "";
+      if (editRegiaoSelect) editRegiaoSelect.value = "";
+      if (editCodigoSelect) editCodigoSelect.value = "";
+      if (editMunicipioSelect) editMunicipioSelect.value = "";
+      if (editMetaSelect) editMetaSelect.value = "";
+      if (editDetalhamentoSelect) editDetalhamentoSelect.value = "";
+      if (editDetalhamentoInput) editDetalhamentoInput.value = "";
+      if (editCodigoNovoSelect) editCodigoNovoSelect.value = "";
+      if (editMunicipioNovoSelect) editMunicipioNovoSelect.value = "";
+      if (editMetaNovoInput) editMetaNovoInput.value = "";
       municipioItems.length = 0;
-      etapaItems.length = 0;
       renderMunicipioList();
+      editMunicipioItems.length = 0;
+      renderEditMunicipioList();
       if (etapaMunicipioSelect) {
         etapaMunicipioSelect.innerHTML = "<option value=\"\">Selecione...</option>";
       }
+        setMsg("");
+        syncSubacaoEntregaCounter();
+        const isEditMode = (modeSelect?.value || "").toLowerCase() === "editar";
+        if (isEditMode) {
+          loadEditOptions();
+        } else {
+          loadOptions();
+        }
+      };
+
+    const clearStepThree = () => {
       clearEtapaFields();
+      etapaItems.length = 0;
+      renderEtapaList();
+      updateEtapaStepLabel();
+      setMsg("");
+    };
+
+    const clearForm = () => {
+      if (currentStep === 1) {
+        clearStepOne();
+        clearStepTwo();
+        clearStepThree();
+        return;
+      }
+      if (currentStep === 2) {
+        clearStepTwo();
+        clearStepThree();
+        return;
+      }
+      if (currentStep === 3) {
+        clearStepThree();
+        return;
+      }
     };
 
     const getRows = () => {
@@ -8658,6 +9384,7 @@
       if (chaveInput) chaveInput.value = chave;
 
       if (subacaoEntregaInput) subacaoEntregaInput.value = subacaoEntregaRaw || "";
+      syncSubacaoEntregaCounter();
       if (responsavelInput) responsavelInput.value = row.dataset.responsavel || "";
       if (cpfInput) cpfInput.value = row.dataset.cpf || "";
       if (dataInicioInput) dataInicioInput.value = prazoParts[0] || "";
@@ -8695,10 +9422,12 @@
       municipioItems.length = 0;
       etapaItems.length = 0;
       renderMunicipioList();
+      renderEtapaList();
       if (etapaMunicipioSelect) {
         etapaMunicipioSelect.innerHTML = "<option value=\"\">Selecione...</option>";
       }
       clearEtapaFields();
+      syncSubacaoEntregaCounter();
     };
 
     const getSelectedRow = () => summaryBody?.querySelector(".dotacao-summary-row.selected");
@@ -8708,6 +9437,9 @@
       el.addEventListener("change", () => {
         el.dataset.touched = "1";
         loadOptions();
+        if ((modeSelect?.value || "").toLowerCase() === "editar") {
+          loadEditOptions();
+        }
       });
     });
     Object.values(chaveSelects).forEach((el) => {
@@ -8722,8 +9454,16 @@
     if (dataInicioInput) dataInicioInput.addEventListener("input", () => maskDate(dataInicioInput));
     if (dataFimInput) dataFimInput.addEventListener("input", () => maskDate(dataFimInput));
     if (cpfInput) cpfInput.addEventListener("input", () => maskCpf(cpfInput));
+    if (editCpfInput) editCpfInput.addEventListener("input", () => maskCpf(editCpfInput));
     if (cpfEtapaInput) cpfEtapaInput.addEventListener("input", () => maskCpf(cpfEtapaInput));
+    if (subacaoEntregaInput) {
+      subacaoEntregaInput.setAttribute("maxlength", "260");
+      subacaoEntregaInput.addEventListener("input", () => {
+        syncSubacaoEntregaCounter();
+      });
+    }
     if (regiaoEntregaSelect) {
+      regiaoEntregaSelect.disabled = true;
       regiaoEntregaSelect.addEventListener("change", () => {
         loadOptions();
       });
@@ -8750,7 +9490,7 @@
     }
     if (metaInput) metaInput.addEventListener("input", formatMetaInput);
     if (etapaInput) {
-      etapaInput.setAttribute("maxlength", "900");
+      etapaInput.setAttribute("maxlength", "260");
       etapaInput.addEventListener("input", syncEtapaCounter);
     }
     if (etapaMunicipioSelect) {
@@ -8758,9 +9498,129 @@
         fillEtapaNomePrefix();
       });
     }
-    if (quantidadeInput) quantidadeInput.addEventListener("input", () => formatDecimalInput(quantidadeInput));
-    if (valorUnitarioInput) valorUnitarioInput.addEventListener("input", () => formatDecimalInput(valorUnitarioInput));
-    if (valorTotalInput) valorTotalInput.addEventListener("input", () => formatDecimalInput(valorTotalInput));
+    if (quantidadeInput) {
+      quantidadeInput.addEventListener("input", () => {
+        formatDecimalInput(quantidadeInput);
+        updateValorTotal();
+      });
+    }
+      if (valorUnitarioInput) {
+        valorUnitarioInput.addEventListener("input", () => {
+          formatDecimalInput(valorUnitarioInput);
+          updateValorTotal();
+        });
+      }
+      if (valorTotalInput) valorTotalInput.addEventListener("input", () => formatDecimalInput(valorTotalInput));
+      const editReloadSelects = [
+        editChaveSelect,
+        editSubacaoSelect,
+        editResponsavelSelect,
+        editPrazoSelect,
+        editUnidGestoraSelect,
+        editUnidadeSetorialSelect,
+        editProdutoSelect,
+        editUnidadeMedidaSelect,
+        editRegiaoSelect,
+        editCodigoSelect,
+        editMunicipioSelect,
+        editMetaSelect,
+        editDetalhamentoSelect,
+      ].filter(Boolean);
+      editReloadSelects.forEach((sel) => {
+        sel.addEventListener("change", loadEditOptions);
+      });
+      if (editCodigoSelect) {
+        editCodigoSelect.addEventListener("change", () => {
+          syncEditMunicipioPair("codigo");
+        });
+      }
+      if (editMunicipioSelect) {
+        editMunicipioSelect.addEventListener("change", () => {
+          syncEditMunicipioPair("municipio");
+        });
+      }
+      if (editMetaSelect) {
+        editMetaSelect.addEventListener("change", () => {
+          syncEditMunicipioPair("meta");
+        });
+      }
+      if (editSubacaoSelect && editSubacaoInput) {
+        editSubacaoSelect.addEventListener("change", () => {
+          editSubacaoInput.value = editSubacaoSelect.value || "";
+        });
+      }
+      if (editResponsavelSelect && editResponsavelInput) {
+        editResponsavelSelect.addEventListener("change", () => {
+          editResponsavelInput.value = editResponsavelSelect.value || "";
+        });
+      }
+      if (editDetalhamentoSelect && editDetalhamentoInput) {
+        editDetalhamentoSelect.addEventListener("change", () => {
+          editDetalhamentoInput.value = editDetalhamentoSelect.value || "";
+        });
+      }
+      if (editMunicipioToggle) {
+        editMunicipioToggle.addEventListener("change", (ev) => {
+          if (!editMunicipioWrap) return;
+          const target = ev.target;
+          if (target && target.name === "edit_municipio_change") {
+            editMunicipioWrap.style.display = target.value === "sim" ? "" : "none";
+          }
+        });
+      }
+      if (editMunicipioAddBtn) {
+        editMunicipioAddBtn.addEventListener("click", () => {
+          addEditMunicipioItem();
+        });
+      }
+      if (editMunicipioListEl) {
+        editMunicipioListEl.addEventListener("click", (ev) => {
+          const btn = ev.target.closest("[data-edit-remove-index]");
+          if (!btn) return;
+          const idx = Number(btn.getAttribute("data-edit-remove-index"));
+          if (Number.isNaN(idx)) return;
+          editMunicipioItems.splice(idx, 1);
+          renderEditMunicipioList();
+        });
+      }
+      if (naturezaInput) {
+        naturezaInput.addEventListener("input", () => {
+        const digits = String(naturezaInput.value || "").replace(/\D/g, "").slice(0, 9);
+        if (!digits) {
+          naturezaInput.value = "";
+          return;
+        }
+        const groups = [1, 1, 2, 2, 3];
+        const parts = [];
+        let idx = 0;
+        for (const size of groups) {
+          if (idx >= digits.length) break;
+          parts.push(digits.slice(idx, Math.min(idx + size, digits.length)));
+          idx += size;
+        }
+        naturezaInput.value = parts.join(".");
+      });
+    }
+    const getFonteSuperavitValue = () => {
+      const selected = fonteSuperavitInputs.find((input) => input.checked);
+      return selected?.value || "nao";
+    };
+
+    if (fonteSuperavitInputs.length) {
+      const updateFonteList = () => {
+        const mode = getFonteSuperavitValue();
+        setFonteOptions(mode === "sim" ? fontesSim : fontesNao);
+      };
+      fonteSuperavitInputs.forEach((input) => {
+        input.addEventListener("change", updateFonteList);
+        input.addEventListener("input", updateFonteList);
+      });
+      form.addEventListener("change", (ev) => {
+        if (ev.target && ev.target.name === "fonte_superavit") {
+          updateFonteList();
+        }
+      });
+    }
     if (clearBtn) clearBtn.addEventListener("click", clearForm);
     if (municipioAddBtn) {
       municipioAddBtn.addEventListener("click", () => {
@@ -8773,8 +9633,20 @@
         if (!btn) return;
         const idx = Number(btn.getAttribute("data-remove-index"));
         if (Number.isNaN(idx)) return;
-        municipioItems.splice(idx, 1);
+        const removed = municipioItems.splice(idx, 1)[0];
         renderMunicipioList();
+        removeEtapasByMunicipio(removed?.municipios_entrega || "");
+      });
+    }
+    if (etapaListEl) {
+      etapaListEl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("[data-remove-etapa]");
+        if (!btn) return;
+        const idx = Number(btn.getAttribute("data-remove-etapa"));
+        if (Number.isNaN(idx)) return;
+        etapaItems.splice(idx, 1);
+        renderEtapaList();
+        updateEtapaStepLabel();
       });
     }
     if (pageSizeSelect) {
@@ -8802,6 +9674,8 @@
           return;
         }
         if (modeSelect) modeSelect.value = "editar";
+        toggleMode();
+        loadEditOptions();
         if (idInput) idInput.value = row.dataset.id || "";
         fillFormFromRow(row);
         setMsg("");
@@ -8873,6 +9747,7 @@
         if (!validateEtapaBlock()) return;
         const payload = captureEtapaPayload();
         etapaItems.push(payload);
+        renderEtapaList();
         const usedMunicipio = payload.municipio;
         if (etapaMunicipioSelect) {
           const options = Array.from(etapaMunicipioSelect.options || []);
@@ -8927,10 +9802,19 @@
           setStep(1);
           return;
         }
+        if (!validateStep(2)) {
+          setStep(2);
+          return;
+        }
         if (!validateStep(totalSteps)) return;
       } else if (!form.checkValidity()) {
         form.reportValidity();
         return;
+      }
+      if (municipioItems.length) {
+        if (codigoSelect) codigoSelect.required = false;
+        if (municipioSelect) municipioSelect.required = false;
+        if (metaInput) metaInput.required = false;
       }
       if (cpfInput && !isValidCpf(cpfInput.value)) {
         setMsg("CPF do responsável inválido.", true);
@@ -8938,7 +9822,7 @@
         return;
       }
       if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
-        setMsg("CPF do responsável da etapa inválido.", true);
+        setMsg("CPF do responsÃ¡vel da etapa invÃ¡lido.", true);
         cpfEtapaInput.focus();
         return;
       }
@@ -8997,8 +9881,20 @@
         if (!validateEtapaBlock()) return;
         const last = captureEtapaPayload();
         const all = [...etapaItems, last];
+        if (!last.municipio) {
+          setMsg("Selecione um munic\u00edpio para a etapa antes de salvar.", true);
+          return;
+        }
         if (all.length < municipioItems.length) {
-          setMsg("Adicione etapas para todos os munic\u00edpios antes de salvar.", true);
+          const faltando = municipioItems.length - all.length;
+          setMsg(`Faltam ${faltando} etapa(s) para concluir os munic\u00edpios.`, true);
+          return;
+        }
+        const missing = municipioItems.some(
+          (m) => !all.find((e) => e.municipio === m.municipios_entrega)
+        );
+        if (missing) {
+          setMsg("Existe munic\u00edpio sem etapa vinculada.", true);
           return;
         }
         payload.etapas_items = all;
@@ -9023,6 +9919,8 @@
           setMsg(data.error || "Falha ao salvar.", true);
           return;
         }
+        const count = Array.isArray(data.subacoes) ? data.subacoes.length : 1;
+        showToast(`Suba\u00e7\u00e3o salva com sucesso. Registros: ${count}.`, "success");
         await loadPage("cadastrar/plan_21-nger/subacao");
       } catch (err) {
         console.error(err);
@@ -9036,6 +9934,7 @@
     setStep(1);
     renderMunicipioList();
     updateEtapaStepLabel();
+    renderEtapaList();
     if (modeSelect && modeSelect.value === "editar") {
       if (municipioAddBtn) municipioAddBtn.disabled = true;
       if (municipioListWrap) municipioListWrap.style.display = "none";
@@ -9044,6 +9943,12 @@
     renderSummaryPage();
     syncEtapaCounter();
     fillEtapaNomePrefix();
+    syncSubacaoEntregaCounter();
+    setFonteOptions(getFonteSuperavitValue() === "sim" ? fontesSim : fontesNao);
+    toggleMode();
+    if ((modeSelect?.value || "").toLowerCase() === "editar") {
+      loadEditOptions();
+    }
   }
 
   if (menu) {
@@ -9093,6 +9998,7 @@
       "empenhado",
     ]);
     const adjustVal = (k, v) => (negateCols.has(k) ? Number(v || 0) * -1 : Number(v || 0));
+
 
 
 
