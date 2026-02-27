@@ -439,6 +439,15 @@ a { color: inherit; text-decoration: none; }
 
 .form { display: flex; flex-direction: column; gap: 12px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.field-disabled:disabled,
+.form-grid input:disabled,
+.form-grid select:disabled,
+.form-grid textarea:disabled {
+  background: #eef2f4;
+  color: #6b7280;
+  border-color: #d1d5db;
+  cursor: not-allowed;
+}
 .wizard-steps {
   display: flex;
   flex-wrap: wrap;

@@ -2243,6 +2243,12 @@ def api_subacao_plan21_edit_options():
         if where:
             sql += " WHERE " + " AND ".join(where)
         rows = _safe_query_mappings(sql, params)
+        def _normalize_spaces(value: str) -> str:
+            return " ".join(value.replace("\xa0", " ").split())
+        def _normalize_meta(value: str) -> str:
+            parts = [_normalize_spaces(p) for p in value.split("*")]
+            parts = [p for p in parts if p]
+            return " * ".join(parts) if parts else ""
         values = []
         for row in rows:
             val = row.get("value")
@@ -2250,6 +2256,10 @@ def api_subacao_plan21_edit_options():
                 continue
             s = str(val).strip()
             if s:
+                if field_key == "meta_subacao":
+                    s = _normalize_meta(s)
+                else:
+                    s = _normalize_spaces(s)
                 values.append(s)
         return sorted(set(values), key=lambda v: v.lower())
 
@@ -2263,29 +2273,82 @@ def api_subacao_plan21_edit_options():
             pair_where.append(f"{col_name} = :{k}")
             pair_params[k] = val
     for k, col_name in edit_fields.items():
-        if k in {"codigo", "municipios_entrega"}:
-            continue
         val = selected.get(k, "")
-        if val:
+        if not val:
+            continue
+        if k in {"codigo", "municipios_entrega", "meta_subacao"}:
             pair_where.append(f"{col_name} = :{k}")
             pair_params[k] = val
+            continue
+        pair_where.append(f"{col_name} = :{k}")
+        pair_params[k] = val
     pair_sql = "SELECT DISTINCT codigo, municipios_entrega, meta_subacao FROM plan21_nger"
     if pair_where:
         pair_sql += " WHERE " + " AND ".join(pair_where)
     pair_rows = _safe_query_mappings(pair_sql, pair_params)
     pairs = []
+    def _split_parts(value):
+        if value is None:
+            return []
+        parts = [part.replace("\xa0", " ").strip() for part in str(value).split("*")]
+        return [part for part in parts if part]
+    def _normalize_meta(value):
+        parts = _split_parts(value)
+        normalized = []
+        for part in parts:
+            s = part.replace("\xa0", " ").strip()
+            if not s:
+                continue
+            if "," in s and "." in s:
+                s = s.replace(".", "").replace(",", ".")
+            elif "." in s and re.match(r"^\d+\.\d{1,2}$", s):
+                normalized.append(s.replace(".", ","))
+                continue
+            elif "," in s:
+                s = s.replace(",", ".")
+            elif "." in s and re.match(r"^\d+\.\d{3}$", s):
+                s = s.replace(".", "")
+            try:
+                num = float(s)
+                s = f"{num:.2f}".replace(".", ",")
+            except ValueError:
+                pass
+            normalized.append(s)
+        return " * ".join(normalized) if normalized else ""
+
+    pair_entries = set()
+
     for row in pair_rows:
         codigo = row.get("codigo")
         municipio = row.get("municipios_entrega")
         meta = row.get("meta_subacao")
         if codigo is None or municipio is None:
             continue
-        codigo_s = str(codigo).strip()
-        municipio_s = str(municipio).strip()
-        if not codigo_s or not municipio_s:
+        raw_codigo = str(codigo).strip()
+        raw_municipio = str(municipio).strip()
+        raw_meta = "" if meta is None else _normalize_meta(meta)
+        codigos = _split_parts(codigo)
+        municipios = _split_parts(municipio)
+        metas = _split_parts(meta)
+        if raw_codigo and raw_municipio:
+            combined_meta = raw_meta
+            if "*" not in combined_meta and len(metas) > 1:
+                combined_meta = " * ".join(metas)
+            pair_entries.add((raw_codigo, raw_municipio, combined_meta))
+        if not codigos or not municipios:
             continue
-        meta_s = "" if meta is None else str(meta).strip()
-        pairs.append({"codigo": codigo_s, "municipio": municipio_s, "meta": meta_s})
+        max_len = max(len(codigos), len(municipios), len(metas) if metas else 0)
+        for idx in range(max_len):
+            codigo_s = codigos[idx] if idx < len(codigos) else ""
+            municipio_s = municipios[idx] if idx < len(municipios) else ""
+            meta_s = metas[idx] if idx < len(metas) else ""
+            if not codigo_s or not municipio_s:
+                continue
+            meta_value = "" if meta_s is None else _normalize_meta(meta_s)
+            pair_entries.add((codigo_s, municipio_s, meta_value))
+
+    for codigo_s, municipio_s, meta_value in pair_entries:
+        pairs.append({"codigo": codigo_s, "municipio": municipio_s, "meta": meta_value})
 
     return jsonify({"options": options, "pairs": pairs})
 

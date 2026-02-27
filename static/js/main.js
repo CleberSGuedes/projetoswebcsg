@@ -1122,7 +1122,7 @@
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver RelatÃ³rio";
+  const viewLabel = "Ver Relatório";
 
   if (inputData) {
     setDefaultAmazonTime(inputData);
@@ -1741,7 +1741,7 @@
     const loading = document.getElementById("plan20-loading");
   const submitBtn = document.getElementById("plan20-submit");
   const defaultLabel = "Upload e processar";
-  const viewLabel = "Ver RelatÃ³rio";
+  const viewLabel = "Ver Relatório";
   const goToRelatorio = () => {
     setActive("relatorios/plan20-seduc");
     loadPage("relatorios/plan20-seduc");
@@ -8943,15 +8943,21 @@
     const setOptionsFromLabel = (select, items, placeholder) => {
       if (!select) return;
       const current = select.value;
+      const seen = new Set();
       select.innerHTML = "";
       const opt = document.createElement("option");
       opt.value = "";
       opt.textContent = placeholder || "Selecione...";
       select.appendChild(opt);
       items.forEach((item) => {
+        const raw = item.label ?? "";
+        const label = String(raw);
+        const key = label.replace(/\s+/g, " ").trim();
+        if (seen.has(key)) return;
+        seen.add(key);
         const o = document.createElement("option");
-        o.value = item.label ?? "";
-        o.textContent = item.label ?? "";
+        o.value = label;
+        o.textContent = label;
         select.appendChild(o);
       });
       if (current) select.value = current;
@@ -9050,14 +9056,53 @@
         }
         editMetaSelect.value = metaValue;
       };
+      const getPairPredicate = (fallback) => {
+        const codigo = editCodigoSelect?.value || "";
+        const municipio = editMunicipioSelect?.value || "";
+        if (codigo && municipio) {
+          return (p) => p.codigo === codigo && p.municipio === municipio;
+        }
+        if (codigo) {
+          return (p) => p.codigo === codigo;
+        }
+        if (municipio) {
+          return (p) => p.municipio === municipio;
+        }
+        return fallback;
+      };
+      const filterMetaOptions = (predicate) => {
+        if (!editMetaSelect) return;
+        const metas = Array.from(
+          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.meta).filter(Boolean))
+        );
+        setOptionsFromLabel(editMetaSelect, metas.map((v) => ({ label: v })), "Selecione...");
+      };
+      const filterMunicipioOptions = (predicate) => {
+        if (!editMunicipioSelect) return;
+        const municipios = Array.from(
+          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.municipio).filter(Boolean))
+        );
+        setOptionsFromLabel(editMunicipioSelect, municipios.map((v) => ({ label: v })), "Selecione...");
+      };
+      const filterCodigoOptions = (predicate) => {
+        if (!editCodigoSelect) return;
+        const codigos = Array.from(
+          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.codigo).filter(Boolean))
+        );
+        setOptionsFromLabel(editCodigoSelect, codigos.map((v) => ({ label: v })), "Selecione...");
+      };
       if (source === "codigo") {
         const match = byCodigo.get(editCodigoSelect.value);
         if (match?.municipio) editMunicipioSelect.value = match.municipio;
         if (match?.meta) setMetaValue(match.meta);
+        filterMunicipioOptions((p) => p.codigo === editCodigoSelect.value);
+        filterMetaOptions((p) => p.codigo === editCodigoSelect.value);
       } else if (source === "municipio") {
         const match = byMunicipio.get(editMunicipioSelect.value);
         if (match?.codigo) editCodigoSelect.value = match.codigo;
         if (match?.meta) setMetaValue(match.meta);
+        filterCodigoOptions((p) => p.municipio === editMunicipioSelect.value);
+        filterMetaOptions((p) => p.municipio === editMunicipioSelect.value);
       } else if (source === "meta") {
         const metaValue = editMetaSelect?.value || "";
         if (!metaValue) return;
@@ -9070,6 +9115,8 @@
         }
         if (match?.codigo) editCodigoSelect.value = match.codigo;
         if (match?.municipio) editMunicipioSelect.value = match.municipio;
+        filterCodigoOptions((p) => p.meta === metaValue);
+        filterMunicipioOptions((p) => p.meta === metaValue);
       }
     };
     const loadEditOptions = async () => {
@@ -9101,6 +9148,7 @@
         Object.entries(editSelectMap).forEach(([key, el]) => {
           if (!el?.value) return;
           if (el.dataset.readonly === "soft") return;
+          if (key === "meta_subacao" && el.dataset.userSelected !== "1") return;
           url.searchParams.set(key, el.value);
         });
       try {
@@ -9113,10 +9161,28 @@
         if (seq !== editOptionsSeq) return;
         const options = data.options || {};
         editMunicipioPairs = Array.isArray(data.pairs) ? data.pairs : [];
+        const hasPairs = editMunicipioPairs.length > 0;
         Object.entries(editSelectMap).forEach(([key, el]) => {
           if (!el) return;
+          if (hasPairs && key === "codigo") return;
+          if (hasPairs && key === "municipios_entrega") return;
+          if (hasPairs && key === "meta_subacao") return;
           setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...");
         });
+        if (hasPairs) {
+          const codes = Array.from(new Set(editMunicipioPairs.map((p) => p.codigo).filter(Boolean)));
+          const municipios = Array.from(new Set(editMunicipioPairs.map((p) => p.municipio).filter(Boolean)));
+          const metas = Array.from(new Set(editMunicipioPairs.map((p) => p.meta).filter(Boolean)));
+          if (editCodigoSelect) {
+            setOptionsFromLabel(editCodigoSelect, codes.map((v) => ({ label: v })), "Selecione...");
+          }
+          if (editMunicipioSelect) {
+            setOptionsFromLabel(editMunicipioSelect, municipios.map((v) => ({ label: v })), "Selecione...");
+          }
+          if (editMetaSelect) {
+            setOptionsFromLabel(editMetaSelect, metas.map((v) => ({ label: v })), "Selecione...");
+          }
+        }
         const softSelects = [
           editPrazoSelect,
           editUnidGestoraSelect,
@@ -9125,7 +9191,6 @@
           editRegiaoSelect,
           editCodigoSelect,
           editMunicipioSelect,
-          editMetaSelect,
         ];
         softSelects.forEach((el) => {
           if (!el) return;
@@ -9135,11 +9200,9 @@
           }
           el.disabled = count <= 2;
         });
-        if (editSubacaoSelect && editSubacaoInput) {
-          editSubacaoInput.value = editSubacaoSelect.value || "";
-        }
-        if (editResponsavelSelect && editResponsavelInput) {
-          editResponsavelInput.value = editResponsavelSelect.value || "";
+        if (editMetaSelect) {
+          editMetaSelect.dataset.userSelected = "0";
+          editMetaSelect.value = "";
         }
         if (editDetalhamentoSelect && editDetalhamentoInput) {
           editDetalhamentoInput.value = editDetalhamentoSelect.value || "";
@@ -9541,17 +9604,8 @@
       }
       if (editMetaSelect) {
         editMetaSelect.addEventListener("change", () => {
+          editMetaSelect.dataset.userSelected = "1";
           syncEditMunicipioPair("meta");
-        });
-      }
-      if (editSubacaoSelect && editSubacaoInput) {
-        editSubacaoSelect.addEventListener("change", () => {
-          editSubacaoInput.value = editSubacaoSelect.value || "";
-        });
-      }
-      if (editResponsavelSelect && editResponsavelInput) {
-        editResponsavelSelect.addEventListener("change", () => {
-          editResponsavelInput.value = editResponsavelSelect.value || "";
         });
       }
       if (editDetalhamentoSelect && editDetalhamentoInput) {
