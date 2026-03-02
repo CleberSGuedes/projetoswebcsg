@@ -10,7 +10,7 @@ import uuid
 from werkzeug.exceptions import HTTPException
 from sqlalchemy import update, select, delete, func
 from sqlalchemy.orm.exc import StaleDataError
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError, ResourceClosedError
 from flask import Flask, g, session, request, jsonify
 from flask_mail import Mail
 from config import Config
@@ -32,6 +32,36 @@ def _setup_logging(app: Flask) -> None:
     handler.setLevel(logging.INFO)
     app.logger.addHandler(handler)
     app.logger.setLevel(logging.INFO)
+
+
+def _safe_session_rollback() -> None:
+    try:
+        db.session.rollback()
+    except Exception:
+        try:
+            db.session.remove()
+        except Exception:
+            pass
+        try:
+            db.engine.dispose()
+        except Exception:
+            pass
+
+
+def _execute_with_retry(stmt, attempts: int = 2, backoff_s: float = 0.2):
+    for idx in range(max(1, attempts)):
+        try:
+            return db.session.execute(stmt)
+        except (OperationalError, ResourceClosedError):
+            _safe_session_rollback()
+            if idx < attempts - 1:
+                try:
+                    import time
+
+                    time.sleep(backoff_s * (idx + 1))
+                except Exception:
+                    pass
+    return None
 
 
 
@@ -76,19 +106,20 @@ def create_app():
         now = datetime.utcnow()
         cutoff = now - SESSION_TIMEOUT
         try:
-            active_row = (
-                db.session.execute(
-                    select(
-                        ActiveSession.email,
-                        ActiveSession.session_token,
-                        ActiveSession.last_activity,
-                    ).where(ActiveSession.email == user.get("email"))
-                )
-                .mappings()
-                .first()
+            result = _execute_with_retry(
+                select(
+                    ActiveSession.email,
+                    ActiveSession.session_token,
+                    ActiveSession.last_activity,
+                ).where(ActiveSession.email == user.get("email"))
             )
+            if result is None:
+                _safe_session_rollback()
+                session.clear()
+                return
+            active_row = result.mappings().first()
         except SQLAlchemyError:
-            db.session.rollback()
+            _safe_session_rollback()
             session.clear()
             return
 
@@ -105,20 +136,23 @@ def create_app():
 
         if last_activity and last_activity < cutoff:
             try:
-                db.session.execute(
+                result = _execute_with_retry(
                     delete(ActiveSession).where(
                         ActiveSession.email == user.get("email"),
                         ActiveSession.session_token == token,
                     )
                 )
-                db.session.commit()
+                if result is None:
+                    _safe_session_rollback()
+                else:
+                    db.session.commit()
             except SQLAlchemyError:
-                db.session.rollback()
+                _safe_session_rollback()
             session.clear()
             return
 
         try:
-            result = db.session.execute(
+            result = _execute_with_retry(
                 update(ActiveSession)
                 .where(
                     ActiveSession.email == user.get("email"),
@@ -126,12 +160,16 @@ def create_app():
                 )
                 .values(last_activity=now)
             )
+            if result is None:
+                _safe_session_rollback()
+                session.clear()
+                return
             db.session.commit()
             if result.rowcount == 0:
                 session.clear()
                 return
         except SQLAlchemyError:
-            db.session.rollback()
+            _safe_session_rollback()
             session.clear()
             return
         g.user = user
@@ -139,7 +177,7 @@ def create_app():
         try:
             perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
         except SQLAlchemyError:
-            db.session.rollback()
+            _safe_session_rollback()
             session.clear()
             return
         if not perfil_row:
@@ -153,16 +191,18 @@ def create_app():
             g.user_perfil_id = perfil_row.id
             g.user_nivel = perfil_row.nivel
         try:
-            g.active_sessions_count = (
-                db.session.execute(
-                    select(func.count())
-                    .select_from(ActiveSession)
-                    .where(ActiveSession.last_activity >= cutoff)
-                ).scalar()
-                or 0
+            result = _execute_with_retry(
+                select(func.count())
+                .select_from(ActiveSession)
+                .where(ActiveSession.last_activity >= cutoff)
             )
+            if result is None:
+                _safe_session_rollback()
+                session.clear()
+                return
+            g.active_sessions_count = result.scalar() or 0
         except SQLAlchemyError:
-            db.session.rollback()
+            _safe_session_rollback()
             session.clear()
             return
 

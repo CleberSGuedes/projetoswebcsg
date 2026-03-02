@@ -1,13 +1,16 @@
 ﻿{
-  "name": "spo-node-runners",
-  "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
-  "description": "Node runners for EMP/NOB processing",
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "exceljs": "^4.4.0",
-    "mysql2": "^3.14.2",
-    "mssql": "^10.0.2"
-  }
+    "name":  "spo-node-runners",
+    "version":  "1.0.0",
+    "private":  true,
+    "type":  "commonjs",
+    "description":  "Node runners for EMP/NOB processing",
+    "dependencies":  {
+                         "dotenv":  "^16.4.5",
+                         "exceljs":  "^4.4.0",
+                         "mysql2":  "^3.14.2",
+                         "mssql":  "^10.0.2"
+                     },
+    "scripts":  {
+                    "check:js-utf8":  "node check_utf8.js"
+                }
 }

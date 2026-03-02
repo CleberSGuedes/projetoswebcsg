@@ -35,7 +35,7 @@ from models import (
     ActiveSession,
     db,
 )
-from sqlalchemy.exc import ProgrammingError, IntegrityError, NoSuchColumnError
+from sqlalchemy.exc import ProgrammingError, IntegrityError, NoSuchColumnError, OperationalError, ResourceClosedError
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
@@ -156,6 +156,52 @@ def _row_value(row, key: str, index: int | None = None):
             return row[index]
         except Exception:
             return None
+    return None
+
+
+def _safe_session_rollback() -> None:
+    try:
+        db.session.rollback()
+    except Exception:
+        try:
+            db.session.remove()
+        except Exception:
+            pass
+        try:
+            db.engine.dispose()
+        except Exception:
+            pass
+
+
+def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    for idx in range(max(1, attempts)):
+        try:
+            return db.session.execute(stmt)
+        except (OperationalError, ResourceClosedError) as exc:
+            _safe_session_rollback()
+            try:
+                with db.engine.connect() as conn:
+                    return conn.execute(stmt)
+            except Exception:
+                if idx < attempts - 1:
+                    try:
+                        current_app.logger.warning(
+                            "DB retry %s/%s failed: %s",
+                            idx + 1,
+                            attempts,
+                            exc,
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        import time
+
+                        time.sleep(backoff_s * (idx + 1))
+                    except Exception:
+                        pass
+                continue
     return None
 
 
@@ -299,30 +345,53 @@ def partial_dashboard():
         nivel_int = int(nivel_raw)
     except (TypeError, ValueError):
         nivel_int = 99
+    warn_ms = int(os.getenv("DB_SLOW_QUERY_MS", "2000"))
+
+    def _log_timing(label: str, started: datetime, count: int):
+        try:
+            elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+            if elapsed_ms >= warn_ms:
+                current_app.logger.warning(
+                    "dashboard %s rows=%s ms=%s (slow)",
+                    label,
+                    count,
+                    elapsed_ms,
+                )
+            else:
+                current_app.logger.info(
+                    "dashboard %s rows=%s ms=%s",
+                    label,
+                    count,
+                    elapsed_ms,
+                )
+        except Exception:
+            pass
     can_view_sessions = nivel_int in (1, 2)
     active_sessions = []
     if can_view_sessions:
         cutoff = datetime.utcnow() - timedelta(hours=2)
         try:
-            rows = (
-                db.session.execute(
-                    select(ActiveSession.email, ActiveSession.last_activity)
-                    .where(ActiveSession.last_activity >= cutoff)
-                    .order_by(ActiveSession.last_activity.desc())
-                )
-                .all()
+            t0 = datetime.utcnow()
+            result = _execute_with_retry(
+                select(ActiveSession.email, ActiveSession.last_activity)
+                .where(ActiveSession.last_activity >= cutoff)
+                .order_by(ActiveSession.last_activity.desc())
             )
-            emails = [r.email for r in rows if r.email]
+            rows = result.all() if result is not None else []
+            _log_timing("active_sessions", t0, len(rows))
+            emails = [(_row_value(r, "email", 0) or "") for r in rows if _row_value(r, "email", 0)]
             usuarios = {}
             if emails:
                 try:
-                    usuarios = dict(
-                        db.session.execute(
-                            select(Usuario.email, Usuario.nome).where(Usuario.email.in_(emails))
-                        ).all()
+                    t1 = datetime.utcnow()
+                    users_result = _execute_with_retry(
+                        select(Usuario.email, Usuario.nome).where(Usuario.email.in_(emails))
                     )
+                    if users_result is not None:
+                        usuarios = dict(users_result.all())
+                    _log_timing("active_sessions_users", t1, len(usuarios))
                 except NotImplementedError:
-                    db.session.rollback()
+                    _safe_session_rollback()
                     with db.engine.connect() as conn:
                         usuarios = dict(
                             conn.execute(
@@ -330,27 +399,26 @@ def partial_dashboard():
                             ).all()
                         )
             for r in rows:
+                email = _row_value(r, "email", 0)
                 active_sessions.append(
                     {
-                        "email": r.email,
-                        "nome": usuarios.get(r.email, r.email),
-                        "last_activity": r.last_activity,
+                        "email": email,
+                        "nome": usuarios.get(email, email),
+                        "last_activity": _row_value(r, "last_activity", 1),
                     }
                 )
-        except (ProgrammingError, NoSuchColumnError):
-            db.session.rollback()
+        except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError):
+            _safe_session_rollback()
             active_sessions = []
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
     if not ped_dotacao_missing:
         try:
-            ped_keys = (
-                db.session.execute(
-                    select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
-                )
-                .scalars()
-                .all()
+            t2 = datetime.utcnow()
+            ped_result = _execute_with_retry(
+                select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
             )
+            ped_keys = ped_result.scalars().all() if ped_result is not None else []
             ped_keys = [
                 _normalize_dotacao_key(k)
                 for k in ped_keys
@@ -366,8 +434,9 @@ def partial_dashboard():
                 dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
                 missing = sorted([k for k in ped_keys if k not in dotacao_keys])
                 ped_dotacao_missing = missing
+            _log_timing("ped_dotacao_missing", t2, len(ped_dotacao_missing))
         except Exception:
-            db.session.rollback()
+            _safe_session_rollback()
             ped_dotacao_missing = []
     emp_planejamento_missing_lines: list[int] = []
     emp_dotacao_missing: list[str] = []
@@ -384,6 +453,7 @@ def partial_dashboard():
     except Exception:
         emp_planejamento_missing_lines = []
         emp_dotacao_missing = []
+    t3 = datetime.utcnow()
     pendentes_raw = (
         Dotacao.query.with_entities(
             Dotacao.chave_dotacao,
@@ -397,6 +467,7 @@ def partial_dashboard():
         .order_by(Dotacao.id.desc())
         .all()
     )
+    _log_timing("pendentes_raw", t3, len(pendentes_raw))
     pendentes = []
     for chave, valor_atual, valor_dot, status, adj_concedente in pendentes_raw:
         valor_base = valor_atual if valor_atual is not None else valor_dot
@@ -412,7 +483,8 @@ def partial_dashboard():
         )
     estornos_aguardando = []
     try:
-        est_raw = db.session.execute(
+        t4 = datetime.utcnow()
+        est_result = _execute_with_retry(
             text(
                 """
                 SELECT id, chave_dotacao, valor_a_ser_est, valor_dotacao, status_aprovacao, perfil_id
@@ -421,7 +493,9 @@ def partial_dashboard():
                 ORDER BY id DESC
                 """
             )
-        ).fetchall()
+        )
+        est_raw = est_result.fetchall() if est_result is not None else []
+        _log_timing("estornos_raw", t4, len(est_raw))
     except Exception:
         est_raw = []
     est_perfil_ids = [r[5] for r in est_raw if len(r) > 5 and r[5]]
@@ -510,17 +584,14 @@ def _load_permissoes_perfil(perfil_id: int | None):
     if perfil_id is None:
         return []
     try:
-        rows = (
-            db.session.execute(
-                select(PerfilPermissao.feature).where(
-                    PerfilPermissao.perfil_id == perfil_id,
-                    PerfilPermissao.ativo == True,  # noqa: E712
-                    PerfilPermissao.feature.isnot(None),
-                )
+        result = _execute_with_retry(
+            select(PerfilPermissao.feature).where(
+                PerfilPermissao.perfil_id == perfil_id,
+                PerfilPermissao.ativo == True,  # noqa: E712
+                PerfilPermissao.feature.isnot(None),
             )
-            .scalars()
-            .all()
         )
+        rows = result.scalars().all() if result is not None else []
         return [f for f in rows if f]
     except (ProgrammingError, NoSuchColumnError):
         db.session.rollback()
@@ -531,17 +602,14 @@ def _load_permissoes_nivel(nivel: int | None):
     if nivel is None:
         return []
     try:
-        rows = (
-            db.session.execute(
-                select(NivelPermissao.feature).where(
-                    NivelPermissao.nivel == nivel,
-                    NivelPermissao.ativo == True,  # noqa: E712
-                    NivelPermissao.feature.isnot(None),
-                )
+        result = _execute_with_retry(
+            select(NivelPermissao.feature).where(
+                NivelPermissao.nivel == nivel,
+                NivelPermissao.ativo == True,  # noqa: E712
+                NivelPermissao.feature.isnot(None),
             )
-            .scalars()
-            .all()
         )
+        rows = result.scalars().all() if result is not None else []
         return [f for f in rows if f]
     except (ProgrammingError, NoSuchColumnError):
         db.session.rollback()

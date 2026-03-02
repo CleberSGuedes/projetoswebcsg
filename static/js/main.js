@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
@@ -173,12 +173,12 @@
           msg.classList.add("text-error");
           return;
         }
-        msg.textContent = "UsuÃ¡rio criado.";
+        msg.textContent = "Usuário criado.";
         form.reset();
         await loadPage("usuarios");
       } catch (err) {
         console.error(err);
-        msg.textContent = "Falha na requisiÃ§Ã£o.";
+        msg.textContent = "Falha na requisição.";
         msg.classList.add("text-error");
       }
     });
@@ -217,7 +217,7 @@
       const id = document.getElementById("edit-id").value;
       const email = document.getElementById("edit-email").value;
       if (!id) {
-        msg.textContent = "Selecione um usuÃ¡rio na lista.";
+        msg.textContent = "Selecione um usuário na lista.";
         msg.classList.add("text-error");
         return;
       }
@@ -241,10 +241,10 @@
         try {
           data = JSON.parse(raw || "{}");
         } catch {
-          // se nÃ£o for JSON, usa texto bruto na mensagem de erro
+          // se não for JSON, usa texto bruto na mensagem de erro
         }
         if (!res.ok) throw new Error(data.error || raw || `Falha ao salvar. Status ${res.status}`);
-        msg.textContent = data.message || "UsuÃ¡rio atualizado.";
+        msg.textContent = data.message || "Usuário atualizado.";
         document.getElementById("edit-senha").value = "";
         const row = document.querySelector(`tr[data-id="${id}"]`);
         if (row) {
@@ -258,7 +258,7 @@
             cells[0].textContent = email || cells[0].textContent;
             cells[1].textContent = payload.nome || cells[1].textContent;
             cells[2].textContent = perfilText || cells[2].textContent;
-            cells[3].textContent = payload.ativo ? "Sim" : "NÃ£o";
+            cells[3].textContent = payload.ativo ? "Sim" : "Não";
           }
         }
       } catch (err) {
@@ -396,7 +396,7 @@
 
   async function fetchCurrentPermissions() {
     if (userNivel === "1") {
-      // admin: libera tudo visÃ­vel no menu
+      // admin: libera tudo visível no menu
       const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
         el.getAttribute("data-route")
       );
@@ -881,7 +881,7 @@
       if (!res.ok) throw new Error("Erro ao consultar status");
       const data = await res.json();
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualização encontrada.";
         return;
       }
       const last = data.last;
@@ -892,7 +892,7 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -908,7 +908,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualização encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -924,12 +924,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -951,7 +951,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualização encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -978,12 +978,12 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       if (last.output_filename) return "done";
       return last.status || null;
@@ -1002,7 +1002,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualização encontrada.";
         if (submitBtn) {
           submitBtn.dataset.mode = "upload";
           submitBtn.textContent = "Upload e processar";
@@ -1018,12 +1018,12 @@
         <div><strong>Upload em:</strong> ${uploaded}</div>
         <div><strong>Data do download:</strong> ${dataArquivo}</div>
         <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
     } catch (err) {
       target.textContent = "Falha ao carregar status.";
@@ -1045,7 +1045,7 @@
       }
       if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
       if (!data.last) {
-        target.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+        target.textContent = "Nenhuma atualização encontrada.";
         return null;
       }
       const last = data.last;
@@ -1067,12 +1067,12 @@
         <div><strong>PID:</strong> ${statusPid}</div>
         <div><strong>Atualizado em:</strong> ${statusUpdated}</div>
         <div><strong>Mensagem:</strong> ${statusMsg || "-"}</div>
-        <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
       `;
       if (submitBtn && last.output_filename) {
         submitBtn.dataset.mode = "view";
         submitBtn.dataset.output = last.output_filename;
-        submitBtn.textContent = viewLabel || "Ver relatÃ³rio";
+        submitBtn.textContent = viewLabel || "Ver relatório";
       }
       if (last.output_filename) return "done";
       return last.status || null;
@@ -1172,7 +1172,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1213,7 +1213,7 @@
     const reprocessBtn = document.getElementById("ped-reprocess");
     const cancelBtn = document.getElementById("ped-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/ped");
       loadPage("relatorios/ped");
@@ -1318,7 +1318,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -1360,7 +1360,7 @@
     const reprocessBtn = document.getElementById("emp-reprocess");
     const cancelBtn = document.getElementById("emp-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/emp");
       loadPage("relatorios/emp");
@@ -1506,7 +1506,7 @@
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/est-emp");
       loadPage("relatorios/est-emp");
@@ -1600,7 +1600,7 @@
     const reprocessBtn = document.getElementById("nob-reprocess");
     const cancelBtn = document.getElementById("nob-cancel");
     const defaultLabel = "Upload e processar";
-    const viewLabel = "Ver relatÃ³rio";
+    const viewLabel = "Ver relatório";
     const goToReport = () => {
       setActive("relatorios/nob");
       loadPage("relatorios/nob");
@@ -1759,7 +1759,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
         if (!data.last) {
-          statusBox.textContent = "Nenhuma atualizaÃ§Ã£o encontrada.";
+          statusBox.textContent = "Nenhuma atualização encontrada.";
           return;
         }
         const last = data.last;
@@ -1770,7 +1770,7 @@
           <div><strong>Upload em:</strong> ${uploaded}</div>
           <div><strong>Data do download:</strong> ${dataArquivo}</div>
           <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
-          <div><strong>SaÃ­da gerada:</strong> ${last.output_filename || "-"}</div>
+          <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
         `;
         if (submitBtn && data.last && data.last.output_filename) {
           submitBtn.dataset.mode = "view";
@@ -1822,7 +1822,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
         if (msg) {
-          msg.textContent = data.message || "Upload concluÃ­do.";
+          msg.textContent = data.message || "Upload concluído.";
           msg.classList.remove("text-error");
         }
         form.reset();
@@ -2012,16 +2012,16 @@
     const criteria = [];
     let criteriaSelected = -1;
     const fieldLabels = {
-      exercicio: "Exerc\u00edcio",
-      statusAprovacao: "Status da Dota\u00e7\u00e3o",
-      chaveDotacao: "Controle de Dota\u00e7\u00e3o",
+      exercicio: "Exercício",
+      statusAprovacao: "Status da Dotação",
+      chaveDotacao: "Controle de Dotação",
       adjunta: "Adjunta Solicitante",
       programa: "Programa",
-      paoe: "A\u00e7\u00e3o/PAOE",
+      paoe: "Ação/PAOE",
     };
     const opLabels = {
       eq: "Igual a",
-      contains: "Cont\u00e9m",
+      contains: "Contém",
       gt: "Maior que",
       lt: "Menor que",
       gte: "Maior igual a",
@@ -2385,25 +2385,25 @@
       const adjConc = row.dataset.adjConcedente || "";
       const isEmp = adjConc && adjConc !== adjSolic;
       const fields = [
-        ["ExercÃ­cio", row.dataset.exercicio],
+        ["Exercício", row.dataset.exercicio],
         ["Adjunta Solicitante", row.dataset.adjunta],
         ...(isEmp ? [["Adjunta Concedente", adjConc]] : []),
         ["Chave do Planejamento", row.dataset.chave],
         ["UO", row.dataset.uo],
         ["Programa", row.dataset.programaRaw],
-        ["AÃ§Ã£o/PAOE", row.dataset.acaoPaoe],
+        ["Ação/PAOE", row.dataset.acaoPaoe],
         ["Produto", row.dataset.produto],
         ["UG", row.dataset.ug],
-        ["RegiÃ£o", row.dataset.regiao],
-        ["SubaÃ§Ã£o/Entrega", row.dataset.subacao],
+        ["Região", row.dataset.regiao],
+        ["Subação/Entrega", row.dataset.subacao],
         ["Etapa", row.dataset.etapa],
         ["Natureza de Despesa", row.dataset.natureza],
         ["Elemento de Despesa", row.dataset.elemento],
         ["Subelemento", row.dataset.subelemento],
         ["Fonte", row.dataset.fonte],
         ["Iduso", row.dataset.iduso],
-        ["Justificativa/HistÃ³rico", row.dataset.justificativa],
-        ["Valor da DotaÃ§Ã£o", formatPtBr(parsePtBr(row.dataset.valor) || 0)],
+        ["Justificativa/Histórico", row.dataset.justificativa],
+        ["Valor da Dotação", formatPtBr(parsePtBr(row.dataset.valor) || 0)],
       ];
       const rowsHtml = fields
         .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
@@ -2477,14 +2477,14 @@
       const adjConc = rows[0]?.dataset?.adjConcedente || "";
       const isEmprestada = adjConc && adjConc !== adjSolic;
       let watermarkText = "";
-      if (status === "aguardando") watermarkText = "Aguardando Aprova\u00e7\u00e3o";
+      if (status === "aguardando") watermarkText = "Aguardando Aprovação";
       if (status === "rejeitado") watermarkText = "Sem Validade";
       const showRegularizacao = isEmprestada && status !== "rejeitado";
       const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>DotaÃ§Ã£o Cadastrada</title>
+  <title>Dotação Cadastrada</title>
   <style>
     body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 70px; }
     .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
@@ -2514,14 +2514,14 @@
     <div class="print-brand">
       <img src="/static/img/logo.jpg" alt="Logo" />
       <div class="print-brand-text">
-        <div class="print-brand-title">Sistema de Planejamento e OrÃ§amento</div>
+        <div class="print-brand-title">Sistema de Planejamento e Orçamento</div>
         <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
       </div>
     </div>
   </div>
   <div class="print-title-row">
     <div class="print-title-key">${escapeHtml(rows[0]?.dataset?.chaveDotacao || "")}</div>
-    <div class="print-title">DOTAÃ‡ÃƒO CADASTRADA</div>
+    <div class="print-title">DOTAÇÃO CADASTRADA</div>
     <div class="print-title-date">${formatPrintDate((rows[0]?.dataset?.alteradoEm && rows[0]?.dataset?.alteradoEm !== rows[0]?.dataset?.criadoEm) ? rows[0]?.dataset?.alteradoEm : rows[0]?.dataset?.criadoEm)}</div>
   </div>
   <div style="height: 36px;"></div>
@@ -2531,7 +2531,7 @@
     <div class="print-footer-text">
       <div>${footerText}</div>
       ${approvalText ? `<div class="print-footer-approval">${approvalText}</div>` : ""}
-      ${showRegularizacao ? `<div class="print-footer-note">Dota\u00e7\u00e3o estar\u00e1 sujeita a regulariza\u00e7\u00e3o</div>` : ""}
+      ${showRegularizacao ? `<div class="print-footer-note">Dotação estará sujeita a regularização</div>` : ""}
     </div>
     <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
   </div>
@@ -2713,7 +2713,7 @@
             return;
           }
           if (field !== "exercicio" && !criteria.some((c) => c.field === "exercicio")) {
-            setFilterMsg("Informe um crit\u00e9rio de Exerc\u00edcio antes dos demais.", true);
+            setFilterMsg("Informe um critério de Exercício antes dos demais.", true);
             return;
           }
           criteria.push({ field, op, value });
@@ -2760,7 +2760,7 @@
       if (filterApply) {
         filterApply.addEventListener("click", () => {
           if (!criteria.some((c) => c.field == "exercicio")) {
-            setFilterMsg("Informe o crit\u00e9rio de Exerc\u00edcio antes de consultar.", true);
+            setFilterMsg("Informe o critério de Exercício antes de consultar.", true);
             return;
           }
           setResultsVisible(true);
@@ -2795,16 +2795,16 @@
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
+          setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("UsuÃ¡rio sem permissÃ£o para editar a dotaÃ§Ã£o atual.", true);
+          setFilterMsg("Usuário sem permissão para editar a dotação atual.", true);
           return;
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser editadas.", true);
+          setFilterMsg("Somente dotações com status Aguardando podem ser editadas.", true);
           return;
         }
         setApprovalMode(false);
@@ -2825,21 +2825,21 @@
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
+          setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("UsuÃ¡rio sem permissÃ£o para excluir a dotaÃ§Ã£o atual.", true);
+          setFilterMsg("Usuário sem permissão para excluir a dotação atual.", true);
           return;
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser excluÃ­das.", true);
+          setFilterMsg("Somente dotações com status Aguardando podem ser excluídas.", true);
           return;
         }
         const dotacaoId = selected.dataset.id;
         if (!dotacaoId) {
-          setFilterMsg("Registro inv\u00e1lido para exclus\u00e3o.", true);
+          setFilterMsg("Registro inválido para exclusão.", true);
           return;
         }
         try {
@@ -2851,7 +2851,7 @@
           if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
           selected.remove();
           renderSummaryPage();
-          setFilterMsg(data.message || "DotaÃ§Ã£o excluÃ­da.", false);
+          setFilterMsg(data.message || "Dotação excluída.", false);
         } catch (err) {
           console.error(err);
           setFilterMsg(err.message || "Falha ao excluir.", true);
@@ -2882,14 +2882,14 @@
       msg.classList.remove("text-error");
       if (approvalMode) {
         if (!dotacaoId) {
-          msg.textContent = "Registro invÃ¡lido para aprovaÃ§Ã£o.";
+          msg.textContent = "Registro inválido para aprovação.";
           msg.classList.add("text-error");
           return;
         }
         const aprovado = Array.from(approvalRadios).find((r) => r.checked)?.value || "sim";
         const justificativa = String(approvalJustificativa?.value || "").trim();
         if (!justificativa) {
-          msg.textContent = "Justificativa obrigatÃ³ria.";
+          msg.textContent = "Justificativa obrigatória.";
           msg.classList.add("text-error");
           return;
         }
@@ -2904,7 +2904,7 @@
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao aprovar.");
-          msg.textContent = data.message || "DotaÃ§Ã£o atualizada.";
+          msg.textContent = data.message || "Dotação atualizada.";
           if (data.dotacao) {
             openPrintPopup([buildRowFromPayload(data.dotacao)]);
           }
@@ -3017,16 +3017,16 @@
         }
         const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
-          setFilterMsg("Somente dotaÃ§Ãµes com status Aguardando podem ser aprovadas.", true);
+          setFilterMsg("Somente dotações com status Aguardando podem ser aprovadas.", true);
           return;
         }
         const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
         if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente nÃ£o definida.", true);
+          setFilterMsg("Adjunta Concedente não definida.", true);
           return;
         }
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
-          setFilterMsg("UsuÃ¡rio sem permissÃ£o para aprovar a dotaÃ§Ã£o atual.", true);
+          setFilterMsg("Usuário sem permissão para aprovar a dotação atual.", true);
           return;
         }
         setApprovalMode(true);
@@ -3238,7 +3238,7 @@
         if (paoeSet.size === 0) {
           paoeEl.textContent = "-";
         } else if (paoeSet.size > 10) {
-          paoeEl.textContent = "VÃ¡rios PAOEs";
+          paoeEl.textContent = "Vários PAOEs";
         } else {
           paoeEl.textContent = Array.from(paoeSet).join(" * ");
         }
@@ -3572,7 +3572,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4099,7 +4099,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -4611,7 +4611,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5109,7 +5109,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -5666,7 +5666,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -6172,7 +6172,7 @@
           const user = data.user_email || "-";
           const uploaded = formatAmazonTime(data.uploaded_at);
           meta.innerHTML = `
-            <div><strong>Ãšltima atualizaÃ§Ã£o</strong></div>
+            <div><strong>Última atualização</strong></div>
             <div>Enviado por: ${user}</div>
             <div>Upload em: ${uploaded}</div>
             <div>Data do download: ${dt}</div>
@@ -7263,15 +7263,15 @@
     const criteria = [];
     let criteriaSelected = -1;
     const fieldLabels = {
-      exercicio: "Exerc\u00edcio",
-      chaveDotacao: "Controle de Dota\u00e7\u00e3o",
+      exercicio: "Exercício",
+      chaveDotacao: "Controle de Dotação",
       adjunta: "Adjunta Solicitante",
       programa: "Programa",
-      paoe: "A\u00e7\u00e3o/PAOE",
+      paoe: "Ação/PAOE",
     };
     const opLabels = {
       eq: "Igual a",
-      contains: "Cont\u00e9m",
+      contains: "Contém",
       gt: "Maior que",
       lt: "Menor que",
       gte: "Maior igual a",
@@ -7574,7 +7574,7 @@
           return;
         }
         if (field !== "exercicio" && !criteria.some((c) => c.field === "exercicio")) {
-          setFilterMsg("Informe um crit\u00e9rio de Exerc\u00edcio antes dos demais.", true);
+          setFilterMsg("Informe um critério de Exercício antes dos demais.", true);
           return;
         }
         criteria.push({ field, op, value });
@@ -7588,7 +7588,7 @@
     if (filterRemove) {
       filterRemove.addEventListener("click", () => {
         if (criteriaSelected < 0 || criteriaSelected >= criteria.length) {
-          setFilterMsg("Selecione um crit\u00e9rio para remover.", true);
+          setFilterMsg("Selecione um critério para remover.", true);
           return;
         }
         criteria.splice(criteriaSelected, 1);
@@ -7625,7 +7625,7 @@
     if (filterApply) {
       filterApply.addEventListener("click", () => {
         if (!criteria.some((c) => c.field == "exercicio")) {
-          setFilterMsg("Informe o crit\u00e9rio de Exerc\u00edcio antes de consultar.", true);
+          setFilterMsg("Informe o critério de Exercício antes de consultar.", true);
           return;
         }
         setResultsVisible(true);
@@ -7649,7 +7649,7 @@
         }
         const adjunta = String(selected.dataset.adjunta || "").trim();
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
-          setFilterMsg("Usu\u00e1rio sem permiss\u00e3o de cadastrar estorno.", true);
+          setFilterMsg("Usuário sem permissão de cadastrar estorno.", true);
           return;
         }
         if (adjuntaInput) adjuntaInput.value = adjunta;
@@ -7737,7 +7737,7 @@
       }
       const adjunta = String(row.dataset.adjunta || "").trim();
       if (!currentUserPerfilId || currentUserPerfilId !== String(row.dataset.perfilId || "").trim()) {
-        setFilterMsg("UsuÃ¡rio sem permissÃ£o para alterar o estorno atual.", true);
+        setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
         return false;
       }
       return true;
@@ -7766,7 +7766,7 @@
         if (!canEditOrDeleteEstorno(selected)) return;
         const estId = selected.dataset.id;
         if (!estId) {
-          setFilterMsg("Registro invÃ¡lido para exclusÃ£o.", true);
+          setFilterMsg("Registro inválido para exclusão.", true);
           return;
         }
         try {
@@ -7797,7 +7797,7 @@
         }
         const adjunta = String(selected.dataset.adjunta || "").trim();
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
-          setFilterMsg("UsuÃ¡rio sem permissÃ£o para aprovar o estorno atual.", true);
+          setFilterMsg("Usuário sem permissão para aprovar o estorno atual.", true);
           return;
         }
         fillFormFromEstorno(selected);
@@ -7814,7 +7814,7 @@
         if (isApprovalMode) {
           if (!editId) {
             if (msg) {
-              msg.textContent = "Registro invÃ¡lido para aprovaÃ§Ã£o.";
+              msg.textContent = "Registro inválido para aprovação.";
               msg.classList.add("text-error");
             }
             return;
@@ -7823,7 +7823,7 @@
           const justificativa = String(approvalJustificativa?.value || "").trim();
           if (!justificativa) {
             if (msg) {
-              msg.textContent = "Justificativa obrigatÃ³ria.";
+              msg.textContent = "Justificativa obrigatória.";
               msg.classList.add("text-error");
             }
             return;
@@ -7848,7 +7848,7 @@
         }
         if (!useEdit && (!selected || selected.dataset.kind !== "dotacao")) {
           if (msg) {
-            msg.textContent = "Carregue uma dotaÃ§Ã£o antes de salvar o estorno.";
+            msg.textContent = "Carregue uma dotação antes de salvar o estorno.";
             msg.classList.add("text-error");
           }
           return;
@@ -7948,7 +7948,7 @@
         const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
         const dia = `${map.day}/${map.month}/${map.year}`;
         const hora = `${map.hour}h${map.minute}m`;
-        return `${dia} Ã s ${hora}`;
+        return `${dia} às ${hora}`;
       };
 
       const diasEl = recordModal.querySelector(".emp-record-digits");
@@ -8230,7 +8230,7 @@
           const di = parseDateBR(dataInicioInput.value);
           const df = parseDateBR(dataFimInput.value);
           if (di && df && df < di) {
-            setMsg("Data final deve ser maior ou igual Ã  data inÃ­cio.", true);
+            setMsg("Data final deve ser maior ou igual à data início.", true);
             dataFimInput.focus();
             return false;
           }
@@ -8268,7 +8268,7 @@
       if (municipioItems.length && chaveSelects.regiao) {
         const currentRegiao = chaveSelects.regiao.value || "";
         if (currentRegiao && lastRegiaoValue && currentRegiao !== lastRegiaoValue) {
-          setMsg("Remova todos os munic\u00edpios antes de trocar a regi\u00e3o.", true);
+          setMsg("Remova todos os municípios antes de trocar a região.", true);
           chaveSelects.regiao.value = lastRegiaoValue;
         }
       }
@@ -8401,47 +8401,47 @@
     };
 
     const fontesNao = [
-      "15000000 - Recursos nÃ£o vinculados de Impostos",
-      "15001001 - Recursos destinados Ã  ManutenÃ§Ã£o e Desenvolvimento do Ensino",
-      "15010000 - Outros Recursos nÃ£o Vinculados",
-      "15010100 - Outros Recursos nÃ£o vinculados destinados ao Tesouro",
-      "15021001 - Recursos nÃ£o vinculados da compensaÃ§Ã£o de impostos - Destinado ao Ensino",
-      "15400000 - TransferÃªncia de recursos do FUNDEB desenvolvimento do Ensino",
-      "15401070 - TransferÃªncia de recursos do FUNDEB RemuneraÃ§Ã£o EducaÃ§Ã£o BÃ¡sica",
-      "15401071 - TransferÃªncia de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
-      "15401072 - TransferÃªncia de recursos do FUNDEB - RemuneraÃ§Ã£o Profissionais ETI",
-      "15460000 - TransferÃªncias do FUNDEB - ComplementaÃ§Ã£o da UniÃ£o - ETI",
-      "15500000 - Recursos da ContribuiÃ§Ã£o ao SalÃ¡rio EducaÃ§Ã£o",
-      "15510000 - TransferÃªncias de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
-      "15520000 - TransferÃªncias de Recursos do FNDE referente ao Programa Nacional de AlimentaÃ§Ã£o Escolar (PNAE)",
-      "15530000 - TransferÃªncias de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
-      "15690000 - Outras TransferÃªncias de Recursos do FNDE",
-      "15700000 - TransferÃªncias do Governo Federal ref. a ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o",
-      "15703110 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Individual",
-      "15703120 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Bancada",
-      "15740000 - Recursos de OperaÃ§Ãµes de CrÃ©dito EducaÃ§Ã£o",
+      "15000000 - Recursos não vinculados de Impostos",
+      "15001001 - Recursos destinados à Manutenção e Desenvolvimento do Ensino",
+      "15010000 - Outros Recursos não Vinculados",
+      "15010100 - Outros Recursos não vinculados destinados ao Tesouro",
+      "15021001 - Recursos não vinculados da compensação de impostos - Destinado ao Ensino",
+      "15400000 - Transferência de recursos do FUNDEB desenvolvimento do Ensino",
+      "15401070 - Transferência de recursos do FUNDEB Remuneração Educação Básica",
+      "15401071 - Transferência de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
+      "15401072 - Transferência de recursos do FUNDEB - Remuneração Profissionais ETI",
+      "15460000 - Transferências do FUNDEB - Complementação da União - ETI",
+      "15500000 - Recursos da Contribuição ao Salário Educação",
+      "15510000 - Transferências de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
+      "15520000 - Transferências de Recursos do FNDE referente ao Programa Nacional de Alimentação Escolar (PNAE)",
+      "15530000 - Transferências de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
+      "15690000 - Outras Transferências de Recursos do FNDE",
+      "15700000 - Transferências do Governo Federal ref. a Convênios e outros Repasses vinculados à Educação",
+      "15703110 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Individual",
+      "15703120 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Bancada",
+      "15740000 - Recursos de Operações de Crédito Educação",
     ];
 
     const fontesSim = [
-      "25000000 - Recursos nÃ£o vinculados de Impostos",
-      "25001001 - Recursos destinados Ã  ManutenÃ§Ã£o e Desenvolvimento do Ensino",
-      "25010000 - Outros Recursos nÃ£o Vinculados",
-      "25010100 - Outros Recursos nÃ£o vinculados destinados ao Tesouro",
-      "25021001 - Recursos nÃ£o vinculados da compensaÃ§Ã£o de impostos - Destinado ao Ensino",
-      "25400000 - TransferÃªncia de recursos do FUNDEB desenvolvimento do Ensino",
-      "25401070 - TransferÃªncia de recursos do FUNDEB RemuneraÃ§Ã£o EducaÃ§Ã£o BÃ¡sica",
-      "25401071 - TransferÃªncia de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
-      "25401072 - TransferÃªncia de recursos do FUNDEB - RemuneraÃ§Ã£o Profissionais ETI",
-      "25460000 - TransferÃªncias do FUNDEB - ComplementaÃ§Ã£o da UniÃ£o - ETI",
-      "25500000 - Recursos da ContribuiÃ§Ã£o ao SalÃ¡rio EducaÃ§Ã£o",
-      "25510000 - TransferÃªncias de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
-      "25520000 - TransferÃªncias de Recursos do FNDE referente ao Programa Nacional de AlimentaÃ§Ã£o Escolar (PNAE)",
-      "25530000 - TransferÃªncias de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
-      "25690000 - Outras TransferÃªncias de Recursos do FNDE",
-      "25700000 - TransferÃªncias do Governo Federal ref. a ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o",
-      "25703110 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Individual",
-      "25703120 - Transf. Gov. Federal ref. ConvÃªnios e outros Repasses vinculados Ã  EducaÃ§Ã£o - Emenda Bancada",
-      "25740000 - Recursos de OperaÃ§Ãµes de CrÃ©dito EducaÃ§Ã£o",
+      "25000000 - Recursos não vinculados de Impostos",
+      "25001001 - Recursos destinados à Manutenção e Desenvolvimento do Ensino",
+      "25010000 - Outros Recursos não Vinculados",
+      "25010100 - Outros Recursos não vinculados destinados ao Tesouro",
+      "25021001 - Recursos não vinculados da compensação de impostos - Destinado ao Ensino",
+      "25400000 - Transferência de recursos do FUNDEB desenvolvimento do Ensino",
+      "25401070 - Transferência de recursos do FUNDEB Remuneração Educação Básica",
+      "25401071 - Transferência de recursos do FUNDEB - Ensino em Tempo Integral (ETI)",
+      "25401072 - Transferência de recursos do FUNDEB - Remuneração Profissionais ETI",
+      "25460000 - Transferências do FUNDEB - Complementação da União - ETI",
+      "25500000 - Recursos da Contribuição ao Salário Educação",
+      "25510000 - Transferências de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
+      "25520000 - Transferências de Recursos do FNDE referente ao Programa Nacional de Alimentação Escolar (PNAE)",
+      "25530000 - Transferências de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)",
+      "25690000 - Outras Transferências de Recursos do FNDE",
+      "25700000 - Transferências do Governo Federal ref. a Convênios e outros Repasses vinculados à Educação",
+      "25703110 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Individual",
+      "25703120 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Bancada",
+      "25740000 - Recursos de Operações de Crédito Educação",
     ];
 
     const setFonteOptions = (items) => {
@@ -8548,7 +8548,7 @@
       if (!municipioItems.length) {
         const empty = document.createElement("div");
         empty.className = "municipio-empty";
-        empty.textContent = "Nenhum munic\u00edpio adicionado.";
+        empty.textContent = "Nenhum município adicionado.";
         municipioListEl.appendChild(empty);
         return;
       }
@@ -8557,11 +8557,11 @@
         row.className = "municipio-item";
         row.innerHTML = `
           <div>
-            <small>C\u00f3digo</small>
+            <small>Código</small>
             <div>${item.codigoLabel || item.codigo}</div>
           </div>
           <div>
-            <small>Munic\u00edpio</small>
+            <small>Município</small>
             <div>${item.municipioLabel || item.municipios_entrega}</div>
           </div>
           <div>
@@ -8587,7 +8587,7 @@
     const handleRegiaoChange = () => {
       if (!planSelects.regiao) return;
       if (municipioItems.length) {
-        setMsg("Remova todos os municÃ­pios antes de trocar a regiÃ£o.", true);
+        setMsg("Remova todos os municípios antes de trocar a região.", true);
         planSelects.regiao.value = lastRegiaoValue || "";
         planSelects.regiao.blur();
         return;
@@ -8608,7 +8608,7 @@
       const municipio = municipioSelect?.value || "";
       const meta = metaInput?.value || "";
       if (!codigo || !municipio || !meta) {
-        if (!opts.silent) setMsg("Informe c\u00f3digo, munic\u00edpio e meta para adicionar.", true);
+        if (!opts.silent) setMsg("Informe código, município e meta para adicionar.", true);
         return false;
       }
       const regiaoAtual = regiaoEntregaSelect?.value || "";
@@ -8617,7 +8617,7 @@
       const regiaoChaveNorm = normalizeDigits(regiaoChave);
       if (regiaoChaveNorm && regiaoAtualNorm && regiaoChaveNorm !== regiaoAtualNorm) {
         if (!opts.silent) {
-          setMsg("A regi\u00e3o da Suba\u00e7\u00e3o/Entrega n\u00e3o confere com a regi\u00e3o da chave.", true);
+          setMsg("A região da Subação/Entrega não confere com a região da chave.", true);
         }
         return false;
       }
@@ -8626,7 +8626,7 @@
         const baseRegiaoNorm = normalizeDigits(baseRegiao);
         if (baseRegiaoNorm && regiaoAtualNorm && baseRegiaoNorm !== regiaoAtualNorm) {
           if (!opts.silent) {
-            setMsg("Remova todos os munic\u00edpios antes de trocar a regi\u00e3o.", true);
+            setMsg("Remova todos os municípios antes de trocar a região.", true);
           }
           return false;
         }
@@ -8635,11 +8635,11 @@
       const exists = municipioItems.some((item) => `${item.codigo}::${item.municipios_entrega}` === key);
       const municipioExists = municipioItems.some((item) => item.municipios_entrega === municipio);
       if (exists) {
-        if (!opts.silent) setMsg("Este munic\u00edpio j\u00e1 foi adicionado.", true);
+        if (!opts.silent) setMsg("Este município já foi adicionado.", true);
         return false;
       }
       if (municipioExists) {
-        if (!opts.silent) setMsg("Este munic\u00edpio j\u00e1 foi adicionado.", true);
+        if (!opts.silent) setMsg("Este município já foi adicionado.", true);
         return false;
       }
       municipioItems.push({
@@ -8677,7 +8677,7 @@
       if (!editMunicipioItems.length) {
         const empty = document.createElement("div");
         empty.className = "municipio-empty";
-        empty.textContent = "Nenhum municÃ­pio adicionado.";
+        empty.textContent = "Nenhum município adicionado.";
         editMunicipioListEl.appendChild(empty);
         if (editMunicipioListWrap) editMunicipioListWrap.style.display = "none";
         return;
@@ -8688,11 +8688,11 @@
         row.className = "municipio-item";
         row.innerHTML = `
           <div>
-            <small>CÃ³digo</small>
+            <small>Código</small>
             <div>${item.codigoLabel || item.codigo}</div>
           </div>
           <div>
-            <small>MunicÃ­pio</small>
+            <small>Município</small>
             <div>${item.municipioLabel || item.municipios_entrega}</div>
           </div>
           <div>
@@ -8712,7 +8712,7 @@
       const municipio = editMunicipioNovoSelect?.value || "";
       const meta = editMetaNovoInput?.value || "";
       if (!codigo || !municipio || !meta) {
-        setMsg("Informe cÃ³digo, municÃ­pio e meta para adicionar.", true);
+        setMsg("Informe código, município e meta para adicionar.", true);
         return false;
       }
       const key = `${codigo}::${municipio}`;
@@ -8720,7 +8720,7 @@
         (item) => `${item.codigo}::${item.municipios_entrega}` === key
       );
       if (exists) {
-        setMsg("Este municÃ­pio jÃ¡ foi adicionado.", true);
+        setMsg("Este município já foi adicionado.", true);
         return false;
       }
       editMunicipioItems.push({
@@ -8865,7 +8865,7 @@
         row.className = "etapa-item";
         row.innerHTML = `
           <div>
-            <small>Munic\u00edpio</small>
+            <small>Município</small>
             <div>${extractMunicipioName(item.municipio_label || item.municipio)}</div>
           </div>
           <div>
@@ -8873,7 +8873,7 @@
             <div>${item.nome_etapa}</div>
           </div>
           <div>
-            <small>Respons\u00e1vel</small>
+            <small>Responsável</small>
             <div>${item.responsavel_etapa || "-"}</div>
           </div>
           <div>
@@ -8900,17 +8900,17 @@
 
     const validateEtapaBlock = () => {
       if (!etapaMunicipioSelect || !etapaMunicipioSelect.value) {
-        setMsg("Selecione o munic\u00edpio da etapa.", true);
+        setMsg("Selecione o município da etapa.", true);
         etapaMunicipioSelect?.focus();
         return false;
       }
       if (!etapaInput?.value || etapaInput.value.length > 260) {
-        setMsg("Informe o nome da etapa (at\u00e9 260 caracteres).", true);
+        setMsg("Informe o nome da etapa (até 260 caracteres).", true);
         etapaInput?.focus();
         return false;
       }
       if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
-        setMsg("CPF do respons\u00e1vel da etapa inv\u00e1lido.", true);
+        setMsg("CPF do responsável da etapa inválido.", true);
         cpfEtapaInput.focus();
         return false;
       }
@@ -9876,7 +9876,7 @@
         return;
       }
       if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
-        setMsg("CPF do responsÃ¡vel da etapa invÃ¡lido.", true);
+        setMsg("CPF do responsável da etapa inválido.", true);
         cpfEtapaInput.focus();
         return;
       }
@@ -9936,19 +9936,19 @@
         const last = captureEtapaPayload();
         const all = [...etapaItems, last];
         if (!last.municipio) {
-          setMsg("Selecione um munic\u00edpio para a etapa antes de salvar.", true);
+          setMsg("Selecione um município para a etapa antes de salvar.", true);
           return;
         }
         if (all.length < municipioItems.length) {
           const faltando = municipioItems.length - all.length;
-          setMsg(`Faltam ${faltando} etapa(s) para concluir os munic\u00edpios.`, true);
+          setMsg(`Faltam ${faltando} etapa(s) para concluir os municípios.`, true);
           return;
         }
         const missing = municipioItems.some(
           (m) => !all.find((e) => e.municipio === m.municipios_entrega)
         );
         if (missing) {
-          setMsg("Existe munic\u00edpio sem etapa vinculada.", true);
+          setMsg("Existe município sem etapa vinculada.", true);
           return;
         }
         payload.etapas_items = all;
@@ -9974,7 +9974,7 @@
           return;
         }
         const count = Array.isArray(data.subacoes) ? data.subacoes.length : 1;
-        showToast(`Suba\u00e7\u00e3o salva com sucesso. Registros: ${count}.`, "success");
+        showToast(`Subação salva com sucesso. Registros: ${count}.`, "success");
         await loadPage("cadastrar/plan_21-nger/subacao");
       } catch (err) {
         console.error(err);

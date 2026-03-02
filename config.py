@@ -87,10 +87,18 @@ class Config:
     else:
         SQLALCHEMY_DATABASE_URI = build_mysql_sqlalchemy_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    _connect_args = {}
+    if engine != "mssql":
+        _connect_args = {
+            "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+        }
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "280")),
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
         "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "10")),
+        **({"connect_args": _connect_args} if _connect_args else {}),
     }
 
     MAIL_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")

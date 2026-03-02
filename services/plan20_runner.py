@@ -61,7 +61,7 @@ EXTR_HEADERS = [
 ]
 
 KEYS = {
-    "A_exercicio": r"\bexercici?o\s*igual\s*a\b",
+    "A_exercicio": r"\bexerc[ií]cio\s*igual\s*a\b",
     "Programa": r"^programa\b",
     "Acao": r"\bacao\b.*\bp\s*a\s*o\s*e\b",
     "Produto": r"\bproduto\s*s?\s*da\s*acao\b|\bprodutos\s+da\s*acao\b",
