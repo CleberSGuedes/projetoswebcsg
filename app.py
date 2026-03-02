@@ -143,6 +143,15 @@ def create_app():
         user = session.get("user")
         token = session.get("session_token")
         if not user or not token:
+            try:
+                app.logger.info(
+                    "auth preload missing session user=%s token=%s path=%s",
+                    bool(user),
+                    bool(token),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 
@@ -153,21 +162,53 @@ def create_app():
         except SQLAlchemyError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload db error, session cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
         except IndexError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload db index error, session cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 
         if active_row is None:
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload active_row=None cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 
         if not active_row or active_row.get("session_token") != token:
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload token mismatch cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 
@@ -192,6 +233,14 @@ def create_app():
                     db.session.commit()
             except SQLAlchemyError:
                 _safe_session_rollback()
+            try:
+                app.logger.info(
+                    "auth preload session expired email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 
@@ -207,16 +256,40 @@ def create_app():
             if result is None:
                 _safe_session_rollback()
                 _best_effort_clear_active_session(user.get("email"), token)
+                try:
+                    app.logger.warning(
+                        "auth preload last_activity update failed, cleared email=%s path=%s",
+                        user.get("email"),
+                        request.path,
+                    )
+                except Exception:
+                    pass
                 session.clear()
                 return
             db.session.commit()
             if result.rowcount == 0:
                 _best_effort_clear_active_session(user.get("email"), token)
+                try:
+                    app.logger.warning(
+                        "auth preload last_activity rowcount=0 cleared email=%s path=%s",
+                        user.get("email"),
+                        request.path,
+                    )
+                except Exception:
+                    pass
                 session.clear()
                 return
         except SQLAlchemyError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload last_activity exception cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
         g.user = user
@@ -226,10 +299,26 @@ def create_app():
         except SQLAlchemyError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload perfil fetch error cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
         if not perfil_row:
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload perfil missing cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
         if perfil_row:
@@ -248,12 +337,28 @@ def create_app():
             if result is None:
                 _safe_session_rollback()
                 _best_effort_clear_active_session(user.get("email"), token)
+                try:
+                    app.logger.warning(
+                        "auth preload active_sessions_count failed cleared email=%s path=%s",
+                        user.get("email"),
+                        request.path,
+                    )
+                except Exception:
+                    pass
                 session.clear()
                 return
             g.active_sessions_count = result.scalar() or 0
         except SQLAlchemyError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
+            try:
+                app.logger.warning(
+                    "auth preload active_sessions_count exception cleared email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             return
 

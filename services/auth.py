@@ -6,6 +6,17 @@ def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("user") or not getattr(g, "user", None):
+            try:
+                from flask import current_app
+
+                current_app.logger.info(
+                    "auth required redirect user=%s g.user=%s path=%s",
+                    bool(session.get("user")),
+                    bool(getattr(g, "user", None)),
+                    request.path,
+                )
+            except Exception:
+                pass
             session.clear()
             if request.headers.get("X-Requested-With"):
                 return ("", 401)
