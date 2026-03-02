@@ -64,6 +64,49 @@ def _execute_with_retry(stmt, attempts: int = 2, backoff_s: float = 0.2):
     return None
 
 
+def _best_effort_clear_active_session(email: str, token: str | None = None) -> None:
+    if not email:
+        return
+    try:
+        stmt = delete(ActiveSession).where(ActiveSession.email == email)
+        if token:
+            stmt = stmt.where(ActiveSession.session_token == token)
+        db.session.execute(stmt)
+        db.session.commit()
+        return
+    except Exception:
+        _safe_session_rollback()
+    try:
+        stmt = delete(ActiveSession).where(ActiveSession.email == email)
+        if token:
+            stmt = stmt.where(ActiveSession.session_token == token)
+        with db.engine.connect() as conn:
+            conn.execute(stmt)
+            conn.commit()
+    except Exception:
+        pass
+
+
+def _fetch_active_session(email: str):
+    stmt = select(
+        ActiveSession.email,
+        ActiveSession.session_token,
+        ActiveSession.last_activity,
+    ).where(ActiveSession.email == email)
+    result = _execute_with_retry(stmt)
+    if result is None:
+        return None
+    try:
+        return result.mappings().first()
+    except Exception:
+        _safe_session_rollback()
+    try:
+        with db.engine.connect() as conn:
+            return conn.execute(stmt).mappings().first()
+    except Exception:
+        return None
+
+
 
 def create_app():
     app = Flask(__name__)
@@ -106,24 +149,25 @@ def create_app():
         now = datetime.utcnow()
         cutoff = now - SESSION_TIMEOUT
         try:
-            result = _execute_with_retry(
-                select(
-                    ActiveSession.email,
-                    ActiveSession.session_token,
-                    ActiveSession.last_activity,
-                ).where(ActiveSession.email == user.get("email"))
-            )
-            if result is None:
-                _safe_session_rollback()
-                session.clear()
-                return
-            active_row = result.mappings().first()
+            active_row = _fetch_active_session(user.get("email"))
         except SQLAlchemyError:
             _safe_session_rollback()
+            _best_effort_clear_active_session(user.get("email"), token)
+            session.clear()
+            return
+        except IndexError:
+            _safe_session_rollback()
+            _best_effort_clear_active_session(user.get("email"), token)
+            session.clear()
+            return
+
+        if active_row is None:
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
 
         if not active_row or active_row.get("session_token") != token:
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
 
@@ -162,14 +206,17 @@ def create_app():
             )
             if result is None:
                 _safe_session_rollback()
+                _best_effort_clear_active_session(user.get("email"), token)
                 session.clear()
                 return
             db.session.commit()
             if result.rowcount == 0:
+                _best_effort_clear_active_session(user.get("email"), token)
                 session.clear()
                 return
         except SQLAlchemyError:
             _safe_session_rollback()
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
         g.user = user
@@ -178,9 +225,11 @@ def create_app():
             perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
         except SQLAlchemyError:
             _safe_session_rollback()
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
         if not perfil_row:
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
         if perfil_row:
@@ -198,11 +247,13 @@ def create_app():
             )
             if result is None:
                 _safe_session_rollback()
+                _best_effort_clear_active_session(user.get("email"), token)
                 session.clear()
                 return
             g.active_sessions_count = result.scalar() or 0
         except SQLAlchemyError:
             _safe_session_rollback()
+            _best_effort_clear_active_session(user.get("email"), token)
             session.clear()
             return
 
