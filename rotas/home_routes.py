@@ -312,8 +312,23 @@ def partial_dashboard():
                 )
                 .all()
             )
-            emails = [r.email for r in rows]
-            usuarios = {u.email: u.nome for u in Usuario.query.filter(Usuario.email.in_(emails)).all()}
+            emails = [r.email for r in rows if r.email]
+            usuarios = {}
+            if emails:
+                try:
+                    usuarios = dict(
+                        db.session.execute(
+                            select(Usuario.email, Usuario.nome).where(Usuario.email.in_(emails))
+                        ).all()
+                    )
+                except NotImplementedError:
+                    db.session.rollback()
+                    with db.engine.connect() as conn:
+                        usuarios = dict(
+                            conn.execute(
+                                select(Usuario.email, Usuario.nome).where(Usuario.email.in_(emails))
+                            ).all()
+                        )
             for r in rows:
                 active_sessions.append(
                     {
