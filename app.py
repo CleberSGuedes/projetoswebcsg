@@ -96,6 +96,38 @@ def _fetch_active_session(email: str):
     result = _execute_with_retry(stmt)
     if result is None:
         return None
+
+
+def _next_pk_active_session() -> int:
+    try:
+        max_id = db.session.query(func.max(ActiveSession.id)).scalar() or 0
+        return int(max_id) + 1
+    except Exception:
+        _safe_session_rollback()
+        return 1
+
+
+def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
+    if not email or not token:
+        return False
+    try:
+        active = ActiveSession.query.filter_by(email=email).first()
+        if not active:
+            active = ActiveSession(
+                id=_next_pk_active_session(),
+                email=email,
+                session_token=token,
+                last_activity=now,
+            )
+            db.session.add(active)
+        else:
+            active.session_token = token
+            active.last_activity = now
+        db.session.commit()
+        return True
+    except Exception:
+        _safe_session_rollback()
+        return False
     try:
         return result.mappings().first()
     except Exception:
@@ -136,6 +168,8 @@ def create_app():
 
     @app.before_request
     def load_current_user():
+        if request.path.startswith("/static/") or request.path == "/favicon.ico":
+            return
         g.user = None
         g.active_sessions_count = 0
         g.user_perfil_id = None
@@ -187,17 +221,20 @@ def create_app():
             return
 
         if active_row is None:
-            _best_effort_clear_active_session(user.get("email"), token)
-            try:
-                app.logger.warning(
-                    "auth preload active_row=None cleared email=%s path=%s",
-                    user.get("email"),
-                    request.path,
-                )
-            except Exception:
-                pass
-            session.clear()
-            return
+            if _ensure_active_session(user.get("email"), token, now):
+                active_row = {"email": user.get("email"), "session_token": token, "last_activity": now}
+            else:
+                _best_effort_clear_active_session(user.get("email"), token)
+                try:
+                    app.logger.warning(
+                        "auth preload active_row=None cleared email=%s path=%s",
+                        user.get("email"),
+                        request.path,
+                    )
+                except Exception:
+                    pass
+                session.clear()
+                return
 
         if not active_row or active_row.get("session_token") != token:
             _best_effort_clear_active_session(user.get("email"), token)
@@ -268,17 +305,18 @@ def create_app():
                 return
             db.session.commit()
             if result.rowcount == 0:
-                _best_effort_clear_active_session(user.get("email"), token)
-                try:
-                    app.logger.warning(
-                        "auth preload last_activity rowcount=0 cleared email=%s path=%s",
-                        user.get("email"),
-                        request.path,
-                    )
-                except Exception:
-                    pass
-                session.clear()
-                return
+                if not _ensure_active_session(user.get("email"), token, now):
+                    _best_effort_clear_active_session(user.get("email"), token)
+                    try:
+                        app.logger.warning(
+                            "auth preload last_activity rowcount=0 cleared email=%s path=%s",
+                            user.get("email"),
+                            request.path,
+                        )
+                    except Exception:
+                        pass
+                    session.clear()
+                    return
         except SQLAlchemyError:
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)

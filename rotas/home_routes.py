@@ -591,10 +591,14 @@ def _load_permissoes_perfil(perfil_id: int | None):
                 PerfilPermissao.feature.isnot(None),
             )
         )
-        rows = result.scalars().all() if result is not None else []
+        try:
+            rows = result.scalars().all() if result is not None else []
+        except (ResourceClosedError, OperationalError):
+            _safe_session_rollback()
+            rows = []
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError):
-        db.session.rollback()
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError):
+        _safe_session_rollback()
         return []
 
 
@@ -609,10 +613,14 @@ def _load_permissoes_nivel(nivel: int | None):
                 NivelPermissao.feature.isnot(None),
             )
         )
-        rows = result.scalars().all() if result is not None else []
+        try:
+            rows = result.scalars().all() if result is not None else []
+        except (ResourceClosedError, OperationalError):
+            _safe_session_rollback()
+            rows = []
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError):
-        db.session.rollback()
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError):
+        _safe_session_rollback()
         return []
 
 
@@ -1311,7 +1319,11 @@ def api_permissoes_nivel(nivel):
 def api_permissoes_current():
     user_session = session.get("user") or {}
     perfil_id = getattr(g, "user_perfil_id", None) or user_session.get("perfil_id")
-    feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
+    try:
+        feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
+    except Exception as exc:
+        current_app.logger.warning("Falha ao carregar permissoes: %s", exc)
+        feats = []
     return jsonify({"features": feats})
 
 
