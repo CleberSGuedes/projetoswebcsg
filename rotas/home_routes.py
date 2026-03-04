@@ -1261,7 +1261,14 @@ def api_permissoes(perfil_id):
         # remove qualquer registro sem feature
         PerfilPermissao.query.filter(PerfilPermissao.feature == None).delete(synchronize_session=False)  # noqa: E711
         for f in clean_feats:
-            db.session.add(PerfilPermissao(perfil_id=perfil_id, feature=f, ativo=True))
+            db.session.add(
+                PerfilPermissao(
+                    perfil_id=perfil_id,
+                    feature=f,
+                    ativo=True,
+                    created_at=datetime.utcnow(),
+                )
+            )
         db.session.commit()
     except ProgrammingError:
         db.session.rollback()
@@ -1555,6 +1562,11 @@ def _find_plan21_nger_row(
     responsavel_acao: str,
     produto_acao: str,
     chave_planejamento: str | None = None,
+    subacao_entrega: str | None = None,
+    etapa: str | None = None,
+    regiao_etapa: str | None = None,
+    natureza: str | None = None,
+    descricao_item_despesa: str | None = None,
 ):
     query = Plan21Nger.query
     if exercicio:
@@ -1571,6 +1583,16 @@ def _find_plan21_nger_row(
         query = query.filter(Plan21Nger.produto == produto_acao)
     if chave_planejamento:
         query = query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
+    if subacao_entrega:
+        query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
+    if etapa:
+        query = query.filter(Plan21Nger.etapa == etapa)
+    if regiao_etapa:
+        query = query.filter(Plan21Nger.regiao_etapa == regiao_etapa)
+    if natureza:
+        query = query.filter(Plan21Nger.natureza == natureza)
+    if descricao_item_despesa:
+        query = query.filter(Plan21Nger.descricao_item_despesa == descricao_item_despesa)
     rows = query.order_by(Plan21Nger.id.desc()).all()
     if not rows:
         return None, "Regi\u00e3o n\u00e3o encontrada no PTA. Por favor, antes de criar esta Suba\u00e7\u00e3o, cadastre uma nova regi\u00e3o do produto e sua respectiva meta f\u00edsica."
@@ -2280,6 +2302,72 @@ def _subacao_payload(registro: CadastrarSubacao) -> dict:
     }
 
 
+def _load_plan21_edit_rows(filters: dict) -> list[dict]:
+    plan_fields = {
+        "exercicio": "exercicio",
+        "uo": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+    }
+    edit_fields = {
+        "chave_planejamento": "chave_planejamento",
+        "subacao_entrega": "subacao_entrega",
+        "responsavel": "responsavel",
+        "prazo": "prazo",
+        "unid_gestora": "unid_gestora",
+        "unidade_setorial_planejamento": "unidade_setorial_planejamento",
+        "produto_subacao": "produto_subacao",
+        "unidade_medida": "unidade_medida",
+        "regiao_subacao": "regiao_subacao",
+        "codigo": "codigo",
+        "municipios_entrega": "municipios_entrega",
+        "meta_subacao": "meta_subacao",
+        "detalhamento_produto": "detalhamento_produto",
+    }
+    where = ["ativo = 1"]
+    params = {}
+    for key, col in plan_fields.items():
+        val = (filters.get(key) or "").strip()
+        if val:
+            where.append(f"{col} = :{key}")
+            params[key] = val
+    for key, col in edit_fields.items():
+        val = (filters.get(key) or "").strip()
+        if val:
+            where.append(f"{col} = :{key}")
+            params[key] = val
+    sql = """
+        SELECT
+          id,
+          exercicio,
+          unidade_orcamentaria,
+          programa,
+          acao_paoe,
+          responsavel_acao,
+          produto_acao,
+          chave_planejamento,
+          subacao_entrega,
+          responsavel,
+          prazo,
+          unid_gestora,
+          unidade_setorial_planejamento,
+          produto_subacao,
+          unidade_medida,
+          regiao_subacao,
+          codigo,
+          municipios_entrega,
+          meta_subacao,
+          detalhamento_produto
+        FROM plan21_nger
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC"
+    return _safe_query_mappings(sql, params)
+
+
 @home_bp.route("/api/subacao/plan21-edit-options", methods=["GET"])
 @login_required
 @require_feature("cadastrar/plan_21-nger/subacao")
@@ -2602,6 +2690,11 @@ def api_subacao_create():
         responsavel_acao,
         produto_acao,
         chave_planejamento,
+        subacao_entrega=subacao_entrega_raw,
+        etapa=etapa,
+        regiao_etapa=regiao_memoria,
+        natureza=natureza,
+        descricao_item_despesa=descricao,
     )
     if plan_err:
         return jsonify({"error": plan_err}), 400
@@ -2616,6 +2709,39 @@ def api_subacao_create():
     registros = []
     for item in items:
         etapa_data = etapa_by_municipio.get(item["municipios_entrega"], {})
+        etapa_value = (etapa_data.get("etapa") or etapa).strip()
+        regiao_etapa_value = (etapa_data.get("regiao_memoria") or regiao_memoria).strip()
+        natureza_value = (etapa_data.get("natureza") or natureza).strip()
+        descricao_value = (etapa_data.get("descricao") or descricao).strip()
+        plan_row_item, _ = _find_plan21_nger_row(
+            str(exercicio),
+            unidade_orcamentaria,
+            programa,
+            acao_paoe,
+            responsavel_acao,
+            produto_acao,
+            chave_planejamento,
+            subacao_entrega=subacao_entrega,
+            etapa=etapa_value,
+            regiao_etapa=regiao_etapa_value,
+            natureza=natureza_value,
+            descricao_item_despesa=descricao_value,
+        )
+        if not plan_row_item and subacao_entrega_raw:
+            plan_row_item, _ = _find_plan21_nger_row(
+                str(exercicio),
+                unidade_orcamentaria,
+                programa,
+                acao_paoe,
+                responsavel_acao,
+                produto_acao,
+                chave_planejamento,
+                subacao_entrega=subacao_entrega_raw,
+                etapa=etapa_value,
+                regiao_etapa=regiao_etapa_value,
+                natureza=natureza_value,
+                descricao_item_despesa=descricao_value,
+            )
         registro = CadastrarSubacao(
             exercicio=exercicio,
             unidade_orcamentaria=unidade_orcamentaria,
@@ -2637,10 +2763,10 @@ def api_subacao_create():
             municipios_entrega=item["municipios_entrega"],
             meta_subacao=item["meta_subacao"],
             detalhamento_produto=detalhamento_produto,
-            etapa=etapa_data.get("etapa") or etapa,
+            etapa=etapa_value or etapa,
             responsavel_etapa=etapa_data.get("responsavel_etapa") or responsavel_etapa,
             cpf_responsavel_etapa=etapa_data.get("cpf_responsavel_etapa") or cpf_responsavel_etapa,
-            regiao_memoria=etapa_data.get("regiao_memoria") or regiao_memoria,
+            regiao_memoria=regiao_etapa_value or regiao_memoria,
             natureza=etapa_data.get("natureza") or natureza,
             fonte=etapa_data.get("fonte") or fonte,
             idu=etapa_data.get("idu") or idu,
@@ -2651,7 +2777,7 @@ def api_subacao_create():
             valor_total=etapa_data.get("valor_total") or valor_total,
             justificativa=etapa_data.get("justificativa") or justificativa,
             responsavel_nger=etapa_data.get("responsavel_nger") or responsavel_nger,
-            plan21_nger_id=plan_row.id if plan_row else None,
+            plan21_nger_id=(plan_row_item.id if plan_row_item else plan_row.id if plan_row else None),
             usuario_id=usuarios_id,
             status_aprovacao="aguardando",
             criado_em=_now_local(),
@@ -2664,6 +2790,223 @@ def api_subacao_create():
         db.session.rollback()
         return jsonify({"error": f"Falha ao salvar subacao: {exc}"}), 500
     return jsonify({"subacoes": [_subacao_payload(r) for r in registros]})
+
+
+@home_bp.route("/api/subacao/editar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_editar():
+    data = request.get_json() or {}
+    edit_mode = (data.get("edit_mode") or "").strip()
+    plan_fields = [
+        "exercicio",
+        "uo",
+        "programa",
+        "acao_paoe",
+        "responsavel_acao",
+        "produto_acao",
+    ]
+    edit_fields = [
+        "chave_planejamento",
+        "subacao_entrega",
+        "responsavel",
+        "prazo",
+        "unid_gestora",
+        "unidade_setorial_planejamento",
+        "produto_subacao",
+        "unidade_medida",
+        "regiao_subacao",
+        "codigo",
+        "municipios_entrega",
+        "meta_subacao",
+        "detalhamento_produto",
+    ]
+    filters = {}
+    for key in plan_fields + edit_fields:
+        val = (data.get(key) or "").strip()
+        if val:
+            filters[key] = val
+    if "exercicio" not in filters:
+        filters["exercicio"] = str(_now_local().year)
+
+    subacao_edit = (data.get("subacao_entrega_edit") or "").strip()
+    responsavel_edit = (data.get("responsavel_edit") or "").strip()
+    cpf_responsavel = re.sub(r"\D", "", (data.get("cpf_responsavel") or "").strip())
+    produto_subacao_edit = (data.get("produto_subacao_edit") or "").strip()
+    justificativa = (data.get("justificativa") or "").strip()
+    responsavel_nger = (data.get("responsavel_nger") or "").strip()
+
+    required_common = [
+        "exercicio",
+        "uo",
+        "programa",
+        "acao_paoe",
+        "responsavel_acao",
+        "produto_acao",
+        "chave_planejamento",
+        "subacao_entrega",
+        "responsavel",
+    ]
+    required_map = {
+        "subacao_name": required_common
+        + ["subacao_entrega_edit", "responsavel_edit", "cpf_responsavel"],
+        "responsavel_name": required_common + ["responsavel_edit", "cpf_responsavel"],
+        "produto_subacao": required_common
+        + [
+            "responsavel_edit",
+            "prazo",
+            "unid_gestora",
+            "unidade_setorial_planejamento",
+            "produto_subacao",
+            "produto_subacao_edit",
+        ],
+        "novo_municipio": required_common
+        + [
+            "responsavel_edit",
+            "prazo",
+            "unid_gestora",
+            "unidade_setorial_planejamento",
+            "produto_subacao",
+            "regiao_subacao",
+        ],
+    }
+    if edit_mode not in required_map:
+        return jsonify({"error": "Modo de edicao invalido."}), 400
+    required_values = {
+        **filters,
+        "subacao_entrega_edit": subacao_edit,
+        "responsavel_edit": responsavel_edit,
+        "cpf_responsavel": cpf_responsavel,
+        "produto_subacao_edit": produto_subacao_edit,
+        "justificativa": justificativa,
+        "responsavel_nger": responsavel_nger,
+    }
+    missing = [k for k in required_map[edit_mode] if not required_values.get(k)]
+    if missing:
+        return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+    if not justificativa or not responsavel_nger:
+        return jsonify({"error": "Justificativa e responsavel NGER sao obrigatorios."}), 400
+    if edit_mode in {"subacao_name", "responsavel_name"} and cpf_responsavel:
+        if not _is_valid_cpf(cpf_responsavel):
+            return jsonify({"error": "CPF do responsavel invalido."}), 400
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+
+    rows = _load_plan21_edit_rows(filters)
+    if not rows:
+        return jsonify({"error": "Nenhum registro encontrado com os filtros informados."}), 404
+
+    if edit_mode == "novo_municipio":
+        rows = rows[:1]
+    else:
+        row_ids = [str(r.get("id")) for r in rows if r.get("id") is not None]
+        rows = rows[:1]
+
+    def pick_row(row: dict, key: str) -> str:
+        val = row.get(key)
+        return "" if val is None else str(val).strip()
+
+    registros = []
+    for row in rows:
+        subacao_value = pick_row(row, "subacao_entrega")
+        if edit_mode == "subacao_name" and subacao_edit:
+            subacao_value = f"{filters.get('chave_planejamento', '')} {subacao_edit}".strip()
+        responsavel_value = responsavel_edit or pick_row(row, "responsavel") or filters.get("responsavel", "")
+        produto_value = (
+            produto_subacao_edit
+            if edit_mode == "produto_subacao"
+            else pick_row(row, "produto_subacao") or filters.get("produto_subacao", "")
+        )
+        prazo_value = filters.get("prazo") or pick_row(row, "prazo")
+        unid_gestora = filters.get("unid_gestora") or pick_row(row, "unid_gestora")
+        unidade_setorial = (
+            filters.get("unidade_setorial_planejamento")
+            or pick_row(row, "unidade_setorial_planejamento")
+        )
+        unidade_medida = filters.get("unidade_medida") or pick_row(row, "unidade_medida")
+        regiao_subacao = filters.get("regiao_subacao") or pick_row(row, "regiao_subacao")
+        detalhamento = filters.get("detalhamento_produto") or pick_row(row, "detalhamento_produto")
+
+        base_kwargs = {
+            "exercicio": filters.get("exercicio") or pick_row(row, "exercicio"),
+            "unidade_orcamentaria": filters.get("uo") or pick_row(row, "unidade_orcamentaria"),
+            "programa": filters.get("programa") or pick_row(row, "programa"),
+            "acao_paoe": filters.get("acao_paoe") or pick_row(row, "acao_paoe"),
+            "responsavel_acao": filters.get("responsavel_acao") or pick_row(row, "responsavel_acao"),
+            "produto_acao": filters.get("produto_acao") or pick_row(row, "produto_acao"),
+            "chave_planejamento": filters.get("chave_planejamento") or pick_row(row, "chave_planejamento"),
+            "subacao_entrega": subacao_value,
+            "responsavel": responsavel_value,
+            "cpf_responsavel": cpf_responsavel if cpf_responsavel else "",
+            "prazo": prazo_value,
+            "unid_gestora": unid_gestora,
+            "unidade_setorial_planejamento": unidade_setorial,
+            "produto_subacao": produto_value,
+            "unidade_medida": unidade_medida,
+            "regiao_subacao": regiao_subacao,
+            "detalhamento_produto": detalhamento,
+            "plan21_nger_id": row.get("id"),
+            "plan21_nger_ids": json.dumps(row_ids) if edit_mode != "novo_municipio" else None,
+            "usuario_id": usuarios_id,
+            "status_aprovacao": "aguardando",
+            "criado_em": _now_local(),
+            "justificativa": justificativa,
+            "responsavel_nger": responsavel_nger,
+        }
+
+        if edit_mode == "novo_municipio":
+            municipios_items = data.get("municipios_items") or []
+            if not isinstance(municipios_items, list) or not municipios_items:
+                return jsonify({"error": "Informe municipios para adicionar."}), 400
+            for item in municipios_items:
+                codigo = (item.get("codigo") or "").strip()
+                municipio = (item.get("municipios_entrega") or "").strip()
+                meta_raw = (item.get("meta_subacao") or "").strip()
+                if not codigo or not municipio or not meta_raw:
+                    return jsonify({"error": "Informe codigo, municipio e meta para todos os itens."}), 400
+                meta_dec = _parse_decimal(meta_raw)
+                if meta_dec is None:
+                    return jsonify({"error": "Meta da subacao invalida."}), 400
+                registro = CadastrarSubacao(
+                    **base_kwargs,
+                    codigo=codigo,
+                    municipios_entrega=municipio,
+                    meta_subacao=meta_dec,
+                )
+                registros.append(registro)
+                db.session.add(registro)
+        else:
+            meta_val = pick_row(row, "meta_subacao")
+            meta_dec = _parse_decimal(meta_val) if meta_val else None
+            registro = CadastrarSubacao(
+                **base_kwargs,
+                codigo=pick_row(row, "codigo"),
+                municipios_entrega=pick_row(row, "municipios_entrega"),
+                meta_subacao=meta_dec,
+            )
+            registros.append(registro)
+            db.session.add(registro)
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar subacao: {exc}"}), 500
+
+    warning = ""
+    if edit_mode == "novo_municipio":
+        warning = (
+            "Novo municipio adicionado. Cadastre uma nova etapa e memoria de calculo em seguida."
+        )
+    return jsonify(
+        {
+            "subacoes": [_subacao_payload(r) for r in registros],
+            "count": len(registros),
+            "warning": warning or None,
+        }
+    )
 
 
 @home_bp.route("/api/subacao/<int:subacao_id>", methods=["PUT"])
@@ -3745,6 +4088,7 @@ def _calc_dotacao_saldo(
     elemento_variants = _codigo_variants(elemento)
     subelemento_variants = _codigo_variants(subelemento)
 
+    ug_norm = _normalize_ug(ug)
     plan21_filters = [Plan21Nger.ativo == True]  # noqa: E712
     if exercicio:
         plan21_filters.append(Plan21Nger.exercicio == exercicio)
@@ -3755,7 +4099,10 @@ def _calc_dotacao_saldo(
     if produto:
         plan21_filters.append(Plan21Nger.produto == produto)
     if ug:
-        plan21_filters.append(Plan21Nger.ug == ug)
+        if ug_norm and ug_norm != ug:
+            plan21_filters.append(or_(Plan21Nger.ug == ug, Plan21Nger.ug == ug_norm))
+        else:
+            plan21_filters.append(Plan21Nger.ug == ug)
     if uo:
         plan21_filters.append(Plan21Nger.uo == uo)
     if regiao:
@@ -3795,8 +4142,6 @@ def _calc_dotacao_saldo(
         dot_filters.append(Dotacao.acao_paoe == acao_paoe)
     if produto:
         dot_filters.append(Dotacao.produto == produto)
-    if ug:
-        dot_filters.append(Dotacao.ug == ug)
     if etapa:
         dot_filters.append(Dotacao.etapa == etapa)
     if natureza:
@@ -3824,6 +4169,7 @@ def _calc_dotacao_saldo(
             Dotacao.valor_ped_emp,
             Dotacao.subacao_entrega,
             Dotacao.chave_dotacao,
+            Dotacao.ug,
         )
         .filter(*dot_filters)
         .all()
@@ -3833,6 +4179,8 @@ def _calc_dotacao_saldo(
     if subacao_entrega:
         subacao_norm = _normalize_chave(subacao_entrega)
         dot_rows = [r for r in dot_rows if _normalize_chave(r.subacao_entrega) == subacao_norm]
+    if ug_norm:
+        dot_rows = [r for r in dot_rows if _normalize_ug(r.ug or "") == ug_norm]
 
     valor_dotacao = sum(
         (
@@ -3856,7 +4204,6 @@ def _calc_dotacao_saldo(
 
     programa_key = _normalize_codigo_num(programa)
     acao_paoe_key = _normalize_codigo_num(acao_paoe)
-    ug_norm = _normalize_ug(ug)
     uo_norm = _normalize_uo(uo)
     try:
         exercicio_int = int(str(exercicio).split(".")[0])
@@ -4062,12 +4409,7 @@ def _calc_dotacao_saldo(
     emp_count = len(emp_nums)
 
     saldo = valor_atual - valor_dotacao - valor_ped - valor_emp_liquido
-    dotacao_count = (
-        db.session.query(func.count(Dotacao.id))
-        .filter(*dot_filters)
-        .scalar()
-        or 0
-    )
+    dotacao_count = len(dot_rows)
     return {
         "saldo": saldo,
         "valor_atual": valor_atual,

@@ -107,7 +107,30 @@ def login():
 
             # Usa perfil_id como fonte de verdade.
             perfil_id = getattr(usuario, "perfil_id", None)
-            perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
+            perfil_nome = (getattr(usuario, "perfil", "") or "").strip()
+            try:
+                perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
+                if not perfil_row and perfil_nome:
+                    perfil_row = (
+                        Perfil.query.filter(
+                            func.lower(func.ltrim(func.rtrim(Perfil.nome))) == perfil_nome.lower()
+                        ).first()
+                    )
+                    if perfil_row and not perfil_id:
+                        usuario.perfil_id = perfil_row.id
+                        db.session.commit()
+            except (SQLAlchemyError, IndexError) as exc:
+                db.session.rollback()
+                current_app.logger.error(
+                    "Falha ao buscar perfil do usuario: %s (perfil_id=%s)",
+                    exc,
+                    perfil_id,
+                    exc_info=True,
+                )
+                if is_fetch:
+                    return {"error": "Falha ao validar perfil do usuario."}, 500
+                flash("Falha ao validar perfil do usuario.", "error")
+                return redirect(url_for("auth.login"))
             if not perfil_row:
                 _log_login(email, "erro", "perfil_id invalido no usuario")
                 if is_fetch:

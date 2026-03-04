@@ -1,674 +1,1369 @@
 <div class="grid" id="subacao-page"
+
      data-user-id="{{ user_id }}"
+
      data-user-nome="{{ user_nome }}">
+
   <div class="card no-print">
+
     <div class="card-title">Subação</div>
+
     <form id="form-subacao" class="form">
+
       <input type="hidden" id="subacao-id" />
+
       <div class="wizard-steps" id="subacao-steps">
+
         <button class="wizard-step-btn active" type="button" data-step="1">1. Chave do Planejamento</button>
+
         <button class="wizard-step-btn" type="button" data-step="2">2. Subação/Entrega</button>
+
         <button class="wizard-step-btn" type="button" data-step="3">3. Etapa</button>
+
       </div>
+
+
 
       <div class="wizard-step active" data-step="1">
+
         <div class="form-grid">
+
           <label class="field">
+
             <span>*Formulário</span>
+
             <select id="subacao-formulario" name="formulario" required>
+
               <option value="">Selecione...</option>
+
               <option value="cadastrar">Cadastrar</option>
+
               <option value="editar">Editar</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Exercício</span>
+
             <select id="subacao-exercicio" name="exercicio" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*UO</span>
+
             <select id="subacao-uo" name="unidade_orcamentaria" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Programa de Governo</span>
+
             <select id="subacao-programa" name="programa" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Ação/PAOE</span>
+
             <select id="subacao-acao" name="acao_paoe" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Responsável da Ação/PAOE</span>
+
             <select id="subacao-responsavel-acao" name="responsavel_acao" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Produto da Ação</span>
+
             <select id="subacao-produto-acao" name="produto_acao" required>
+
               <option value="">Carregando...</option>
+
             </select>
+
           </label>
+
         </div>
+
+
 
         <div class="form-section-title" id="subacao-chave-title">Chave do Planejamento</div>
+
         <div class="form-section" id="subacao-chave-section">
+
           <div class="form-grid">
+
             <label class="field">
+
               <span>*Região</span>
+
               <select id="subacao-regiao" name="regiao" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Subfunção</span>
+
               <select id="subacao-subfuncao" name="subfuncao" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*UG</span>
+
               <select id="subacao-ug" name="ug" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Adjunta</span>
+
               <select id="subacao-adj" name="adj" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Macropolítica</span>
+
               <select id="subacao-macropolitica" name="macropolitica" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Pilar</span>
+
               <select id="subacao-pilar" name="pilar" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Eixo</span>
+
               <select id="subacao-eixo" name="eixo" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Política Decreto</span>
+
               <select id="subacao-politica" name="politica_decr" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
             <label class="field">
+
               <span>*Público Transversal</span>
+
               <select id="subacao-publico" name="publico_transversal" required>
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
+
           </div>
+
         </div>
+
       </div>
 
+
+
         <div class="wizard-step" data-step="2">
+
           <div class="form-grid" id="subacao-cadastrar-grid">
+
           <label class="field">
+
             <span>*Chave do Planejamento</span>
+
             <input type="text" id="subacao-chave" name="chave_planejamento" readonly required />
+
           </label>
+
         <label class="field">
+
           <span>*Subação/Entrega</span>
+
           <input type="text" id="subacao-entrega" name="subacao_entrega" required />
+
           <div class="char-counter" id="subacao-entrega-counter">0/260</div>
+
         </label>
+
         <label class="field">
+
           <span>*Responsável da Subação/Entrega</span>
+
           <input type="text" id="subacao-responsavel" name="responsavel" required />
+
         </label>
+
         <label class="field">
+
           <span>*CPF do Responsável da Subação/Entrega</span>
+
           <input type="text" id="subacao-cpf" name="cpf_responsavel" inputmode="numeric" maxlength="14" required />
+
         </label>
+
         <label class="field">
+
           <span>*Data Início</span>
+
           <input type="text" id="subacao-data-inicio" name="prazo_inicio" placeholder="dd/mm/aaaa" required />
+
         </label>
+
         <label class="field">
+
           <span>*Data Final</span>
+
           <input type="text" id="subacao-data-fim" name="prazo_fim" placeholder="dd/mm/aaaa" required />
+
         </label>
+
           <label class="field">
+
             <span>*Unidade Gestora</span>
+
               <select id="subacao-unid-gestora" name="unid_gestora" required disabled data-readonly="1">
+
               <option value="">Selecione a unidade gestora</option>
+
             <option value="0001 - Sede">1 - Sede</option>
+
             <option value="0002 - Ensino Fundamental">2 - Ensino Fundamental</option>
+
             <option value="0003 - Ensino Médio">3 - Ensino Médio</option>
+
             <option value="0004 - Educ. Jovens e Adult">4 - Educ. Jovens e Adult</option>
+
             <option value="0005 - Educação Especial">5 - Educação Especial</option>
+
             <option value="0006 - Administração Geral">6 - Administração Geral</option>
+
             <option value="0007 - Transporte Escolar">7 - Transporte Escolar</option>
+
             <option value="0008 - Outr Modal Ens">8 - Outr Modal Ens</option>
+
             <option value="0009 - FMTE - Ensino Fundam">9 - FMTE - Ensino Fundam</option>
+
             <option value="0010 - FMTE - Educação Inf.">10 - FMTE - Educação Inf.</option>
+
           </select>
+
         </label>
+
         <label class="field">
+
           <span>*Unidade Setorial de Planejamento</span>
+
           <select id="subacao-unidade-setorial" name="unidade_setorial_planejamento" required>
+
             <option value="001 - Administração Geral">001 - Administração Geral</option>
+
           </select>
+
         </label>
+
         <label class="field">
+
           <span>*Produto da Subação</span>
+
           <select id="subacao-produto" name="produto_subacao" required>
+
             <option value="">Selecione o produto</option>
+
             <option value="0012 - Adesão realizada">0012 - Adesão realizada</option>
+
             <option value="0018 - Aluno atendido">0018 - Aluno atendido</option>
+
             <option value="0029 - Assessoramento realizado">0029 - Assessoramento realizado</option>
+
             <option value="0105 - Conselho mantido">0105 - Conselho mantido</option>
+
             <option value="0109 - Contratação realizada">0109 - Contratação realizada</option>
+
             <option value="0123 - Divulgação realizada">0123 - Divulgação realizada</option>
+
             <option value="0132 - Escola construída">0132 - Escola construída</option>
+
             <option value="0134 - Escola reformada e ampliada">0134 - Escola reformada e ampliada</option>
+
             <option value="0139 - Evento realizado">0139 - Evento realizado</option>
+
             <option value="0148 - Imóvel locado">0148 - Imóvel locado</option>
+
             <option value="0155 - Infraestrutura Mantida">0155 - Infraestrutura Mantida</option>
+
             <option value="0162 - Inventário realizado">0162 - Inventário realizado</option>
+
             <option value="0182 - Manutenção realizada">0182 - Manutenção realizada</option>
+
             <option value="0183 - Mão de obra credenciada">0183 - Mão de obra credenciada</option>
+
             <option value="0186 - Mapeamento elaborado">0186 - Mapeamento elaborado</option>
+
             <option value="0189 - Material adquirido">0189 - Material adquirido</option>
+
             <option value="0219 - Oficina realizada">0219 - Oficina realizada</option>
+
             <option value="0233 - Parceria firmada">0233 - Parceria firmada</option>
+
             <option value="0294 - Reunião realizada">0294 - Reunião realizada</option>
+
             <option value="0302 - Sistema desenvolvido">0302 - Sistema desenvolvido</option>
+
             <option value="0304 - Sistema implantado">0304 - Sistema implantado</option>
+
             <option value="0311 - Suporte realizado">0311 - Suporte realizado</option>
+
             <option value="0323 - Unidade aparelhada">0323 - Unidade aparelhada</option>
+
             <option value="0324 - Unidade Construída para Quadra">0324 - Unidade Construída para Quadra</option>
+
             <option value="0343 - Pagamento realizado">0343 - Pagamento realizado</option>
+
             <option value="0346 - Unidade Atendida">0346 - Unidade Atendida</option>
+
             <option value="0352 - Acervo Digitalizado">0352 - Acervo Digitalizado</option>
+
             <option value="0364 - Serviço prestado">0364 - Serviço prestado</option>
+
             <option value="0395 - Projeto Atendido">0395 - Projeto Atendido</option>
+
             <option value="0404 - Monitoramento realizado">0404 - Monitoramento realizado</option>
+
             <option value="0409 - Quadro de pessoal adequado">0409 - Quadro de pessoal adequado</option>
+
             <option value="0413 - Recolhimento realizado">0413 - Recolhimento realizado</option>
+
             <option value="0415 - Programa implantado">0415 - Programa implantado</option>
+
             <option value="0431 - Ação desenvolvida">0431 - Ação desenvolvida</option>
+
             <option value="0462 - Transferência efetuada">0462 - Transferência efetuada</option>
+
             <option value="0503 - Apoio prestado">0503 - Apoio prestado</option>
+
             <option value="0509 - Gestão de Portfólio, Programas e Projetos">0509 - Gestão de Portfólio, Programas e Projetos</option>
+
             <option value="0531 - Produto exclusivo para Emendas Parlamentares">0531 - Produto exclusivo para Emendas Parlamentares</option>
+
             <option value="0559 - Escola atendida">0559 - Escola atendida</option>
+
             <option value="0623 - Serviços de Transportes">0623 - Serviços de Transportes</option>
+
             <option value="0675 - Diárias disponibilizadas">0675 - Diárias disponibilizadas</option>
+
           </select>
+
         </label>
+
           <label class="field">
+
             <span>*Unidade de Medida</span>
+
             <select id="subacao-unidade-medida" name="unidade_medida" required>
+
               <option value="">Selecione a unidade</option>
+
               <option value="Percentual">Percentual</option>
+
               <option value="Unidade">Unidade</option>
+
             </select>
+
           </label>
+
         <label class="field">
+
           <span>*Região da Subação/Entrega</span>
+
             <select id="subacao-regiao-entrega" name="regiao_subacao" required disabled data-readonly="1">
+
             <option value="">Carregando...</option>
+
           </select>
+
         </label>
+
         <label class="field">
+
           <span>*Código do Município</span>
+
           <select id="subacao-codigo" name="codigo" required>
+
             <option value="">Carregando...</option>
+
           </select>
+
         </label>
+
         <label class="field">
+
           <span>*Município de Entrega</span>
+
           <select id="subacao-municipio" name="municipios_entrega" required>
+
             <option value="">Carregando...</option>
+
           </select>
+
         </label>
+
         <label class="field">
+
           <span>*Meta da Subação/Entrega</span>
+
           <input type="text" id="subacao-meta" name="meta_subacao" required />
+
         </label>
+
         <div class="field field-inline align-end">
+
           <button class="btn btn-secondary sm" type="button" id="subacao-municipio-add">Adicionar Município</button>
+
         </div>
+
           <label class="field">
+
             <span>*Detalhamento do Produto</span>
+
             <textarea id="subacao-detalhamento" name="detalhamento_produto" rows="2" required></textarea>
+
           </label>
+
           </div>
+
+          <div class="form-section" id="subacao-edit-questions" style="display:none;">
+
+          <div class="form-section-title">Perguntas da Edição</div>
+            <div class="form-grid">
+
+              <div class="field">
+
+                <span>Deseja alterar o nome da Subação</span>
+                <div class="field-radio-group">
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_subacao" value="nao" />
+
+                    <span>Não</span>
+                  </label>
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_subacao" value="sim" />
+
+                    <span>Sim</span>
+
+                  </label>
+
+                </div>
+
+              </div>
+
+              <div class="field">
+
+                <span>Deseja alterar o nome do Responsável</span>
+                <div class="field-radio-group">
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_responsavel" value="nao" />
+
+                    <span>Não</span>
+                  </label>
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_responsavel" value="sim" />
+
+                    <span>Sim</span>
+
+                  </label>
+
+                </div>
+
+              </div>
+
+              <div class="field">
+
+                <span>Deseja alterar o produto da Subação</span>
+                <div class="field-radio-group">
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_produto" value="nao" />
+
+                    <span>Não</span>
+                  </label>
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_produto" value="sim" />
+
+                    <span>Sim</span>
+
+                  </label>
+
+                </div>
+
+              </div>
+
+              <div class="field">
+
+                <span>Deseja acrescentar Novo Município</span>
+                <div class="field-radio-group">
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_municipio" value="nao" />
+
+                    <span>Não</span>
+                  </label>
+
+                  <label class="field-radio">
+
+                    <input type="radio" name="subacao_edit_q_municipio" value="sim" />
+
+                    <span>Sim</span>
+
+                  </label>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
           <div class="form-grid" id="subacao-editar-grid" style="display:none;">
-            <label class="field">
+
+            <label class="field" data-edit-group="core">
+
               <span>*Chave do Planejamento</span>
+
               <select id="subacao-edit-chave" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="core">
+
               <span>*Subação/Entrega</span>
+
               <select id="subacao-edit-subacao-select" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="subacao_name">
+
               <span>*Subação/Entrega (Editar)</span>
-              <textarea id="subacao-edit-subacao-input" rows="2" required></textarea>
+
+              <textarea id="subacao-edit-subacao-input" rows="2"></textarea>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="core">
+
               <span>*Responsável da Subação/Entrega</span>
+
               <select id="subacao-edit-responsavel-select" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="subacao_name responsavel_name produto_subacao novo_municipio">
+
               <span>*Responsável da Subação/Entrega (Editar)</span>
-              <textarea id="subacao-edit-responsavel-input" rows="2" required></textarea>
+
+              <textarea id="subacao-edit-responsavel-input" rows="2"></textarea>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="subacao_name responsavel_name">
+
               <span>*CPF do Responsável da Subação/Entrega</span>
-              <input type="text" id="subacao-edit-cpf" inputmode="numeric" maxlength="14" required />
+
+              <input type="text" id="subacao-edit-cpf" inputmode="numeric" maxlength="14" />
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="produto_subacao novo_municipio">
+
               <span>*Prazo</span>
-              <select id="subacao-edit-prazo" class="field-disabled" required disabled data-readonly="soft">
+
+              <select id="subacao-edit-prazo" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="produto_subacao novo_municipio">
+
               <span>*Unidade Gestora</span>
-              <select id="subacao-edit-unid-gestora" class="field-disabled" required disabled data-readonly="soft">
+
+              <select id="subacao-edit-unid-gestora" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="produto_subacao novo_municipio">
+
               <span>*Unidade Setorial de Planejamento</span>
-              <select id="subacao-edit-unidade-setorial" class="field-disabled" required disabled data-readonly="soft">
+
+              <select id="subacao-edit-unidade-setorial" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="produto_subacao novo_municipio">
+
               <span>*Produto da Subação</span>
+
               <select id="subacao-edit-produto-select" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="produto_subacao">
+
               <span>*Produto da Subação (Editar)</span>
-              <select id="subacao-edit-produto-input" required>
+
+              <select id="subacao-edit-produto-input">
+
                 <option value="">Selecione o produto</option>
+
                 <option value="0012 - Adesão realizada">0012 - Adesão realizada</option>
+
                 <option value="0018 - Aluno atendido">0018 - Aluno atendido</option>
+
                 <option value="0029 - Assessoramento realizado">0029 - Assessoramento realizado</option>
+
                 <option value="0105 - Conselho mantido">0105 - Conselho mantido</option>
+
                 <option value="0109 - Contratação realizada">0109 - Contratação realizada</option>
+
                 <option value="0123 - Divulgação realizada">0123 - Divulgação realizada</option>
+
                 <option value="0132 - Escola construída">0132 - Escola construída</option>
+
                 <option value="0134 - Escola reformada e ampliada">0134 - Escola reformada e ampliada</option>
+
                 <option value="0139 - Evento realizado">0139 - Evento realizado</option>
+
                 <option value="0148 - Imóvel locado">0148 - Imóvel locado</option>
+
                 <option value="0155 - Infraestrutura Mantida">0155 - Infraestrutura Mantida</option>
+
                 <option value="0162 - Inventário realizado">0162 - Inventário realizado</option>
+
                 <option value="0182 - Manutenção realizada">0182 - Manutenção realizada</option>
+
                 <option value="0183 - Mão de obra credenciada">0183 - Mão de obra credenciada</option>
+
                 <option value="0186 - Mapeamento elaborado">0186 - Mapeamento elaborado</option>
+
                 <option value="0189 - Material adquirido">0189 - Material adquirido</option>
+
                 <option value="0219 - Oficina realizada">0219 - Oficina realizada</option>
+
                 <option value="0233 - Parceria firmada">0233 - Parceria firmada</option>
+
                 <option value="0294 - Reunião realizada">0294 - Reunião realizada</option>
+
                 <option value="0302 - Sistema desenvolvido">0302 - Sistema desenvolvido</option>
+
                 <option value="0304 - Sistema implantado">0304 - Sistema implantado</option>
+
                 <option value="0311 - Suporte realizado">0311 - Suporte realizado</option>
+
                 <option value="0323 - Unidade aparelhada">0323 - Unidade aparelhada</option>
-                <option value="0324 - Unidade Construída para Quadra">0324 - Unidade Construída para Quadra</option>
+
+                <option value="0324 - Unidade Construda para Quadra">0324 - Unidade Construda para Quadra</option>
+
                 <option value="0343 - Pagamento realizado">0343 - Pagamento realizado</option>
+
                 <option value="0346 - Unidade Atendida">0346 - Unidade Atendida</option>
+
                 <option value="0352 - Acervo Digitalizado">0352 - Acervo Digitalizado</option>
+
                 <option value="0364 - Serviço prestado">0364 - Serviço prestado</option>
+
                 <option value="0395 - Projeto Atendido">0395 - Projeto Atendido</option>
+
                 <option value="0404 - Monitoramento realizado">0404 - Monitoramento realizado</option>
+
                 <option value="0409 - Quadro de pessoal adequado">0409 - Quadro de pessoal adequado</option>
+
                 <option value="0413 - Recolhimento realizado">0413 - Recolhimento realizado</option>
+
                 <option value="0415 - Programa implantado">0415 - Programa implantado</option>
-                <option value="0431 - Ação desenvolvida">0431 - Ação desenvolvida</option>
+
+                <option value="0431 - Ao desenvolvida">0431 - Ao desenvolvida</option>
+
                 <option value="0462 - Transferência efetuada">0462 - Transferência efetuada</option>
+
                 <option value="0503 - Apoio prestado">0503 - Apoio prestado</option>
+
                 <option value="0509 - Gestão de Portfólio, Programas e Projetos">0509 - Gestão de Portfólio, Programas e Projetos</option>
+
                 <option value="0531 - Produto exclusivo para Emendas Parlamentares">0531 - Produto exclusivo para Emendas Parlamentares</option>
+
                 <option value="0559 - Escola atendida">0559 - Escola atendida</option>
+
                 <option value="0623 - Serviços de Transportes">0623 - Serviços de Transportes</option>
+
                 <option value="0675 - Diárias disponibilizadas">0675 - Diárias disponibilizadas</option>
+
               </select>
+
             </label>
-            <label class="field">
-              <span>*Unidade de Medida</span>
-              <select id="subacao-edit-unidade-medida" class="field-disabled" required disabled data-readonly="soft">
-                <option value="">Selecione...</option>
-              </select>
-            </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="novo_municipio">
+
               <span>*Região da Subação/Entrega</span>
-              <select id="subacao-edit-regiao" class="field-disabled" required disabled data-readonly="soft">
+
+              <select id="subacao-edit-regiao" required>
+
                 <option value="">Selecione...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="novo_municipio">
+
               <span>*Código do Município</span>
-              <select id="subacao-edit-codigo" required disabled data-readonly="soft">
-                <option value="">Selecione...</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>*Município de Entrega</span>
-              <select id="subacao-edit-municipio" required disabled data-readonly="soft">
-                <option value="">Selecione...</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>*Meta da Subação/Entrega</span>
-              <select id="subacao-edit-meta" required disabled data-readonly="soft">
-                <option value="">Selecione...</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>*Detalhamento do Produto</span>
-              <select id="subacao-edit-detalhamento-select" required>
-                <option value="">Selecione...</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>*Detalhamento do Produto (Editar)</span>
-              <textarea id="subacao-edit-detalhamento-input" rows="2" required></textarea>
-            </label>
-          </div>
-          <div class="field" id="subacao-edit-municipio-toggle" style="display:none;">
-            <span>*Deseja alterar o Município?</span>
-            <div class="field-radio-group">
-              <label class="field-radio">
-                <input type="radio" name="edit_municipio_change" value="nao" checked />
-                <span>Não</span>
-              </label>
-              <label class="field-radio">
-                <input type="radio" name="edit_municipio_change" value="sim" />
-                <span>Sim</span>
-              </label>
-            </div>
-          </div>
-          <div id="subacao-edit-municipio-wrap" style="display:none;">
-            <label class="field">
-              <span>*Código do Município</span>
+
               <select id="subacao-edit-codigo-novo">
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="novo_municipio">
+
               <span>*Município de Entrega</span>
+
               <select id="subacao-edit-municipio-novo">
+
                 <option value="">Carregando...</option>
+
               </select>
+
             </label>
-            <label class="field">
+
+            <label class="field" data-edit-group="novo_municipio">
+
               <span>*Meta da Subação/Entrega</span>
+
               <input type="text" id="subacao-edit-meta-novo" />
+
             </label>
-            <div class="actions">
+
+            <div class="field field-inline align-end" data-edit-group="novo_municipio">
+
               <button class="btn btn-secondary sm" type="button" id="subacao-edit-municipio-add">Adicionar Município</button>
+
             </div>
-            <div class="municipio-list" id="subacao-edit-municipio-list-wrap">
+
+            <label class="field" data-edit-group="all">
+
+              <span>*Justificativa</span>
+
+              <textarea id="subacao-edit-justificativa" rows="3"></textarea>
+
+            </label>
+
+            <label class="field" data-edit-group="all">
+
+              <span>*Responsável pelo NGER</span>
+
+              <input type="text" id="subacao-edit-responsavel-nger" />
+
+            </label>
+
+            <div class="municipio-list field-full" id="subacao-edit-municipio-list-wrap" data-edit-group="novo_municipio">
+
               <div class="municipio-list-head">Municípios adicionados</div>
+
               <div class="municipio-list-body" id="subacao-edit-municipio-list"></div>
+
             </div>
+
           </div>
 
         <div class="municipio-list" id="subacao-municipio-list-wrap">
+
           <div class="municipio-list-head">Municípios adicionados</div>
+
           <div class="municipio-list-body" id="subacao-municipio-list"></div>
+
         </div>
+
       </div>
+
+
 
       <div class="wizard-step" data-step="3">
+
         <div class="form-grid">
+
           <label class="field">
+
             <span>*Município</span>
+
             <select id="subacao-etapa-municipio" required>
+
               <option value="">Selecione...</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Nome da Etapa</span>
+
             <input type="text" id="subacao-etapa" name="etapa" required />
+
             <div class="char-counter" id="subacao-etapa-counter">0/260</div>
+
           </label>
+
           <label class="field">
+
             <span>*Responsável de Etapa</span>
+
             <input type="text" id="subacao-responsavel-etapa" name="responsavel_etapa" required />
+
           </label>
+
           <label class="field">
+
             <span>*CPF do Responsável da Etapa</span>
+
             <input type="text" id="subacao-cpf-etapa" name="cpf_responsavel_etapa" inputmode="numeric" maxlength="14" required />
+
           </label>
+
           <label class="field">
+
             <span>*Região da Memória de Cálculo</span>
+
             <input type="text" id="subacao-regiao-memoria" name="regiao_memoria" readonly required />
+
           </label>
+
           <label class="field">
+
             <span>*Natureza de Despesa</span>
+
             <input type="text" id="subacao-natureza" name="natureza" required />
+
           </label>
+
             <div class="field">
-              <span>*Fonte de Superávit?</span>
+
+              <span>*Fonte de Superávit</span>
+
               <div class="field-radio-group">
+
                 <label class="field-radio">
+
                   <input type="radio" name="fonte_superavit" value="nao" checked required />
+
                   <span>Não</span>
+
                 </label>
+
                 <label class="field-radio">
+
                   <input type="radio" name="fonte_superavit" value="sim" required />
+
                   <span>Sim</span>
+
                 </label>
+
               </div>
+
             </div>
+
           <label class="field">
+
             <span>*Fonte</span>
+
             <select id="subacao-fonte" name="fonte" required>
+
               <option value="">Selecione</option>
+
               <option>15000000 - Recursos não vinculados de Impostos</option>
+
               <option>15001001 - Recursos destinados à Manutenção e Desenvolvimento do Ensino</option>
+
               <option>15010000 - Outros Recursos não Vinculados</option>
+
               <option>15010100 - Outros Recursos não vinculados destinados ao Tesouro</option>
+
               <option>15021001 - Recursos não vinculados da compensação de impostos - Destinado ao Ensino</option>
+
               <option>15400000 - Transferência de recursos do FUNDEB desenvolvimento do Ensino</option>
+
               <option>15401070 - Transferência de recursos do FUNDEB Remuneração Educação Básica</option>
+
               <option>15401071 - Transferência de recursos do FUNDEB - Ensino em Tempo Integral (ETI)</option>
+
               <option>15401072 - Transferência de recursos do FUNDEB - Remuneração Profissionais ETI</option>
+
               <option>15460000 - Transferências do FUNDEB - Complementação da União - ETI</option>
+
               <option>15500000 - Recursos da Contribuição ao Salário Educação</option>
+
               <option>15510000 - Transferências de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)</option>
+
               <option>15520000 - Transferências de Recursos do FNDE referente ao Programa Nacional de Alimentação Escolar (PNAE)</option>
+
               <option>15530000 - Transferências de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)</option>
+
               <option>15690000 - Outras Transferências de Recursos do FNDE</option>
+
               <option>15700000 - Transferências do Governo Federal ref. a Convênios e outros Repasses vinculados à Educação</option>
+
               <option>15703110 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Individual</option>
+
               <option>15703120 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Bancada</option>
+
               <option>15740000 - Recursos de Operações de Crédito Educação</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Iduso</span>
+
             <select id="subacao-iduso" name="idu" required>
+
               <option value="">Selecione...</option>
+
               <option>01 - OUTRAS DESPESAS - OD</option>
+
               <option>02 - CONTRAPARTIDA DE CONVÊNIOS - RCC</option>
+
               <option>03 - DESPESAS OBRIGATÓRIAS - DO</option>
+
               <option>04 - CONTRATOS DIVERSOS - CD</option>
+
               <option>06 - EMENDAS DE BANCADA - Em-Bancada</option>
+
               <option>07 - EMENDAS PARLAMENTARES IMPOSITIVAS - EPI</option>
+
               <option>08 - EMENDAS PARLAMENTARES - DEMAIS ORIGENS - EP-DmO</option>
+
               <option>10 - PROFISCO PRINCIPAL - PRF PR</option>
+
               <option>11 - PROFISCO CONTRAPARTIDA - PRF CTRP</option>
+
               <option>12 - PROGESTÃO PRINCIPAL - PROG PR</option>
+
               <option>13 - OPERAÇÕES DE CRÉDITOS - Opr Créd</option>
+
               <option>14 - PRIORIDADE DE GOVERNO - PG</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Descrição do Item de Despesa</span>
+
             <textarea id="subacao-descricao" name="descricao" rows="3" style="resize:vertical;" required></textarea>
+
           </label>
+
           <label class="field">
+
             <span>*Unid. Medida</span>
+
             <select id="subacao-unidade-etapa" name="unidade_etapa" required>
+
               <option value="">Selecione</option>
+
               <option>Percentual</option>
+
               <option>Real (R$)</option>
+
               <option>Unidade</option>
+
             </select>
+
           </label>
+
           <label class="field">
+
             <span>*Quantidade</span>
+
             <input type="text" id="subacao-quantidade" name="quantidade" required />
+
           </label>
+
           <label class="field">
+
             <span>*Valor Unitário</span>
+
             <input type="text" id="subacao-valor-unitario" name="valor_unitario" required />
+
           </label>
+
           <label class="field">
+
             <span>*Valor Total</span>
+
             <input type="text" id="subacao-valor-total" name="valor_total" readonly required />
+
           </label>
+
           <label class="field">
+
             <span>*Justificativa Inclusão</span>
+
             <textarea id="subacao-justificativa" name="justificativa" rows="3" style="resize:vertical;" required></textarea>
+
           </label>
+
           <label class="field">
+
             <span>*Responsável pelo NGER</span>
+
             <input type="text" id="subacao-responsavel-nger" name="responsavel_nger" required />
+
           </label>
+
         </div>
+
           <div class="actions etapa-actions">
+
             <button class="btn btn-secondary sm" type="button" id="subacao-add-etapa">Adicionar + Etapa</button>
+
           </div>
+
         <div class="etapa-list" id="subacao-etapa-list-wrap">
+
           <div class="etapa-list-head">Etapas adicionadas</div>
+
           <div class="etapa-list-body" id="subacao-etapa-list"></div>
+
         </div>
+
       </div>
+
       <div class="actions">
+
         <button class="btn btn-secondary sm" type="button" id="subacao-prev">Voltar</button>
+
         <button class="btn btn-primary sm" type="button" id="subacao-next">Próximo</button>
+
         <button class="btn btn-primary sm" type="submit" id="subacao-save">Salvar</button>
+
         <button class="btn btn-danger sm" type="button" id="subacao-clear">Limpar Formulário</button>
+
         <div id="subacao-msg" class="muted"></div>
+
       </div>
+
     </form>
+
   </div>
 
+
+
   <div class="card">
+
     <div class="dotacao-summary no-print" id="subacao-summary">
+
       <div class="table-responsive">
+
         <table class="table" id="subacao-summary-table">
+
           <thead>
+
             <tr>
+
               <th>Exercício</th>
+
               <th>UO</th>
+
               <th>Programa</th>
+
               <th>Ação/PAOE</th>
+
               <th>Subação/Entrega</th>
+
               <th>Chave do Planejamento</th>
+
               <th>Responsável</th>
+
               <th>Prazo</th>
+
               <th>Unidade Gestora</th>
+
               <th>Produto Subação</th>
+
               <th>Meta</th>
+
             </tr>
+
           </thead>
+
           <tbody>
+
             {% for s in subacoes %}
+
             <tr class="dotacao-summary-row"
+
                 data-id="{{ s.id }}"
+
                 data-exercicio="{{ s.exercicio }}"
+
                 data-uo="{{ s.unidade_orcamentaria or '' }}"
+
                 data-programa="{{ s.programa or '' }}"
+
                 data-acao-paoe="{{ s.acao_paoe or '' }}"
+
                 data-responsavel-acao="{{ s.responsavel_acao or '' }}"
+
                 data-produto-acao="{{ s.produto_acao or '' }}"
+
                 data-chave="{{ s.chave_planejamento or '' }}"
+
                 data-subacao-entrega="{{ s.subacao_entrega or '' }}"
+
                 data-responsavel="{{ s.responsavel or '' }}"
+
                 data-cpf="{{ s.cpf_responsavel or '' }}"
+
                 data-prazo="{{ s.prazo or '' }}"
+
                 data-unid-gestora="{{ s.unid_gestora or '' }}"
+
                 data-unidade-setorial="{{ s.unidade_setorial_planejamento or '' }}"
+
                 data-produto-subacao="{{ s.produto_subacao or '' }}"
+
                 data-unidade-medida="{{ s.unidade_medida or '' }}"
+
                 data-regiao-subacao="{{ s.regiao_subacao or '' }}"
+
                 data-codigo="{{ s.codigo or '' }}"
+
                 data-municipio="{{ s.municipios_entrega or '' }}"
+
                 data-meta="{{ s.meta_subacao or '' }}"
+
                 data-detalhamento="{{ s.detalhamento_produto or '' }}"
+
                 data-etapa="{{ s.etapa or '' }}"
+
                 data-responsavel-etapa="{{ s.responsavel_etapa or '' }}"
+
                 data-cpf-responsavel-etapa="{{ s.cpf_responsavel_etapa or '' }}"
+
                 data-regiao-memoria="{{ s.regiao_memoria or '' }}"
+
                 data-natureza="{{ s.natureza or '' }}"
+
                 data-fonte="{{ s.fonte or '' }}"
+
                 data-idu="{{ s.idu or '' }}"
+
                 data-descricao="{{ s.descricao or '' }}"
+
                 data-unidade-etapa="{{ s.unidade_etapa or '' }}"
+
                 data-quantidade="{{ s.quantidade or '' }}"
+
                 data-valor-unitario="{{ s.valor_unitario or '' }}"
+
                 data-valor-total="{{ s.valor_total or '' }}"
+
                 data-justificativa="{{ s.justificativa or '' }}"
+
                 data-responsavel-nger="{{ s.responsavel_nger or '' }}">
+
               <td>{{ s.exercicio }}</td>
+
               <td>{{ s.unidade_orcamentaria }}</td>
+
               <td>{{ s.programa }}</td>
+
               <td>{{ s.acao_paoe }}</td>
+
               <td>{{ s.subacao_entrega }}</td>
+
               <td>{{ s.chave_planejamento }}</td>
+
               <td>{{ s.responsavel }}</td>
+
               <td>{{ s.prazo }}</td>
+
               <td>{{ s.unid_gestora }}</td>
+
               <td>{{ s.produto_subacao }}</td>
+
               <td>{{ s.meta_subacao }}</td>
+
             </tr>
+
             {% endfor %}
+
           </tbody>
+
         </table>
+
       </div>
+
       <div class="table-foot no-print">
+
         <div class="page-size">
+
           <label for="subacao-page-size">Itens por página</label>
+
           <select id="subacao-page-size" class="input">
+
             <option value="10">10</option>
+
             <option value="20" selected>20</option>
+
             <option value="50">50</option>
+
             <option value="100">100</option>
+
           </select>
+
         </div>
+
         <div id="subacao-pagination" class="pagination"></div>
+
       </div>
+
     </div>
+
     <div class="actions no-print dotacao-actions">
+
       <button class="btn btn-secondary sm" type="button" id="subacao-edit">Editar</button>
+
       <button class="btn btn-danger sm" type="button" id="subacao-delete">Excluir</button>
+
       <button class="btn btn-primary sm" type="button" id="subacao-print">Imprimir</button>
+
     </div>
+
   </div>
+
 </div>
+

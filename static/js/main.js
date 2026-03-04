@@ -8022,7 +8022,7 @@
     const prevBtn = document.getElementById("subacao-prev");
     const nextBtn = document.getElementById("subacao-next");
     const saveBtn = document.getElementById("subacao-save");
-    const totalSteps = stepPanels.length || 1;
+    let totalSteps = stepPanels.length || 1;
     let currentStep = 1;
 
     const modeSelect = document.getElementById("subacao-formulario");
@@ -8105,21 +8105,17 @@
     const editUnidadeSetorialSelect = document.getElementById("subacao-edit-unidade-setorial");
     const editProdutoSelect = document.getElementById("subacao-edit-produto-select");
     const editProdutoInput = document.getElementById("subacao-edit-produto-input");
-    const editUnidadeMedidaSelect = document.getElementById("subacao-edit-unidade-medida");
     const editRegiaoSelect = document.getElementById("subacao-edit-regiao");
-    const editCodigoSelect = document.getElementById("subacao-edit-codigo");
-    const editMunicipioSelect = document.getElementById("subacao-edit-municipio");
-    const editMetaSelect = document.getElementById("subacao-edit-meta");
-    const editDetalhamentoSelect = document.getElementById("subacao-edit-detalhamento-select");
-    const editDetalhamentoInput = document.getElementById("subacao-edit-detalhamento-input");
-    const editMunicipioToggle = document.getElementById("subacao-edit-municipio-toggle");
-    const editMunicipioWrap = document.getElementById("subacao-edit-municipio-wrap");
     const editMunicipioAddBtn = document.getElementById("subacao-edit-municipio-add");
     const editMunicipioListWrap = document.getElementById("subacao-edit-municipio-list-wrap");
     const editMunicipioListEl = document.getElementById("subacao-edit-municipio-list");
     const editCodigoNovoSelect = document.getElementById("subacao-edit-codigo-novo");
     const editMunicipioNovoSelect = document.getElementById("subacao-edit-municipio-novo");
     const editMetaNovoInput = document.getElementById("subacao-edit-meta-novo");
+      const editQuestions = document.getElementById("subacao-edit-questions");
+      const editJustificativaInput = document.getElementById("subacao-edit-justificativa");
+      const editResponsavelNgerInput = document.getElementById("subacao-edit-responsavel-nger");
+      let pendingEditPref = null;
 
     const summaryBody = document.querySelector("#subacao-summary-table tbody");
     const pageSizeSelect = document.getElementById("subacao-page-size");
@@ -8153,10 +8149,9 @@
       if (chaveSection) chaveSection.style.display = isEdit ? "none" : "";
       if (cadastrarGrid) cadastrarGrid.style.display = isEdit ? "none" : "";
       if (editarGrid) editarGrid.style.display = isEdit ? "" : "none";
+      if (editQuestions) editQuestions.style.display = isEdit ? "" : "none";
       if (municipioListWrap) municipioListWrap.style.display = isEdit ? "none" : "";
       if (municipioAddBtn) municipioAddBtn.style.display = isEdit ? "none" : "";
-      if (editMunicipioToggle) editMunicipioToggle.style.display = isEdit ? "" : "none";
-      if (editMunicipioWrap) editMunicipioWrap.style.display = "none";
 
       const toggleFields = (root, enable) => {
         if (!root) return;
@@ -8172,33 +8167,239 @@
       toggleFields(chaveSection, !isEdit);
       toggleFields(cadastrarGrid, !isEdit);
       toggleFields(editarGrid, isEdit);
+      updateStepVisibility();
+      if (isEdit) syncEditMode();
+    };
+
+    const editGroupEls = editarGrid ? Array.from(editarGrid.querySelectorAll("[data-edit-group]")) : [];
+    const getEditQuestionValue = (name) =>
+      form.querySelector(`input[name="${name}"]:checked`)?.value || "";
+    const setEditQuestionValue = (name, value) => {
+      const el = form.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (el) el.checked = true;
+    };
+    const getEditModeKey = () => {
+      if (getEditQuestionValue("subacao_edit_q_subacao") === "sim") return "subacao_name";
+      if (getEditQuestionValue("subacao_edit_q_responsavel") === "sim") return "responsavel_name";
+      if (getEditQuestionValue("subacao_edit_q_produto") === "sim") return "produto_subacao";
+      if (getEditQuestionValue("subacao_edit_q_municipio") === "sim") return "novo_municipio";
+      return "";
+    };
+    const setEditGroupVisibility = (modeKey) => {
+      if (!editarGrid) return;
+      const active = new Set();
+      if (modeKey) {
+        active.add("core");
+        active.add("all");
+        active.add(modeKey);
+      }
+      editGroupEls.forEach((el) => {
+        const groups = String(el.dataset.editGroup || "").split(/\s+/).filter(Boolean);
+        const show = groups.some((g) => active.has(g));
+        el.style.display = show ? "" : "none";
+        el.querySelectorAll("input, select, textarea").forEach((field) => {
+          field.disabled = !show;
+        });
+      });
+      if (modeKey === "produto_subacao" || modeKey === "novo_municipio") {
+        const lockTargets = [
+          editResponsavelSelect,
+          editPrazoSelect,
+          editUnidGestoraSelect,
+          editUnidadeSetorialSelect,
+          editProdutoSelect,
+          editRegiaoSelect,
+        ];
+        lockTargets.forEach((el) => {
+          if (!el) return;
+          el.disabled = true;
+        });
+        const responsavelEditField = editResponsavelInput?.closest(".field");
+        if (responsavelEditField) {
+          responsavelEditField.style.display = "none";
+          editResponsavelInput.disabled = true;
+        }
+      } else {
+        const lockTargets = [
+          editResponsavelSelect,
+          editPrazoSelect,
+          editUnidGestoraSelect,
+          editUnidadeSetorialSelect,
+          editProdutoSelect,
+          editRegiaoSelect,
+        ];
+        lockTargets.forEach((el) => {
+          if (!el) return;
+          const wrap = el.closest(".field");
+          if (wrap && wrap.style.display === "none") return;
+          el.disabled = false;
+        });
+      }
+    };
+    const setEditRequiredFields = (modeKey) => {
+      const allFields = [
+        editSubacaoInput,
+        editResponsavelInput,
+        editCpfInput,
+        editPrazoSelect,
+        editUnidGestoraSelect,
+        editUnidadeSetorialSelect,
+        editProdutoSelect,
+        editProdutoInput,
+        editRegiaoSelect,
+        editCodigoNovoSelect,
+        editMunicipioNovoSelect,
+        editMetaNovoInput,
+        editJustificativaInput,
+        editResponsavelNgerInput,
+      ];
+      allFields.forEach((el) => {
+        if (el) el.required = false;
+      });
+      const requiredMap = {
+        subacao_name: [
+          editSubacaoInput,
+          editResponsavelInput,
+          editCpfInput,
+          editJustificativaInput,
+          editResponsavelNgerInput,
+        ],
+        responsavel_name: [
+          editResponsavelInput,
+          editCpfInput,
+          editJustificativaInput,
+          editResponsavelNgerInput,
+        ],
+        produto_subacao: [
+          editProdutoSelect,
+          editProdutoInput,
+          editJustificativaInput,
+          editResponsavelNgerInput,
+        ],
+        novo_municipio: [
+          editResponsavelInput,
+          editPrazoSelect,
+          editUnidGestoraSelect,
+          editUnidadeSetorialSelect,
+          editProdutoSelect,
+          editRegiaoSelect,
+          editCodigoNovoSelect,
+          editMunicipioNovoSelect,
+          editMetaNovoInput,
+          editJustificativaInput,
+          editResponsavelNgerInput,
+        ],
+      };
+      const required = requiredMap[modeKey] || [];
+      required.forEach((el) => {
+        if (el) el.required = true;
+      });
+    };
+      const syncEditMode = () => {
+        const modeKey = getEditModeKey();
+        updateQuestionVisibility();
+        setEditGroupVisibility(modeKey);
+        setEditRequiredFields(modeKey);
+        updateEditMunicipioRequired();
+        if (modeKey !== "novo_municipio") {
+          editMunicipioItems.length = 0;
+          renderEditMunicipioList();
+        }
+        return modeKey;
     };
 
     if (modeSelect) {
       modeSelect.addEventListener("change", () => {
         toggleMode();
         if ((modeSelect.value || "").toLowerCase() === "editar") {
+          resetEditQuestions();
+          updateQuestionVisibility();
           loadEditOptions();
         }
+        syncEditMode();
       });
     }
+
+    const editQuestionNames = [
+      "subacao_edit_q_subacao",
+      "subacao_edit_q_responsavel",
+      "subacao_edit_q_produto",
+      "subacao_edit_q_municipio",
+    ];
+    const editQuestionFields = {
+      subacao: form.querySelector('input[name="subacao_edit_q_subacao"]')?.closest(".field"),
+      responsavel: form
+        .querySelector('input[name="subacao_edit_q_responsavel"]')
+        ?.closest(".field"),
+      produto: form.querySelector('input[name="subacao_edit_q_produto"]')?.closest(".field"),
+      municipio: form
+        .querySelector('input[name="subacao_edit_q_municipio"]')
+        ?.closest(".field"),
+    };
+    const updateQuestionVisibility = () => {
+      const q1 = getEditQuestionValue("subacao_edit_q_subacao");
+      const q2 = getEditQuestionValue("subacao_edit_q_responsavel");
+      const q3 = getEditQuestionValue("subacao_edit_q_produto");
+      if (editQuestionFields.subacao) {
+        editQuestionFields.subacao.style.display = "";
+      }
+      if (editQuestionFields.responsavel) {
+        editQuestionFields.responsavel.style.display = q1 === "nao" ? "" : "none";
+      }
+      if (editQuestionFields.produto) {
+        editQuestionFields.produto.style.display = q1 === "nao" && q2 === "nao" ? "" : "none";
+      }
+      if (editQuestionFields.municipio) {
+        editQuestionFields.municipio.style.display =
+          q1 === "nao" && q2 === "nao" && q3 === "nao" ? "" : "none";
+      }
+    };
+    const resetEditQuestions = () => {
+      editQuestionNames.forEach((name) => {
+        form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+          input.checked = false;
+        });
+      });
+    };
+    editQuestionNames.forEach((name) => {
+      form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+        input.addEventListener("change", () => {
+          if (input.value === "sim") {
+            editQuestionNames.forEach((other) => {
+              if (other !== name) setEditQuestionValue(other, "nao");
+            });
+          }
+          updateQuestionVisibility();
+          syncEditMode();
+        });
+      });
+    });
 
     const validateStep = (step) => {
       const panel = getStepPanel(step);
       if (!panel) return true;
       const fields = panel.querySelectorAll("input, select, textarea");
-      for (const field of fields) {
-        if (field.disabled) continue;
-        if (field.type === "hidden") continue;
-        if (municipioItems.length) {
-          if (field === codigoSelect || field === municipioSelect || field === metaInput) {
-            continue;
+        for (const field of fields) {
+          if (field.disabled) continue;
+          if (field.type === "hidden") continue;
+          if (municipioItems.length) {
+            if (field === codigoSelect || field === municipioSelect || field === metaInput) {
+              continue;
+            }
           }
-        }
-        if (!field.checkValidity()) {
-          if (field === metaInput && municipioItems.length) {
-            continue;
+          if (editMunicipioItems.length) {
+            if (
+              field === editCodigoNovoSelect ||
+              field === editMunicipioNovoSelect ||
+              field === editMetaNovoInput
+            ) {
+              continue;
+            }
           }
+          if (!field.checkValidity()) {
+            if (field === metaInput && municipioItems.length) {
+              continue;
+            }
           field.reportValidity();
           field.focus();
           return false;
@@ -8210,7 +8411,14 @@
         cpfInput.focus();
         return false;
       }
-      if (step === 2 && isEditMode && editCpfInput && editCpfInput.value && !isValidCpf(editCpfInput.value)) {
+      if (
+        step === 2 &&
+        isEditMode &&
+        editCpfInput &&
+        editCpfInput.required &&
+        editCpfInput.value &&
+        !isValidCpf(editCpfInput.value)
+      ) {
         setMsg("CPF do responsável inválido.", true);
         editCpfInput.focus();
         return false;
@@ -8241,17 +8449,52 @@
 
     const setStep = (step) => {
       if (!stepPanels.length) return;
-      const clamped = Math.min(Math.max(step, 1), totalSteps);
-      currentStep = clamped;
+      const visiblePanels = stepPanels.filter((panel) => panel.style.display !== "none");
+      const visibleSteps = visiblePanels.map((panel) => Number(panel.dataset.step));
+      if (!visibleSteps.length) return;
+      let target = step;
+      if (!visibleSteps.includes(step)) {
+        target = visibleSteps[0];
+      }
+      currentStep = target;
+      totalSteps = visibleSteps.length || 1;
       stepPanels.forEach((panel) => {
-        panel.classList.toggle("active", Number(panel.dataset.step) === clamped);
+        const stepNum = Number(panel.dataset.step);
+        panel.classList.toggle("active", stepNum === target);
       });
       stepButtons.forEach((btn) => {
-        btn.classList.toggle("active", Number(btn.dataset.step) === clamped);
+        const stepNum = Number(btn.dataset.step);
+        btn.classList.toggle("active", stepNum === target);
       });
-      if (prevBtn) prevBtn.disabled = clamped === 1;
-      if (nextBtn) nextBtn.style.display = clamped === totalSteps ? "none" : "inline-flex";
-      if (saveBtn) saveBtn.style.display = clamped === totalSteps ? "inline-flex" : "none";
+      const currentIndex = visibleSteps.indexOf(target);
+      if (prevBtn) prevBtn.disabled = currentIndex <= 0;
+      if (nextBtn) nextBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "none" : "inline-flex";
+      if (saveBtn) saveBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "inline-flex" : "none";
+    };
+
+    const updateStepVisibility = () => {
+      const isEdit = (modeSelect?.value || "").toLowerCase() === "editar";
+      stepPanels.forEach((panel) => {
+        if (panel.dataset.step === "3") {
+          panel.style.display = isEdit ? "none" : "";
+          panel.querySelectorAll("input, select, textarea").forEach((field) => {
+            if (!isEdit && field.dataset.readonly === "1") {
+              field.disabled = true;
+              return;
+            }
+            field.disabled = isEdit;
+          });
+        }
+      });
+      stepButtons.forEach((btn) => {
+        if (btn.dataset.step === "3") {
+          btn.style.display = isEdit ? "none" : "inline-flex";
+        }
+      });
+      if (isEdit && currentStep === 3) {
+        currentStep = 2;
+      }
+      setStep(currentStep);
     };
 
     const normalizeDigits = (value) => {
@@ -8398,6 +8641,16 @@
       }
       const num = Number(digits) / 100;
       metaInput.value = formatPtBr(num);
+    };
+    const formatEditMetaNovoInput = () => {
+      if (!editMetaNovoInput) return;
+      const digits = String(editMetaNovoInput.value || "").replace(/\D/g, "");
+      if (!digits) {
+        editMetaNovoInput.value = "";
+        return;
+      }
+      const num = Number(digits) / 100;
+      editMetaNovoInput.value = formatPtBr(num);
     };
 
     const fontesNao = [
@@ -8670,6 +8923,13 @@
     };
 
     const editMunicipioItems = [];
+    const updateEditMunicipioRequired = () => {
+      const isNovoMunicipio = getEditModeKey() === "novo_municipio";
+      const shouldRequire = isNovoMunicipio && editMunicipioItems.length === 0;
+      [editCodigoNovoSelect, editMunicipioNovoSelect, editMetaNovoInput].forEach((el) => {
+        if (el) el.required = shouldRequire;
+      });
+    };
 
     const renderEditMunicipioList = () => {
       if (!editMunicipioListEl) return;
@@ -8680,6 +8940,7 @@
         empty.textContent = "Nenhum município adicionado.";
         editMunicipioListEl.appendChild(empty);
         if (editMunicipioListWrap) editMunicipioListWrap.style.display = "none";
+        updateEditMunicipioRequired();
         return;
       }
       if (editMunicipioListWrap) editMunicipioListWrap.style.display = "";
@@ -8705,6 +8966,7 @@
         `;
         editMunicipioListEl.appendChild(row);
       });
+      updateEditMunicipioRequired();
     };
 
     const addEditMunicipioItem = () => {
@@ -9031,94 +9293,7 @@
 
     let pendingEditAbort = null;
     let editOptionsSeq = 0;
-    let editMunicipioPairs = [];
-    const syncEditMunicipioPair = (source) => {
-      if (!editCodigoSelect || !editMunicipioSelect) return;
-      if (!editMunicipioPairs.length) return;
-      const byCodigo = new Map();
-      const byMunicipio = new Map();
-      editMunicipioPairs.forEach((pair) => {
-        if (pair?.codigo && !byCodigo.has(pair.codigo)) {
-          byCodigo.set(pair.codigo, { municipio: pair.municipio, meta: pair.meta || "" });
-        }
-        if (pair?.municipio && !byMunicipio.has(pair.municipio)) {
-          byMunicipio.set(pair.municipio, { codigo: pair.codigo, meta: pair.meta || "" });
-        }
-      });
-      const setMetaValue = (metaValue) => {
-        if (!editMetaSelect || !metaValue) return;
-        const existing = [...editMetaSelect.options].some((opt) => opt.value === metaValue);
-        if (!existing) {
-          const opt = document.createElement("option");
-          opt.value = metaValue;
-          opt.textContent = metaValue;
-          editMetaSelect.appendChild(opt);
-        }
-        editMetaSelect.value = metaValue;
-      };
-      const getPairPredicate = (fallback) => {
-        const codigo = editCodigoSelect?.value || "";
-        const municipio = editMunicipioSelect?.value || "";
-        if (codigo && municipio) {
-          return (p) => p.codigo === codigo && p.municipio === municipio;
-        }
-        if (codigo) {
-          return (p) => p.codigo === codigo;
-        }
-        if (municipio) {
-          return (p) => p.municipio === municipio;
-        }
-        return fallback;
-      };
-      const filterMetaOptions = (predicate) => {
-        if (!editMetaSelect) return;
-        const metas = Array.from(
-          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.meta).filter(Boolean))
-        );
-        setOptionsFromLabel(editMetaSelect, metas.map((v) => ({ label: v })), "Selecione...");
-      };
-      const filterMunicipioOptions = (predicate) => {
-        if (!editMunicipioSelect) return;
-        const municipios = Array.from(
-          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.municipio).filter(Boolean))
-        );
-        setOptionsFromLabel(editMunicipioSelect, municipios.map((v) => ({ label: v })), "Selecione...");
-      };
-      const filterCodigoOptions = (predicate) => {
-        if (!editCodigoSelect) return;
-        const codigos = Array.from(
-          new Set(editMunicipioPairs.filter(getPairPredicate(predicate)).map((p) => p.codigo).filter(Boolean))
-        );
-        setOptionsFromLabel(editCodigoSelect, codigos.map((v) => ({ label: v })), "Selecione...");
-      };
-      if (source === "codigo") {
-        const match = byCodigo.get(editCodigoSelect.value);
-        if (match?.municipio) editMunicipioSelect.value = match.municipio;
-        if (match?.meta) setMetaValue(match.meta);
-        filterMunicipioOptions((p) => p.codigo === editCodigoSelect.value);
-        filterMetaOptions((p) => p.codigo === editCodigoSelect.value);
-      } else if (source === "municipio") {
-        const match = byMunicipio.get(editMunicipioSelect.value);
-        if (match?.codigo) editCodigoSelect.value = match.codigo;
-        if (match?.meta) setMetaValue(match.meta);
-        filterCodigoOptions((p) => p.municipio === editMunicipioSelect.value);
-        filterMetaOptions((p) => p.municipio === editMunicipioSelect.value);
-      } else if (source === "meta") {
-        const metaValue = editMetaSelect?.value || "";
-        if (!metaValue) return;
-        let match = editMunicipioPairs.find((pair) => pair.meta === metaValue && pair.codigo === editCodigoSelect.value);
-        if (!match) {
-          match = editMunicipioPairs.find((pair) => pair.meta === metaValue && pair.municipio === editMunicipioSelect.value);
-        }
-        if (!match) {
-          match = editMunicipioPairs.find((pair) => pair.meta === metaValue);
-        }
-        if (match?.codigo) editCodigoSelect.value = match.codigo;
-        if (match?.municipio) editMunicipioSelect.value = match.municipio;
-        filterCodigoOptions((p) => p.meta === metaValue);
-        filterMunicipioOptions((p) => p.meta === metaValue);
-      }
-    };
+
     const loadEditOptions = async () => {
       if (!editarGrid) return;
       const seq = ++editOptionsSeq;
@@ -9138,19 +9313,12 @@
         unid_gestora: editUnidGestoraSelect,
         unidade_setorial_planejamento: editUnidadeSetorialSelect,
         produto_subacao: editProdutoSelect,
-        unidade_medida: editUnidadeMedidaSelect,
         regiao_subacao: editRegiaoSelect,
-        codigo: editCodigoSelect,
-        municipios_entrega: editMunicipioSelect,
-        meta_subacao: editMetaSelect,
-        detalhamento_produto: editDetalhamentoSelect,
       };
-        Object.entries(editSelectMap).forEach(([key, el]) => {
-          if (!el?.value) return;
-          if (el.dataset.readonly === "soft") return;
-          if (key === "meta_subacao" && el.dataset.userSelected !== "1") return;
-          url.searchParams.set(key, el.value);
-        });
+      Object.entries(editSelectMap).forEach(([key, el]) => {
+        if (!el?.value) return;
+        url.searchParams.set(key, el.value);
+      });
       try {
         const res = await fetch(url, {
           headers: { "X-Requested-With": "fetch" },
@@ -9160,64 +9328,71 @@
         const data = await res.json();
         if (seq !== editOptionsSeq) return;
         const options = data.options || {};
-        editMunicipioPairs = Array.isArray(data.pairs) ? data.pairs : [];
-        const hasPairs = editMunicipioPairs.length > 0;
-        Object.entries(editSelectMap).forEach(([key, el]) => {
-          if (!el) return;
-          if (hasPairs && key === "codigo") return;
-          if (hasPairs && key === "municipios_entrega") return;
-          if (hasPairs && key === "meta_subacao") return;
-          setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...");
-        });
-        if (hasPairs) {
-          const codes = Array.from(new Set(editMunicipioPairs.map((p) => p.codigo).filter(Boolean)));
-          const municipios = Array.from(new Set(editMunicipioPairs.map((p) => p.municipio).filter(Boolean)));
-          const metas = Array.from(new Set(editMunicipioPairs.map((p) => p.meta).filter(Boolean)));
-          if (editCodigoSelect) {
-            setOptionsFromLabel(editCodigoSelect, codes.map((v) => ({ label: v })), "Selecione...");
+          Object.entries(editSelectMap).forEach(([key, el]) => {
+            if (!el) return;
+            setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...");
+          });
+          if (pendingEditPref && editSubacaoSelect?.value === pendingEditPref.subacao_entrega) {
+            const applyIfAvailable = (el, value) => {
+              if (!el || !value) return;
+              const exists = Array.from(el.options || []).some((opt) => opt.value === value);
+              if (exists) el.value = value;
+            };
+            if (editResponsavelSelect && pendingEditPref.responsavel) {
+              const exists = Array.from(editResponsavelSelect.options || []).some(
+                (opt) => opt.value === pendingEditPref.responsavel
+              );
+              if (!exists) {
+                const opt = document.createElement("option");
+                opt.value = pendingEditPref.responsavel;
+                opt.textContent = pendingEditPref.responsavel;
+                editResponsavelSelect.appendChild(opt);
+              }
+              editResponsavelSelect.value = pendingEditPref.responsavel;
+            }
+            applyIfAvailable(editPrazoSelect, pendingEditPref.prazo);
+            applyIfAvailable(editUnidGestoraSelect, pendingEditPref.unid_gestora);
+            applyIfAvailable(editUnidadeSetorialSelect, pendingEditPref.unidade_setorial_planejamento);
+            applyIfAvailable(editProdutoSelect, pendingEditPref.produto_subacao);
+            applyIfAvailable(editRegiaoSelect, pendingEditPref.regiao_subacao);
+            pendingEditPref = null;
           }
-          if (editMunicipioSelect) {
-            setOptionsFromLabel(editMunicipioSelect, municipios.map((v) => ({ label: v })), "Selecione...");
-          }
-          if (editMetaSelect) {
-            setOptionsFromLabel(editMetaSelect, metas.map((v) => ({ label: v })), "Selecione...");
-          }
-        }
-        const softSelects = [
-          editPrazoSelect,
-          editUnidGestoraSelect,
-          editUnidadeSetorialSelect,
-          editUnidadeMedidaSelect,
-          editRegiaoSelect,
-          editCodigoSelect,
-          editMunicipioSelect,
-        ];
+          const softSelects = [
+            editResponsavelSelect,
+            editPrazoSelect,
+            editUnidGestoraSelect,
+            editUnidadeSetorialSelect,
+            editProdutoSelect,
+            editRegiaoSelect,
+          ];
         softSelects.forEach((el) => {
           if (!el) return;
           const count = el.options.length;
           if (!el.value && count === 2) {
             el.value = el.options[1].value;
           }
-          el.disabled = count <= 2;
         });
-        if (editMetaSelect) {
-          editMetaSelect.dataset.userSelected = "0";
-          editMetaSelect.value = "";
-        }
-        if (editDetalhamentoSelect && editDetalhamentoInput) {
-          editDetalhamentoInput.value = editDetalhamentoSelect.value || "";
-        }
-        const muniCount = editMunicipioSelect?.options?.length || 0;
-        if (editMunicipioToggle) {
-          editMunicipioToggle.style.display = muniCount > 2 ? "" : "none";
-        }
-        if (editCodigoSelect?.value) {
-          syncEditMunicipioPair("codigo");
-        } else if (editMunicipioSelect?.value) {
-          syncEditMunicipioPair("municipio");
-        }
+        await loadEditMunicipios();
       } catch (err) {
         if (err.name !== "AbortError") console.error(err);
+      }
+    };
+
+    const loadEditMunicipios = async () => {
+      if (!editCodigoNovoSelect || !editMunicipioNovoSelect) return;
+      const url = new URL("/api/subacao/options", window.location.origin);
+      if (editRegiaoSelect?.value) {
+        url.searchParams.set("regiao_subacao", editRegiaoSelect.value);
+      }
+      try {
+        const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const municipios = Array.isArray(data.municipios) ? data.municipios : [];
+        setOptions(editCodigoNovoSelect, municipios, "Selecione...", "codigo", "label");
+        setOptions(editMunicipioNovoSelect, municipios, "Selecione...", "nome", "label");
+      } catch (err) {
+        console.error(err);
       }
     };
 
@@ -9259,16 +9434,14 @@
       if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.value = "";
       if (editProdutoSelect) editProdutoSelect.value = "";
       if (editProdutoInput) editProdutoInput.value = "";
-      if (editUnidadeMedidaSelect) editUnidadeMedidaSelect.value = "";
       if (editRegiaoSelect) editRegiaoSelect.value = "";
-      if (editCodigoSelect) editCodigoSelect.value = "";
-      if (editMunicipioSelect) editMunicipioSelect.value = "";
-      if (editMetaSelect) editMetaSelect.value = "";
-      if (editDetalhamentoSelect) editDetalhamentoSelect.value = "";
-      if (editDetalhamentoInput) editDetalhamentoInput.value = "";
       if (editCodigoNovoSelect) editCodigoNovoSelect.value = "";
       if (editMunicipioNovoSelect) editMunicipioNovoSelect.value = "";
       if (editMetaNovoInput) editMetaNovoInput.value = "";
+      if (editJustificativaInput) editJustificativaInput.value = "";
+      if (editResponsavelNgerInput) editResponsavelNgerInput.value = "";
+      editQuestionNames.forEach((name) => setEditQuestionValue(name, "nao"));
+      updateQuestionVisibility();
       municipioItems.length = 0;
       renderMunicipioList();
       editMunicipioItems.length = 0;
@@ -9415,11 +9588,11 @@
       if (row) row.classList.add("selected");
     };
 
-    const fillFormFromRow = (row) => {
-      if (!row) return;
-      const chave = row.dataset.chave || "";
-      const chaveParts = parseChaveParts(chave);
-      const subacaoEntregaFull = row.dataset.subacaoEntrega || "";
+      const fillFormFromRow = (row) => {
+        if (!row) return;
+        const chave = row.dataset.chave || "";
+        const chaveParts = parseChaveParts(chave);
+        const subacaoEntregaFull = row.dataset.subacaoEntrega || "";
       let subacaoEntregaRaw = subacaoEntregaFull;
       if (chave && subacaoEntregaFull.startsWith(chave)) {
         subacaoEntregaRaw = subacaoEntregaFull.slice(chave.length).trim();
@@ -9473,9 +9646,20 @@
       if (quantidadeInput) quantidadeInput.value = row.dataset.quantidade || "";
       if (valorUnitarioInput) valorUnitarioInput.value = row.dataset.valorUnitario || "";
       if (valorTotalInput) valorTotalInput.value = row.dataset.valorTotal || "";
-      if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
-      if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
-      syncBridges();
+        if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
+        if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
+        if (editChaveSelect) editChaveSelect.value = row.dataset.chave || "";
+        if (editSubacaoSelect) editSubacaoSelect.value = row.dataset.subacaoEntrega || "";
+        pendingEditPref = {
+          subacao_entrega: row.dataset.subacaoEntrega || "",
+          responsavel: row.dataset.responsavel || "",
+          prazo: row.dataset.prazo || "",
+          unid_gestora: row.dataset.unidGestora || "",
+          unidade_setorial_planejamento: row.dataset.unidadeSetorial || "",
+          produto_subacao: row.dataset.produtoSubacao || "",
+          regiao_subacao: row.dataset.regiaoSubacao || "",
+        };
+        syncBridges();
       formatMetaInput();
       formatDecimalInput(quantidadeInput);
       formatDecimalInput(valorUnitarioInput);
@@ -9551,7 +9735,8 @@
         if (match && codigoSelect) codigoSelect.value = match.value;
       });
     }
-    if (metaInput) metaInput.addEventListener("input", formatMetaInput);
+      if (metaInput) metaInput.addEventListener("input", formatMetaInput);
+      if (editMetaNovoInput) editMetaNovoInput.addEventListener("input", formatEditMetaNovoInput);
     if (etapaInput) {
       etapaInput.setAttribute("maxlength", "260");
       etapaInput.addEventListener("input", syncEtapaCounter);
@@ -9582,44 +9767,46 @@
         editUnidGestoraSelect,
         editUnidadeSetorialSelect,
         editProdutoSelect,
-        editUnidadeMedidaSelect,
         editRegiaoSelect,
-        editCodigoSelect,
-        editMunicipioSelect,
-        editMetaSelect,
-        editDetalhamentoSelect,
       ].filter(Boolean);
-      editReloadSelects.forEach((sel) => {
-        sel.addEventListener("change", loadEditOptions);
-      });
-      if (editCodigoSelect) {
-        editCodigoSelect.addEventListener("change", () => {
-          syncEditMunicipioPair("codigo");
+        editReloadSelects.forEach((sel) => {
+          sel.addEventListener("change", loadEditOptions);
+        });
+        if (editSubacaoSelect) {
+          editSubacaoSelect.addEventListener("change", () => {
+            if (editResponsavelSelect) editResponsavelSelect.value = "";
+            if (editPrazoSelect) editPrazoSelect.value = "";
+            if (editUnidGestoraSelect) editUnidGestoraSelect.value = "";
+            if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.value = "";
+            if (editProdutoSelect) editProdutoSelect.value = "";
+            if (editRegiaoSelect) editRegiaoSelect.value = "";
+            pendingEditPref = null;
+            loadEditOptions();
+          });
+        }
+      if (editRegiaoSelect) {
+        editRegiaoSelect.addEventListener("change", () => {
+          loadEditMunicipios();
         });
       }
-      if (editMunicipioSelect) {
-        editMunicipioSelect.addEventListener("change", () => {
-          syncEditMunicipioPair("municipio");
+      if (editCodigoNovoSelect) {
+        editCodigoNovoSelect.addEventListener("change", () => {
+          const selectedCodigo = editCodigoNovoSelect.value || "";
+          const match = Array.from(editMunicipioNovoSelect?.options || []).find((opt) => {
+            const optCodigo = normalizeDigits(opt.textContent || "");
+            return optCodigo === normalizeDigits(selectedCodigo);
+          });
+          if (match && editMunicipioNovoSelect) editMunicipioNovoSelect.value = match.value;
         });
       }
-      if (editMetaSelect) {
-        editMetaSelect.addEventListener("change", () => {
-          editMetaSelect.dataset.userSelected = "1";
-          syncEditMunicipioPair("meta");
-        });
-      }
-      if (editDetalhamentoSelect && editDetalhamentoInput) {
-        editDetalhamentoSelect.addEventListener("change", () => {
-          editDetalhamentoInput.value = editDetalhamentoSelect.value || "";
-        });
-      }
-      if (editMunicipioToggle) {
-        editMunicipioToggle.addEventListener("change", (ev) => {
-          if (!editMunicipioWrap) return;
-          const target = ev.target;
-          if (target && target.name === "edit_municipio_change") {
-            editMunicipioWrap.style.display = target.value === "sim" ? "" : "none";
-          }
+      if (editMunicipioNovoSelect) {
+        editMunicipioNovoSelect.addEventListener("change", () => {
+          const selectedNome = editMunicipioNovoSelect.value || "";
+          const match = Array.from(editCodigoNovoSelect?.options || []).find((opt) => {
+            const label = opt.textContent || "";
+            return label.endsWith(selectedNome) || label.includes(`- ${selectedNome}`);
+          });
+          if (match && editCodigoNovoSelect) editCodigoNovoSelect.value = match.value;
         });
       }
       if (editMunicipioAddBtn) {
@@ -9720,21 +9907,21 @@
       });
     }
 
-    if (editBtn) {
-      editBtn.addEventListener("click", () => {
-        const row = getSelectedRow();
-        if (!row) {
-          setMsg("Selecione um registro para editar.", true);
-          return;
-        }
-        if (modeSelect) modeSelect.value = "editar";
-        toggleMode();
-        loadEditOptions();
-        if (idInput) idInput.value = row.dataset.id || "";
-        fillFormFromRow(row);
-        setMsg("");
-      });
-    }
+      if (editBtn) {
+        editBtn.addEventListener("click", () => {
+          const row = getSelectedRow();
+          if (modeSelect) modeSelect.value = "editar";
+          resetEditQuestions();
+          updateQuestionVisibility();
+          toggleMode();
+          if (row) {
+            if (idInput) idInput.value = row.dataset.id || "";
+            fillFormFromRow(row);
+          }
+          loadEditOptions();
+          setMsg("");
+        });
+      }
 
     if (deleteBtn) {
       deleteBtn.addEventListener("click", async () => {
@@ -9782,6 +9969,9 @@
           if (municipioAddBtn) municipioAddBtn.disabled = true;
           if (municipioListWrap) municipioListWrap.style.display = "none";
           if (addEtapaBtn) addEtapaBtn.style.display = "none";
+          resetEditQuestions();
+          updateQuestionVisibility();
+          syncEditMode();
         }
       });
     }
@@ -9870,21 +10060,95 @@
         if (municipioSelect) municipioSelect.required = false;
         if (metaInput) metaInput.required = false;
       }
-      if (cpfInput && !isValidCpf(cpfInput.value)) {
-        setMsg("CPF do responsável inválido.", true);
-        cpfInput.focus();
-        return;
-      }
-      if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
-        setMsg("CPF do responsável da etapa inválido.", true);
-        cpfEtapaInput.focus();
-        return;
+      const mode = modeSelect?.value || "cadastrar";
+      if (mode === "cadastrar") {
+        if (cpfInput && cpfInput.value && !isValidCpf(cpfInput.value)) {
+          setMsg("CPF do responsável inválido.", true);
+          cpfInput.focus();
+          return;
+        }
+        if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
+          setMsg("CPF do responsável da etapa inválido.", true);
+          cpfEtapaInput.focus();
+          return;
+        }
       }
       setMsg("");
-      const mode = modeSelect?.value || "cadastrar";
-      const subacaoId = idInput?.value || "";
-      if (mode === "editar" && !subacaoId) {
-        setMsg("Selecione um registro para editar.", true);
+      const isEditMode = mode === "editar";
+      if (isEditMode) {
+        const editModeKey = syncEditMode();
+        if (!editModeKey) {
+          setMsg("Selecione uma op??o de edi??o.", true);
+          return;
+        }
+        if (!validateStep(1)) {
+          setStep(1);
+          return;
+        }
+        if (!validateStep(2)) {
+          setStep(2);
+          return;
+        }
+        const payload = {
+          edit_mode: editModeKey,
+          exercicio: planSelects.exercicio?.value || "",
+          uo: planSelects.uo?.value || "",
+          programa: planSelects.programa?.value || "",
+          acao_paoe: planSelects.acao_paoe?.value || "",
+          responsavel_acao: planSelects.responsavel_acao?.value || "",
+          produto_acao: planSelects.produto_acao?.value || "",
+          chave_planejamento: editChaveSelect?.value || "",
+          subacao_entrega: editSubacaoSelect?.value || "",
+          subacao_entrega_edit: editSubacaoInput?.value || "",
+          responsavel: editResponsavelSelect?.value || "",
+            responsavel_edit:
+              editResponsavelInput?.value || editResponsavelSelect?.value || "",
+          cpf_responsavel: editCpfInput?.value || "",
+          prazo: editPrazoSelect?.value || "",
+          unid_gestora: editUnidGestoraSelect?.value || "",
+          unidade_setorial_planejamento: editUnidadeSetorialSelect?.value || "",
+          produto_subacao: editProdutoSelect?.value || "",
+          produto_subacao_edit: editProdutoInput?.value || "",
+          regiao_subacao: editRegiaoSelect?.value || "",
+          justificativa: editJustificativaInput?.value || "",
+          responsavel_nger: editResponsavelNgerInput?.value || "",
+        };
+        if (editModeKey === "novo_municipio") {
+          const hasPending = Boolean(
+            editCodigoNovoSelect?.value || editMunicipioNovoSelect?.value || editMetaNovoInput?.value
+          );
+          if (hasPending) addEditMunicipioItem();
+          if (!editMunicipioItems.length) {
+            setMsg("Informe c?digo, munic?pio e meta para adicionar.", true);
+            return;
+          }
+          payload.municipios_items = editMunicipioItems.map((item) => ({
+            codigo: item.codigo,
+            municipios_entrega: item.municipios_entrega,
+            meta_subacao: item.meta_subacao,
+          }));
+        }
+        try {
+          const res = await fetch("/api/subacao/editar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setMsg(data.error || "Falha ao salvar.", true);
+            return;
+          }
+          const count = data.count || (Array.isArray(data.subacoes) ? data.subacoes.length : 1);
+          showToast(`Suba??o salva com sucesso. Registros: ${count}.`, "success");
+          if (data.warning) {
+            setMsg(data.warning);
+          }
+          await loadPage("cadastrar/plan_21-nger/subacao");
+        } catch (err) {
+          console.error(err);
+          setMsg("Falha ao salvar.", true);
+        }
         return;
       }
       const chavePlanejamento = chaveInput?.value || "";
@@ -9960,8 +10224,8 @@
           meta_subacao: item.meta_subacao,
         }));
       }
-      const url = mode === "editar" ? `/api/subacao/${encodeURIComponent(subacaoId)}` : "/api/subacao";
-      const method = mode === "editar" ? "PUT" : "POST";
+      const url = "/api/subacao";
+      const method = "POST";
       try {
         const res = await fetch(url, {
           method,

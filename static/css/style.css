@@ -439,6 +439,7 @@ a { color: inherit; text-decoration: none; }
 
 .form { display: flex; flex-direction: column; gap: 12px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.field-full { grid-column: 1 / -1; }
 .field-disabled:disabled,
 .form-grid input:disabled,
 .form-grid select:disabled,

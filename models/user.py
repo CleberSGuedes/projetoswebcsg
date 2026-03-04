@@ -4,12 +4,12 @@ from .db import db
 class Usuario(db.Model):
     __tablename__ = "usuarios"
 
-    id = db.Column(db.BigInteger)
-    email = db.Column(db.String(255), primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
     nome = db.Column(db.String(255), nullable=False)
-    perfil_id = db.Column(db.Integer, db.ForeignKey("perfil.id"), nullable=False)
     perfil = db.Column(db.String(50), nullable=False)
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    perfil_id = db.Column(db.Integer, db.ForeignKey("perfil.id"), nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, server_default=db.text("1"))
     password_hash = db.Column(db.String(255), nullable=False)
 
     def set_password(self, raw_password: str) -> None:
@@ -36,13 +36,13 @@ class LogLogin(db.Model):
 class Perfil(db.Model):
     __tablename__ = "perfil"
 
-    id = db.Column(db.Integer, primary_key=True, autoincrement=False)
-    nome = db.Column(db.String(100), unique=True, nullable=False)
-    nivel = db.Column(db.SmallInteger, nullable=False)
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
-    criado_em = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(50), nullable=True)
+    nivel = db.Column(db.Integer, nullable=True)
+    ativo = db.Column(db.Integer, nullable=True)
+    criado_em = db.Column(db.DateTime, server_default=db.func.now(), nullable=True)
     atualizado_em = db.Column(
-        db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False
+        db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=True
     )
 
 
@@ -61,9 +61,9 @@ class PerfilPermissao(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     perfil_id = db.Column(db.Integer, db.ForeignKey("perfil.id"), nullable=False)
-    feature = db.Column(db.String(100), nullable=False)
-    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
-    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    feature = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime, nullable=False)
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
 
@@ -444,6 +444,7 @@ class Plan21Nger(db.Model):
     elemento = db.Column(db.String(50))
     subelemento = db.Column(db.String(50))
     natureza = db.Column(db.String(255))
+    descricao_item_despesa = db.Column(db.String(2000))
     fonte = db.Column(db.String(50))
     idu = db.Column(db.String(50))
     valor_atual = db.Column(db.Numeric(18, 2))
@@ -537,6 +538,7 @@ class CadastrarSubacao(db.Model):
     justificativa = db.Column(db.Text)
     responsavel_nger = db.Column(db.String(255))
     plan21_nger_id = db.Column(db.BigInteger)
+    plan21_nger_ids = db.Column(db.Text)
     usuario_id = db.Column(db.BigInteger)
     status_aprovacao = db.Column(db.String(50))
     situacao = db.Column(db.String(50))

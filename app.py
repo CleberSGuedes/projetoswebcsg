@@ -96,6 +96,15 @@ def _fetch_active_session(email: str):
     result = _execute_with_retry(stmt)
     if result is None:
         return None
+    try:
+        return result.mappings().first()
+    except Exception:
+        _safe_session_rollback()
+    try:
+        with db.engine.connect() as conn:
+            return conn.execute(stmt).mappings().first()
+    except Exception:
+        return None
 
 
 def _next_pk_active_session() -> int:
@@ -128,15 +137,6 @@ def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
     except Exception:
         _safe_session_rollback()
         return False
-    try:
-        return result.mappings().first()
-    except Exception:
-        _safe_session_rollback()
-    try:
-        with db.engine.connect() as conn:
-            return conn.execute(stmt).mappings().first()
-    except Exception:
-        return None
 
 
 
@@ -165,6 +165,19 @@ def create_app():
         if request.path.startswith("/api/"):
             return jsonify({"error": "Erro interno", "trace_id": trace_id}), 500
         return "Erro interno", 500
+
+    @app.after_request
+    def force_utf8_response(response):
+        mimetype = response.mimetype or ""
+        content_type = response.content_type or ""
+        wants_utf8 = (
+            mimetype.startswith("text/")
+            or mimetype in ("application/javascript", "application/json")
+        )
+        if wants_utf8 and "charset=" not in content_type.lower():
+            response.headers["Content-Type"] = f"{mimetype}; charset=utf-8"
+        response.charset = "utf-8"
+        return response
 
     @app.before_request
     def load_current_user():
@@ -332,15 +345,23 @@ def create_app():
             return
         g.user = user
         perfil_id = user.get("perfil_id")
+        perfil_nome = (user.get("perfil") or "").strip()
         try:
             perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
-        except SQLAlchemyError:
+            if not perfil_row and perfil_nome:
+                perfil_row = (
+                    Perfil.query.filter(
+                        func.lower(func.ltrim(func.rtrim(Perfil.nome))) == perfil_nome.lower()
+                    ).first()
+                )
+        except (SQLAlchemyError, IndexError):
             _safe_session_rollback()
             _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
-                    "auth preload perfil fetch error cleared email=%s path=%s",
+                    "auth preload perfil fetch error cleared email=%s perfil_id=%s path=%s",
                     user.get("email"),
+                    perfil_id,
                     request.path,
                 )
             except Exception:
@@ -362,6 +383,7 @@ def create_app():
         if perfil_row:
             # mantem nome do perfil sincronizado para exibicao/compatibilidade.
             user["perfil"] = (perfil_row.nome or "").strip()
+            user["perfil_id"] = perfil_row.id
             session["user"] = user
         if perfil_row:
             g.user_perfil_id = perfil_row.id
