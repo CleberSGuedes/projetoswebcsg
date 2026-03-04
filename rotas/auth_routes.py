@@ -1,12 +1,13 @@
 from typing import Optional
 import secrets
+from types import SimpleNamespace
 from datetime import datetime, timedelta
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import check_password_hash
 from models import db, Usuario, LogLogin, ActiveSession, Perfil
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.exc import SQLAlchemyError
 
 
@@ -57,6 +58,30 @@ def _clear_active_session(email: str) -> None:
     if active:
         db.session.delete(active)
         db.session.commit()
+
+
+def _fetch_perfil_raw(perfil_id: int | None, perfil_nome: str | None):
+    try:
+        if perfil_id:
+            row = db.session.execute(
+                text("SELECT id, nome, nivel FROM perfil WHERE id = :id"),
+                {"id": perfil_id},
+            ).mappings().first()
+            if row:
+                return row
+        if perfil_nome:
+            row = db.session.execute(
+                text(
+                    "SELECT id, nome, nivel FROM perfil "
+                    "WHERE LOWER(TRIM(nome)) = :nome LIMIT 1"
+                ),
+                {"nome": perfil_nome.lower()},
+            ).mappings().first()
+            if row:
+                return row
+    except Exception:
+        db.session.rollback()
+    return None
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -121,16 +146,34 @@ def login():
                         db.session.commit()
             except (SQLAlchemyError, IndexError) as exc:
                 db.session.rollback()
-                current_app.logger.error(
-                    "Falha ao buscar perfil do usuario: %s (perfil_id=%s)",
-                    exc,
-                    perfil_id,
-                    exc_info=True,
-                )
-                if is_fetch:
-                    return {"error": "Falha ao validar perfil do usuario."}, 500
-                flash("Falha ao validar perfil do usuario.", "error")
-                return redirect(url_for("auth.login"))
+                raw_row = _fetch_perfil_raw(perfil_id, perfil_nome)
+                if raw_row:
+                    perfil_row = SimpleNamespace(
+                        id=raw_row.get("id"),
+                        nome=raw_row.get("nome"),
+                        nivel=raw_row.get("nivel"),
+                    )
+                    if not perfil_id:
+                        try:
+                            usuario.perfil_id = perfil_row.id
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                    current_app.logger.warning(
+                        "Login usando fallback raw para perfil (perfil_id=%s).",
+                        perfil_id,
+                    )
+                else:
+                    current_app.logger.error(
+                        "Falha ao buscar perfil do usuario: %s (perfil_id=%s)",
+                        exc,
+                        perfil_id,
+                        exc_info=True,
+                    )
+                    if is_fetch:
+                        return {"error": "Falha ao validar perfil do usuario."}, 500
+                    flash("Falha ao validar perfil do usuario.", "error")
+                    return redirect(url_for("auth.login"))
             if not perfil_row:
                 _log_login(email, "erro", "perfil_id invalido no usuario")
                 if is_fetch:

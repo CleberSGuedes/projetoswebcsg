@@ -6,9 +6,10 @@ import secrets
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 from werkzeug.exceptions import HTTPException
-from sqlalchemy import update, select, delete, func
+from sqlalchemy import update, select, delete, func, text
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, ResourceClosedError
 from flask import Flask, g, session, request, jsonify
@@ -61,6 +62,30 @@ def _execute_with_retry(stmt, attempts: int = 2, backoff_s: float = 0.2):
                     time.sleep(backoff_s * (idx + 1))
                 except Exception:
                     pass
+    return None
+
+
+def _fetch_perfil_raw(perfil_id: int | None, perfil_nome: str | None):
+    try:
+        if perfil_id:
+            row = db.session.execute(
+                text("SELECT id, nome, nivel FROM perfil WHERE id = :id"),
+                {"id": perfil_id},
+            ).mappings().first()
+            if row:
+                return row
+        if perfil_nome:
+            row = db.session.execute(
+                text(
+                    "SELECT id, nome, nivel FROM perfil "
+                    "WHERE LOWER(TRIM(nome)) = :nome LIMIT 1"
+                ),
+                {"nome": perfil_nome.lower()},
+            ).mappings().first()
+            if row:
+                return row
+    except Exception:
+        _safe_session_rollback()
     return None
 
 
@@ -356,18 +381,35 @@ def create_app():
                 )
         except (SQLAlchemyError, IndexError):
             _safe_session_rollback()
-            _best_effort_clear_active_session(user.get("email"), token)
-            try:
-                app.logger.warning(
-                    "auth preload perfil fetch error cleared email=%s perfil_id=%s path=%s",
-                    user.get("email"),
-                    perfil_id,
-                    request.path,
+            raw_row = _fetch_perfil_raw(perfil_id, perfil_nome)
+            if raw_row:
+                perfil_row = SimpleNamespace(
+                    id=raw_row.get("id"),
+                    nome=raw_row.get("nome"),
+                    nivel=raw_row.get("nivel"),
                 )
-            except Exception:
-                pass
-            session.clear()
-            return
+                try:
+                    app.logger.warning(
+                        "auth preload perfil raw fallback email=%s perfil_id=%s path=%s",
+                        user.get("email"),
+                        perfil_id,
+                        request.path,
+                    )
+                except Exception:
+                    pass
+            else:
+                _best_effort_clear_active_session(user.get("email"), token)
+                try:
+                    app.logger.warning(
+                        "auth preload perfil fetch error cleared email=%s perfil_id=%s path=%s",
+                        user.get("email"),
+                        perfil_id,
+                        request.path,
+                    )
+                except Exception:
+                    pass
+                session.clear()
+                return
         if not perfil_row:
             _best_effort_clear_active_session(user.get("email"), token)
             try:
