@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
-from functools import wraps
+from functools import wraps, lru_cache
 import re
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -55,7 +55,7 @@ from services.est_emp_runner import (
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from pathlib import Path
-from sqlalchemy import text, func, or_, select
+from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
 
 home_bp = Blueprint("home", __name__)
@@ -982,10 +982,75 @@ def partial_cadastrar_plan21_subacao():
     user_session = session.get("user") or {}
     user_nome = (user_session.get("nome") or "").strip()
     subacoes = (
-        CadastrarSubacao.query.filter(CadastrarSubacao.excluido_em.is_(None))
+        CadastrarSubacao.query.filter(CadastrarSubacao.ativo == True)  # noqa: E712
         .order_by(CadastrarSubacao.id.desc())
         .all()
     )
+    usuario_ids = {s.usuario_id for s in subacoes if s.usuario_id}
+    aprovado_ids = set()
+    for s in subacoes:
+        aprovado_id = getattr(s, "aprovado_por", None)
+        if not aprovado_id:
+            continue
+        try:
+            aprovado_ids.add(int(aprovado_id))
+        except Exception:
+            continue
+    all_user_ids = set(usuario_ids)
+    all_user_ids.update(aprovado_ids)
+    usuarios_map = {}
+    perfil_ids = set()
+    if all_user_ids:
+        usuarios = Usuario.query.filter(Usuario.id.in_(all_user_ids)).all()
+        usuarios_map = {u.id: u for u in usuarios}
+        perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
+    perfil_map = {}
+    if perfil_ids:
+        perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
+        perfil_map = {p.id: p for p in perfis}
+    for s in subacoes:
+        usuario = usuarios_map.get(s.usuario_id)
+        perfil_id = getattr(usuario, "perfil_id", None)
+        perfil_nome = ""
+        if perfil_id:
+            perfil_row = perfil_map.get(perfil_id)
+            perfil_nome = (getattr(perfil_row, "nome", "") or "").strip()
+        exercicio = getattr(s, "exercicio", "") or ""
+        if perfil_nome:
+            s.controle_subacao = f"SUB.{exercicio}.{perfil_nome}.{s.id}"
+        else:
+            s.controle_subacao = f"SUB.{exercicio}.{s.id}"
+        s.usuario_nome = (
+            (getattr(usuario, "nome", "") or getattr(usuario, "email", "") or "").strip()
+            if usuario
+            else ""
+        )
+        s.usuario_perfil = perfil_nome
+        aprovado_nome = ""
+        aprovado_perfil = ""
+        aprovado_id = getattr(s, "aprovado_por", None)
+        if aprovado_id:
+            try:
+                aprovado_id = int(aprovado_id)
+            except Exception:
+                aprovado_id = None
+        if aprovado_id:
+            aprovado_usuario = usuarios_map.get(aprovado_id)
+            aprovado_nome = (
+                (getattr(aprovado_usuario, "nome", "") or getattr(aprovado_usuario, "email", "") or "").strip()
+                if aprovado_usuario
+                else ""
+            )
+            aprovado_perfil_id = getattr(aprovado_usuario, "perfil_id", None) if aprovado_usuario else None
+            if aprovado_perfil_id:
+                aprovado_perfil_row = perfil_map.get(aprovado_perfil_id)
+                aprovado_perfil = (getattr(aprovado_perfil_row, "nome", "") or "").strip()
+        s.aprovado_por_nome = aprovado_nome
+        s.aprovado_por_perfil = aprovado_perfil
+        s.criado_em_iso = s.criado_em.isoformat() if getattr(s, "criado_em", None) else ""
+        s.data_aprovacao_iso = (
+            s.data_aprovacao.isoformat() if getattr(s, "data_aprovacao", None) else ""
+        )
     return render_template(
         "partials/cadastrar_plan21_nger_subacao.html",
         subacoes=subacoes,
@@ -1564,6 +1629,7 @@ def _find_plan21_nger_row(
     chave_planejamento: str | None = None,
     subacao_entrega: str | None = None,
     etapa: str | None = None,
+    responsavel_etapa: str | None = None,
     regiao_etapa: str | None = None,
     natureza: str | None = None,
     descricao_item_despesa: str | None = None,
@@ -1587,6 +1653,8 @@ def _find_plan21_nger_row(
         query = query.filter(Plan21Nger.subacao_entrega == subacao_entrega)
     if etapa:
         query = query.filter(Plan21Nger.etapa == etapa)
+    if responsavel_etapa:
+        query = query.filter(Plan21Nger.responsavel_etapa == responsavel_etapa)
     if regiao_etapa:
         query = query.filter(Plan21Nger.regiao_etapa == regiao_etapa)
     if natureza:
@@ -1595,7 +1663,7 @@ def _find_plan21_nger_row(
         query = query.filter(Plan21Nger.descricao_item_despesa == descricao_item_despesa)
     rows = query.order_by(Plan21Nger.id.desc()).all()
     if not rows:
-        return None, "Regi\u00e3o n\u00e3o encontrada no PTA. Por favor, antes de criar esta Suba\u00e7\u00e3o, cadastre uma nova regi\u00e3o do produto e sua respectiva meta f\u00edsica."
+        return None, "Nenhum registro encontrado com os filtros informados."
     if len(rows) > 1:
         # Seleciona o registro mais recente quando houver ambiguidade.
         return rows[0], None
@@ -2144,7 +2212,9 @@ def api_subacao_options():
             "nome",
         )
     if allowed_pilar:
-        pilares = [p for p in pilares if (p.get("value") or "") in allowed_pilar]
+        filtered_pilares = [p for p in pilares if (p.get("value") or "") in allowed_pilar]
+        if filtered_pilares:
+            pilares = filtered_pilares
 
     eixo_rows = []
     if adj_selected:
@@ -2288,18 +2358,251 @@ def _subacao_payload(registro: CadastrarSubacao) -> dict:
         "etapa": registro.etapa,
         "responsavel_etapa": registro.responsavel_etapa,
         "cpf_responsavel_etapa": registro.cpf_responsavel_etapa,
-        "regiao_memoria": registro.regiao_memoria,
-        "natureza": registro.natureza,
-        "fonte": registro.fonte,
-        "idu": registro.idu,
-        "descricao": registro.descricao,
-        "unidade_etapa": registro.unidade_etapa,
-        "quantidade": str(registro.quantidade or ""),
-        "valor_unitario": str(registro.valor_unitario or ""),
-        "valor_total": str(registro.valor_total or ""),
         "justificativa": registro.justificativa,
         "responsavel_nger": registro.responsavel_nger,
+        "tipo_solicitacao": registro.tipo_solicitacao,
+        "status_aprovacao": registro.status_aprovacao,
+        "tipo_edicao": registro.tipo_edicao,
     }
+
+
+def _parse_json_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (tuple, set)):
+        return list(value)
+    token = str(value).strip()
+    if not token:
+        return []
+    if token.startswith("[") and token.endswith("]"):
+        try:
+            parsed = json.loads(token)
+            if isinstance(parsed, list):
+                return parsed
+        except (TypeError, ValueError):
+            pass
+    return [token]
+
+
+def _pick_list_value(values: list, idx: int) -> str:
+    if not values:
+        return ""
+    if idx < len(values):
+        return "" if values[idx] is None else str(values[idx]).strip()
+    return "" if values[0] is None else str(values[0]).strip()
+
+
+def _extract_plan21_ids(registro: CadastrarSubacao) -> list[int]:
+    ids = []
+    raw_ids = registro.plan21_nger_ids
+    if raw_ids:
+        try:
+            parsed = json.loads(raw_ids) if isinstance(raw_ids, str) else raw_ids
+            if isinstance(parsed, list):
+                for val in parsed:
+                    try:
+                        num = int(val)
+                        if num > 0:
+                            ids.append(num)
+                    except (TypeError, ValueError):
+                        continue
+        except (TypeError, ValueError):
+            pass
+    if not ids and registro.plan21_nger_id:
+        try:
+            num = int(registro.plan21_nger_id)
+            if num > 0:
+                ids.append(num)
+        except (TypeError, ValueError):
+            pass
+    return ids
+
+
+@lru_cache(maxsize=1)
+def _plan21_columns() -> list[str]:
+    insp = inspect(db.engine)
+    cols = [col["name"] for col in insp.get_columns("plan21_nger")]
+    return cols
+
+
+def _clone_plan21_row(source_id: int, overrides: dict | None = None, nullify: set | None = None) -> int:
+    cols = [c for c in _plan21_columns() if c != "id"]
+    overrides = overrides or {}
+    nullify = nullify or set()
+    override_keys = {k for k in overrides.keys() if k in cols}
+    nullify_keys = {k for k in nullify if k in cols and k not in override_keys}
+    select_parts = []
+    params = {"source_id": source_id}
+    for col in cols:
+        if col in override_keys:
+            select_parts.append(f":{col} AS {col}")
+            params[col] = overrides[col]
+        elif col in nullify_keys:
+            select_parts.append(f"NULL AS {col}")
+        else:
+            select_parts.append(col)
+    sql = f"INSERT INTO plan21_nger ({', '.join(cols)}) SELECT {', '.join(select_parts)} FROM plan21_nger WHERE id = :source_id"
+    result = db.session.execute(text(sql), params)
+    new_id = result.lastrowid
+    if not new_id:
+        try:
+            new_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+        except Exception:
+            new_id = None
+    return int(new_id) if new_id else 0
+
+
+def _subacao_list_payload(registro: CadastrarSubacao) -> dict:
+    return {
+        "codigos": _parse_json_list(registro.codigo),
+        "municipios": _parse_json_list(registro.municipios_entrega),
+        "metas": _parse_json_list(registro.meta_subacao),
+        "etapas": _parse_json_list(registro.etapa),
+        "responsaveis_etapa": _parse_json_list(registro.responsavel_etapa),
+    }
+
+
+def _build_subacao_override(registro: CadastrarSubacao, idx: int) -> dict:
+    lists = _subacao_list_payload(registro)
+    meta_raw = _pick_list_value(lists["metas"], idx)
+    meta_val = _parse_decimal(meta_raw) if meta_raw else None
+    return {
+        "exercicio": registro.exercicio,
+        "unidade_orcamentaria": registro.unidade_orcamentaria,
+        "programa": registro.programa,
+        "acao_paoe": registro.acao_paoe,
+        "responsavel_acao": registro.responsavel_acao,
+        "produto_acao": registro.produto_acao,
+        "chave_planejamento": registro.chave_planejamento,
+        "subacao_entrega": registro.subacao_entrega,
+        "responsavel": registro.responsavel,
+        "prazo": registro.prazo,
+        "unid_gestora": registro.unid_gestora,
+        "unidade_setorial_planejamento": registro.unidade_setorial_planejamento,
+        "produto_subacao": registro.produto_subacao,
+        "unidade_medida": registro.unidade_medida,
+        "regiao_subacao": registro.regiao_subacao,
+        "codigo": _pick_list_value(lists["codigos"], idx),
+        "municipios_entrega": _pick_list_value(lists["municipios"], idx),
+        "meta_subacao": meta_val,
+        "detalhamento_produto": registro.detalhamento_produto,
+        "etapa": _pick_list_value(lists["etapas"], idx) or registro.etapa,
+        "responsavel_etapa": _pick_list_value(lists["responsaveis_etapa"], idx) or registro.responsavel_etapa,
+        "ativo": True,
+    }
+
+
+def _apply_subacao_cadastrar(registro: CadastrarSubacao) -> list[int]:
+    ids = _extract_plan21_ids(registro)
+    if not ids:
+        raise ValueError("Referencia plan21_nger nao encontrada para cadastrar.")
+    lists = _subacao_list_payload(registro)
+    list_sizes = [
+        len(lists["codigos"]),
+        len(lists["municipios"]),
+        len(lists["metas"]),
+        len(lists["etapas"]),
+        len(lists["responsaveis_etapa"]),
+    ]
+    items_count = max([1] + list_sizes)
+    source_ids = ids if len(ids) > 1 else [ids[0]] * items_count
+    if len(source_ids) < items_count:
+        source_ids = [source_ids[min(i, len(source_ids) - 1)] for i in range(items_count)]
+    nullify_cols = {
+        "regiao_etapa",
+        "natureza",
+        "fonte",
+        "idu",
+        "descricao_item_despesa",
+        "unid_medida_item",
+        "quantidade",
+        "valor_unitario",
+        "valor_total",
+        "suplementacao",
+        "anulacao",
+        "valor_atual",
+        "cat_econ",
+        "grupo",
+        "modalidade",
+        "elemento",
+        "subelemento",
+    }
+    new_ids = []
+    for idx in range(items_count):
+        overrides = _build_subacao_override(registro, idx)
+        new_id = _clone_plan21_row(source_ids[idx], overrides=overrides, nullify=nullify_cols)
+        if new_id:
+            new_ids.append(new_id)
+    return new_ids
+
+
+def _apply_subacao_alterar(registro: CadastrarSubacao) -> list[int]:
+    ids = _extract_plan21_ids(registro)
+    if not ids:
+        raise ValueError("Referencia plan21_nger nao encontrada para alterar.")
+    tipo_edicao = (registro.tipo_edicao or "").strip().lower()
+    lists = _subacao_list_payload(registro)
+    list_sizes = [len(lists["codigos"]), len(lists["municipios"]), len(lists["metas"])]
+    items_count = max([1] + list_sizes)
+    if tipo_edicao == "novo_municipio" and items_count > 1 and len(ids) == 1:
+        source_ids = [ids[0]] * items_count
+    else:
+        source_ids = ids
+    if tipo_edicao == "novo_municipio" and items_count > len(source_ids):
+        source_ids = [source_ids[min(i, len(source_ids) - 1)] for i in range(items_count)]
+
+    def build_overrides(idx: int) -> dict:
+        overrides = {"ativo": True}
+        if tipo_edicao == "subacao_name":
+            overrides.update(
+                {
+                    "subacao_entrega": registro.subacao_entrega,
+                    "responsavel": registro.responsavel,
+                }
+            )
+        elif tipo_edicao == "responsavel_name":
+            overrides.update({"responsavel": registro.responsavel})
+        elif tipo_edicao == "produto_subacao":
+            overrides.update(
+                {
+                    "produto_subacao": registro.produto_subacao,
+                    "unidade_medida": registro.unidade_medida,
+                }
+            )
+        elif tipo_edicao == "novo_municipio":
+            meta_raw = _pick_list_value(lists["metas"], idx)
+            meta_val = _parse_decimal(meta_raw) if meta_raw else None
+            overrides.update(
+                {
+                    "codigo": _pick_list_value(lists["codigos"], idx),
+                    "municipios_entrega": _pick_list_value(lists["municipios"], idx),
+                    "meta_subacao": meta_val,
+                }
+            )
+        return overrides
+
+    new_ids = []
+    for idx, source_id in enumerate(source_ids):
+        overrides = build_overrides(idx)
+        new_id = _clone_plan21_row(source_id, overrides=overrides, nullify=set())
+        if new_id:
+            new_ids.append(new_id)
+    if ids:
+        Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).update(
+            {"ativo": False}, synchronize_session=False
+        )
+    return new_ids
+
+
+def _apply_subacao_excluir(registro: CadastrarSubacao) -> None:
+    ids = _extract_plan21_ids(registro)
+    if not ids:
+        raise ValueError("Referencia plan21_nger nao encontrada para excluir.")
+    Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).update(
+        {"ativo": False}, synchronize_session=False
+    )
 
 
 def _load_plan21_edit_rows(filters: dict) -> list[dict]:
@@ -2359,7 +2662,8 @@ def _load_plan21_edit_rows(filters: dict) -> list[dict]:
           codigo,
           municipios_entrega,
           meta_subacao,
-          detalhamento_produto
+          detalhamento_produto,
+          valor_atual
         FROM plan21_nger
     """
     if where:
@@ -2563,22 +2867,15 @@ def api_subacao_create():
     municipios_entrega = (data.get("municipios_entrega") or "").strip()
     meta_raw = (data.get("meta_subacao") or "").strip()
     municipios_items = data.get("municipios_items") or []
+    municipios_items = data.get("municipios_items") or []
     detalhamento_produto = (data.get("detalhamento_produto") or "").strip()
     etapa = (data.get("etapa") or "").strip()
     responsavel_etapa = (data.get("responsavel_etapa") or "").strip()
     cpf_responsavel_etapa_raw = (data.get("cpf_responsavel_etapa") or "").strip()
     cpf_responsavel_etapa = re.sub(r"\D", "", cpf_responsavel_etapa_raw)
-    regiao_memoria = (data.get("regiao_memoria") or "").strip()
-    natureza = (data.get("natureza") or "").strip()
-    fonte = (data.get("fonte") or "").strip()
-    idu = (data.get("idu") or "").strip()
-    descricao = (data.get("descricao") or "").strip()
-    unidade_etapa = (data.get("unidade_etapa") or "").strip()
-    quantidade_raw = (data.get("quantidade") or "").strip()
-    valor_unitario_raw = (data.get("valor_unitario") or "").strip()
-    valor_total_raw = (data.get("valor_total") or "").strip()
     justificativa = (data.get("justificativa") or "").strip()
     responsavel_nger = (data.get("responsavel_nger") or "").strip()
+    tipo_solicitacao = (data.get("tipo_solicitacao") or "cadastrar").strip().lower()
     etapas_items = data.get("etapas_items") or []
 
     required = {
@@ -2660,27 +2957,36 @@ def api_subacao_create():
                 "etapa": nome,
                 "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
                 "cpf_responsavel_etapa": re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or "")),
-                "regiao_memoria": (item.get("regiao_memoria") or "").strip(),
-                "natureza": (item.get("natureza") or "").strip(),
-                "fonte": (item.get("fonte") or "").strip(),
-                "idu": (item.get("idu") or "").strip(),
-                "descricao": (item.get("descricao") or "").strip(),
-                "unidade_etapa": (item.get("unidade_etapa") or "").strip(),
-                "quantidade": _parse_decimal(item.get("quantidade")) if item.get("quantidade") else None,
-                "valor_unitario": _parse_decimal(item.get("valor_unitario")) if item.get("valor_unitario") else None,
-                "valor_total": _parse_decimal(item.get("valor_total")) if item.get("valor_total") else None,
                 "justificativa": (item.get("justificativa") or "").strip(),
                 "responsavel_nger": (item.get("responsavel_nger") or "").strip(),
             }
-    quantidade = _parse_decimal(quantidade_raw) if quantidade_raw else None
-    if quantidade_raw and quantidade is None:
-        return jsonify({"error": "Quantidade invalida."}), 400
-    valor_unitario = _parse_decimal(valor_unitario_raw) if valor_unitario_raw else None
-    if valor_unitario_raw and valor_unitario is None:
-        return jsonify({"error": "Valor unitario invalido."}), 400
-    valor_total = _parse_decimal(valor_total_raw) if valor_total_raw else None
-    if valor_total_raw and valor_total is None:
-        return jsonify({"error": "Valor total invalido."}), 400
+
+    regiao_key = _normalize_codigo_num(regiao_subacao)
+    if regiao_key:
+        regiao_query = Plan21Nger.query
+        regiao_query = regiao_query.filter(Plan21Nger.exercicio == str(exercicio))
+        regiao_query = regiao_query.filter(Plan21Nger.uo == unidade_orcamentaria)
+        regiao_query = regiao_query.filter(Plan21Nger.programa == programa)
+        regiao_query = regiao_query.filter(Plan21Nger.acao_paoe == acao_paoe)
+        regiao_query = regiao_query.filter(Plan21Nger.responsavel_acao == responsavel_acao)
+        regiao_query = regiao_query.filter(Plan21Nger.produto == produto_acao)
+        regiao_query = regiao_query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
+        regiao_query = regiao_query.filter(
+            or_(
+                Plan21Nger.regiao_subacao == regiao_subacao,
+                Plan21Nger.regiao_subacao == regiao_key,
+                Plan21Nger.regiao_subacao.like(f"{regiao_key}%"),
+            )
+        )
+        if not regiao_query.first():
+            return (
+                jsonify(
+                    {
+                        "error": "Região não encontrada no PTA. Por favor, antes de criar esta Subação, cadastre uma nova região do produto e sua respectiva meta física."
+                    }
+                ),
+                400,
+            )
 
     plan_row, plan_err = _find_plan21_nger_row(
         str(exercicio),
@@ -2690,11 +2996,6 @@ def api_subacao_create():
         responsavel_acao,
         produto_acao,
         chave_planejamento,
-        subacao_entrega=subacao_entrega_raw,
-        etapa=etapa,
-        regiao_etapa=regiao_memoria,
-        natureza=natureza,
-        descricao_item_despesa=descricao,
     )
     if plan_err:
         return jsonify({"error": plan_err}), 400
@@ -2707,12 +3008,22 @@ def api_subacao_create():
     subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
 
     registros = []
+    codigos = []
+    municipios = []
+    metas = []
+    etapas = []
+    responsaveis_etapa = []
+    cpfs_etapa = []
+    plan21_ids = []
+
     for item in items:
         etapa_data = etapa_by_municipio.get(item["municipios_entrega"], {})
         etapa_value = (etapa_data.get("etapa") or etapa).strip()
-        regiao_etapa_value = (etapa_data.get("regiao_memoria") or regiao_memoria).strip()
-        natureza_value = (etapa_data.get("natureza") or natureza).strip()
-        descricao_value = (etapa_data.get("descricao") or descricao).strip()
+        responsavel_etapa_value = (etapa_data.get("responsavel_etapa") or responsavel_etapa).strip()
+        cpf_responsavel_etapa_value = (
+            etapa_data.get("cpf_responsavel_etapa") or cpf_responsavel_etapa
+        )
+
         plan_row_item, _ = _find_plan21_nger_row(
             str(exercicio),
             unidade_orcamentaria,
@@ -2723,9 +3034,7 @@ def api_subacao_create():
             chave_planejamento,
             subacao_entrega=subacao_entrega,
             etapa=etapa_value,
-            regiao_etapa=regiao_etapa_value,
-            natureza=natureza_value,
-            descricao_item_despesa=descricao_value,
+            responsavel_etapa=responsavel_etapa_value,
         )
         if not plan_row_item and subacao_entrega_raw:
             plan_row_item, _ = _find_plan21_nger_row(
@@ -2738,52 +3047,60 @@ def api_subacao_create():
                 chave_planejamento,
                 subacao_entrega=subacao_entrega_raw,
                 etapa=etapa_value,
-                regiao_etapa=regiao_etapa_value,
-                natureza=natureza_value,
-                descricao_item_despesa=descricao_value,
+                responsavel_etapa=responsavel_etapa_value,
             )
-        registro = CadastrarSubacao(
-            exercicio=exercicio,
-            unidade_orcamentaria=unidade_orcamentaria,
-            programa=programa,
-            acao_paoe=acao_paoe,
-            responsavel_acao=responsavel_acao,
-            produto_acao=produto_acao,
-            chave_planejamento=chave_planejamento,
-            subacao_entrega=subacao_entrega,
-            responsavel=responsavel,
-            cpf_responsavel=cpf_responsavel,
-            prazo=prazo,
-            unid_gestora=unid_gestora,
-            unidade_setorial_planejamento=unidade_setorial_planejamento,
-            produto_subacao=produto_subacao,
-            unidade_medida=unidade_medida,
-            regiao_subacao=regiao_subacao,
-            codigo=item["codigo"],
-            municipios_entrega=item["municipios_entrega"],
-            meta_subacao=item["meta_subacao"],
-            detalhamento_produto=detalhamento_produto,
-            etapa=etapa_value or etapa,
-            responsavel_etapa=etapa_data.get("responsavel_etapa") or responsavel_etapa,
-            cpf_responsavel_etapa=etapa_data.get("cpf_responsavel_etapa") or cpf_responsavel_etapa,
-            regiao_memoria=regiao_etapa_value or regiao_memoria,
-            natureza=etapa_data.get("natureza") or natureza,
-            fonte=etapa_data.get("fonte") or fonte,
-            idu=etapa_data.get("idu") or idu,
-            descricao=etapa_data.get("descricao") or descricao,
-            unidade_etapa=etapa_data.get("unidade_etapa") or unidade_etapa,
-            quantidade=etapa_data.get("quantidade") or quantidade,
-            valor_unitario=etapa_data.get("valor_unitario") or valor_unitario,
-            valor_total=etapa_data.get("valor_total") or valor_total,
-            justificativa=etapa_data.get("justificativa") or justificativa,
-            responsavel_nger=etapa_data.get("responsavel_nger") or responsavel_nger,
-            plan21_nger_id=(plan_row_item.id if plan_row_item else plan_row.id if plan_row else None),
-            usuario_id=usuarios_id,
-            status_aprovacao="aguardando",
-            criado_em=_now_local(),
-        )
-        registros.append(registro)
-        db.session.add(registro)
+        if plan_row_item:
+            plan21_ids.append(plan_row_item.id)
+        elif plan_row:
+            plan21_ids.append(plan_row.id)
+
+        codigos.append(item["codigo"])
+        municipios.append(item["municipios_entrega"])
+        meta_val = item["meta_subacao"]
+        if isinstance(meta_val, Decimal):
+            meta_val = format(meta_val, "f")
+        metas.append(str(meta_val))
+        etapas.append(etapa_value or etapa)
+        responsaveis_etapa.append(responsavel_etapa_value)
+        cpfs_etapa.append(cpf_responsavel_etapa_value)
+
+    plan21_id = plan21_ids[-1] if plan21_ids else (plan_row.id if plan_row else None)
+    registro = CadastrarSubacao(
+        exercicio=exercicio,
+        unidade_orcamentaria=unidade_orcamentaria,
+        programa=programa,
+        acao_paoe=acao_paoe,
+        responsavel_acao=responsavel_acao,
+        produto_acao=produto_acao,
+        chave_planejamento=chave_planejamento,
+        subacao_entrega=subacao_entrega,
+        responsavel=responsavel,
+        cpf_responsavel=cpf_responsavel,
+        prazo=prazo,
+        unid_gestora=unid_gestora,
+        unidade_setorial_planejamento=unidade_setorial_planejamento,
+        produto_subacao=produto_subacao,
+        unidade_medida=unidade_medida,
+        regiao_subacao=regiao_subacao,
+        codigo=json.dumps(codigos),
+        municipios_entrega=json.dumps(municipios),
+        meta_subacao=json.dumps(metas),
+        etapa=json.dumps(etapas),
+        responsavel_etapa=json.dumps(responsaveis_etapa),
+        cpf_responsavel_etapa=json.dumps(cpfs_etapa),
+        detalhamento_produto=detalhamento_produto,
+        justificativa=justificativa,
+        responsavel_nger=responsavel_nger,
+        tipo_solicitacao=tipo_solicitacao,
+        ativo=True,
+        plan21_nger_id=plan21_id,
+        plan21_nger_ids=json.dumps(plan21_ids) if plan21_ids else None,
+        usuario_id=usuarios_id,
+        status_aprovacao="aguardando",
+        criado_em=_now_local(),
+    )
+    registros.append(registro)
+    db.session.add(registro)
     try:
         db.session.commit()
     except Exception as exc:
@@ -2835,6 +3152,13 @@ def api_subacao_editar():
     produto_subacao_edit = (data.get("produto_subacao_edit") or "").strip()
     justificativa = (data.get("justificativa") or "").strip()
     responsavel_nger = (data.get("responsavel_nger") or "").strip()
+    tipo_solicitacao = (data.get("tipo_solicitacao") or edit_mode or "alterar").strip().lower()
+    if tipo_solicitacao == "editar":
+        tipo_solicitacao = "alterar"
+    tipo_edicao = (data.get("tipo_edicao") or edit_mode or "").strip().lower()
+    plan21_nger_id_raw = (data.get("plan21_nger_id") or "").strip()
+    plan21_nger_ids_raw = data.get("plan21_nger_ids")
+    registro_id_raw = (data.get("registro_id") or data.get("id") or "").strip()
 
     required_common = [
         "exercicio",
@@ -2857,7 +3181,6 @@ def api_subacao_editar():
             "prazo",
             "unid_gestora",
             "unidade_setorial_planejamento",
-            "produto_subacao",
             "produto_subacao_edit",
         ],
         "novo_municipio": required_common
@@ -2869,6 +3192,7 @@ def api_subacao_editar():
             "produto_subacao",
             "regiao_subacao",
         ],
+        "excluir": required_common + ["justificativa", "responsavel_nger"],
     }
     if edit_mode not in required_map:
         return jsonify({"error": "Modo de edicao invalido."}), 400
@@ -2894,19 +3218,106 @@ def api_subacao_editar():
     if usuarios_id is None:
         return jsonify({"error": "Usuario nao encontrado."}), 400
 
-    rows = _load_plan21_edit_rows(filters)
+    registro_id = None
+    registro_row = None
+    if registro_id_raw:
+        try:
+            registro_id = int(registro_id_raw)
+        except ValueError:
+            registro_id = None
+    if registro_id:
+        registro_row = CadastrarSubacao.query.get(registro_id)
+
+    ids: list[int] = []
+    if plan21_nger_ids_raw:
+        try:
+            if isinstance(plan21_nger_ids_raw, str):
+                parsed = json.loads(plan21_nger_ids_raw)
+            else:
+                parsed = plan21_nger_ids_raw
+            if isinstance(parsed, list):
+                for val in parsed:
+                    try:
+                        ids.append(int(val))
+                    except (TypeError, ValueError):
+                        continue
+        except (TypeError, ValueError):
+            pass
+    if plan21_nger_id_raw:
+        try:
+            ids.append(int(plan21_nger_id_raw))
+        except ValueError:
+            pass
+    ids = [i for i in ids if i > 0]
+    rows: list[dict] = []
+    if ids:
+        plan_rows = Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).all()
+        for r in plan_rows:
+            rows.append(
+                {
+                    "id": r.id,
+                    "exercicio": getattr(r, "exercicio", None),
+                    "unidade_orcamentaria": getattr(r, "uo", None),
+                    "programa": getattr(r, "programa", None),
+                    "acao_paoe": getattr(r, "acao_paoe", None),
+                    "responsavel_acao": getattr(r, "responsavel_acao", None),
+                    "produto_acao": getattr(r, "produto", None),
+                    "chave_planejamento": getattr(r, "chave_planejamento", None),
+                    "subacao_entrega": getattr(r, "subacao_entrega", None),
+                    "responsavel": getattr(r, "responsavel", None),
+                    "cpf_responsavel": getattr(r, "cpf_responsavel", None),
+                    "prazo": getattr(r, "prazo", None),
+                    "unid_gestora": getattr(r, "unid_gestora", None),
+                    "unidade_setorial_planejamento": getattr(
+                        r, "unidade_setorial_planejamento", None
+                    ),
+                    "produto_subacao": getattr(r, "produto_subacao", None),
+                    "unidade_medida": getattr(r, "unidade_medida", None),
+                    "regiao_subacao": getattr(r, "regiao_subacao", None),
+                    "codigo": getattr(r, "codigo", None),
+                    "municipios_entrega": getattr(r, "municipios_entrega", None),
+                    "meta_subacao": getattr(r, "meta_subacao", None),
+                    "detalhamento_produto": getattr(r, "detalhamento_produto", None),
+                    "valor_atual": getattr(r, "valor_atual", None),
+                }
+            )
+    else:
+        rows = _load_plan21_edit_rows(filters)
     if not rows:
         return jsonify({"error": "Nenhum registro encontrado com os filtros informados."}), 404
 
-    if edit_mode == "novo_municipio":
-        rows = rows[:1]
-    else:
-        row_ids = [str(r.get("id")) for r in rows if r.get("id") is not None]
-        rows = rows[:1]
+    if edit_mode == "excluir":
+        for row in rows:
+            val = row.get("valor_atual")
+            if val is None or val == "":
+                continue
+            dec = _parse_decimal(val)
+            if dec is None or dec != 0:
+                return (
+                    jsonify(
+                        {
+                            "error": "Por favor, antes de excluir esta Subação, remaneje os valores da Memória de Cálculo."
+                        }
+                    ),
+                    400,
+                )
+
+    row_ids = [str(r.get("id")) for r in rows if r.get("id") is not None]
+    rows = rows[:1]
 
     def pick_row(row: dict, key: str) -> str:
         val = row.get(key)
         return "" if val is None else str(val).strip()
+
+    if registro_id_raw and not registro_row:
+        return jsonify({"error": "Registro de edição não encontrado."}), 404
+
+    def _coalesce_update(target, key, value):
+        if value is None:
+            return
+        if isinstance(value, str) and value.strip() == "":
+            return
+        setattr(target, key, value)
 
     registros = []
     for row in rows:
@@ -2947,11 +3358,13 @@ def api_subacao_editar():
             "unidade_medida": unidade_medida,
             "regiao_subacao": regiao_subacao,
             "detalhamento_produto": detalhamento,
-            "plan21_nger_id": row.get("id"),
-            "plan21_nger_ids": json.dumps(row_ids) if edit_mode != "novo_municipio" else None,
+            "tipo_solicitacao": tipo_solicitacao,
+            "tipo_edicao": tipo_edicao if edit_mode != "excluir" else None,
+            "ativo": True,
+            "plan21_nger_id": (row_ids[-1] if row_ids else row.get("id")),
+            "plan21_nger_ids": None if edit_mode == "novo_municipio" else json.dumps(row_ids) if row_ids else None,
             "usuario_id": usuarios_id,
             "status_aprovacao": "aguardando",
-            "criado_em": _now_local(),
             "justificativa": justificativa,
             "responsavel_nger": responsavel_nger,
         }
@@ -2960,6 +3373,9 @@ def api_subacao_editar():
             municipios_items = data.get("municipios_items") or []
             if not isinstance(municipios_items, list) or not municipios_items:
                 return jsonify({"error": "Informe municipios para adicionar."}), 400
+            codigos = []
+            municipios = []
+            metas = []
             for item in municipios_items:
                 codigo = (item.get("codigo") or "").strip()
                 municipio = (item.get("municipios_entrega") or "").strip()
@@ -2969,25 +3385,49 @@ def api_subacao_editar():
                 meta_dec = _parse_decimal(meta_raw)
                 if meta_dec is None:
                     return jsonify({"error": "Meta da subacao invalida."}), 400
+                codigos.append(codigo)
+                municipios.append(municipio)
+                metas.append(meta_raw)
+            if registro_row:
+                for key, value in base_kwargs.items():
+                    _coalesce_update(registro_row, key, value)
+                _coalesce_update(registro_row, "codigo", json.dumps(codigos))
+                _coalesce_update(registro_row, "municipios_entrega", json.dumps(municipios))
+                _coalesce_update(registro_row, "meta_subacao", json.dumps(metas))
+                registros.append(registro_row)
+            else:
                 registro = CadastrarSubacao(
                     **base_kwargs,
-                    codigo=codigo,
-                    municipios_entrega=municipio,
-                    meta_subacao=meta_dec,
+                    codigo=json.dumps(codigos),
+                    municipios_entrega=json.dumps(municipios),
+                    meta_subacao=json.dumps(metas),
+                    criado_em=_now_local(),
                 )
                 registros.append(registro)
                 db.session.add(registro)
         else:
             meta_val = pick_row(row, "meta_subacao")
             meta_dec = _parse_decimal(meta_val) if meta_val else None
-            registro = CadastrarSubacao(
-                **base_kwargs,
-                codigo=pick_row(row, "codigo"),
-                municipios_entrega=pick_row(row, "municipios_entrega"),
-                meta_subacao=meta_dec,
-            )
-            registros.append(registro)
-            db.session.add(registro)
+            if registro_row:
+                for key, value in base_kwargs.items():
+                    _coalesce_update(registro_row, key, value)
+                _coalesce_update(registro_row, "codigo", pick_row(row, "codigo"))
+                _coalesce_update(
+                    registro_row, "municipios_entrega", pick_row(row, "municipios_entrega")
+                )
+                if meta_dec is not None:
+                    registro_row.meta_subacao = meta_dec
+                registros.append(registro_row)
+            else:
+                registro = CadastrarSubacao(
+                    **base_kwargs,
+                    codigo=pick_row(row, "codigo"),
+                    municipios_entrega=pick_row(row, "municipios_entrega"),
+                    meta_subacao=meta_dec,
+                    criado_em=_now_local(),
+                )
+                registros.append(registro)
+                db.session.add(registro)
 
     try:
         db.session.commit()
@@ -2998,7 +3438,7 @@ def api_subacao_editar():
     warning = ""
     if edit_mode == "novo_municipio":
         warning = (
-            "Novo municipio adicionado. Cadastre uma nova etapa e memoria de calculo em seguida."
+                    "Novo municipio adicionado. Cadastre uma nova etapa em seguida."
         )
     return jsonify(
         {
@@ -3043,18 +3483,10 @@ def api_subacao_update(subacao_id):
     responsavel_etapa = (data.get("responsavel_etapa") or "").strip()
     cpf_responsavel_etapa_raw = (data.get("cpf_responsavel_etapa") or "").strip()
     cpf_responsavel_etapa = re.sub(r"\D", "", cpf_responsavel_etapa_raw)
-    regiao_memoria = (data.get("regiao_memoria") or "").strip()
-    natureza = (data.get("natureza") or "").strip()
-    fonte = (data.get("fonte") or "").strip()
-    idu = (data.get("idu") or "").strip()
-    descricao = (data.get("descricao") or "").strip()
-    unidade_etapa = (data.get("unidade_etapa") or "").strip()
-    quantidade_raw = (data.get("quantidade") or "").strip()
-    valor_unitario_raw = (data.get("valor_unitario") or "").strip()
-    valor_total_raw = (data.get("valor_total") or "").strip()
     justificativa = (data.get("justificativa") or "").strip()
     responsavel_nger = (data.get("responsavel_nger") or "").strip()
 
+    has_municipios_items = isinstance(municipios_items, list) and bool(municipios_items)
     required = {
         "exercicio": exercicio_raw,
         "unidade_orcamentaria": unidade_orcamentaria,
@@ -3073,10 +3505,11 @@ def api_subacao_update(subacao_id):
         "produto_subacao": produto_subacao,
         "unidade_medida": unidade_medida,
         "regiao_subacao": regiao_subacao,
-        "codigo": codigo,
-        "municipios_entrega": municipios_entrega,
-        "meta_subacao": meta_raw,
     }
+    if not has_municipios_items:
+        required["codigo"] = codigo
+        required["municipios_entrega"] = municipios_entrega
+        required["meta_subacao"] = meta_raw
     missing = [k for k, v in required.items() if not v]
     if missing:
         return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
@@ -3088,20 +3521,53 @@ def api_subacao_update(subacao_id):
     except ValueError:
         return jsonify({"error": "Exercicio invalido."}), 400
 
-    meta_subacao = _parse_decimal(meta_raw)
-    if meta_subacao is None:
-        return jsonify({"error": "Meta da subacao invalida."}), 400
-    quantidade = _parse_decimal(quantidade_raw) if quantidade_raw else None
-    if quantidade_raw and quantidade is None:
-        return jsonify({"error": "Quantidade invalida."}), 400
-    valor_unitario = _parse_decimal(valor_unitario_raw) if valor_unitario_raw else None
-    if valor_unitario_raw and valor_unitario is None:
-        return jsonify({"error": "Valor unitario invalido."}), 400
-    valor_total = _parse_decimal(valor_total_raw) if valor_total_raw else None
-    if valor_total_raw and valor_total is None:
-        return jsonify({"error": "Valor total invalido."}), 400
+    items: list[dict] = []
+    if has_municipios_items:
+        for item in municipios_items:
+            codigo_i = (item.get("codigo") or "").strip()
+            municipio_i = (item.get("municipios_entrega") or "").strip()
+            meta_i = (item.get("meta_subacao") or "").strip()
+            if not codigo_i or not municipio_i or not meta_i:
+                return jsonify({"error": "Informe codigo, municipio e meta para todos os itens."}), 400
+            meta_i_dec = _parse_decimal(meta_i)
+            if meta_i_dec is None:
+                return jsonify({"error": "Meta da subacao invalida."}), 400
+            items.append(
+                {
+                    "codigo": codigo_i,
+                    "municipios_entrega": municipio_i,
+                    "meta_subacao": meta_i_dec,
+                }
+            )
+    else:
+        meta_subacao = _parse_decimal(meta_raw)
+        if meta_subacao is None:
+            return jsonify({"error": "Meta da subacao invalida."}), 400
+        items.append(
+            {
+                "codigo": codigo,
+                "municipios_entrega": municipios_entrega,
+                "meta_subacao": meta_subacao,
+            }
+        )
 
-    plan_row, plan_err = _find_plan21_nger_row(
+    etapa_by_municipio = {}
+    if isinstance(etapas_items, list) and etapas_items:
+        for item in etapas_items:
+            muni = (item.get("municipio") or "").strip()
+            nome = (item.get("nome_etapa") or "").strip()
+            if not muni or not nome:
+                return jsonify({"error": "Etapas incompletas para municipios."}), 400
+            etapa_by_municipio[muni] = {
+                "etapa": nome,
+                "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
+                "cpf_responsavel_etapa": re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or "")),
+            }
+
+    prazo = f"{prazo_inicio} a {prazo_fim}".strip()
+    subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
+
+    plan_row_base, plan_err = _find_plan21_nger_row(
         str(exercicio),
         unidade_orcamentaria,
         programa,
@@ -3113,8 +3579,63 @@ def api_subacao_update(subacao_id):
     if plan_err:
         return jsonify({"error": plan_err}), 400
 
-    prazo = f"{prazo_inicio} a {prazo_fim}".strip()
-    subacao_entrega = f"{chave_planejamento} {subacao_entrega_raw}".strip()
+    codigos = []
+    municipios = []
+    metas = []
+    etapas = []
+    responsaveis_etapa = []
+    cpfs_etapa = []
+    plan21_ids = []
+
+    for item in items:
+        etapa_data = etapa_by_municipio.get(item["municipios_entrega"], {})
+        etapa_value = (etapa_data.get("etapa") or etapa).strip()
+        responsavel_etapa_value = (etapa_data.get("responsavel_etapa") or responsavel_etapa).strip()
+        cpf_responsavel_etapa_value = (
+            etapa_data.get("cpf_responsavel_etapa") or cpf_responsavel_etapa
+        )
+
+        plan_row_item, _ = _find_plan21_nger_row(
+            str(exercicio),
+            unidade_orcamentaria,
+            programa,
+            acao_paoe,
+            responsavel_acao,
+            produto_acao,
+            chave_planejamento,
+            subacao_entrega=subacao_entrega,
+            etapa=etapa_value,
+            responsavel_etapa=responsavel_etapa_value,
+        )
+        if not plan_row_item and subacao_entrega_raw:
+            plan_row_item, _ = _find_plan21_nger_row(
+                str(exercicio),
+                unidade_orcamentaria,
+                programa,
+                acao_paoe,
+                responsavel_acao,
+                produto_acao,
+                chave_planejamento,
+                subacao_entrega=subacao_entrega_raw,
+                etapa=etapa_value,
+                responsavel_etapa=responsavel_etapa_value,
+            )
+        if plan_row_item:
+            plan21_ids.append(plan_row_item.id)
+        elif plan_row_base:
+            plan21_ids.append(plan_row_base.id)
+
+        meta_val = item["meta_subacao"]
+        if isinstance(meta_val, Decimal):
+            meta_val = format(meta_val, "f")
+        codigos.append(item["codigo"])
+        municipios.append(item["municipios_entrega"])
+        metas.append(str(meta_val))
+        etapas.append(etapa_value or etapa)
+        responsaveis_etapa.append(responsavel_etapa_value)
+        cpfs_etapa.append(cpf_responsavel_etapa_value)
+
+    use_grouped = has_municipios_items or len(items) > 1
 
     registro.exercicio = exercicio
     registro.unidade_orcamentaria = unidade_orcamentaria
@@ -3132,25 +3653,25 @@ def api_subacao_update(subacao_id):
     registro.produto_subacao = produto_subacao
     registro.unidade_medida = unidade_medida
     registro.regiao_subacao = regiao_subacao
-    registro.codigo = codigo
-    registro.municipios_entrega = municipios_entrega
-    registro.meta_subacao = meta_subacao
+    if use_grouped:
+        registro.codigo = json.dumps(codigos)
+        registro.municipios_entrega = json.dumps(municipios)
+        registro.meta_subacao = json.dumps(metas)
+        registro.etapa = json.dumps(etapas)
+        registro.responsavel_etapa = json.dumps(responsaveis_etapa)
+        registro.cpf_responsavel_etapa = json.dumps(cpfs_etapa)
+        registro.plan21_nger_ids = json.dumps(plan21_ids) if plan21_ids else None
+    else:
+        registro.codigo = codigo
+        registro.municipios_entrega = municipios_entrega
+        registro.meta_subacao = metas[0] if metas else meta_raw
+        registro.etapa = etapa
+        registro.responsavel_etapa = responsavel_etapa
+        registro.cpf_responsavel_etapa = cpf_responsavel_etapa
     registro.detalhamento_produto = detalhamento_produto
-    registro.etapa = etapa
-    registro.responsavel_etapa = responsavel_etapa
-    registro.cpf_responsavel_etapa = cpf_responsavel_etapa
-    registro.regiao_memoria = regiao_memoria
-    registro.natureza = natureza
-    registro.fonte = fonte
-    registro.idu = idu
-    registro.descricao = descricao
-    registro.unidade_etapa = unidade_etapa
-    registro.quantidade = quantidade
-    registro.valor_unitario = valor_unitario
-    registro.valor_total = valor_total
     registro.justificativa = justificativa
     registro.responsavel_nger = responsavel_nger
-    registro.plan21_nger_id = plan_row.id if plan_row else None
+    registro.plan21_nger_id = plan21_ids[-1] if plan21_ids else plan_row_base.id if plan_row_base else None
     registro.alterado_em = _now_local()
     try:
         db.session.commit()
@@ -3165,8 +3686,12 @@ def api_subacao_update(subacao_id):
 @require_feature("cadastrar/plan_21-nger/subacao")
 def api_subacao_delete(subacao_id):
     registro = db.session.get(CadastrarSubacao, subacao_id)
-    if not registro or registro.excluido_em is not None:
+    if not registro or registro.ativo is False:
         return jsonify({"error": "Registro nao encontrado."}), 404
+    status = (registro.status_aprovacao or "").strip().lower()
+    if status and status != "aguardando":
+        return jsonify({"error": "Somente registros com status Aguardando podem ser excluídos."}), 400
+    registro.ativo = False
     registro.excluido_em = _now_local()
     try:
         db.session.commit()
@@ -3174,6 +3699,77 @@ def api_subacao_delete(subacao_id):
         db.session.rollback()
         return jsonify({"error": f"Falha ao excluir subacao: {exc}"}), 500
     return jsonify({"ok": True})
+
+
+@home_bp.route("/api/subacao/<int:subacao_id>/aprovar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_aprovar(subacao_id):
+    registro = db.session.get(CadastrarSubacao, subacao_id)
+    if not registro or registro.ativo is False:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Subacao ja foi processada."}), 400
+
+    try:
+        nivel_int = int(getattr(g, "user_nivel", 0) or 0)
+    except (TypeError, ValueError):
+        nivel_int = 0
+    if nivel_int not in (1, 2):
+        return jsonify({"error": "Usuario sem permissao para aprovar a subacao atual."}), 403
+
+    data = request.get_json() or {}
+    aprovado_raw = (data.get("subacao_aprovada") or "").strip().lower()
+    motivo = (data.get("motivo_rejeicao") or "").strip()
+    if not motivo:
+        return jsonify({"error": "Justificativa obrigatoria."}), 400
+    aprovado = aprovado_raw if aprovado_raw in ("sim", "nao") else "sim"
+
+    novos_ids = []
+    if aprovado == "sim":
+        tipo = (registro.tipo_solicitacao or "cadastrar").strip().lower()
+        if tipo == "editar":
+            tipo = "alterar"
+        try:
+            if tipo == "cadastrar":
+                novos_ids = _apply_subacao_cadastrar(registro)
+            elif tipo == "alterar":
+                novos_ids = _apply_subacao_alterar(registro)
+            elif tipo == "excluir":
+                _apply_subacao_excluir(registro)
+            else:
+                return jsonify({"error": "Tipo de solicitacao invalido."}), 400
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify({"error": f"Falha ao aprovar subacao: {exc}"}), 500
+
+        registro.status_aprovacao = "Aprovado"
+        registro.motivo_rejeicao = motivo
+        if novos_ids:
+            registro.plan21_nger_id = novos_ids[-1]
+            registro.plan21_nger_ids = json.dumps(novos_ids) if len(novos_ids) > 1 else None
+    else:
+        registro.status_aprovacao = "Rejeitado"
+        registro.ativo = False
+        registro.excluido_em = _now_local()
+        registro.motivo_rejeicao = motivo
+
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+    registro.aprovado_por = str(usuarios_id)
+    registro.data_aprovacao = _now_local()
+    registro.alterado_em = _now_local()
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao aprovar subacao: {exc}"}), 500
+
+    return jsonify({"ok": True, "message": "Subacao atualizada.", "subacao": _subacao_payload(registro)})
 
 
 @home_bp.route("/api/dotacao", methods=["POST"])

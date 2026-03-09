@@ -1,4 +1,4 @@
-<div class="grid" id="subacao-page"
+﻿<div class="grid" id="subacao-page"
 
      data-user-id="{{ user_id }}"
 
@@ -38,7 +38,8 @@
 
               <option value="cadastrar">Cadastrar</option>
 
-              <option value="editar">Editar</option>
+              <option value="alterar">Alterar</option>
+              <option value="excluir">Excluir</option>
 
             </select>
 
@@ -517,7 +518,7 @@
 
               <div class="field">
 
-                <span>Deseja alterar o nome da Subação</span>
+                <span>Deseja alterar o nome da Subação?</span>
                 <div class="field-radio-group">
 
                   <label class="field-radio">
@@ -541,7 +542,7 @@
 
               <div class="field">
 
-                <span>Deseja alterar o nome do Responsável</span>
+                <span>Deseja alterar o nome do Responsável?</span>
                 <div class="field-radio-group">
 
                   <label class="field-radio">
@@ -565,7 +566,7 @@
 
               <div class="field">
 
-                <span>Deseja alterar o produto da Subação</span>
+                <span>Deseja alterar o produto da Subação?</span>
                 <div class="field-radio-group">
 
                   <label class="field-radio">
@@ -589,7 +590,7 @@
 
               <div class="field">
 
-                <span>Deseja acrescentar Novo Município</span>
+                <span>Deseja acrescentar Novo Município?</span>
                 <div class="field-radio-group">
 
                   <label class="field-radio">
@@ -948,185 +949,6 @@
             <input type="text" id="subacao-cpf-etapa" name="cpf_responsavel_etapa" inputmode="numeric" maxlength="14" required />
 
           </label>
-
-          <label class="field">
-
-            <span>*Região da Memória de Cálculo</span>
-
-            <input type="text" id="subacao-regiao-memoria" name="regiao_memoria" readonly required />
-
-          </label>
-
-          <label class="field">
-
-            <span>*Natureza de Despesa</span>
-
-            <input type="text" id="subacao-natureza" name="natureza" required />
-
-          </label>
-
-            <div class="field">
-
-              <span>*Fonte de Superávit</span>
-
-              <div class="field-radio-group">
-
-                <label class="field-radio">
-
-                  <input type="radio" name="fonte_superavit" value="nao" checked required />
-
-                  <span>Não</span>
-
-                </label>
-
-                <label class="field-radio">
-
-                  <input type="radio" name="fonte_superavit" value="sim" required />
-
-                  <span>Sim</span>
-
-                </label>
-
-              </div>
-
-            </div>
-
-          <label class="field">
-
-            <span>*Fonte</span>
-
-            <select id="subacao-fonte" name="fonte" required>
-
-              <option value="">Selecione</option>
-
-              <option>15000000 - Recursos não vinculados de Impostos</option>
-
-              <option>15001001 - Recursos destinados à Manutenção e Desenvolvimento do Ensino</option>
-
-              <option>15010000 - Outros Recursos não Vinculados</option>
-
-              <option>15010100 - Outros Recursos não vinculados destinados ao Tesouro</option>
-
-              <option>15021001 - Recursos não vinculados da compensação de impostos - Destinado ao Ensino</option>
-
-              <option>15400000 - Transferência de recursos do FUNDEB desenvolvimento do Ensino</option>
-
-              <option>15401070 - Transferência de recursos do FUNDEB Remuneração Educação Básica</option>
-
-              <option>15401071 - Transferência de recursos do FUNDEB - Ensino em Tempo Integral (ETI)</option>
-
-              <option>15401072 - Transferência de recursos do FUNDEB - Remuneração Profissionais ETI</option>
-
-              <option>15460000 - Transferências do FUNDEB - Complementação da União - ETI</option>
-
-              <option>15500000 - Recursos da Contribuição ao Salário Educação</option>
-
-              <option>15510000 - Transferências de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)</option>
-
-              <option>15520000 - Transferências de Recursos do FNDE referente ao Programa Nacional de Alimentação Escolar (PNAE)</option>
-
-              <option>15530000 - Transferências de Recursos do FNDE referente ao P. N. de Apoio ao Transporte Escolar (PNATE)</option>
-
-              <option>15690000 - Outras Transferências de Recursos do FNDE</option>
-
-              <option>15700000 - Transferências do Governo Federal ref. a Convênios e outros Repasses vinculados à Educação</option>
-
-              <option>15703110 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Individual</option>
-
-              <option>15703120 - Transf. Gov. Federal ref. Convênios e outros Repasses vinculados à Educação - Emenda Bancada</option>
-
-              <option>15740000 - Recursos de Operações de Crédito Educação</option>
-
-            </select>
-
-          </label>
-
-          <label class="field">
-
-            <span>*Iduso</span>
-
-            <select id="subacao-iduso" name="idu" required>
-
-              <option value="">Selecione...</option>
-
-              <option>01 - OUTRAS DESPESAS - OD</option>
-
-              <option>02 - CONTRAPARTIDA DE CONVÊNIOS - RCC</option>
-
-              <option>03 - DESPESAS OBRIGATÓRIAS - DO</option>
-
-              <option>04 - CONTRATOS DIVERSOS - CD</option>
-
-              <option>06 - EMENDAS DE BANCADA - Em-Bancada</option>
-
-              <option>07 - EMENDAS PARLAMENTARES IMPOSITIVAS - EPI</option>
-
-              <option>08 - EMENDAS PARLAMENTARES - DEMAIS ORIGENS - EP-DmO</option>
-
-              <option>10 - PROFISCO PRINCIPAL - PRF PR</option>
-
-              <option>11 - PROFISCO CONTRAPARTIDA - PRF CTRP</option>
-
-              <option>12 - PROGESTÃO PRINCIPAL - PROG PR</option>
-
-              <option>13 - OPERAÇÕES DE CRÉDITOS - Opr Créd</option>
-
-              <option>14 - PRIORIDADE DE GOVERNO - PG</option>
-
-            </select>
-
-          </label>
-
-          <label class="field">
-
-            <span>*Descrição do Item de Despesa</span>
-
-            <textarea id="subacao-descricao" name="descricao" rows="3" style="resize:vertical;" required></textarea>
-
-          </label>
-
-          <label class="field">
-
-            <span>*Unid. Medida</span>
-
-            <select id="subacao-unidade-etapa" name="unidade_etapa" required>
-
-              <option value="">Selecione</option>
-
-              <option>Percentual</option>
-
-              <option>Real (R$)</option>
-
-              <option>Unidade</option>
-
-            </select>
-
-          </label>
-
-          <label class="field">
-
-            <span>*Quantidade</span>
-
-            <input type="text" id="subacao-quantidade" name="quantidade" required />
-
-          </label>
-
-          <label class="field">
-
-            <span>*Valor Unitário</span>
-
-            <input type="text" id="subacao-valor-unitario" name="valor_unitario" required />
-
-          </label>
-
-          <label class="field">
-
-            <span>*Valor Total</span>
-
-            <input type="text" id="subacao-valor-total" name="valor_total" readonly required />
-
-          </label>
-
           <label class="field">
 
             <span>*Justificativa Inclusão</span>
@@ -1161,6 +983,26 @@
 
       </div>
 
+      <div class="form-section" id="subacao-aprovacao-fields" style="display:none;">
+        <label class="field">
+          <span>*Aprovar a Subação?</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="subacao-aprovada" value="sim" checked />
+              <span>Sim</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="subacao-aprovada" value="nao" />
+              <span>Não</span>
+            </label>
+          </div>
+        </label>
+        <label class="field field-full">
+          <span>*Justificativa</span>
+          <textarea id="subacao-justificativa-aprovacao" rows="3"></textarea>
+        </label>
+      </div>
+
       <div class="actions">
 
         <button class="btn btn-secondary sm" type="button" id="subacao-prev">Voltar</button>
@@ -1183,6 +1025,58 @@
 
   <div class="card">
 
+    <div class="form no-print" id="subacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Campo</span>
+          <select id="subacao-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="exercicio">*Exercício</option>
+            <option value="controleSubacao">Controle de Subação</option>
+            <option value="statusAprovacao">Status</option>
+            <option value="acaoPaoe">Ação/PAOE</option>
+            <option value="programa">Programa</option>
+            <option value="produtoAcao">Produto</option>
+            <option value="tipoSolicitacao">Tipo de Solicitação</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="subacao-filtro-operador">
+            <option value="eq">Igual a</option>
+            <option value="contains">Contém</option>
+            <option value="gt">Maior que</option>
+            <option value="lt">Menor que</option>
+            <option value="gte">Maior igual a</option>
+            <option value="lte">Menor igual a</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="subacao-filtro-valor" />
+        </label>
+        <div class="actions" style="align-items:flex-end;">
+          <button class="btn btn-primary sm" type="button" id="subacao-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Critérios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field dotacao-criteria-box">
+          <ul id="subacao-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
+          <button class="btn btn-danger sm" type="button" id="subacao-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="subacao-filtro-clear">Limpar</button>
+        </div>
+      </div>
+      <div class="actions dotacao-criteria-actions">
+        <button class="btn btn-danger sm" type="button" id="subacao-filtro-cancel">Cancelar</button>
+        <button class="btn btn-primary sm" type="button" id="subacao-filtro-apply">Consultar</button>
+        <div id="subacao-filtro-msg" class="muted"></div>
+      </div>
+    </div>
+
     <div class="dotacao-summary no-print" id="subacao-summary">
 
       <div class="table-responsive">
@@ -1191,7 +1085,13 @@
 
           <thead>
 
-            <tr>
+              <tr>
+
+                <th>Controle de Subação</th>
+
+                <th>Status</th>
+
+              <th>Tipo de Solicitação</th>
 
               <th>Exercício</th>
 
@@ -1223,11 +1123,13 @@
 
             {% for s in subacoes %}
 
-            <tr class="dotacao-summary-row"
+              <tr class="dotacao-summary-row"
 
-                data-id="{{ s.id }}"
+                  data-id="{{ s.id }}"
 
-                data-exercicio="{{ s.exercicio }}"
+                  data-controle-subacao="{{ s.controle_subacao or '' }}"
+
+                  data-exercicio="{{ s.exercicio }}"
 
                 data-uo="{{ s.unidade_orcamentaria or '' }}"
 
@@ -1273,27 +1175,37 @@
 
                 data-cpf-responsavel-etapa="{{ s.cpf_responsavel_etapa or '' }}"
 
-                data-regiao-memoria="{{ s.regiao_memoria or '' }}"
-
-                data-natureza="{{ s.natureza or '' }}"
-
-                data-fonte="{{ s.fonte or '' }}"
-
-                data-idu="{{ s.idu or '' }}"
-
-                data-descricao="{{ s.descricao or '' }}"
-
-                data-unidade-etapa="{{ s.unidade_etapa or '' }}"
-
-                data-quantidade="{{ s.quantidade or '' }}"
-
-                data-valor-unitario="{{ s.valor_unitario or '' }}"
-
-                data-valor-total="{{ s.valor_total or '' }}"
-
                 data-justificativa="{{ s.justificativa or '' }}"
 
-                data-responsavel-nger="{{ s.responsavel_nger or '' }}">
+                data-responsavel-nger="{{ s.responsavel_nger or '' }}"
+
+                  data-status-aprovacao="{{ s.status_aprovacao or '' }}"
+
+                  data-usuario-nome="{{ s.usuario_nome or '' }}"
+
+                  data-usuario-perfil="{{ s.usuario_perfil or '' }}"
+
+                  data-criado-em="{{ s.criado_em_iso or '' }}"
+
+                  data-aprovado-por-nome="{{ s.aprovado_por_nome or '' }}"
+
+                  data-aprovado-por-perfil="{{ s.aprovado_por_perfil or '' }}"
+
+                  data-data-aprovacao="{{ s.data_aprovacao_iso or '' }}"
+
+                  data-tipo-solicitacao="{{ s.tipo_solicitacao or '' }}"
+
+                data-tipo-edicao="{{ s.tipo_edicao or '' }}"
+
+                data-plan21-nger-id="{{ s.plan21_nger_id or '' }}"
+
+                data-plan21-nger-ids="{{ s.plan21_nger_ids or '' }}">
+
+                <td>{{ s.controle_subacao }}</td>
+
+                <td>{{ s.status_aprovacao }}</td>
+
+                <td>{{ "alterar" if s.tipo_solicitacao == "editar" else s.tipo_solicitacao }}</td>
 
               <td>{{ s.exercicio }}</td>
 
@@ -1335,9 +1247,11 @@
 
           <select id="subacao-page-size" class="input">
 
+            <option value="5" selected>5</option>
+
             <option value="10">10</option>
 
-            <option value="20" selected>20</option>
+            <option value="20">20</option>
 
             <option value="50">50</option>
 
@@ -1355,6 +1269,8 @@
 
     <div class="actions no-print dotacao-actions">
 
+      <button class="btn btn-primary sm" type="button" id="subacao-approve">Aprovar</button>
+
       <button class="btn btn-secondary sm" type="button" id="subacao-edit">Editar</button>
 
       <button class="btn btn-danger sm" type="button" id="subacao-delete">Excluir</button>
@@ -1366,4 +1282,5 @@
   </div>
 
 </div>
+
 
