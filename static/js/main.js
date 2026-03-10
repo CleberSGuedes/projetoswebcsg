@@ -8699,13 +8699,28 @@
 
     let lastRegiaoValue = planSelects.regiao?.value || "";
 
-    const setMsg = (text, isError = false) => {
-      msg.textContent = text || "";
-      msg.classList.toggle("text-error", isError);
-      if (text && msg.scrollIntoView) {
-        msg.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    };
+      const setMsg = (text, isError = false) => {
+        msg.textContent = text || "";
+        msg.classList.toggle("text-error", isError);
+        if (text && msg.scrollIntoView) {
+          msg.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      };
+
+      const syncRequiredByVisibility = () => {
+        const fields = Array.from(form.querySelectorAll("input, select, textarea"));
+        fields.forEach((field) => {
+          if (field.type === "hidden") return;
+          if (field.dataset.required === "1") {
+            field.required = field.offsetParent !== null;
+            return;
+          }
+          if (field.required && field.offsetParent === null) {
+            field.dataset.required = "1";
+            field.required = false;
+          }
+        });
+      };
 
     const setFilterMsg = (text, isError = false) => {
       if (!filterMsg) return;
@@ -8881,12 +8896,13 @@
           }
         });
       };
-      toggleFields(chaveSection, !isEditLike);
-      toggleFields(cadastrarGrid, !isEditLike);
-      toggleFields(editarGrid, isEditLike);
-      updateStepVisibility();
-      if (isEdit) syncEditMode();
-    };
+        toggleFields(chaveSection, !isEditLike);
+        toggleFields(cadastrarGrid, !isEditLike);
+        toggleFields(editarGrid, isEditLike);
+        updateStepVisibility();
+        syncRequiredByVisibility();
+        if (isEdit) syncEditMode();
+      };
 
     const editGroupEls = editarGrid ? Array.from(editarGrid.querySelectorAll("[data-edit-group]")) : [];
     const getEditQuestionValue = (name) =>
@@ -9114,14 +9130,15 @@
           : [];
       const etapaListaCompleta = step === 3 && municipioItems.length > 0 && municipiosPendentes.length === 0;
       const fields = panel.querySelectorAll("input, select, textarea");
-      for (const field of fields) {
-          if (field.disabled) continue;
-          if (field.type === "hidden") continue;
-          if (municipioItems.length) {
-            if (field === codigoSelect || field === municipioSelect || field === metaInput) {
-              continue;
+        for (const field of fields) {
+            if (field.disabled) continue;
+            if (field.type === "hidden") continue;
+            if (field.offsetParent === null) continue;
+            if (municipioItems.length) {
+              if (field === codigoSelect || field === municipioSelect || field === metaInput) {
+                continue;
+              }
             }
-          }
           if (editMunicipioItems.length) {
             if (
               field === editCodigoNovoSelect ||
@@ -9212,6 +9229,7 @@
           if (prevBtn) prevBtn.style.display = "none";
           if (nextBtn) nextBtn.style.display = "none";
           if (saveBtn) saveBtn.style.display = "inline-flex";
+          syncRequiredByVisibility();
           return;
         }
         const visiblePanels = stepPanels.filter((panel) => panel.style.display !== "none");
@@ -9239,6 +9257,7 @@
         }
         if (nextBtn) nextBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "none" : "inline-flex";
         if (saveBtn) saveBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "inline-flex" : "none";
+        syncRequiredByVisibility();
       };
 
       const updateStepVisibility = () => {
@@ -9259,6 +9278,7 @@
         if (isEdit && currentStep === 3) {
           currentStep = 2;
         }
+        syncRequiredByVisibility();
         setStep(currentStep);
       };
 
@@ -10201,21 +10221,24 @@
       setMsg("");
     };
 
-    const clearForm = () => {
-      if (currentStep === 1) {
-        clearStepOne();
-        clearStepTwo();
-        clearStepThree();
-        return;
-      }
-      if (currentStep === 2) {
-        clearStepTwo();
-        clearStepThree();
-        return;
-      }
-      if (currentStep === 3) {
-        clearStepThree();
-        return;
+      const clearForm = () => {
+        if (currentStep === 1) {
+          clearStepOne();
+          clearStepTwo();
+          clearStepThree();
+          syncRequiredByVisibility();
+          return;
+        }
+        if (currentStep === 2) {
+          clearStepTwo();
+          clearStepThree();
+          syncRequiredByVisibility();
+          return;
+        }
+        if (currentStep === 3) {
+          clearStepThree();
+          syncRequiredByVisibility();
+          return;
       }
     };
 
@@ -11317,54 +11340,11 @@
       const municipiosPendentes = municipioItems.filter(
         (m) => !etapaMunicipios.has(String(m?.municipios_entrega || "").trim())
       );
-      const registroId = idInput?.value || "";
-      const etapaPayloadSet = Boolean(registroId) && municipioItems.length && municipiosPendentes.length === 0;
-      if (etapaPayloadSet) {
-        payload.etapas_items = etapaItems;
-      }
-      if (municipioItems.length && !etapaPayloadSet) {
-        const etapaMunicipios = new Set(
-          etapaItems
-            .map((item) => String(item?.municipio || "").trim())
-            .filter((value) => value)
-        );
-        const municipiosPendentes = municipioItems.filter(
-          (m) => !etapaMunicipios.has(String(m?.municipios_entrega || "").trim())
-        );
-        if (municipiosPendentes.length === 0) {
-          payload.etapas_items = etapaItems;
-        } else {
-          if (!validateEtapaBlock()) return;
-          const last = captureEtapaPayload();
-          const all = [...etapaItems, last];
-          if (!last.municipio) {
-            setMsg("Selecione um município para a etapa antes de salvar.", true);
+        if (mode === "cadastrar") {
+          if (cpfInput && cpfInput.value && !isValidCpf(cpfInput.value)) {
+            setMsg("CPF do responsável inválido.", true);
+            cpfInput.focus();
             return;
-          }
-          if (all.length < municipioItems.length) {
-            const faltando = municipioItems.length - all.length;
-            setMsg(`Faltam ${faltando} etapa(s) para concluir os municípios.`, true);
-            return;
-          }
-          const missing = municipioItems.some(
-            (m) => !all.find((e) => e.municipio === m.municipios_entrega)
-          );
-          if (missing) {
-            setMsg("Existe município sem etapa vinculada.", true);
-            return;
-          }
-          payload.etapas_items = all;
-        }
-      } else if (false) {
-        if (codigoSelect) codigoSelect.required = false;
-        if (municipioSelect) municipioSelect.required = false;
-        if (metaInput) metaInput.required = false;
-      }
-      if (mode === "cadastrar") {
-        if (cpfInput && cpfInput.value && !isValidCpf(cpfInput.value)) {
-          setMsg("CPF do responsável inválido.", true);
-          cpfInput.focus();
-          return;
         }
         if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
           setMsg("CPF do responsável da etapa inválido.", true);
@@ -11513,14 +11493,15 @@
         }
         payload.etapas_items = all;
       }
-      if (mode === "cadastrar" && municipioItems.length) {
-        payload.municipios_items = municipioItems.map((item) => ({
-          codigo: item.codigo,
-          municipios_entrega: item.municipios_entrega,
-          meta_subacao: item.meta_subacao,
-        }));
-      }
-      const url = registroId ? `/api/subacao/${encodeURIComponent(registroId)}` : "/api/subacao";
+        if (mode === "cadastrar" && municipioItems.length) {
+          payload.municipios_items = municipioItems.map((item) => ({
+            codigo: item.codigo,
+            municipios_entrega: item.municipios_entrega,
+            meta_subacao: item.meta_subacao,
+          }));
+        }
+        const registroId = idInput?.value || "";
+        const url = registroId ? `/api/subacao/${encodeURIComponent(registroId)}` : "/api/subacao";
       const method = registroId ? "PUT" : "POST";
       try {
         const res = await fetch(url, {
@@ -11544,6 +11525,7 @@
 
     bindRowSelection();
     setStep(1);
+    syncRequiredByVisibility();
     renderMunicipioList();
     updateEtapaStepLabel();
     renderEtapaList();
