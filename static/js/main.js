@@ -4140,6 +4140,547 @@
     }
   }
 
+  function initRelatorioPlan21Nger() {
+    const table = document.getElementById("plan21-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const meta = document.getElementById("plan21-relatorio-meta");
+    const pager = document.getElementById("plan21-pagination");
+    const pageSizeSelect = document.getElementById("plan21-page-size");
+    const btnDownload = document.getElementById("plan21-download");
+    const btnReset = document.getElementById("plan21-reset");
+    const totExercicio = document.getElementById("plan21-tot-exercicio");
+    const totValorTotal = document.getElementById("plan21-tot-valor-total");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const fmtNum = (v) => {
+      const n = Number(v);
+      if (Number.isNaN(n)) return v ?? "";
+      return numFmt.format(n);
+    };
+
+    const updateTotals = (rows) => {
+      const exSet = new Set();
+      let totalVal = 0;
+      rows.forEach((r) => {
+        if (r.exercicio !== undefined && r.exercicio !== null && r.exercicio !== "") {
+          exSet.add(String(r.exercicio));
+        }
+        const v = Number(r.valor_total || 0);
+        if (!Number.isNaN(v)) totalVal += v;
+      });
+      if (totExercicio) {
+        totExercicio.textContent = exSet.size
+          ? Array.from(exSet).sort((a, b) => a.localeCompare(b, "pt-BR")).join(" * ")
+          : "-";
+      }
+      if (totValorTotal) {
+        totValorTotal.textContent = numFmt.format(totalVal);
+        totValorTotal.classList.remove("pos", "neg");
+        if (totalVal > 0) totValorTotal.classList.add("pos");
+        else if (totalVal < 0) totValorTotal.classList.add("neg");
+      }
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderFiltered(false);
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p++) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.exercicio ?? ""}</td>
+          <td>${r.chave_planejamento ?? ""}</td>
+          <td>${r.regiao ?? ""}</td>
+          <td>${r.subfuncao_ug ?? ""}</td>
+          <td>${r.adj ?? ""}</td>
+          <td>${r.macropolitica ?? ""}</td>
+          <td>${r.pilar ?? ""}</td>
+          <td>${r.eixo ?? ""}</td>
+          <td>${r.politica_decreto ?? ""}</td>
+          <td>${r.publico_transversal_chave ?? ""}</td>
+          <td>${r.programa ?? ""}</td>
+          <td>${r.funcao ?? ""}</td>
+          <td>${r.unidade_orcamentaria ?? ""}</td>
+          <td>${r.acao_paoe ?? ""}</td>
+          <td>${r.subfuncao ?? ""}</td>
+          <td>${r.objetivo_especifico ?? ""}</td>
+          <td>${r.esfera ?? ""}</td>
+          <td>${r.responsavel_acao ?? ""}</td>
+          <td>${r.produto_acao ?? ""}</td>
+          <td>${r.unid_medida_produto ?? ""}</td>
+          <td>${r.regiao_produto ?? ""}</td>
+          <td>${r.meta_produto ?? ""}</td>
+          <td>${r.saldo_meta_produto ?? ""}</td>
+          <td>${r.meta_credito ?? ""}</td>
+          <td>${r.meta_anulada ?? ""}</td>
+          <td>${r.meta_atual ?? ""}</td>
+          <td>${r.publico_transversal ?? ""}</td>
+          <td>${r.subacao_entrega ?? ""}</td>
+          <td>${r.responsavel ?? ""}</td>
+          <td>${r.prazo ?? ""}</td>
+          <td>${r.unid_gestora ?? ""}</td>
+          <td>${r.unidade_setorial_planejamento ?? ""}</td>
+          <td>${r.produto_subacao ?? ""}</td>
+          <td>${r.unidade_medida ?? ""}</td>
+          <td>${r.regiao_subacao ?? ""}</td>
+          <td>${r.codigo ?? ""}</td>
+          <td>${r.municipios_entrega ?? ""}</td>
+          <td>${r.meta_subacao ?? ""}</td>
+          <td>${r.detalhamento_produto ?? ""}</td>
+          <td>${r.etapa ?? ""}</td>
+          <td>${r.responsavel_etapa ?? ""}</td>
+          <td>${r.prazo_etapa ?? ""}</td>
+          <td>${r.regiao_etapa ?? ""}</td>
+          <td>${r.natureza ?? ""}</td>
+          <td>${r.cat_econ ?? ""}</td>
+          <td>${r.grupo ?? ""}</td>
+          <td>${r.modalidade ?? ""}</td>
+          <td>${r.elemento ?? ""}</td>
+          <td>${r.subelemento ?? ""}</td>
+          <td>${r.fonte ?? ""}</td>
+          <td>${r.idu ?? ""}</td>
+          <td>${r.descricao_item_despesa ?? ""}</td>
+          <td>${r.unid_medida_item ?? ""}</td>
+          <td class="num">${fmtNum(r.quantidade)}</td>
+          <td class="num">${fmtNum(r.valor_unitario)}</td>
+          <td class="num">${fmtNum(r.valor_total)}</td>
+          <td class="num">${fmtNum(r.suplementacao)}</td>
+          <td class="num">${fmtNum(r.anulacao)}</td>
+          <td class="num">${fmtNum(r.valor_atual)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+    };
+
+    const allData = { rows: [] };
+
+    const colKeys = [
+      "exercicio",
+      "chave_planejamento",
+      "regiao",
+      "subfuncao_ug",
+      "adj",
+      "macropolitica",
+      "pilar",
+      "eixo",
+      "politica_decreto",
+      "publico_transversal_chave",
+      "programa",
+      "funcao",
+      "unidade_orcamentaria",
+      "acao_paoe",
+      "subfuncao",
+      "objetivo_especifico",
+      "esfera",
+      "responsavel_acao",
+      "produto_acao",
+      "unid_medida_produto",
+      "regiao_produto",
+      "meta_produto",
+      "saldo_meta_produto",
+      "meta_credito",
+      "meta_anulada",
+      "meta_atual",
+      "publico_transversal",
+      "subacao_entrega",
+      "responsavel",
+      "prazo",
+      "unid_gestora",
+      "unidade_setorial_planejamento",
+      "produto_subacao",
+      "unidade_medida",
+      "regiao_subacao",
+      "codigo",
+      "municipios_entrega",
+      "meta_subacao",
+      "detalhamento_produto",
+      "etapa",
+      "responsavel_etapa",
+      "prazo_etapa",
+      "regiao_etapa",
+      "natureza",
+      "cat_econ",
+      "grupo",
+      "modalidade",
+      "elemento",
+      "subelemento",
+      "fonte",
+      "idu",
+      "descricao_item_despesa",
+      "unid_medida_item",
+      "quantidade",
+      "valor_unitario",
+      "valor_total",
+      "suplementacao",
+      "anulacao",
+      "valor_atual",
+    ];
+
+    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
+    const filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+    const filterControls = {};
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((v) => map[v] || v)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      container.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allId = `${key}-all`;
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.id = allId;
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        const allVisibleSelected = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+        selectVisibleCb.checked = allVisibleSelected;
+      };
+
+      const applyTempToFilters = () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((v) => set.add(v));
+        updateDisplay(key);
+        renderFiltered();
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        allCb.checked = tempSelected.size === 0;
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+            allCb.checked = false;
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          const match = txt.textContent.toLowerCase().includes(term);
+          row.style.display = match ? "" : "none";
+        });
+        const allMatch = "(todos)".includes(term) || term === "";
+        allRow.style.display = allMatch ? "" : "none";
+        selectVisibleRow.style.display = "";
+        syncUIFromTemp();
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((v) => tempSelected.add(v));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        applyTempToFilters();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          panel.style.width = "";
+          panel.style.height = "";
+          tempSelected.clear();
+          filters[key].forEach((v) => tempSelected.add(v));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((c) => c.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((r) => {
+        colKeys.forEach((k, idx) => {
+          const v = r[k];
+          if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx]).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((r) =>
+        colKeys.every((k) => {
+          const set = filters[k];
+          if (!set || set.size === 0) return true;
+          const val = r[k];
+          const cmp = val === null || val === undefined ? "" : String(val).toLowerCase();
+          return set.has(cmp);
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/plan21-nger");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        allData.rows = data.data || [];
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        render();
+        if (meta) {
+          const dt = formatAmazonLocalTime(data.data_arquivo);
+          const user = data.user_email || "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
+          meta.innerHTML = `
+            <div><strong>Última atualização</strong></div>
+            <div>Enviado por: ${user}</div>
+            <div>Upload em: ${uploaded}</div>
+            <div>Data do download: ${dt}</div>
+          `;
+        }
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    load();
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        Object.keys(filters).forEach((k) => filters[k].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        const val = parseInt(pageSizeSelect.value || "20", 10);
+        pageSize = Number.isNaN(val) ? 20 : val;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/plan21-nger/download", "_blank");
+      });
+    }
+  }
+
   function initRelatorioEmp() {
     const table = document.getElementById("emp-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
@@ -6290,6 +6831,9 @@
     }
     if (route === "relatorios/plan20-seduc") {
       initRelatorioPlan20();
+    }
+    if (route === "relatorios/plan21-nger") {
+      initRelatorioPlan21Nger();
     }
   }
 

@@ -63,6 +63,7 @@ FEATURES = [
         "children": [
             {"id": "relatorios/fip613", "nome": "FIP 613 (Relatório)"},
             {"id": "relatorios/plan20-seduc", "nome": "Plan20 - SEDUC"},
+            {"id": "relatorios/plan21-nger", "nome": "Plan21_NGER"},
             {"id": "relatorios/ped", "nome": "PED"},
             {"id": "relatorios/emp", "nome": "EMP"},
             {"id": "relatorios/est-emp", "nome": "Est Emp"},

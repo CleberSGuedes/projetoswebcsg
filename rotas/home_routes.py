@@ -1284,6 +1284,13 @@ def partial_relatorios_plan20():
     return render_template("partials/relatorios_plan20.html")
 
 
+@home_bp.route("/partial/relatorios/plan21-nger")
+@login_required
+@require_feature("relatorios/plan21-nger")
+def partial_relatorios_plan21_nger():
+    return render_template("partials/relatorios_plan21_nger.html")
+
+
 @home_bp.route("/api/permissoes/<int:perfil_id>", methods=["GET", "POST"])
 @login_required
 def api_permissoes(perfil_id):
@@ -5228,6 +5235,208 @@ def api_relatorio_fip613():
         return jsonify({"error": f"Falha ao buscar dados: {exc}"}), 500
 
 
+@home_bp.route("/api/relatorios/plan21-nger", methods=["GET"])
+@login_required
+@require_feature("relatorios/plan21-nger")
+def api_relatorio_plan21_nger():
+    def _as_iso(value):
+        if value in (None, ""):
+            return None
+        if hasattr(value, "isoformat"):
+            try:
+                return value.isoformat()
+            except Exception:
+                return str(value)
+        try:
+            from datetime import datetime
+
+            return datetime.fromisoformat(str(value)).isoformat()
+        except Exception:
+            return str(value)
+
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    try:
+        rows = (
+            db.session.execute(
+                text(
+                    """
+                    SELECT
+                        exercicio,
+                        chave_planejamento,
+                        regiao,
+                        subfuncao_ug,
+                        adj,
+                        macropolitica,
+                        pilar,
+                        eixo,
+                        politica_decreto,
+                        publico_transversal_chave,
+                        programa,
+                        funcao,
+                        unidade_orcamentaria,
+                        acao_paoe,
+                        subfuncao,
+                        objetivo_especifico,
+                        esfera,
+                        responsavel_acao,
+                        produto_acao,
+                        unid_medida_produto,
+                        regiao_produto,
+                        meta_produto,
+                        saldo_meta_produto,
+                        meta_credito,
+                        meta_anulada,
+                        meta_atual,
+                        publico_transversal,
+                        subacao_entrega,
+                        responsavel,
+                        prazo,
+                        unid_gestora,
+                        unidade_setorial_planejamento,
+                        produto_subacao,
+                        unidade_medida,
+                        regiao_subacao,
+                        codigo,
+                        municipios_entrega,
+                        meta_subacao,
+                        detalhamento_produto,
+                        etapa,
+                        responsavel_etapa,
+                        prazo_etapa,
+                        regiao_etapa,
+                        natureza,
+                        cat_econ,
+                        grupo,
+                        modalidade,
+                        elemento,
+                        subelemento,
+                        fonte,
+                        idu,
+                        descricao_item_despesa,
+                        unid_medida_item,
+                        quantidade,
+                        valor_unitario,
+                        valor_total,
+                        suplementacao,
+                        anulacao,
+                        valor_atual
+                    FROM plan21_nger
+                    WHERE ativo = 1
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+        last_row = (
+            db.session.execute(
+                text(
+                    """
+                    SELECT user_email, data_arquivo, data_atualizacao
+                    FROM plan21_nger
+                    WHERE data_arquivo IS NOT NULL
+                    ORDER BY data_arquivo DESC
+                    LIMIT 1
+                    """
+                )
+            )
+            .mappings()
+            .first()
+        )
+        data_arquivo = _as_iso(last_row.get("data_arquivo")) if last_row else None
+        uploaded_at = _as_iso(last_row.get("data_atualizacao")) if last_row else None
+        user_email = last_row.get("user_email") if last_row else None
+
+        data = []
+        for r in rows:
+            data.append(
+                {
+                    "exercicio": r.get("exercicio"),
+                    "chave_planejamento": r.get("chave_planejamento"),
+                    "regiao": r.get("regiao"),
+                    "subfuncao_ug": r.get("subfuncao_ug"),
+                    "adj": r.get("adj"),
+                    "macropolitica": r.get("macropolitica"),
+                    "pilar": r.get("pilar"),
+                    "eixo": r.get("eixo"),
+                    "politica_decreto": r.get("politica_decreto"),
+                    "publico_transversal_chave": r.get("publico_transversal_chave"),
+                    "programa": r.get("programa"),
+                    "funcao": r.get("funcao"),
+                    "unidade_orcamentaria": r.get("unidade_orcamentaria"),
+                    "acao_paoe": r.get("acao_paoe"),
+                    "subfuncao": r.get("subfuncao"),
+                    "objetivo_especifico": r.get("objetivo_especifico"),
+                    "esfera": r.get("esfera"),
+                    "responsavel_acao": r.get("responsavel_acao"),
+                    "produto_acao": r.get("produto_acao"),
+                    "unid_medida_produto": r.get("unid_medida_produto"),
+                    "regiao_produto": r.get("regiao_produto"),
+                    "meta_produto": _to_float(r.get("meta_produto")),
+                    "saldo_meta_produto": _to_float(r.get("saldo_meta_produto")),
+                    "meta_credito": _to_float(r.get("meta_credito")),
+                    "meta_anulada": _to_float(r.get("meta_anulada")),
+                    "meta_atual": _to_float(r.get("meta_atual")),
+                    "publico_transversal": r.get("publico_transversal"),
+                    "subacao_entrega": r.get("subacao_entrega"),
+                    "responsavel": r.get("responsavel"),
+                    "prazo": r.get("prazo"),
+                    "unid_gestora": r.get("unid_gestora"),
+                    "unidade_setorial_planejamento": r.get("unidade_setorial_planejamento"),
+                    "produto_subacao": r.get("produto_subacao"),
+                    "unidade_medida": r.get("unidade_medida"),
+                    "regiao_subacao": r.get("regiao_subacao"),
+                    "codigo": r.get("codigo"),
+                    "municipios_entrega": r.get("municipios_entrega"),
+                    "meta_subacao": _to_float(r.get("meta_subacao")),
+                    "detalhamento_produto": r.get("detalhamento_produto"),
+                    "etapa": r.get("etapa"),
+                    "responsavel_etapa": r.get("responsavel_etapa"),
+                    "prazo_etapa": r.get("prazo_etapa"),
+                    "regiao_etapa": r.get("regiao_etapa"),
+                    "natureza": r.get("natureza"),
+                    "cat_econ": r.get("cat_econ"),
+                    "grupo": r.get("grupo"),
+                    "modalidade": r.get("modalidade"),
+                    "elemento": r.get("elemento"),
+                    "subelemento": r.get("subelemento"),
+                    "fonte": r.get("fonte"),
+                    "idu": r.get("idu"),
+                    "descricao_item_despesa": r.get("descricao_item_despesa"),
+                    "unid_medida_item": r.get("unid_medida_item"),
+                    "quantidade": _to_float(r.get("quantidade")),
+                    "valor_unitario": _to_float(r.get("valor_unitario")),
+                    "valor_total": _to_float(r.get("valor_total")),
+                    "suplementacao": _to_float(r.get("suplementacao")),
+                    "anulacao": _to_float(r.get("anulacao")),
+                    "valor_atual": _to_float(r.get("valor_atual")),
+                }
+            )
+
+        return jsonify(
+            {
+                "ok": True,
+                "data": data,
+                "data_arquivo": data_arquivo,
+                "uploaded_at": uploaded_at,
+                "user_email": user_email,
+            }
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao buscar dados: {exc}"}), 500
+
+
 @home_bp.route("/api/relatorios/fip613/download", methods=["GET"])
 @login_required
 @require_feature("relatorios/fip613")
@@ -8593,6 +8802,242 @@ def api_relatorio_plan20_download():
             styled.seek(0)
 
             filename = f"plan20_seduc_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return _send_excel_bytes(styled, filename)
+        except Exception as exc:
+            return jsonify({"error": f"Falha ao preparar planilha: {exc}"}), 500
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao exportar: {exc}"}), 500
+
+
+@home_bp.route("/api/relatorios/plan21-nger/download", methods=["GET"])
+@login_required
+@require_feature("relatorios/plan21-nger")
+def api_relatorio_plan21_nger_download():
+    def _to_float(val):
+        try:
+            if val in (None, ""):
+                return 0.0
+            if isinstance(val, str):
+                cleaned = val.replace(".", "").replace(",", ".")
+                return float(cleaned)
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    try:
+        rows = (
+            db.session.execute(
+                text(
+                    """
+                    SELECT
+                        exercicio,
+                        chave_planejamento,
+                        regiao,
+                        subfuncao_ug,
+                        adj,
+                        macropolitica,
+                        pilar,
+                        eixo,
+                        politica_decreto,
+                        publico_transversal_chave,
+                        programa,
+                        funcao,
+                        unidade_orcamentaria,
+                        acao_paoe,
+                        subfuncao,
+                        objetivo_especifico,
+                        esfera,
+                        responsavel_acao,
+                        produto_acao,
+                        unid_medida_produto,
+                        regiao_produto,
+                        meta_produto,
+                        saldo_meta_produto,
+                        meta_credito,
+                        meta_anulada,
+                        meta_atual,
+                        publico_transversal,
+                        subacao_entrega,
+                        responsavel,
+                        prazo,
+                        unid_gestora,
+                        unidade_setorial_planejamento,
+                        produto_subacao,
+                        unidade_medida,
+                        regiao_subacao,
+                        codigo,
+                        municipios_entrega,
+                        meta_subacao,
+                        detalhamento_produto,
+                        etapa,
+                        responsavel_etapa,
+                        prazo_etapa,
+                        regiao_etapa,
+                        natureza,
+                        cat_econ,
+                        grupo,
+                        modalidade,
+                        elemento,
+                        subelemento,
+                        fonte,
+                        idu,
+                        descricao_item_despesa,
+                        unid_medida_item,
+                        quantidade,
+                        valor_unitario,
+                        valor_total,
+                        suplementacao,
+                        anulacao,
+                        valor_atual
+                    FROM plan21_nger
+                    WHERE ativo = 1
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+        if not rows:
+            return jsonify({"error": "Nenhum dado para exportar."}), 404
+        db.session.close()
+
+        headers = [
+            ("ExercÃ­cio", "exercicio"),
+            ("Chave de Planejamento", "chave_planejamento"),
+            ("RegiÃ£o", "regiao"),
+            ("SubfunÃ§Ã£o + UG", "subfuncao_ug"),
+            ("ADJ", "adj"),
+            ("Macropolitica", "macropolitica"),
+            ("Pilar", "pilar"),
+            ("Eixo", "eixo"),
+            ("Politica_Decreto", "politica_decreto"),
+            ("PÃºblico Transversal (chave)", "publico_transversal_chave"),
+            ("Programa", "programa"),
+            ("FunÃ§Ã£o", "funcao"),
+            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
+            ("AÃ§Ã£o (P/A/OE)", "acao_paoe"),
+            ("SubfunÃ§Ã£o", "subfuncao"),
+            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
+            ("Esfera", "esfera"),
+            ("ResponsÃ¡vel pela AÃ§Ã£o", "responsavel_acao"),
+            ("Produto(s) da AÃ§Ã£o", "produto_acao"),
+            ("Unidade de Medida do Produto", "unid_medida_produto"),
+            ("RegiÃ£o do Produto", "regiao_produto"),
+            ("Meta do Produto", "meta_produto"),
+            ("Saldo Meta do Produto", "saldo_meta_produto"),
+            ("Meta CrÃ©dito", "meta_credito"),
+            ("Meta Anulada", "meta_anulada"),
+            ("Meta Atual", "meta_atual"),
+            ("PÃºblico Transversal", "publico_transversal"),
+            ("SubaÃ§Ã£o/entrega", "subacao_entrega"),
+            ("ResponsÃ¡vel", "responsavel"),
+            ("Prazo", "prazo"),
+            ("Unid. Gestora", "unid_gestora"),
+            ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
+            ("Produto da SubaÃ§Ã£o", "produto_subacao"),
+            ("Unidade de Medida", "unidade_medida"),
+            ("RegiÃ£o da SubaÃ§Ã£o", "regiao_subacao"),
+            ("CÃ³digo", "codigo"),
+            ("MunicÃ­pio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubaÃ§Ã£o", "meta_subacao"),
+            ("Detalhamento do produto", "detalhamento_produto"),
+            ("Etapa", "etapa"),
+            ("ResponsÃ¡vel da Etapa", "responsavel_etapa"),
+            ("Prazo da Etapa", "prazo_etapa"),
+            ("RegiÃ£o da Etapa", "regiao_etapa"),
+            ("Natureza", "natureza"),
+            ("Cat.Econ", "cat_econ"),
+            ("Grupo", "grupo"),
+            ("Modalidade", "modalidade"),
+            ("Elemento", "elemento"),
+            ("Subelemento", "subelemento"),
+            ("Fonte", "fonte"),
+            ("IDU", "idu"),
+            ("DescriÃ§Ã£o do Item de Despesa", "descricao_item_despesa"),
+            ("Unid. Medida", "unid_medida_item"),
+            ("Quantidade", "quantidade"),
+            ("Valor UnitÃ¡rio", "valor_unitario"),
+            ("Valor Total", "valor_total"),
+            ("SuplementaÃ§Ã£o", "suplementacao"),
+            ("AnulaÃ§Ã£o", "anulacao"),
+            ("Valor Atual", "valor_atual"),
+        ]
+
+        data = []
+        numeric_keys = {
+            "meta_produto",
+            "saldo_meta_produto",
+            "meta_credito",
+            "meta_anulada",
+            "meta_atual",
+            "meta_subacao",
+            "quantidade",
+            "valor_unitario",
+            "valor_total",
+            "suplementacao",
+            "anulacao",
+            "valor_atual",
+        }
+        for r in rows:
+            row_dict = {}
+            for label, key in headers:
+                val = r.get(key)
+                if key in numeric_keys:
+                    val = _to_float(val)
+                row_dict[label] = val
+            data.append(row_dict)
+
+        df = None
+        try:
+            import pandas as pd
+            from io import BytesIO
+            from openpyxl import load_workbook
+            from openpyxl.styles import Font
+
+            df = pd.DataFrame(data, columns=[h[0] for h in headers])
+            output = BytesIO()
+            df.to_excel(output, index=False)
+            output.seek(0)
+
+            wb = load_workbook(output)
+            ws = wb.active
+            font = Font(name="Helvetica", size=8)
+            idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
+            numeric_cols = {
+                idx_map.get("Meta do Produto"),
+                idx_map.get("Saldo Meta do Produto"),
+                idx_map.get("Meta CrÃ©dito"),
+                idx_map.get("Meta Anulada"),
+                idx_map.get("Meta Atual"),
+                idx_map.get("Meta da SubaÃ§Ã£o"),
+                idx_map.get("Quantidade"),
+                idx_map.get("Valor UnitÃ¡rio"),
+                idx_map.get("Valor Total"),
+                idx_map.get("SuplementaÃ§Ã£o"),
+                idx_map.get("AnulaÃ§Ã£o"),
+                idx_map.get("Valor Atual"),
+            }
+            numeric_cols = {c for c in numeric_cols if c}
+            number_format = "#,##0.00"
+            for row in ws.iter_rows():
+                for cell in row:
+                    cell.font = font
+                    if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
+                        cell.number_format = number_format
+                    if cell.col_idx == idx_map.get("ExercÃ­cio") and isinstance(
+                        cell.value, (int, float, str)
+                    ):
+                        try:
+                            cell.value = int(str(cell.value).split(".")[0])
+                        except Exception:
+                            pass
+                        cell.number_format = "0"
+
+            styled = BytesIO()
+            wb.save(styled)
+            styled.seek(0)
+
+            filename = f"plan21_nger_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
             return _send_excel_bytes(styled, filename)
         except Exception as exc:
             return jsonify({"error": f"Falha ao preparar planilha: {exc}"}), 500
