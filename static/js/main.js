@@ -8666,6 +8666,7 @@
       const editJustificativaInput = document.getElementById("subacao-edit-justificativa");
       const editResponsavelNgerInput = document.getElementById("subacao-edit-responsavel-nger");
       let pendingEditPref = null;
+      let editMunicipioLocked = false;
 
     const summaryBody = document.querySelector("#subacao-summary-table tbody");
     const pageSizeSelect = document.getElementById("subacao-page-size");
@@ -8911,14 +8912,16 @@
       const el = form.querySelector(`input[name="${name}"][value="${value}"]`);
       if (el) el.checked = true;
     };
-    const getEditModeKey = () => {
-      if (getModeValue() === "excluir") return "excluir";
-      if (getEditQuestionValue("subacao_edit_q_subacao") === "sim") return "subacao_name";
-      if (getEditQuestionValue("subacao_edit_q_responsavel") === "sim") return "responsavel_name";
-      if (getEditQuestionValue("subacao_edit_q_produto") === "sim") return "produto_subacao";
-      if (getEditQuestionValue("subacao_edit_q_municipio") === "sim") return "novo_municipio";
-      return "";
-    };
+      const getEditModeKey = () => {
+        if (getModeValue() === "excluir") return "excluir";
+        if (getEditQuestionValue("subacao_edit_q_subacao") === "sim") return "subacao_name";
+        if (getEditQuestionValue("subacao_edit_q_responsavel") === "sim") return "responsavel_name";
+        if (getEditQuestionValue("subacao_edit_q_produto") === "sim") return "produto_subacao";
+        if (getEditQuestionValue("subacao_edit_q_remove_municipio") === "sim")
+          return "remover_municipio";
+        if (getEditQuestionValue("subacao_edit_q_municipio") === "sim") return "novo_municipio";
+        return "";
+      };
     const setEditGroupVisibility = (modeKey) => {
       if (!editarGrid) return;
       const active = new Set();
@@ -8935,12 +8938,12 @@
           field.disabled = !show;
         });
       });
-      if (modeKey === "produto_subacao" || modeKey === "novo_municipio") {
-        const lockTargets = [
-          editResponsavelSelect,
-          editPrazoSelect,
-          editUnidGestoraSelect,
-          editUnidadeSetorialSelect,
+        if (modeKey === "produto_subacao" || modeKey === "novo_municipio" || modeKey === "remover_municipio") {
+          const lockTargets = [
+            editResponsavelSelect,
+            editPrazoSelect,
+            editUnidGestoraSelect,
+            editUnidadeSetorialSelect,
           editProdutoSelect,
           editRegiaoSelect,
         ];
@@ -8990,31 +8993,44 @@
       allFields.forEach((el) => {
         if (el) el.required = false;
       });
-      const requiredMap = {
-        subacao_name: [
-          editSubacaoInput,
-          editResponsavelInput,
-          editCpfInput,
-          editJustificativaInput,
-          editResponsavelNgerInput,
-        ],
-        responsavel_name: [
-          editResponsavelInput,
-          editCpfInput,
-          editJustificativaInput,
-          editResponsavelNgerInput,
-        ],
-        produto_subacao: [
-          editProdutoSelect,
-          editProdutoInput,
-          editJustificativaInput,
-          editResponsavelNgerInput,
-        ],
-        novo_municipio: [
-          editResponsavelInput,
-          editPrazoSelect,
-          editUnidGestoraSelect,
-          editUnidadeSetorialSelect,
+        const requiredMap = {
+          subacao_name: [
+            editSubacaoInput,
+            editResponsavelInput,
+            editCpfInput,
+            editJustificativaInput,
+            editResponsavelNgerInput,
+          ],
+          responsavel_name: [
+            editResponsavelInput,
+            editCpfInput,
+            editJustificativaInput,
+            editResponsavelNgerInput,
+          ],
+          produto_subacao: [
+            editProdutoSelect,
+            editProdutoInput,
+            editJustificativaInput,
+            editResponsavelNgerInput,
+          ],
+          remover_municipio: [
+            editResponsavelInput,
+            editPrazoSelect,
+            editUnidGestoraSelect,
+            editUnidadeSetorialSelect,
+            editProdutoSelect,
+            editRegiaoSelect,
+            editCodigoNovoSelect,
+            editMunicipioNovoSelect,
+            editMetaNovoInput,
+            editJustificativaInput,
+            editResponsavelNgerInput,
+          ],
+          novo_municipio: [
+            editResponsavelInput,
+            editPrazoSelect,
+            editUnidGestoraSelect,
+            editUnidadeSetorialSelect,
           editProdutoSelect,
           editRegiaoSelect,
           editCodigoNovoSelect,
@@ -9036,12 +9052,17 @@
         setEditGroupVisibility(modeKey);
         setEditRequiredFields(modeKey);
         updateEditMunicipioRequired();
-        if (modeKey !== "novo_municipio") {
+        if (["novo_municipio", "remover_municipio"].includes(modeKey)) {
+          loadPlan21Municipios();
+        } else {
+          editMunicipioLocked = false;
+        }
+        if (!["novo_municipio", "remover_municipio"].includes(modeKey)) {
           editMunicipioItems.length = 0;
           renderEditMunicipioList();
         }
         return modeKey;
-    };
+      };
 
     if (modeSelect) {
       modeSelect.addEventListener("change", () => {
@@ -9058,40 +9079,49 @@
       });
     }
 
-    const editQuestionNames = [
-      "subacao_edit_q_subacao",
-      "subacao_edit_q_responsavel",
-      "subacao_edit_q_produto",
-      "subacao_edit_q_municipio",
-    ];
-    const editQuestionFields = {
-      subacao: form.querySelector('input[name="subacao_edit_q_subacao"]')?.closest(".field"),
-      responsavel: form
-        .querySelector('input[name="subacao_edit_q_responsavel"]')
-        ?.closest(".field"),
-      produto: form.querySelector('input[name="subacao_edit_q_produto"]')?.closest(".field"),
-      municipio: form
-        .querySelector('input[name="subacao_edit_q_municipio"]')
-        ?.closest(".field"),
-    };
-    const updateQuestionVisibility = () => {
-      const q1 = getEditQuestionValue("subacao_edit_q_subacao");
-      const q2 = getEditQuestionValue("subacao_edit_q_responsavel");
-      const q3 = getEditQuestionValue("subacao_edit_q_produto");
-      if (editQuestionFields.subacao) {
-        editQuestionFields.subacao.style.display = "";
-      }
-      if (editQuestionFields.responsavel) {
-        editQuestionFields.responsavel.style.display = q1 === "nao" ? "" : "none";
-      }
-      if (editQuestionFields.produto) {
-        editQuestionFields.produto.style.display = q1 === "nao" && q2 === "nao" ? "" : "none";
-      }
-      if (editQuestionFields.municipio) {
-        editQuestionFields.municipio.style.display =
-          q1 === "nao" && q2 === "nao" && q3 === "nao" ? "" : "none";
-      }
-    };
+      const editQuestionNames = [
+        "subacao_edit_q_subacao",
+        "subacao_edit_q_responsavel",
+        "subacao_edit_q_produto",
+        "subacao_edit_q_remove_municipio",
+        "subacao_edit_q_municipio",
+      ];
+      const editQuestionFields = {
+        subacao: form.querySelector('input[name="subacao_edit_q_subacao"]')?.closest(".field"),
+        responsavel: form
+          .querySelector('input[name="subacao_edit_q_responsavel"]')
+          ?.closest(".field"),
+        produto: form.querySelector('input[name="subacao_edit_q_produto"]')?.closest(".field"),
+        removerMunicipio: form
+          .querySelector('input[name="subacao_edit_q_remove_municipio"]')
+          ?.closest(".field"),
+        municipio: form
+          .querySelector('input[name="subacao_edit_q_municipio"]')
+          ?.closest(".field"),
+      };
+      const updateQuestionVisibility = () => {
+        const q1 = getEditQuestionValue("subacao_edit_q_subacao");
+        const q2 = getEditQuestionValue("subacao_edit_q_responsavel");
+        const q3 = getEditQuestionValue("subacao_edit_q_produto");
+        const q4 = getEditQuestionValue("subacao_edit_q_remove_municipio");
+        if (editQuestionFields.subacao) {
+          editQuestionFields.subacao.style.display = "";
+        }
+        if (editQuestionFields.responsavel) {
+          editQuestionFields.responsavel.style.display = q1 === "nao" ? "" : "none";
+        }
+        if (editQuestionFields.produto) {
+          editQuestionFields.produto.style.display = q1 === "nao" && q2 === "nao" ? "" : "none";
+        }
+        if (editQuestionFields.removerMunicipio) {
+          editQuestionFields.removerMunicipio.style.display =
+            q1 === "nao" && q2 === "nao" && q3 === "nao" ? "" : "none";
+        }
+        if (editQuestionFields.municipio) {
+          editQuestionFields.municipio.style.display =
+            q1 === "nao" && q2 === "nao" && q3 === "nao" && q4 === "nao" ? "" : "none";
+        }
+      };
     const resetEditQuestions = () => {
       editQuestionNames.forEach((name) => {
         form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
@@ -9343,13 +9373,15 @@
       if (match) select.value = match.value;
     };
 
-    const syncBridges = () => {
-      if (chaveSelects.ug && unidGestoraSelect) {
-        syncSelectByCodigo(unidGestoraSelect, chaveSelects.ug.value || "");
-      }
-      if (chaveSelects.regiao && regiaoEntregaSelect) {
-        syncSelectByCodigo(regiaoEntregaSelect, chaveSelects.regiao.value || "");
-      }
+      const syncBridges = () => {
+        if (chaveSelects.ug && unidGestoraSelect) {
+          syncSelectByCodigo(unidGestoraSelect, chaveSelects.ug.value || "");
+          unidGestoraSelect.disabled = true;
+        }
+        if (chaveSelects.regiao && regiaoEntregaSelect) {
+          syncSelectByCodigo(regiaoEntregaSelect, chaveSelects.regiao.value || "");
+          regiaoEntregaSelect.disabled = true;
+        }
       if (regiaoEntregaSelect) {
         const newRegiao = regiaoEntregaSelect.value || "";
         const lastRegiao = regiaoEntregaSelect.dataset.bridgeValue || "";
@@ -9668,56 +9700,69 @@
     };
 
     const editMunicipioItems = [];
-    const updateEditMunicipioRequired = () => {
-      const isNovoMunicipio = getEditModeKey() === "novo_municipio";
-      const shouldRequire = isNovoMunicipio && editMunicipioItems.length === 0;
-      [editCodigoNovoSelect, editMunicipioNovoSelect, editMetaNovoInput].forEach((el) => {
-        if (el) el.required = shouldRequire;
-      });
-    };
+      const updateEditMunicipioRequired = () => {
+        const isMunicipioEdit = ["novo_municipio", "remover_municipio"].includes(getEditModeKey());
+        const shouldRequire = isMunicipioEdit && editMunicipioItems.length === 0;
+        [editCodigoNovoSelect, editMunicipioNovoSelect, editMetaNovoInput].forEach((el) => {
+          if (el) el.required = shouldRequire;
+        });
+      };
 
-    const renderEditMunicipioList = () => {
-      if (!editMunicipioListEl) return;
-      editMunicipioListEl.innerHTML = "";
-      if (!editMunicipioItems.length) {
-        const empty = document.createElement("div");
-        empty.className = "municipio-empty";
-        empty.textContent = "Nenhum município adicionado.";
-        editMunicipioListEl.appendChild(empty);
-        if (editMunicipioListWrap) editMunicipioListWrap.style.display = "none";
+      const renderEditMunicipioList = () => {
+        if (!editMunicipioListEl) return;
+        editMunicipioListEl.innerHTML = "";
+        if (!editMunicipioItems.length) {
+          const empty = document.createElement("div");
+          empty.className = "municipio-empty";
+          empty.textContent = "Nenhum município adicionado.";
+          editMunicipioListEl.appendChild(empty);
+          if (editMunicipioListWrap) editMunicipioListWrap.style.display = "none";
+          updateEditMunicipioRequired();
+          return;
+        }
+        if (editMunicipioListWrap) editMunicipioListWrap.style.display = "";
+        const modeKey = getEditModeKey();
+        editMunicipioItems.forEach((item, idx) => {
+          const row = document.createElement("div");
+          row.className = "municipio-item";
+          const allowRemove = modeKey === "remover_municipio";
+          const removeBtn = `
+            <button class="btn btn-danger sm" type="button" data-edit-remove-index="${idx}" ${
+              editMunicipioLocked ? "disabled" : ""
+            }>Remover</button>
+          `;
+          row.innerHTML = `
+            <div>
+              <small>Código</small>
+              <div>${item.codigoLabel || item.codigo}</div>
+            </div>
+            <div>
+              <small>Município</small>
+              <div>${item.municipioLabel || item.municipios_entrega}</div>
+            </div>
+            <div>
+              <small>Meta</small>
+              <div>${item.meta_subacao}</div>
+            </div>
+            <div>${removeBtn}</div>
+          `;
+          editMunicipioListEl.appendChild(row);
+        });
+        if (editMunicipioAddBtn) editMunicipioAddBtn.disabled = editMunicipioLocked;
         updateEditMunicipioRequired();
-        return;
-      }
-      if (editMunicipioListWrap) editMunicipioListWrap.style.display = "";
-      editMunicipioItems.forEach((item, idx) => {
-        const row = document.createElement("div");
-        row.className = "municipio-item";
-        row.innerHTML = `
-          <div>
-            <small>Código</small>
-            <div>${item.codigoLabel || item.codigo}</div>
-          </div>
-          <div>
-            <small>Município</small>
-            <div>${item.municipioLabel || item.municipios_entrega}</div>
-          </div>
-          <div>
-            <small>Meta</small>
-            <div>${item.meta_subacao}</div>
-          </div>
-          <div>
-            <button class="btn btn-danger sm" type="button" data-edit-remove-index="${idx}">Remover</button>
-          </div>
-        `;
-        editMunicipioListEl.appendChild(row);
-      });
-      updateEditMunicipioRequired();
-    };
+      };
 
-    const addEditMunicipioItem = () => {
-      const codigo = editCodigoNovoSelect?.value || "";
-      const municipio = editMunicipioNovoSelect?.value || "";
-      const meta = editMetaNovoInput?.value || "";
+      const addEditMunicipioItem = () => {
+        if (editMunicipioLocked && getEditModeKey() === "remover_municipio") {
+          setMsg(
+            "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
+            true
+          );
+          return false;
+        }
+        const codigo = editCodigoNovoSelect?.value || "";
+        const municipio = editMunicipioNovoSelect?.value || "";
+        const meta = editMetaNovoInput?.value || "";
       if (!codigo || !municipio || !meta) {
         setMsg("Informe código, município e meta para adicionar.", true);
         return false;
@@ -10024,9 +10069,9 @@
     let pendingEditAbort = null;
     let editOptionsSeq = 0;
 
-    const loadEditOptions = async () => {
-      if (!editarGrid) return;
-      const seq = ++editOptionsSeq;
+      const loadEditOptions = async () => {
+        if (!editarGrid) return;
+        const seq = ++editOptionsSeq;
       if (pendingEditAbort) {
         pendingEditAbort.abort();
       }
@@ -10107,30 +10152,90 @@
             applyIfAvailable(editPrazoSelect, pendingEditPref.prazo);
             applyIfAvailable(editUnidGestoraSelect, pendingEditPref.unid_gestora);
             applyIfAvailable(editUnidadeSetorialSelect, pendingEditPref.unidade_setorial_planejamento);
-            applyIfAvailable(editProdutoSelect, pendingEditPref.produto_subacao);
+            if (editProdutoSelect && pendingEditPref.produto_subacao) {
+              const exists = Array.from(editProdutoSelect.options || []).some(
+                (opt) => opt.value === pendingEditPref.produto_subacao
+              );
+              if (!exists) {
+                const opt = document.createElement("option");
+                opt.value = pendingEditPref.produto_subacao;
+                opt.textContent = pendingEditPref.produto_subacao;
+                editProdutoSelect.appendChild(opt);
+              }
+              editProdutoSelect.value = pendingEditPref.produto_subacao;
+            }
             applyIfAvailable(editRegiaoSelect, pendingEditPref.regiao_subacao);
             pendingEditPref = null;
           }
-          const softSelects = [
-            editResponsavelSelect,
-            editPrazoSelect,
-            editUnidGestoraSelect,
-            editUnidadeSetorialSelect,
-            editProdutoSelect,
-            editRegiaoSelect,
-          ];
+            const softSelects = [
+              editResponsavelSelect,
+              editPrazoSelect,
+              editUnidGestoraSelect,
+              editUnidadeSetorialSelect,
+              editProdutoSelect,
+              editRegiaoSelect,
+            ];
         softSelects.forEach((el) => {
           if (!el) return;
           const count = el.options.length;
           if (!el.value && count === 2) {
             el.value = el.options[1].value;
           }
+          });
+          const modeKey = getEditModeKey();
+          if (["novo_municipio", "remover_municipio"].includes(modeKey)) {
+            await loadPlan21Municipios();
+          }
+          await loadEditMunicipios();
+        } catch (err) {
+          if (err.name !== "AbortError") console.error(err);
+        }
+      };
+
+      const loadPlan21Municipios = async () => {
+        if (!editChaveSelect || !editSubacaoSelect) return;
+        const chave = editChaveSelect.value || "";
+        const subacao = editSubacaoSelect.value || "";
+        if (!chave || !subacao) return;
+        const url = new URL("/api/subacao/plan21-municipios", window.location.origin);
+        Object.entries(planSelects).forEach(([key, el]) => {
+          if (el?.value) url.searchParams.set(key, el.value);
         });
-        await loadEditMunicipios();
-      } catch (err) {
-        if (err.name !== "AbortError") console.error(err);
-      }
-    };
+        url.searchParams.set("chave_planejamento", chave);
+        url.searchParams.set("subacao_entrega", subacao);
+        try {
+          const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+          if (!res.ok) return;
+          const data = await res.json();
+          const items = Array.isArray(data.municipios) ? data.municipios : [];
+          editMunicipioLocked =
+            Boolean(data.has_etapas) && getEditModeKey() === "remover_municipio";
+          if (editMunicipioLocked) {
+            setMsg(
+              "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
+              true
+            );
+          }
+          editMunicipioItems.length = 0;
+          items.forEach((item) => {
+            const codigo = String(item.codigo || "").trim();
+            const municipio = String(item.municipio || "").trim();
+            const meta = String(item.meta || "").trim();
+            if (!codigo || !municipio || !meta) return;
+            editMunicipioItems.push({
+              codigo,
+              municipios_entrega: municipio,
+              meta_subacao: meta,
+              codigoLabel: item.codigo_label || codigo,
+              municipioLabel: item.municipio_label || municipio,
+            });
+          });
+          renderEditMunicipioList();
+          updateEditMunicipioRequired();
+        } catch (err) {
+          console.error(err);
+        }
+      };
 
     const loadEditMunicipios = async () => {
       if (!editCodigoNovoSelect || !editMunicipioNovoSelect) return;
@@ -10478,13 +10583,14 @@
         const etapas = parseJsonArray(row.dataset.etapa);
         const responsaveis = parseJsonArray(row.dataset.responsavelEtapa);
         const cpfs = parseJsonArray(row.dataset.cpfResponsavelEtapa).map(formatCpf);
+        const cpfFallback = formatCpf(row.dataset.cpfResponsavelEtapa || "");
         const etapaCount = Math.max(etapas.length, responsaveis.length, cpfs.length, 1);
         const etapaRows = [];
         if (showEtapas) {
           for (let i = 0; i < etapaCount; i += 1) {
             const etapa = etapas[i] ?? "";
             const resp = responsaveis[i] ?? "";
-            const cpf = cpfs[i] ?? "";
+            const cpf = cpfs[i] ?? (cpfs.length ? "" : cpfFallback);
             etapaRows.push(`
               <tr><th>Relação das etapas</th><td>${escapeHtml(etapa)}</td></tr>
               <tr><th>Responsável da etapa</th><td>${escapeHtml(joinNonEmpty([resp, cpf]))}</td></tr>
@@ -10703,7 +10809,14 @@
           setEditQuestionValue("subacao_edit_q_subacao", "nao");
           setEditQuestionValue("subacao_edit_q_responsavel", "nao");
           setEditQuestionValue("subacao_edit_q_produto", "nao");
+          setEditQuestionValue("subacao_edit_q_remove_municipio", "nao");
           setEditQuestionValue("subacao_edit_q_municipio", "sim");
+        } else if (tipo === "remover_municipio") {
+          setEditQuestionValue("subacao_edit_q_subacao", "nao");
+          setEditQuestionValue("subacao_edit_q_responsavel", "nao");
+          setEditQuestionValue("subacao_edit_q_produto", "nao");
+          setEditQuestionValue("subacao_edit_q_remove_municipio", "sim");
+          setEditQuestionValue("subacao_edit_q_municipio", "nao");
         }
         updateQuestionVisibility();
         syncEditMode();
@@ -10924,18 +11037,21 @@
         editReloadSelects.forEach((sel) => {
           sel.addEventListener("change", loadEditOptions);
         });
-        if (editSubacaoSelect) {
-          editSubacaoSelect.addEventListener("change", () => {
-            if (editResponsavelSelect) editResponsavelSelect.value = "";
-            if (editPrazoSelect) editPrazoSelect.value = "";
-            if (editUnidGestoraSelect) editUnidGestoraSelect.value = "";
-            if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.value = "";
-            if (editProdutoSelect) editProdutoSelect.value = "";
-            if (editRegiaoSelect) editRegiaoSelect.value = "";
-            pendingEditPref = null;
-            loadEditOptions();
-          });
-        }
+          if (editSubacaoSelect) {
+            editSubacaoSelect.addEventListener("change", () => {
+              if (editResponsavelSelect) editResponsavelSelect.value = "";
+              if (editPrazoSelect) editPrazoSelect.value = "";
+              if (editUnidGestoraSelect) editUnidGestoraSelect.value = "";
+              if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.value = "";
+              if (editProdutoSelect) editProdutoSelect.value = "";
+              if (editRegiaoSelect) editRegiaoSelect.value = "";
+              editMunicipioLocked = false;
+              editMunicipioItems.length = 0;
+              renderEditMunicipioList();
+              pendingEditPref = null;
+              loadEditOptions();
+            });
+          }
       if (editRegiaoSelect) {
         editRegiaoSelect.addEventListener("change", () => {
           loadEditMunicipios();
@@ -10970,6 +11086,13 @@
         editMunicipioListEl.addEventListener("click", (ev) => {
           const btn = ev.target.closest("[data-edit-remove-index]");
           if (!btn) return;
+          if (editMunicipioLocked) {
+            setMsg(
+              "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
+              true
+            );
+            return;
+          }
           const idx = Number(btn.getAttribute("data-edit-remove-index"));
           if (Number.isNaN(idx)) return;
           editMunicipioItems.splice(idx, 1);
@@ -11397,21 +11520,28 @@
           justificativa: editJustificativaInput?.value || "",
           responsavel_nger: editResponsavelNgerInput?.value || "",
         };
-        if (editModeKey === "novo_municipio") {
-          const hasPending = Boolean(
-            editCodigoNovoSelect?.value || editMunicipioNovoSelect?.value || editMetaNovoInput?.value
-          );
-          if (hasPending) addEditMunicipioItem();
-          if (!editMunicipioItems.length) {
-            setMsg("Informe c?digo, munic?pio e meta para adicionar.", true);
-            return;
+          if (editModeKey === "novo_municipio" || editModeKey === "remover_municipio") {
+            if (editModeKey === "remover_municipio" && editMunicipioLocked) {
+              setMsg(
+                "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
+                true
+              );
+              return;
+            }
+            const hasPending = Boolean(
+              editCodigoNovoSelect?.value || editMunicipioNovoSelect?.value || editMetaNovoInput?.value
+            );
+            if (hasPending) addEditMunicipioItem();
+            if (!editMunicipioItems.length) {
+              setMsg("Informe c?digo, munic?pio e meta para adicionar.", true);
+              return;
+            }
+            payload.municipios_items = editMunicipioItems.map((item) => ({
+              codigo: item.codigo,
+              municipios_entrega: item.municipios_entrega,
+              meta_subacao: item.meta_subacao,
+            }));
           }
-          payload.municipios_items = editMunicipioItems.map((item) => ({
-            codigo: item.codigo,
-            municipios_entrega: item.municipios_entrega,
-            meta_subacao: item.meta_subacao,
-          }));
-        }
         try {
           const res = await fetch("/api/subacao/editar", {
             method: "POST",
@@ -11419,19 +11549,25 @@
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          if (!res.ok) {
-            setMsg(data.error || "Falha ao salvar.", true);
-            return;
-          }
-          const count = data.count || (Array.isArray(data.subacoes) ? data.subacoes.length : 1);
-          showToast(`Suba??o salva com sucesso. Registros: ${count}.`, "success");
-          if (data.warning) {
-            setMsg(data.warning);
-          }
-          await loadPage("cadastrar/plan_21-nger/subacao");
-        } catch (err) {
-          console.error(err);
-          setMsg("Falha ao salvar.", true);
+            if (!res.ok) {
+              setMsg(data.error || "Falha ao salvar.", true);
+              return;
+            }
+            const count = data.count || (Array.isArray(data.subacoes) ? data.subacoes.length : 1);
+            showToast(`Suba??o salva com sucesso. Registros: ${count}.`, "success");
+            if (data.warning) {
+              setMsg(data.warning);
+            }
+            if (Array.isArray(data.subacoes) && data.subacoes.length) {
+              const last = data.subacoes[data.subacoes.length - 1];
+              if (last && last.id) {
+                window.__subacaoAutoPrintId = String(last.id);
+              }
+            }
+            await loadPage("cadastrar/plan_21-nger/subacao");
+          } catch (err) {
+            console.error(err);
+            setMsg("Falha ao salvar.", true);
         }
         return;
       }
@@ -11471,28 +11607,46 @@
         justificativa: justificativaInput?.value || "",
         responsavel_nger: responsavelNgerInput?.value || "",
       };
-      if (municipioItems.length) {
-        if (!validateEtapaBlock()) return;
-        const last = captureEtapaPayload();
-        const all = [...etapaItems, last];
-        if (!last.municipio) {
-          setMsg("Selecione um município para a etapa antes de salvar.", true);
-          return;
+        if (municipioItems.length) {
+          const etapaMunicipios = new Set(
+            etapaItems
+              .map((item) => String(item?.municipio || "").trim())
+              .filter((value) => value)
+          );
+          const municipiosPendentes = municipioItems.filter(
+            (m) => !etapaMunicipios.has(String(m?.municipios_entrega || "").trim())
+          );
+          const hasEtapaInput = Boolean(
+            etapaMunicipioSelect?.value ||
+              etapaInput?.value ||
+              responsavelEtapaInput?.value ||
+              cpfEtapaInput?.value
+          );
+          if (!municipiosPendentes.length && !hasEtapaInput) {
+            payload.etapas_items = etapaItems;
+          } else {
+            if (!validateEtapaBlock()) return;
+            const last = captureEtapaPayload();
+            const all = [...etapaItems, last];
+            if (!last.municipio) {
+              setMsg("Selecione um município para a etapa antes de salvar.", true);
+              return;
+            }
+            if (all.length < municipioItems.length) {
+              const faltando = municipioItems.length - all.length;
+              setMsg(`Faltam ${faltando} etapa(s) para concluir os municípios.`, true);
+              return;
+            }
+            const missing = municipioItems.some(
+              (m) => !all.find((e) => e.municipio === m.municipios_entrega)
+            );
+            if (missing) {
+              setMsg("Existe município sem etapa vinculada.", true);
+              return;
+            }
+            payload.etapas_items = all;
+          }
         }
-        if (all.length < municipioItems.length) {
-          const faltando = municipioItems.length - all.length;
-          setMsg(`Faltam ${faltando} etapa(s) para concluir os municípios.`, true);
-          return;
-        }
-        const missing = municipioItems.some(
-          (m) => !all.find((e) => e.municipio === m.municipios_entrega)
-        );
-        if (missing) {
-          setMsg("Existe município sem etapa vinculada.", true);
-          return;
-        }
-        payload.etapas_items = all;
-      }
         if (mode === "cadastrar" && municipioItems.length) {
           payload.municipios_items = municipioItems.map((item) => ({
             codigo: item.codigo,
@@ -11514,12 +11668,18 @@
           setMsg(data.error || "Falha ao salvar.", true);
           return;
         }
-        const count = Array.isArray(data.subacoes) ? data.subacoes.length : 1;
-        showToast(`Subação salva com sucesso. Registros: ${count}.`, "success");
-        await loadPage("cadastrar/plan_21-nger/subacao");
-      } catch (err) {
-        console.error(err);
-        setMsg("Falha ao salvar.", true);
+          const count = Array.isArray(data.subacoes) ? data.subacoes.length : 1;
+          showToast(`Subação salva com sucesso. Registros: ${count}.`, "success");
+          if (Array.isArray(data.subacoes) && data.subacoes.length) {
+            const last = data.subacoes[data.subacoes.length - 1];
+            if (last && last.id) {
+              window.__subacaoAutoPrintId = String(last.id);
+            }
+          }
+          await loadPage("cadastrar/plan_21-nger/subacao");
+        } catch (err) {
+          console.error(err);
+          setMsg("Falha ao salvar.", true);
       }
     });
 
@@ -11535,6 +11695,17 @@
     }
     loadOptions();
     renderSummaryPage();
+    const autoPrintId = window.__subacaoAutoPrintId;
+    if (autoPrintId) {
+      const row = summaryBody?.querySelector(
+        `.dotacao-summary-row[data-id="${CSS.escape(String(autoPrintId))}"]`
+      );
+      if (row) {
+        setSelectedRow(row);
+        openSubacaoPrintPopup(row);
+      }
+      window.__subacaoAutoPrintId = null;
+    }
     if (pageSizeSelect) {
       pageSizeSelect.addEventListener("change", () => {
         pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;

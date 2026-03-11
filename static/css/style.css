@@ -495,7 +495,8 @@ a { color: inherit; text-decoration: none; }
   background: rgba(31,155,126,0.08);
 }
 .field { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; }
-.field input, .field select, .field textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; }
+  .field input, .field select, .field textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; }
+  .field .locked-field { background: #f0f0f0; color: #555; }
 .field select option { color: var(--text); background: var(--surface); }
 .field textarea { resize: both; min-height: 80px; }
 .field input:focus { outline: 1px solid var(--accent); }
@@ -706,6 +707,11 @@ a { color: inherit; text-decoration: none; }
 .dotacao-summary-hidden .pagination,
 .dotacao-summary-hidden .page-size { visibility: hidden; }
 .dotacao-summary-row.selected { background: rgba(31,155,126,0.12); }
+.subacao-rejeitado,
+.subacao-rejeitado td,
+.subacao-rejeitado th {
+  color: #c62828 !important;
+}
 .dotacao-summary-warn {
   border-radius: 12px;
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.6);

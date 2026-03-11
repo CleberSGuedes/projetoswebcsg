@@ -982,7 +982,10 @@ def partial_cadastrar_plan21_subacao():
     user_session = session.get("user") or {}
     user_nome = (user_session.get("nome") or "").strip()
     subacoes = (
-        CadastrarSubacao.query.filter(CadastrarSubacao.ativo == True)  # noqa: E712
+        CadastrarSubacao.query.filter(
+            (CadastrarSubacao.ativo == True)  # noqa: E712
+            | (func.lower(CadastrarSubacao.status_aprovacao) == "rejeitado")
+        )
         .order_by(CadastrarSubacao.id.desc())
         .all()
     )
@@ -1056,6 +1059,7 @@ def partial_cadastrar_plan21_subacao():
         subacoes=subacoes,
         user_id=user_id,
         user_nome=user_nome,
+        current_year=str(_now_local().year),
     )
 
 
@@ -2117,10 +2121,34 @@ def api_subacao_options():
         if politica_val:
             allowed_politica.add(politica_val)
 
-    regiao_rows = _safe_query_mappings(
-        "SELECT codigo, nome FROM regiao ORDER BY codigo"
-    )
-    regioes = _options_code_name(regiao_rows, "codigo", "nome")
+    regiao_where = []
+    regiao_params = {}
+    regiao_map = {
+        "exercicio": "exercicio",
+        "uo": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "produto_acao": "produto_acao",
+    }
+    for key, col in regiao_map.items():
+        val = (selected.get(key) or "").strip()
+        if val:
+            regiao_where.append(f"{col} = :{key}")
+            regiao_params[key] = val
+    regiao_sql = "SELECT DISTINCT regiao_produto FROM plan21_nger"
+    if regiao_where:
+        regiao_sql += " WHERE " + " AND ".join(regiao_where)
+    regiao_rows = _safe_query_mappings(regiao_sql, regiao_params)
+    regioes = []
+    for row in regiao_rows:
+        val = row.get("regiao_produto")
+        if val is None:
+            continue
+        text = str(val).strip()
+        if not text:
+            continue
+        regioes.append({"value": text, "label": text})
+    regioes = sorted(regioes, key=lambda r: r["label"].lower())
 
     subfuncao_rows = _safe_query_mappings(
         "SELECT codigo, nome FROM subfuncao ORDER BY codigo"
@@ -2553,11 +2581,11 @@ def _apply_subacao_alterar(registro: CadastrarSubacao) -> list[int]:
     lists = _subacao_list_payload(registro)
     list_sizes = [len(lists["codigos"]), len(lists["municipios"]), len(lists["metas"])]
     items_count = max([1] + list_sizes)
-    if tipo_edicao == "novo_municipio" and items_count > 1 and len(ids) == 1:
+    if tipo_edicao in {"novo_municipio", "remover_municipio"} and items_count > 1 and len(ids) == 1:
         source_ids = [ids[0]] * items_count
     else:
         source_ids = ids
-    if tipo_edicao == "novo_municipio" and items_count > len(source_ids):
+    if tipo_edicao in {"novo_municipio", "remover_municipio"} and items_count > len(source_ids):
         source_ids = [source_ids[min(i, len(source_ids) - 1)] for i in range(items_count)]
 
     def build_overrides(idx: int) -> dict:
@@ -2578,7 +2606,7 @@ def _apply_subacao_alterar(registro: CadastrarSubacao) -> list[int]:
                     "unidade_medida": registro.unidade_medida,
                 }
             )
-        elif tipo_edicao == "novo_municipio":
+        elif tipo_edicao in {"novo_municipio", "remover_municipio"}:
             meta_raw = _pick_list_value(lists["metas"], idx)
             meta_val = _parse_decimal(meta_raw) if meta_raw else None
             overrides.update(
@@ -2845,6 +2873,101 @@ def api_subacao_plan21_edit_options():
         pairs.append({"codigo": codigo_s, "municipio": municipio_s, "meta": meta_value})
 
     return jsonify({"options": options, "pairs": pairs})
+
+
+@home_bp.route("/api/subacao/plan21-municipios", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/subacao")
+def api_subacao_plan21_municipios():
+    plan_fields = {
+        "exercicio": "exercicio",
+        "uo": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+    }
+    filters = {}
+    for key, col in plan_fields.items():
+        val = (request.args.get(key) or "").strip()
+        if val:
+            filters[col] = val
+    chave = (request.args.get("chave_planejamento") or "").strip()
+    subacao = (request.args.get("subacao_entrega") or "").strip()
+    if not chave or not subacao:
+        return jsonify({"municipios": [], "has_etapas": False})
+    where = ["ativo = 1", "chave_planejamento = :chave", "subacao_entrega = :subacao"]
+    params = {"chave": chave, "subacao": subacao}
+    for col, val in filters.items():
+        where.append(f"{col} = :{col}")
+        params[col] = val
+    sql = """
+        SELECT codigo, municipios_entrega, meta_subacao, etapa
+        FROM plan21_nger
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    rows = _safe_query_mappings(sql, params)
+    def _split_parts(value):
+        if value is None:
+            return []
+        parts = [part.replace("\xa0", " ").strip() for part in str(value).split("*")]
+        return [part for part in parts if part]
+
+    seen = set()
+    municipios = []
+    has_etapas = False
+    for row in rows:
+        codigo_raw = (row.get("codigo") or "").strip()
+        municipio_raw = (row.get("municipios_entrega") or "").strip()
+        meta_raw = row.get("meta_subacao")
+        etapa = (row.get("etapa") or "").strip()
+        if etapa:
+            has_etapas = True
+        if not codigo_raw or not municipio_raw:
+            continue
+
+        codigos = _split_parts(codigo_raw)
+        municipios_raw = _split_parts(municipio_raw)
+        metas = _split_parts(meta_raw)
+        if not codigos or not municipios_raw:
+            key = f"{codigo_raw}::{municipio_raw}"
+            if key in seen:
+                continue
+            seen.add(key)
+            meta_str = "" if meta_raw is None else str(meta_raw)
+            municipios.append(
+                {
+                    "codigo": codigo_raw,
+                    "municipio": municipio_raw,
+                    "meta": meta_str,
+                    "codigo_label": codigo_raw,
+                    "municipio_label": municipio_raw,
+                }
+            )
+            continue
+
+        max_len = max(len(codigos), len(municipios_raw), len(metas) if metas else 0)
+        for idx in range(max_len):
+            codigo = codigos[idx] if idx < len(codigos) else ""
+            municipio = municipios_raw[idx] if idx < len(municipios_raw) else ""
+            meta = metas[idx] if idx < len(metas) else ""
+            if not codigo or not municipio:
+                continue
+            key = f"{codigo}::{municipio}"
+            if key in seen:
+                continue
+            seen.add(key)
+            municipios.append(
+                {
+                    "codigo": codigo,
+                    "municipio": municipio,
+                    "meta": meta,
+                    "codigo_label": codigo,
+                    "municipio_label": municipio,
+                }
+            )
+    return jsonify({"municipios": municipios, "has_etapas": has_etapas})
 
 
 @home_bp.route("/api/subacao", methods=["POST"])
@@ -3190,6 +3313,15 @@ def api_subacao_editar():
             "unidade_setorial_planejamento",
             "produto_subacao_edit",
         ],
+        "remover_municipio": required_common
+        + [
+            "responsavel_edit",
+            "prazo",
+            "unid_gestora",
+            "unidade_setorial_planejamento",
+            "produto_subacao",
+            "regiao_subacao",
+        ],
         "novo_municipio": required_common
         + [
             "responsavel_edit",
@@ -3293,6 +3425,50 @@ def api_subacao_editar():
     if not rows:
         return jsonify({"error": "Nenhum registro encontrado com os filtros informados."}), 404
 
+    if edit_mode == "remover_municipio":
+        filter_map = {
+            "exercicio": "exercicio",
+            "uo": "unidade_orcamentaria",
+            "programa": "programa",
+            "acao_paoe": "acao_paoe",
+            "responsavel_acao": "responsavel_acao",
+            "produto_acao": "produto_acao",
+            "chave_planejamento": "chave_planejamento",
+            "subacao_entrega": "subacao_entrega",
+            "responsavel": "responsavel",
+            "prazo": "prazo",
+            "unid_gestora": "unid_gestora",
+            "unidade_setorial_planejamento": "unidade_setorial_planejamento",
+            "produto_subacao": "produto_subacao",
+            "unidade_medida": "unidade_medida",
+            "regiao_subacao": "regiao_subacao",
+            "codigo": "codigo",
+            "municipios_entrega": "municipios_entrega",
+            "meta_subacao": "meta_subacao",
+            "detalhamento_produto": "detalhamento_produto",
+        }
+        where = ["ativo = 1", "etapa IS NOT NULL", "TRIM(etapa) <> ''"]
+        params = {}
+        for key, col in filter_map.items():
+            val = filters.get(key)
+            if val:
+                where.append(f"{col} = :{key}")
+                params[key] = val
+        etapa_sql = "SELECT 1 AS has_etapa FROM plan21_nger"
+        if where:
+            etapa_sql += " WHERE " + " AND ".join(where)
+        etapa_sql += " LIMIT 1"
+        etapa_rows = _safe_query_mappings(etapa_sql, params)
+        if etapa_rows:
+            return (
+                jsonify(
+                    {
+                        "error": "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas."
+                    }
+                ),
+                400,
+            )
+
     if edit_mode == "excluir":
         for row in rows:
             val = row.get("valor_atual")
@@ -3369,14 +3545,18 @@ def api_subacao_editar():
             "tipo_edicao": tipo_edicao if edit_mode != "excluir" else None,
             "ativo": True,
             "plan21_nger_id": (row_ids[-1] if row_ids else row.get("id")),
-            "plan21_nger_ids": None if edit_mode == "novo_municipio" else json.dumps(row_ids) if row_ids else None,
+            "plan21_nger_ids": None
+            if edit_mode in {"novo_municipio", "remover_municipio"}
+            else json.dumps(row_ids)
+            if row_ids
+            else None,
             "usuario_id": usuarios_id,
             "status_aprovacao": "aguardando",
             "justificativa": justificativa,
             "responsavel_nger": responsavel_nger,
         }
 
-        if edit_mode == "novo_municipio":
+        if edit_mode in {"novo_municipio", "remover_municipio"}:
             municipios_items = data.get("municipios_items") or []
             if not isinstance(municipios_items, list) or not municipios_items:
                 return jsonify({"error": "Informe municipios para adicionar."}), 400
@@ -3444,9 +3624,9 @@ def api_subacao_editar():
 
     warning = ""
     if edit_mode == "novo_municipio":
-        warning = (
-                    "Novo municipio adicionado. Cadastre uma nova etapa em seguida."
-        )
+        warning = "Novo municipio adicionado. Cadastre uma nova etapa em seguida."
+    if edit_mode == "remover_municipio":
+        warning = "Municipios atualizados com sucesso."
     return jsonify(
         {
             "subacoes": [_subacao_payload(r) for r in registros],

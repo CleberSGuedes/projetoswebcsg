@@ -6,7 +6,7 @@
 
   <div class="card no-print">
 
-    <div class="card-title">Subação</div>
+    <div class="card-title">Subação - Base de dados PTA {{ current_year }}</div>
 
     <form id="form-subacao" class="form" novalidate>
 
@@ -129,7 +129,7 @@
 
             <label class="field">
 
-              <span>*Região</span>
+              <span>*Região (Vinculada à região do produto)</span>
 
               <select id="subacao-regiao" name="regiao" required>
 
@@ -301,7 +301,7 @@
 
             <span>*Unidade Gestora</span>
 
-              <select id="subacao-unid-gestora" name="unid_gestora" required disabled data-readonly="1">
+              <select id="subacao-unid-gestora" name="unid_gestora" required disabled data-readonly="1" class="locked-field">
 
               <option value="">Selecione a unidade gestora</option>
 
@@ -333,7 +333,7 @@
 
           <span>*Unidade Setorial de Planejamento</span>
 
-          <select id="subacao-unidade-setorial" name="unidade_setorial_planejamento" required>
+          <select id="subacao-unidade-setorial" name="unidade_setorial_planejamento" required class="locked-field">
 
             <option value="001 - Administração Geral">001 - Administração Geral</option>
 
@@ -455,7 +455,7 @@
 
           <span>*Região da Subação/Entrega</span>
 
-            <select id="subacao-regiao-entrega" name="regiao_subacao" required disabled data-readonly="1">
+            <select id="subacao-regiao-entrega" name="regiao_subacao" required disabled data-readonly="1" class="locked-field">
 
             <option value="">Carregando...</option>
 
@@ -564,10 +564,10 @@
 
               </div>
 
-              <div class="field">
+                <div class="field">
 
-                <span>Deseja alterar o produto da Subação?</span>
-                <div class="field-radio-group">
+                  <span>Deseja alterar o produto da Subação?</span>
+                  <div class="field-radio-group">
 
                   <label class="field-radio">
 
@@ -586,12 +586,36 @@
 
                 </div>
 
-              </div>
+                </div>
 
-              <div class="field">
+                <div class="field">
 
-                <span>Deseja acrescentar Novo Município?</span>
-                <div class="field-radio-group">
+                  <span>Deseja remover um Município?</span>
+                  <div class="field-radio-group">
+
+                    <label class="field-radio">
+
+                      <input type="radio" name="subacao_edit_q_remove_municipio" value="nao" />
+
+                      <span>Não</span>
+                    </label>
+
+                    <label class="field-radio">
+
+                      <input type="radio" name="subacao_edit_q_remove_municipio" value="sim" />
+
+                      <span>Sim</span>
+
+                    </label>
+
+                  </div>
+
+                </div>
+
+                <div class="field">
+
+                  <span>Deseja acrescentar Novo Município?</span>
+                  <div class="field-radio-group">
 
                   <label class="field-radio">
 
@@ -820,7 +844,7 @@
 
             </label>
 
-            <label class="field" data-edit-group="novo_municipio">
+            <label class="field" data-edit-group="novo_municipio remover_municipio">
 
               <span>*Região da Subação/Entrega</span>
 
@@ -832,7 +856,7 @@
 
             </label>
 
-            <label class="field" data-edit-group="novo_municipio">
+            <label class="field" data-edit-group="novo_municipio remover_municipio">
 
               <span>*Código do Município</span>
 
@@ -844,7 +868,7 @@
 
             </label>
 
-            <label class="field" data-edit-group="novo_municipio">
+            <label class="field" data-edit-group="novo_municipio remover_municipio">
 
               <span>*Município de Entrega</span>
 
@@ -856,7 +880,7 @@
 
             </label>
 
-            <label class="field" data-edit-group="novo_municipio">
+            <label class="field" data-edit-group="novo_municipio remover_municipio">
 
               <span>*Meta da Subação/Entrega</span>
 
@@ -864,7 +888,7 @@
 
             </label>
 
-            <div class="field field-inline align-end" data-edit-group="novo_municipio">
+            <div class="field field-inline align-end" data-edit-group="novo_municipio remover_municipio">
 
               <button class="btn btn-secondary sm" type="button" id="subacao-edit-municipio-add">Adicionar Município</button>
 
@@ -886,7 +910,7 @@
 
             </label>
 
-            <div class="municipio-list field-full" id="subacao-edit-municipio-list-wrap" data-edit-group="novo_municipio">
+            <div class="municipio-list field-full" id="subacao-edit-municipio-list-wrap" data-edit-group="novo_municipio remover_municipio">
 
               <div class="municipio-list-head">Municípios adicionados</div>
 
@@ -1123,7 +1147,7 @@
 
             {% for s in subacoes %}
 
-              <tr class="dotacao-summary-row"
+              <tr class="dotacao-summary-row {% if s.status_aprovacao and s.status_aprovacao|lower == 'rejeitado' %}subacao-rejeitado{% endif %}"
 
                   data-id="{{ s.id }}"
 
