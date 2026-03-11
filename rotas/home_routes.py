@@ -520,6 +520,50 @@ def partial_dashboard():
                 "adj_solicitante": est_adj_map.get(perfil_id, ""),
             }
         )
+    subacoes_aguardando = []
+    try:
+        t5 = datetime.utcnow()
+        subacoes_raw = (
+            CadastrarSubacao.query.filter(CadastrarSubacao.ativo == True)  # noqa: E712
+            .filter(func.lower(CadastrarSubacao.status_aprovacao) == "aguardando")
+            .order_by(CadastrarSubacao.id.desc())
+            .all()
+        )
+        _log_timing("subacoes_aguardando", t5, len(subacoes_raw))
+    except Exception:
+        subacoes_raw = []
+    if subacoes_raw:
+        usuario_ids = {s.usuario_id for s in subacoes_raw if s.usuario_id}
+        usuarios_map = {}
+        perfil_map = {}
+        perfil_ids = set()
+        if usuario_ids:
+            usuarios = Usuario.query.filter(Usuario.id.in_(usuario_ids)).all()
+            usuarios_map = {u.id: u for u in usuarios}
+            perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
+            perfil_map = {p.id: p for p in perfis}
+        for s in subacoes_raw:
+            usuario = usuarios_map.get(s.usuario_id)
+            perfil_id = getattr(usuario, "perfil_id", None)
+            perfil_nome = ""
+            if perfil_id:
+                perfil_row = perfil_map.get(perfil_id)
+                perfil_nome = (getattr(perfil_row, "nome", "") or "").strip()
+            exercicio = getattr(s, "exercicio", "") or ""
+            if perfil_nome:
+                controle = f"SUB.{exercicio}.{perfil_nome}.{s.id}"
+            else:
+                controle = f"SUB.{exercicio}.{s.id}"
+            subacoes_aguardando.append(
+                {
+                    "controle_subacao": controle,
+                    "status_aprovacao": getattr(s, "status_aprovacao", "") or "",
+                    "tipo_solicitacao": getattr(s, "tipo_solicitacao", "") or "",
+                    "perfil": perfil_nome,
+                }
+            )
     try:
         emp_record = get_emp_record_snapshot()
     except Exception:
@@ -540,6 +584,7 @@ def partial_dashboard():
         emp_dotacao_missing=emp_dotacao_missing,
         dotacoes_aguardando=pendentes,
         estornos_aguardando=estornos_aguardando,
+        subacoes_aguardando=subacoes_aguardando,
         emp_record=emp_record_payload,
     )
 
