@@ -3148,9 +3148,9 @@ def api_subacao_create():
         regiao_query = regiao_query.filter(Plan21Nger.chave_planejamento == chave_planejamento)
         regiao_query = regiao_query.filter(
             or_(
-                Plan21Nger.regiao_subacao == regiao_subacao,
-                Plan21Nger.regiao_subacao == regiao_key,
-                Plan21Nger.regiao_subacao.like(f"{regiao_key}%"),
+                Plan21Nger.regiao_produto == regiao_subacao,
+                Plan21Nger.regiao_produto == regiao_key,
+                Plan21Nger.regiao_produto.like(f"{regiao_key}%"),
             )
         )
         if not regiao_query.first():
