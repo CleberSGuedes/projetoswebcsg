@@ -110,15 +110,18 @@ function parseDataDb(value) {
     const hh = Number(timePart.slice(0, 2));
     const mm = Number(timePart.slice(2, 4));
     const ss = Number(timePart.slice(4, 6));
-    return new Date(y, m - 1, d, hh, mm, ss);
+    const out = new Date(y, m - 1, d, hh, mm, ss);
+    return Number.isNaN(out.getTime()) ? null : out;
   }
-  if (formats[1].test(candidate)) {
+  if (formats[2].test(candidate)) {
     const [d, m, y] = candidate.split("/").map(Number);
-    return new Date(y, m - 1, d);
+    const out = new Date(y, m - 1, d);
+    return Number.isNaN(out.getTime()) ? null : out;
   }
-  if (formats[2].test(text)) {
+  if (formats[3].test(text)) {
     const [y, m, d] = text.split("-").map(Number);
-    return new Date(y, m - 1, d);
+    const out = new Date(y, m - 1, d);
+    return Number.isNaN(out.getTime()) ? null : out;
   }
   return null;
 }
