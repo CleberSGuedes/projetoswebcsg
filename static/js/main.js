@@ -3090,9 +3090,20 @@
     setResultsVisible(false);
   }
 
+  function toggleReportEmptyState({ tableEl, emptyEl, btnDownloadEl, pagerEl, hasRows }) {
+    const tableWrapEl = tableEl ? tableEl.closest(".table-responsive") : null;
+    const tableFootEl = tableEl ? tableEl.closest(".card")?.querySelector(".table-foot") : null;
+    if (emptyEl) emptyEl.hidden = hasRows;
+    if (tableWrapEl) tableWrapEl.style.display = hasRows ? "" : "none";
+    if (tableFootEl) tableFootEl.style.display = hasRows ? "" : "none";
+    if (btnDownloadEl) btnDownloadEl.disabled = !hasRows;
+    if (!hasRows && pagerEl) pagerEl.innerHTML = "";
+  }
+
   function initRelatorioFip() {
     const table = document.getElementById("fip613-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("fip613-empty");
     const meta = document.getElementById("fip613-relatorio-meta");
     const pager = document.getElementById("fip613-pagination");
     const pageSizeSelect = document.getElementById("fip613-page-size");
@@ -3305,6 +3316,13 @@
       }
       formatVal(saldoDotEl, totals.saldo_dotacao);
       renderPagination(totalPages);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const allData = { rows: [] };
@@ -3653,6 +3671,7 @@
   function initRelatorioPlan20() {
     const table = document.getElementById("plan20-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("plan20-empty");
     const meta = document.getElementById("plan20-relatorio-meta");
     const pager = document.getElementById("plan20-pagination");
     const pageSizeSelect = document.getElementById("plan20-page-size");
@@ -3805,6 +3824,13 @@
 
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const allData = { rows: [] };
@@ -4180,6 +4206,7 @@
   function initRelatorioPlan21Nger() {
     const table = document.getElementById("plan21-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("plan21-empty");
     const meta = document.getElementById("plan21-relatorio-meta");
     const pager = document.getElementById("plan21-pagination");
     const pageSizeSelect = document.getElementById("plan21-page-size");
@@ -4340,6 +4367,13 @@
 
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const allData = { rows: [] };
@@ -4721,6 +4755,7 @@
   function initRelatorioEmp() {
     const table = document.getElementById("emp-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("emp-empty");
     const meta = document.getElementById("emp-relatorio-meta");
     const pager = document.getElementById("emp-pagination");
     const pageSizeSelect = document.getElementById("emp-page-size");
@@ -5170,6 +5205,13 @@
 
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const load = async () => {
@@ -5245,6 +5287,7 @@
   function initRelatorioEstEmp() {
     const table = document.getElementById("est-emp-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("est-emp-empty");
     const meta = document.getElementById("est-emp-relatorio-meta");
     const pager = document.getElementById("est-emp-pagination");
     const pageSizeSelect = document.getElementById("est-emp-page-size");
@@ -5646,6 +5689,13 @@
 
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const renderFiltered = (resetPage = true) => {
@@ -5731,6 +5781,7 @@
   function initRelatorioPed() {
     const table = document.getElementById("ped-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("ped-empty");
     const meta = document.getElementById("ped-relatorio-meta");
     const pager = document.getElementById("ped-pagination");
     const pageSizeSelect = document.getElementById("ped-page-size");
@@ -6225,6 +6276,13 @@
       });
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const load = async () => {
@@ -6300,6 +6358,7 @@
   function initRelatorioNob() {
     const table = document.getElementById("nob-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("nob-empty");
     const meta = document.getElementById("nob-relatorio-meta");
     const pager = document.getElementById("nob-pagination");
     const pageSizeSelect = document.getElementById("nob-page-size");
@@ -6734,6 +6793,13 @@
 
       renderPagination(totalPages);
       updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const load = async () => {
@@ -6877,6 +6943,7 @@
   function initRelatorioDotacao() {
     const table = document.getElementById("dotacao-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("dotacao-empty");
     const pager = document.getElementById("dotacao-pagination");
     const pageSizeSelect = document.getElementById("dotacao-page-size");
     const btnDownload = document.getElementById("dotacao-relatorio-download");
@@ -7264,6 +7331,13 @@
       });
 
       renderPagination(totalPages);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
     };
 
     const renderFiltered = (resetPage = true) => {
@@ -7336,6 +7410,9 @@
   function initRelatorioEstDotacao() {
     const table = document.getElementById("est-dotacao-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
+    const tableWrap = table ? table.closest(".table-responsive") : null;
+    const tableFoot = table ? table.closest(".card")?.querySelector(".table-foot") : null;
+    const emptyState = document.getElementById("est-dotacao-empty");
     const pager = document.getElementById("est-dotacao-pagination");
     const pageSizeSelect = document.getElementById("est-dotacao-page-size");
     const btnDownload = document.getElementById("est-dotacao-relatorio-download");
@@ -7400,6 +7477,17 @@
     const allData = { rows: [] };
     const filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
     const filterControls = {};
+
+    const updateDownloadState = () => {
+      if (!btnDownload) return;
+      btnDownload.disabled = filteredRows.length === 0;
+    };
+
+    const toggleEmptyState = (showEmpty) => {
+      if (emptyState) emptyState.hidden = !showEmpty;
+      if (tableWrap) tableWrap.style.display = showEmpty ? "none" : "";
+      if (tableFoot) tableFoot.style.display = showEmpty ? "none" : "";
+    };
 
     const closeAllPanels = () => {
       Object.values(filterControls).forEach((ctrl) => {
@@ -7676,6 +7764,15 @@
 
     const render = () => {
       const rows = filteredRows;
+      if (!rows.length) {
+        tbody.innerHTML = "";
+        if (pager) pager.innerHTML = "";
+        toggleEmptyState(true);
+        updateDownloadState();
+        return;
+      }
+
+      toggleEmptyState(false);
       const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
       if (currentPage > totalPages) currentPage = totalPages;
       const startIdx = (currentPage - 1) * pageSize;
@@ -7719,6 +7816,7 @@
       });
 
       renderPagination(totalPages);
+      updateDownloadState();
     };
 
     const renderFiltered = (resetPage = true) => {
@@ -7783,6 +7881,7 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
+        if (!filteredRows.length) return;
         window.open("/api/relatorios/est-dotacao/download", "_blank");
       });
     }

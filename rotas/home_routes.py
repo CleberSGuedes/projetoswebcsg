@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
+from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
 from functools import wraps, lru_cache
 import re
 from datetime import datetime, timedelta
@@ -2120,7 +2120,7 @@ def api_subacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
-    # forÃ§a o exercicio ao ano atual
+    # força o exercicio ao ano atual
     selected["exercicio"] = current_year
     plan_options = {}
     for key, col in plan_fields.items():
@@ -4177,7 +4177,7 @@ def api_dotacao_create():
     saldo_disponivel = _dec_or_zero(saldo_disponivel).quantize(Decimal("0.01"))
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da DotAção deve ser menor ou igual ao Saldo da DotAção"}), 400
+        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -4406,7 +4406,7 @@ def api_dotacao_update(dotacao_id):
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     saldo_disponivel += _dec_or_zero(registro.valor_dotacao)
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da DotAção deve ser menor ou igual ao Saldo da DotAção"}), 400
+        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -4624,24 +4624,24 @@ def api_est_dotacao_create():
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
-        return jsonify({"error": f"Campos obrigatÃ³rios ausentes: {', '.join(missing)}."}), 400
+        return jsonify({"error": f"Campos obrigatórios ausentes: {', '.join(missing)}."}), 400
 
     if not _current_user_matches_perfil(_perfil_id_by_nome(adjunta)):
-        return jsonify({"error": "UsuÃ¡rio sem permissÃ£o de cadastrar estorno."}), 403
+        return jsonify({"error": "Usuário sem permissão de cadastrar estorno."}), 403
 
     valor_dotacao = _parse_decimal(valor_dotacao_raw)
     valor_est = _parse_decimal(valor_est_raw)
     saldo = _parse_decimal(saldo_raw)
     if valor_dotacao is None or valor_est is None or saldo is None:
-        return jsonify({"error": "Valores monetÃ¡rios invÃ¡lidos."}), 400
+        return jsonify({"error": "Valores monetários inválidos."}), 400
 
     adj_row = Perfil.query.filter(Perfil.nome == adjunta).first()
     if not adj_row:
-        return jsonify({"error": "Adjunta Solicitante nÃ£o encontrada."}), 400
+        return jsonify({"error": "Adjunta Solicitante não encontrada."}), 400
 
     usuarios_id = _resolve_usuario_id()
     if usuarios_id is None:
-        return jsonify({"error": "UsuÃ¡rio nÃ£o encontrado."}), 400
+        return jsonify({"error": "Usuário não encontrado."}), 400
 
     now = _now_local()
     try:
@@ -5413,15 +5413,15 @@ def api_fip613_status():
 @require_feature("atualizar/fip613")
 def api_fip613_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo é obrigatório."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download é obrigatória."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download inválida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -5742,7 +5742,7 @@ def api_relatorio_fip613_download():
                 {
                     "UO": r.uo,
                     "UG": r.ug,
-                    "FunÃ§Ã£o": r.funcao,
+                    "Função": r.funcao,
                     "Subfunção": r.subfuncao,
                     "Programa": r.programa,
                     "Projeto/Atividade": r.projeto_atividade,
@@ -5751,16 +5751,16 @@ def api_relatorio_fip613_download():
                     "Fonte de Recurso": str(r.fonte_recurso or ""),
                     "Iduso": r.iduso,
                     "Tipo de Recurso": r.tipo_recurso,
-                    "DotAção Inicial": float(r.dotacao_inicial or 0),
-                    "CrÃ©d. Suplementar": float(r.cred_suplementar or 0),
-                    "CrÃ©d. Especial": float(r.cred_especial or 0),
-                    "CrÃ©d. ExtraordinÃ¡rio": float(r.cred_extraordinario or 0),
-                    "ReduÃ§Ã£o": float(r.reducao or 0),
-                    "CrÃ©d. Autorizado": float(r.cred_autorizado or 0),
+                    "Dotação Inicial": float(r.dotacao_inicial or 0),
+                    "Créd. Suplementar": float(r.cred_suplementar or 0),
+                    "Créd. Especial": float(r.cred_especial or 0),
+                    "Créd. Extraordinário": float(r.cred_extraordinario or 0),
+                    "Redução": float(r.reducao or 0),
+                    "Créd. Autorizado": float(r.cred_autorizado or 0),
                     "Bloqueado/Conting.": float(r.bloqueado_conting or 0),
                     "Reserva Empenho": float(r.reserva_empenho or 0),
                     "Saldo de Destaque": float(r.saldo_destaque or 0),
-                    "Saldo DotAção": float(r.saldo_dotacao or 0),
+                    "Saldo Dotação": float(r.saldo_dotacao or 0),
                     "Empenhado": float(r.empenhado or 0),
                     "Liquidado": float(r.liquidado or 0),
                     "A liquidar": float(r.a_liquidar or 0),
@@ -5799,12 +5799,12 @@ def api_relatorio_fip613_download():
             df.to_excel(output, index=False)
             output.seek(0)
 
-            # aplica fonte e formato numÃ©rico no Excel
+            # aplica fonte e formato numérico no Excel
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
             number_format = "[Blue]#,##0.00;[Red]-#,##0.00;0"
-            # colunas numÃ©ricas comeÃ§am em 12 (1-based) atÃ© o final
+            # colunas numéricas começam em 12 (1-based) até o final
             numeric_cols = set(range(12, ws.max_column + 1))
             for row in ws.iter_rows():
                 for cell in row:
@@ -5872,15 +5872,15 @@ def api_ped_status():
 @require_feature("atualizar/ped")
 def api_ped_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo é obrigatório."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download é obrigatória."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download inválida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -6671,34 +6671,34 @@ def api_relatorio_ped_download():
             "regiao": "Região",
             "subfuncao_ug": "Subfunção + UG",
             "adj": "ADJ",
-            "macropolitica": "MacropolÃ­tica",
+            "macropolitica": "Macropolítica",
             "pilar": "Pilar",
             "eixo": "Eixo",
-            "politica_decreto": "PolÃ­tica_Decreto",
+            "politica_decreto": "Política_Decreto",
             "exercicio": "Exercício",
-            "numero_ped": "NÂº PED",
-            "numero_ped_estorno": "NÂº PED Estorno/Estornado",
-            "numero_emp": "NÂº EMP",
-            "numero_cad": "NÂº CAD",
-            "numero_noblist": "NÂº NOBLIST",
-            "numero_os": "NÂº OS",
-            "convenio": "ConvÃªnio",
-            "numero_processo_orcamentario_pagamento": "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
+            "numero_ped": "Nº PED",
+            "numero_ped_estorno": "Nº PED Estorno/Estornado",
+            "numero_emp": "Nº EMP",
+            "numero_cad": "Nº CAD",
+            "numero_noblist": "Nº NOBLIST",
+            "numero_os": "Nº OS",
+            "convenio": "Convênio",
+            "numero_processo_orcamentario_pagamento": "Nº Processo Orçamentário de Pagamento",
             "valor_ped": "Valor PED",
             "valor_estorno": "Valor do Estorno",
-            "indicativo_licitacao_exercicios_anteriores": "Indicativo de LicitAção de Exercícios Anteriores",
-            "data_licitacao": "Data da LicitAção",
+            "indicativo_licitacao_exercicios_anteriores": "Indicativo de Licitação de Exercícios Anteriores",
+            "data_licitacao": "Data da Licitação",
             "liberado_fisco_estadual": "Liberado Fisco Estadual",
-            "situacao": "SituAção",
+            "situacao": "Situação",
             "uo": "UO",
-            "nome_unidade_orcamentaria": "Nome da Unidade OrÃ§amentÃ¡ria",
+            "nome_unidade_orcamentaria": "Nome da Unidade Orçamentária",
             "ug": "UG",
             "nome_unidade_gestora": "Nome da Unidade Gestora",
-            "data_solicitacao": "Data SolicitAção",
-            "data_criacao": "Data CriAção",
+            "data_solicitacao": "Data Solicitação",
+            "data_criacao": "Data Criação",
             "tipo_empenho": "Tipo Empenho",
-            "dotacao_orcamentaria": "DotAção OrÃ§amentÃ¡ria",
-            "funcao": "FunÃ§Ã£o",
+            "dotacao_orcamentaria": "Dotação Orçamentária",
+            "funcao": "Função",
             "subfuncao": "Subfunção",
             "programa_governo": "Programa de Governo",
             "paoe": "PAOE",
@@ -6710,28 +6710,28 @@ def api_relatorio_ped_download():
             "nome_elemento": "Nome do Elemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "numero_emenda_ep": "NÂº Emenda (EP)",
+            "numero_emenda_ep": "Nº Emenda (EP)",
             "autor_emenda_ep": "Autor da Emenda (EP)",
-            "numero_cac": "NÂº CAC",
-            "licitacao": "LicitAção",
-            "usuario_responsavel": "UsuÃ¡rio Responsável",
-            "historico": "HistÃ³rico",
+            "numero_cac": "Nº CAC",
+            "licitacao": "Licitação",
+            "usuario_responsavel": "Usuário Responsável",
+            "historico": "Histórico",
             "credor": "Credor",
             "nome_credor": "Nome do Credor",
-            "data_autorizacao": "Data AutorizAção",
-            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro AutorizAção",
+            "data_autorizacao": "Data Autorização",
+            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro Autorização",
             "tipo_despesa": "Tipo de Despesa",
-            "numero_abj": "NÂº ABJ",
-            "numero_processo_sequestro_judicial": "NÂº Processo do Sequestro Judicial",
-            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
+            "numero_abj": "Nº ABJ",
+            "numero_processo_sequestro_judicial": "Nº Processo do Sequestro Judicial",
+            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
             "indicativo_contrato": "Indicativo de contrato",
-            "codigo_uo_extinta": "CÃ³digo UO Extinta",
-            "devolucao_gcv": "DevoluÃ§Ã£o GCV",
-            "mes_competencia_folha_pagamento": "MÃªs de CompetÃªncia da Folha de Pagamento",
-            "exercicio_competencia_folha": "Exercício de CompetÃªncia da Folha de Pagamento",
-            "obrigacao_patronal": "ObrigAção Patronal",
-            "tipo_obrigacao_patronal": "Tipo de ObrigAção Patronal",
-            "numero_nla": "NÂº NLA",
+            "codigo_uo_extinta": "Código UO Extinta",
+            "devolucao_gcv": "Devolução GCV",
+            "mes_competencia_folha_pagamento": "Mês de Competência da Folha de Pagamento",
+            "exercicio_competencia_folha": "Exercício de Competência da Folha de Pagamento",
+            "obrigacao_patronal": "Obrigação Patronal",
+            "tipo_obrigacao_patronal": "Tipo de Obrigação Patronal",
+            "numero_nla": "Nº NLA",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -6740,34 +6740,34 @@ def api_relatorio_ped_download():
             "Região",
             "Subfunção + UG",
             "ADJ",
-            "MacropolÃ­tica",
+            "Macropolítica",
             "Pilar",
             "Eixo",
-            "PolÃ­tica_Decreto",
+            "Política_Decreto",
             "Exercício",
-            "NÂº PED",
-            "NÂº PED Estorno/Estornado",
-            "NÂº EMP",
-            "NÂº CAD",
-            "NÂº NOBLIST",
-            "NÂº OS",
-            "ConvÃªnio",
-            "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
+            "Nº PED",
+            "Nº PED Estorno/Estornado",
+            "Nº EMP",
+            "Nº CAD",
+            "Nº NOBLIST",
+            "Nº OS",
+            "Convênio",
+            "Nº Processo Orçamentário de Pagamento",
             "Valor PED",
             "Valor do Estorno",
-            "Indicativo de LicitAção de Exercícios Anteriores",
-            "Data da LicitAção",
+            "Indicativo de Licitação de Exercícios Anteriores",
+            "Data da Licitação",
             "Liberado Fisco Estadual",
-            "SituAção",
+            "Situação",
             "UO",
-            "Nome da Unidade OrÃ§amentÃ¡ria",
+            "Nome da Unidade Orçamentária",
             "UG",
             "Nome da Unidade Gestora",
-            "Data SolicitAção",
-            "Data CriAção",
+            "Data Solicitação",
+            "Data Criação",
             "Tipo Empenho",
-            "DotAção OrÃ§amentÃ¡ria",
-            "FunÃ§Ã£o",
+            "Dotação Orçamentária",
+            "Função",
             "Subfunção",
             "Programa de Governo",
             "PAOE",
@@ -6779,28 +6779,28 @@ def api_relatorio_ped_download():
             "Nome do Elemento",
             "Fonte",
             "Iduso",
-            "NÂº Emenda (EP)",
+            "Nº Emenda (EP)",
             "Autor da Emenda (EP)",
-            "NÂº CAC",
-            "LicitAção",
-            "UsuÃ¡rio Responsável",
-            "HistÃ³rico",
+            "Nº CAC",
+            "Licitação",
+            "Usuário Responsável",
+            "Histórico",
             "Credor",
             "Nome do Credor",
-            "Data AutorizAção",
-            "Data/Hora Cadastro AutorizAção",
+            "Data Autorização",
+            "Data/Hora Cadastro Autorização",
             "Tipo de Despesa",
-            "NÂº ABJ",
-            "NÂº Processo do Sequestro Judicial",
-            "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
+            "Nº ABJ",
+            "Nº Processo do Sequestro Judicial",
+            "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
             "Indicativo de contrato",
-            "CÃ³digo UO Extinta",
-            "DevoluÃ§Ã£o GCV",
-            "MÃªs de CompetÃªncia da Folha de Pagamento",
-            "Exercício de CompetÃªncia da Folha de Pagamento",
-            "ObrigAção Patronal",
-            "Tipo de ObrigAção Patronal",
-            "NÂº NLA",
+            "Código UO Extinta",
+            "Devolução GCV",
+            "Mês de Competência da Folha de Pagamento",
+            "Exercício de Competência da Folha de Pagamento",
+            "Obrigação Patronal",
+            "Tipo de Obrigação Patronal",
+            "Nº NLA",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -6836,7 +6836,7 @@ PLAN20_OUTPUT_DIR = Path("outputs/plan20_seduc")
 def api_plan20_status():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
+        Converte datetime ou string em isoformat; se já for string que não
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -6876,7 +6876,7 @@ def api_plan20_status():
 def api_plan20_upload():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
+        Converte datetime ou string em isoformat; se já for string que não
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -6894,15 +6894,15 @@ def api_plan20_upload():
             return str(value)
 
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo é obrigatório."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download é obrigatória."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download inválida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -6953,11 +6953,11 @@ def api_plan20_upload():
                 col_map = {
                     "Exercício": "exercicio",
                     "Programa": "programa",
-                    "FunÃ§Ã£o": "funcao",
-                    "Unidade OrÃ§amentÃ¡ria": "unidade_orcamentaria",
+                    "Função": "funcao",
+                    "Unidade Orçamentária": "unidade_orcamentaria",
                     "Ação (P/A/OE)": "acao_paoe",
                     "Subfunção": "subfuncao",
-                    "Objetivo EspecÃ­fico": "objetivo_especifico",
+                    "Objetivo Específico": "objetivo_especifico",
                     "Esfera": "esfera",
                     "Responsável pela Ação": "responsavel_acao",
                     "Produto(s) da Ação": "produto_acao",
@@ -6974,7 +6974,7 @@ def api_plan20_upload():
                     "Produto da SubAção": "produto_subacao",
                     "Unidade de Medida": "unidade_medida",
                     "Região da SubAção": "regiao_subacao",
-                    "CÃ³digo": "codigo",
+                    "Código": "codigo",
                     "Município(s) da entrega": "municipios_entrega",
                     "Meta da SubAção": "meta_subacao",
                     "Detalhamento do produto": "detalhamento_produto",
@@ -6988,7 +6988,7 @@ def api_plan20_upload():
                     "Descrição do Item de Despesa": "descricao_item_despesa",
                     "Unid. Medida": "unid_medida_item",
                     "Quantidade": "quantidade",
-                    "Valor UnitÃ¡rio": "valor_unitario",
+                    "Valor Unitário": "valor_unitario",
                     "Valor Total": "valor_total",
                     "Chave de Planejamento": "chave_planejamento",
                     "Região": "regiao",
@@ -7041,7 +7041,7 @@ def api_plan20_upload():
                         errors="coerce",
                     )
 
-                # Apenas colunas realmente numÃ©ricas no banco
+                # Apenas colunas realmente numéricas no banco
                 numeric_cols = [
                     "exercicio",
                     "quantidade",
@@ -8044,13 +8044,13 @@ def api_relatorio_nob_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_nob": "NÂº NOB",
-            "numero_nob_estorno": "NÂº NOB Estorno/Estornado",
-            "numero_liq": "NÂº LIQ",
-            "numero_emp": "NÂº EMP",
+            "numero_nob": "Nº NOB",
+            "numero_nob_estorno": "Nº NOB Estorno/Estornado",
+            "numero_liq": "Nº LIQ",
+            "numero_emp": "Nº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÂº PED",
+            "numero_ped": "Nº PED",
             "valor_nob": "Valor NOB",
             "devolucao_gcv": "Devolucao GCV",
             "valor_nob_gcv": "Valor NOB - GCV",
@@ -8084,13 +8084,13 @@ def api_relatorio_nob_download():
 
         col_order = [
             "Exercicio",
-            "NÂº NOB",
-            "NÂº NOB Estorno/Estornado",
-            "NÂº LIQ",
-            "NÂº EMP",
+            "Nº NOB",
+            "Nº NOB Estorno/Estornado",
+            "Nº LIQ",
+            "Nº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÂº PED",
+            "Nº PED",
             "Valor NOB",
             "Devolucao GCV",
             "Valor NOB - GCV",
@@ -8257,8 +8257,8 @@ def api_relatorio_emp_download():
             "eixo": "Eixo",
             "politica_decreto": "Politica_Decreto",
             "exercicio": "Exercicio",
-            "numero_emp": "NÂº EMP",
-            "numero_ped": "NÂº PED",
+            "numero_emp": "Nº EMP",
+            "numero_ped": "Nº PED",
             "valor_emp": "Valor EMP",
             "devolucao_gcv": "Devolucao GCV",
             "valor_emp_devolucao_gcv": "Valor EMP-Devolucao GCV",
@@ -8288,8 +8288,8 @@ def api_relatorio_emp_download():
             "situacao": "Situacao",
             "data_emissao": "Data emissao",
             "data_criacao": "Data criacao",
-            "numero_contrato": "NÂº Contrato",
-            "numero_convenio": "NÂº ConvÃªnio",
+            "numero_contrato": "Nº Contrato",
+            "numero_convenio": "Nº Convênio",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -8303,8 +8303,8 @@ def api_relatorio_emp_download():
             "Eixo",
             "Politica_Decreto",
             "Exercicio",
-            "NÂº EMP",
-            "NÂº PED",
+            "Nº EMP",
+            "Nº PED",
             "Valor EMP",
             "Devolucao GCV",
             "Valor EMP-Devolucao GCV",
@@ -8334,8 +8334,8 @@ def api_relatorio_emp_download():
             "Situacao",
             "Data emissao",
             "Data criacao",
-            "NÂº Contrato",
-            "NÂº ConvÃªnio",
+            "Nº Contrato",
+            "Nº Convênio",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -8473,13 +8473,13 @@ def api_relatorio_dotacao_download():
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
             "adj_concedente": "Adjunta Concedente",
-            "chave_dotacao": "Controle de DotAção",
+            "chave_dotacao": "Controle de Dotação",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotAção",
+            "valor_dotacao": "Valor da Dotação",
             "valor_estorno": "Valor do Estorno",
             "valor_ped_emp": "Valor do PED/EMP",
-            "valor_atual": "Valor da DotAção Atualizada",
-            "situacao": "SituAção",
+            "valor_atual": "Valor da Dotação Atualizada",
+            "situacao": "Situação",
             "uo": "UO",
             "programa": "Programa",
             "acao_paoe": "Ação/PAOE",
@@ -8493,13 +8493,13 @@ def api_relatorio_dotacao_download():
             "subelemento": "Subelemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "justificativa_historico": "Justificativa/HistÃ³rico",
+            "justificativa_historico": "Justificativa/Histórico",
             "usuario_nome_perfil": "Criado/Alterado por",
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovAção",
-            "motivo_rejeicao": "Justificativa da AprovAção/RejeiÃ§Ã£o",
+            "data_aprovacao": "Data da Aprovação",
+            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -8508,13 +8508,13 @@ def api_relatorio_dotacao_download():
             "Status",
             "Adjunta Solicitante",
             "Adjunta Concedente",
-            "Controle de DotAção",
+            "Controle de Dotação",
             "Chave de Planejamento",
-            "Valor da DotAção",
+            "Valor da Dotação",
             "Valor do Estorno",
             "Valor do PED/EMP",
-            "Valor da DotAção Atualizada",
-            "SituAção",
+            "Valor da Dotação Atualizada",
+            "Situação",
             "UO",
             "Programa",
             "Ação/PAOE",
@@ -8528,13 +8528,13 @@ def api_relatorio_dotacao_download():
             "Subelemento",
             "Fonte",
             "Iduso",
-            "Justificativa/HistÃ³rico",
+            "Justificativa/Histórico",
             "Criado/Alterado por",
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovAção",
-            "Justificativa da AprovAção/RejeiÃ§Ã£o",
+            "Data da Aprovação",
+            "Justificativa da Aprovação/Rejeição",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -8669,12 +8669,12 @@ def api_relatorio_est_dotacao_download():
             "exercicio": "Exercício",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
-            "chave_dotacao": "Controle de DotAção",
+            "chave_dotacao": "Controle de Dotação",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotAção",
+            "valor_dotacao": "Valor da Dotação",
             "valor_a_ser_est": "Valor do Estorno",
-            "saldo_dotacao_apos": "Saldo de DotAção",
-            "situacao": "SituAção",
+            "saldo_dotacao_apos": "Saldo de Dotação",
+            "situacao": "Situação",
             "uo": "UO",
             "programa": "Programa",
             "acao_paoe": "Ação/PAOE",
@@ -8693,8 +8693,8 @@ def api_relatorio_est_dotacao_download():
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovAção",
-            "motivo_rejeicao": "Justificativa da AprovAção/RejeiÃ§Ã£o",
+            "data_aprovacao": "Data da Aprovação",
+            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -8702,12 +8702,12 @@ def api_relatorio_est_dotacao_download():
             "Exercício",
             "Status",
             "Adjunta Solicitante",
-            "Controle de DotAção",
+            "Controle de Dotação",
             "Chave de Planejamento",
-            "Valor da DotAção",
+            "Valor da Dotação",
             "Valor do Estorno",
-            "Saldo de DotAção",
-            "SituAção",
+            "Saldo de Dotação",
+            "Situação",
             "UO",
             "Programa",
             "Ação/PAOE",
@@ -8726,8 +8726,8 @@ def api_relatorio_est_dotacao_download():
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovAção",
-            "Justificativa da AprovAção/RejeiÃ§Ã£o",
+            "Data da Aprovação",
+            "Justificativa da Aprovação/Rejeição",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -8830,11 +8830,11 @@ def api_relatorio_est_emp_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_est": "NÂº EST",
-            "numero_emp": "NÂº EMP",
+            "numero_est": "Nº EST",
+            "numero_emp": "Nº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÂº PED",
+            "numero_ped": "Nº PED",
             "valor_emp": "Valor EMP",
             "valor_est_emp_sem_aqs": "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "valor_est_emp_com_aqs": "Valor Est EMP (Em LIQ com AQS)",
@@ -8857,11 +8857,11 @@ def api_relatorio_est_emp_download():
 
         col_order = [
             "Exercicio",
-            "NÂº EST",
-            "NÂº EMP",
+            "Nº EST",
+            "Nº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÂº PED",
+            "Nº PED",
             "Valor EMP",
             "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "Valor Est EMP (Em LIQ com AQS)",
@@ -9001,11 +9001,11 @@ def api_relatorio_plan20_download():
             ("Politica_Decreto", "politica_decreto"),
             ("Público Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃ§Ã£o", "funcao"),
-            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
+            ("Função", "funcao"),
+            ("Unidade Orçamentária", "unidade_orcamentaria"),
             ("Ação (P/A/OE)", "acao_paoe"),
             ("Subfunção", "subfuncao"),
-            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
+            ("Objetivo Específico", "objetivo_especifico"),
             ("Esfera", "esfera"),
             ("Responsável pela Ação", "responsavel_acao"),
             ("Produto(s) da Ação", "produto_acao"),
@@ -9022,7 +9022,7 @@ def api_relatorio_plan20_download():
             ("Produto da SubAção", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
             ("Região da SubAção", "regiao_subacao"),
-            ("CÃ³digo", "codigo"),
+            ("Código", "codigo"),
             ("Município(s) da entrega", "municipios_entrega"),
             ("Meta da SubAção", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
@@ -9041,7 +9041,7 @@ def api_relatorio_plan20_download():
             ("Descrição do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃ¡rio", "valor_unitario"),
+            ("Valor Unitário", "valor_unitario"),
             ("Valor Total", "valor_total"),
         ]
 
@@ -9073,7 +9073,7 @@ def api_relatorio_plan20_download():
             idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
             numeric_cols = {
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃ¡rio"),
+                idx_map.get("Valor Unitário"),
                 idx_map.get("Valor Total"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -9206,11 +9206,11 @@ def api_relatorio_plan21_nger_download():
             ("Politica_Decreto", "politica_decreto"),
             ("Público Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃƒÂ§ÃƒÂ£o", "funcao"),
-            ("Unidade OrÃƒÂ§amentÃƒÂ¡ria", "unidade_orcamentaria"),
+            ("Função", "funcao"),
+            ("Unidade Orçamentária", "unidade_orcamentaria"),
             ("Ação (P/A/OE)", "acao_paoe"),
             ("Subfunção", "subfuncao"),
-            ("Objetivo EspecÃƒÂ­fico", "objetivo_especifico"),
+            ("Objetivo Específico", "objetivo_especifico"),
             ("Esfera", "esfera"),
             ("Responsável pela Ação", "responsavel_acao"),
             ("Produto(s) da Ação", "produto_acao"),
@@ -9230,7 +9230,7 @@ def api_relatorio_plan21_nger_download():
             ("Produto da Subação", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
             ("Região da Subação", "regiao_subacao"),
-            ("CÃƒÂ³digo", "codigo"),
+            ("Código", "codigo"),
             ("Município(s) da entrega", "municipios_entrega"),
             ("Meta da Subação", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
@@ -9249,7 +9249,7 @@ def api_relatorio_plan21_nger_download():
             ("Descrição do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃƒÂ¡rio", "valor_unitario"),
+            ("Valor Unitário", "valor_unitario"),
             ("Valor Total", "valor_total"),
             ("SuplementAção", "suplementacao"),
             ("AnulAção", "anulacao"),
@@ -9304,7 +9304,7 @@ def api_relatorio_plan21_nger_download():
                 idx_map.get("Meta Atual"),
                 idx_map.get("Meta da Subação"),
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃƒÂ¡rio"),
+                idx_map.get("Valor Unitário"),
                 idx_map.get("Valor Total"),
                 idx_map.get("SuplementAção"),
                 idx_map.get("AnulAção"),
@@ -9690,7 +9690,7 @@ def api_perfil(perfil_id):
             return jsonify({"ok": True, "message": "Perfil excluido."})
         except IntegrityError:
             db.session.rollback()
-            return jsonify({"error": "NÃ£o foi possÃ­vel excluir este perfil."}), 400
+            return jsonify({"error": "Não foi possível excluir este perfil."}), 400
 
     data = request.get_json() or {}
     nome = (data.get("nome") or perfil.nome).strip()
