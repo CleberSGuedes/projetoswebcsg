@@ -2072,6 +2072,43 @@
       }).format(n);
     };
 
+    const normalizeMetaDisplay = (value) => {
+      let raw = String(value || "").trim();
+      if (!raw) return "";
+      if (raw.startsWith("[") && raw.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length) {
+            raw = String(parsed[0] ?? "").trim();
+          }
+        } catch (err) {
+          const inner = raw.slice(1, -1);
+          const first = inner.split(",")[0] || "";
+          raw = first.replace(/^["']|["']$/g, "").trim();
+        }
+      } else if (raw.includes("*")) {
+        raw = raw.split("*")[0].trim();
+      }
+      if (!raw) return "";
+      let cleaned = raw;
+      if (cleaned.includes(".") && !cleaned.includes(",")) {
+        if (/^\d+\.\d+$/.test(cleaned)) {
+          cleaned = cleaned.replace(",", ".");
+        } else {
+          cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+        }
+      } else {
+        cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+      }
+      let num = Number(cleaned);
+      if (Number.isNaN(num)) {
+        const digits = raw.replace(/\D/g, "");
+        if (!digits) return raw;
+        num = Number(digits) / 100;
+      }
+      return formatPtBr(num);
+    };
+
     const parsePtBr = (value) => {
       if (value === null || value === undefined) return null;
       const raw = String(value).trim();
@@ -8689,6 +8726,7 @@
     const subacaoSummary = document.getElementById("subacao-summary");
     const approvalFields = document.getElementById("subacao-aprovacao-fields");
     const approvalJustificativa = document.getElementById("subacao-justificativa-aprovacao");
+    const editBanner = document.getElementById("subacao-edit-banner");
     const approvalRadios = form
       ? Array.from(form.querySelectorAll('input[name="subacao-aprovada"]'))
       : [];
@@ -8697,6 +8735,15 @@
     const hasAllPlanSelects = Object.values(planSelects).every((el) => el);
     const hasAllKeySelects = Object.values(chaveSelects).every((el) => el);
     if (!hasAllPlanSelects || !hasAllKeySelects) return;
+
+    if (unidadeSetorialSelect) {
+      unidadeSetorialSelect.disabled = true;
+      unidadeSetorialSelect.dataset.readonly = "1";
+    }
+    if (editUnidadeSetorialSelect) {
+      editUnidadeSetorialSelect.disabled = true;
+      editUnidadeSetorialSelect.dataset.readonly = "1";
+    }
 
     let lastRegiaoValue = planSelects.regiao?.value || "";
 
@@ -8752,28 +8799,50 @@
         });
         approvalDisabledSnapshot = null;
       }
-      if (nextBtn) nextBtn.disabled = disabled;
-      if (prevBtn) prevBtn.disabled = disabled;
+      // Keep step navigation enabled so approver can review all wizard parts.
+      if (nextBtn) nextBtn.disabled = false;
+      if (prevBtn) prevBtn.disabled = false;
       if (clearBtn) clearBtn.disabled = disabled;
     };
-    const setApprovalMode = (enabled) => {
-      approvalMode = enabled;
-      if (approvalFields) approvalFields.style.display = enabled ? "" : "none";
-      if (approvalJustificativa) approvalJustificativa.required = enabled;
-      if (enabled) {
-        setFormDisabled(true);
+      const updateEditingBanner = () => {
+        if (!editBanner) return;
+        const registroId = String(idInput?.value || "").trim();
+        const controle = String(currentControleSubacao || "").trim();
+        if (controle || registroId) {
+          const ref = controle || registroId;
+          if (approvalMode) {
+            editBanner.textContent =
+              `Aprovando registro existente (${ref}).`;
+          } else {
+            editBanner.textContent =
+              `Editando registro existente (${ref}). Ao salvar, o registro será atualizado.`;
+          }
+          editBanner.style.display = "";
+          return;
+        }
+        editBanner.textContent = "";
+        editBanner.style.display = "none";
+      };
+
+      const setApprovalMode = (enabled) => {
+        approvalMode = enabled;
+        if (approvalFields) approvalFields.style.display = enabled ? "" : "none";
+        if (approvalJustificativa) approvalJustificativa.required = enabled;
+        if (enabled) {
+          setFormDisabled(true);
         if (approvalJustificativa) approvalJustificativa.value = "";
         approvalRadios.forEach((r) => {
           r.checked = r.value === "sim";
         });
-      } else {
-        setFormDisabled(false);
-        if (approvalJustificativa) approvalJustificativa.value = "";
-        approvalRadios.forEach((r) => {
-          r.checked = r.value === "sim";
-        });
-      }
-    };
+        } else {
+          setFormDisabled(false);
+          if (approvalJustificativa) approvalJustificativa.value = "";
+          approvalRadios.forEach((r) => {
+            r.checked = r.value === "sim";
+          });
+        }
+        updateEditingBanner();
+      };
 
     const nivelAtual = parseInt(String(userNivel || "").trim(), 10);
     const canApprove = nivelAtual === 1 || nivelAtual === 2;
@@ -8901,6 +8970,8 @@
         toggleFields(cadastrarGrid, !isEditLike);
         toggleFields(editarGrid, isEditLike);
         updateStepVisibility();
+        if (unidadeSetorialSelect) unidadeSetorialSelect.disabled = true;
+        if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.disabled = true;
         syncRequiredByVisibility();
         if (isEdit) syncEditMode();
       };
@@ -9287,6 +9358,7 @@
         }
         if (nextBtn) nextBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "none" : "inline-flex";
         if (saveBtn) saveBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "inline-flex" : "none";
+        setMsg("");
         syncRequiredByVisibility();
       };
 
@@ -9456,6 +9528,50 @@
       const num = Number(digits) / 100;
       metaInput.value = formatPtBr(num);
     };
+    const normalizeSubacaoMetaDisplay = (value) => {
+      let raw = String(value || "").trim();
+      if (!raw) return "";
+      if (raw.startsWith("[") && raw.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length) {
+            raw = String(parsed[0] ?? "").trim();
+          }
+        } catch (err) {
+          const inner = raw.slice(1, -1);
+          const first = inner.split(",")[0] || "";
+          raw = first.replace(/^["']|["']$/g, "").trim();
+        }
+      } else if (raw.includes("*")) {
+        raw = raw.split("*")[0].trim();
+      }
+      if (!raw) return "";
+      let cleaned = raw;
+      const hasDot = cleaned.includes(".");
+      const hasComma = cleaned.includes(",");
+      if (hasDot && hasComma) {
+        cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+      } else if (hasComma) {
+        cleaned = cleaned.replace(",", ".");
+      } else if (hasDot) {
+        if (/^\d+\.\d{1,2}$/.test(cleaned)) {
+          // "10.00" => decimal with dot
+          cleaned = cleaned;
+        } else if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+          // "1.000" => thousand separators
+          cleaned = cleaned.replace(/\./g, "");
+        } else {
+          cleaned = cleaned.replace(/\./g, "");
+        }
+      }
+      let num = Number(cleaned);
+      if (Number.isNaN(num)) {
+        const digits = raw.replace(/\D/g, "");
+        if (!digits) return raw;
+        num = Number(digits) / 100;
+      }
+      return formatPtBr(num);
+    };
     const formatEditMetaNovoInput = () => {
       if (!editMetaNovoInput) return;
       const digits = String(editMetaNovoInput.value || "").replace(/\D/g, "");
@@ -9579,7 +9695,7 @@
           </div>
           <div>
             <small>Meta</small>
-            <div>${item.meta_subacao}</div>
+            <div>${normalizeSubacaoMetaDisplay(item.meta_subacao)}</div>
           </div>
           <div>
             <button class="btn btn-danger sm" type="button" data-remove-index="${idx}">Remover</button>
@@ -9634,8 +9750,18 @@
     }
 
     const addMunicipioItem = (opts = {}) => {
-      const codigo = codigoSelect?.value || "";
-      const municipio = municipioSelect?.value || "";
+      const codigoValue = codigoSelect?.value || "";
+      const municipioValue = municipioSelect?.value || "";
+      const codigoLabel = getSelectLabel(codigoSelect);
+      const municipioLabel = getSelectLabel(municipioSelect);
+      const codigoFromLabel = codigoLabel.includes(" - ")
+        ? codigoLabel.split(" - ")[0].trim()
+        : normalizeDigits(codigoLabel || "");
+      const municipioFromLabel = municipioLabel.includes(" - ")
+        ? municipioLabel.split(" - ").slice(1).join(" - ").trim()
+        : String(municipioLabel || "").trim();
+      const codigo = codigoValue || codigoFromLabel;
+      const municipio = municipioValue || municipioFromLabel;
       const meta = metaInput?.value || "";
       if (!codigo || !municipio || !meta) {
         if (!opts.silent) setMsg("Informe código, município e meta para adicionar.", true);
@@ -9675,10 +9801,10 @@
       municipioItems.push({
         codigo,
         municipios_entrega: municipio,
-        meta_subacao: meta,
+        meta_subacao: normalizeSubacaoMetaDisplay(meta),
         regiao_subacao: regiaoAtual,
-        codigoLabel: getSelectLabel(codigoSelect),
-        municipioLabel: getSelectLabel(municipioSelect),
+        codigoLabel: codigoLabel || codigo,
+        municipioLabel: municipioLabel || municipio,
       });
       if (!opts.silent) setMsg("");
       if (codigoSelect) codigoSelect.value = "";
@@ -9742,7 +9868,7 @@
             </div>
             <div>
               <small>Meta</small>
-              <div>${item.meta_subacao}</div>
+              <div>${normalizeSubacaoMetaDisplay(item.meta_subacao)}</div>
             </div>
             <div>${removeBtn}</div>
           `;
@@ -9898,6 +10024,10 @@
             <div>${item.responsavel_etapa || "-"}</div>
           </div>
           <div>
+            <small>CPF do Responsável</small>
+            <div>${formatCpf(item.cpf_responsavel_etapa || "") || "-"}</div>
+          </div>
+          <div>
             <button class="btn btn-danger sm" type="button" data-remove-etapa="${idx}">Remover</button>
           </div>
         `;
@@ -9929,6 +10059,11 @@
       if (!etapaInput?.value || etapaInput.value.length > 260) {
         setMsg("Informe o nome da etapa (até 260 caracteres).", true);
         etapaInput?.focus();
+        return false;
+      }
+      if (cpfEtapaInput && !cpfEtapaInput.value) {
+        setMsg("Informe o CPF do responsável da etapa.", true);
+        cpfEtapaInput.focus();
         return false;
       }
       if (cpfEtapaInput && cpfEtapaInput.value && !isValidCpf(cpfEtapaInput.value)) {
@@ -10493,21 +10628,60 @@
       if (row) row.classList.add("selected");
     };
 
-      const parseJsonArray = (value) => {
-        if (!value) return [];
-        if (Array.isArray(value)) return value;
-        const raw = String(value).trim();
-        if (!raw) return [];
-        if (raw.startsWith("[")) {
-          try {
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
-          } catch (err) {
-            return [];
-          }
+    const decodeHtmlEntities = (value) => {
+      if (value === null || value === undefined) return "";
+      const textarea = document.createElement("textarea");
+      textarea.innerHTML = String(value);
+      return textarea.value;
+    };
+
+    const parseJsonArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) {
+        return value.filter((item) => String(item ?? "").trim());
+      }
+      let raw = decodeHtmlEntities(String(value)).trim();
+      if (!raw) return [];
+      const normalizeJsonLike = (str) => {
+        let s = decodeHtmlEntities(str).trim();
+        if (
+          (s.startsWith('"') && s.endsWith('"')) ||
+          (s.startsWith("'") && s.endsWith("'"))
+        ) {
+          s = s.slice(1, -1);
         }
-        return [raw];
+        s = s.replace(/\\"/g, '"').replace(/\\'/g, "'");
+        return s;
       };
+      raw = normalizeJsonLike(raw);
+      if (raw.startsWith("[") && raw.endsWith("]")) {
+        const tryParse = (text) => {
+          try {
+            const parsed = JSON.parse(text);
+            if (!Array.isArray(parsed)) return [];
+            return parsed.filter((item) => String(item ?? "").trim());
+          } catch (err) {
+            return null;
+          }
+        };
+        const parsed = tryParse(raw);
+        if (parsed) return parsed;
+        const alt = raw.includes('"') ? null : tryParse(raw.replace(/'/g, '"'));
+        if (alt) return alt;
+        const inner = raw.slice(1, -1);
+        return inner
+          .split(",")
+          .map((part) => part.replace(/^["']|["']$/g, "").trim())
+          .filter((part) => part);
+      }
+      if (raw.includes("*")) {
+        return raw
+          .split("*")
+          .map((part) => String(part || "").trim())
+          .filter((part) => part);
+      }
+      return [raw];
+    };
 
       const escapeHtml = (value) => {
         return String(value || "")
@@ -10771,10 +10945,14 @@
         }, 300);
       };
 
+    let isPrefill = false;
+    let currentControleSubacao = "";
+
     const fillFormFromRow = (row) => {
       if (!row) return;
       let prefilledMunicipios = false;
         const chave = row.dataset.chave || "";
+        currentControleSubacao = row.dataset.controleSubacao || "";
         const chaveParts = parseChaveParts(chave);
         const subacaoEntregaFull = row.dataset.subacaoEntrega || "";
       let subacaoEntregaRaw = subacaoEntregaFull;
@@ -10784,10 +10962,12 @@
       const prazo = row.dataset.prazo || "";
       const prazoParts = prazo.split(" a ");
       if (idInput) idInput.value = row.dataset.id || "";
+      const tipoSolic = String(row.dataset.tipoSolicitacao || "").trim().toLowerCase();
       if (modeSelect && row.dataset.tipoSolicitacao) {
-        const tipoSolic = String(row.dataset.tipoSolicitacao || "").toLowerCase();
+        isPrefill = true;
         modeSelect.value = tipoSolic === "editar" ? "alterar" : tipoSolic;
         modeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        isPrefill = false;
       }
       if (["editar", "alterar"].includes(String(row.dataset.tipoSolicitacao || "").toLowerCase()) && row.dataset.tipoEdicao) {
         const tipo = row.dataset.tipoEdicao;
@@ -10852,17 +11032,22 @@
       if (produtoSubacaoSelect) produtoSubacaoSelect.value = row.dataset.produtoSubacao || "";
       if (unidadeMedidaSelect) unidadeMedidaSelect.value = row.dataset.unidadeMedida || "";
       if (regiaoEntregaSelect) regiaoEntregaSelect.value = row.dataset.regiaoSubacao || "";
-      if (codigoSelect) codigoSelect.value = row.dataset.codigo || "";
-      if (municipioSelect) municipioSelect.value = row.dataset.municipio || "";
-      if (metaInput) metaInput.value = row.dataset.meta || "";
-      if (detalhamentoInput) detalhamentoInput.value = row.dataset.detalhamento || "";
-      if (etapaInput) etapaInput.value = row.dataset.etapa || "";
-      if (responsavelEtapaInput) responsavelEtapaInput.value = row.dataset.responsavelEtapa || "";
-      if (cpfEtapaInput) cpfEtapaInput.value = row.dataset.cpfResponsavelEtapa || "";
+      const codigoPref = parseJsonArray(row.dataset.codigo)[0] || "";
+      const municipioPref = parseJsonArray(row.dataset.municipio)[0] || "";
+      const metaPref = parseJsonArray(row.dataset.meta)[0] || "";
+      if (codigoSelect) codigoSelect.value = codigoPref;
+      if (municipioSelect) municipioSelect.value = municipioPref;
+      if (metaInput) metaInput.value = normalizeSubacaoMetaDisplay(metaPref);
+      if (detalhamentoInput) detalhamentoInput.value = decodeHtmlEntities(row.dataset.detalhamento || "");
+      if (etapaInput) etapaInput.value = parseJsonArray(row.dataset.etapa)[0] || "";
+      if (responsavelEtapaInput) {
+        responsavelEtapaInput.value = parseJsonArray(row.dataset.responsavelEtapa)[0] || "";
+      }
+      if (cpfEtapaInput) cpfEtapaInput.value = parseJsonArray(row.dataset.cpfResponsavelEtapa)[0] || "";
       if (justificativaInput) justificativaInput.value = row.dataset.justificativa || "";
       if (responsavelNgerInput) responsavelNgerInput.value = row.dataset.responsavelNger || "";
 
-      if ((row.dataset.tipoSolicitacao || "") === "cadastrar") {
+      if (tipoSolic === "cadastrar") {
         municipioItems.length = 0;
         const codigos = parseJsonArray(row.dataset.codigo);
         const municipios = parseJsonArray(row.dataset.municipio);
@@ -10879,7 +11064,7 @@
             codigoLabel: codigo,
             municipios_entrega: municipio,
             municipioLabel: municipio,
-            meta_subacao: meta,
+            meta_subacao: normalizeSubacaoMetaDisplay(meta),
             regiao_subacao: regiaoAtual,
           });
         }
@@ -10895,12 +11080,13 @@
         const etapas = parseJsonArray(row.dataset.etapa);
         const responsaveis = parseJsonArray(row.dataset.responsavelEtapa);
         const cpfs = parseJsonArray(row.dataset.cpfResponsavelEtapa);
+        const cpfFallback = row.dataset.cpfResponsavelEtapa || "";
         const etapaTotal = Math.max(municipios.length, etapas.length, responsaveis.length, cpfs.length);
         for (let i = 0; i < etapaTotal; i += 1) {
           const municipio = municipios[i] ?? "";
           const nomeEtapa = etapas[i] ?? "";
           const resp = responsaveis[i] ?? "";
-          const cpf = cpfs[i] ?? cpfs[0] ?? "";
+          const cpf = cpfs[i] ?? cpfs[0] ?? cpfFallback ?? "";
           if (!municipio && !nomeEtapa && !resp && !cpf) continue;
           etapaItems.push({
             municipio,
@@ -10952,6 +11138,7 @@
       }
       clearEtapaFields();
       syncSubacaoEntregaCounter();
+      updateEditingBanner();
     };
 
     const getSelectedRow = () => summaryBody?.querySelector(".dotacao-summary-row.selected");
@@ -11194,8 +11381,12 @@
           setFilterMsg("Somente registros com status Aguardando podem ser aprovados.", true);
           return;
         }
+        currentControleSubacao = row.dataset.controleSubacao || "";
+        if (idInput && row.dataset.id) idInput.value = row.dataset.id;
+        updateEditingBanner();
         await fillFormFromRow(row);
         setApprovalMode(true);
+        updateEditingBanner();
       });
     }
 
@@ -11286,10 +11477,11 @@
         setApprovalMode(false);
         const modeValue = getModeValue();
         if (modeValue === "cadastrar") {
-          if (idInput) idInput.value = "";
+          if (!isPrefill && idInput) idInput.value = "";
           if (subacaoSummary) subacaoSummary.classList.remove("dotacao-summary-warn");
           if (municipioAddBtn) municipioAddBtn.disabled = false;
           if (municipioListWrap) municipioListWrap.style.display = "";
+          updateEditingBanner();
         }
         if (modeValue === "editar") {
           municipioItems.length = 0;
@@ -11307,11 +11499,11 @@
 
     const updateEtapaStepLabel = () => {
       if (!stepButtons.length) return;
-      const idx = etapaItems.length + 1;
       stepButtons.forEach((btn) => {
-        if (Number(btn.dataset.step) === 3) {
-          btn.textContent = idx > 1 ? `3.${idx} Etapa` : "3. Etapa";
-        }
+        const stepNum = Number(btn.dataset.step);
+        if (stepNum === 1) btn.textContent = "1. Chave do Planejamento";
+        if (stepNum === 2) btn.textContent = "2. Subação/Entrega";
+        if (stepNum === 3) btn.textContent = "3. Etapa";
       });
     };
 
@@ -11414,6 +11606,11 @@
             return;
           }
           setMsg(data.message || "Subação atualizada.");
+          if (data.subacao?.id) {
+            window.__subacaoAutoPrintId = String(data.subacao.id);
+          } else if (registroId) {
+            window.__subacaoAutoPrintId = String(registroId);
+          }
           setApprovalMode(false);
           await loadPage("cadastrar/plan_21-nger/subacao");
         } catch (err) {
@@ -11480,7 +11677,7 @@
       if (isEditMode) {
         const editModeKey = syncEditMode();
         if (!editModeKey) {
-          setMsg("Selecione uma op??o de edi??o.", true);
+          setMsg("Selecione uma opção de edição.", true);
           return;
         }
         if (!validateStep(1)) {
@@ -11533,7 +11730,7 @@
             );
             if (hasPending) addEditMunicipioItem();
             if (!editMunicipioItems.length) {
-              setMsg("Informe c?digo, munic?pio e meta para adicionar.", true);
+              setMsg("Informe código, município e meta para adicionar.", true);
               return;
             }
             payload.municipios_items = editMunicipioItems.map((item) => ({
@@ -11554,7 +11751,7 @@
               return;
             }
             const count = data.count || (Array.isArray(data.subacoes) ? data.subacoes.length : 1);
-            showToast(`Suba??o salva com sucesso. Registros: ${count}.`, "success");
+            showToast(`Subação salva com sucesso. Registros: ${count}.`, "success");
             if (data.warning) {
               setMsg(data.warning);
             }
@@ -11675,6 +11872,8 @@
             if (last && last.id) {
               window.__subacaoAutoPrintId = String(last.id);
             }
+          } else if (data.subacao?.id) {
+            window.__subacaoAutoPrintId = String(data.subacao.id);
           }
           await loadPage("cadastrar/plan_21-nger/subacao");
         } catch (err) {

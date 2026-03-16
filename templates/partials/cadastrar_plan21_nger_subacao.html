@@ -7,6 +7,7 @@
   <div class="card no-print">
 
     <div class="card-title">Subação - Base de dados PTA {{ current_year }}</div>
+    <div class="alert alert-info" id="subacao-edit-banner" style="display:none;"></div>
 
     <form id="form-subacao" class="form" novalidate>
 
@@ -333,7 +334,7 @@
 
           <span>*Unidade Setorial de Planejamento</span>
 
-          <select id="subacao-unidade-setorial" name="unidade_setorial_planejamento" required class="locked-field">
+          <select id="subacao-unidade-setorial" name="unidade_setorial_planejamento" required disabled data-readonly="1" class="locked-field">
 
             <option value="001 - Administração Geral">001 - Administração Geral</option>
 
@@ -501,9 +502,17 @@
 
         </div>
 
+        <div class="municipio-list field-full" id="subacao-municipio-list-wrap">
+
+          <div class="municipio-list-head">Municípios adicionados</div>
+
+          <div class="municipio-list-body" id="subacao-municipio-list"></div>
+
+        </div>
+
           <label class="field">
 
-            <span>*Detalhamento do Produto</span>
+            <span>*Detalhamento e Qualificação do Produto (Subação)</span>
 
             <textarea id="subacao-detalhamento" name="detalhamento_produto" rows="2" required></textarea>
 
@@ -730,7 +739,7 @@
 
               <span>*Unidade Setorial de Planejamento</span>
 
-              <select id="subacao-edit-unidade-setorial" required>
+              <select id="subacao-edit-unidade-setorial" required disabled data-readonly="1" class="locked-field">
 
                 <option value="">Selecione...</option>
 
@@ -920,14 +929,6 @@
 
           </div>
 
-        <div class="municipio-list" id="subacao-municipio-list-wrap">
-
-          <div class="municipio-list-head">Municípios adicionados</div>
-
-          <div class="municipio-list-body" id="subacao-municipio-list"></div>
-
-        </div>
-
       </div>
 
 
@@ -1005,26 +1006,26 @@
 
         </div>
 
-      </div>
+        <div class="form-section" id="subacao-aprovacao-fields" style="display:none;">
+          <label class="field">
+            <span>*Aprovar a Subação?</span>
+            <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="subacao-aprovada" value="sim" checked />
+                <span>Sim</span>
+              </label>
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="subacao-aprovada" value="nao" />
+                <span>Não</span>
+              </label>
+            </div>
+          </label>
+          <label class="field field-full">
+            <span>*Justificativa</span>
+            <textarea id="subacao-justificativa-aprovacao" rows="3"></textarea>
+          </label>
+        </div>
 
-      <div class="form-section" id="subacao-aprovacao-fields" style="display:none;">
-        <label class="field">
-          <span>*Aprovar a Subação?</span>
-          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
-            <label style="display:flex; gap:6px; align-items:center; margin:0;">
-              <input type="radio" name="subacao-aprovada" value="sim" checked />
-              <span>Sim</span>
-            </label>
-            <label style="display:flex; gap:6px; align-items:center; margin:0;">
-              <input type="radio" name="subacao-aprovada" value="nao" />
-              <span>Não</span>
-            </label>
-          </div>
-        </label>
-        <label class="field field-full">
-          <span>*Justificativa</span>
-          <textarea id="subacao-justificativa-aprovacao" rows="3"></textarea>
-        </label>
       </div>
 
       <div class="actions">
@@ -1167,41 +1168,41 @@
 
                 data-chave="{{ s.chave_planejamento or '' }}"
 
-                data-subacao-entrega="{{ s.subacao_entrega or '' }}"
+                data-subacao-entrega="{{ (s.subacao_entrega or '')|e }}"
 
-                data-responsavel="{{ s.responsavel or '' }}"
+                data-responsavel="{{ (s.responsavel or '')|e }}"
 
-                data-cpf="{{ s.cpf_responsavel or '' }}"
+                data-cpf="{{ (s.cpf_responsavel or '')|e }}"
 
-                data-prazo="{{ s.prazo or '' }}"
+                data-prazo="{{ (s.prazo or '')|e }}"
 
-                data-unid-gestora="{{ s.unid_gestora or '' }}"
+                data-unid-gestora="{{ (s.unid_gestora or '')|e }}"
 
-                data-unidade-setorial="{{ s.unidade_setorial_planejamento or '' }}"
+                data-unidade-setorial="{{ (s.unidade_setorial_planejamento or '')|e }}"
 
-                data-produto-subacao="{{ s.produto_subacao or '' }}"
+                data-produto-subacao="{{ (s.produto_subacao or '')|e }}"
 
-                data-unidade-medida="{{ s.unidade_medida or '' }}"
+                data-unidade-medida="{{ (s.unidade_medida or '')|e }}"
 
-                data-regiao-subacao="{{ s.regiao_subacao or '' }}"
+                data-regiao-subacao="{{ (s.regiao_subacao or '')|e }}"
 
-                data-codigo="{{ s.codigo or '' }}"
+                data-codigo="{{ (s.codigo or '')|e }}"
 
-                data-municipio="{{ s.municipios_entrega or '' }}"
+                data-municipio="{{ (s.municipios_entrega or '')|e }}"
 
-                data-meta="{{ s.meta_subacao or '' }}"
+                data-meta="{{ (s.meta_subacao or '')|e }}"
 
-                data-detalhamento="{{ s.detalhamento_produto or '' }}"
+                data-detalhamento="{{ (s.detalhamento_produto or '')|e }}"
 
-                data-etapa="{{ s.etapa or '' }}"
+                data-etapa="{{ (s.etapa or '')|e }}"
 
-                data-responsavel-etapa="{{ s.responsavel_etapa or '' }}"
+                data-responsavel-etapa="{{ (s.responsavel_etapa or '')|e }}"
 
-                data-cpf-responsavel-etapa="{{ s.cpf_responsavel_etapa or '' }}"
+                data-cpf-responsavel-etapa="{{ (s.cpf_responsavel_etapa or '')|e }}"
 
-                data-justificativa="{{ s.justificativa or '' }}"
+                data-justificativa="{{ (s.justificativa or '')|e }}"
 
-                data-responsavel-nger="{{ s.responsavel_nger or '' }}"
+                data-responsavel-nger="{{ (s.responsavel_nger or '')|e }}"
 
                   data-status-aprovacao="{{ s.status_aprovacao or '' }}"
 
