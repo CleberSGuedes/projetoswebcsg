@@ -8824,6 +8824,7 @@
     const printBtn = document.getElementById("subacao-print");
     const subacaoSummary = document.getElementById("subacao-summary");
     const approvalFields = document.getElementById("subacao-aprovacao-fields");
+    const approvalQuestionLabel = document.getElementById("subacao-aprovacao-pergunta");
     const approvalJustificativa = document.getElementById("subacao-justificativa-aprovacao");
     const editBanner = document.getElementById("subacao-edit-banner");
     const approvalRadios = form
@@ -8886,8 +8887,8 @@
     const syncApprovalFieldsVisibility = () => {
       if (!approvalFields) return;
       const modeValue = getModeValue();
-      const isExcluir = modeValue === "excluir";
-      const shouldShow = approvalMode && (isExcluir || Number(currentStep) === 2);
+      const approvalStep = modeValue === "excluir" ? 1 : modeValue === "editar" ? 2 : 3;
+      const shouldShow = approvalMode && Number(currentStep) === approvalStep;
       approvalFields.style.display = shouldShow ? "" : "none";
     };
     const setFormDisabled = (disabled) => {
@@ -8939,6 +8940,13 @@
         editBanner.textContent = "";
         editBanner.style.display = "none";
       };
+      const updateApprovalQuestion = () => {
+        if (!approvalQuestionLabel) return;
+        const controle = String(currentControleSubacao || "").trim();
+        approvalQuestionLabel.textContent = controle
+          ? `*Deseja aprovar o registro (${controle})?`
+          : "*Deseja aprovar o registro (Controle de Subação)?";
+      };
 
       const setApprovalMode = (enabled) => {
         approvalMode = enabled;
@@ -8951,7 +8959,7 @@
                 actionsWrap.parentNode.insertBefore(approvalFields, actionsWrap);
               }
             } else {
-              const approvalStep = 2;
+              const approvalStep = modeValue === "editar" ? 2 : 3;
               const approvalPanel = stepPanels.find(
                 (panel) => Number(panel.dataset.step) === approvalStep
               );
@@ -8984,6 +8992,7 @@
         if (municipioAddBtn) municipioAddBtn.disabled = enabled;
         renderMunicipioList();
         updateEditingBanner();
+        updateApprovalQuestion();
       };
 
     const nivelAtual = parseInt(String(userNivel || "").trim(), 10);
@@ -11002,13 +11011,24 @@
 
       const openSubacaoPrintPopup = (row, targetWin = null) => {
         const tipoSolicitacao = String(row.dataset.tipoSolicitacao || "").trim().toLowerCase();
+        const tipoEdicao = String(row.dataset.tipoEdicao || "").trim().toLowerCase();
         const titleMap = {
           cadastrar: "Cadastrar Subação",
           editar: "Alterar Subação",
           alterar: "Alterar Subação",
           excluir: "Excluir Subação",
         };
-        const titulo = titleMap[tipoSolicitacao] || "Cadastrar Subação";
+        const alteracaoTitleMap = {
+          subacao_name: "ALTERAR SUBAÇÃO: NOME DA SUBAÇÃO",
+          responsavel_name: "ALTERAR SUBAÇÃO: NOME DO RESPONSÁVEL",
+          produto_subacao: "ALTERAR SUBAÇÃO: PRODUTO DA SUBAÇÃO",
+          remover_municipio: "ALTERAR SUBAÇÃO: TROCAR MUNICÍPIO DA REGIÃO",
+          novo_municipio: "ALTERAR SUBAÇÃO: ACRESCENTAR MUNICÍPIO NA REGIÃO",
+        };
+        const titulo =
+          tipoSolicitacao === "alterar" || tipoSolicitacao === "editar"
+            ? alteracaoTitleMap[tipoEdicao] || "ALTERAR SUBAÇÃO"
+            : titleMap[tipoSolicitacao] || "Cadastrar Subação";
         const controle = row.dataset.controleSubacao || "";
         const criadoEm = formatPrintDate(row.dataset.criadoEm || "");
         const usuarioNome = row.dataset.usuarioNome || "";
@@ -11016,6 +11036,7 @@
         const aprovadoNome = row.dataset.aprovadoPorNome || "";
         const aprovadoPerfil = row.dataset.aprovadoPorPerfil || "";
         const aprovadoEm = formatPrintDate(row.dataset.dataAprovacao || "");
+        const status = String(row?.dataset?.statusAprovacao || "").trim().toLowerCase();
         const footerLine2 = joinNonEmpty(
           [
             joinNonEmpty([usuarioNome, usuarioPerfil]),
@@ -11024,16 +11045,22 @@
           ],
           " - "
         );
+        const statusEventoLabel =
+          status === "rejeitado"
+            ? "rejeitado em"
+            : status === "aprovado"
+              ? "aprovado em"
+              : "aprovado em";
         const footerLine3 = joinNonEmpty(
           [
             joinNonEmpty([aprovadoNome, aprovadoPerfil]),
-            aprovadoEm ? `aprovado em ${aprovadoEm}` : "",
+            aprovadoEm ? `${statusEventoLabel} ${aprovadoEm}` : "",
           ],
           " - "
         );
-        const status = String(row?.dataset?.statusAprovacao || "").trim().toLowerCase();
         let watermarkText = "";
         if (status === "aguardando") watermarkText = "AGUARDANDO VALIDAÇÃO";
+        if (status === "rejeitado") watermarkText = "REJEITADO";
         const html = `<!doctype html>
   <html>
   <head>
@@ -11131,6 +11158,7 @@
       let prefilledMunicipios = false;
         const chave = row.dataset.chave || "";
         currentControleSubacao = row.dataset.controleSubacao || "";
+        updateApprovalQuestion();
         const chaveParts = parseChaveParts(chave);
         const subacaoEntregaFull = row.dataset.subacaoEntrega || "";
       let subacaoEntregaRaw = subacaoEntregaFull;
@@ -11681,7 +11709,7 @@
       if (!stepButtons.length) return;
       stepButtons.forEach((btn) => {
         const stepNum = Number(btn.dataset.step);
-        if (stepNum === 1) btn.textContent = "1. Chave do Planejamento";
+        if (stepNum === 1) btn.textContent = "1. Chave de Planejamento";
         if (stepNum === 2) btn.textContent = "2. Subação/Entrega";
         if (stepNum === 3) btn.textContent = "3. Etapa";
       });
