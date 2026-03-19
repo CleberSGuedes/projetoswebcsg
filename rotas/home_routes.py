@@ -35,7 +35,14 @@ from models import (
     ActiveSession,
     db,
 )
-from sqlalchemy.exc import ProgrammingError, IntegrityError, NoSuchColumnError, OperationalError, ResourceClosedError
+from sqlalchemy.exc import (
+    ProgrammingError,
+    IntegrityError,
+    NoSuchColumnError,
+    OperationalError,
+    ResourceClosedError,
+    SQLAlchemyError,
+)
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
@@ -203,6 +210,17 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
                         pass
                 continue
     return None
+
+
+def _debug_probe(event: str, **fields) -> None:
+    if os.getenv("AUTH_DEBUG_PRINTS", "false").strip().lower() != "true":
+        return
+    try:
+        ts = datetime.utcnow().isoformat()
+        payload = " ".join(f"{k}={fields[k]}" for k in sorted(fields))
+        print(f"[AUTH_DEBUG] ts={ts} event={event} {payload}".strip(), flush=True)
+    except Exception:
+        pass
 
 
 def _process_emp_upload(upload_id: int) -> None:
@@ -1056,6 +1074,23 @@ def partial_cadastrar_plan21_subacao():
     if perfil_ids:
         perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
         perfil_map = {p.id: p for p in perfis}
+    plan21_ids_all: set[int] = set()
+    subacao_plan_ids: dict[int, list[int]] = {}
+    for s in subacoes:
+        ids = _extract_plan21_ids(s)
+        if ids:
+            subacao_plan_ids[s.id] = ids
+            plan21_ids_all.update(ids)
+    plan21_subacao_map: dict[int, str] = {}
+    if plan21_ids_all:
+        plan_rows = Plan21Nger.query.filter(Plan21Nger.id.in_(list(plan21_ids_all))).all()
+        for r in plan_rows:
+            try:
+                key = int(getattr(r, "id", 0) or 0)
+            except Exception:
+                key = 0
+            if key > 0:
+                plan21_subacao_map[key] = (getattr(r, "subacao_entrega", "") or "").strip()
     for s in subacoes:
         usuario = usuarios_map.get(s.usuario_id)
         perfil_id = getattr(usuario, "perfil_id", None)
@@ -1099,6 +1134,11 @@ def partial_cadastrar_plan21_subacao():
         s.data_aprovacao_iso = (
             s.data_aprovacao.isoformat() if getattr(s, "data_aprovacao", None) else ""
         )
+        s.subacao_origem = ""
+        if (getattr(s, "tipo_edicao", "") or "").strip().lower() == "subacao_name":
+            ids = subacao_plan_ids.get(s.id) or []
+            if ids:
+                s.subacao_origem = plan21_subacao_map.get(ids[0], "")
     return render_template(
         "partials/cadastrar_plan21_nger_subacao.html",
         subacoes=subacoes,
@@ -1447,21 +1487,74 @@ def api_permissoes_nivel(nivel):
 def api_permissoes_current():
     user_session = session.get("user") or {}
     perfil_id = getattr(g, "user_perfil_id", None) or user_session.get("perfil_id")
+    _debug_probe(
+        "permissoes_current_start",
+        path=request.path,
+        perfil_id=perfil_id,
+        nivel=getattr(g, "user_nivel", None),
+        has_user=bool(session.get("user")),
+    )
     try:
         feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
+    except SQLAlchemyError as exc:
+        current_app.logger.warning(
+            "Falha de banco ao carregar permissoes (perfil_id=%s, path=%s): %s",
+            perfil_id,
+            request.path,
+            exc,
+            exc_info=True,
+        )
+        _debug_probe("permissoes_current_db_error", path=request.path, perfil_id=perfil_id, exc=str(exc))
+        return jsonify({"error": "Permissoes indisponiveis temporariamente."}), 503
     except Exception as exc:
         current_app.logger.warning("Falha ao carregar permissoes: %s", exc)
+        _debug_probe("permissoes_current_generic_error", path=request.path, perfil_id=perfil_id, exc=str(exc))
         feats = []
+    _debug_probe("permissoes_current_success", path=request.path, perfil_id=perfil_id, features_count=len(feats))
     return jsonify({"features": feats})
 
 
 def _parse_decimal(raw_val):
     if raw_val is None:
         return None
-    raw = str(raw_val).strip()
+    if isinstance(raw_val, (list, tuple)):
+        if not raw_val:
+            return None
+        return _parse_decimal(raw_val[0])
+    raw = str(raw_val).replace("\xa0", " ").strip()
     if not raw:
         return None
-    cleaned = raw.replace(".", "").replace(",", ".")
+    if raw.startswith("[") and raw.endswith("]"):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                return _parse_decimal(parsed[0])
+        except (TypeError, ValueError):
+            pass
+    raw = raw.strip("\"'").strip()
+    if not raw:
+        return None
+    cleaned = raw.replace(" ", "")
+    has_dot = "." in cleaned
+    has_comma = "," in cleaned
+    if has_dot and has_comma:
+        # Decide decimal separator by the last symbol position.
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif has_comma:
+        if re.fullmatch(r"-?\d{1,3}(,\d{3})+", cleaned):
+            cleaned = cleaned.replace(",", "")
+        else:
+            cleaned = cleaned.replace(",", ".")
+    elif has_dot:
+        if re.fullmatch(r"-?\d+\.\d{1,6}", cleaned):
+            pass
+        elif re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+\.?", cleaned):
+            cleaned = cleaned.replace(".", "")
+        else:
+            cleaned = cleaned.replace(".", "")
     try:
         return Decimal(cleaned)
     except Exception:
@@ -2584,11 +2677,35 @@ def _subacao_list_payload(registro: CadastrarSubacao) -> dict:
     }
 
 
+def _parse_chave_planejamento_parts(chave_planejamento: str | None) -> dict:
+    raw = str(chave_planejamento or "")
+    parts = [part.replace("\xa0", " ").strip() for part in raw.split("*")]
+    parts = [part for part in parts if part]
+    columns = [
+        "regiao",
+        "subfuncao_ug",
+        "adj",
+        "macropolitica",
+        "pilar",
+        "eixo",
+        "politica_decreto",
+        "publico_transversal_chave",
+    ]
+    parsed = {}
+    for idx, col in enumerate(columns):
+        if idx >= len(parts):
+            break
+        value = (parts[idx] or "").strip()
+        if value:
+            parsed[col] = value
+    return parsed
+
+
 def _build_subacao_override(registro: CadastrarSubacao, idx: int) -> dict:
     lists = _subacao_list_payload(registro)
     meta_raw = _pick_list_value(lists["metas"], idx)
     meta_val = _parse_decimal(meta_raw) if meta_raw else None
-    return {
+    overrides = {
         "exercicio": registro.exercicio,
         "unidade_orcamentaria": registro.unidade_orcamentaria,
         "programa": registro.programa,
@@ -2612,6 +2729,8 @@ def _build_subacao_override(registro: CadastrarSubacao, idx: int) -> dict:
         "responsavel_etapa": _pick_list_value(lists["responsaveis_etapa"], idx) or registro.responsavel_etapa,
         "ativo": True,
     }
+    overrides.update(_parse_chave_planejamento_parts(registro.chave_planejamento))
+    return overrides
 
 
 def _apply_subacao_cadastrar(registro: CadastrarSubacao) -> list[int]:
@@ -5548,15 +5667,8 @@ def api_relatorio_plan21_nger():
             return str(value)
 
     def _to_float(val):
-        try:
-            if val in (None, ""):
-                return 0.0
-            if isinstance(val, str):
-                cleaned = val.replace(".", "").replace(",", ".")
-                return float(cleaned)
-            return float(val)
-        except (TypeError, ValueError):
-            return 0.0
+        dec = _parse_decimal(val)
+        return float(dec) if dec is not None else 0.0
 
     try:
         rows = (
@@ -9107,15 +9219,8 @@ def api_relatorio_plan20_download():
 @require_feature("relatorios/plan21-nger")
 def api_relatorio_plan21_nger_download():
     def _to_float(val):
-        try:
-            if val in (None, ""):
-                return 0.0
-            if isinstance(val, str):
-                cleaned = val.replace(".", "").replace(",", ".")
-                return float(cleaned)
-            return float(val)
-        except (TypeError, ValueError):
-            return 0.0
+        dec = _parse_decimal(val)
+        return float(dec) if dec is not None else 0.0
 
     try:
         rows = (

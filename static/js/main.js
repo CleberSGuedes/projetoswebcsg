@@ -8876,9 +8876,22 @@
     };
 
     let approvalMode = false;
+    const approvalPlaceholder = document.createComment("subacao-approval-placeholder");
+    if (approvalFields?.parentNode) {
+      approvalFields.parentNode.insertBefore(approvalPlaceholder, approvalFields);
+    }
+    const approvalStep2Anchor = document.createElement("div");
+    approvalStep2Anchor.id = "subacao-aprovacao-anchor";
     let approvalDisabledSnapshot = null;
+    const syncApprovalFieldsVisibility = () => {
+      if (!approvalFields) return;
+      const modeValue = getModeValue();
+      const isExcluir = modeValue === "excluir";
+      const shouldShow = approvalMode && (isExcluir || Number(currentStep) === 2);
+      approvalFields.style.display = shouldShow ? "" : "none";
+    };
     const setFormDisabled = (disabled) => {
-      const fields = Array.from(form.querySelectorAll("input, select, textarea"));
+      const fields = Array.from(form.querySelectorAll("button, input, select, textarea"));
       if (disabled) {
         approvalDisabledSnapshot = new Map();
       }
@@ -8899,8 +8912,12 @@
         approvalDisabledSnapshot = null;
       }
       // Keep step navigation enabled so approver can review all wizard parts.
+      stepButtons.forEach((btn) => {
+        btn.disabled = false;
+      });
       if (nextBtn) nextBtn.disabled = false;
       if (prevBtn) prevBtn.disabled = false;
+      if (saveBtn) saveBtn.disabled = false;
       if (clearBtn) clearBtn.disabled = disabled;
     };
       const updateEditingBanner = () => {
@@ -8925,7 +8942,31 @@
 
       const setApprovalMode = (enabled) => {
         approvalMode = enabled;
-        if (approvalFields) approvalFields.style.display = enabled ? "" : "none";
+        if (approvalFields) {
+          if (enabled) {
+            const modeValue = getModeValue();
+            if (modeValue === "excluir") {
+              const actionsWrap = saveBtn?.closest(".actions");
+              if (actionsWrap?.parentNode) {
+                actionsWrap.parentNode.insertBefore(approvalFields, actionsWrap);
+              }
+            } else {
+              const approvalStep = 2;
+              const approvalPanel = stepPanels.find(
+                (panel) => Number(panel.dataset.step) === approvalStep
+              );
+              if (approvalPanel) {
+                if (approvalStep2Anchor.parentNode !== approvalPanel) {
+                  approvalPanel.appendChild(approvalStep2Anchor);
+                }
+                approvalStep2Anchor.parentNode.insertBefore(approvalFields, approvalStep2Anchor);
+              }
+            }
+          } else if (approvalPlaceholder.parentNode) {
+            approvalPlaceholder.parentNode.insertBefore(approvalFields, approvalPlaceholder.nextSibling);
+          }
+        }
+        syncApprovalFieldsVisibility();
         if (approvalJustificativa) approvalJustificativa.required = enabled;
         if (enabled) {
           setFormDisabled(true);
@@ -8940,6 +8981,8 @@
             r.checked = r.value === "sim";
           });
         }
+        if (municipioAddBtn) municipioAddBtn.disabled = enabled;
+        renderMunicipioList();
         updateEditingBanner();
       };
 
@@ -9447,8 +9490,13 @@
         });
         stepButtons.forEach((btn) => {
           const stepNum = Number(btn.dataset.step);
+          const isVisible = visibleSteps.includes(stepNum);
+          btn.style.display = isVisible ? "inline-flex" : "none";
+          if (!isVisible) {
+            btn.classList.remove("active");
+            return;
+          }
           btn.classList.toggle("active", stepNum === target);
-          btn.style.display = "inline-flex";
         });
         const currentIndex = visibleSteps.indexOf(target);
         if (prevBtn) {
@@ -9457,6 +9505,7 @@
         }
         if (nextBtn) nextBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "none" : "inline-flex";
         if (saveBtn) saveBtn.style.display = currentIndex >= visibleSteps.length - 1 ? "inline-flex" : "none";
+        syncApprovalFieldsVisibility();
         setMsg("");
         syncRequiredByVisibility();
       };
@@ -9797,7 +9846,9 @@
             <div>${normalizeSubacaoMetaDisplay(item.meta_subacao)}</div>
           </div>
           <div>
-            <button class="btn btn-danger sm" type="button" data-remove-index="${idx}">Remover</button>
+            <button class="btn btn-danger sm" type="button" data-remove-index="${idx}" ${
+              approvalMode ? "disabled" : ""
+            }>Remover</button>
           </div>
         `;
         municipioListEl.appendChild(row);
@@ -9814,6 +9865,7 @@
 
     if (municipioListEl) {
       municipioListEl.addEventListener("click", (ev) => {
+        if (approvalMode) return;
         const btn = ev.target.closest("[data-remove-index]");
         if (!btn) return;
         const idx = Number(btn.getAttribute("data-remove-index"));
@@ -9953,7 +10005,7 @@
           const allowRemove = modeKey === "remover_municipio";
           const removeBtn = `
             <button class="btn btn-danger sm" type="button" data-edit-remove-index="${idx}" ${
-              editMunicipioLocked ? "disabled" : ""
+              approvalMode || editMunicipioLocked ? "disabled" : ""
             }>Remover</button>
           `;
           row.innerHTML = `
@@ -9973,7 +10025,7 @@
           `;
           editMunicipioListEl.appendChild(row);
         });
-        if (editMunicipioAddBtn) editMunicipioAddBtn.disabled = editMunicipioLocked;
+        if (editMunicipioAddBtn) editMunicipioAddBtn.disabled = approvalMode || editMunicipioLocked;
         updateEditMunicipioRequired();
       };
 
@@ -10810,6 +10862,7 @@
 
       const buildSubacaoPrintTable = (row) => {
         const tipoSolicitacao = String(row.dataset.tipoSolicitacao || "").trim().toLowerCase();
+        const tipoEdicao = String(row.dataset.tipoEdicao || "").trim().toLowerCase();
         const showEtapas = tipoSolicitacao === "cadastrar";
         const showResponsavelSubacao = tipoSolicitacao !== "alterar" && tipoSolicitacao !== "excluir";
         const showProdutoSubacao = tipoSolicitacao !== "excluir";
@@ -10821,6 +10874,7 @@
         const uo = row.dataset.uo || "";
         const produtoAcao = row.dataset.produtoAcao || "";
         const subacaoEntrega = row.dataset.subacaoEntrega || "";
+        const subacaoOrigem = row.dataset.subacaoOrigem || "";
         const responsavel = row.dataset.responsavel || "";
         const cpfResponsavel = formatCpf(row.dataset.cpf || "");
         const produtoSubacao = row.dataset.produtoSubacao || "";
@@ -10871,6 +10925,14 @@
           }
         }
 
+        const subacaoNameRows =
+          tipoSolicitacao === "alterar" && tipoEdicao === "subacao_name"
+            ? `
+              <tr><th>Nome da Subação de Origem</th><td>${escapeHtml(subacaoOrigem || "-")}</td></tr>
+              <tr><th>Novo nome de Subação</th><td>${escapeHtml(subacaoEntrega)}</td></tr>
+            `
+            : `<tr><th>Nome da Subação</th><td>${escapeHtml(subacaoEntrega)}</td></tr>`;
+
         return `
           <table class="print-table subacao-print">
             <tbody>
@@ -10879,7 +10941,7 @@
               <tr><th>Código da Ação</th><td>${escapeHtml(acaoPaoe)}</td></tr>
               <tr><th>U.O. Responsável pela Ação</th><td>${escapeHtml(uo)}</td></tr>
               <tr><th>Produto da Ação</th><td>${escapeHtml(produtoAcao)}</td></tr>
-              <tr><th>Nome da Subação</th><td>${escapeHtml(subacaoEntrega)}</td></tr>
+              ${subacaoNameRows}
               ${showResponsavelSubacao
                 ? `<tr><th>Nome e CPF do Responsável pela Subação *</th><td>${escapeHtml(
                     joinNonEmpty([responsavel, cpfResponsavel])
@@ -10938,7 +11000,7 @@
         `;
       };
 
-      const openSubacaoPrintPopup = (row) => {
+      const openSubacaoPrintPopup = (row, targetWin = null) => {
         const tipoSolicitacao = String(row.dataset.tipoSolicitacao || "").trim().toLowerCase();
         const titleMap = {
           cadastrar: "Cadastrar Subação",
@@ -11030,7 +11092,8 @@
     </div>
   </body>
   </html>`;
-        const win = window.open("", "_blank");
+        const win =
+          targetWin && !targetWin.closed ? targetWin : window.open("", "_blank");
         if (!win) {
           setFilterMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
           return;
@@ -11043,6 +11106,22 @@
           win.print();
         }, 300);
       };
+
+    const prepareAutoPrintWindow = () => {
+      const existing = window.__subacaoAutoPrintWin;
+      if (existing && !existing.closed) return existing;
+      const win = window.open("", "_blank");
+      if (!win) return null;
+      try {
+        win.document.open();
+        win.document.write("<!doctype html><html><head><meta charset=\"utf-8\" /><title>Preparando impressão...</title></head><body>Preparando impressão...</body></html>");
+        win.document.close();
+      } catch (err) {
+        console.error(err);
+      }
+      window.__subacaoAutoPrintWin = win;
+      return win;
+    };
 
     let isPrefill = false;
     let currentControleSubacao = "";
@@ -11338,53 +11417,55 @@
               loadEditOptions();
             });
           }
-      if (editRegiaoSelect) {
-        editRegiaoSelect.addEventListener("change", () => {
-          loadEditMunicipios();
+    if (editRegiaoSelect) {
+      editRegiaoSelect.addEventListener("change", () => {
+        loadEditMunicipios();
+      });
+    }
+    if (editCodigoNovoSelect) {
+      editCodigoNovoSelect.addEventListener("change", () => {
+        const selectedCodigo = editCodigoNovoSelect.value || "";
+        const match = Array.from(editMunicipioNovoSelect?.options || []).find((opt) => {
+          const optCodigo = normalizeDigits(opt.textContent || "");
+          return optCodigo === normalizeDigits(selectedCodigo);
         });
-      }
-      if (editCodigoNovoSelect) {
-        editCodigoNovoSelect.addEventListener("change", () => {
-          const selectedCodigo = editCodigoNovoSelect.value || "";
-          const match = Array.from(editMunicipioNovoSelect?.options || []).find((opt) => {
-            const optCodigo = normalizeDigits(opt.textContent || "");
-            return optCodigo === normalizeDigits(selectedCodigo);
-          });
-          if (match && editMunicipioNovoSelect) editMunicipioNovoSelect.value = match.value;
+        if (match && editMunicipioNovoSelect) editMunicipioNovoSelect.value = match.value;
+      });
+    }
+    if (editMunicipioNovoSelect) {
+      editMunicipioNovoSelect.addEventListener("change", () => {
+        const selectedNome = editMunicipioNovoSelect.value || "";
+        const match = Array.from(editCodigoNovoSelect?.options || []).find((opt) => {
+          const label = opt.textContent || "";
+          return label.endsWith(selectedNome) || label.includes(`- ${selectedNome}`);
         });
-      }
-      if (editMunicipioNovoSelect) {
-        editMunicipioNovoSelect.addEventListener("change", () => {
-          const selectedNome = editMunicipioNovoSelect.value || "";
-          const match = Array.from(editCodigoNovoSelect?.options || []).find((opt) => {
-            const label = opt.textContent || "";
-            return label.endsWith(selectedNome) || label.includes(`- ${selectedNome}`);
-          });
-          if (match && editCodigoNovoSelect) editCodigoNovoSelect.value = match.value;
-        });
-      }
-      if (editMunicipioAddBtn) {
-        editMunicipioAddBtn.addEventListener("click", () => {
-          addEditMunicipioItem();
-        });
-      }
-      if (editMunicipioListEl) {
-        editMunicipioListEl.addEventListener("click", (ev) => {
-          const btn = ev.target.closest("[data-edit-remove-index]");
-          if (!btn) return;
-          if (editMunicipioLocked) {
-            setMsg(
-              "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
-              true
-            );
-            return;
-          }
-          const idx = Number(btn.getAttribute("data-edit-remove-index"));
-          if (Number.isNaN(idx)) return;
-          editMunicipioItems.splice(idx, 1);
-          renderEditMunicipioList();
-        });
-      }
+        if (match && editCodigoNovoSelect) editCodigoNovoSelect.value = match.value;
+      });
+    }
+    if (editMunicipioAddBtn) {
+      editMunicipioAddBtn.addEventListener("click", () => {
+        if (approvalMode) return;
+        addEditMunicipioItem();
+      });
+    }
+    if (editMunicipioListEl) {
+      editMunicipioListEl.addEventListener("click", (ev) => {
+        if (approvalMode) return;
+        const btn = ev.target.closest("[data-edit-remove-index]");
+        if (!btn) return;
+        if (editMunicipioLocked) {
+          setMsg(
+            "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas.",
+            true
+          );
+          return;
+        }
+        const idx = Number(btn.getAttribute("data-edit-remove-index"));
+        if (Number.isNaN(idx)) return;
+        editMunicipioItems.splice(idx, 1);
+        renderEditMunicipioList();
+      });
+    }
 
     if (filterForm) {
       renderCriteria();
@@ -11608,6 +11689,7 @@
 
     if (addEtapaBtn) {
       addEtapaBtn.addEventListener("click", () => {
+        if (approvalMode) return;
         if (!validateEtapaBlock()) return;
         const payload = captureEtapaPayload();
         etapaItems.push(payload);
@@ -11638,6 +11720,7 @@
 
     if (etapaListEl) {
       etapaListEl.addEventListener("click", (ev) => {
+        if (approvalMode) return;
         const btn = ev.target.closest("[data-remove-etapa]");
         if (!btn) return;
         const idx = Number(btn.getAttribute("data-remove-etapa"));
@@ -11660,6 +11743,7 @@
     }
     if (municipioAddBtn) {
       municipioAddBtn.addEventListener("click", () => {
+        if (approvalMode) return;
         addMunicipioItem();
       });
     }
@@ -11689,6 +11773,11 @@
           setMsg("Justificativa obrigatória.", true);
           return;
         }
+        const printWin = prepareAutoPrintWindow();
+        if (!printWin) {
+          setMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
+          return;
+        }
         setMsg("Aprovando...");
         try {
           const res = await fetch(`/api/subacao/${encodeURIComponent(registroId)}/aprovar`, {
@@ -11714,6 +11803,10 @@
           await loadPage("cadastrar/plan_21-nger/subacao");
         } catch (err) {
           console.error(err);
+          try {
+            if (printWin && !printWin.closed) printWin.close();
+          } catch (_) {}
+          window.__subacaoAutoPrintWin = null;
           setMsg("Falha ao aprovar.", true);
         }
         return;
@@ -11838,6 +11931,11 @@
               meta_subacao: item.meta_subacao,
             }));
           }
+        const printWin = prepareAutoPrintWindow();
+        if (!printWin) {
+          setMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
+          return;
+        }
         try {
           const res = await fetch("/api/subacao/editar", {
             method: "POST",
@@ -11863,6 +11961,10 @@
             await loadPage("cadastrar/plan_21-nger/subacao");
           } catch (err) {
             console.error(err);
+            try {
+              if (printWin && !printWin.closed) printWin.close();
+            } catch (_) {}
+            window.__subacaoAutoPrintWin = null;
             setMsg("Falha ao salvar.", true);
         }
         return;
@@ -11953,6 +12055,11 @@
         const registroId = idInput?.value || "";
         const url = registroId ? `/api/subacao/${encodeURIComponent(registroId)}` : "/api/subacao";
       const method = registroId ? "PUT" : "POST";
+      const printWin = prepareAutoPrintWindow();
+      if (!printWin) {
+        setMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
+        return;
+      }
       try {
         const res = await fetch(url, {
           method,
@@ -11977,6 +12084,10 @@
           await loadPage("cadastrar/plan_21-nger/subacao");
         } catch (err) {
           console.error(err);
+          try {
+            if (printWin && !printWin.closed) printWin.close();
+          } catch (_) {}
+          window.__subacaoAutoPrintWin = null;
           setMsg("Falha ao salvar.", true);
       }
     });
@@ -11998,11 +12109,15 @@
       const row = summaryBody?.querySelector(
         `.dotacao-summary-row[data-id="${CSS.escape(String(autoPrintId))}"]`
       );
+      const pendingPrintWin = window.__subacaoAutoPrintWin || null;
       if (row) {
         setSelectedRow(row);
-        openSubacaoPrintPopup(row);
+        openSubacaoPrintPopup(row, pendingPrintWin);
+      } else if (pendingPrintWin && !pendingPrintWin.closed) {
+        pendingPrintWin.close();
       }
       window.__subacaoAutoPrintId = null;
+      window.__subacaoAutoPrintWin = null;
     }
     if (pageSizeSelect) {
       pageSizeSelect.addEventListener("change", () => {

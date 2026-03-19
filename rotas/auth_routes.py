@@ -1,5 +1,6 @@
 from typing import Optional
 import secrets
+import os
 from types import SimpleNamespace
 from datetime import datetime, timedelta
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
@@ -28,6 +29,18 @@ def _log_login(email: str, status: str, motivo: Optional[str] = None) -> None:
         db.session.commit()
     except Exception:
         db.session.rollback()
+
+
+def _debug_probe(event: str, **fields) -> None:
+    if os.getenv("AUTH_DEBUG_PRINTS", "false").strip().lower() != "true":
+        return
+    try:
+        ts = datetime.utcnow().isoformat()
+        payload = " ".join(f"{k}={fields[k]}" for k in sorted(fields))
+        print(f"[AUTH_DEBUG] ts={ts} event={event} {payload}".strip(), flush=True)
+    except Exception:
+        pass
+
 
 def _set_active_session(email: str) -> None:
     token = secrets.token_hex(16)
@@ -98,21 +111,25 @@ def login():
             email = (data.get("email") or "").lower().strip()
             senha = data.get("password") or ""
             force_login = bool(data.get("force_login"))
+            _debug_probe("login_attempt", path=request.path, email=email, force_login=force_login, is_fetch=is_fetch)
 
             usuario = Usuario.query.filter_by(email=email).first()
             if not usuario:
+                _debug_probe("login_user_not_found", path=request.path, email=email)
                 _log_login(email, "inexistente", "usuario nao encontrado")
                 if is_fetch:
                     return {"error": "Usuario nao cadastrado."}, 404
                 flash("Usuario nao cadastrado.", "error")
                 return redirect(url_for("auth.login"))
             if not usuario.ativo:
+                _debug_probe("login_user_inactive", path=request.path, email=email)
                 _log_login(email, "inativo", "usuario inativo")
                 if is_fetch:
                     return {"error": "Usuario inativo."}, 403
                 flash("Usuario inativo.", "error")
                 return redirect(url_for("auth.login"))
             if not usuario.password_hash or not check_password_hash(usuario.password_hash, senha):
+                _debug_probe("login_invalid_credentials", path=request.path, email=email)
                 _log_login(email, "erro", "credenciais invalidas")
                 if is_fetch:
                     return {"error": "Email ou senha invalidos."}, 401
@@ -122,6 +139,7 @@ def login():
             cutoff = datetime.utcnow() - SESSION_TIMEOUT
             active = ActiveSession.query.filter_by(email=email).first()
             if active and active.last_activity and active.last_activity >= cutoff and not force_login:
+                _debug_probe("login_conflict_active_session", path=request.path, email=email)
                 if is_fetch:
                     return {
                         "conflict": True,
@@ -175,6 +193,7 @@ def login():
                     flash("Falha ao validar perfil do usuario.", "error")
                     return redirect(url_for("auth.login"))
             if not perfil_row:
+                _debug_probe("login_invalid_profile", path=request.path, email=email, perfil_id=perfil_id)
                 _log_login(email, "erro", "perfil_id invalido no usuario")
                 if is_fetch:
                     return {"error": "Perfil do usuario invalido."}, 403
@@ -185,8 +204,10 @@ def login():
                 "nome": usuario.nome,
                 "perfil": (perfil_row.nome or "").strip(),
                 "perfil_id": perfil_row.id,
+                "nivel": perfil_row.nivel,
             }
             _set_active_session(usuario.email)
+            _debug_probe("login_success", path=request.path, email=usuario.email, perfil_id=perfil_row.id, nivel=perfil_row.nivel)
             _log_login(email, "sucesso", None)
             if is_fetch:
                 return {"ok": True, "redirect": url_for("home.index")}
@@ -194,6 +215,7 @@ def login():
         except Exception as exc:
             db.session.rollback()
             session.clear()
+            _debug_probe("login_exception", path=request.path, email=locals().get("email", ""), exc=str(exc))
             current_app.logger.error("Erro ao processar login: %s", exc, exc_info=True)
             if is_fetch:
                 return {"error": "Falha interna ao processar login."}, 500

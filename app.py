@@ -4,6 +4,7 @@ load_dotenv()
 from datetime import datetime, timedelta
 import secrets
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import SimpleNamespace
@@ -164,6 +165,36 @@ def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
         return False
 
 
+def _as_int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _restore_cached_user_context(user) -> bool:
+    if not isinstance(user, dict):
+        return False
+    email = (user.get("email") or "").strip()
+    if not email:
+        return False
+    g.user = user
+    g.user_perfil_id = _as_int_or_none(user.get("perfil_id"))
+    g.user_nivel = _as_int_or_none(user.get("nivel"))
+    return True
+
+
+def _debug_probe(event: str, **fields) -> None:
+    if os.getenv("AUTH_DEBUG_PRINTS", "false").strip().lower() != "true":
+        return
+    try:
+        ts = datetime.utcnow().isoformat()
+        payload = " ".join(f"{k}={fields[k]}" for k in sorted(fields))
+        print(f"[AUTH_DEBUG] ts={ts} event={event} {payload}".strip(), flush=True)
+    except Exception:
+        pass
+
+
 
 def create_app():
     app = Flask(__name__)
@@ -214,6 +245,12 @@ def create_app():
         g.user_nivel = None
         user = session.get("user")
         token = session.get("session_token")
+        _debug_probe(
+            "preload_start",
+            path=request.path,
+            has_user=bool(user),
+            has_token=bool(token),
+        )
         if not user or not token:
             try:
                 app.logger.info(
@@ -225,6 +262,7 @@ def create_app():
             except Exception:
                 pass
             session.clear()
+            _debug_probe("preload_missing_session", path=request.path)
             return
 
         now = datetime.utcnow()
@@ -233,45 +271,56 @@ def create_app():
             active_row = _fetch_active_session(user.get("email"))
         except SQLAlchemyError:
             _safe_session_rollback()
-            _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
-                    "auth preload db error, session cleared email=%s path=%s",
+                    "auth preload db error, keeping cached session email=%s path=%s",
                     user.get("email"),
                     request.path,
+                    exc_info=True,
                 )
             except Exception:
                 pass
-            session.clear()
+            if not _restore_cached_user_context(user):
+                session.clear()
+                _debug_probe("preload_db_error_session_cleared", path=request.path, email=user.get("email"))
+            else:
+                _debug_probe("preload_db_error_cached_session_kept", path=request.path, email=user.get("email"))
             return
         except IndexError:
             _safe_session_rollback()
-            _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
-                    "auth preload db index error, session cleared email=%s path=%s",
+                    "auth preload db index error, keeping cached session email=%s path=%s",
                     user.get("email"),
                     request.path,
+                    exc_info=True,
                 )
             except Exception:
                 pass
-            session.clear()
+            if not _restore_cached_user_context(user):
+                session.clear()
+                _debug_probe("preload_db_index_error_session_cleared", path=request.path, email=user.get("email"))
+            else:
+                _debug_probe("preload_db_index_error_cached_session_kept", path=request.path, email=user.get("email"))
             return
 
         if active_row is None:
             if _ensure_active_session(user.get("email"), token, now):
                 active_row = {"email": user.get("email"), "session_token": token, "last_activity": now}
             else:
-                _best_effort_clear_active_session(user.get("email"), token)
                 try:
                     app.logger.warning(
-                        "auth preload active_row=None cleared email=%s path=%s",
+                        "auth preload active_row=None keeping cached session email=%s path=%s",
                         user.get("email"),
                         request.path,
                     )
                 except Exception:
                     pass
-                session.clear()
+                if not _restore_cached_user_context(user):
+                    session.clear()
+                    _debug_probe("preload_active_row_missing_session_cleared", path=request.path, email=user.get("email"))
+                else:
+                    _debug_probe("preload_active_row_missing_cached_session_kept", path=request.path, email=user.get("email"))
                 return
 
         if not active_row or active_row.get("session_token") != token:
@@ -285,6 +334,7 @@ def create_app():
             except Exception:
                 pass
             session.clear()
+            _debug_probe("preload_token_mismatch_session_cleared", path=request.path, email=user.get("email"))
             return
 
         last_activity = active_row.get("last_activity")
@@ -317,6 +367,7 @@ def create_app():
             except Exception:
                 pass
             session.clear()
+            _debug_probe("preload_session_expired", path=request.path, email=user.get("email"))
             return
 
         try:
@@ -330,43 +381,53 @@ def create_app():
             )
             if result is None:
                 _safe_session_rollback()
-                _best_effort_clear_active_session(user.get("email"), token)
                 try:
                     app.logger.warning(
-                        "auth preload last_activity update failed, cleared email=%s path=%s",
+                        "auth preload last_activity update failed, keeping cached session email=%s path=%s",
                         user.get("email"),
                         request.path,
                     )
                 except Exception:
                     pass
-                session.clear()
+                if not _restore_cached_user_context(user):
+                    session.clear()
+                    _debug_probe("preload_last_activity_update_failed_session_cleared", path=request.path, email=user.get("email"))
+                else:
+                    _debug_probe("preload_last_activity_update_failed_cached_session_kept", path=request.path, email=user.get("email"))
                 return
             db.session.commit()
             if result.rowcount == 0:
                 if not _ensure_active_session(user.get("email"), token, now):
-                    _best_effort_clear_active_session(user.get("email"), token)
                     try:
                         app.logger.warning(
-                            "auth preload last_activity rowcount=0 cleared email=%s path=%s",
+                            "auth preload last_activity rowcount=0 keeping cached session email=%s path=%s",
                             user.get("email"),
                             request.path,
                         )
                     except Exception:
                         pass
-                    session.clear()
+                    if not _restore_cached_user_context(user):
+                        session.clear()
+                        _debug_probe("preload_last_activity_rowcount_zero_session_cleared", path=request.path, email=user.get("email"))
+                    else:
+                        _debug_probe("preload_last_activity_rowcount_zero_cached_session_kept", path=request.path, email=user.get("email"))
                     return
         except SQLAlchemyError:
             _safe_session_rollback()
-            _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
-                    "auth preload last_activity exception cleared email=%s path=%s",
+                    "auth preload last_activity exception, keeping cached session email=%s path=%s",
                     user.get("email"),
                     request.path,
+                    exc_info=True,
                 )
             except Exception:
                 pass
-            session.clear()
+            if not _restore_cached_user_context(user):
+                session.clear()
+                _debug_probe("preload_last_activity_exception_session_cleared", path=request.path, email=user.get("email"))
+            else:
+                _debug_probe("preload_last_activity_exception_cached_session_kept", path=request.path, email=user.get("email"))
             return
         g.user = user
         perfil_id = user.get("perfil_id")
@@ -398,20 +459,34 @@ def create_app():
                 except Exception:
                     pass
             else:
-                _best_effort_clear_active_session(user.get("email"), token)
                 try:
                     app.logger.warning(
-                        "auth preload perfil fetch error cleared email=%s perfil_id=%s path=%s",
+                        "auth preload perfil fetch error, keeping cached session email=%s perfil_id=%s path=%s",
                         user.get("email"),
                         perfil_id,
+                        request.path,
+                        exc_info=True,
+                    )
+                except Exception:
+                    pass
+                if not _restore_cached_user_context(user):
+                    session.clear()
+                    _debug_probe("preload_perfil_fetch_error_session_cleared", path=request.path, email=user.get("email"))
+                else:
+                    _debug_probe("preload_perfil_fetch_error_cached_session_kept", path=request.path, email=user.get("email"))
+                return
+        if not perfil_row:
+            if _restore_cached_user_context(user):
+                try:
+                    app.logger.warning(
+                        "auth preload perfil missing, keeping cached session email=%s path=%s",
+                        user.get("email"),
                         request.path,
                     )
                 except Exception:
                     pass
-                session.clear()
+                _debug_probe("preload_perfil_missing_cached_session_kept", path=request.path, email=user.get("email"))
                 return
-        if not perfil_row:
-            _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
                     "auth preload perfil missing cleared email=%s path=%s",
@@ -421,11 +496,13 @@ def create_app():
             except Exception:
                 pass
             session.clear()
+            _debug_probe("preload_perfil_missing_session_cleared", path=request.path, email=user.get("email"))
             return
         if perfil_row:
             # mantem nome do perfil sincronizado para exibicao/compatibilidade.
             user["perfil"] = (perfil_row.nome or "").strip()
             user["perfil_id"] = perfil_row.id
+            user["nivel"] = perfil_row.nivel
             session["user"] = user
         if perfil_row:
             g.user_perfil_id = perfil_row.id
@@ -438,31 +515,37 @@ def create_app():
             )
             if result is None:
                 _safe_session_rollback()
-                _best_effort_clear_active_session(user.get("email"), token)
                 try:
                     app.logger.warning(
-                        "auth preload active_sessions_count failed cleared email=%s path=%s",
+                        "auth preload active_sessions_count failed, keeping cached session email=%s path=%s",
                         user.get("email"),
                         request.path,
                     )
                 except Exception:
                     pass
-                session.clear()
+                _debug_probe("preload_active_sessions_count_failed_cached_session_kept", path=request.path, email=user.get("email"))
                 return
             g.active_sessions_count = result.scalar() or 0
         except SQLAlchemyError:
             _safe_session_rollback()
-            _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
-                    "auth preload active_sessions_count exception cleared email=%s path=%s",
+                    "auth preload active_sessions_count exception, keeping cached session email=%s path=%s",
                     user.get("email"),
                     request.path,
+                    exc_info=True,
                 )
             except Exception:
                 pass
-            session.clear()
+            _debug_probe("preload_active_sessions_count_exception_cached_session_kept", path=request.path, email=user.get("email"))
             return
+        _debug_probe(
+            "preload_success",
+            path=request.path,
+            email=user.get("email"),
+            perfil_id=getattr(g, "user_perfil_id", None),
+            nivel=getattr(g, "user_nivel", None),
+        )
 
     register_blueprints(app)
     return app
