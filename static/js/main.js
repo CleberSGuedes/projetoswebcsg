@@ -6865,6 +6865,581 @@
     load();
   }
 
+  function initMetaFisicaPlan21() {
+    const form = document.getElementById("form-meta-fisica");
+    const msg = document.getElementById("meta-fisica-msg");
+    if (!form || !msg) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const selects = {
+      exercicio: document.getElementById("meta-fisica-exercicio"),
+      unidade_orcamentaria: document.getElementById("meta-fisica-uo"),
+      programa: document.getElementById("meta-fisica-programa"),
+      acao_paoe: document.getElementById("meta-fisica-acao"),
+      responsavel_acao: document.getElementById("meta-fisica-responsavel-acao"),
+      produto_acao: document.getElementById("meta-fisica-produto"),
+      unid_medida_produto: document.getElementById("meta-fisica-unidade-medida"),
+    };
+    const tbody = document.getElementById("meta-fisica-tbody");
+    const addRowBtn = document.getElementById("meta-fisica-add-row");
+    const clearBtn = document.getElementById("meta-fisica-clear");
+    const consultBtn = document.getElementById("meta-fisica-consultar");
+    const justificativaInput = document.getElementById("meta-fisica-justificativa");
+    const rowRequiredKeys = [
+      "unidade_orcamentaria",
+      "programa",
+      "acao_paoe",
+      "responsavel_acao",
+      "produto_acao",
+      "unid_medida_produto",
+    ];
+
+    let tableRows = [];
+    let hasConsulted = false;
+    let lastQueryHadRows = false;
+
+    const setMsg = (text, isError = false) => {
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", !!isError);
+    };
+    const esc = (v) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const normalizeRegionKey = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const digits = raw.replace(/\D/g, "");
+      if (digits) {
+        return String(parseInt(digits, 10));
+      }
+      return raw.toLowerCase();
+    };
+    const parseDec = (value) => {
+      if (value === null || value === undefined) return null;
+      const raw = String(value).trim();
+      if (!raw) return null;
+      let cleaned = raw.replace(/\s+/g, "");
+      const hasDot = cleaned.includes(".");
+      const hasComma = cleaned.includes(",");
+      if (hasDot && hasComma) {
+        if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
+          cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+        } else {
+          cleaned = cleaned.replace(/,/g, "");
+        }
+      } else if (hasComma) {
+        cleaned = cleaned.replace(",", ".");
+      }
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : null;
+    };
+    const fmtNum = (value) => {
+      if (value === null || value === undefined || value === "") return "";
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "";
+      return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const formatPrintDate = (value) => {
+      if (!value) return "";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value);
+      return d.toLocaleString("pt-BR");
+    };
+    const inputNumValue = (value) => {
+      const n = parseDec(value);
+      if (n === null) return "";
+      return String(n);
+    };
+    const formatDecimalPtBr = (value) => {
+      const n = parseDec(value);
+      if (n === null) return "";
+      return n.toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    };
+    const unformatDecimalPtBr = (value) => {
+      const n = parseDec(value);
+      if (n === null) return "";
+      return String(n).replace(".", ",");
+    };
+    const sanitizeDecimalInput = (value) => {
+      let raw = String(value ?? "").replace(/[^\d,.\-]/g, "");
+      const negative = raw.startsWith("-") ? "-" : "";
+      raw = raw.replace(/-/g, "");
+      const firstSepIdx = raw.search(/[,.]/);
+      if (firstSepIdx >= 0) {
+        const intPart = raw.slice(0, firstSepIdx).replace(/[,.]/g, "");
+        const decPart = raw.slice(firstSepIdx + 1).replace(/[,.]/g, "");
+        return `${negative}${intPart}${decPart ? `,${decPart}` : ","}`;
+      }
+      return `${negative}${raw}`;
+    };
+    const rowAdjusted = (row) => {
+      if (row.is_novo) return "";
+      const metaBase = parseDec(row.meta_produto);
+      if (metaBase === null) return "";
+      const credito = parseDec(row.meta_credito) || 0;
+      const anulada = parseDec(row.meta_anulada) || 0;
+      return metaBase + credito - anulada;
+    };
+    const validateDuplicateRegions = () => {
+      const seen = new Set();
+      for (const row of tableRows) {
+        const key = normalizeRegionKey(row.regiao_produto);
+        if (!key) continue;
+        if (seen.has(key)) return row.regiao_produto;
+        seen.add(key);
+      }
+      return "";
+    };
+    const applySelectOptions = (select, values, keepValue = true) => {
+      if (!select) return;
+      const current = keepValue ? select.value : "";
+      select.innerHTML = '<option value="">Selecione...</option>';
+      (values || []).forEach((val) => {
+        const opt = document.createElement("option");
+        opt.value = String(val);
+        opt.textContent = String(val);
+        select.appendChild(opt);
+      });
+      if (current && (values || []).includes(current)) {
+        select.value = current;
+      }
+    };
+    const hasAllRowFiltersSelected = () =>
+      rowRequiredKeys.every((key) => String(selects[key]?.value || "").trim() !== "");
+    const getRowsEmptyMessage = () => {
+      if (!hasAllRowFiltersSelected()) {
+        return "Preencha todos os filtros obrigatórios para carregar as regiões.";
+      }
+      if (!hasConsulted) {
+        return "Clique em Consultar para carregar as regiões.";
+      }
+      if (!lastQueryHadRows) {
+        return "Nenhuma região encontrada para os filtros informados.";
+      }
+      return "Sem registros.";
+    };
+
+    const buildMetaFisicaPrintTable = (meta) => {
+      const linhas = Array.isArray(meta?.linhas) ? meta.linhas : [];
+      const linhasHtml = linhas
+        .map((l) => {
+          const reg = l?.regiao_produto || "";
+          const mp = fmtNum(parseDec(l?.meta_produto));
+          const mc = fmtNum(parseDec(l?.meta_credito));
+          const ma = fmtNum(parseDec(l?.meta_anulada));
+          const mt = fmtNum(parseDec(l?.meta_atual));
+          return `<tr>
+            <td>${esc(reg)}</td>
+            <td>${esc(mp)}</td>
+            <td>${esc(mc)}</td>
+            <td>${esc(ma)}</td>
+            <td>${esc(mt)}</td>
+          </tr>`;
+        })
+        .join("");
+
+      return `
+        <table class="print-table">
+          <tbody>
+            <tr><th>Exercício</th><td>${esc(meta?.exercicio || "")}</td></tr>
+            <tr><th>UO</th><td>${esc(meta?.unidade_orcamentaria || "")}</td></tr>
+            <tr><th>Programa de Governo</th><td>${esc(meta?.programa || "")}</td></tr>
+            <tr><th>Ação/PAOE</th><td>${esc(meta?.acao_paoe || "")}</td></tr>
+            <tr><th>Responsável da Ação/PAOE</th><td>${esc(meta?.responsavel_acao || "")}</td></tr>
+            <tr><th>Produto da Ação</th><td>${esc(meta?.produto_acao || "")}</td></tr>
+            <tr><th>Unidade de Medida</th><td>${esc(meta?.unid_medida_produto || "")}</td></tr>
+            <tr><th>ID Plan21 mais recente</th><td>${esc(meta?.plan21_nger_id || "")}</td></tr>
+            <tr><th>IDs Plan21 (sequência)</th><td>${esc((meta?.plan21_nger_ids || []).join(", "))}</td></tr>
+            <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
+            <tr>
+              <th>Tabela de Metas</th>
+              <td>
+                <table class="print-inner">
+                  <thead>
+                    <tr>
+                      <th>REGIÃO PTA/LOA</th>
+                      <th>META PTA/LOA</th>
+                      <th>ACRÉSCIMO</th>
+                      <th>REDUÇÃO</th>
+                      <th>META AJUSTADA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${linhasHtml || '<tr><td colspan="5">Sem linhas</td></tr>'}
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    };
+
+    const openMetaFisicaPrintPopup = (meta, targetWin = null) => {
+      const controle = meta?.controle || "";
+      const criadoEm = formatPrintDate(meta?.criado_em || "");
+      const usuarioNome = meta?.usuario_nome || "";
+      const footerLine2 = [usuarioNome, criadoEm ? `cadastrado em ${criadoEm}` : "", controle]
+        .map((p) => String(p || "").trim())
+        .filter(Boolean)
+        .join(" - ");
+      const watermarkText = "AGUARDANDO";
+      const html = `<!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Meta Física</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 80px; }
+      .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
+      .print-brand { display: flex; align-items: center; gap: 12px; }
+      .print-brand img { height: 48px; }
+      .print-brand-title { font-weight: 700; font-size: 16px; }
+      .print-brand-subtitle { font-size: 12px; color: #333; }
+      .print-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 18px; }
+      .print-title { text-align: center; font-weight: 700; flex: 1; text-transform: uppercase; }
+      .print-title-key { min-width: 200px; font-size: 12px; }
+      .print-title-date { min-width: 200px; text-align: right; font-size: 12px; }
+      .print-footer { position: fixed; left: 20px; right: 20px; bottom: 12px; border-top: 1px dashed #000; font-size: 11px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .print-footer img { height: 36px; }
+      .print-footer-text { flex: 1; text-align: center; line-height: 1.35; }
+      .print-body { margin-top: 2em; }
+      .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
+      .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
+      .print-table th { width: 35%; background: #f1f1f1; }
+      .print-inner { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .print-inner th, .print-inner td { border: 1px solid #000; padding: 4px 6px; font-size: 9px; vertical-align: top; }
+      .print-inner th { background: #f8f8f8; }
+      .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div class="print-watermark">${watermarkText}</div>
+    <div class="print-header">
+      <div class="print-brand">
+        <img src="/static/img/logo.jpg" alt="Logo" />
+        <div class="print-brand-text">
+          <div class="print-brand-title">Sistema de Planejamento e Orçamento</div>
+          <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
+        </div>
+      </div>
+    </div>
+    <div class="print-title-row">
+      <div class="print-title-key">${esc(controle)}</div>
+      <div class="print-title">Meta Física do Produto da Ação</div>
+      <div class="print-title-date">${esc(criadoEm)}</div>
+    </div>
+    <div class="print-body">
+      ${buildMetaFisicaPrintTable(meta)}
+    </div>
+    <div class="print-footer">
+      <img src="/static/img/logo.jpg" alt="Logo" />
+      <div class="print-footer-text">
+        ${footerLine2 ? `<div>${esc(footerLine2)}</div>` : ""}
+      </div>
+      <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
+    </div>
+  </body>
+  </html>`;
+      const win = targetWin && !targetWin.closed ? targetWin : window.open("", "_blank");
+      if (!win) {
+        setMsg("Popup bloqueado. Libere o navegador para imprimir.", true);
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+      }, 300);
+    };
+
+    const prepareMetaFisicaPrintWindow = () => {
+      const win = window.open("", "_blank");
+      if (!win) return null;
+      try {
+        win.document.open();
+        win.document.write("<!doctype html><html><head><meta charset=\"utf-8\" /><title>Preparando impressão...</title></head><body>Preparando impressão...</body></html>");
+        win.document.close();
+      } catch (err) {
+        console.error(err);
+      }
+      return win;
+    };
+
+    const renderRows = () => {
+      if (!tbody) return;
+      if (!tableRows.length) {
+        tbody.innerHTML =
+          `<tr><td colspan="5" class="muted">${esc(getRowsEmptyMessage())}</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = tableRows
+        .map((row, idx) => {
+          const adjusted = rowAdjusted(row);
+          const readOnlyNew = row.is_novo ? "" : "readonly";
+          const disabledNew = row.is_novo ? "readonly" : "";
+          return `
+            <tr data-idx="${idx}">
+              <td><input type="text" class="meta-fisica-cell" data-field="regiao_produto" value="${esc(row.regiao_produto || "")}" ${readOnlyNew} /></td>
+              <td><input type="text" class="meta-fisica-cell" data-field="meta_produto" value="${esc(fmtNum(row.meta_produto))}" readonly /></td>
+              <td><input type="text" inputmode="decimal" class="meta-fisica-cell meta-fisica-cell-credito" data-field="meta_credito" value="${esc(formatDecimalPtBr(row.meta_credito))}" /></td>
+              <td><input type="text" inputmode="decimal" class="meta-fisica-cell meta-fisica-cell-anulada" data-field="meta_anulada" value="${esc(formatDecimalPtBr(row.meta_anulada))}" ${disabledNew} /></td>
+              <td><input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(adjusted))}" readonly /></td>
+            </tr>
+          `;
+        })
+        .join("");
+    };
+
+    const loadOptions = async (loadRows = false) => {
+      try {
+        const url = new URL("/api/meta-fisica/options", window.location.origin);
+        Object.entries(selects).forEach(([key, el]) => {
+          if (!el) return;
+          const val = String(el.value || "").trim();
+          if (val) url.searchParams.set(key, val);
+        });
+        const res = await fetch(url.toString(), { headers: { "X-Requested-With": "fetch" } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar opções.");
+
+        applySelectOptions(selects.exercicio, data.options?.exercicio || [], false);
+        if (selects.exercicio) {
+          selects.exercicio.value = (data.current_year || "");
+          selects.exercicio.disabled = true;
+        }
+        applySelectOptions(selects.unidade_orcamentaria, data.options?.unidade_orcamentaria || []);
+        applySelectOptions(selects.programa, data.options?.programa || []);
+        applySelectOptions(selects.acao_paoe, data.options?.acao_paoe || []);
+        applySelectOptions(selects.responsavel_acao, data.options?.responsavel_acao || []);
+        applySelectOptions(selects.produto_acao, data.options?.produto_acao || []);
+        applySelectOptions(selects.unid_medida_produto, data.options?.unid_medida_produto || []);
+
+        const manualRows = tableRows.filter((row) => row.is_novo);
+        if (!hasAllRowFiltersSelected()) {
+          tableRows = [];
+          lastQueryHadRows = false;
+          renderRows();
+          return;
+        }
+        if (!loadRows) {
+          tableRows = manualRows;
+          lastQueryHadRows = false;
+          renderRows();
+          return;
+        }
+
+        const prevByRegion = new Map(tableRows.map((row) => [normalizeRegionKey(row.regiao_produto), row]));
+        const loadedRows = (data.rows || []).map((row) => {
+          const key = normalizeRegionKey(row.regiao_produto);
+          const prev = prevByRegion.get(key);
+          return {
+            regiao_produto: row.regiao_produto || "",
+            meta_produto: row.meta_produto || "",
+            meta_credito: prev ? prev.meta_credito || "" : "",
+            meta_anulada: prev ? prev.meta_anulada || "" : "",
+            is_novo: false,
+            plan21_nger_id: row.plan21_nger_id || null,
+            plan21_ids: Array.isArray(row.plan21_ids) ? row.plan21_ids : [],
+          };
+        });
+        tableRows = [...loadedRows, ...manualRows];
+        lastQueryHadRows = loadedRows.length > 0;
+        renderRows();
+      } catch (err) {
+        console.error(err);
+        setMsg(err.message || "Falha ao carregar opções.", true);
+      }
+    };
+
+    if (tbody) {
+      tbody.addEventListener("focusin", (ev) => {
+        const input = ev.target.closest("input[data-field]");
+        if (!input) return;
+        const field = input.dataset.field;
+        if (field !== "meta_credito" && field !== "meta_anulada") return;
+        input.value = unformatDecimalPtBr(input.value);
+      });
+
+      tbody.addEventListener("input", (ev) => {
+        const input = ev.target.closest("input[data-field]");
+        if (!input) return;
+        const tr = input.closest("tr[data-idx]");
+        if (!tr) return;
+        const idx = Number(tr.dataset.idx || "-1");
+        if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+        const field = input.dataset.field;
+        if (field === "meta_credito" || field === "meta_anulada") {
+          const masked = sanitizeDecimalInput(input.value);
+          input.value = masked;
+          tableRows[idx][field] = masked;
+        } else {
+          tableRows[idx][field] = input.value;
+        }
+        const dup = validateDuplicateRegions();
+        if (dup) {
+          setMsg(`A região ${dup} já existe na tabela.`, true);
+        } else {
+          setMsg("");
+        }
+        const adjustedField = tr.querySelector('input[data-field="meta_atual"]');
+        if (adjustedField) {
+          adjustedField.value = fmtNum(rowAdjusted(tableRows[idx]));
+        }
+      });
+
+      tbody.addEventListener("focusout", (ev) => {
+        const input = ev.target.closest("input[data-field]");
+        if (!input) return;
+        const tr = input.closest("tr[data-idx]");
+        if (!tr) return;
+        const idx = Number(tr.dataset.idx || "-1");
+        if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+        const field = input.dataset.field;
+        if (field !== "meta_credito" && field !== "meta_anulada") return;
+        const masked = sanitizeDecimalInput(input.value);
+        tableRows[idx][field] = masked;
+        input.value = formatDecimalPtBr(masked);
+        const adjustedField = tr.querySelector('input[data-field="meta_atual"]');
+        if (adjustedField) {
+          adjustedField.value = fmtNum(rowAdjusted(tableRows[idx]));
+        }
+      });
+    }
+
+    if (addRowBtn) {
+      addRowBtn.addEventListener("click", () => {
+        tableRows.push({
+          regiao_produto: "",
+          meta_produto: "",
+          meta_credito: "",
+          meta_anulada: "",
+          is_novo: true,
+          plan21_nger_id: null,
+          plan21_ids: [],
+        });
+        renderRows();
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", async () => {
+        if (justificativaInput) justificativaInput.value = "";
+        tableRows = [];
+        hasConsulted = false;
+        lastQueryHadRows = false;
+        await loadOptions(false);
+        setMsg("");
+      });
+    }
+
+    if (consultBtn) {
+      consultBtn.addEventListener("click", async () => {
+        if (!hasAllRowFiltersSelected()) {
+          setMsg("Preencha todos os filtros obrigatórios antes de consultar.", true);
+          hasConsulted = false;
+          lastQueryHadRows = false;
+          renderRows();
+          return;
+        }
+        hasConsulted = true;
+        setMsg("");
+        await loadOptions(true);
+      });
+    }
+
+    Object.values(selects).forEach((el) => {
+      if (!el || el === selects.exercicio) return;
+      el.addEventListener("change", () => {
+        hasConsulted = false;
+        lastQueryHadRows = false;
+        loadOptions(false);
+      });
+    });
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      const dup = validateDuplicateRegions();
+      if (dup) {
+        setMsg(`A região ${dup} já existe na tabela.`, true);
+        return;
+      }
+      const rowsPayload = [];
+      for (const row of tableRows) {
+        const regiao = String(row.regiao_produto || "").trim();
+        if (!regiao) {
+          setMsg("Informe a região em todas as linhas.", true);
+          return;
+        }
+        if (!row.is_novo && parseDec(row.meta_produto) === null) {
+          setMsg(`Meta PTA/LOA inválida para a região ${regiao}.`, true);
+          return;
+        }
+        rowsPayload.push({
+          regiao_produto: regiao,
+          meta_produto: row.meta_produto,
+          meta_credito: row.meta_credito || "",
+          meta_anulada: row.is_novo ? "" : row.meta_anulada || "",
+          is_novo: !!row.is_novo,
+          plan21_nger_id: row.plan21_nger_id || null,
+          plan21_ids: Array.isArray(row.plan21_ids) ? row.plan21_ids : [],
+        });
+      }
+      if (!rowsPayload.length) {
+        setMsg("Adicione ao menos uma linha de meta física.", true);
+        return;
+      }
+
+      const payload = {
+        exercicio: selects.exercicio?.value || "",
+        unidade_orcamentaria: selects.unidade_orcamentaria?.value || "",
+        programa: selects.programa?.value || "",
+        acao_paoe: selects.acao_paoe?.value || "",
+        responsavel_acao: selects.responsavel_acao?.value || "",
+        produto_acao: selects.produto_acao?.value || "",
+        unid_medida_produto: selects.unid_medida_produto?.value || "",
+        justificativa: justificativaInput?.value || "",
+        rows: rowsPayload,
+      };
+
+      try {
+        const pendingPrintWin = prepareMetaFisicaPrintWindow();
+        setMsg("Salvando...");
+        const res = await fetch("/api/meta-fisica", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
+        showToast(`Meta física salva com sucesso. Registros: ${data.count || 0}.`, "success");
+        if (data.meta_fisica) {
+          openMetaFisicaPrintPopup(data.meta_fisica, pendingPrintWin || null);
+        }
+        await loadPage("cadastrar/plan_21-nger/meta_fisica");
+      } catch (err) {
+        console.error(err);
+        setMsg(err.message || "Falha ao salvar.", true);
+      }
+    });
+
+    loadOptions(false);
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
@@ -6907,6 +7482,9 @@
     }
     if (route === "cadastrar/est-dotacao") {
       initEstDotacao();
+    }
+    if (route === "cadastrar/plan_21-nger/meta_fisica") {
+      initMetaFisicaPlan21();
     }
     if (route === "cadastrar/plan_21-nger/subacao") {
       initSubacaoPlan21();

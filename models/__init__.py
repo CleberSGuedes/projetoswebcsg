@@ -22,4 +22,5 @@ from .user import (
     Adj,
     Dotacao,
     CadastrarSubacao,
+    AlterarMeta,
 )

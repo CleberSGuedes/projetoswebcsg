@@ -641,6 +641,10 @@ async function loadSheetData(filePath) {
 async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   ensureDir(OUTPUT_DIR);
   await moveOldOutputs(OUTPUT_DIR);
+  updateStatusFields("nob", uploadId, {
+    progress: 3,
+    message: "Lendo planilha NOB.",
+  });
   const outputFile = path.join(OUTPUT_DIR, `${path.basename(filePath, path.extname(filePath))}_tratado.xlsx`);
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: outputFile });
   const sheet = workbook.addWorksheet("nob_tratado");
@@ -659,6 +663,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   let keepIndices = null;
   let keepNames = null;
   let headerRowIdx = null;
+  let dbProgress = 60;
 
   const bufferRows = [];
 
@@ -701,10 +706,20 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     }
     outputColumns = buildFinalColumns(keepNames);
     sheet.columns = outputColumns.map((col) => ({ header: fixOutputHeader(col), key: col }));
+    updateStatusFields("nob", uploadId, {
+      progress: 20,
+      message: "Cabeçalho identificado. Processando registros.",
+    });
   };
 
   const processRecord = async (values) => {
     processed += 1;
+    if (processed % 5000 === 0) {
+      updateStatusFields("nob", uploadId, {
+        progress: 45,
+        message: `Processando linhas da planilha (${processed}).`,
+      });
+    }
     const selected = keepIndices.map((pos) => {
       const val = pos < values.length ? values[pos] : null;
       if (val === null || val === undefined) return "";
@@ -768,7 +783,9 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
       }
       await bulkInsert(db, "nob", INSERT_COLS, batch);
       totalInserted += batch.length;
+      dbProgress = Math.min(95, dbProgress + 2);
       updateStatusFields("nob", uploadId, {
+        progress: dbProgress,
         message: `Gravando registros no banco (${totalInserted}).`,
       });
       batch.length = 0;
@@ -815,12 +832,16 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     await bulkInsert(db, "nob", INSERT_COLS, batch);
     totalInserted += batch.length;
     updateStatusFields("nob", uploadId, {
-      progress: 100,
+      progress: 95,
       message: `Gravando registros no banco (${totalInserted}).`,
     });
   }
 
   await workbook.commit();
+  updateStatusFields("nob", uploadId, {
+    progress: 99,
+    message: "Finalizando processamento NOB.",
+  });
   if (db.kind === "mssql") {
     await db.pool.close();
   } else {

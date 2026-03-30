@@ -32,6 +32,7 @@ from models import (
     Adj,
     Dotacao,
     CadastrarSubacao,
+    AlterarMeta,
     ActiveSession,
     db,
 )
@@ -90,6 +91,14 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
 
 
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
+    node_env = os.environ.copy()
+    node_max_old_space_mb = os.getenv("NODE_MAX_OLD_SPACE_MB", "4096").strip()
+    if node_max_old_space_mb.isdigit() and int(node_max_old_space_mb) > 0:
+        extra_opt = f"--max-old-space-size={int(node_max_old_space_mb)}"
+        existing_opts = str(node_env.get("NODE_OPTIONS") or "").strip()
+        if extra_opt not in existing_opts:
+            node_env["NODE_OPTIONS"] = f"{existing_opts} {extra_opt}".strip()
+
     args = [
         NODE_EXE,
         str(NODE_RUNNER),
@@ -107,7 +116,15 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
             args.extend(["--data-arquivo", data_arquivo.isoformat()])
         except Exception:
             args.extend(["--data-arquivo", str(data_arquivo)])
-    proc = subprocess.run(args, capture_output=True, text=True, cwd=str(NODE_RUNNER.parent))
+    proc = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(NODE_RUNNER.parent),
+        env=node_env,
+    )
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip()
         raise RuntimeError(f"Node runner falhou: {err or 'erro desconhecido'}")
@@ -115,7 +132,19 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
     try:
         payload = json.loads(raw) if raw else {}
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Resposta invalida do Node: {exc}") from exc
+        parsed = None
+        for line in reversed(raw.splitlines()):
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                parsed = json.loads(text)
+                break
+            except Exception:
+                continue
+        if parsed is None:
+            raise RuntimeError(f"Resposta invalida do Node: {exc}") from exc
+        payload = parsed
     if not payload.get("ok"):
         raise RuntimeError(f"Node runner falhou: {payload.get('error')}")
     return payload
@@ -1148,6 +1177,69 @@ def partial_cadastrar_plan21_subacao():
     )
 
 
+@home_bp.route("/partial/cadastrar/plan_21-nger/meta_fisica")
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def partial_cadastrar_plan21_meta_fisica():
+    user_id = _resolve_usuario_id() or ""
+    user_session = session.get("user") or {}
+    user_nome = (user_session.get("nome") or "").strip()
+    metas = (
+        AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
+        .order_by(AlterarMeta.id.desc())
+        .all()
+    )
+    usuario_ids = {m.usuario_id for m in metas if m.usuario_id}
+    usuarios_map = {}
+    perfil_map = {}
+    if usuario_ids:
+        usuarios = Usuario.query.filter(Usuario.id.in_(list(usuario_ids))).all()
+        usuarios_map = {u.id: u for u in usuarios}
+        perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(list(perfil_ids))).all()
+            perfil_map = {p.id: p for p in perfis}
+    for m in metas:
+        exercicio_ctrl = str(getattr(m, "exercicio", "") or _now_local().year)
+        adj_nome = ""
+        usuario = usuarios_map.get(getattr(m, "usuario_id", None))
+        if usuario:
+            perfil_id = getattr(usuario, "perfil_id", None)
+            if perfil_id:
+                perfil_row = perfil_map.get(perfil_id)
+                adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
+            if not adj_nome:
+                adj_nome = (getattr(usuario, "perfil", "") or "").strip()
+        adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
+        m.controle_meta = f"meta.{exercicio_ctrl}.{adj_token}.{m.id}"
+        m.regioes_preview = ""
+        m.linhas_count = 0
+        reg_raw = (getattr(m, "regiao_produto", "") or "").strip()
+        if reg_raw.startswith("[") and reg_raw.endswith("]"):
+            try:
+                parsed = json.loads(reg_raw)
+            except Exception:
+                parsed = []
+            if isinstance(parsed, list):
+                regioes = []
+                for item in parsed:
+                    reg = str((item or {}).get("regiao_produto") or "").strip()
+                    if reg:
+                        regioes.append(reg)
+                if regioes:
+                    m.regioes_preview = ", ".join(regioes[:5])
+                    if len(regioes) > 5:
+                        m.regioes_preview += "..."
+                    m.linhas_count = len(regioes)
+    return render_template(
+        "partials/cadastrar_plan21_nger_meta_fisica.html",
+        metas=metas,
+        user_id=user_id,
+        user_nome=user_nome,
+        current_year=str(_now_local().year),
+    )
+
+
 @home_bp.route("/partial/cadastrar/est-dotacao")
 @login_required
 @require_feature("cadastrar/est-dotacao")
@@ -1698,6 +1790,15 @@ def _leading_token(value: str) -> str:
     return str(value).strip().split(" ", 1)[0]
 
 
+def _normalize_controle_token(value: str) -> str:
+    if not value:
+        return ""
+    text_val = unicodedata.normalize("NFKD", str(value))
+    text_val = "".join(ch for ch in text_val if not unicodedata.combining(ch))
+    text_val = re.sub(r"[^A-Za-z0-9]+", "", text_val).upper()
+    return text_val
+
+
 def _normalize_codigo_num(value: str) -> str:
     if not value:
         return ""
@@ -2193,6 +2294,321 @@ def api_dotacao_options():
         adj_options.append({"id": p.id, "label": nome})
     perfis = [o["label"] for o in adj_options]
     return jsonify({"options": options, "adj": adj_options, "perfis": perfis})
+
+
+@home_bp.route("/api/meta-fisica/options", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def api_meta_fisica_options():
+    current_year = str(_now_local().year)
+    field_cols = {
+        "exercicio": "exercicio",
+        "unidade_orcamentaria": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+        "unid_medida_produto": "unid_medida_produto",
+    }
+
+    selected = {}
+    for key in field_cols:
+        val = (request.args.get(key) or "").strip()
+        if val:
+            selected[key] = val
+    selected["exercicio"] = current_year
+
+    options = {}
+    for key, col in field_cols.items():
+        where = ["ativo = 1"]
+        params = {}
+        for s_key, s_val in selected.items():
+            if s_key == key:
+                continue
+            if s_key == "exercicio":
+                where.append("CAST(exercicio AS CHAR) = :exercicio")
+                params["exercicio"] = s_val
+            else:
+                where.append(f"{field_cols[s_key]} = :{s_key}")
+                params[s_key] = s_val
+        sql = f"SELECT DISTINCT {col} AS value FROM plan21_nger WHERE {' AND '.join(where)} ORDER BY {col}"
+        rows = _safe_query_mappings(sql, params)
+        vals = []
+        for row in rows:
+            raw_val = row.get("value")
+            if raw_val is None:
+                continue
+            txt = str(raw_val).strip()
+            if txt:
+                vals.append(txt)
+        if key == "exercicio":
+            options[key] = [current_year]
+        else:
+            options[key] = sorted(set(vals), key=lambda x: x.lower())
+
+    required_for_rows = (
+        "unidade_orcamentaria",
+        "programa",
+        "acao_paoe",
+        "responsavel_acao",
+        "produto_acao",
+        "unid_medida_produto",
+    )
+    has_all_required = all((selected.get(k) or "").strip() for k in required_for_rows)
+    plan_rows = []
+    if has_all_required:
+        where_rows = ["ativo = 1", "CAST(exercicio AS CHAR) = :exercicio"]
+        params_rows = {"exercicio": current_year}
+        for key in required_for_rows:
+            where_rows.append(f"{field_cols[key]} = :{key}")
+            params_rows[key] = (selected.get(key) or "").strip()
+        rows_sql = f"""
+            SELECT id, regiao_produto, meta_produto
+            FROM plan21_nger
+            WHERE {' AND '.join(where_rows)}
+            ORDER BY id
+        """
+        plan_rows = _safe_query_mappings(rows_sql, params_rows)
+    grouped = {}
+    for row in plan_rows:
+        regiao = str(row.get("regiao_produto") or "").strip()
+        if not regiao:
+            continue
+        meta_val = _parse_decimal(row.get("meta_produto"))
+        if regiao not in grouped:
+            grouped[regiao] = {
+                "regiao_produto": regiao,
+                "meta_produto": "",
+                "meta_produto_max": None,
+                "plan21_ids": [],
+            }
+        # Para a mesma regiao, mantém o maior valor de meta_produto.
+        if meta_val is not None:
+            current_max = grouped[regiao].get("meta_produto_max")
+            if current_max is None or meta_val > current_max:
+                grouped[regiao]["meta_produto_max"] = meta_val
+                grouped[regiao]["meta_produto"] = str(meta_val)
+        row_id = row.get("id")
+        try:
+            row_id_int = int(row_id)
+        except Exception:
+            row_id_int = 0
+        if row_id_int > 0 and row_id_int not in grouped[regiao]["plan21_ids"]:
+            grouped[regiao]["plan21_ids"].append(row_id_int)
+
+    rows_out = []
+    for regiao in sorted(grouped.keys(), key=lambda x: x.lower()):
+        item = grouped[regiao]
+        ids = item["plan21_ids"]
+        rows_out.append(
+            {
+                "regiao_produto": item["regiao_produto"],
+                "meta_produto": item["meta_produto"],
+                "plan21_nger_id": ids[0] if ids else None,
+                "plan21_ids": ids,
+            }
+        )
+
+    return jsonify({"current_year": current_year, "options": options, "rows": rows_out})
+
+
+@home_bp.route("/api/meta-fisica", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def api_meta_fisica_create():
+    data = request.get_json() or {}
+    current_year = str(_now_local().year)
+
+    exercicio_raw = str(data.get("exercicio") or "").strip()
+    unidade_orcamentaria = str(data.get("unidade_orcamentaria") or "").strip()
+    programa = str(data.get("programa") or "").strip()
+    acao_paoe = str(data.get("acao_paoe") or "").strip()
+    responsavel_acao = str(data.get("responsavel_acao") or "").strip()
+    produto_acao = str(data.get("produto_acao") or "").strip()
+    unid_medida_produto = str(data.get("unid_medida_produto") or "").strip()
+    justificativa = str(data.get("justificativa") or "").strip()
+    rows = data.get("rows") or []
+
+    if exercicio_raw != current_year:
+        return jsonify({"error": "Exercicio invalido para o ano corrente."}), 400
+
+    required = {
+        "unidade_orcamentaria": unidade_orcamentaria,
+        "programa": programa,
+        "acao_paoe": acao_paoe,
+        "responsavel_acao": responsavel_acao,
+        "produto_acao": produto_acao,
+        "unid_medida_produto": unid_medida_produto,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return jsonify({"error": f"Campos obrigatorios ausentes: {', '.join(missing)}."}), 400
+    if not isinstance(rows, list) or not rows:
+        return jsonify({"error": "Adicione ao menos uma linha de meta fisica."}), 400
+
+    seen_regioes = set()
+    parsed_rows = []
+
+    for row in rows:
+        regiao_produto = str(row.get("regiao_produto") or "").strip()
+        if not regiao_produto:
+            return jsonify({"error": "Regiao PTA/LOA e obrigatoria em todas as linhas."}), 400
+        regiao_key = _normalize_codigo_num(regiao_produto) or regiao_produto.lower()
+        if regiao_key in seen_regioes:
+            return jsonify({"error": f"Regiao repetida na tabela: {regiao_produto}."}), 400
+        seen_regioes.add(regiao_key)
+
+        is_novo = bool(row.get("is_novo"))
+        meta_produto = _parse_decimal(row.get("meta_produto"))
+        meta_credito = _parse_decimal(row.get("meta_credito")) or Decimal("0")
+        meta_anulada = _parse_decimal(row.get("meta_anulada")) or Decimal("0")
+        if not is_novo and meta_produto is None:
+            return jsonify({"error": f"Meta PTA/LOA invalida para a regiao {regiao_produto}."}), 400
+
+        meta_atual = None
+        if not is_novo:
+            meta_atual = (meta_produto or Decimal("0")) + meta_credito - meta_anulada
+
+        parsed_rows.append(
+            {
+                "regiao_produto": regiao_produto,
+                "meta_produto": None if is_novo else meta_produto,
+                "meta_credito": meta_credito,
+                "meta_anulada": None if is_novo else meta_anulada,
+                "meta_atual": meta_atual,
+                "is_novo": is_novo,
+            }
+        )
+
+    # IDs do plan21_nger para os filtros do formulário (ordem crescente)
+    filters_where = [
+        "ativo = 1",
+        "CAST(exercicio AS CHAR) = :exercicio",
+        "unidade_orcamentaria = :uo",
+        "programa = :programa",
+        "acao_paoe = :acao_paoe",
+        "responsavel_acao = :responsavel_acao",
+        "produto_acao = :produto_acao",
+        "unid_medida_produto = :unid_medida_produto",
+    ]
+    filters_params = {
+        "exercicio": exercicio_raw,
+        "uo": unidade_orcamentaria,
+        "programa": programa,
+        "acao_paoe": acao_paoe,
+        "responsavel_acao": responsavel_acao,
+        "produto_acao": produto_acao,
+        "unid_medida_produto": unid_medida_produto,
+    }
+    ids_sql = f"SELECT id FROM plan21_nger WHERE {' AND '.join(filters_where)} ORDER BY id ASC"
+    id_rows = _safe_query_mappings(ids_sql, filters_params)
+    all_plan_ids = []
+    for r in id_rows:
+        try:
+            rid = int(r.get("id"))
+        except Exception:
+            rid = 0
+        if rid > 0:
+            all_plan_ids.append(rid)
+    # mais recente = maior id encontrado
+    plan21_nger_id_latest = all_plan_ids[-1] if all_plan_ids else None
+
+    # Salvar como registro único com dados da tabela em JSON (fácil reconstrução)
+    meta_produto_total = Decimal("0")
+    meta_credito_total = Decimal("0")
+    meta_anulada_total = Decimal("0")
+    meta_atual_total = Decimal("0")
+    rows_serialized = []
+    for row in parsed_rows:
+        mp = row["meta_produto"] if row["meta_produto"] is not None else Decimal("0")
+        mc = row["meta_credito"] if row["meta_credito"] is not None else Decimal("0")
+        ma = row["meta_anulada"] if row["meta_anulada"] is not None else Decimal("0")
+        mt = row["meta_atual"] if row["meta_atual"] is not None else Decimal("0")
+        meta_produto_total += mp
+        meta_credito_total += mc
+        meta_anulada_total += ma
+        meta_atual_total += mt
+        rows_serialized.append(
+            {
+                "regiao_produto": row["regiao_produto"],
+                "meta_produto": str(row["meta_produto"]) if row["meta_produto"] is not None else "",
+                "meta_credito": str(row["meta_credito"]) if row["meta_credito"] is not None else "",
+                "meta_anulada": str(row["meta_anulada"]) if row["meta_anulada"] is not None else "",
+                "meta_atual": str(row["meta_atual"]) if row["meta_atual"] is not None else "",
+                "is_novo": bool(row.get("is_novo")),
+            }
+        )
+
+    user_id = _resolve_usuario_id()
+    now = _now_local()
+    try:
+        registro = AlterarMeta(
+            exercicio=int(exercicio_raw),
+            unidade_orcamentaria=unidade_orcamentaria,
+            programa=programa,
+            acao_paoe=acao_paoe,
+            responsavel_acao=responsavel_acao,
+            produto_acao=produto_acao,
+            unid_medida_produto=unid_medida_produto,
+            regiao_produto=json.dumps(rows_serialized, ensure_ascii=False),
+            meta_produto=meta_produto_total,
+            meta_credito=meta_credito_total,
+            meta_anulada=meta_anulada_total,
+            meta_atual=meta_atual_total,
+            justificativa=justificativa,
+            plan21_nger_id=plan21_nger_id_latest,
+            plan21_nger_ids=json.dumps(all_plan_ids, ensure_ascii=False) if all_plan_ids else None,
+            usuario_id=user_id,
+            status_aprovacao="aguardando",
+            situacao="ativo",
+            criado_em=now,
+            ativo=True,
+        )
+        db.session.add(registro)
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar meta fisica: {exc}"}), 500
+
+    adj_nome = ""
+    if user_id:
+        usuario_row = Usuario.query.filter_by(id=user_id).first()
+        if usuario_row:
+            perfil_id = getattr(usuario_row, "perfil_id", None)
+            if perfil_id:
+                perfil_row = Perfil.query.filter_by(id=perfil_id).first()
+                if perfil_row:
+                    adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
+            if not adj_nome:
+                adj_nome = (getattr(usuario_row, "perfil", "") or "").strip()
+    adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
+    controle = f"meta.{exercicio_raw}.{adj_token}.{registro.id}"
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Meta fisica salva.",
+            "count": 1,
+            "meta_fisica": {
+                "id": registro.id,
+                "controle": controle,
+                "status_aprovacao": registro.status_aprovacao or "aguardando",
+                "criado_em": now.isoformat(),
+                "usuario_nome": (session.get("user") or {}).get("nome") or "",
+                "usuario_id": user_id or "",
+                "exercicio": exercicio_raw,
+                "unidade_orcamentaria": unidade_orcamentaria,
+                "programa": programa,
+                "acao_paoe": acao_paoe,
+                "responsavel_acao": responsavel_acao,
+                "produto_acao": produto_acao,
+                "unid_medida_produto": unid_medida_produto,
+                "justificativa": justificativa,
+                "linhas": rows_serialized,
+                "plan21_nger_id": plan21_nger_id_latest,
+                "plan21_nger_ids": all_plan_ids,
+            },
+        }
+    )
 
 
 @home_bp.route("/api/subacao/options", methods=["GET"])

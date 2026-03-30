@@ -1,0 +1,163 @@
+<div class="grid" id="meta-fisica-page" data-user-id="{{ user_id }}" data-user-nome="{{ user_nome }}">
+  <div class="card no-print">
+    <div class="card-title">Meta Física do Produto da Ação - Base de dados PTA ({{ current_year }})</div>
+    <form id="form-meta-fisica" class="form" novalidate>
+      <div class="form-grid">
+        <label class="field">
+          <span>*Exercício</span>
+          <select id="meta-fisica-exercicio" name="exercicio" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*UO</span>
+          <select id="meta-fisica-uo" name="unidade_orcamentaria" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Programa de Governo</span>
+          <select id="meta-fisica-programa" name="programa" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Ação/PAOE</span>
+          <select id="meta-fisica-acao" name="acao_paoe" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Responsável da Ação/PAOE</span>
+          <select id="meta-fisica-responsavel-acao" name="responsavel_acao" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Produto da Ação</span>
+          <select id="meta-fisica-produto" name="produto_acao" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Unidade de Medida</span>
+          <select id="meta-fisica-unidade-medida" name="unid_medida_produto" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <div class="field field-inline align-end meta-fisica-consultar-wrap">
+          <button class="btn btn-primary sm" type="button" id="meta-fisica-consultar">Consultar</button>
+        </div>
+      </div>
+
+      <div class="meta-fisica-table-wrap">
+        <div class="table-responsive">
+          <table class="table meta-fisica-table" id="meta-fisica-table">
+            <thead>
+              <tr>
+                <th>REGIÃO PTA/LOA</th>
+                <th>META PTA/LOA</th>
+                <th>ACRÉSCIMO</th>
+                <th>REDUÇÃO</th>
+                <th>META AJUSTADA</th>
+              </tr>
+            </thead>
+            <tbody id="meta-fisica-tbody"></tbody>
+          </table>
+        </div>
+        <div class="meta-fisica-add-row">
+          <button class="btn btn-primary sm meta-fisica-plus-btn" type="button" id="meta-fisica-add-row">+</button>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field field-full">
+          <span>Justificativa</span>
+          <textarea id="meta-fisica-justificativa" name="justificativa" rows="3" style="resize:vertical;"></textarea>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="meta-fisica-save">Salvar</button>
+        <button class="btn btn-danger sm" type="button" id="meta-fisica-clear">Limpar Formulário</button>
+        <div id="meta-fisica-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="form no-print" id="meta-fisica-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Campo</span>
+          <select id="meta-fisica-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="exercicio">*Exercício</option>
+            <option value="status_aprovacao">Status</option>
+            <option value="acao_paoe">Ação/PAOE</option>
+            <option value="programa">Programa</option>
+            <option value="produto_acao">Produto da Ação</option>
+            <option value="regiao_produto">Região PTA/LOA</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="meta-fisica-filtro-operador">
+            <option value="eq">Igual a</option>
+            <option value="contains">Contém</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="meta-fisica-filtro-valor" />
+        </label>
+      </div>
+    </div>
+
+    <div class="dotacao-summary no-print" id="meta-fisica-summary">
+      <div class="table-responsive">
+        <table class="table" id="meta-fisica-summary-table">
+          <thead>
+            <tr>
+              <th>Controle de Meta</th>
+              <th>Status</th>
+              <th>Exercício</th>
+              <th>UO</th>
+              <th>Programa</th>
+              <th>Ação/PAOE</th>
+              <th>Produto da Ação</th>
+              <th>Unidade de Medida</th>
+              <th>Regiões PTA/LOA</th>
+              <th>Qtd Linhas</th>
+              <th>Acréscimo</th>
+              <th>Redução</th>
+              <th>Meta Ajustada</th>
+              <th>Justificativa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in metas %}
+              <tr>
+                <td>{{ m.controle_meta or "" }}</td>
+                <td>{{ m.status_aprovacao or "" }}</td>
+                <td>{{ m.exercicio or "" }}</td>
+                <td>{{ m.unidade_orcamentaria or "" }}</td>
+                <td>{{ m.programa or "" }}</td>
+                <td>{{ m.acao_paoe or "" }}</td>
+                <td>{{ m.produto_acao or "" }}</td>
+                <td>{{ m.unid_medida_produto or "" }}</td>
+                <td>{{ m.regioes_preview or "" }}</td>
+                <td>{{ m.linhas_count or "" }}</td>
+                <td>{{ m.meta_credito or "" }}</td>
+                <td>{{ m.meta_anulada or "" }}</td>
+                <td>{{ m.meta_atual or "" }}</td>
+                <td>{{ m.justificativa or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

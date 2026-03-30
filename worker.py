@@ -36,6 +36,14 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
 
 
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
+    node_env = os.environ.copy()
+    node_max_old_space_mb = os.getenv("NODE_MAX_OLD_SPACE_MB", "4096").strip()
+    if node_max_old_space_mb.isdigit() and int(node_max_old_space_mb) > 0:
+        extra_opt = f"--max-old-space-size={int(node_max_old_space_mb)}"
+        existing_opts = str(node_env.get("NODE_OPTIONS") or "").strip()
+        if extra_opt not in existing_opts:
+            node_env["NODE_OPTIONS"] = f"{existing_opts} {extra_opt}".strip()
+
     args = [
         NODE_EXE,
         str(NODE_RUNNER),
@@ -53,7 +61,15 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
             args.extend(["--data-arquivo", data_arquivo.isoformat()])
         except Exception:
             args.extend(["--data-arquivo", str(data_arquivo)])
-    proc = subprocess.run(args, capture_output=True, text=True, cwd=str(NODE_RUNNER.parent))
+    proc = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(NODE_RUNNER.parent),
+        env=node_env,
+    )
     if proc.stderr:
         print(proc.stderr, file=sys.stderr)
     if proc.returncode != 0:
@@ -63,7 +79,19 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
     try:
         payload = json.loads(raw) if raw else {}
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Resposta invalida do Node: {exc}") from exc
+        parsed = None
+        for line in reversed(raw.splitlines()):
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                parsed = json.loads(text)
+                break
+            except Exception:
+                continue
+        if parsed is None:
+            raise RuntimeError(f"Resposta invalida do Node: {exc}") from exc
+        payload = parsed
     if not payload.get("ok"):
         raise RuntimeError(f"Node runner falhou: {payload.get('error')}")
     return payload
@@ -115,6 +143,7 @@ def _run_emp(upload_id: int) -> None:
         state="processamento finalizado",
         message=f"Processado com sucesso. Registros: {payload.get('total')}.",
         output_filename=payload.get("output_filename"),
+        progress=100,
     )
     try:
         update_emp_record_from_status(upload_id)
@@ -137,6 +166,7 @@ def _run_nob(upload_id: int) -> None:
         "processamento finalizado",
         f"Processado com sucesso. Registros: {payload.get('total')}.",
         payload.get("output_filename"),
+        progress=100,
     )
 
 

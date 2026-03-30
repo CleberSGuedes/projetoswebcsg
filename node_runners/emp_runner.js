@@ -28,6 +28,13 @@ const BASE_DIR = path.resolve(__dirname, "..");
 const JSON_CHAVES_PATH = path.join(BASE_DIR, "static", "js", "chaves_planejamento.json");
 const JSON_CASOS_PATH = path.join(BASE_DIR, "static", "js", "chave_arrumar.json");
 const JSON_FORCAR_PATH = path.join(BASE_DIR, "static", "js", "forcar_chave.json");
+const EMP_DEBUG = String(process.env.EMP_DEBUG || "").trim() === "1";
+
+function logEmpDebug(message) {
+  if (EMP_DEBUG) {
+    console.error(message);
+  }
+}
 
 const OUTPUT_HEADER_LIST = [
   "Chave",
@@ -572,10 +579,10 @@ function carregarCasosEspecificos(jsonPath) {
       const kNorm = normalizeSimple(kCorrigido);
       out[kNorm] = chaveSaida;
     }
-    console.error(`[emp] chave_arrumar carregado: ${Object.keys(out).length} itens`);
+    logEmpDebug(`[emp] chave_arrumar carregado: ${Object.keys(out).length} itens`);
     return out;
   } catch {
-    console.error("[emp] chave_arrumar nao carregado");
+    logEmpDebug("[emp] chave_arrumar nao carregado");
     return {};
   }
 }
@@ -643,7 +650,7 @@ function extrairChaveDotDoHistorico(hist) {
   return null;
 }
 
-function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath, keyColName, partesChave) {
+function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath, keyColName, partesChave, uploadId) {
   const casosEspecificos = carregarCasosEspecificos(jsonCasosPath);
   const chavesNorm = chavesPlanejamento.map((c) => canonicalizarChave(c));
 
@@ -726,9 +733,16 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     return Math.max(r1, r2, r3);
   };
 
-  const wRatio = (a, b) => {
-    const aNorm = normalizeForComparison(a);
-    const bNorm = normalizeForComparison(b);
+  const normalizedCache = new Map();
+  const getNorm = (value) => {
+    const key = String(value || "");
+    if (normalizedCache.has(key)) return normalizedCache.get(key);
+    const norm = normalizeForComparison(key);
+    normalizedCache.set(key, norm);
+    return norm;
+  };
+
+  const wRatioNormalized = (aNorm, bNorm) => {
     if (!aNorm || !bNorm) return 0;
     const base = ratio(aNorm, bNorm);
     const lenRatio = Math.max(aNorm.length, bNorm.length) / Math.max(1, Math.min(aNorm.length, bNorm.length));
@@ -744,11 +758,15 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     return Math.round(best);
   };
 
+  const wRatio = (a, b) => wRatioNormalized(getNorm(a), getNorm(b));
+
   const extractOne = (query, candidates) => {
+    const queryNorm = getNorm(query);
+    if (!queryNorm) return null;
     let best = null;
     let bestScore = 0;
     for (const cand of candidates) {
-      const score = wRatio(query, cand);
+      const score = wRatioNormalized(queryNorm, getNorm(cand));
       if (score > bestScore) {
         bestScore = score;
         best = cand;
@@ -777,18 +795,56 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     return texto.replace(/\s+/g, " ");
   };
 
+  const chavesByPartes = new Map();
+  for (const chave of chavesNorm) {
+    const partes = contarPartesChave(chave);
+    if (!chavesByPartes.has(partes)) {
+      chavesByPartes.set(partes, []);
+    }
+    chavesByPartes.get(partes).push(chave);
+  }
+  const chavesSetByPartes = new Map();
+  const chavesPipeSetByPartes = new Map();
+  for (const [partes, keys] of chavesByPartes.entries()) {
+    chavesSetByPartes.set(partes, new Set(keys));
+    chavesPipeSetByPartes.set(
+      partes,
+      new Set(
+        keys
+          .map((c) => paraPipe(c))
+          .filter(Boolean)
+      )
+    );
+  }
+  const casosEntries = Object.entries(casosEspecificos);
+  const fuzzyCache = new Map();
+
   const resultados = [];
+  const totalRows = dataset.rows.length || 1;
+  const progressStep = Math.max(1, Math.floor(totalRows / 30));
+  let processedRows = 0;
+  const maybeUpdateProgress = () => {
+    processedRows += 1;
+    if (!uploadId) return;
+    if (processedRows % progressStep !== 0 && processedRows !== totalRows) return;
+    const keyProgress = 10 + Math.floor((processedRows / totalRows) * 30);
+    updateStatusFields("emp", uploadId, {
+      progress: Math.min(40, keyProgress),
+      message: `Tratando dados e identificando chaves (${processedRows}/${totalRows}).`,
+    });
+  };
 
   for (const row of dataset.rows) {
     const anoLinha = obterExercicioLinha(row);
     const partesLinha = anoLinha && anoLinha >= 2026 ? 8 : partesChave;
-    const chavesBase = chavesNorm.filter((c) => contarPartesChave(c) === partesLinha);
-    const chavesSetBase = new Set(chavesBase);
-    const chavesPipeSetBase = new Set(chavesBase.map((c) => paraPipe(c)).filter(Boolean));
+    const chavesBase = chavesByPartes.get(partesLinha) || [];
+    const chavesSetBase = chavesSetByPartes.get(partesLinha) || new Set();
+    const chavesPipeSetBase = chavesPipeSetByPartes.get(partesLinha) || new Set();
 
     const hist = row["Hist\u00f3rico"] || "";
     if (hist === "NÃO INFORMADO") {
       resultados.push("NÃO IDENTIFICADO");
+      maybeUpdateProgress();
       continue;
     }
     let histLimpo = String(hist).trim();
@@ -807,17 +863,19 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     const chaveDireta = extrairChaveValidaDoHistorico(histCanon, chavesBase);
     if (chaveDireta) {
       resultados.push(canonicalizarChave(chaveDireta));
+      maybeUpdateProgress();
       continue;
     }
     if (chavesPipeSetBase.has(histPipe)) {
       const chaveStar = canonicalizarChave(histPipe.replace(/\|/g, "*"));
       resultados.push(chaveStar);
+      maybeUpdateProgress();
       continue;
     }
 
     let casoEncontrado = null;
     const histComp = normalizeSimple(histCanon);
-    for (const [casoNorm, chave] of Object.entries(casosEspecificos)) {
+    for (const [casoNorm, chave] of casosEntries) {
       if (casoNorm && (histComp.includes(casoNorm) || histPipeComp.includes(casoNorm))) {
         if (contarPartesChave(chave) === partesLinha) {
           casoEncontrado = chave;
@@ -826,8 +884,9 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
       }
     }
     if (casoEncontrado) {
-      console.error(`[emp] chave_arrumar aplicada: ${casoEncontrado}`);
+      logEmpDebug(`[emp] chave_arrumar aplicada: ${casoEncontrado}`);
       resultados.push(canonicalizarChave(casoEncontrado));
+      maybeUpdateProgress();
       continue;
     }
 
@@ -851,14 +910,21 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
     if (chaveJanela === "NÃO IDENTIFICADO" && partes.length >= tamanhoJanela) {
       const trecho = partes.slice(0, tamanhoJanela).join(" * ");
       const base = chavesBase.length ? chavesBase : chavesNorm;
-      const fuzzy = extractOne(trecho, base);
+      const fuzzyKey = `${partesLinha}|${trecho}`;
+      let fuzzy = fuzzyCache.get(fuzzyKey);
+      if (fuzzy === undefined) {
+        fuzzy = extractOne(trecho, base);
+        fuzzyCache.set(fuzzyKey, fuzzy || null);
+      }
       if (fuzzy && fuzzy.score >= 95) {
-        console.error(`[emp] chave aproximada identificada por fuzzy: ${fuzzy.match}`);
+        logEmpDebug(`[emp] chave aproximada identificada por fuzzy: ${fuzzy.match}`);
         resultados.push(canonicalizarChave(fuzzy.match));
+        maybeUpdateProgress();
         continue;
       }
     }
     resultados.push(chaveJanela === "NÃO IDENTIFICADO" ? chaveJanela : canonicalizarChave(chaveJanela));
+    maybeUpdateProgress();
   }
 
   dataset.columns = [keyColName, ...dataset.columns];
@@ -1381,8 +1447,16 @@ async function carregarPlanilha(filePath) {
 async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   ensureDir(OUTPUT_DIR);
   await moveOldOutputs(OUTPUT_DIR);
+  updateStatusFields("emp", uploadId, {
+    progress: 3,
+    message: "Lendo planilha EMP.",
+  });
 
   const raw = await carregarPlanilha(filePath);
+  updateStatusFields("emp", uploadId, {
+    progress: 10,
+    message: "Tratando dados e identificando chaves.",
+  });
   const dfEmpBase = {
     columns: raw.columns.slice(),
     rows: raw.rows.map((row) => {
@@ -1421,7 +1495,14 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   const planejamentoAtivo = true;
 
   const chavesPlanejamento = carregarChavesPlanejamento(JSON_CHAVES_PATH);
-  df = identificarChavePlanejamento(df, chavesPlanejamento, JSON_CASOS_PATH, keyColName, partesPlanejamento);
+  df = identificarChavePlanejamento(
+    df,
+    chavesPlanejamento,
+    JSON_CASOS_PATH,
+    keyColName,
+    partesPlanejamento,
+    uploadId
+  );
   df = forcarChavesManualmente(df, keyColName);
 
   df = adicionarNovasColunas(df, keyColName, planejamentoAtivo);
@@ -1439,6 +1520,10 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
 
   df = removerEmpenhosEstornados(df).dataset;
   dfEmpBase.rows = removerEmpenhosEstornados(dfEmpBase).dataset.rows;
+  updateStatusFields("emp", uploadId, {
+    progress: 28,
+    message: "Aplicando colunas e cálculos de saída.",
+  });
 
   const missingPlanejamentoLines = [];
   const isMissingKey = (value) => {
@@ -1506,6 +1591,10 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   }
 
   await workbook.commit();
+  updateStatusFields("emp", uploadId, {
+    progress: 55,
+    message: "Arquivo tratado gerado. Preparando gravação no banco.",
+  });
 
   const db = await connect();
   if (db.kind === "mssql") {
@@ -1517,6 +1606,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   const registros = montarRegistrosParaDb(dfSaida, dataArquivo, userEmail, uploadId);
   let total = 0;
   const batch = [];
+  const totalRegistros = Math.max(1, registros.length);
   for (const registro of registros) {
     if (readCancelFlag("emp", uploadId)) {
       throw new Error("PROCESSAMENTO_CANCELADO");
@@ -1525,8 +1615,9 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     if (batch.length >= BATCH_SIZE) {
       await bulkInsert(db, "emp", INSERT_COLS, batch);
       total += batch.length;
+      const dbProgress = 60 + Math.floor((total / totalRegistros) * 35);
       updateStatusFields("emp", uploadId, {
-        progress: Math.min(100, Math.floor((total / registros.length) * 100)),
+        progress: Math.min(95, dbProgress),
         message: `Gravando registros no banco (${total}/${registros.length}).`,
       });
       batch.length = 0;
@@ -1536,13 +1627,15 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     await bulkInsert(db, "emp", INSERT_COLS, batch);
     total += batch.length;
     updateStatusFields("emp", uploadId, {
-      progress: 100,
+      progress: 95,
       message: `Gravando registros no banco (${total}/${registros.length}).`,
     });
   }
 
   const missingDotacaoKeys = await atualizarDotacaoComEmp(db, empDotSums);
   updateStatusFields("emp", uploadId, {
+    progress: 98,
+    message: "Atualizando dotação com valores do EMP.",
     dotacao_missing_keys: missingDotacaoKeys,
   });
 
