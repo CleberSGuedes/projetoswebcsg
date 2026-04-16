@@ -23,4 +23,5 @@ from .user import (
     Dotacao,
     CadastrarSubacao,
     AlterarMeta,
+    AlterarMetaItem,
 )

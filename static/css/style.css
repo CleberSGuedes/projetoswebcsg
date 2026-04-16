@@ -878,6 +878,71 @@ a { color: inherit; text-decoration: none; }
   border-color: rgba(220, 38, 38, 0.28);
 }
 
+.meta-fisica-multi-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-fisica-adjust-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-fisica-adjust-line {
+  display: flex;
+  align-items: center;
+}
+
+.meta-fisica-multi-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-fisica-mov-label {
+  min-width: 118px;
+  font-size: 9px;
+  line-height: 1.1;
+  color: var(--muted);
+}
+
+.meta-fisica-item-add,
+.meta-fisica-item-remove {
+  width: 12px;
+  height: 12px;
+  min-width: 12px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #8f9ca3;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.meta-fisica-item-add {
+  align-self: flex-end;
+  margin-top: 1px;
+}
+
+.meta-fisica-item-add:hover,
+.meta-fisica-item-remove:hover,
+.meta-fisica-item-add:focus,
+.meta-fisica-item-remove:focus {
+  color: var(--accent);
+}
+
+.meta-fisica-item-add:disabled {
+  color: #b7c1c6;
+  cursor: default;
+}
+
 .meta-fisica-add-row {
   display: flex;
   justify-content: flex-end;

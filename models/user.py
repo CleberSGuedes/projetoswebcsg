@@ -577,3 +577,20 @@ class AlterarMeta(db.Model):
     alterado_em = db.Column(db.DateTime)
     excluido_em = db.Column(db.DateTime)
     ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+
+
+class AlterarMetaItem(db.Model):
+    __tablename__ = "alterar_meta_item"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    alterar_meta_id = db.Column(db.BigInteger, db.ForeignKey("alterar_meta.id"), nullable=False)
+    regiao_codigo = db.Column(db.String(20), nullable=False)
+    tipo = db.Column(db.Enum("acrescimo", "reducao"), nullable=False)
+    valor = db.Column(db.Numeric(19, 2), nullable=False)
+    ordem = db.Column(db.Integer, nullable=False, server_default=db.text("1"))
+    justificativa_item = db.Column(db.Text)
+    usuario_id = db.Column(db.BigInteger)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)

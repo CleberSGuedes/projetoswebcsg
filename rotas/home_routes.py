@@ -33,6 +33,7 @@ from models import (
     Dotacao,
     CadastrarSubacao,
     AlterarMeta,
+    AlterarMetaItem,
     ActiveSession,
     db,
 )
@@ -956,10 +957,16 @@ def partial_cadastrar_dotacao():
     usuarios_ids = [dot.usuarios_id for dot in rows if getattr(dot, "usuarios_id", None)]
     usuarios_map = {}
     usuarios_perfil_map = {}
+    usuarios_perfil_id_map = {}
     if usuarios_ids:
         usuarios = Usuario.query.filter(Usuario.id.in_(usuarios_ids)).all()
         usuarios_map = {u.id: u.nome for u in usuarios}
         usuarios_perfil_map = {u.id: u.perfil for u in usuarios if getattr(u, "perfil", None)}
+        usuarios_perfil_id_map = {
+            u.id: str(getattr(u, "perfil_id", "") or "").strip()
+            for u in usuarios
+            if getattr(u, "id", None)
+        }
 
     dotacoes = []
     atualizar_ids: list[int] = []
@@ -1037,6 +1044,7 @@ def partial_cadastrar_dotacao():
                 "justificativa_historico": dot.justificativa_historico,
                 "usuario_nome": usuarios_map.get(dot.usuarios_id, ""),
                 "usuario_perfil": usuarios_perfil_map.get(dot.usuarios_id, ""),
+                "criador_perfil_id": usuarios_perfil_id_map.get(dot.usuarios_id, ""),
                 "criado_em": dot.criado_em.isoformat() if dot.criado_em else "",
                 "alterado_em": dot.alterado_em.isoformat() if dot.alterado_em else "",
             }
@@ -1071,6 +1079,7 @@ def partial_cadastrar_dotacao():
 @require_feature("cadastrar/plan_21-nger/subacao")
 def partial_cadastrar_plan21_subacao():
     user_id = _resolve_usuario_id() or ""
+    user_perfil_id = str(_resolve_usuario_perfil_id() or "").strip()
     user_session = session.get("user") or {}
     user_nome = (user_session.get("nome") or "").strip()
     subacoes = (
@@ -1138,6 +1147,7 @@ def partial_cadastrar_plan21_subacao():
             else ""
         )
         s.usuario_perfil = perfil_nome
+        s.criador_perfil_id = str(perfil_id or "").strip() if perfil_id else ""
         aprovado_nome = ""
         aprovado_perfil = ""
         aprovado_id = getattr(s, "aprovado_por", None)
@@ -1172,6 +1182,7 @@ def partial_cadastrar_plan21_subacao():
         "partials/cadastrar_plan21_nger_subacao.html",
         subacoes=subacoes,
         user_id=user_id,
+        user_perfil_id=user_perfil_id,
         user_nome=user_nome,
         current_year=str(_now_local().year),
     )
@@ -1184,6 +1195,21 @@ def partial_cadastrar_plan21_meta_fisica():
     user_id = _resolve_usuario_id() or ""
     user_session = session.get("user") or {}
     user_nome = (user_session.get("nome") or "").strip()
+    user_perfil_id = ""
+    user_perfil_nome = ""
+    try:
+        user_id_int = int(user_id) if str(user_id).strip() else 0
+    except Exception:
+        user_id_int = 0
+    if user_id_int > 0:
+        user_row = Usuario.query.filter_by(id=user_id_int).first()
+        if user_row:
+            if getattr(user_row, "perfil_id", None):
+                user_perfil_id = str(user_row.perfil_id)
+                perfil_row_user = Perfil.query.filter_by(id=user_row.perfil_id).first()
+                user_perfil_nome = (getattr(perfil_row_user, "nome", "") or "").strip() if perfil_row_user else ""
+            if not user_perfil_nome:
+                user_perfil_nome = (getattr(user_row, "perfil", "") or "").strip()
     metas = (
         AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
         .order_by(AlterarMeta.id.desc())
@@ -1200,20 +1226,26 @@ def partial_cadastrar_plan21_meta_fisica():
             perfis = Perfil.query.filter(Perfil.id.in_(list(perfil_ids))).all()
             perfil_map = {p.id: p for p in perfis}
     for m in metas:
-        exercicio_ctrl = str(getattr(m, "exercicio", "") or _now_local().year)
-        adj_nome = ""
         usuario = usuarios_map.get(getattr(m, "usuario_id", None))
-        if usuario:
-            perfil_id = getattr(usuario, "perfil_id", None)
-            if perfil_id:
-                perfil_row = perfil_map.get(perfil_id)
-                adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
-            if not adj_nome:
-                adj_nome = (getattr(usuario, "perfil", "") or "").strip()
+        m.criador_perfil_id = (
+            str(getattr(usuario, "perfil_id", "") or "").strip() if usuario else ""
+        )
+        exercicio_ctrl = str(getattr(m, "exercicio", "") or _now_local().year)
+        adj_nome = (getattr(m, "responsavel_acao", "") or "").strip()
+        if not adj_nome:
+            if usuario:
+                perfil_id = getattr(usuario, "perfil_id", None)
+                if perfil_id:
+                    perfil_row = perfil_map.get(perfil_id)
+                    adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
+                if not adj_nome:
+                    adj_nome = (getattr(usuario, "perfil", "") or "").strip()
         adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
-        m.controle_meta = f"meta.{exercicio_ctrl}.{adj_token}.{m.id}"
+        m.controle_meta = f"META.{exercicio_ctrl}.{adj_token}.{m.id}"
         m.regioes_preview = ""
         m.linhas_count = 0
+        m.regioes_payload = []
+        m.criado_em_iso = getattr(m, "criado_em", None).isoformat() if getattr(m, "criado_em", None) else ""
         reg_raw = (getattr(m, "regiao_produto", "") or "").strip()
         if reg_raw.startswith("[") and reg_raw.endswith("]"):
             try:
@@ -1221,6 +1253,7 @@ def partial_cadastrar_plan21_meta_fisica():
             except Exception:
                 parsed = []
             if isinstance(parsed, list):
+                m.regioes_payload = parsed
                 regioes = []
                 for item in parsed:
                     reg = str((item or {}).get("regiao_produto") or "").strip()
@@ -1236,6 +1269,8 @@ def partial_cadastrar_plan21_meta_fisica():
         metas=metas,
         user_id=user_id,
         user_nome=user_nome,
+        user_perfil_id=user_perfil_id,
+        user_perfil_nome=user_perfil_nome,
         current_year=str(_now_local().year),
     )
 
@@ -1307,6 +1342,15 @@ def partial_cadastrar_est_dotacao():
     if est_perfil_ids:
         est_perfis = Perfil.query.filter(Perfil.id.in_(est_perfil_ids)).all()
         est_adj_map = {p.id: p.nome for p in est_perfis if p and p.nome}
+    est_usuario_ids = {r.get("usuarios_id") for r in raw if r.get("usuarios_id")}
+    est_usuario_perfil_id_map = {}
+    if est_usuario_ids:
+        est_usuarios = Usuario.query.filter(Usuario.id.in_(list(est_usuario_ids))).all()
+        est_usuario_perfil_id_map = {
+            u.id: str(getattr(u, "perfil_id", "") or "").strip()
+            for u in est_usuarios
+            if getattr(u, "id", None)
+        }
     for r in raw:
         def pick(*keys):
             for k in keys:
@@ -1373,6 +1417,7 @@ def partial_cadastrar_est_dotacao():
                 "iduso": str(iduso or ""),
                 "produto": str(produto or ""),
                 "situacao": str(situacao or ""),
+                "criador_perfil_id": est_usuario_perfil_id_map.get(r.get("usuarios_id"), ""),
             }
         )
 
@@ -2306,7 +2351,7 @@ def api_meta_fisica_options():
         "unidade_orcamentaria": "unidade_orcamentaria",
         "programa": "programa",
         "acao_paoe": "acao_paoe",
-        "responsavel_acao": "responsavel_acao",
+        "adj_solicitante": "adj",
         "produto_acao": "produto_acao",
         "unid_medida_produto": "unid_medida_produto",
     }
@@ -2317,12 +2362,32 @@ def api_meta_fisica_options():
         if val:
             selected[key] = val
     selected["exercicio"] = current_year
+    selected_for_cascade = {k: v for k, v in selected.items() if k != "adj_solicitante"}
 
     options = {}
     for key, col in field_cols.items():
+        if key == "adj_solicitante":
+            adj_rows = _safe_query_mappings(
+                """
+                SELECT abreviacao AS value
+                FROM adj
+                WHERE ativo = 1
+                ORDER BY abreviacao
+                """
+            )
+            adj_vals = []
+            for row in adj_rows:
+                raw_val = row.get("value")
+                if raw_val is None:
+                    continue
+                txt = str(raw_val).strip()
+                if txt:
+                    adj_vals.append(txt)
+            options[key] = sorted(set(adj_vals), key=lambda x: x.lower())
+            continue
         where = ["ativo = 1"]
         params = {}
-        for s_key, s_val in selected.items():
+        for s_key, s_val in selected_for_cascade.items():
             if s_key == key:
                 continue
             if s_key == "exercicio":
@@ -2350,7 +2415,6 @@ def api_meta_fisica_options():
         "unidade_orcamentaria",
         "programa",
         "acao_paoe",
-        "responsavel_acao",
         "produto_acao",
         "unid_medida_produto",
     )
@@ -2363,7 +2427,7 @@ def api_meta_fisica_options():
             where_rows.append(f"{field_cols[key]} = :{key}")
             params_rows[key] = (selected.get(key) or "").strip()
         rows_sql = f"""
-            SELECT id, regiao_produto, meta_produto
+            SELECT id, regiao_produto, meta_produto, meta_credito, meta_anulada, meta_atual
             FROM plan21_nger
             WHERE {' AND '.join(where_rows)}
             ORDER BY id
@@ -2380,9 +2444,13 @@ def api_meta_fisica_options():
                 "regiao_produto": regiao,
                 "meta_produto": "",
                 "meta_produto_max": None,
+                "meta_credito": "",
+                "meta_anulada": "",
+                "meta_atual": "",
+                "latest_id": 0,
                 "plan21_ids": [],
             }
-        # Para a mesma regiao, mantém o maior valor de meta_produto.
+        # Para a mesma regiao, mantÃ©m o maior valor de meta_produto.
         if meta_val is not None:
             current_max = grouped[regiao].get("meta_produto_max")
             if current_max is None or meta_val > current_max:
@@ -2393,23 +2461,156 @@ def api_meta_fisica_options():
             row_id_int = int(row_id)
         except Exception:
             row_id_int = 0
+        if row_id_int > 0 and row_id_int >= int(grouped[regiao].get("latest_id") or 0):
+            credito_val = _parse_decimal(row.get("meta_credito"))
+            anulada_val = _parse_decimal(row.get("meta_anulada"))
+            atual_val = _parse_decimal(row.get("meta_atual"))
+            grouped[regiao]["meta_credito"] = str(credito_val) if credito_val is not None else ""
+            grouped[regiao]["meta_anulada"] = str(anulada_val) if anulada_val is not None else ""
+            grouped[regiao]["meta_atual"] = str(atual_val) if atual_val is not None else ""
+            grouped[regiao]["latest_id"] = row_id_int
         if row_id_int > 0 and row_id_int not in grouped[regiao]["plan21_ids"]:
             grouped[regiao]["plan21_ids"].append(row_id_int)
 
+    historico_map = {}
+    if has_all_required:
+        hist_where = [
+            "ai.ativo = 1",
+            "am.ativo = 1",
+            "LOWER(COALESCE(am.status_aprovacao, '')) = 'aprovado'",
+            "CAST(am.exercicio AS CHAR) = :exercicio",
+            "am.unidade_orcamentaria = :unidade_orcamentaria",
+            "am.programa = :programa",
+            "am.acao_paoe = :acao_paoe",
+            "am.produto_acao = :produto_acao",
+            "am.unid_medida_produto = :unid_medida_produto",
+        ]
+        hist_params = {
+            "exercicio": current_year,
+            "unidade_orcamentaria": (selected.get("unidade_orcamentaria") or "").strip(),
+            "programa": (selected.get("programa") or "").strip(),
+            "acao_paoe": (selected.get("acao_paoe") or "").strip(),
+            "produto_acao": (selected.get("produto_acao") or "").strip(),
+            "unid_medida_produto": (selected.get("unid_medida_produto") or "").strip(),
+        }
+        adj_sel = (selected.get("adj_solicitante") or "").strip()
+        if adj_sel:
+            hist_where.append("am.responsavel_acao = :adj_solicitante")
+            hist_params["adj_solicitante"] = adj_sel
+        hist_sql = f"""
+            SELECT ai.regiao_codigo, ai.tipo, ai.valor, ai.ordem, ai.id, am.id AS alterar_meta_id
+            FROM alterar_meta_item ai
+            INNER JOIN alterar_meta am ON am.id = ai.alterar_meta_id
+            WHERE {' AND '.join(hist_where)}
+            ORDER BY ai.regiao_codigo, am.id, ai.tipo, ai.ordem, ai.id
+        """
+        hist_rows = _safe_query_mappings(hist_sql, hist_params)
+        for row in hist_rows:
+            regiao_codigo = str(row.get("regiao_codigo") or "").strip()
+            regiao_key = _normalize_codigo_num(regiao_codigo) or regiao_codigo.lower()
+            if not regiao_key:
+                continue
+            tipo = str(row.get("tipo") or "").strip().lower()
+            valor = _parse_decimal(row.get("valor"))
+            if valor is None or valor <= Decimal("0"):
+                continue
+            bucket = historico_map.setdefault(
+                regiao_key,
+                {
+                    "meta_credito_historico_items": [],
+                    "meta_anulada_historico_items": [],
+                },
+            )
+            if tipo == "acrescimo":
+                bucket["meta_credito_historico_items"].append(str(valor))
+            elif tipo == "reducao":
+                bucket["meta_anulada_historico_items"].append(str(valor))
+
+    def _regiao_sort_key(val: str):
+        txt = str(val or "").strip()
+        num_txt = _normalize_codigo_num(txt)
+        if num_txt:
+            try:
+                return (0, int(num_txt), txt.lower())
+            except Exception:
+                pass
+        return (1, txt.lower(), txt.lower())
+
     rows_out = []
-    for regiao in sorted(grouped.keys(), key=lambda x: x.lower()):
+    for regiao in sorted(grouped.keys(), key=_regiao_sort_key):
         item = grouped[regiao]
         ids = item["plan21_ids"]
+        regiao_key = _normalize_codigo_num(regiao) or regiao.lower()
+        hist_item = historico_map.get(
+            regiao_key,
+            {
+                "meta_credito_historico_items": [],
+                "meta_anulada_historico_items": [],
+            },
+        )
+        hist_credito_items = hist_item.get("meta_credito_historico_items") or []
+        hist_anulada_items = hist_item.get("meta_anulada_historico_items") or []
+        meta_credito_historico = Decimal("0")
+        for v in hist_credito_items:
+            parsed = _parse_decimal(v)
+            if parsed is not None:
+                meta_credito_historico += parsed
+        meta_anulada_historico = Decimal("0")
+        for v in hist_anulada_items:
+            parsed = _parse_decimal(v)
+            if parsed is not None:
+                meta_anulada_historico += parsed
         rows_out.append(
             {
                 "regiao_produto": item["regiao_produto"],
                 "meta_produto": item["meta_produto"],
+                "meta_credito": item["meta_credito"],
+                "meta_anulada": item["meta_anulada"],
+                "meta_atual": item["meta_atual"],
+                "meta_credito_historico": str(meta_credito_historico),
+                "meta_anulada_historico": str(meta_anulada_historico),
+                "meta_credito_historico_items": hist_credito_items,
+                "meta_anulada_historico_items": hist_anulada_items,
                 "plan21_nger_id": ids[0] if ids else None,
                 "plan21_ids": ids,
             }
         )
 
-    return jsonify({"current_year": current_year, "options": options, "rows": rows_out})
+    regioes_catalog_rows = _safe_query_mappings(
+        """
+        SELECT codigo, nome
+        FROM regiao
+        WHERE ativo = 1
+        ORDER BY CAST(codigo AS UNSIGNED), codigo
+        """
+    )
+    regioes_catalog = []
+    for row in regioes_catalog_rows:
+        codigo_raw = row.get("codigo")
+        nome_raw = row.get("nome")
+        if codigo_raw is None:
+            continue
+        codigo = str(codigo_raw).strip()
+        if not codigo:
+            continue
+        nome = str(nome_raw or "").strip()
+        label = f"{codigo} - {nome}" if nome else codigo
+        regioes_catalog.append(
+            {
+                "codigo": codigo,
+                "nome": nome,
+                "label": label,
+            }
+        )
+
+    return jsonify(
+        {
+            "current_year": current_year,
+            "options": options,
+            "rows": rows_out,
+            "regioes_catalog": regioes_catalog,
+        }
+    )
 
 
 @home_bp.route("/api/meta-fisica", methods=["POST"])
@@ -2418,16 +2619,49 @@ def api_meta_fisica_options():
 def api_meta_fisica_create():
     data = request.get_json() or {}
     current_year = str(_now_local().year)
+    meta_id_raw = str(data.get("meta_id") or "").strip()
 
     exercicio_raw = str(data.get("exercicio") or "").strip()
     unidade_orcamentaria = str(data.get("unidade_orcamentaria") or "").strip()
     programa = str(data.get("programa") or "").strip()
     acao_paoe = str(data.get("acao_paoe") or "").strip()
-    responsavel_acao = str(data.get("responsavel_acao") or "").strip()
+    adj_solicitante = str(data.get("adj_solicitante") or "").strip()
     produto_acao = str(data.get("produto_acao") or "").strip()
     unid_medida_produto = str(data.get("unid_medida_produto") or "").strip()
     justificativa = str(data.get("justificativa") or "").strip()
     rows = data.get("rows") or []
+
+    registro_existente = None
+    criador_registro = None
+    if meta_id_raw:
+        try:
+            meta_id = int(meta_id_raw)
+        except Exception:
+            return jsonify({"error": "ID de registro inválido para edição."}), 400
+        registro_existente = (
+            AlterarMeta.query.filter(AlterarMeta.id == meta_id)
+            .filter(AlterarMeta.ativo == True)  # noqa: E712
+            .first()
+        )
+        if not registro_existente:
+            return jsonify({"error": "Registro de meta não encontrado para edição."}), 404
+        criador_registro = None
+        if getattr(registro_existente, "usuario_id", None):
+            criador_registro = Usuario.query.filter_by(id=registro_existente.usuario_id).first()
+        exercicio_ctrl = str(getattr(registro_existente, "exercicio", "") or current_year)
+        adj_nome_ctrl = (getattr(registro_existente, "responsavel_acao", "") or "").strip()
+        if not adj_nome_ctrl and criador_registro:
+            perfil_id_ctrl = getattr(criador_registro, "perfil_id", None)
+            if perfil_id_ctrl:
+                perfil_row_ctrl = Perfil.query.filter_by(id=perfil_id_ctrl).first()
+                adj_nome_ctrl = (getattr(perfil_row_ctrl, "nome", "") or "").strip()
+        controle_meta = f"META.{exercicio_ctrl}.{_normalize_controle_token(adj_nome_ctrl) or 'SEMADJ'}.{registro_existente.id}"
+        status_atual = str(getattr(registro_existente, "status_aprovacao", "") or "").strip().lower()
+        if status_atual != "aguardando":
+            return jsonify({"error": f"Somente registros com status Aguardando podem ser editados ({controle_meta})."}), 400
+        perfil_criador = getattr(criador_registro, "perfil_id", None) if criador_registro else None
+        if not _current_user_matches_perfil(perfil_criador):
+            return jsonify({"error": f"Usuário sem permissão para editar registro {controle_meta}."}), 403
 
     if exercicio_raw != current_year:
         return jsonify({"error": "Exercicio invalido para o ano corrente."}), 400
@@ -2436,7 +2670,7 @@ def api_meta_fisica_create():
         "unidade_orcamentaria": unidade_orcamentaria,
         "programa": programa,
         "acao_paoe": acao_paoe,
-        "responsavel_acao": responsavel_acao,
+        "adj_solicitante": adj_solicitante,
         "produto_acao": produto_acao,
         "unid_medida_produto": unid_medida_produto,
     }
@@ -2449,6 +2683,27 @@ def api_meta_fisica_create():
     seen_regioes = set()
     parsed_rows = []
 
+    unidade_tipo = (unid_medida_produto or "").strip().lower()
+
+    def _parse_item_list(raw_items):
+        if not isinstance(raw_items, list):
+            return []
+        out = []
+        for raw in raw_items:
+            txt = str(raw or "").strip()
+            if txt:
+                out.append(txt)
+        return out
+
+    def _validate_item_value(val: Decimal, regiao_produto: str, field_name: str):
+        if val == Decimal("0"):
+            return None
+        if unidade_tipo == "percentual" and val > Decimal("0") and val < Decimal("0.1"):
+            return jsonify({"error": f"{field_name} minimo e 0,1 para a regiao {regiao_produto}."}), 400
+        if unidade_tipo == "unidade" and val > Decimal("0") and val != val.to_integral_value():
+            return jsonify({"error": f"{field_name} deve ser inteiro para a regiao {regiao_produto}."}), 400
+        return None
+
     for row in rows:
         regiao_produto = str(row.get("regiao_produto") or "").strip()
         if not regiao_produto:
@@ -2460,60 +2715,124 @@ def api_meta_fisica_create():
 
         is_novo = bool(row.get("is_novo"))
         meta_produto = _parse_decimal(row.get("meta_produto"))
-        meta_credito = _parse_decimal(row.get("meta_credito")) or Decimal("0")
-        meta_anulada = _parse_decimal(row.get("meta_anulada")) or Decimal("0")
+        credito_items_raw = _parse_item_list(row.get("meta_credito_items"))
+        anulada_items_raw = _parse_item_list(row.get("meta_anulada_items"))
+        credito_mov_items_raw = _parse_item_list(row.get("meta_credito_mov_items"))
+        anulada_mov_items_raw = _parse_item_list(row.get("meta_anulada_mov_items"))
+        meta_credito_historico = _parse_decimal(row.get("meta_credito_historico"))
+        meta_anulada_historico = _parse_decimal(row.get("meta_anulada_historico"))
+        has_historico_movimento = bool(row.get("has_historico_movimento"))
+        if not credito_items_raw:
+            fallback_credito = str(row.get("meta_credito") or "").strip()
+            if fallback_credito:
+                credito_items_raw = [fallback_credito]
+        if not anulada_items_raw:
+            fallback_anulada = str(row.get("meta_anulada") or "").strip()
+            if fallback_anulada:
+                anulada_items_raw = [fallback_anulada]
+
+        credito_items = []
+        meta_credito = Decimal("0")
+        for idx_item, item_raw in enumerate(credito_items_raw, start=1):
+            item_val = _parse_decimal(item_raw)
+            if item_val is None:
+                return jsonify({"error": f"Acrescimo invalido para a regiao {regiao_produto}."}), 400
+            validate_err = _validate_item_value(item_val, regiao_produto, "Acrescimo")
+            if validate_err:
+                return validate_err
+            meta_credito += item_val
+            if item_val > Decimal("0"):
+                credito_items.append({"ordem": idx_item, "valor": item_val})
+
+        anulada_items = []
+        meta_anulada = Decimal("0")
+        for idx_item, item_raw in enumerate(anulada_items_raw, start=1):
+            item_val = _parse_decimal(item_raw)
+            if item_val is None:
+                return jsonify({"error": f"Reducao invalida para a regiao {regiao_produto}."}), 400
+            validate_err = _validate_item_value(item_val, regiao_produto, "Reducao")
+            if validate_err:
+                return validate_err
+            meta_anulada += item_val
+            if item_val > Decimal("0"):
+                anulada_items.append({"ordem": idx_item, "valor": item_val})
+
         if not is_novo and meta_produto is None:
             return jsonify({"error": f"Meta PTA/LOA invalida para a regiao {regiao_produto}."}), 400
 
-        meta_atual = None
-        if not is_novo:
-            meta_atual = (meta_produto or Decimal("0")) + meta_credito - meta_anulada
+        meta_base = meta_produto if meta_produto is not None else Decimal("0")
+        meta_atual = meta_base + meta_credito - meta_anulada
 
         parsed_rows.append(
             {
                 "regiao_produto": regiao_produto,
                 "meta_produto": None if is_novo else meta_produto,
                 "meta_credito": meta_credito,
-                "meta_anulada": None if is_novo else meta_anulada,
+                "meta_anulada": meta_anulada,
                 "meta_atual": meta_atual,
                 "is_novo": is_novo,
+                "credito_items": credito_items,
+                "anulada_items": anulada_items,
+                "meta_credito_mov_items": credito_mov_items_raw,
+                "meta_anulada_mov_items": anulada_mov_items_raw,
+                "meta_credito_historico": meta_credito_historico,
+                "meta_anulada_historico": meta_anulada_historico,
+                "has_historico_movimento": has_historico_movimento,
+                "plan21_ids_raw": row.get("plan21_ids") if isinstance(row.get("plan21_ids"), list) else [],
             }
         )
 
-    # IDs do plan21_nger para os filtros do formulário (ordem crescente)
-    filters_where = [
+    # IDs do plan21_nger para os filtros do formulÃ¡rio (ordem crescente)
+    filters_where_base = [
         "ativo = 1",
         "CAST(exercicio AS CHAR) = :exercicio",
         "unidade_orcamentaria = :uo",
         "programa = :programa",
         "acao_paoe = :acao_paoe",
-        "responsavel_acao = :responsavel_acao",
+        "adj = :adj_solicitante",
         "produto_acao = :produto_acao",
         "unid_medida_produto = :unid_medida_produto",
     ]
-    filters_params = {
+    filters_params_base = {
         "exercicio": exercicio_raw,
         "uo": unidade_orcamentaria,
         "programa": programa,
         "acao_paoe": acao_paoe,
-        "responsavel_acao": responsavel_acao,
+        "adj_solicitante": adj_solicitante,
         "produto_acao": produto_acao,
         "unid_medida_produto": unid_medida_produto,
     }
-    ids_sql = f"SELECT id FROM plan21_nger WHERE {' AND '.join(filters_where)} ORDER BY id ASC"
-    id_rows = _safe_query_mappings(ids_sql, filters_params)
-    all_plan_ids = []
-    for r in id_rows:
-        try:
-            rid = int(r.get("id"))
-        except Exception:
-            rid = 0
-        if rid > 0:
-            all_plan_ids.append(rid)
-    # mais recente = maior id encontrado
+    all_plan_ids_set = set()
+    for row in parsed_rows:
+        regiao = str(row.get("regiao_produto") or "").strip()
+        row_plan_ids = []
+        for val in row.get("plan21_ids_raw", []) or []:
+            try:
+                rid = int(val)
+            except Exception:
+                rid = 0
+            if rid > 0 and rid not in row_plan_ids:
+                row_plan_ids.append(rid)
+        if not row_plan_ids and regiao:
+            where = list(filters_where_base) + ["regiao_produto = :regiao_produto"]
+            params = dict(filters_params_base)
+            params["regiao_produto"] = regiao
+            ids_sql = f"SELECT id FROM plan21_nger WHERE {' AND '.join(where)} ORDER BY id ASC"
+            id_rows = _safe_query_mappings(ids_sql, params)
+            for r in id_rows:
+                try:
+                    rid = int(r.get("id"))
+                except Exception:
+                    rid = 0
+                if rid > 0 and rid not in row_plan_ids:
+                    row_plan_ids.append(rid)
+        row["plan21_ids"] = row_plan_ids
+        for rid in row_plan_ids:
+            all_plan_ids_set.add(rid)
+    all_plan_ids = sorted(all_plan_ids_set)
     plan21_nger_id_latest = all_plan_ids[-1] if all_plan_ids else None
 
-    # Salvar como registro único com dados da tabela em JSON (fácil reconstrução)
+    # Salvar como registro Ãºnico com dados da tabela em JSON (fÃ¡cil reconstruÃ§Ã£o)
     meta_produto_total = Decimal("0")
     meta_credito_total = Decimal("0")
     meta_anulada_total = Decimal("0")
@@ -2536,57 +2855,119 @@ def api_meta_fisica_create():
                 "meta_anulada": str(row["meta_anulada"]) if row["meta_anulada"] is not None else "",
                 "meta_atual": str(row["meta_atual"]) if row["meta_atual"] is not None else "",
                 "is_novo": bool(row.get("is_novo")),
+                "meta_credito_items": [str(i.get("valor")) for i in row.get("credito_items", [])],
+                "meta_anulada_items": [str(i.get("valor")) for i in row.get("anulada_items", [])],
+                "meta_credito_mov_items": [str(v) for v in row.get("meta_credito_mov_items", [])],
+                "meta_anulada_mov_items": [str(v) for v in row.get("meta_anulada_mov_items", [])],
+                "meta_credito_historico": str(row.get("meta_credito_historico")) if row.get("meta_credito_historico") is not None else "",
+                "meta_anulada_historico": str(row.get("meta_anulada_historico")) if row.get("meta_anulada_historico") is not None else "",
+                "has_historico_movimento": bool(row.get("has_historico_movimento")),
+                "plan21_ids": row.get("plan21_ids") or [],
             }
         )
 
     user_id = _resolve_usuario_id()
     now = _now_local()
     try:
-        registro = AlterarMeta(
-            exercicio=int(exercicio_raw),
-            unidade_orcamentaria=unidade_orcamentaria,
-            programa=programa,
-            acao_paoe=acao_paoe,
-            responsavel_acao=responsavel_acao,
-            produto_acao=produto_acao,
-            unid_medida_produto=unid_medida_produto,
-            regiao_produto=json.dumps(rows_serialized, ensure_ascii=False),
-            meta_produto=meta_produto_total,
-            meta_credito=meta_credito_total,
-            meta_anulada=meta_anulada_total,
-            meta_atual=meta_atual_total,
-            justificativa=justificativa,
-            plan21_nger_id=plan21_nger_id_latest,
-            plan21_nger_ids=json.dumps(all_plan_ids, ensure_ascii=False) if all_plan_ids else None,
-            usuario_id=user_id,
-            status_aprovacao="aguardando",
-            situacao="ativo",
-            criado_em=now,
-            ativo=True,
-        )
-        db.session.add(registro)
+        if registro_existente:
+            registro = registro_existente
+            registro.exercicio = int(exercicio_raw)
+            registro.unidade_orcamentaria = unidade_orcamentaria
+            registro.programa = programa
+            registro.acao_paoe = acao_paoe
+            registro.responsavel_acao = adj_solicitante
+            registro.produto_acao = produto_acao
+            registro.unid_medida_produto = unid_medida_produto
+            registro.regiao_produto = json.dumps(rows_serialized, ensure_ascii=False)
+            registro.meta_produto = meta_produto_total
+            registro.meta_credito = meta_credito_total
+            registro.meta_anulada = meta_anulada_total
+            registro.meta_atual = meta_atual_total
+            registro.justificativa = justificativa
+            registro.plan21_nger_id = plan21_nger_id_latest
+            registro.plan21_nger_ids = json.dumps(all_plan_ids, ensure_ascii=False) if all_plan_ids else None
+            registro.status_aprovacao = "aguardando"
+            registro.situacao = "ativo"
+            registro.alterado_em = now
+            registro.ativo = True
+            (
+                db.session.query(AlterarMetaItem)
+                .filter(AlterarMetaItem.alterar_meta_id == registro.id)
+                .filter(AlterarMetaItem.ativo == True)  # noqa: E712
+                .update(
+                    {
+                        "ativo": False,
+                        "alterado_em": now,
+                        "excluido_em": now,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            db.session.flush()
+        else:
+            registro = AlterarMeta(
+                exercicio=int(exercicio_raw),
+                unidade_orcamentaria=unidade_orcamentaria,
+                programa=programa,
+                acao_paoe=acao_paoe,
+                responsavel_acao=adj_solicitante,
+                produto_acao=produto_acao,
+                unid_medida_produto=unid_medida_produto,
+                regiao_produto=json.dumps(rows_serialized, ensure_ascii=False),
+                meta_produto=meta_produto_total,
+                meta_credito=meta_credito_total,
+                meta_anulada=meta_anulada_total,
+                meta_atual=meta_atual_total,
+                justificativa=justificativa,
+                plan21_nger_id=plan21_nger_id_latest,
+                plan21_nger_ids=json.dumps(all_plan_ids, ensure_ascii=False) if all_plan_ids else None,
+                usuario_id=user_id,
+                status_aprovacao="aguardando",
+                situacao="ativo",
+                criado_em=now,
+                ativo=True,
+            )
+            db.session.add(registro)
+            db.session.flush()
+        for row in parsed_rows:
+            regiao_codigo = _normalize_codigo_num(row.get("regiao_produto")) or str(row.get("regiao_produto") or "").strip()
+            for item in row.get("credito_items", []):
+                db.session.add(
+                    AlterarMetaItem(
+                        alterar_meta_id=registro.id,
+                        regiao_codigo=regiao_codigo,
+                        tipo="acrescimo",
+                        valor=item.get("valor") or Decimal("0"),
+                        ordem=item.get("ordem") or 1,
+                        usuario_id=user_id,
+                        ativo=True,
+                        criado_em=now,
+                    )
+                )
+            for item in row.get("anulada_items", []):
+                db.session.add(
+                    AlterarMetaItem(
+                        alterar_meta_id=registro.id,
+                        regiao_codigo=regiao_codigo,
+                        tipo="reducao",
+                        valor=item.get("valor") or Decimal("0"),
+                        ordem=item.get("ordem") or 1,
+                        usuario_id=user_id,
+                        ativo=True,
+                        criado_em=now,
+                    )
+                )
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao salvar meta fisica: {exc}"}), 500
 
-    adj_nome = ""
-    if user_id:
-        usuario_row = Usuario.query.filter_by(id=user_id).first()
-        if usuario_row:
-            perfil_id = getattr(usuario_row, "perfil_id", None)
-            if perfil_id:
-                perfil_row = Perfil.query.filter_by(id=perfil_id).first()
-                if perfil_row:
-                    adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
-            if not adj_nome:
-                adj_nome = (getattr(usuario_row, "perfil", "") or "").strip()
-    adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
-    controle = f"meta.{exercicio_raw}.{adj_token}.{registro.id}"
+    adj_token = _normalize_controle_token(adj_solicitante) or "SEMADJ"
+    controle = f"META.{exercicio_raw}.{adj_token}.{registro.id}"
     return jsonify(
         {
             "ok": True,
-            "message": "Meta fisica salva.",
+            "message": "Meta fisica atualizada." if registro_existente else "Meta fisica salva.",
             "count": 1,
             "meta_fisica": {
                 "id": registro.id,
@@ -2599,7 +2980,7 @@ def api_meta_fisica_create():
                 "unidade_orcamentaria": unidade_orcamentaria,
                 "programa": programa,
                 "acao_paoe": acao_paoe,
-                "responsavel_acao": responsavel_acao,
+                "adj_solicitante": adj_solicitante,
                 "produto_acao": produto_acao,
                 "unid_medida_produto": unid_medida_produto,
                 "justificativa": justificativa,
@@ -2607,6 +2988,81 @@ def api_meta_fisica_create():
                 "plan21_nger_id": plan21_nger_id_latest,
                 "plan21_nger_ids": all_plan_ids,
             },
+        }
+    )
+
+
+@home_bp.route("/api/meta-fisica/<int:meta_id>", methods=["DELETE"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def api_meta_fisica_delete(meta_id: int):
+    registro = (
+        AlterarMeta.query.filter(AlterarMeta.id == meta_id)
+        .filter(AlterarMeta.ativo == True)  # noqa: E712
+        .first()
+    )
+    if not registro:
+        return jsonify({"error": "Registro de meta nao encontrado."}), 404
+
+    criador = None
+    if getattr(registro, "usuario_id", None):
+        criador = Usuario.query.filter_by(id=registro.usuario_id).first()
+
+    exercicio_ctrl = str(getattr(registro, "exercicio", "") or _now_local().year)
+    adj_nome = (getattr(registro, "responsavel_acao", "") or "").strip()
+    if not adj_nome and criador:
+        perfil_id = getattr(criador, "perfil_id", None)
+        if perfil_id:
+            perfil_row = Perfil.query.filter_by(id=perfil_id).first()
+            adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
+        if not adj_nome:
+            adj_nome = (getattr(criador, "perfil", "") or "").strip()
+    adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
+    controle_meta = f"META.{exercicio_ctrl}.{adj_token}.{registro.id}"
+
+    status = str(getattr(registro, "status_aprovacao", "") or "").strip().lower()
+    if status != "aguardando":
+        return jsonify({"error": f"Somente registros com status Aguardando podem ser excluidos ({controle_meta})."}), 400
+
+    usuario_id = _resolve_usuario_id()
+    if not usuario_id:
+        return jsonify({"error": f"Usuario sem permissao para excluir registro {controle_meta}."}), 403
+    usuario_atual = Usuario.query.filter_by(id=usuario_id).first()
+    perfil_atual = str(getattr(usuario_atual, "perfil_id", "") or "").strip() if usuario_atual else ""
+    perfil_criador = str(getattr(criador, "perfil_id", "") or "").strip() if criador else ""
+    if not perfil_atual or perfil_atual != perfil_criador:
+        return jsonify({"error": f"Usuario sem permissao para excluir registro {controle_meta}."}), 403
+
+    now = _now_local()
+    try:
+        registro.ativo = False
+        registro.situacao = "inativo"
+        registro.excluido_em = now
+        registro.alterado_em = now
+        (
+            db.session.query(AlterarMetaItem)
+            .filter(AlterarMetaItem.alterar_meta_id == registro.id)
+            .filter(AlterarMetaItem.ativo == True)  # noqa: E712
+            .update(
+                {
+                    AlterarMetaItem.ativo: False,
+                    AlterarMetaItem.excluido_em: now,
+                    AlterarMetaItem.alterado_em: now,
+                },
+                synchronize_session=False,
+            )
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir registro {controle_meta}: {exc}"}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": f"Registro {controle_meta} excluido com sucesso.",
+            "controle_meta": controle_meta,
+            "id": registro.id,
         }
     )
 
@@ -2629,7 +3085,7 @@ def api_subacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
-    # força o exercicio ao ano atual
+    # forÃ§a o exercicio ao ano atual
     selected["exercicio"] = current_year
     plan_options = {}
     for key, col in plan_fields.items():
@@ -3655,13 +4111,13 @@ def api_subacao_create():
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if (not isinstance(etapas_items, list) or not etapas_items) and not cpf_responsavel_etapa:
-        return jsonify({"error": "CPF do responsável da etapa é obrigatório."}), 400
+        return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if (not isinstance(etapas_items, list) or not etapas_items) and not cpf_responsavel_etapa:
-        return jsonify({"error": "CPF do responsável da etapa é obrigatório."}), 400
+        return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
 
     try:
         exercicio = int(exercicio_raw)
@@ -3709,9 +4165,9 @@ def api_subacao_create():
                 return jsonify({"error": "Etapas incompletas para municipios."}), 400
             cpf_etapa = re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or ""))
             if not cpf_etapa:
-                return jsonify({"error": "CPF do responsável da etapa é obrigatório."}), 400
+                return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
             if not _is_valid_cpf(cpf_etapa):
-                return jsonify({"error": "CPF do responsável da etapa inválido."}), 400
+                return jsonify({"error": "CPF do responsÃ¡vel da etapa invÃ¡lido."}), 400
             etapa_by_municipio[muni] = {
                 "etapa": nome,
                 "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
@@ -3731,7 +4187,7 @@ def api_subacao_create():
         return (
             jsonify(
                 {
-                    "error": "Região não encontrada no PTA. Por favor, antes de criar esta Subação, cadastre uma nova região do produto e sua respectiva meta física."
+                    "error": "RegiÃ£o nÃ£o encontrada no PTA. Por favor, antes de criar esta SubaÃ§Ã£o, cadastre uma nova regiÃ£o do produto e sua respectiva meta fÃ­sica."
                 }
             ),
             400,
@@ -4082,7 +4538,7 @@ def api_subacao_editar():
             return (
                 jsonify(
                     {
-                        "error": "Antes de remover um município da Subação, por favor, exclua as etapas vinculadas."
+                        "error": "Antes de remover um municÃ­pio da SubaÃ§Ã£o, por favor, exclua as etapas vinculadas."
                     }
                 ),
                 400,
@@ -4098,7 +4554,7 @@ def api_subacao_editar():
                 return (
                     jsonify(
                         {
-                            "error": "Por favor, antes de excluir esta Subação, remaneje os valores da Memória de Cálculo."
+                            "error": "Por favor, antes de excluir esta SubaÃ§Ã£o, remaneje os valores da MemÃ³ria de CÃ¡lculo."
                         }
                     ),
                     400,
@@ -4112,7 +4568,7 @@ def api_subacao_editar():
         return "" if val is None else str(val).strip()
 
     if registro_id_raw and not registro_row:
-        return jsonify({"error": "Registro de edição não encontrado."}), 404
+        return jsonify({"error": "Registro de ediÃ§Ã£o nÃ£o encontrado."}), 404
 
     def _coalesce_update(target, key, value):
         if value is None:
@@ -4262,6 +4718,15 @@ def api_subacao_update(subacao_id):
     registro = db.session.get(CadastrarSubacao, subacao_id)
     if not registro or registro.excluido_em is not None:
         return jsonify({"error": "Registro nao encontrado."}), 404
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Somente registros com status Aguardando podem ser editados."}), 400
+    criador = None
+    if getattr(registro, "usuario_id", None):
+        criador = Usuario.query.filter_by(id=registro.usuario_id).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
+        return jsonify({"error": "Usuario sem permissao para editar o registro de controle de subacao."}), 403
     data = request.get_json() or {}
     exercicio_raw = (data.get("exercicio") or "").strip()
     unidade_orcamentaria = (data.get("unidade_orcamentaria") or "").strip()
@@ -4370,9 +4835,9 @@ def api_subacao_update(subacao_id):
                 return jsonify({"error": "Etapas incompletas para municipios."}), 400
             cpf_etapa = re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or ""))
             if not cpf_etapa:
-                return jsonify({"error": "CPF do responsável da etapa é obrigatório."}), 400
+                return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
             if not _is_valid_cpf(cpf_etapa):
-                return jsonify({"error": "CPF do responsável da etapa inválido."}), 400
+                return jsonify({"error": "CPF do responsÃ¡vel da etapa invÃ¡lido."}), 400
             etapa_by_municipio[muni] = {
                 "etapa": nome,
                 "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
@@ -4393,7 +4858,7 @@ def api_subacao_update(subacao_id):
         return (
             jsonify(
                 {
-                    "error": "Região não encontrada no PTA. Por favor, antes de criar esta Subação, cadastre uma nova região do produto e sua respectiva meta física."
+                    "error": "RegiÃ£o nÃ£o encontrada no PTA. Por favor, antes de criar esta SubaÃ§Ã£o, cadastre uma nova regiÃ£o do produto e sua respectiva meta fÃ­sica."
                 }
             ),
             400,
@@ -4525,7 +4990,13 @@ def api_subacao_delete(subacao_id):
         return jsonify({"error": "Registro nao encontrado."}), 404
     status = (registro.status_aprovacao or "").strip().lower()
     if status and status != "aguardando":
-        return jsonify({"error": "Somente registros com status Aguardando podem ser excluídos."}), 400
+        return jsonify({"error": "Somente registros com status Aguardando podem ser excluÃ­dos."}), 400
+    criador = None
+    if getattr(registro, "usuario_id", None):
+        criador = Usuario.query.filter_by(id=registro.usuario_id).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
+        return jsonify({"error": "Usuário sem permissão para excluir o registro de controle de subação."}), 403
     registro.ativo = False
     registro.excluido_em = _now_local()
     try:
@@ -4712,7 +5183,7 @@ def api_dotacao_create():
     saldo_disponivel = _dec_or_zero(saldo_disponivel).quantize(Decimal("0.01"))
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
+        return jsonify({"error": "Valor da DotaÃ§Ã£o deve ser menor ou igual ao Saldo da DotaÃ§Ã£o"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -4827,17 +5298,15 @@ def api_dotacao_update(dotacao_id):
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
 
-    adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
-    if not adj_concedente:
-        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    adj_concedente_id = _perfil_id_by_nome(adj_concedente)
-    if not adj_concedente_id:
-        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    if not _current_user_matches_perfil(adj_concedente_id):
-        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar a dota\u00e7\u00e3o atual."}), 403
     status_atual = (registro.status_aprovacao or "").strip().lower()
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente dota\u00e7\u00f5es com status Aguardando podem ser editadas."}), 400
+    criador = None
+    if getattr(registro, "usuarios_id", None):
+        criador = Usuario.query.filter_by(id=registro.usuarios_id).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar a dota\u00e7\u00e3o atual."}), 403
 
     data = request.get_json() or {}
     exercicio = (data.get("exercicio") or "").strip()
@@ -4941,7 +5410,7 @@ def api_dotacao_update(dotacao_id):
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     saldo_disponivel += _dec_or_zero(registro.valor_dotacao)
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da Dotação deve ser menor ou igual ao Saldo da Dotação"}), 400
+        return jsonify({"error": "Valor da DotaÃ§Ã£o deve ser menor ou igual ao Saldo da DotaÃ§Ã£o"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -5033,17 +5502,15 @@ def api_dotacao_delete(dotacao_id):
     if not registro:
         return jsonify({"error": "Dotacao nao encontrada."}), 404
 
-    adj_concedente = (getattr(registro, "adj_concedente", "") or "").strip()
-    if not adj_concedente:
-        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    adj_concedente_id = _perfil_id_by_nome(adj_concedente)
-    if not adj_concedente_id:
-        return jsonify({"error": "Adjunta Concedente n\u00e3o definida."}), 400
-    if not _current_user_matches_perfil(adj_concedente_id):
-        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir a dota\u00e7\u00e3o atual."}), 403
     status_atual = (registro.status_aprovacao or "").strip().lower()
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente dota\u00e7\u00f5es com status Aguardando podem ser exclu\u00eddas."}), 400
+    criador = None
+    if getattr(registro, "usuarios_id", None):
+        criador = Usuario.query.filter_by(id=registro.usuarios_id).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
+        return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir a dota\u00e7\u00e3o atual."}), 403
 
     registro.ativo = False
     registro.excluido_em = _now_local()
@@ -5159,24 +5626,24 @@ def api_est_dotacao_create():
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
-        return jsonify({"error": f"Campos obrigatórios ausentes: {', '.join(missing)}."}), 400
+        return jsonify({"error": f"Campos obrigatÃ³rios ausentes: {', '.join(missing)}."}), 400
 
     if not _current_user_matches_perfil(_perfil_id_by_nome(adjunta)):
-        return jsonify({"error": "Usuário sem permissão de cadastrar estorno."}), 403
+        return jsonify({"error": "UsuÃ¡rio sem permissÃ£o de cadastrar estorno."}), 403
 
     valor_dotacao = _parse_decimal(valor_dotacao_raw)
     valor_est = _parse_decimal(valor_est_raw)
     saldo = _parse_decimal(saldo_raw)
     if valor_dotacao is None or valor_est is None or saldo is None:
-        return jsonify({"error": "Valores monetários inválidos."}), 400
+        return jsonify({"error": "Valores monetÃ¡rios invÃ¡lidos."}), 400
 
     adj_row = Perfil.query.filter(Perfil.nome == adjunta).first()
     if not adj_row:
-        return jsonify({"error": "Adjunta Solicitante não encontrada."}), 400
+        return jsonify({"error": "Adjunta Solicitante nÃ£o encontrada."}), 400
 
     usuarios_id = _resolve_usuario_id()
     if usuarios_id is None:
-        return jsonify({"error": "Usuário não encontrado."}), 400
+        return jsonify({"error": "UsuÃ¡rio nÃ£o encontrado."}), 400
 
     now = _now_local()
     try:
@@ -5287,8 +5754,11 @@ def api_est_dotacao_update(est_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente estornos com status Aguardando podem ser alterados."}), 400
 
-    perfil_id = row.get("perfil_id")
-    if not _current_user_matches_perfil(perfil_id):
+    criador = None
+    if row.get("usuarios_id"):
+        criador = Usuario.query.filter_by(id=row.get("usuarios_id")).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para editar o estorno atual."}), 403
 
     data = request.get_json() or {}
@@ -5380,8 +5850,11 @@ def api_est_dotacao_delete(est_id):
     if status_atual and status_atual != "aguardando":
         return jsonify({"error": "Somente estornos com status Aguardando podem ser exclu\u00eddos."}), 400
 
-    perfil_id = row.get("perfil_id")
-    if not _current_user_matches_perfil(perfil_id):
+    criador = None
+    if row.get("usuarios_id"):
+        criador = Usuario.query.filter_by(id=row.get("usuarios_id")).first()
+    perfil_criador = getattr(criador, "perfil_id", None) if criador else None
+    if not _current_user_matches_perfil(perfil_criador):
         return jsonify({"error": "Usu\u00e1rio sem permiss\u00e3o para excluir o estorno atual."}), 403
 
     try:
@@ -5948,15 +6421,15 @@ def api_fip613_status():
 @require_feature("atualizar/fip613")
 def api_fip613_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo é obrigatório."}), 400
+        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download é obrigatória."}), 400
+        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download inválida."}), 400
+        return jsonify({"error": "Data do download invÃ¡lida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -6270,8 +6743,8 @@ def api_relatorio_fip613_download():
                 {
                     "UO": r.uo,
                     "UG": r.ug,
-                    "Função": r.funcao,
-                    "Subfunção": r.subfuncao,
+                    "FunÃ§Ã£o": r.funcao,
+                    "SubfunÃ§Ã£o": r.subfuncao,
                     "Programa": r.programa,
                     "Projeto/Atividade": r.projeto_atividade,
                     "Regional": r.regional,
@@ -6279,16 +6752,16 @@ def api_relatorio_fip613_download():
                     "Fonte de Recurso": str(r.fonte_recurso or ""),
                     "Iduso": r.iduso,
                     "Tipo de Recurso": r.tipo_recurso,
-                    "Dotação Inicial": float(r.dotacao_inicial or 0),
-                    "Créd. Suplementar": float(r.cred_suplementar or 0),
-                    "Créd. Especial": float(r.cred_especial or 0),
-                    "Créd. Extraordinário": float(r.cred_extraordinario or 0),
-                    "Redução": float(r.reducao or 0),
-                    "Créd. Autorizado": float(r.cred_autorizado or 0),
+                    "DotaÃ§Ã£o Inicial": float(r.dotacao_inicial or 0),
+                    "CrÃ©d. Suplementar": float(r.cred_suplementar or 0),
+                    "CrÃ©d. Especial": float(r.cred_especial or 0),
+                    "CrÃ©d. ExtraordinÃ¡rio": float(r.cred_extraordinario or 0),
+                    "ReduÃ§Ã£o": float(r.reducao or 0),
+                    "CrÃ©d. Autorizado": float(r.cred_autorizado or 0),
                     "Bloqueado/Conting.": float(r.bloqueado_conting or 0),
                     "Reserva Empenho": float(r.reserva_empenho or 0),
                     "Saldo de Destaque": float(r.saldo_destaque or 0),
-                    "Saldo Dotação": float(r.saldo_dotacao or 0),
+                    "Saldo DotaÃ§Ã£o": float(r.saldo_dotacao or 0),
                     "Empenhado": float(r.empenhado or 0),
                     "Liquidado": float(r.liquidado or 0),
                     "A liquidar": float(r.a_liquidar or 0),
@@ -6327,12 +6800,12 @@ def api_relatorio_fip613_download():
             df.to_excel(output, index=False)
             output.seek(0)
 
-            # aplica fonte e formato numérico no Excel
+            # aplica fonte e formato numÃ©rico no Excel
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
             number_format = "[Blue]#,##0.00;[Red]-#,##0.00;0"
-            # colunas numéricas começam em 12 (1-based) até o final
+            # colunas numÃ©ricas comeÃ§am em 12 (1-based) atÃ© o final
             numeric_cols = set(range(12, ws.max_column + 1))
             for row in ws.iter_rows():
                 for cell in row:
@@ -6400,15 +6873,15 @@ def api_ped_status():
 @require_feature("atualizar/ped")
 def api_ped_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo é obrigatório."}), 400
+        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download é obrigatória."}), 400
+        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download inválida."}), 400
+        return jsonify({"error": "Data do download invÃ¡lida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -6657,7 +7130,7 @@ def api_emp_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.",
+                "message": "Arquivo recebido. O processamento ocorrerÃ¡ em segundo plano.",
                 "job_id": registro.id,
             }
         )
@@ -6810,7 +7283,7 @@ def api_nob_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.",
+                "message": "Arquivo recebido. O processamento ocorrerÃ¡ em segundo plano.",
                 "job_id": registro.id,
             }
         )
@@ -7196,38 +7669,38 @@ def api_relatorio_ped_download():
             df["valor_estorno"] = df["valor_estorno"].apply(_to_float)
 
         rename_map = {
-            "regiao": "Região",
-            "subfuncao_ug": "Subfunção + UG",
+            "regiao": "RegiÃ£o",
+            "subfuncao_ug": "SubfunÃ§Ã£o + UG",
             "adj": "ADJ",
-            "macropolitica": "Macropolítica",
+            "macropolitica": "MacropolÃ­tica",
             "pilar": "Pilar",
             "eixo": "Eixo",
-            "politica_decreto": "Política_Decreto",
-            "exercicio": "Exercício",
-            "numero_ped": "Nº PED",
-            "numero_ped_estorno": "Nº PED Estorno/Estornado",
-            "numero_emp": "Nº EMP",
-            "numero_cad": "Nº CAD",
-            "numero_noblist": "Nº NOBLIST",
-            "numero_os": "Nº OS",
-            "convenio": "Convênio",
-            "numero_processo_orcamentario_pagamento": "Nº Processo Orçamentário de Pagamento",
+            "politica_decreto": "PolÃ­tica_Decreto",
+            "exercicio": "ExercÃ­cio",
+            "numero_ped": "NÂº PED",
+            "numero_ped_estorno": "NÂº PED Estorno/Estornado",
+            "numero_emp": "NÂº EMP",
+            "numero_cad": "NÂº CAD",
+            "numero_noblist": "NÂº NOBLIST",
+            "numero_os": "NÂº OS",
+            "convenio": "ConvÃªnio",
+            "numero_processo_orcamentario_pagamento": "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
             "valor_ped": "Valor PED",
             "valor_estorno": "Valor do Estorno",
-            "indicativo_licitacao_exercicios_anteriores": "Indicativo de Licitação de Exercícios Anteriores",
-            "data_licitacao": "Data da Licitação",
+            "indicativo_licitacao_exercicios_anteriores": "Indicativo de LicitaÃ§Ã£o de ExercÃ­cios Anteriores",
+            "data_licitacao": "Data da LicitaÃ§Ã£o",
             "liberado_fisco_estadual": "Liberado Fisco Estadual",
-            "situacao": "Situação",
+            "situacao": "SituaÃ§Ã£o",
             "uo": "UO",
-            "nome_unidade_orcamentaria": "Nome da Unidade Orçamentária",
+            "nome_unidade_orcamentaria": "Nome da Unidade OrÃ§amentÃ¡ria",
             "ug": "UG",
             "nome_unidade_gestora": "Nome da Unidade Gestora",
-            "data_solicitacao": "Data Solicitação",
-            "data_criacao": "Data Criação",
+            "data_solicitacao": "Data SolicitaÃ§Ã£o",
+            "data_criacao": "Data CriaÃ§Ã£o",
             "tipo_empenho": "Tipo Empenho",
-            "dotacao_orcamentaria": "Dotação Orçamentária",
-            "funcao": "Função",
-            "subfuncao": "Subfunção",
+            "dotacao_orcamentaria": "DotaÃ§Ã£o OrÃ§amentÃ¡ria",
+            "funcao": "FunÃ§Ã£o",
+            "subfuncao": "SubfunÃ§Ã£o",
             "programa_governo": "Programa de Governo",
             "paoe": "PAOE",
             "natureza_despesa": "Natureza de Despesa",
@@ -7238,65 +7711,65 @@ def api_relatorio_ped_download():
             "nome_elemento": "Nome do Elemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "numero_emenda_ep": "Nº Emenda (EP)",
+            "numero_emenda_ep": "NÂº Emenda (EP)",
             "autor_emenda_ep": "Autor da Emenda (EP)",
-            "numero_cac": "Nº CAC",
-            "licitacao": "Licitação",
-            "usuario_responsavel": "Usuário Responsável",
-            "historico": "Histórico",
+            "numero_cac": "NÂº CAC",
+            "licitacao": "LicitaÃ§Ã£o",
+            "usuario_responsavel": "UsuÃ¡rio ResponsÃ¡vel",
+            "historico": "HistÃ³rico",
             "credor": "Credor",
             "nome_credor": "Nome do Credor",
-            "data_autorizacao": "Data Autorização",
-            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro Autorização",
+            "data_autorizacao": "Data AutorizaÃ§Ã£o",
+            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro AutorizaÃ§Ã£o",
             "tipo_despesa": "Tipo de Despesa",
-            "numero_abj": "Nº ABJ",
-            "numero_processo_sequestro_judicial": "Nº Processo do Sequestro Judicial",
-            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
+            "numero_abj": "NÂº ABJ",
+            "numero_processo_sequestro_judicial": "NÂº Processo do Sequestro Judicial",
+            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
             "indicativo_contrato": "Indicativo de contrato",
-            "codigo_uo_extinta": "Código UO Extinta",
-            "devolucao_gcv": "Devolução GCV",
-            "mes_competencia_folha_pagamento": "Mês de Competência da Folha de Pagamento",
-            "exercicio_competencia_folha": "Exercício de Competência da Folha de Pagamento",
-            "obrigacao_patronal": "Obrigação Patronal",
-            "tipo_obrigacao_patronal": "Tipo de Obrigação Patronal",
-            "numero_nla": "Nº NLA",
+            "codigo_uo_extinta": "CÃ³digo UO Extinta",
+            "devolucao_gcv": "DevoluÃ§Ã£o GCV",
+            "mes_competencia_folha_pagamento": "MÃªs de CompetÃªncia da Folha de Pagamento",
+            "exercicio_competencia_folha": "ExercÃ­cio de CompetÃªncia da Folha de Pagamento",
+            "obrigacao_patronal": "ObrigaÃ§Ã£o Patronal",
+            "tipo_obrigacao_patronal": "Tipo de ObrigaÃ§Ã£o Patronal",
+            "numero_nla": "NÂº NLA",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
             "Chave / Chave de Planejamento",
-            "Região",
-            "Subfunção + UG",
+            "RegiÃ£o",
+            "SubfunÃ§Ã£o + UG",
             "ADJ",
-            "Macropolítica",
+            "MacropolÃ­tica",
             "Pilar",
             "Eixo",
-            "Política_Decreto",
-            "Exercício",
-            "Nº PED",
-            "Nº PED Estorno/Estornado",
-            "Nº EMP",
-            "Nº CAD",
-            "Nº NOBLIST",
-            "Nº OS",
-            "Convênio",
-            "Nº Processo Orçamentário de Pagamento",
+            "PolÃ­tica_Decreto",
+            "ExercÃ­cio",
+            "NÂº PED",
+            "NÂº PED Estorno/Estornado",
+            "NÂº EMP",
+            "NÂº CAD",
+            "NÂº NOBLIST",
+            "NÂº OS",
+            "ConvÃªnio",
+            "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
             "Valor PED",
             "Valor do Estorno",
-            "Indicativo de Licitação de Exercícios Anteriores",
-            "Data da Licitação",
+            "Indicativo de LicitaÃ§Ã£o de ExercÃ­cios Anteriores",
+            "Data da LicitaÃ§Ã£o",
             "Liberado Fisco Estadual",
-            "Situação",
+            "SituaÃ§Ã£o",
             "UO",
-            "Nome da Unidade Orçamentária",
+            "Nome da Unidade OrÃ§amentÃ¡ria",
             "UG",
             "Nome da Unidade Gestora",
-            "Data Solicitação",
-            "Data Criação",
+            "Data SolicitaÃ§Ã£o",
+            "Data CriaÃ§Ã£o",
             "Tipo Empenho",
-            "Dotação Orçamentária",
-            "Função",
-            "Subfunção",
+            "DotaÃ§Ã£o OrÃ§amentÃ¡ria",
+            "FunÃ§Ã£o",
+            "SubfunÃ§Ã£o",
             "Programa de Governo",
             "PAOE",
             "Natureza de Despesa",
@@ -7307,28 +7780,28 @@ def api_relatorio_ped_download():
             "Nome do Elemento",
             "Fonte",
             "Iduso",
-            "Nº Emenda (EP)",
+            "NÂº Emenda (EP)",
             "Autor da Emenda (EP)",
-            "Nº CAC",
-            "Licitação",
-            "Usuário Responsável",
-            "Histórico",
+            "NÂº CAC",
+            "LicitaÃ§Ã£o",
+            "UsuÃ¡rio ResponsÃ¡vel",
+            "HistÃ³rico",
             "Credor",
             "Nome do Credor",
-            "Data Autorização",
-            "Data/Hora Cadastro Autorização",
+            "Data AutorizaÃ§Ã£o",
+            "Data/Hora Cadastro AutorizaÃ§Ã£o",
             "Tipo de Despesa",
-            "Nº ABJ",
-            "Nº Processo do Sequestro Judicial",
-            "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
+            "NÂº ABJ",
+            "NÂº Processo do Sequestro Judicial",
+            "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
             "Indicativo de contrato",
-            "Código UO Extinta",
-            "Devolução GCV",
-            "Mês de Competência da Folha de Pagamento",
-            "Exercício de Competência da Folha de Pagamento",
-            "Obrigação Patronal",
-            "Tipo de Obrigação Patronal",
-            "Nº NLA",
+            "CÃ³digo UO Extinta",
+            "DevoluÃ§Ã£o GCV",
+            "MÃªs de CompetÃªncia da Folha de Pagamento",
+            "ExercÃ­cio de CompetÃªncia da Folha de Pagamento",
+            "ObrigaÃ§Ã£o Patronal",
+            "Tipo de ObrigaÃ§Ã£o Patronal",
+            "NÂº NLA",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -7364,7 +7837,7 @@ PLAN20_OUTPUT_DIR = Path("outputs/plan20_seduc")
 def api_plan20_status():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se já for string que não
+        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -7404,7 +7877,7 @@ def api_plan20_status():
 def api_plan20_upload():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se já for string que não
+        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -7422,15 +7895,15 @@ def api_plan20_upload():
             return str(value)
 
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo é obrigatório."}), 400
+        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download é obrigatória."}), 400
+        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download inválida."}), 400
+        return jsonify({"error": "Data do download invÃ¡lida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -7479,54 +7952,54 @@ def api_plan20_upload():
             df_out = pd.read_excel(output_path, sheet_name="Plan20_SEDUC")
             if not df_out.empty:
                 col_map = {
-                    "Exercício": "exercicio",
+                    "ExercÃ­cio": "exercicio",
                     "Programa": "programa",
-                    "Função": "funcao",
-                    "Unidade Orçamentária": "unidade_orcamentaria",
-                    "Ação (P/A/OE)": "acao_paoe",
-                    "Subfunção": "subfuncao",
-                    "Objetivo Específico": "objetivo_especifico",
+                    "FunÃ§Ã£o": "funcao",
+                    "Unidade OrÃ§amentÃ¡ria": "unidade_orcamentaria",
+                    "AÃ§Ã£o (P/A/OE)": "acao_paoe",
+                    "SubfunÃ§Ã£o": "subfuncao",
+                    "Objetivo EspecÃ­fico": "objetivo_especifico",
                     "Esfera": "esfera",
-                    "Responsável pela Ação": "responsavel_acao",
-                    "Produto(s) da Ação": "produto_acao",
+                    "ResponsÃ¡vel pela AÃ§Ã£o": "responsavel_acao",
+                    "Produto(s) da AÃ§Ã£o": "produto_acao",
                     "Unidade de Medida do Produto": "unid_medida_produto",
-                    "Região do Produto": "regiao_produto",
+                    "RegiÃ£o do Produto": "regiao_produto",
                     "Meta do Produto": "meta_produto",
                     "Saldo Meta do Produto": "saldo_meta_produto",
-                    "Público Transversal": "publico_transversal",
-                    "SubAção/entrega": "subacao_entrega",
-                    "Responsável": "responsavel",
+                    "PÃºblico Transversal": "publico_transversal",
+                    "SubAÃ§Ã£o/entrega": "subacao_entrega",
+                    "ResponsÃ¡vel": "responsavel",
                     "Prazo": "prazo",
                     "Unid. Gestora": "unid_gestora",
                     "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
-                    "Produto da SubAção": "produto_subacao",
+                    "Produto da SubAÃ§Ã£o": "produto_subacao",
                     "Unidade de Medida": "unidade_medida",
-                    "Região da SubAção": "regiao_subacao",
-                    "Código": "codigo",
-                    "Município(s) da entrega": "municipios_entrega",
-                    "Meta da SubAção": "meta_subacao",
+                    "RegiÃ£o da SubAÃ§Ã£o": "regiao_subacao",
+                    "CÃ³digo": "codigo",
+                    "MunicÃ­pio(s) da entrega": "municipios_entrega",
+                    "Meta da SubAÃ§Ã£o": "meta_subacao",
                     "Detalhamento do produto": "detalhamento_produto",
                     "Etapa": "etapa",
-                    "Responsável da Etapa": "responsavel_etapa",
+                    "ResponsÃ¡vel da Etapa": "responsavel_etapa",
                     "Prazo da Etapa": "prazo_etapa",
-                    "Região da Etapa": "regiao_etapa",
+                    "RegiÃ£o da Etapa": "regiao_etapa",
                     "Natureza": "natureza",
                     "Fonte": "fonte",
                     "IDU": "idu",
-                    "Descrição do Item de Despesa": "descricao_item_despesa",
+                    "DescriÃ§Ã£o do Item de Despesa": "descricao_item_despesa",
                     "Unid. Medida": "unid_medida_item",
                     "Quantidade": "quantidade",
-                    "Valor Unitário": "valor_unitario",
+                    "Valor UnitÃ¡rio": "valor_unitario",
                     "Valor Total": "valor_total",
                     "Chave de Planejamento": "chave_planejamento",
-                    "Região": "regiao",
-                    "Subfunção + UG": "subfuncao_ug",
+                    "RegiÃ£o": "regiao",
+                    "SubfunÃ§Ã£o + UG": "subfuncao_ug",
                     "ADJ": "adj",
                     "Macropolitica": "macropolitica",
                     "Pilar": "pilar",
                     "Eixo": "eixo",
                     "Politica_Decreto": "politica_decreto",
-                    "Público Transversal (chave)": "publico_transversal_chave",
+                    "PÃºblico Transversal (chave)": "publico_transversal_chave",
                     "Cat.Econ": "cat_econ",
                     "Grupo": "grupo",
                     "Modalidade": "modalidade",
@@ -7569,7 +8042,7 @@ def api_plan20_upload():
                         errors="coerce",
                     )
 
-                # Apenas colunas realmente numéricas no banco
+                # Apenas colunas realmente numÃ©ricas no banco
                 numeric_cols = [
                     "exercicio",
                     "quantidade",
@@ -8572,13 +9045,13 @@ def api_relatorio_nob_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_nob": "Nº NOB",
-            "numero_nob_estorno": "Nº NOB Estorno/Estornado",
-            "numero_liq": "Nº LIQ",
-            "numero_emp": "Nº EMP",
+            "numero_nob": "NÂº NOB",
+            "numero_nob_estorno": "NÂº NOB Estorno/Estornado",
+            "numero_liq": "NÂº LIQ",
+            "numero_emp": "NÂº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "Nº PED",
+            "numero_ped": "NÂº PED",
             "valor_nob": "Valor NOB",
             "devolucao_gcv": "Devolucao GCV",
             "valor_nob_gcv": "Valor NOB - GCV",
@@ -8612,13 +9085,13 @@ def api_relatorio_nob_download():
 
         col_order = [
             "Exercicio",
-            "Nº NOB",
-            "Nº NOB Estorno/Estornado",
-            "Nº LIQ",
-            "Nº EMP",
+            "NÂº NOB",
+            "NÂº NOB Estorno/Estornado",
+            "NÂº LIQ",
+            "NÂº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "Nº PED",
+            "NÂº PED",
             "Valor NOB",
             "Devolucao GCV",
             "Valor NOB - GCV",
@@ -8785,8 +9258,8 @@ def api_relatorio_emp_download():
             "eixo": "Eixo",
             "politica_decreto": "Politica_Decreto",
             "exercicio": "Exercicio",
-            "numero_emp": "Nº EMP",
-            "numero_ped": "Nº PED",
+            "numero_emp": "NÂº EMP",
+            "numero_ped": "NÂº PED",
             "valor_emp": "Valor EMP",
             "devolucao_gcv": "Devolucao GCV",
             "valor_emp_devolucao_gcv": "Valor EMP-Devolucao GCV",
@@ -8816,8 +9289,8 @@ def api_relatorio_emp_download():
             "situacao": "Situacao",
             "data_emissao": "Data emissao",
             "data_criacao": "Data criacao",
-            "numero_contrato": "Nº Contrato",
-            "numero_convenio": "Nº Convênio",
+            "numero_contrato": "NÂº Contrato",
+            "numero_convenio": "NÂº ConvÃªnio",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -8831,8 +9304,8 @@ def api_relatorio_emp_download():
             "Eixo",
             "Politica_Decreto",
             "Exercicio",
-            "Nº EMP",
-            "Nº PED",
+            "NÂº EMP",
+            "NÂº PED",
             "Valor EMP",
             "Devolucao GCV",
             "Valor EMP-Devolucao GCV",
@@ -8862,8 +9335,8 @@ def api_relatorio_emp_download():
             "Situacao",
             "Data emissao",
             "Data criacao",
-            "Nº Contrato",
-            "Nº Convênio",
+            "NÂº Contrato",
+            "NÂº ConvÃªnio",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -8997,72 +9470,72 @@ def api_relatorio_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "Exercício",
+            "exercicio": "ExercÃ­cio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
             "adj_concedente": "Adjunta Concedente",
-            "chave_dotacao": "Controle de Dotação",
+            "chave_dotacao": "Controle de DotaÃ§Ã£o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da Dotação",
+            "valor_dotacao": "Valor da DotaÃ§Ã£o",
             "valor_estorno": "Valor do Estorno",
             "valor_ped_emp": "Valor do PED/EMP",
-            "valor_atual": "Valor da Dotação Atualizada",
-            "situacao": "Situação",
+            "valor_atual": "Valor da DotaÃ§Ã£o Atualizada",
+            "situacao": "SituaÃ§Ã£o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "Ação/PAOE",
+            "acao_paoe": "AÃ§Ã£o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "Região",
-            "subacao_entrega": "SubAção/Entrega",
+            "regiao": "RegiÃ£o",
+            "subacao_entrega": "SubAÃ§Ã£o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
             "subelemento": "Subelemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "justificativa_historico": "Justificativa/Histórico",
+            "justificativa_historico": "Justificativa/HistÃ³rico",
             "usuario_nome_perfil": "Criado/Alterado por",
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da Aprovação",
-            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
+            "data_aprovacao": "Data da AprovaÃ§Ã£o",
+            "motivo_rejeicao": "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "Exercício",
+            "ExercÃ­cio",
             "Status",
             "Adjunta Solicitante",
             "Adjunta Concedente",
-            "Controle de Dotação",
+            "Controle de DotaÃ§Ã£o",
             "Chave de Planejamento",
-            "Valor da Dotação",
+            "Valor da DotaÃ§Ã£o",
             "Valor do Estorno",
             "Valor do PED/EMP",
-            "Valor da Dotação Atualizada",
-            "Situação",
+            "Valor da DotaÃ§Ã£o Atualizada",
+            "SituaÃ§Ã£o",
             "UO",
             "Programa",
-            "Ação/PAOE",
+            "AÃ§Ã£o/PAOE",
             "Produto",
             "UG",
-            "Região",
-            "SubAção/Entrega",
+            "RegiÃ£o",
+            "SubAÃ§Ã£o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
             "Subelemento",
             "Fonte",
             "Iduso",
-            "Justificativa/Histórico",
+            "Justificativa/HistÃ³rico",
             "Criado/Alterado por",
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da Aprovação",
-            "Justificativa da Aprovação/Rejeição",
+            "Data da AprovaÃ§Ã£o",
+            "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -9194,22 +9667,22 @@ def api_relatorio_est_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "Exercício",
+            "exercicio": "ExercÃ­cio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
-            "chave_dotacao": "Controle de Dotação",
+            "chave_dotacao": "Controle de DotaÃ§Ã£o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da Dotação",
+            "valor_dotacao": "Valor da DotaÃ§Ã£o",
             "valor_a_ser_est": "Valor do Estorno",
-            "saldo_dotacao_apos": "Saldo de Dotação",
-            "situacao": "Situação",
+            "saldo_dotacao_apos": "Saldo de DotaÃ§Ã£o",
+            "situacao": "SituaÃ§Ã£o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "Ação/PAOE",
+            "acao_paoe": "AÃ§Ã£o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "Região",
-            "subacao_entrega": "SubAção/Entrega",
+            "regiao": "RegiÃ£o",
+            "subacao_entrega": "SubAÃ§Ã£o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
@@ -9221,28 +9694,28 @@ def api_relatorio_est_dotacao_download():
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da Aprovação",
-            "motivo_rejeicao": "Justificativa da Aprovação/Rejeição",
+            "data_aprovacao": "Data da AprovaÃ§Ã£o",
+            "motivo_rejeicao": "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "Exercício",
+            "ExercÃ­cio",
             "Status",
             "Adjunta Solicitante",
-            "Controle de Dotação",
+            "Controle de DotaÃ§Ã£o",
             "Chave de Planejamento",
-            "Valor da Dotação",
+            "Valor da DotaÃ§Ã£o",
             "Valor do Estorno",
-            "Saldo de Dotação",
-            "Situação",
+            "Saldo de DotaÃ§Ã£o",
+            "SituaÃ§Ã£o",
             "UO",
             "Programa",
-            "Ação/PAOE",
+            "AÃ§Ã£o/PAOE",
             "Produto",
             "UG",
-            "Região",
-            "SubAção/Entrega",
+            "RegiÃ£o",
+            "SubAÃ§Ã£o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
@@ -9254,8 +9727,8 @@ def api_relatorio_est_dotacao_download():
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da Aprovação",
-            "Justificativa da Aprovação/Rejeição",
+            "Data da AprovaÃ§Ã£o",
+            "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -9358,11 +9831,11 @@ def api_relatorio_est_emp_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_est": "Nº EST",
-            "numero_emp": "Nº EMP",
+            "numero_est": "NÂº EST",
+            "numero_emp": "NÂº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "Nº PED",
+            "numero_ped": "NÂº PED",
             "valor_emp": "Valor EMP",
             "valor_est_emp_sem_aqs": "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "valor_est_emp_com_aqs": "Valor Est EMP (Em LIQ com AQS)",
@@ -9385,11 +9858,11 @@ def api_relatorio_est_emp_download():
 
         col_order = [
             "Exercicio",
-            "Nº EST",
-            "Nº EMP",
+            "NÂº EST",
+            "NÂº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "Nº PED",
+            "NÂº PED",
             "Valor EMP",
             "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "Valor Est EMP (Em LIQ com AQS)",
@@ -9518,46 +9991,46 @@ def api_relatorio_plan20_download():
         db.session.close()
 
         headers = [
-            ("Exercício", "exercicio"),
+            ("ExercÃ­cio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("Região", "regiao"),
-            ("Subfunção + UG", "subfuncao_ug"),
+            ("RegiÃ£o", "regiao"),
+            ("SubfunÃ§Ã£o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("Público Transversal (chave)", "publico_transversal_chave"),
+            ("PÃºblico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("Função", "funcao"),
-            ("Unidade Orçamentária", "unidade_orcamentaria"),
-            ("Ação (P/A/OE)", "acao_paoe"),
-            ("Subfunção", "subfuncao"),
-            ("Objetivo Específico", "objetivo_especifico"),
+            ("FunÃ§Ã£o", "funcao"),
+            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
+            ("AÃ§Ã£o (P/A/OE)", "acao_paoe"),
+            ("SubfunÃ§Ã£o", "subfuncao"),
+            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("Responsável pela Ação", "responsavel_acao"),
-            ("Produto(s) da Ação", "produto_acao"),
+            ("ResponsÃ¡vel pela AÃ§Ã£o", "responsavel_acao"),
+            ("Produto(s) da AÃ§Ã£o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("Região do Produto", "regiao_produto"),
+            ("RegiÃ£o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("Público Transversal", "publico_transversal"),
-            ("SubAção/entrega", "subacao_entrega"),
-            ("Responsável", "responsavel"),
+            ("PÃºblico Transversal", "publico_transversal"),
+            ("SubAÃ§Ã£o/entrega", "subacao_entrega"),
+            ("ResponsÃ¡vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubAção", "produto_subacao"),
+            ("Produto da SubAÃ§Ã£o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("Região da SubAção", "regiao_subacao"),
-            ("Código", "codigo"),
-            ("Município(s) da entrega", "municipios_entrega"),
-            ("Meta da SubAção", "meta_subacao"),
+            ("RegiÃ£o da SubAÃ§Ã£o", "regiao_subacao"),
+            ("CÃ³digo", "codigo"),
+            ("MunicÃ­pio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubAÃ§Ã£o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("Responsável da Etapa", "responsavel_etapa"),
+            ("ResponsÃ¡vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("Região da Etapa", "regiao_etapa"),
+            ("RegiÃ£o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -9566,10 +10039,10 @@ def api_relatorio_plan20_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("Descrição do Item de Despesa", "descricao_item_despesa"),
+            ("DescriÃ§Ã£o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor Unitário", "valor_unitario"),
+            ("Valor UnitÃ¡rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
         ]
 
@@ -9601,7 +10074,7 @@ def api_relatorio_plan20_download():
             idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
             numeric_cols = {
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor Unitário"),
+                idx_map.get("Valor UnitÃ¡rio"),
                 idx_map.get("Valor Total"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -9611,7 +10084,7 @@ def api_relatorio_plan20_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("Exercício") and isinstance(cell.value, (int, float, str)):
+                    if cell.col_idx == idx_map.get("ExercÃ­cio") and isinstance(cell.value, (int, float, str)):
                         try:
                             cell.value = int(str(cell.value).split(".")[0])
                         except Exception:
@@ -9716,49 +10189,49 @@ def api_relatorio_plan21_nger_download():
         db.session.close()
 
         headers = [
-            ("Exercício", "exercicio"),
+            ("ExercÃ­cio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("Região", "regiao"),
-            ("Subfunção + UG", "subfuncao_ug"),
+            ("RegiÃ£o", "regiao"),
+            ("SubfunÃ§Ã£o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("Público Transversal (chave)", "publico_transversal_chave"),
+            ("PÃºblico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("Função", "funcao"),
-            ("Unidade Orçamentária", "unidade_orcamentaria"),
-            ("Ação (P/A/OE)", "acao_paoe"),
-            ("Subfunção", "subfuncao"),
-            ("Objetivo Específico", "objetivo_especifico"),
+            ("FunÃ§Ã£o", "funcao"),
+            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
+            ("AÃ§Ã£o (P/A/OE)", "acao_paoe"),
+            ("SubfunÃ§Ã£o", "subfuncao"),
+            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("Responsável pela Ação", "responsavel_acao"),
-            ("Produto(s) da Ação", "produto_acao"),
+            ("ResponsÃ¡vel pela AÃ§Ã£o", "responsavel_acao"),
+            ("Produto(s) da AÃ§Ã£o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("Região do Produto", "regiao_produto"),
+            ("RegiÃ£o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("Meta Crédito", "meta_credito"),
+            ("Meta CrÃ©dito", "meta_credito"),
             ("Meta Anulada", "meta_anulada"),
             ("Meta Atual", "meta_atual"),
-            ("Público Transversal", "publico_transversal"),
-            ("Subação/entrega", "subacao_entrega"),
-            ("Responsável", "responsavel"),
+            ("PÃºblico Transversal", "publico_transversal"),
+            ("SubaÃ§Ã£o/entrega", "subacao_entrega"),
+            ("ResponsÃ¡vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da Subação", "produto_subacao"),
+            ("Produto da SubaÃ§Ã£o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("Região da Subação", "regiao_subacao"),
-            ("Código", "codigo"),
-            ("Município(s) da entrega", "municipios_entrega"),
-            ("Meta da Subação", "meta_subacao"),
+            ("RegiÃ£o da SubaÃ§Ã£o", "regiao_subacao"),
+            ("CÃ³digo", "codigo"),
+            ("MunicÃ­pio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubaÃ§Ã£o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("Responsável da Etapa", "responsavel_etapa"),
+            ("ResponsÃ¡vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("Região da Etapa", "regiao_etapa"),
+            ("RegiÃ£o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -9767,13 +10240,13 @@ def api_relatorio_plan21_nger_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("Descrição do Item de Despesa", "descricao_item_despesa"),
+            ("DescriÃ§Ã£o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor Unitário", "valor_unitario"),
+            ("Valor UnitÃ¡rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
-            ("SuplementAção", "suplementacao"),
-            ("AnulAção", "anulacao"),
+            ("SuplementAÃ§Ã£o", "suplementacao"),
+            ("AnulAÃ§Ã£o", "anulacao"),
             ("Valor Atual", "valor_atual"),
         ]
 
@@ -9820,15 +10293,15 @@ def api_relatorio_plan21_nger_download():
             numeric_cols = {
                 idx_map.get("Meta do Produto"),
                 idx_map.get("Saldo Meta do Produto"),
-                idx_map.get("Meta Crédito"),
+                idx_map.get("Meta CrÃ©dito"),
                 idx_map.get("Meta Anulada"),
                 idx_map.get("Meta Atual"),
-                idx_map.get("Meta da Subação"),
+                idx_map.get("Meta da SubaÃ§Ã£o"),
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor Unitário"),
+                idx_map.get("Valor UnitÃ¡rio"),
                 idx_map.get("Valor Total"),
-                idx_map.get("SuplementAção"),
-                idx_map.get("AnulAção"),
+                idx_map.get("SuplementAÃ§Ã£o"),
+                idx_map.get("AnulAÃ§Ã£o"),
                 idx_map.get("Valor Atual"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -9838,7 +10311,7 @@ def api_relatorio_plan21_nger_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("Exercício") and isinstance(
+                    if cell.col_idx == idx_map.get("ExercÃ­cio") and isinstance(
                         cell.value, (int, float, str)
                     ):
                         try:
@@ -10211,7 +10684,7 @@ def api_perfil(perfil_id):
             return jsonify({"ok": True, "message": "Perfil excluido."})
         except IntegrityError:
             db.session.rollback()
-            return jsonify({"error": "Não foi possível excluir este perfil."}), 400
+            return jsonify({"error": "NÃ£o foi possÃ­vel excluir este perfil."}), 400
 
     data = request.get_json() or {}
     nome = (data.get("nome") or perfil.nome).strip()

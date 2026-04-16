@@ -1,10 +1,13 @@
-<div class="grid" id="meta-fisica-page" data-user-id="{{ user_id }}" data-user-nome="{{ user_nome }}">
+<div class="grid" id="meta-fisica-page" data-user-id="{{ user_id }}" data-user-nome="{{ user_nome }}" data-user-perfil-id="{{ user_perfil_id or '' }}" data-user-perfil="{{ user_perfil_nome or '' }}">
   <div class="card no-print">
-    <div class="card-title">Meta Física do Produto da Ação - Base de dados PTA ({{ current_year }})</div>
+    <div class="card-title" id="meta-fisica-form-title">
+      Meta F&iacute;sica do Produto da A&ccedil;&atilde;o - Base de dados PTA ({{ current_year }})
+      <span id="meta-fisica-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span>
+    </div>
     <form id="form-meta-fisica" class="form" novalidate>
       <div class="form-grid">
         <label class="field">
-          <span>*Exercício</span>
+          <span>*Exerc&iacute;cio</span>
           <select id="meta-fisica-exercicio" name="exercicio" required>
             <option value="">Carregando...</option>
           </select>
@@ -22,20 +25,20 @@
           </select>
         </label>
         <label class="field">
-          <span>*Ação/PAOE</span>
+          <span>*A&ccedil;&atilde;o/PAOE</span>
           <select id="meta-fisica-acao" name="acao_paoe" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>*Responsável da Ação/PAOE</span>
-          <select id="meta-fisica-responsavel-acao" name="responsavel_acao" required>
+          <span>*Produto da A&ccedil;&atilde;o</span>
+          <select id="meta-fisica-produto" name="produto_acao" required>
             <option value="">Carregando...</option>
           </select>
         </label>
         <label class="field">
-          <span>*Produto da Ação</span>
-          <select id="meta-fisica-produto" name="produto_acao" required>
+          <span>*Adjunta Solicitante</span>
+          <select id="meta-fisica-adj-solicitante" name="adj_solicitante" required>
             <option value="">Carregando...</option>
           </select>
         </label>
@@ -55,10 +58,10 @@
           <table class="table meta-fisica-table" id="meta-fisica-table">
             <thead>
               <tr>
-                <th>REGIÃO PTA/LOA</th>
+                <th>REGI&Atilde;O PTA/LOA</th>
                 <th>META PTA/LOA</th>
-                <th>ACRÉSCIMO</th>
-                <th>REDUÇÃO</th>
+                <th>ACR&Eacute;SCIMO</th>
+                <th>REDU&Ccedil;&Atilde;O</th>
                 <th>META AJUSTADA</th>
               </tr>
             </thead>
@@ -79,7 +82,7 @@
 
       <div class="actions">
         <button class="btn btn-primary sm" type="submit" id="meta-fisica-save">Salvar</button>
-        <button class="btn btn-danger sm" type="button" id="meta-fisica-clear">Limpar Formulário</button>
+        <button class="btn btn-danger sm" type="button" id="meta-fisica-clear">Limpar Formul&aacute;rio</button>
         <div id="meta-fisica-msg" class="muted"></div>
       </div>
     </form>
@@ -87,31 +90,54 @@
 
   <div class="card">
     <div class="form no-print" id="meta-fisica-filtro-form">
-      <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
+      <div class="card-title" style="margin-bottom:10px;">Crit&eacute;rios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">
           <span>Campo</span>
           <select id="meta-fisica-filtro-campo">
             <option value="">Selecione...</option>
-            <option value="exercicio">*Exercício</option>
+            <option value="controle_meta">Controle de Meta</option>
+            <option value="exercicio">*Exerc&iacute;cio</option>
             <option value="status_aprovacao">Status</option>
-            <option value="acao_paoe">Ação/PAOE</option>
+            <option value="acao_paoe">A&ccedil;&atilde;o/PAOE</option>
             <option value="programa">Programa</option>
-            <option value="produto_acao">Produto da Ação</option>
-            <option value="regiao_produto">Região PTA/LOA</option>
+            <option value="produto_acao">Produto da A&ccedil;&atilde;o</option>
+            <option value="regiao_produto">Regi&atilde;o PTA/LOA</option>
           </select>
         </label>
         <label class="field">
           <span>Operador</span>
           <select id="meta-fisica-filtro-operador">
             <option value="eq">Igual a</option>
-            <option value="contains">Contém</option>
+            <option value="contains">Cont&eacute;m</option>
+            <option value="gt">Maior que</option>
+            <option value="lt">Menor que</option>
+            <option value="gte">Maior igual a</option>
+            <option value="lte">Menor igual a</option>
           </select>
         </label>
         <label class="field">
           <span>Valor</span>
           <input type="text" id="meta-fisica-filtro-valor" />
         </label>
+        <div class="field field-inline align-end">
+          <button class="btn btn-primary sm" type="button" id="meta-fisica-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Crit&eacute;rios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field dotacao-criteria-box">
+          <ul id="meta-fisica-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="field field-inline" style="gap:8px; align-items:flex-start;">
+          <button class="btn btn-danger sm" type="button" id="meta-fisica-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="meta-fisica-filtro-clear">Limpar</button>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:8px;">
+        <button class="btn btn-danger sm" type="button" id="meta-fisica-filtro-cancel">Cancelar</button>
+        <button class="btn btn-primary sm" type="button" id="meta-fisica-filtro-apply">Consultar</button>
+        <div id="meta-fisica-filtro-msg" class="muted"></div>
       </div>
     </div>
 
@@ -122,23 +148,41 @@
             <tr>
               <th>Controle de Meta</th>
               <th>Status</th>
-              <th>Exercício</th>
+              <th>Exerc&iacute;cio</th>
               <th>UO</th>
               <th>Programa</th>
-              <th>Ação/PAOE</th>
-              <th>Produto da Ação</th>
+              <th>A&ccedil;&atilde;o/PAOE</th>
+              <th>Produto da A&ccedil;&atilde;o</th>
               <th>Unidade de Medida</th>
-              <th>Regiões PTA/LOA</th>
+              <th>Regi&otilde;es PTA/LOA</th>
               <th>Qtd Linhas</th>
-              <th>Acréscimo</th>
-              <th>Redução</th>
+              <th>Acr&eacute;scimo</th>
+              <th>Redu&ccedil;&atilde;o</th>
               <th>Meta Ajustada</th>
               <th>Justificativa</th>
             </tr>
           </thead>
           <tbody>
             {% for m in metas %}
-              <tr>
+              <tr class="dotacao-summary-row meta-fisica-summary-row"
+                  data-id="{{ m.id or '' }}"
+                  data-controle-meta="{{ m.controle_meta or '' }}"
+                  data-status-aprovacao="{{ m.status_aprovacao or '' }}"
+                  data-criador-perfil-id="{{ m.criador_perfil_id or '' }}"
+                  data-exercicio="{{ m.exercicio or '' }}"
+                  data-uo="{{ m.unidade_orcamentaria or '' }}"
+                  data-programa="{{ m.programa or '' }}"
+                  data-acao-paoe="{{ m.acao_paoe or '' }}"
+                  data-produto-acao="{{ m.produto_acao or '' }}"
+                  data-adj-solicitante="{{ m.responsavel_acao or '' }}"
+                  data-unid-medida-produto="{{ m.unid_medida_produto or '' }}"
+                  data-regioes-preview="{{ m.regioes_preview or '' }}"
+                  data-justificativa="{{ m.justificativa or '' }}"
+                  data-meta-credito="{{ m.meta_credito or '' }}"
+                  data-meta-anulada="{{ m.meta_anulada or '' }}"
+                  data-meta-atual="{{ m.meta_atual or '' }}"
+                  data-criado-em="{{ m.criado_em_iso or '' }}"
+                  data-linhas='{{ (m.regioes_payload or [])|tojson }}'>
                 <td>{{ m.controle_meta or "" }}</td>
                 <td>{{ m.status_aprovacao or "" }}</td>
                 <td>{{ m.exercicio or "" }}</td>
@@ -158,6 +202,12 @@
           </tbody>
         </table>
       </div>
+    </div>
+    <div class="actions no-print" style="justify-content:flex-end; margin-top:10px;">
+      <button class="btn btn-primary sm" type="button" id="meta-fisica-approve" disabled>Aprovar</button>
+      <button class="btn btn-secondary sm" type="button" id="meta-fisica-edit" disabled>Editar</button>
+      <button class="btn btn-danger sm" type="button" id="meta-fisica-delete" disabled>Excluir</button>
+      <button class="btn btn-primary sm" type="button" id="meta-fisica-print">Imprimir</button>
     </div>
   </div>
 </div>

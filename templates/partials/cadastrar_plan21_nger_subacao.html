@@ -1,7 +1,6 @@
-﻿<div class="grid" id="subacao-page"
-
+<div class="grid" id="subacao-page"
+     data-user-perfil-id="{{ user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
-
      data-user-nome="{{ user_nome }}">
 
   <div class="card no-print">
@@ -1210,7 +1209,7 @@
                   data-usuario-nome="{{ s.usuario_nome or '' }}"
 
                   data-usuario-perfil="{{ s.usuario_perfil or '' }}"
-
+                  data-criador-perfil-id="{{ s.criador_perfil_id or '' }}"
                   data-criado-em="{{ s.criado_em_iso or '' }}"
 
                   data-aprovado-por-nome="{{ s.aprovado_por_nome or '' }}"
@@ -1308,5 +1307,4 @@
   </div>
 
 </div>
-
 

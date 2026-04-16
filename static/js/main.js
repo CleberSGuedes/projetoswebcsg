@@ -2830,12 +2830,8 @@
           setFilterMsg("Selecione um registro para editar.", true);
           return;
         }
-        const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
-        if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente não definida.", true);
-          return;
-        }
-        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
+        const criadorPerfilId = String(selected.dataset.criadorPerfilId || "").trim();
+        if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
           setFilterMsg("Usuário sem permissão para editar a dotação atual.", true);
           return;
         }
@@ -2860,12 +2856,8 @@
           setFilterMsg("Selecione um registro para excluir.", true);
           return;
         }
-        const adjConcedenteId = String(selected.dataset.adjConcedenteId || "").trim();
-        if (!adjConcedenteId) {
-          setFilterMsg("Adjunta Concedente não definida.", true);
-          return;
-        }
-        if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.adjConcedenteId || "").trim()) {
+        const criadorPerfilId = String(selected.dataset.criadorPerfilId || "").trim();
+        if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
           setFilterMsg("Usuário sem permissão para excluir a dotação atual.", true);
           return;
         }
@@ -6877,7 +6869,7 @@
       unidade_orcamentaria: document.getElementById("meta-fisica-uo"),
       programa: document.getElementById("meta-fisica-programa"),
       acao_paoe: document.getElementById("meta-fisica-acao"),
-      responsavel_acao: document.getElementById("meta-fisica-responsavel-acao"),
+      adj_solicitante: document.getElementById("meta-fisica-adj-solicitante"),
       produto_acao: document.getElementById("meta-fisica-produto"),
       unid_medida_produto: document.getElementById("meta-fisica-unidade-medida"),
     };
@@ -6886,22 +6878,67 @@
     const clearBtn = document.getElementById("meta-fisica-clear");
     const consultBtn = document.getElementById("meta-fisica-consultar");
     const justificativaInput = document.getElementById("meta-fisica-justificativa");
+    const metaPage = document.getElementById("meta-fisica-page");
+    const summaryBox = document.getElementById("meta-fisica-summary");
+    const summaryBody = document.querySelector("#meta-fisica-summary-table tbody");
+    const filterField = document.getElementById("meta-fisica-filtro-campo");
+    const filterOp = document.getElementById("meta-fisica-filtro-operador");
+    const filterValue = document.getElementById("meta-fisica-filtro-valor");
+    const filterAdd = document.getElementById("meta-fisica-filtro-add");
+    const filterList = document.getElementById("meta-fisica-filtro-list");
+    const filterRemove = document.getElementById("meta-fisica-filtro-remove");
+    const filterClear = document.getElementById("meta-fisica-filtro-clear");
+    const filterCancel = document.getElementById("meta-fisica-filtro-cancel");
+    const filterApply = document.getElementById("meta-fisica-filtro-apply");
+    const filterMsg = document.getElementById("meta-fisica-filtro-msg");
+    const editBtn = document.getElementById("meta-fisica-edit");
+    const deleteBtn = document.getElementById("meta-fisica-delete");
+    const printBtn = document.getElementById("meta-fisica-print");
+    const editBadge = document.getElementById("meta-fisica-editing-badge");
+    const currentUserPerfilId = String(metaPage?.dataset?.userPerfilId || "").trim();
     const rowRequiredKeys = [
       "unidade_orcamentaria",
       "programa",
       "acao_paoe",
-      "responsavel_acao",
       "produto_acao",
       "unid_medida_produto",
     ];
+    const MAX_META_FISICA_ROWS = 13;
 
     let tableRows = [];
     let hasConsulted = false;
     let lastQueryHadRows = false;
+    let regionCatalog = [];
+    let editingMetaId = "";
+    let editingControle = "";
+    const criteria = [];
+    let criteriaSelected = -1;
+    const fieldLabels = {
+      controle_meta: "Controle de Meta",
+      exercicio: "Exercício",
+      status_aprovacao: "Status",
+      acao_paoe: "Ação/PAOE",
+      programa: "Programa",
+      produto_acao: "Produto da Ação",
+      regiao_produto: "Região PTA/LOA",
+    };
+    const opLabels = {
+      eq: "Igual a",
+      contains: "Contém",
+      gt: "Maior que",
+      lt: "Menor que",
+      gte: "Maior igual a",
+      lte: "Menor igual a",
+    };
 
     const setMsg = (text, isError = false) => {
       msg.textContent = text || "";
       msg.classList.toggle("text-error", !!isError);
+    };
+    const setFilterMsg = (text, isError = false) => {
+      if (!filterMsg) return;
+      filterMsg.textContent = text || "";
+      filterMsg.classList.toggle("text-error", !!isError);
     };
     const esc = (v) =>
       String(v ?? "")
@@ -6980,13 +7017,187 @@
       }
       return `${negative}${raw}`;
     };
+    const getUnidadeTipo = () => String(selects.unid_medida_produto?.value || "").trim().toLowerCase();
+    const sanitizeByUnidade = (value) => {
+      if (getUnidadeTipo() === "unidade") {
+        return String(value ?? "").replace(/[^\d]/g, "");
+      }
+      return sanitizeDecimalInput(value);
+    };
+    const enforceMinPercentual = (value, isFinal = false) => {
+      if (getUnidadeTipo() !== "percentual") return String(value ?? "");
+      const raw = String(value ?? "").trim();
+      if (!raw) return raw;
+      const n = parseDec(raw);
+      if (n === null) return raw;
+      const isTypingPrefix =
+        !isFinal && (raw === "0" || raw === "0," || raw === "0." || /[,.]$/.test(raw));
+      if (isTypingPrefix) return raw;
+      if (n < 0.1) return "0,1";
+      return raw;
+    };
+    const formatByUnidade = (value) => {
+      const n = parseDec(value);
+      if (n === null) return "";
+      if (getUnidadeTipo() === "unidade") {
+        return String(Math.trunc(n));
+      }
+      return formatDecimalPtBr(value);
+    };
+    const validateValorByUnidade = (value, fieldLabel) => {
+      const raw = String(value ?? "").trim();
+      if (!raw) return "";
+      const n = parseDec(raw);
+      if (n === null) return `${fieldLabel} inválido.`;
+      if (n === 0) return "";
+      if (getUnidadeTipo() === "percentual" && n > 0 && n < 0.1) {
+        return `${fieldLabel} mínimo é 0,1 para unidade de medida Percentual.`;
+      }
+      if (getUnidadeTipo() === "unidade" && n > 0 && !Number.isInteger(n)) {
+        return `${fieldLabel} deve ser inteiro quando unidade de medida for Unidade.`;
+      }
+      return "";
+    };
     const rowAdjusted = (row) => {
-      if (row.is_novo) return "";
-      const metaBase = parseDec(row.meta_produto);
-      if (metaBase === null) return "";
-      const credito = parseDec(row.meta_credito) || 0;
-      const anulada = parseDec(row.meta_anulada) || 0;
+      const metaBaseRaw = parseDec(row.meta_produto);
+      const creditoRaw = parseDec(sumFieldItems(row, "meta_credito"));
+      const anuladaRaw = parseDec(sumFieldItems(row, "meta_anulada"));
+      if (row.is_novo && metaBaseRaw === null && creditoRaw === null && anuladaRaw === null) {
+        return "";
+      }
+      if (!row.is_novo && metaBaseRaw === null) return "";
+      const metaBase = metaBaseRaw === null ? 0 : metaBaseRaw;
+      const credito = creditoRaw || 0;
+      const anulada = anuladaRaw || 0;
       return metaBase + credito - anulada;
+    };
+    const getFieldItems = (row, field) => {
+      const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
+      const arr = Array.isArray(row[key]) ? row[key].map((v) => String(v ?? "")) : [];
+      if (arr.length) return arr;
+      const fallback = String(row[field] ?? "");
+      if (!fallback && !row?.is_novo) return [];
+      return [fallback];
+    };
+    const setFieldItems = (row, field, items) => {
+      const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
+      row[key] =
+        Array.isArray(items) && items.length
+          ? items.map((v) => String(v ?? ""))
+          : (row?.is_novo ? [""] : []);
+      row[field] = sumFieldItems(row, field);
+    };
+    const sumFieldItems = (row, field) => {
+      const items = getFieldItems(row, field);
+      let total = 0;
+      items.forEach((item) => {
+        const n = parseDec(item);
+        if (n !== null) total += n;
+      });
+      if (!Number.isFinite(total) || total === 0) return "";
+      return String(total).replace(".", ",");
+    };
+    const canAddMovement = (row, field) => {
+      if (row?.[`allow_start_${field}`]) return true;
+      const ownHas = getFieldItems(row, field).some((item) => {
+        const n = parseDec(item);
+        return n !== null && n > 0;
+      });
+      if (ownHas) return true;
+      if (!row?.allow_cross_add) return false;
+      const otherField = field === "meta_credito" ? "meta_anulada" : "meta_credito";
+      return getFieldItems(row, otherField).some((item) => {
+        const n = parseDec(item);
+        return n !== null && n > 0;
+      });
+    };
+    const getMovementCountForField = (row, field) => {
+      const items = getFieldItems(row, field);
+      const hasValue = items.some((v) => String(v ?? "").trim() !== "");
+      if (!hasValue && items.length <= 1) {
+        return row?.[`entry_enable_${field}`] ? 1 : 0;
+      }
+      return items.length;
+    };
+    const getMovementRowsCount = (row) =>
+      Math.max(getMovementCountForField(row, "meta_credito"), getMovementCountForField(row, "meta_anulada"));
+    const getLockedItemCount = (row, field) => {
+      const key = field === "meta_credito" ? "lock_meta_credito_count" : "lock_meta_anulada_count";
+      const raw = Number(row?.[key] ?? 0);
+      return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
+    };
+    const getMovementLabel = (row, movementIdx) => {
+      const total = getMovementRowsCount(row);
+      if (total > 1 && movementIdx === 0) return "Histórico";
+      return "Movimentação";
+    };
+    const buildAdjustedLinesHtml = (row) => {
+      const baseRaw = parseDec(row.meta_produto);
+      if (baseRaw === null) {
+        return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="" readonly />`;
+      }
+      const base = baseRaw;
+      if (row.is_novo) {
+        return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(rowAdjusted(row)))}" readonly />`;
+      }
+      const creditoItems = getFieldItems(row, "meta_credito");
+      const anuladaItems = getFieldItems(row, "meta_anulada");
+      const movementRows = getMovementRowsCount(row);
+      let acumulado = base;
+      let html = `<div class="meta-fisica-adjust-line">
+        <input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(base))}" readonly />
+      </div>`;
+      for (let i = 0; i < movementRows; i += 1) {
+        const c = parseDec(creditoItems[i]) || 0;
+        const a = parseDec(anuladaItems[i]) || 0;
+        acumulado += c - a;
+        html += `<div class="meta-fisica-adjust-line">
+          <input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(acumulado))}" readonly />
+        </div>`;
+      }
+      return html;
+    };
+    const updateAdjustedDisplay = (tr, row) => {
+      const wrap = tr?.querySelector(".meta-fisica-adjust-wrap");
+      if (!wrap) return;
+      wrap.innerHTML = buildAdjustedLinesHtml(row);
+    };
+    const buildMovementCell = (row, idx, field, readOnly = false, allowAdd = false) => {
+      const items = getFieldItems(row, field);
+      const fieldCss = field === "meta_credito" ? "meta-fisica-cell-credito" : "meta-fisica-cell-anulada";
+      const canAdd = allowAdd && canAddMovement(row, field);
+      const lockedCount = readOnly ? getLockedItemCount(row, field) : 0;
+      const entryEnabled = !!row?.[`entry_enable_${field}`];
+      if (row.is_novo) {
+        const inputsNovo = items
+          .map((val, itemIdx) => `<div class="meta-fisica-multi-line">
+            <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" />
+            ${itemIdx > 0 ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
+          </div>`)
+          .join("");
+        return `<div class="meta-fisica-multi-wrap">${inputsNovo}
+          ${allowAdd ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
+        </div>`;
+      }
+
+      const movementRows = getMovementRowsCount(row);
+      let inputs = `<div class="meta-fisica-multi-line">
+        <input type="text" class="meta-fisica-cell ${fieldCss}" value="" readonly />
+      </div>`;
+      for (let itemIdx = 0; itemIdx < movementRows; itemIdx += 1) {
+        const val = items[itemIdx] ?? "";
+        const isLocked = readOnly && itemIdx < lockedCount;
+        const disabled = isLocked || !entryEnabled ? "readonly" : "";
+        const labelText = getMovementLabel(row, itemIdx);
+        inputs += `<div class="meta-fisica-multi-line">
+          <span class="meta-fisica-mov-label">${labelText}</span>
+          <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" ${disabled} />
+          ${itemIdx >= lockedCount && !isLocked ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
+        </div>`;
+      }
+      return `<div class="meta-fisica-multi-wrap">${inputs}
+        ${allowAdd ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
+      </div>`;
     };
     const validateDuplicateRegions = () => {
       const seen = new Set();
@@ -6997,6 +7208,25 @@
         seen.add(key);
       }
       return "";
+    };
+    const getCatalogCode = (item) =>
+      normalizeRegionKey(item?.codigo || item?.value || item?.label || "");
+    const getUsedRegionCodes = (exceptIdx = null) => {
+      const used = new Set();
+      tableRows.forEach((row, idx) => {
+        if (exceptIdx !== null && idx === exceptIdx) return;
+        const key = normalizeRegionKey(row.regiao_produto);
+        if (key) used.add(key);
+      });
+      return used;
+    };
+    const getAvailableRegionOptions = (rowIdx) => {
+      const used = getUsedRegionCodes(rowIdx);
+      return regionCatalog.filter((item) => {
+        const code = getCatalogCode(item);
+        if (!code) return false;
+        return !used.has(code);
+      });
     };
     const applySelectOptions = (select, values, keepValue = true) => {
       if (!select) return;
@@ -7032,17 +7262,73 @@
       const linhasHtml = linhas
         .map((l) => {
           const reg = l?.regiao_produto || "";
-          const mp = fmtNum(parseDec(l?.meta_produto));
-          const mc = fmtNum(parseDec(l?.meta_credito));
-          const ma = fmtNum(parseDec(l?.meta_anulada));
-          const mt = fmtNum(parseDec(l?.meta_atual));
-          return `<tr>
+          const isNovo = !!l?.is_novo;
+          const metaBase = parseDec(l?.meta_produto) ?? 0;
+          let acumulado = metaBase;
+          const creditoNums = (Array.isArray(l?.meta_credito_items) ? l.meta_credito_items : [])
+            .map((v) => parseDec(v))
+            .filter((n) => n !== null && n > 0);
+          const anuladaNums = (Array.isArray(l?.meta_anulada_items) ? l.meta_anulada_items : [])
+            .map((v) => parseDec(v))
+            .filter((n) => n !== null && n > 0);
+
+          let histCredito = parseDec(l?.meta_credito_historico);
+          let histAnulada = parseDec(l?.meta_anulada_historico);
+          if (!(histCredito > 0)) histCredito = null;
+          if (!(histAnulada > 0)) histAnulada = null;
+
+          const movCredito = [...creditoNums];
+          const movAnulada = [...anuladaNums];
+
+          const consumeFirstEqual = (arr, value) => {
+            if (!arr.length || value === null || value === undefined) return;
+            const idx = arr.findIndex((n) => Math.abs(n - value) < 0.000001);
+            if (idx >= 0) arr.splice(idx, 1);
+          };
+
+          if (histCredito !== null) consumeFirstEqual(movCredito, histCredito);
+          if (histAnulada !== null) consumeFirstEqual(movAnulada, histAnulada);
+
+          // Compatibilidade com registros antigos sem campos de histórico explícitos.
+          if (histCredito === null && histAnulada === null && !isNovo && (movCredito.length > 1 || movAnulada.length > 1)) {
+            if (movCredito.length) histCredito = movCredito.shift();
+            if (movAnulada.length) histAnulada = movAnulada.shift();
+          }
+
+          const rows = [];
+          rows.push(`<tr>
             <td>${esc(reg)}</td>
-            <td>${esc(mp)}</td>
-            <td>${esc(mc)}</td>
-            <td>${esc(ma)}</td>
-            <td>${esc(mt)}</td>
-          </tr>`;
+            <td>${esc(fmtNum(metaBase))}</td>
+            <td></td>
+            <td></td>
+            <td>${esc(fmtNum(acumulado))}</td>
+          </tr>`);
+
+          if (histCredito !== null || histAnulada !== null) {
+            acumulado += (histCredito || 0) - (histAnulada || 0);
+            rows.push(`<tr>
+              <td colspan="2">Histórico</td>
+              <td>${esc(histCredito ? fmtNum(histCredito) : "")}</td>
+              <td>${esc(histAnulada ? fmtNum(histAnulada) : "")}</td>
+              <td>${esc(fmtNum(acumulado))}</td>
+            </tr>`);
+          }
+
+          const maxMov = Math.max(movCredito.length, movAnulada.length);
+          for (let i = 0; i < maxMov; i += 1) {
+            const c = movCredito[i] ?? 0;
+            const a = movAnulada[i] ?? 0;
+            if (!(c > 0) && !(a > 0)) continue;
+            acumulado += c - a;
+            rows.push(`<tr>
+              <td colspan="2">Movimentação</td>
+              <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
+              <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
+              <td>${esc(fmtNum(acumulado))}</td>
+            </tr>`);
+          }
+
+          return rows.join("");
         })
         .join("");
 
@@ -7053,14 +7339,11 @@
             <tr><th>UO</th><td>${esc(meta?.unidade_orcamentaria || "")}</td></tr>
             <tr><th>Programa de Governo</th><td>${esc(meta?.programa || "")}</td></tr>
             <tr><th>Ação/PAOE</th><td>${esc(meta?.acao_paoe || "")}</td></tr>
-            <tr><th>Responsável da Ação/PAOE</th><td>${esc(meta?.responsavel_acao || "")}</td></tr>
+            <tr><th>Adjunta Solicitante</th><td>${esc(meta?.adj_solicitante || "")}</td></tr>
             <tr><th>Produto da Ação</th><td>${esc(meta?.produto_acao || "")}</td></tr>
             <tr><th>Unidade de Medida</th><td>${esc(meta?.unid_medida_produto || "")}</td></tr>
-            <tr><th>ID Plan21 mais recente</th><td>${esc(meta?.plan21_nger_id || "")}</td></tr>
-            <tr><th>IDs Plan21 (sequência)</th><td>${esc((meta?.plan21_nger_ids || []).join(", "))}</td></tr>
-            <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
             <tr>
-              <th>Tabela de Metas</th>
+              <th class="print-table-label-metas">Tabela de Metas</th>
               <td>
                 <table class="print-inner">
                   <thead>
@@ -7078,6 +7361,7 @@
                 </table>
               </td>
             </tr>
+            <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
           </tbody>
         </table>
       `;
@@ -7087,7 +7371,8 @@
       const controle = meta?.controle || "";
       const criadoEm = formatPrintDate(meta?.criado_em || "");
       const usuarioNome = meta?.usuario_nome || "";
-      const footerLine2 = [usuarioNome, criadoEm ? `cadastrado em ${criadoEm}` : "", controle]
+      const usuarioPerfil = meta?.usuario_perfil || String(metaPage?.dataset?.userPerfil || "").trim();
+      const footerLine2 = [usuarioNome, usuarioPerfil, criadoEm ? `cadastrado em ${criadoEm}` : "", controle]
         .map((p) => String(p || "").trim())
         .filter(Boolean)
         .join(" - ");
@@ -7096,7 +7381,7 @@
   <html>
   <head>
     <meta charset="utf-8" />
-    <title>Meta Física</title>
+    <title>Alterar Meta Física</title>
     <style>
       body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 80px; }
       .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
@@ -7115,9 +7400,11 @@
       .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
       .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
       .print-table th { width: 35%; background: #f1f1f1; }
+      .print-table th.print-table-label-metas { vertical-align: middle; text-align: left; }
       .print-inner { width: 100%; border-collapse: collapse; table-layout: fixed; }
       .print-inner th, .print-inner td { border: 1px solid #000; padding: 4px 6px; font-size: 9px; vertical-align: top; }
       .print-inner th { background: #f8f8f8; }
+      .print-inner tbody td { text-align: center; vertical-align: middle; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
     </style>
   </head>
@@ -7134,7 +7421,7 @@
     </div>
     <div class="print-title-row">
       <div class="print-title-key">${esc(controle)}</div>
-      <div class="print-title">Meta Física do Produto da Ação</div>
+      <div class="print-title">Alterar Meta Física</div>
       <div class="print-title-date">${esc(criadoEm)}</div>
     </div>
     <div class="print-body">
@@ -7176,6 +7463,298 @@
       return win;
     };
 
+    const getSummaryRows = () => Array.from(summaryBody?.querySelectorAll(".meta-fisica-summary-row") || []);
+
+    const parseMaybeNumber = (value) => {
+      if (value === null || value === undefined) return { raw: "", num: null };
+      const raw = String(value).trim();
+      if (!raw) return { raw, num: null };
+      const num = Number(raw.replace(/\./g, "").replace(",", "."));
+      return Number.isNaN(num) ? { raw, num: null } : { raw, num };
+    };
+
+    const compareValues = (left, right, op) => {
+      const l = parseMaybeNumber(left);
+      const r = parseMaybeNumber(right);
+      if (l.num !== null && r.num !== null) {
+        if (op === "eq") return l.num === r.num;
+        if (op === "gt") return l.num > r.num;
+        if (op === "lt") return l.num < r.num;
+        if (op === "gte") return l.num >= r.num;
+        if (op === "lte") return l.num <= r.num;
+      }
+      const lraw = l.raw.toLowerCase();
+      const rraw = r.raw.toLowerCase();
+      const cmp = lraw.localeCompare(rraw, "pt-BR", { sensitivity: "base" });
+      if (op === "eq") return cmp === 0;
+      if (op === "contains") return lraw.includes(rraw);
+      if (op === "gt") return cmp > 0;
+      if (op === "lt") return cmp < 0;
+      if (op === "gte") return cmp >= 0;
+      if (op === "lte") return cmp <= 0;
+      return false;
+    };
+
+    const normalizeDigits = (value) => {
+      const raw = String(value || "");
+      const match = raw.match(/\d+(?:[.,]\d+)?/);
+      if (match) return match[0].replace(".", ",");
+      return raw;
+    };
+
+    const getRowFieldValue = (row, field) => {
+      if (!row) return "";
+      if (field === "controle_meta") return row.dataset.controleMeta || "";
+      if (field === "exercicio") return row.dataset.exercicio || "";
+      if (field === "status_aprovacao") return row.dataset.statusAprovacao || "";
+      if (field === "acao_paoe") return row.dataset.acaoPaoe || "";
+      if (field === "programa") return row.dataset.programa || "";
+      if (field === "produto_acao") return row.dataset.produtoAcao || "";
+      if (field === "regiao_produto") return row.dataset.regioesPreview || "";
+      return "";
+    };
+
+    const compareField = (field, rowVal, targetVal, op) => {
+      if (field === "acao_paoe" || field === "programa") {
+        return compareValues(normalizeDigits(rowVal), normalizeDigits(targetVal), op);
+      }
+      return compareValues(rowVal, targetVal, op);
+    };
+
+    const renderCriteria = () => {
+      if (!filterList) return;
+      filterList.innerHTML = "";
+      criteria.forEach((c, idx) => {
+        const li = document.createElement("li");
+        const label = fieldLabels[c.field] || c.field;
+        const op = opLabels[c.op] || c.op;
+        li.textContent = `${label} ${op} ${c.value}`;
+        li.dataset.index = String(idx);
+        if (idx === criteriaSelected) {
+          li.style.borderColor = "var(--primary)";
+        }
+        li.addEventListener("click", () => {
+          criteriaSelected = idx;
+          renderCriteria();
+        });
+        filterList.appendChild(li);
+      });
+    };
+
+    const setResultsVisible = (show) => {
+      if (!summaryBox) return;
+      summaryBox.classList.toggle("dotacao-summary-hidden", !show);
+    };
+
+    const getFilteredSummaryRows = () => {
+      const rows = getSummaryRows();
+      if (!criteria.length) return rows;
+      return rows.filter((row) =>
+        criteria.every((c) => compareField(c.field, getRowFieldValue(row, c.field), c.value, c.op))
+      );
+    };
+
+    const applyCriteriaToResults = () => {
+      const rows = getSummaryRows();
+      const filtered = getFilteredSummaryRows();
+      const visible = new Set(filtered);
+      rows.forEach((row) => {
+        row.style.display = visible.has(row) ? "" : "none";
+        if (!visible.has(row)) {
+          row.classList.remove("selected");
+        }
+      });
+      if (!filtered.length) {
+        setFilterMsg("Nenhum registro encontrado para os critérios informados.", true);
+      }
+    };
+
+    const selectSummaryRow = (row) => {
+      getSummaryRows().forEach((el) => el.classList.remove("selected"));
+      if (row && row.style.display !== "none") row.classList.add("selected");
+      updateSummaryActionButtons();
+    };
+
+    const resetEditMode = () => {
+      editingMetaId = "";
+      editingControle = "";
+      if (editBadge) {
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
+      }
+    };
+
+    const setEditMode = (metaId, controle) => {
+      editingMetaId = String(metaId || "").trim();
+      editingControle = String(controle || "").trim();
+      if (!editBadge) return;
+      if (!editingMetaId) {
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
+        return;
+      }
+      editBadge.textContent = `- Edição do registro ${editingControle || `<id:${editingMetaId}>`}`;
+      editBadge.style.display = "inline";
+    };
+
+    const updateSummaryActionButtons = () => {
+      const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+      if (deleteBtn) deleteBtn.disabled = !selected;
+      if (editBtn) editBtn.disabled = !selected;
+    };
+
+    const parseSummaryLinhas = (row) => {
+      const raw = row?.getAttribute("data-linhas") || "[]";
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        return [];
+      }
+    };
+
+    const buildSummaryMetaForPrint = (row) => {
+      const linhas = parseSummaryLinhas(row);
+      return {
+        controle: row?.dataset?.controleMeta || "",
+        criado_em: row?.dataset?.criadoEm || "",
+          usuario_nome: String(metaPage?.dataset?.userNome || "").trim(),
+          usuario_perfil: String(metaPage?.dataset?.userPerfil || "").trim(),
+        exercicio: row?.dataset?.exercicio || "",
+        unidade_orcamentaria: row?.dataset?.uo || "",
+        programa: row?.dataset?.programa || "",
+        acao_paoe: row?.dataset?.acaoPaoe || "",
+        adj_solicitante: row?.dataset?.adjSolicitante || "",
+        produto_acao: row?.dataset?.produtoAcao || "",
+        unid_medida_produto: row?.dataset?.unidMedidaProduto || "",
+        justificativa: row?.dataset?.justificativa || "",
+        linhas,
+      };
+    };
+
+    const _lockCountByBaseline = (items, baselineTotal) => {
+      const base = Number(baselineTotal || 0);
+      if (!Number.isFinite(base) || base <= 0) return 0;
+      let acc = 0;
+      let count = 0;
+      for (const raw of items) {
+        const n = parseDec(raw);
+        if (!(n > 0)) continue;
+        acc += n;
+        count += 1;
+        if (acc >= base - 0.000001) break;
+      }
+      return count;
+    };
+
+    const buildEditableRowsFromSummary = (linhas, baselineByRegion = {}) =>
+      (Array.isArray(linhas) ? linhas : []).map((row) => {
+        const isNovo = !!row?.is_novo;
+        const creditoItems = Array.isArray(row?.meta_credito_items)
+          ? row.meta_credito_items
+              .map((v) => String(v ?? ""))
+              .filter((v) => (parseDec(v) || 0) > 0)
+          : [];
+        const anuladaItems = Array.isArray(row?.meta_anulada_items)
+          ? row.meta_anulada_items
+              .map((v) => String(v ?? ""))
+              .filter((v) => (parseDec(v) || 0) > 0)
+          : [];
+        const creditoMovItems = Array.isArray(row?.meta_credito_mov_items)
+          ? row.meta_credito_mov_items.map((v) => String(v ?? ""))
+          : [];
+        const anuladaMovItems = Array.isArray(row?.meta_anulada_mov_items)
+          ? row.meta_anulada_mov_items.map((v) => String(v ?? ""))
+          : [];
+        const creditoHistorico = parseDec(row?.meta_credito_historico);
+        const anuladaHistorico = parseDec(row?.meta_anulada_historico);
+        const hasHistoricoMov = !!row?.has_historico_movimento;
+        const creditoPositivos = creditoItems.filter((v) => (parseDec(v) || 0) > 0);
+        const anuladaPositivos = anuladaItems.filter((v) => (parseDec(v) || 0) > 0);
+        const hasCreditoMovList = Array.isArray(row?.meta_credito_mov_items);
+        const hasAnuladaMovList = Array.isArray(row?.meta_anulada_mov_items);
+        const creditoMovLen = creditoMovItems.filter((v) => (parseDec(v) || 0) > 0).length;
+        const anuladaMovLen = anuladaMovItems.filter((v) => (parseDec(v) || 0) > 0).length;
+        let lockCreditoCount = 0;
+        let lockAnuladaCount = 0;
+        const regKey = normalizeRegionKey(String(row?.regiao_produto || ""));
+        const baseline = baselineByRegion?.[regKey] || {};
+        const baselineCredito = parseDec(baseline.meta_credito);
+        const baselineAnulada = parseDec(baseline.meta_anulada);
+
+        if (!isNovo) {
+          // Regra principal: bloquear somente o que veio do plan21_nger (baseline da consulta).
+          if ((baselineCredito || 0) > 0 && creditoPositivos.length > 0) {
+            lockCreditoCount = _lockCountByBaseline(creditoItems, baselineCredito);
+          } else if (hasHistoricoMov && (creditoHistorico || 0) > 0 && creditoPositivos.length > 0) {
+            // Fallback para registros legados sem baseline encontrado.
+            if (hasCreditoMovList && creditoMovLen <= creditoPositivos.length) {
+              lockCreditoCount = Math.max(0, creditoPositivos.length - creditoMovLen);
+            } else {
+              lockCreditoCount = 1;
+            }
+          }
+
+          if ((baselineAnulada || 0) > 0 && anuladaPositivos.length > 0) {
+            lockAnuladaCount = _lockCountByBaseline(anuladaItems, baselineAnulada);
+          } else if (hasHistoricoMov && (anuladaHistorico || 0) > 0 && anuladaPositivos.length > 0) {
+            // Fallback para registros legados sem baseline encontrado.
+            if (hasAnuladaMovList && anuladaMovLen <= anuladaPositivos.length) {
+              lockAnuladaCount = Math.max(0, anuladaPositivos.length - anuladaMovLen);
+            } else {
+              lockAnuladaCount = 1;
+            }
+          }
+        }
+        const creditoEditableCount = Math.max(0, creditoPositivos.length - lockCreditoCount);
+        const anuladaEditableCount = Math.max(0, anuladaPositivos.length - lockAnuladaCount);
+        return {
+          regiao_produto: String(row?.regiao_produto || "").trim(),
+          meta_produto: row?.meta_produto ?? "",
+          meta_credito: "",
+          meta_anulada: "",
+          meta_credito_items: creditoItems.length ? creditoItems : (isNovo ? [""] : []),
+          meta_anulada_items: isNovo ? [""] : (anuladaItems.length ? anuladaItems : []),
+          lock_meta_credito: lockCreditoCount > 0,
+          lock_meta_anulada: lockAnuladaCount > 0,
+          lock_meta_credito_count: lockCreditoCount,
+          lock_meta_anulada_count: lockAnuladaCount,
+          allow_add_meta_credito: isNovo ? true : true,
+          allow_add_meta_anulada: isNovo ? false : true,
+          allow_start_meta_credito: isNovo ? true : (creditoPositivos.length === 0 && anuladaPositivos.length === 0),
+          allow_start_meta_anulada: isNovo ? true : (creditoPositivos.length === 0 && anuladaPositivos.length === 0),
+          allow_cross_add: !isNovo,
+          entry_enable_meta_credito: creditoEditableCount > 0,
+          entry_enable_meta_anulada: anuladaEditableCount > 0,
+          is_novo: isNovo,
+          plan21_nger_id: row?.plan21_nger_id || null,
+          plan21_ids: Array.isArray(row?.plan21_ids) ? row.plan21_ids : [],
+        };
+      });
+
+    const fetchPlanBaselineByRegion = async () => {
+      const url = new URL("/api/meta-fisica/options", window.location.origin);
+      Object.entries(selects).forEach(([key, el]) => {
+        if (!el) return;
+        const val = String(el.value || "").trim();
+        if (val) url.searchParams.set(key, val);
+      });
+      const res = await fetch(url.toString(), { headers: { "X-Requested-With": "fetch" } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao carregar baseline do PTA.");
+      const map = {};
+      const rows = Array.isArray(data?.rows) ? data.rows : [];
+      rows.forEach((r) => {
+        const key = normalizeRegionKey(String(r?.regiao_produto || ""));
+        if (!key) return;
+        map[key] = {
+          meta_credito: r?.meta_credito || "",
+          meta_anulada: r?.meta_anulada || "",
+        };
+      });
+      return map;
+    };
+
     const renderRows = () => {
       if (!tbody) return;
       if (!tableRows.length) {
@@ -7185,20 +7764,55 @@
       }
       tbody.innerHTML = tableRows
         .map((row, idx) => {
-          const adjusted = rowAdjusted(row);
           const readOnlyNew = row.is_novo ? "" : "readonly";
-          const disabledNew = row.is_novo ? "readonly" : "";
+          const creditoReadOnly = !!row.lock_meta_credito;
+          const anuladaReadOnly = row.is_novo ? true : !!row.lock_meta_anulada;
+          const creditoAllowAdd = !!row.allow_add_meta_credito;
+          const anuladaAllowAdd = !!row.allow_add_meta_anulada;
+          let regionFieldHtml = "";
+          if (row.is_novo) {
+            const options = getAvailableRegionOptions(idx);
+            const selectedKey = normalizeRegionKey(row.regiao_produto);
+            const hasSelected = selectedKey && options.some((opt) => getCatalogCode(opt) === selectedKey);
+            let selectOptions = '<option value="">Selecione...</option>';
+            if (selectedKey && !hasSelected && row.regiao_produto) {
+              selectOptions += `<option value="${esc(row.regiao_produto)}">${esc(row.regiao_produto)}</option>`;
+            }
+            selectOptions += options
+              .map((opt) => {
+                const code = String(opt?.codigo || "").trim();
+                return `<option value="${esc(code)}">${esc(code)}</option>`;
+              })
+              .join("");
+            regionFieldHtml = `
+              <select class="meta-fisica-cell meta-fisica-region-select" data-field="regiao_produto" ${options.length ? "" : "disabled"}>
+                ${selectOptions}
+              </select>
+            `;
+          } else {
+            regionFieldHtml = `<input type="text" class="meta-fisica-cell" data-field="regiao_produto" value="${esc(row.regiao_produto || "")}" ${readOnlyNew} />`;
+          }
           return `
             <tr data-idx="${idx}">
-              <td><input type="text" class="meta-fisica-cell" data-field="regiao_produto" value="${esc(row.regiao_produto || "")}" ${readOnlyNew} /></td>
+              <td>${regionFieldHtml}</td>
               <td><input type="text" class="meta-fisica-cell" data-field="meta_produto" value="${esc(fmtNum(row.meta_produto))}" readonly /></td>
-              <td><input type="text" inputmode="decimal" class="meta-fisica-cell meta-fisica-cell-credito" data-field="meta_credito" value="${esc(formatDecimalPtBr(row.meta_credito))}" /></td>
-              <td><input type="text" inputmode="decimal" class="meta-fisica-cell meta-fisica-cell-anulada" data-field="meta_anulada" value="${esc(formatDecimalPtBr(row.meta_anulada))}" ${disabledNew} /></td>
-              <td><input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(adjusted))}" readonly /></td>
+              <td>${buildMovementCell(row, idx, "meta_credito", creditoReadOnly, creditoAllowAdd)}</td>
+              <td>${buildMovementCell(row, idx, "meta_anulada", anuladaReadOnly, anuladaAllowAdd)}</td>
+              <td><div class="meta-fisica-adjust-wrap">${buildAdjustedLinesHtml(row)}</div></td>
             </tr>
           `;
         })
         .join("");
+      tableRows.forEach((row, idx) => {
+        if (!row.is_novo) return;
+        const tr = tbody.querySelector(`tr[data-idx="${idx}"]`);
+        const select = tr ? tr.querySelector('select[data-field="regiao_produto"]') : null;
+        if (!select) return;
+        const desired = String(row.regiao_produto || "").trim();
+        if (desired && Array.from(select.options).some((o) => o.value === desired)) {
+          select.value = desired;
+        }
+      });
     };
 
     const loadOptions = async (loadRows = false) => {
@@ -7212,6 +7826,7 @@
         const res = await fetch(url.toString(), { headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar opções.");
+        regionCatalog = Array.isArray(data.regioes_catalog) ? data.regioes_catalog : [];
 
         applySelectOptions(selects.exercicio, data.options?.exercicio || [], false);
         if (selects.exercicio) {
@@ -7221,7 +7836,7 @@
         applySelectOptions(selects.unidade_orcamentaria, data.options?.unidade_orcamentaria || []);
         applySelectOptions(selects.programa, data.options?.programa || []);
         applySelectOptions(selects.acao_paoe, data.options?.acao_paoe || []);
-        applySelectOptions(selects.responsavel_acao, data.options?.responsavel_acao || []);
+        applySelectOptions(selects.adj_solicitante, data.options?.adj_solicitante || []);
         applySelectOptions(selects.produto_acao, data.options?.produto_acao || []);
         applySelectOptions(selects.unid_medida_produto, data.options?.unid_medida_produto || []);
 
@@ -7239,15 +7854,59 @@
           return;
         }
 
-        const prevByRegion = new Map(tableRows.map((row) => [normalizeRegionKey(row.regiao_produto), row]));
         const loadedRows = (data.rows || []).map((row) => {
-          const key = normalizeRegionKey(row.regiao_produto);
-          const prev = prevByRegion.get(key);
+          const histCreditoItemsRaw = Array.isArray(row.meta_credito_historico_items)
+            ? row.meta_credito_historico_items.map((v) => String(v ?? ""))
+            : [];
+          const histAnuladaItemsRaw = Array.isArray(row.meta_anulada_historico_items)
+            ? row.meta_anulada_historico_items.map((v) => String(v ?? ""))
+            : [];
+          const histCreditoItems = histCreditoItemsRaw.filter((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
+          const histAnuladaItems = histAnuladaItemsRaw.filter((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
+          const creditoDbVal = parseDec(row.meta_credito);
+          const anuladaDbVal = parseDec(row.meta_anulada);
+          const fallbackHistCredito =
+            histCreditoItems.length > 0
+              ? histCreditoItems
+              : creditoDbVal !== null && creditoDbVal > 0
+                ? [String(creditoDbVal).replace(".", ",")]
+                : [];
+          const fallbackHistAnulada =
+            histAnuladaItems.length > 0
+              ? histAnuladaItems
+              : anuladaDbVal !== null && anuladaDbVal > 0
+                ? [String(anuladaDbVal).replace(".", ",")]
+                : [];
+          const lockCreditoFromDb = fallbackHistCredito.length > 0;
+          const lockAnuladaFromDb = fallbackHistAnulada.length > 0;
+          const lockedCreditoCount = fallbackHistCredito.length;
+          const lockedAnuladaCount = fallbackHistAnulada.length;
+          const hasMovFromDb = lockCreditoFromDb || lockAnuladaFromDb;
+          const creditoItems = lockCreditoFromDb ? [...fallbackHistCredito] : [];
+          const anuladaItems = lockAnuladaFromDb ? [...fallbackHistAnulada] : [];
           return {
             regiao_produto: row.regiao_produto || "",
             meta_produto: row.meta_produto || "",
-            meta_credito: prev ? prev.meta_credito || "" : "",
-            meta_anulada: prev ? prev.meta_anulada || "" : "",
+            meta_credito: "",
+            meta_anulada: "",
+            meta_credito_items: creditoItems,
+            meta_anulada_items: anuladaItems,
+            lock_meta_credito: lockCreditoFromDb,
+            lock_meta_anulada: lockAnuladaFromDb,
+            lock_meta_credito_count: lockedCreditoCount,
+            lock_meta_anulada_count: lockedAnuladaCount,
+            allow_add_meta_credito: true,
+            allow_add_meta_anulada: true,
+            allow_start_meta_credito: !hasMovFromDb,
+            allow_start_meta_anulada: !hasMovFromDb,
+            entry_enable_meta_credito: false,
+            entry_enable_meta_anulada: false,
             is_novo: false,
             plan21_nger_id: row.plan21_nger_id || null,
             plan21_ids: Array.isArray(row.plan21_ids) ? row.plan21_ids : [],
@@ -7268,7 +7927,9 @@
         if (!input) return;
         const field = input.dataset.field;
         if (field !== "meta_credito" && field !== "meta_anulada") return;
-        input.value = unformatDecimalPtBr(input.value);
+        if (getUnidadeTipo() !== "unidade") {
+          input.value = unformatDecimalPtBr(input.value);
+        }
       });
 
       tbody.addEventListener("input", (ev) => {
@@ -7279,23 +7940,69 @@
         const idx = Number(tr.dataset.idx || "-1");
         if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
         const field = input.dataset.field;
+        const itemIdx = Number(input.dataset.itemIdx || "0");
         if (field === "meta_credito" || field === "meta_anulada") {
-          const masked = sanitizeDecimalInput(input.value);
+          const itemIdx = Number(input.dataset.itemIdx || "0");
+          const lockCount = getLockedItemCount(tableRows[idx], field);
+          const isLocked =
+            itemIdx >= 0 &&
+            itemIdx < lockCount &&
+            ((field === "meta_credito" && !!tableRows[idx].lock_meta_credito) ||
+              (field === "meta_anulada" && !!tableRows[idx].lock_meta_anulada));
+          if (isLocked) return;
+          let masked = sanitizeByUnidade(input.value);
+          masked = enforceMinPercentual(masked, false);
           input.value = masked;
-          tableRows[idx][field] = masked;
+          const items = getFieldItems(tableRows[idx], field);
+          items[itemIdx] = masked;
+          setFieldItems(tableRows[idx], field, items);
         } else {
           tableRows[idx][field] = input.value;
         }
+        let valueRuleErr = "";
+        if (field === "meta_credito" || field === "meta_anulada") {
+          const fieldLabel = field === "meta_credito" ? "Acréscimo" : "Redução";
+          const items = getFieldItems(tableRows[idx], field);
+          const lockCount = getLockedItemCount(tableRows[idx], field);
+          for (let i = 0; i < items.length; i += 1) {
+            if (
+              ((field === "meta_credito" && tableRows[idx].lock_meta_credito) ||
+                (field === "meta_anulada" && tableRows[idx].lock_meta_anulada)) &&
+              i < lockCount
+            ) {
+              continue;
+            }
+            const item = items[i];
+            valueRuleErr = validateValorByUnidade(item, fieldLabel);
+            if (valueRuleErr) break;
+          }
+        }
+        const dup = validateDuplicateRegions();
+        if (dup) {
+          setMsg(`A região ${dup} já existe na tabela.`, true);
+        } else if (valueRuleErr) {
+          setMsg(valueRuleErr, true);
+        } else {
+          setMsg("");
+        }
+        updateAdjustedDisplay(tr, tableRows[idx]);
+      });
+
+      tbody.addEventListener("change", (ev) => {
+        const select = ev.target.closest('select[data-field="regiao_produto"]');
+        if (!select) return;
+        const tr = select.closest("tr[data-idx]");
+        if (!tr) return;
+        const idx = Number(tr.dataset.idx || "-1");
+        if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+        tableRows[idx].regiao_produto = String(select.value || "").trim();
         const dup = validateDuplicateRegions();
         if (dup) {
           setMsg(`A região ${dup} já existe na tabela.`, true);
         } else {
           setMsg("");
         }
-        const adjustedField = tr.querySelector('input[data-field="meta_atual"]');
-        if (adjustedField) {
-          adjustedField.value = fmtNum(rowAdjusted(tableRows[idx]));
-        }
+        renderRows();
       });
 
       tbody.addEventListener("focusout", (ev) => {
@@ -7307,23 +8014,107 @@
         if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
         const field = input.dataset.field;
         if (field !== "meta_credito" && field !== "meta_anulada") return;
-        const masked = sanitizeDecimalInput(input.value);
-        tableRows[idx][field] = masked;
-        input.value = formatDecimalPtBr(masked);
-        const adjustedField = tr.querySelector('input[data-field="meta_atual"]');
-        if (adjustedField) {
-          adjustedField.value = fmtNum(rowAdjusted(tableRows[idx]));
+        const itemIdx = Number(input.dataset.itemIdx || "0");
+        const lockCount = getLockedItemCount(tableRows[idx], field);
+        const isLocked =
+          itemIdx >= 0 &&
+          itemIdx < lockCount &&
+          ((field === "meta_credito" && !!tableRows[idx].lock_meta_credito) ||
+            (field === "meta_anulada" && !!tableRows[idx].lock_meta_anulada));
+        if (isLocked) return;
+        let masked = sanitizeByUnidade(input.value);
+        masked = enforceMinPercentual(masked, true);
+        const items = getFieldItems(tableRows[idx], field);
+        items[itemIdx] = masked;
+        setFieldItems(tableRows[idx], field, items);
+        input.value = formatByUnidade(masked);
+        updateAdjustedDisplay(tr, tableRows[idx]);
+      });
+
+      tbody.addEventListener("click", (ev) => {
+        const addBtn = ev.target.closest("[data-add-field]");
+        if (addBtn) {
+          const tr = addBtn.closest("tr[data-idx]");
+          if (!tr) return;
+          const idx = Number(tr.dataset.idx || "-1");
+          if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+          const field = addBtn.getAttribute("data-add-field");
+          if (field !== "meta_credito" && field !== "meta_anulada") return;
+          const allowAdd =
+            (field === "meta_credito" && !!tableRows[idx].allow_add_meta_credito) ||
+            (field === "meta_anulada" && !!tableRows[idx].allow_add_meta_anulada);
+          if (!allowAdd) return;
+          if (!canAddMovement(tableRows[idx], field)) {
+            setMsg("Preencha um lançamento antes de adicionar outro.", true);
+            return;
+          }
+          tableRows[idx][`allow_start_${field}`] = false;
+          tableRows[idx][`entry_enable_${field}`] = true;
+          const items = getFieldItems(tableRows[idx], field);
+          items.push("");
+          setFieldItems(tableRows[idx], field, items);
+          renderRows();
+          return;
+        }
+        const removeBtn = ev.target.closest("[data-remove-field]");
+        if (removeBtn) {
+          const tr = removeBtn.closest("tr[data-idx]");
+          if (!tr) return;
+          const idx = Number(tr.dataset.idx || "-1");
+          if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+          const field = removeBtn.getAttribute("data-remove-field");
+          const removeIdx = Number(removeBtn.getAttribute("data-remove-idx") || "-1");
+          if (field !== "meta_credito" && field !== "meta_anulada") return;
+          if (removeIdx < 0) return;
+          const items = getFieldItems(tableRows[idx], field);
+          if (removeIdx >= items.length) return;
+          items.splice(removeIdx, 1);
+          setFieldItems(tableRows[idx], field, items);
+          const stillHasAny = getFieldItems(tableRows[idx], field).some((item) => {
+            const n = parseDec(item);
+            return n !== null && n > 0;
+          });
+          if (!stillHasAny) {
+            tableRows[idx][`entry_enable_${field}`] = false;
+            tableRows[idx][`allow_start_${field}`] = true;
+          }
+          renderRows();
         }
       });
     }
 
     if (addRowBtn) {
       addRowBtn.addEventListener("click", () => {
+        if (!hasAllRowFiltersSelected()) {
+          setMsg("Preencha os filtros obrigatórios e clique em Consultar antes de adicionar linha.", true);
+          return;
+        }
+        if (!hasConsulted) {
+          setMsg("Clique em Consultar antes de adicionar nova linha.", true);
+          return;
+        }
+        if (tableRows.length >= MAX_META_FISICA_ROWS) {
+          setMsg(`Limite máximo de ${MAX_META_FISICA_ROWS} linhas atingido.`, true);
+          return;
+        }
+        const available = getAvailableRegionOptions(null);
+        if (!available.length) {
+          setMsg("Não há regiões disponíveis para adicionar.", true);
+          return;
+        }
         tableRows.push({
           regiao_produto: "",
           meta_produto: "",
           meta_credito: "",
           meta_anulada: "",
+          meta_credito_items: [""],
+          meta_anulada_items: [""],
+          lock_meta_credito: false,
+          lock_meta_anulada: false,
+          lock_meta_credito_count: 0,
+          lock_meta_anulada_count: 0,
+          allow_add_meta_credito: false,
+          allow_add_meta_anulada: false,
           is_novo: true,
           plan21_nger_id: null,
           plan21_ids: [],
@@ -7334,7 +8125,13 @@
 
     if (clearBtn) {
       clearBtn.addEventListener("click", async () => {
+        resetEditMode();
         if (justificativaInput) justificativaInput.value = "";
+        Object.entries(selects).forEach(([key, el]) => {
+          if (!el) return;
+          if (key === "exercicio") return;
+          el.value = "";
+        });
         tableRows = [];
         hasConsulted = false;
         lastQueryHadRows = false;
@@ -7345,6 +8142,7 @@
 
     if (consultBtn) {
       consultBtn.addEventListener("click", async () => {
+        resetEditMode();
         if (!hasAllRowFiltersSelected()) {
           setMsg("Preencha todos os filtros obrigatórios antes de consultar.", true);
           hasConsulted = false;
@@ -7359,13 +8157,216 @@
     }
 
     Object.values(selects).forEach((el) => {
-      if (!el || el === selects.exercicio) return;
+      if (!el || el === selects.exercicio || el === selects.adj_solicitante) return;
       el.addEventListener("change", () => {
+        resetEditMode();
         hasConsulted = false;
         lastQueryHadRows = false;
         loadOptions(false);
       });
     });
+    if (selects.adj_solicitante) {
+      selects.adj_solicitante.addEventListener("change", () => {
+        resetEditMode();
+      });
+    }
+
+    getSummaryRows().forEach((row) => {
+      row.addEventListener("click", () => {
+        selectSummaryRow(row);
+      });
+    });
+
+    renderCriteria();
+    setResultsVisible(false);
+    updateSummaryActionButtons();
+
+    if (filterAdd) {
+      filterAdd.addEventListener("click", () => {
+        const field = String(filterField?.value || "");
+        const op = String(filterOp?.value || "eq");
+        const value = String(filterValue?.value || "").trim();
+        if (!field) {
+          setFilterMsg("Selecione um campo.", true);
+          return;
+        }
+        if (!value) {
+          setFilterMsg("Informe um valor.", true);
+          return;
+        }
+        if (field !== "exercicio" && !criteria.some((c) => c.field === "exercicio")) {
+          setFilterMsg("Informe o critério de Exercício antes dos demais.", true);
+          return;
+        }
+        criteria.push({ field, op, value });
+        criteriaSelected = criteria.length - 1;
+        renderCriteria();
+        setFilterMsg("");
+        if (filterValue) filterValue.value = "";
+      });
+    }
+
+    if (filterRemove) {
+      filterRemove.addEventListener("click", () => {
+        if (criteriaSelected < 0 || criteriaSelected >= criteria.length) {
+          setFilterMsg("Selecione um critério para remover.", true);
+          return;
+        }
+        criteria.splice(criteriaSelected, 1);
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        setFilterMsg("");
+      });
+    }
+
+    if (filterClear) {
+      filterClear.addEventListener("click", () => {
+        criteria.length = 0;
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        setFilterMsg("");
+      });
+    }
+
+    if (filterCancel) {
+      filterCancel.addEventListener("click", () => {
+        criteria.length = 0;
+        criteriaSelected = -1;
+        renderCriteria();
+        setResultsVisible(false);
+        getSummaryRows().forEach((row) => {
+          row.style.display = "";
+          row.classList.remove("selected");
+        });
+        updateSummaryActionButtons();
+        if (filterField) filterField.value = "";
+        if (filterOp) filterOp.value = "eq";
+        if (filterValue) filterValue.value = "";
+        setFilterMsg("");
+      });
+    }
+
+    if (filterApply) {
+      filterApply.addEventListener("click", () => {
+        if (!criteria.some((c) => c.field === "exercicio")) {
+          setFilterMsg("Informe o critério de Exercício antes de consultar.", true);
+          return;
+        }
+        setResultsVisible(true);
+        applyCriteriaToResults();
+        if (getFilteredSummaryRows().length) {
+          setFilterMsg("");
+        }
+        updateSummaryActionButtons();
+      });
+    }
+
+    if (editBtn) {
+      editBtn.addEventListener("click", async () => {
+        const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para editar.", true);
+          return;
+        }
+        const controle = String(selected.dataset.controleMeta || "").trim() || "(sem controle)";
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status !== "aguardando") {
+          setFilterMsg(`Somente registros com status Aguardando podem ser editados (${controle}).`, true);
+          return;
+        }
+        const criadorPerfilId = String(selected.dataset.criadorPerfilId || "").trim();
+        if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+          setFilterMsg(`Usuário sem permissão para editar registro ${controle}.`, true);
+          return;
+        }
+
+        const mapSelectToData = {
+          exercicio: "exercicio",
+          unidade_orcamentaria: "uo",
+          programa: "programa",
+          acao_paoe: "acaoPaoe",
+          adj_solicitante: "adjSolicitante",
+          produto_acao: "produtoAcao",
+          unid_medida_produto: "unidMedidaProduto",
+        };
+        Object.entries(selects).forEach(([key, el]) => {
+          if (!el) return;
+          const dataKey = mapSelectToData[key];
+          const v = String((dataKey && selected.dataset[dataKey]) || "").trim();
+          el.value = v;
+        });
+        if (justificativaInput) {
+          justificativaInput.value = String(selected.dataset.justificativa || "");
+        }
+        await loadOptions(false);
+        let baselineByRegion = {};
+        try {
+          baselineByRegion = await fetchPlanBaselineByRegion();
+        } catch (err) {
+          console.error(err);
+        }
+        const linhas = parseSummaryLinhas(selected);
+        tableRows = buildEditableRowsFromSummary(linhas, baselineByRegion);
+        hasConsulted = true;
+        lastQueryHadRows = tableRows.length > 0;
+        renderRows();
+        setEditMode(selected.dataset.id || "", controle);
+        setMsg("");
+        setFilterMsg("");
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para excluir.", true);
+          return;
+        }
+        const controle = String(selected.dataset.controleMeta || "").trim() || "(sem controle)";
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status !== "aguardando") {
+          setFilterMsg(`Somente registros com status Aguardando podem ser excluídos (${controle}).`, true);
+          return;
+        }
+        const criadorPerfilId = String(selected.dataset.criadorPerfilId || "").trim();
+        if (!currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+          setFilterMsg(`Usuário sem permissão para excluir registro ${controle}.`, true);
+          return;
+        }
+        const metaId = String(selected.dataset.id || "").trim();
+        if (!metaId) {
+          setFilterMsg(`Registro inválido para exclusão (${controle}).`, true);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/meta-fisica/${encodeURIComponent(metaId)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Falha ao excluir registro ${controle}.`);
+          showToast(data.message || `Registro ${controle} excluído com sucesso.`, "success");
+          await loadPage("cadastrar/plan_21-nger/meta_fisica");
+        } catch (err) {
+          setFilterMsg(err.message || `Falha ao excluir registro ${controle}.`, true);
+        }
+      });
+    }
+
+    if (printBtn) {
+      printBtn.addEventListener("click", () => {
+        const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para imprimir.", true);
+          return;
+        }
+        const meta = buildSummaryMetaForPrint(selected);
+        openMetaFisicaPrintPopup(meta);
+      });
+    }
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
@@ -7389,11 +8390,58 @@
           setMsg(`Meta PTA/LOA inválida para a região ${regiao}.`, true);
           return;
         }
+        const creditoItemsAll = getFieldItems(row, "meta_credito");
+        const anuladaItemsAll = getFieldItems(row, "meta_anulada");
+        const creditoLockCount = getLockedItemCount(row, "meta_credito");
+        const anuladaLockCount = getLockedItemCount(row, "meta_anulada");
+        const creditoHistorico =
+          row.lock_meta_credito && creditoLockCount > 0
+            ? creditoItemsAll
+              .slice(0, creditoLockCount)
+              .reduce((acc, v) => {
+                const n = parseDec(v);
+                return n !== null && n > 0 ? acc + n : acc;
+              }, 0)
+            : "";
+        const anuladaHistorico =
+          row.lock_meta_anulada && anuladaLockCount > 0
+            ? anuladaItemsAll
+              .slice(0, anuladaLockCount)
+              .reduce((acc, v) => {
+                const n = parseDec(v);
+                return n !== null && n > 0 ? acc + n : acc;
+              }, 0)
+            : "";
+        const creditoMovItems = creditoItemsAll.filter((v, idx) => {
+          const n = parseDec(v);
+          if (n === null || n <= 0) return false;
+          return !(row.lock_meta_credito && idx < creditoLockCount);
+        });
+        const anuladaMovItems = anuladaItemsAll.filter((v, idx) => {
+          const n = parseDec(v);
+          if (n === null || n <= 0) return false;
+          return !(row.lock_meta_anulada && idx < anuladaLockCount);
+        });
         rowsPayload.push({
           regiao_produto: regiao,
           meta_produto: row.meta_produto,
-          meta_credito: row.meta_credito || "",
-          meta_anulada: row.is_novo ? "" : row.meta_anulada || "",
+          meta_credito: sumFieldItems(row, "meta_credito") || "",
+          meta_anulada: row.is_novo ? "" : sumFieldItems(row, "meta_anulada") || "",
+          meta_credito_items: creditoItemsAll.filter((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          }),
+          meta_credito_mov_items: creditoMovItems,
+          meta_credito_historico: creditoHistorico ? String(creditoHistorico).replace(".", ",") : "",
+          meta_anulada_items: row.is_novo
+            ? []
+            : anuladaItemsAll.filter((v) => {
+              const n = parseDec(v);
+              return n !== null && n > 0;
+            }),
+          meta_anulada_mov_items: row.is_novo ? [] : anuladaMovItems,
+          meta_anulada_historico: row.is_novo ? "" : (anuladaHistorico ? String(anuladaHistorico).replace(".", ",") : ""),
+          has_historico_movimento: !!(creditoHistorico || anuladaHistorico),
           is_novo: !!row.is_novo,
           plan21_nger_id: row.plan21_nger_id || null,
           plan21_ids: Array.isArray(row.plan21_ids) ? row.plan21_ids : [],
@@ -7403,13 +8451,38 @@
         setMsg("Adicione ao menos uma linha de meta física.", true);
         return;
       }
+      for (const row of tableRows) {
+        const creditoItems = getFieldItems(row, "meta_credito");
+        const creditoLockCount = getLockedItemCount(row, "meta_credito");
+        for (let i = 0; i < creditoItems.length; i += 1) {
+          if (row.lock_meta_credito && i < creditoLockCount) continue;
+          const item = creditoItems[i];
+          const errCredito = validateValorByUnidade(item, "Acréscimo");
+          if (errCredito) {
+            setMsg(errCredito, true);
+            return;
+          }
+        }
+        const anuladaItems = getFieldItems(row, "meta_anulada");
+        const anuladaLockCount = getLockedItemCount(row, "meta_anulada");
+        for (let i = 0; i < anuladaItems.length; i += 1) {
+          if (row.lock_meta_anulada && i < anuladaLockCount) continue;
+          const item = anuladaItems[i];
+          const errAnulada = validateValorByUnidade(item, "Redução");
+          if (errAnulada) {
+            setMsg(errAnulada, true);
+            return;
+          }
+        }
+      }
 
       const payload = {
+        meta_id: editingMetaId || "",
         exercicio: selects.exercicio?.value || "",
         unidade_orcamentaria: selects.unidade_orcamentaria?.value || "",
         programa: selects.programa?.value || "",
         acao_paoe: selects.acao_paoe?.value || "",
-        responsavel_acao: selects.responsavel_acao?.value || "",
+        adj_solicitante: selects.adj_solicitante?.value || "",
         produto_acao: selects.produto_acao?.value || "",
         unid_medida_produto: selects.unid_medida_produto?.value || "",
         justificativa: justificativaInput?.value || "",
@@ -7426,10 +8499,12 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
-        showToast(`Meta física salva com sucesso. Registros: ${data.count || 0}.`, "success");
+        const acao = editingMetaId ? "atualizada" : "salva";
+        showToast(`Meta física ${acao} com sucesso. Registros: ${data.count || 0}.`, "success");
         if (data.meta_fisica) {
           openMetaFisicaPrintPopup(data.meta_fisica, pendingPrintWin || null);
         }
+        resetEditMode();
         await loadPage("cadastrar/plan_21-nger/meta_fisica");
       } catch (err) {
         console.error(err);
@@ -7437,6 +8512,7 @@
       }
     });
 
+    resetEditMode();
     loadOptions(false);
   }
 
@@ -8994,8 +10070,8 @@
         setFilterMsg("Somente estornos com status Aguardando podem ser alterados.", true);
         return false;
       }
-      const adjunta = String(row.dataset.adjunta || "").trim();
-      if (!currentUserPerfilId || currentUserPerfilId !== String(row.dataset.perfilId || "").trim()) {
+      const criadorPerfilId = String(row.dataset.criadorPerfilId || "").trim();
+      if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
         setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
         return false;
       }
@@ -9007,6 +10083,21 @@
       if (step === 3 && municipioItems.length > 0 && municipiosPendentes.length > 0) {
         setMsg(`Faltam ${municipiosPendentes.length} etapa(s) para concluir os municípios.`, true);
         if (etapaMunicipioSelect) etapaMunicipioSelect.focus();
+        return false;
+      }
+      return true;
+    };
+
+    const canDeleteEstorno = (row) => {
+      if (!row) return false;
+      const status = String(row.dataset.status || "").trim().toLowerCase();
+      if (status && status !== "aguardando") {
+        setFilterMsg("Somente estornos com status Aguardando podem ser excluídos.", true);
+        return false;
+      }
+      const criadorPerfilId = String(row.dataset.criadorPerfilId || "").trim();
+      if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+        setFilterMsg("Usuário sem permissão para excluir o estorno atual.", true);
         return false;
       }
       return true;
@@ -9032,7 +10123,7 @@
           setFilterMsg("Selecione um registro para excluir.", true);
           return;
         }
-        if (!canEditOrDeleteEstorno(selected)) return;
+        if (!canDeleteEstorno(selected)) return;
         const estId = selected.dataset.id;
         if (!estId) {
           setFilterMsg("Registro inválido para exclusão.", true);
@@ -9400,6 +10491,8 @@
     const editBtn = document.getElementById("subacao-edit");
     const deleteBtn = document.getElementById("subacao-delete");
     const printBtn = document.getElementById("subacao-print");
+    const subacaoPage = document.getElementById("subacao-page");
+    const currentUserPerfilId = String(subacaoPage?.dataset?.userPerfilId || userPerfilId || "").trim();
     const subacaoSummary = document.getElementById("subacao-summary");
     const approvalFields = document.getElementById("subacao-aprovacao-fields");
     const approvalQuestionLabel = document.getElementById("subacao-aprovacao-pergunta");
@@ -12194,6 +13287,11 @@
           setFilterMsg("Somente registros com status Aguardando podem ser editados.", true);
           return;
         }
+        const criadorPerfilId = String(row.dataset.criadorPerfilId || "").trim();
+        if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+          setFilterMsg("Usuário sem permissão para editar o registro de controle de subação.", true);
+          return;
+        }
         await fillFormFromRow(row);
       });
     }
@@ -12214,6 +13312,11 @@
         const status = String(row.dataset.statusAprovacao || "").trim().toLowerCase();
         if (status && status !== "aguardando") {
           setFilterMsg("Somente registros com status Aguardando podem ser excluídos.", true);
+          return;
+        }
+        const criadorPerfilId = String(row.dataset.criadorPerfilId || "").trim();
+        if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+          setFilterMsg("Usuário sem permissão para excluir o registro de controle de subação.", true);
           return;
         }
         const id = row.dataset.id || "";
