@@ -1227,6 +1227,15 @@ def partial_cadastrar_plan21_meta_fisica():
             perfil_map = {p.id: p for p in perfis}
     for m in metas:
         usuario = usuarios_map.get(getattr(m, "usuario_id", None))
+        m.criador_nome = (getattr(usuario, "nome", "") or getattr(usuario, "email", "") or "").strip() if usuario else ""
+        m.criador_perfil_nome = ""
+        if usuario:
+            perfil_id = getattr(usuario, "perfil_id", None)
+            if perfil_id:
+                perfil_row = perfil_map.get(perfil_id)
+                m.criador_perfil_nome = (getattr(perfil_row, "nome", "") or "").strip() if perfil_row else ""
+            if not m.criador_perfil_nome:
+                m.criador_perfil_nome = (getattr(usuario, "perfil", "") or "").strip()
         m.criador_perfil_id = (
             str(getattr(usuario, "perfil_id", "") or "").strip() if usuario else ""
         )

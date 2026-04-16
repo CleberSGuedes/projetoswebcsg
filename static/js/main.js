@@ -7618,8 +7618,8 @@
       return {
         controle: row?.dataset?.controleMeta || "",
         criado_em: row?.dataset?.criadoEm || "",
-          usuario_nome: String(metaPage?.dataset?.userNome || "").trim(),
-          usuario_perfil: String(metaPage?.dataset?.userPerfil || "").trim(),
+        usuario_nome: String(row?.dataset?.usuarioNome || "").trim(),
+        usuario_perfil: String(row?.dataset?.usuarioPerfil || "").trim(),
         exercicio: row?.dataset?.exercicio || "",
         unidade_orcamentaria: row?.dataset?.uo || "",
         programa: row?.dataset?.programa || "",
