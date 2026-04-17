@@ -3125,7 +3125,9 @@
     const filtroLimparBtn = document.getElementById("chave-regra-filtro-limpar");
     const rawFeatures = userMeta?.dataset?.features ? JSON.parse(userMeta.dataset.features || "[]") : [];
     const hasPlanejamentoUpload =
-      Number(userNivel || 0) === 1 || rawFeatures.includes("painel/chaves_planejamento_upload");
+      Number(userNivel || 0) === 1 ||
+      rawFeatures.includes("atualizar/chaves_planejamento_upload") ||
+      rawFeatures.includes("painel/chaves_planejamento_upload");
     const tipoPlanejamentoOption = tipoEl
       ? tipoEl.querySelector("option[value='chaves_planejamento']")
       : null;

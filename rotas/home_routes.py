@@ -961,7 +961,8 @@ def api_chave_planejamento_regra_create():
     tipos_validos = {"chaves_planejamento", "chave_arrumar", "forcar_chave"}
     if tipo not in tipos_validos:
         return jsonify({"error": "Tipo de regra invalido."}), 400
-    if tipo == "chaves_planejamento" and not has_permission("painel/chaves_planejamento_upload"):
+    can_upload_planejamento = has_permission("atualizar/chaves_planejamento_upload") or has_permission("painel/chaves_planejamento_upload")
+    if tipo == "chaves_planejamento" and not can_upload_planejamento:
         return jsonify({"error": "Usuario sem permissao para cadastrar chaves_planejamento."}), 403
     if not origem:
         return jsonify({"error": "Chave de origem obrigatoria."}), 400
@@ -1014,7 +1015,8 @@ def api_chave_planejamento_regra_create():
 @login_required
 @require_feature("atualizar/chave_planejamento_regra")
 def api_chave_planejamento_regra_import():
-    if not has_permission("painel/chaves_planejamento_upload"):
+    can_upload_planejamento = has_permission("atualizar/chaves_planejamento_upload") or has_permission("painel/chaves_planejamento_upload")
+    if not can_upload_planejamento:
         return jsonify({"error": "Usuario sem permissao para importar chaves_planejamento."}), 403
     arquivo = request.files.get("arquivo")
     if not arquivo or not getattr(arquivo, "filename", ""):
@@ -1130,7 +1132,8 @@ def api_chave_planejamento_regra_update(regra_id: int):
     tipos_validos = {"chaves_planejamento", "chave_arrumar", "forcar_chave"}
     if tipo not in tipos_validos:
         return jsonify({"error": "Tipo de regra invalido."}), 400
-    if tipo == "chaves_planejamento" and not has_permission("painel/chaves_planejamento_upload"):
+    can_upload_planejamento = has_permission("atualizar/chaves_planejamento_upload") or has_permission("painel/chaves_planejamento_upload")
+    if tipo == "chaves_planejamento" and not can_upload_planejamento:
         return jsonify({"error": "Usuario sem permissao para alterar chaves_planejamento."}), 403
     if not origem:
         return jsonify({"error": "Chave de origem obrigatoria."}), 400
