@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
+﻿from flask import Blueprint, jsonify, render_template, request, abort, g, session, send_file, current_app
 from functools import wraps, lru_cache
 import re
 from datetime import datetime, timedelta
@@ -1020,9 +1020,9 @@ def api_chave_planejamento_regra_import():
         return jsonify({"error": "Usuario sem permissao para importar chaves_planejamento."}), 403
     arquivo = request.files.get("arquivo")
     if not arquivo or not getattr(arquivo, "filename", ""):
-        return jsonify({"error": "Arquivo .xlsx é obrigatório."}), 400
+        return jsonify({"error": "Arquivo .xlsx Ã© obrigatÃ³rio."}), 400
     if not str(arquivo.filename).lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx válido."}), 400
+        return jsonify({"error": "Envie um arquivo .xlsx vÃ¡lido."}), 400
 
     observacao_padrao = str(request.form.get("observacao") or "").strip()
     ativo_flag = str(request.form.get("ativo") or "1").strip() not in {"0", "false", "False"}
@@ -1035,13 +1035,13 @@ def api_chave_planejamento_regra_import():
         return jsonify({"error": f"Falha ao ler o arquivo .xlsx: {exc}"}), 400
 
     if df is None or df.empty:
-        return jsonify({"error": "Arquivo sem dados para importação."}), 400
+        return jsonify({"error": "Arquivo sem dados para importaÃ§Ã£o."}), 400
 
     cols_norm = {str(c).strip().lower(): c for c in df.columns}
     col_origem = cols_norm.get("chave_origem") or cols_norm.get("origem")
-    col_obs = cols_norm.get("observacao") or cols_norm.get("observação")
+    col_obs = cols_norm.get("observacao") or cols_norm.get("observaÃ§Ã£o")
     if not col_origem:
-        return jsonify({"error": "Coluna obrigatória não encontrada: chave_origem."}), 400
+        return jsonify({"error": "Coluna obrigatÃ³ria nÃ£o encontrada: chave_origem."}), 400
 
     inseridas = 0
     atualizadas = 0
@@ -1104,7 +1104,7 @@ def api_chave_planejamento_regra_import():
     return jsonify(
         {
             "ok": True,
-            "message": "Importação de chaves concluída.",
+            "message": "ImportaÃ§Ã£o de chaves concluÃ­da.",
             "inseridas": inseridas,
             "atualizadas": atualizadas,
             "ignoradas_duplicadas_arquivo": ignoradas_duplicadas_arquivo,
@@ -2736,7 +2736,7 @@ def api_meta_fisica_options():
                 "latest_id": 0,
                 "plan21_ids": [],
             }
-        # Para a mesma regiao, mantÃ©m o maior valor de meta_produto.
+        # Para a mesma regiao, mantÃƒÂ©m o maior valor de meta_produto.
         if meta_val is not None:
             current_max = grouped[regiao].get("meta_produto_max")
             if current_max is None or meta_val > current_max:
@@ -2923,14 +2923,14 @@ def api_meta_fisica_create():
         try:
             meta_id = int(meta_id_raw)
         except Exception:
-            return jsonify({"error": "ID de registro inválido para edição."}), 400
+            return jsonify({"error": "ID de registro invÃ¡lido para ediÃ§Ã£o."}), 400
         registro_existente = (
             AlterarMeta.query.filter(AlterarMeta.id == meta_id)
             .filter(AlterarMeta.ativo == True)  # noqa: E712
             .first()
         )
         if not registro_existente:
-            return jsonify({"error": "Registro de meta não encontrado para edição."}), 404
+            return jsonify({"error": "Registro de meta nÃ£o encontrado para ediÃ§Ã£o."}), 404
         criador_registro = None
         if getattr(registro_existente, "usuario_id", None):
             criador_registro = Usuario.query.filter_by(id=registro_existente.usuario_id).first()
@@ -2947,7 +2947,7 @@ def api_meta_fisica_create():
             return jsonify({"error": f"Somente registros com status Aguardando podem ser editados ({controle_meta})."}), 400
         perfil_criador = getattr(criador_registro, "perfil_id", None) if criador_registro else None
         if not _current_user_matches_perfil(perfil_criador):
-            return jsonify({"error": f"Usuário sem permissão para editar registro {controle_meta}."}), 403
+            return jsonify({"error": f"UsuÃ¡rio sem permissÃ£o para editar registro {controle_meta}."}), 403
 
     if exercicio_raw != current_year:
         return jsonify({"error": "Exercicio invalido para o ano corrente."}), 400
@@ -3068,7 +3068,7 @@ def api_meta_fisica_create():
             }
         )
 
-    # IDs do plan21_nger para os filtros do formulÃ¡rio (ordem crescente)
+    # IDs do plan21_nger para os filtros do formulÃƒÂ¡rio (ordem crescente)
     filters_where_base = [
         "ativo = 1",
         "CAST(exercicio AS CHAR) = :exercicio",
@@ -3118,7 +3118,7 @@ def api_meta_fisica_create():
     all_plan_ids = sorted(all_plan_ids_set)
     plan21_nger_id_latest = all_plan_ids[-1] if all_plan_ids else None
 
-    # Salvar como registro Ãºnico com dados da tabela em JSON (fÃ¡cil reconstruÃ§Ã£o)
+    # Salvar como registro ÃƒÂºnico com dados da tabela em JSON (fÃƒÂ¡cil reconstruÃƒÂ§ÃƒÂ£o)
     meta_produto_total = Decimal("0")
     meta_credito_total = Decimal("0")
     meta_anulada_total = Decimal("0")
@@ -3371,7 +3371,7 @@ def api_subacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
-    # forÃ§a o exercicio ao ano atual
+    # forÃƒÂ§a o exercicio ao ano atual
     selected["exercicio"] = current_year
     plan_options = {}
     for key, col in plan_fields.items():
@@ -4397,13 +4397,13 @@ def api_subacao_create():
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if (not isinstance(etapas_items, list) or not etapas_items) and not cpf_responsavel_etapa:
-        return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa ÃƒÂ© obrigatÃƒÂ³rio."}), 400
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if cpf_responsavel_etapa and not _is_valid_cpf(cpf_responsavel_etapa):
         return jsonify({"error": "CPF do responsavel da etapa invalido."}), 400
     if (not isinstance(etapas_items, list) or not etapas_items) and not cpf_responsavel_etapa:
-        return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa ÃƒÂ© obrigatÃƒÂ³rio."}), 400
 
     try:
         exercicio = int(exercicio_raw)
@@ -4451,9 +4451,9 @@ def api_subacao_create():
                 return jsonify({"error": "Etapas incompletas para municipios."}), 400
             cpf_etapa = re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or ""))
             if not cpf_etapa:
-                return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
+                return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa ÃƒÂ© obrigatÃƒÂ³rio."}), 400
             if not _is_valid_cpf(cpf_etapa):
-                return jsonify({"error": "CPF do responsÃ¡vel da etapa invÃ¡lido."}), 400
+                return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa invÃƒÂ¡lido."}), 400
             etapa_by_municipio[muni] = {
                 "etapa": nome,
                 "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
@@ -4473,7 +4473,7 @@ def api_subacao_create():
         return (
             jsonify(
                 {
-                    "error": "RegiÃ£o nÃ£o encontrada no PTA. Por favor, antes de criar esta SubaÃ§Ã£o, cadastre uma nova regiÃ£o do produto e sua respectiva meta fÃ­sica."
+                    "error": "RegiÃƒÂ£o nÃƒÂ£o encontrada no PTA. Por favor, antes de criar esta SubaÃƒÂ§ÃƒÂ£o, cadastre uma nova regiÃƒÂ£o do produto e sua respectiva meta fÃƒÂ­sica."
                 }
             ),
             400,
@@ -4824,7 +4824,7 @@ def api_subacao_editar():
             return (
                 jsonify(
                     {
-                        "error": "Antes de remover um municÃ­pio da SubaÃ§Ã£o, por favor, exclua as etapas vinculadas."
+                        "error": "Antes de remover um municÃƒÂ­pio da SubaÃƒÂ§ÃƒÂ£o, por favor, exclua as etapas vinculadas."
                     }
                 ),
                 400,
@@ -4840,7 +4840,7 @@ def api_subacao_editar():
                 return (
                     jsonify(
                         {
-                            "error": "Por favor, antes de excluir esta SubaÃ§Ã£o, remaneje os valores da MemÃ³ria de CÃ¡lculo."
+                            "error": "Por favor, antes de excluir esta SubaÃƒÂ§ÃƒÂ£o, remaneje os valores da MemÃƒÂ³ria de CÃƒÂ¡lculo."
                         }
                     ),
                     400,
@@ -4854,7 +4854,7 @@ def api_subacao_editar():
         return "" if val is None else str(val).strip()
 
     if registro_id_raw and not registro_row:
-        return jsonify({"error": "Registro de ediÃ§Ã£o nÃ£o encontrado."}), 404
+        return jsonify({"error": "Registro de ediÃƒÂ§ÃƒÂ£o nÃƒÂ£o encontrado."}), 404
 
     def _coalesce_update(target, key, value):
         if value is None:
@@ -5121,9 +5121,9 @@ def api_subacao_update(subacao_id):
                 return jsonify({"error": "Etapas incompletas para municipios."}), 400
             cpf_etapa = re.sub(r"\D", "", (item.get("cpf_responsavel_etapa") or ""))
             if not cpf_etapa:
-                return jsonify({"error": "CPF do responsÃ¡vel da etapa Ã© obrigatÃ³rio."}), 400
+                return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa ÃƒÂ© obrigatÃƒÂ³rio."}), 400
             if not _is_valid_cpf(cpf_etapa):
-                return jsonify({"error": "CPF do responsÃ¡vel da etapa invÃ¡lido."}), 400
+                return jsonify({"error": "CPF do responsÃƒÂ¡vel da etapa invÃƒÂ¡lido."}), 400
             etapa_by_municipio[muni] = {
                 "etapa": nome,
                 "responsavel_etapa": (item.get("responsavel_etapa") or "").strip(),
@@ -5144,7 +5144,7 @@ def api_subacao_update(subacao_id):
         return (
             jsonify(
                 {
-                    "error": "RegiÃ£o nÃ£o encontrada no PTA. Por favor, antes de criar esta SubaÃ§Ã£o, cadastre uma nova regiÃ£o do produto e sua respectiva meta fÃ­sica."
+                    "error": "RegiÃƒÂ£o nÃƒÂ£o encontrada no PTA. Por favor, antes de criar esta SubaÃƒÂ§ÃƒÂ£o, cadastre uma nova regiÃƒÂ£o do produto e sua respectiva meta fÃƒÂ­sica."
                 }
             ),
             400,
@@ -5276,13 +5276,13 @@ def api_subacao_delete(subacao_id):
         return jsonify({"error": "Registro nao encontrado."}), 404
     status = (registro.status_aprovacao or "").strip().lower()
     if status and status != "aguardando":
-        return jsonify({"error": "Somente registros com status Aguardando podem ser excluÃ­dos."}), 400
+        return jsonify({"error": "Somente registros com status Aguardando podem ser excluÃƒÂ­dos."}), 400
     criador = None
     if getattr(registro, "usuario_id", None):
         criador = Usuario.query.filter_by(id=registro.usuario_id).first()
     perfil_criador = getattr(criador, "perfil_id", None) if criador else None
     if not _current_user_matches_perfil(perfil_criador):
-        return jsonify({"error": "Usuário sem permissão para excluir o registro de controle de subação."}), 403
+        return jsonify({"error": "UsuÃ¡rio sem permissÃ£o para excluir o registro de controle de subaÃ§Ã£o."}), 403
     registro.ativo = False
     registro.excluido_em = _now_local()
     try:
@@ -5469,7 +5469,7 @@ def api_dotacao_create():
     saldo_disponivel = _dec_or_zero(saldo_disponivel).quantize(Decimal("0.01"))
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da DotaÃ§Ã£o deve ser menor ou igual ao Saldo da DotaÃ§Ã£o"}), 400
+        return jsonify({"error": "Valor da DotaÃƒÂ§ÃƒÂ£o deve ser menor ou igual ao Saldo da DotaÃƒÂ§ÃƒÂ£o"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -5696,7 +5696,7 @@ def api_dotacao_update(dotacao_id):
     valor_dotacao = _dec_or_zero(valor_dotacao).quantize(Decimal("0.01"))
     saldo_disponivel += _dec_or_zero(registro.valor_dotacao)
     if valor_dotacao <= 0 or valor_dotacao > saldo_disponivel:
-        return jsonify({"error": "Valor da DotaÃ§Ã£o deve ser menor ou igual ao Saldo da DotaÃ§Ã£o"}), 400
+        return jsonify({"error": "Valor da DotaÃƒÂ§ÃƒÂ£o deve ser menor ou igual ao Saldo da DotaÃƒÂ§ÃƒÂ£o"}), 400
 
     query = Plan21Nger.query
     query = query.filter(Plan21Nger.exercicio == exercicio)
@@ -5912,24 +5912,24 @@ def api_est_dotacao_create():
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
-        return jsonify({"error": f"Campos obrigatÃ³rios ausentes: {', '.join(missing)}."}), 400
+        return jsonify({"error": f"Campos obrigatÃƒÂ³rios ausentes: {', '.join(missing)}."}), 400
 
     if not _current_user_matches_perfil(_perfil_id_by_nome(adjunta)):
-        return jsonify({"error": "UsuÃ¡rio sem permissÃ£o de cadastrar estorno."}), 403
+        return jsonify({"error": "UsuÃƒÂ¡rio sem permissÃƒÂ£o de cadastrar estorno."}), 403
 
     valor_dotacao = _parse_decimal(valor_dotacao_raw)
     valor_est = _parse_decimal(valor_est_raw)
     saldo = _parse_decimal(saldo_raw)
     if valor_dotacao is None or valor_est is None or saldo is None:
-        return jsonify({"error": "Valores monetÃ¡rios invÃ¡lidos."}), 400
+        return jsonify({"error": "Valores monetÃƒÂ¡rios invÃƒÂ¡lidos."}), 400
 
     adj_row = Perfil.query.filter(Perfil.nome == adjunta).first()
     if not adj_row:
-        return jsonify({"error": "Adjunta Solicitante nÃ£o encontrada."}), 400
+        return jsonify({"error": "Adjunta Solicitante nÃƒÂ£o encontrada."}), 400
 
     usuarios_id = _resolve_usuario_id()
     if usuarios_id is None:
-        return jsonify({"error": "UsuÃ¡rio nÃ£o encontrado."}), 400
+        return jsonify({"error": "UsuÃƒÂ¡rio nÃƒÂ£o encontrado."}), 400
 
     now = _now_local()
     try:
@@ -6707,15 +6707,15 @@ def api_fip613_status():
 @require_feature("atualizar/fip613")
 def api_fip613_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo ÃƒÂ© obrigatÃƒÂ³rio."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download ÃƒÂ© obrigatÃƒÂ³ria."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download invÃƒÂ¡lida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -7029,8 +7029,8 @@ def api_relatorio_fip613_download():
                 {
                     "UO": r.uo,
                     "UG": r.ug,
-                    "FunÃ§Ã£o": r.funcao,
-                    "SubfunÃ§Ã£o": r.subfuncao,
+                    "FunÃƒÂ§ÃƒÂ£o": r.funcao,
+                    "SubfunÃƒÂ§ÃƒÂ£o": r.subfuncao,
                     "Programa": r.programa,
                     "Projeto/Atividade": r.projeto_atividade,
                     "Regional": r.regional,
@@ -7038,16 +7038,16 @@ def api_relatorio_fip613_download():
                     "Fonte de Recurso": str(r.fonte_recurso or ""),
                     "Iduso": r.iduso,
                     "Tipo de Recurso": r.tipo_recurso,
-                    "DotaÃ§Ã£o Inicial": float(r.dotacao_inicial or 0),
-                    "CrÃ©d. Suplementar": float(r.cred_suplementar or 0),
-                    "CrÃ©d. Especial": float(r.cred_especial or 0),
-                    "CrÃ©d. ExtraordinÃ¡rio": float(r.cred_extraordinario or 0),
-                    "ReduÃ§Ã£o": float(r.reducao or 0),
-                    "CrÃ©d. Autorizado": float(r.cred_autorizado or 0),
+                    "DotaÃƒÂ§ÃƒÂ£o Inicial": float(r.dotacao_inicial or 0),
+                    "CrÃƒÂ©d. Suplementar": float(r.cred_suplementar or 0),
+                    "CrÃƒÂ©d. Especial": float(r.cred_especial or 0),
+                    "CrÃƒÂ©d. ExtraordinÃƒÂ¡rio": float(r.cred_extraordinario or 0),
+                    "ReduÃƒÂ§ÃƒÂ£o": float(r.reducao or 0),
+                    "CrÃƒÂ©d. Autorizado": float(r.cred_autorizado or 0),
                     "Bloqueado/Conting.": float(r.bloqueado_conting or 0),
                     "Reserva Empenho": float(r.reserva_empenho or 0),
                     "Saldo de Destaque": float(r.saldo_destaque or 0),
-                    "Saldo DotaÃ§Ã£o": float(r.saldo_dotacao or 0),
+                    "Saldo DotaÃƒÂ§ÃƒÂ£o": float(r.saldo_dotacao or 0),
                     "Empenhado": float(r.empenhado or 0),
                     "Liquidado": float(r.liquidado or 0),
                     "A liquidar": float(r.a_liquidar or 0),
@@ -7086,12 +7086,12 @@ def api_relatorio_fip613_download():
             df.to_excel(output, index=False)
             output.seek(0)
 
-            # aplica fonte e formato numÃ©rico no Excel
+            # aplica fonte e formato numÃƒÂ©rico no Excel
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
             number_format = "[Blue]#,##0.00;[Red]-#,##0.00;0"
-            # colunas numÃ©ricas comeÃ§am em 12 (1-based) atÃ© o final
+            # colunas numÃƒÂ©ricas comeÃƒÂ§am em 12 (1-based) atÃƒÂ© o final
             numeric_cols = set(range(12, ws.max_column + 1))
             for row in ws.iter_rows():
                 for cell in row:
@@ -7159,15 +7159,15 @@ def api_ped_status():
 @require_feature("atualizar/ped")
 def api_ped_upload():
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo é obrigatório."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download é obrigatória."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download inválida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -7955,38 +7955,38 @@ def api_relatorio_ped_download():
             df["valor_estorno"] = df["valor_estorno"].apply(_to_float)
 
         rename_map = {
-            "regiao": "RegiÃ£o",
-            "subfuncao_ug": "SubfunÃ§Ã£o + UG",
+            "regiao": "Região",
+            "subfuncao_ug": "Subfunção + UG",
             "adj": "ADJ",
-            "macropolitica": "MacropolÃ­tica",
+            "macropolitica": "Macropolítica",
             "pilar": "Pilar",
             "eixo": "Eixo",
-            "politica_decreto": "PolÃ­tica_Decreto",
-            "exercicio": "ExercÃ­cio",
-            "numero_ped": "NÂº PED",
-            "numero_ped_estorno": "NÂº PED Estorno/Estornado",
-            "numero_emp": "NÂº EMP",
-            "numero_cad": "NÂº CAD",
-            "numero_noblist": "NÂº NOBLIST",
-            "numero_os": "NÂº OS",
-            "convenio": "ConvÃªnio",
-            "numero_processo_orcamentario_pagamento": "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
+            "politica_decreto": "Política_Decreto",
+            "exercicio": "Exercício",
+            "numero_ped": "Nº PED",
+            "numero_ped_estorno": "Nº PED Estorno/Estornado",
+            "numero_emp": "Nº EMP",
+            "numero_cad": "Nº CAD",
+            "numero_noblist": "Nº NOBLIST",
+            "numero_os": "Nº OS",
+            "convenio": "Convênio",
+            "numero_processo_orcamentario_pagamento": "Nº Processo Orçamentário de Pagamento",
             "valor_ped": "Valor PED",
             "valor_estorno": "Valor do Estorno",
-            "indicativo_licitacao_exercicios_anteriores": "Indicativo de LicitaÃ§Ã£o de ExercÃ­cios Anteriores",
-            "data_licitacao": "Data da LicitaÃ§Ã£o",
+            "indicativo_licitacao_exercicios_anteriores": "Indicativo de Licitação de Exercícios Anteriores",
+            "data_licitacao": "Data da Licitação",
             "liberado_fisco_estadual": "Liberado Fisco Estadual",
-            "situacao": "SituaÃ§Ã£o",
+            "situacao": "Situação",
             "uo": "UO",
-            "nome_unidade_orcamentaria": "Nome da Unidade OrÃ§amentÃ¡ria",
+            "nome_unidade_orcamentaria": "Nome da Unidade Orçamentária",
             "ug": "UG",
             "nome_unidade_gestora": "Nome da Unidade Gestora",
-            "data_solicitacao": "Data SolicitaÃ§Ã£o",
-            "data_criacao": "Data CriaÃ§Ã£o",
+            "data_solicitacao": "Data Solicitação",
+            "data_criacao": "Data Criação",
             "tipo_empenho": "Tipo Empenho",
-            "dotacao_orcamentaria": "DotaÃ§Ã£o OrÃ§amentÃ¡ria",
-            "funcao": "FunÃ§Ã£o",
-            "subfuncao": "SubfunÃ§Ã£o",
+            "dotacao_orcamentaria": "Dotação Orçamentária",
+            "funcao": "Função",
+            "subfuncao": "Subfunção",
             "programa_governo": "Programa de Governo",
             "paoe": "PAOE",
             "natureza_despesa": "Natureza de Despesa",
@@ -7997,65 +7997,65 @@ def api_relatorio_ped_download():
             "nome_elemento": "Nome do Elemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "numero_emenda_ep": "NÂº Emenda (EP)",
+            "numero_emenda_ep": "Nº Emenda (EP)",
             "autor_emenda_ep": "Autor da Emenda (EP)",
-            "numero_cac": "NÂº CAC",
-            "licitacao": "LicitaÃ§Ã£o",
-            "usuario_responsavel": "UsuÃ¡rio ResponsÃ¡vel",
-            "historico": "HistÃ³rico",
+            "numero_cac": "Nº CAC",
+            "licitacao": "Licitação",
+            "usuario_responsavel": "Usuário Responsável",
+            "historico": "Histórico",
             "credor": "Credor",
             "nome_credor": "Nome do Credor",
-            "data_autorizacao": "Data AutorizaÃ§Ã£o",
-            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro AutorizaÃ§Ã£o",
+            "data_autorizacao": "Data Autorização",
+            "data_hora_cadastro_autorizacao": "Data/Hora Cadastro Autorização",
             "tipo_despesa": "Tipo de Despesa",
-            "numero_abj": "NÂº ABJ",
-            "numero_processo_sequestro_judicial": "NÂº Processo do Sequestro Judicial",
-            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
+            "numero_abj": "Nº ABJ",
+            "numero_processo_sequestro_judicial": "Nº Processo do Sequestro Judicial",
+            "indicativo_entrega_imediata": "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
             "indicativo_contrato": "Indicativo de contrato",
-            "codigo_uo_extinta": "CÃ³digo UO Extinta",
-            "devolucao_gcv": "DevoluÃ§Ã£o GCV",
-            "mes_competencia_folha_pagamento": "MÃªs de CompetÃªncia da Folha de Pagamento",
-            "exercicio_competencia_folha": "ExercÃ­cio de CompetÃªncia da Folha de Pagamento",
-            "obrigacao_patronal": "ObrigaÃ§Ã£o Patronal",
-            "tipo_obrigacao_patronal": "Tipo de ObrigaÃ§Ã£o Patronal",
-            "numero_nla": "NÂº NLA",
+            "codigo_uo_extinta": "Código UO Extinta",
+            "devolucao_gcv": "Devolução GCV",
+            "mes_competencia_folha_pagamento": "Mês de Competência da Folha de Pagamento",
+            "exercicio_competencia_folha": "Exercício de Competência da Folha de Pagamento",
+            "obrigacao_patronal": "Obrigação Patronal",
+            "tipo_obrigacao_patronal": "Tipo de Obrigação Patronal",
+            "numero_nla": "Nº NLA",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
             "Chave / Chave de Planejamento",
-            "RegiÃ£o",
-            "SubfunÃ§Ã£o + UG",
+            "Região",
+            "Subfunção + UG",
             "ADJ",
-            "MacropolÃ­tica",
+            "Macropolítica",
             "Pilar",
             "Eixo",
-            "PolÃ­tica_Decreto",
-            "ExercÃ­cio",
-            "NÂº PED",
-            "NÂº PED Estorno/Estornado",
-            "NÂº EMP",
-            "NÂº CAD",
-            "NÂº NOBLIST",
-            "NÂº OS",
-            "ConvÃªnio",
-            "NÂº Processo OrÃ§amentÃ¡rio de Pagamento",
+            "Política_Decreto",
+            "Exercício",
+            "Nº PED",
+            "Nº PED Estorno/Estornado",
+            "Nº EMP",
+            "Nº CAD",
+            "Nº NOBLIST",
+            "Nº OS",
+            "Convênio",
+            "Nº Processo Orçamentário de Pagamento",
             "Valor PED",
             "Valor do Estorno",
-            "Indicativo de LicitaÃ§Ã£o de ExercÃ­cios Anteriores",
-            "Data da LicitaÃ§Ã£o",
+            "Indicativo de Licitação de Exercícios Anteriores",
+            "Data da Licitação",
             "Liberado Fisco Estadual",
-            "SituaÃ§Ã£o",
+            "Situação",
             "UO",
-            "Nome da Unidade OrÃ§amentÃ¡ria",
+            "Nome da Unidade Orçamentária",
             "UG",
             "Nome da Unidade Gestora",
-            "Data SolicitaÃ§Ã£o",
-            "Data CriaÃ§Ã£o",
+            "Data Solicitação",
+            "Data Criação",
             "Tipo Empenho",
-            "DotaÃ§Ã£o OrÃ§amentÃ¡ria",
-            "FunÃ§Ã£o",
-            "SubfunÃ§Ã£o",
+            "Dotação Orçamentária",
+            "Função",
+            "Subfunção",
             "Programa de Governo",
             "PAOE",
             "Natureza de Despesa",
@@ -8066,28 +8066,28 @@ def api_relatorio_ped_download():
             "Nome do Elemento",
             "Fonte",
             "Iduso",
-            "NÂº Emenda (EP)",
+            "Nº Emenda (EP)",
             "Autor da Emenda (EP)",
-            "NÂº CAC",
-            "LicitaÃ§Ã£o",
-            "UsuÃ¡rio ResponsÃ¡vel",
-            "HistÃ³rico",
+            "Nº CAC",
+            "Licitação",
+            "Usuário Responsável",
+            "Histórico",
             "Credor",
             "Nome do Credor",
-            "Data AutorizaÃ§Ã£o",
-            "Data/Hora Cadastro AutorizaÃ§Ã£o",
+            "Data Autorização",
+            "Data/Hora Cadastro Autorização",
             "Tipo de Despesa",
-            "NÂº ABJ",
-            "NÂº Processo do Sequestro Judicial",
-            "Indicativo de Entrega imediata - Â§ 4Âº Art. 62 Lei 8.666",
+            "Nº ABJ",
+            "Nº Processo do Sequestro Judicial",
+            "Indicativo de Entrega imediata - § 4º Art. 62 Lei 8.666",
             "Indicativo de contrato",
-            "CÃ³digo UO Extinta",
-            "DevoluÃ§Ã£o GCV",
-            "MÃªs de CompetÃªncia da Folha de Pagamento",
-            "ExercÃ­cio de CompetÃªncia da Folha de Pagamento",
-            "ObrigaÃ§Ã£o Patronal",
-            "Tipo de ObrigaÃ§Ã£o Patronal",
-            "NÂº NLA",
+            "Código UO Extinta",
+            "Devolução GCV",
+            "Mês de Competência da Folha de Pagamento",
+            "Exercício de Competência da Folha de Pagamento",
+            "Obrigação Patronal",
+            "Tipo de Obrigação Patronal",
+            "Nº NLA",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -8123,7 +8123,7 @@ PLAN20_OUTPUT_DIR = Path("outputs/plan20_seduc")
 def api_plan20_status():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
+        Converte datetime ou string em isoformat; se jÃƒÂ¡ for string que nÃƒÂ£o
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -8163,7 +8163,7 @@ def api_plan20_status():
 def api_plan20_upload():
     def _as_iso(value):
         """
-        Converte datetime ou string em isoformat; se jÃ¡ for string que nÃ£o
+        Converte datetime ou string em isoformat; se jÃƒÂ¡ for string que nÃƒÂ£o
         parseia, devolve a string mesmo.
         """
         if value in (None, ""):
@@ -8181,15 +8181,15 @@ def api_plan20_upload():
             return str(value)
 
     if "arquivo" not in request.files:
-        return jsonify({"error": "Arquivo Ã© obrigatÃ³rio."}), 400
+        return jsonify({"error": "Arquivo ÃƒÂ© obrigatÃƒÂ³rio."}), 400
     arquivo = request.files["arquivo"]
     data_arquivo_raw = request.form.get("data_arquivo")
     if not data_arquivo_raw:
-        return jsonify({"error": "Data do download Ã© obrigatÃ³ria."}), 400
+        return jsonify({"error": "Data do download ÃƒÂ© obrigatÃƒÂ³ria."}), 400
     try:
         data_arquivo = datetime.fromisoformat(data_arquivo_raw)
     except ValueError:
-        return jsonify({"error": "Data do download invÃ¡lida."}), 400
+        return jsonify({"error": "Data do download invÃƒÂ¡lida."}), 400
 
     if not arquivo.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Envie um arquivo .xlsx."}), 400
@@ -8238,54 +8238,54 @@ def api_plan20_upload():
             df_out = pd.read_excel(output_path, sheet_name="Plan20_SEDUC")
             if not df_out.empty:
                 col_map = {
-                    "ExercÃ­cio": "exercicio",
+                    "ExercÃƒÂ­cio": "exercicio",
                     "Programa": "programa",
-                    "FunÃ§Ã£o": "funcao",
-                    "Unidade OrÃ§amentÃ¡ria": "unidade_orcamentaria",
-                    "AÃ§Ã£o (P/A/OE)": "acao_paoe",
-                    "SubfunÃ§Ã£o": "subfuncao",
-                    "Objetivo EspecÃ­fico": "objetivo_especifico",
+                    "FunÃƒÂ§ÃƒÂ£o": "funcao",
+                    "Unidade OrÃƒÂ§amentÃƒÂ¡ria": "unidade_orcamentaria",
+                    "AÃƒÂ§ÃƒÂ£o (P/A/OE)": "acao_paoe",
+                    "SubfunÃƒÂ§ÃƒÂ£o": "subfuncao",
+                    "Objetivo EspecÃƒÂ­fico": "objetivo_especifico",
                     "Esfera": "esfera",
-                    "ResponsÃ¡vel pela AÃ§Ã£o": "responsavel_acao",
-                    "Produto(s) da AÃ§Ã£o": "produto_acao",
+                    "ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o": "responsavel_acao",
+                    "Produto(s) da AÃƒÂ§ÃƒÂ£o": "produto_acao",
                     "Unidade de Medida do Produto": "unid_medida_produto",
-                    "RegiÃ£o do Produto": "regiao_produto",
+                    "RegiÃƒÂ£o do Produto": "regiao_produto",
                     "Meta do Produto": "meta_produto",
                     "Saldo Meta do Produto": "saldo_meta_produto",
-                    "PÃºblico Transversal": "publico_transversal",
-                    "SubAÃ§Ã£o/entrega": "subacao_entrega",
-                    "ResponsÃ¡vel": "responsavel",
+                    "PÃƒÂºblico Transversal": "publico_transversal",
+                    "SubAÃƒÂ§ÃƒÂ£o/entrega": "subacao_entrega",
+                    "ResponsÃƒÂ¡vel": "responsavel",
                     "Prazo": "prazo",
                     "Unid. Gestora": "unid_gestora",
                     "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
-                    "Produto da SubAÃ§Ã£o": "produto_subacao",
+                    "Produto da SubAÃƒÂ§ÃƒÂ£o": "produto_subacao",
                     "Unidade de Medida": "unidade_medida",
-                    "RegiÃ£o da SubAÃ§Ã£o": "regiao_subacao",
-                    "CÃ³digo": "codigo",
-                    "MunicÃ­pio(s) da entrega": "municipios_entrega",
-                    "Meta da SubAÃ§Ã£o": "meta_subacao",
+                    "RegiÃƒÂ£o da SubAÃƒÂ§ÃƒÂ£o": "regiao_subacao",
+                    "CÃƒÂ³digo": "codigo",
+                    "MunicÃƒÂ­pio(s) da entrega": "municipios_entrega",
+                    "Meta da SubAÃƒÂ§ÃƒÂ£o": "meta_subacao",
                     "Detalhamento do produto": "detalhamento_produto",
                     "Etapa": "etapa",
-                    "ResponsÃ¡vel da Etapa": "responsavel_etapa",
+                    "ResponsÃƒÂ¡vel da Etapa": "responsavel_etapa",
                     "Prazo da Etapa": "prazo_etapa",
-                    "RegiÃ£o da Etapa": "regiao_etapa",
+                    "RegiÃƒÂ£o da Etapa": "regiao_etapa",
                     "Natureza": "natureza",
                     "Fonte": "fonte",
                     "IDU": "idu",
-                    "DescriÃ§Ã£o do Item de Despesa": "descricao_item_despesa",
+                    "DescriÃƒÂ§ÃƒÂ£o do Item de Despesa": "descricao_item_despesa",
                     "Unid. Medida": "unid_medida_item",
                     "Quantidade": "quantidade",
-                    "Valor UnitÃ¡rio": "valor_unitario",
+                    "Valor UnitÃƒÂ¡rio": "valor_unitario",
                     "Valor Total": "valor_total",
                     "Chave de Planejamento": "chave_planejamento",
-                    "RegiÃ£o": "regiao",
-                    "SubfunÃ§Ã£o + UG": "subfuncao_ug",
+                    "RegiÃƒÂ£o": "regiao",
+                    "SubfunÃƒÂ§ÃƒÂ£o + UG": "subfuncao_ug",
                     "ADJ": "adj",
                     "Macropolitica": "macropolitica",
                     "Pilar": "pilar",
                     "Eixo": "eixo",
                     "Politica_Decreto": "politica_decreto",
-                    "PÃºblico Transversal (chave)": "publico_transversal_chave",
+                    "PÃƒÂºblico Transversal (chave)": "publico_transversal_chave",
                     "Cat.Econ": "cat_econ",
                     "Grupo": "grupo",
                     "Modalidade": "modalidade",
@@ -8328,7 +8328,7 @@ def api_plan20_upload():
                         errors="coerce",
                     )
 
-                # Apenas colunas realmente numÃ©ricas no banco
+                # Apenas colunas realmente numÃƒÂ©ricas no banco
                 numeric_cols = [
                     "exercicio",
                     "quantidade",
@@ -9331,13 +9331,13 @@ def api_relatorio_nob_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_nob": "NÂº NOB",
-            "numero_nob_estorno": "NÂº NOB Estorno/Estornado",
-            "numero_liq": "NÂº LIQ",
-            "numero_emp": "NÂº EMP",
+            "numero_nob": "NÃ‚Âº NOB",
+            "numero_nob_estorno": "NÃ‚Âº NOB Estorno/Estornado",
+            "numero_liq": "NÃ‚Âº LIQ",
+            "numero_emp": "NÃ‚Âº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÂº PED",
+            "numero_ped": "NÃ‚Âº PED",
             "valor_nob": "Valor NOB",
             "devolucao_gcv": "Devolucao GCV",
             "valor_nob_gcv": "Valor NOB - GCV",
@@ -9371,13 +9371,13 @@ def api_relatorio_nob_download():
 
         col_order = [
             "Exercicio",
-            "NÂº NOB",
-            "NÂº NOB Estorno/Estornado",
-            "NÂº LIQ",
-            "NÂº EMP",
+            "NÃ‚Âº NOB",
+            "NÃ‚Âº NOB Estorno/Estornado",
+            "NÃ‚Âº LIQ",
+            "NÃ‚Âº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÂº PED",
+            "NÃ‚Âº PED",
             "Valor NOB",
             "Devolucao GCV",
             "Valor NOB - GCV",
@@ -9536,26 +9536,26 @@ def api_relatorio_emp_download():
                 df[col] = df[col].apply(_format_date)
 
         rename_map = {
-            "regiao": "Regiao",
-            "subfuncao_ug": "Subfuncao + UG",
+            "regiao": "Região",
+            "subfuncao_ug": "Subfunção + UG",
             "adj": "ADJ",
-            "macropolitica": "Macropolitica",
+            "macropolitica": "Macropolítica",
             "pilar": "Pilar",
             "eixo": "Eixo",
-            "politica_decreto": "Politica_Decreto",
-            "exercicio": "Exercicio",
-            "numero_emp": "NÂº EMP",
-            "numero_ped": "NÂº PED",
+            "politica_decreto": "Política_Decreto",
+            "exercicio": "Exercício",
+            "numero_emp": "Nº EMP",
+            "numero_ped": "Nº PED",
             "valor_emp": "Valor EMP",
-            "devolucao_gcv": "Devolucao GCV",
-            "valor_emp_devolucao_gcv": "Valor EMP-Devolucao GCV",
+            "devolucao_gcv": "Devolução GCV",
+            "valor_emp_devolucao_gcv": "Valor EMP-Devolução GCV",
             "uo": "UO",
-            "nome_unidade_orcamentaria": "Nome da Unidade Orcamentaria",
+            "nome_unidade_orcamentaria": "Nome da Unidade Orçamentária",
             "ug": "UG",
             "nome_unidade_gestora": "Nome da Unidade Gestora",
-            "dotacao_orcamentaria": "Dotacao Orcamentaria",
-            "funcao": "Funcao",
-            "subfuncao": "Subfuncao",
+            "dotacao_orcamentaria": "Dotação Orçamentária",
+            "funcao": "Função",
+            "subfuncao": "Subfunção",
             "programa_governo": "Programa de Governo",
             "paoe": "PAOE",
             "natureza_despesa": "Natureza de Despesa",
@@ -9565,43 +9565,43 @@ def api_relatorio_emp_download():
             "elemento": "Elemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "historico": "Historico",
+            "historico": "Histórico",
             "tipo_despesa": "Tipo de Despesa",
             "credor": "Credor",
             "nome_credor": "Nome do Credor",
             "cpf_cnpj_credor": "CPF/CNPJ do Credor",
             "categoria_credor": "Categoria do Credor",
             "tipo_empenho": "Tipo Empenho",
-            "situacao": "Situacao",
-            "data_emissao": "Data emissao",
-            "data_criacao": "Data criacao",
-            "numero_contrato": "NÂº Contrato",
-            "numero_convenio": "NÂº ConvÃªnio",
+            "situacao": "Situação",
+            "data_emissao": "Data emissão",
+            "data_criacao": "Data criação",
+            "numero_contrato": "Nº Contrato",
+            "numero_convenio": "Nº Convênio",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
             "Chave / Chave de Planejamento",
-            "Regiao",
-            "Subfuncao + UG",
+            "Região",
+            "Subfunção + UG",
             "ADJ",
-            "Macropolitica",
+            "Macropolítica",
             "Pilar",
             "Eixo",
-            "Politica_Decreto",
-            "Exercicio",
-            "NÂº EMP",
-            "NÂº PED",
+            "Política_Decreto",
+            "Exercício",
+            "Nº EMP",
+            "Nº PED",
             "Valor EMP",
-            "Devolucao GCV",
-            "Valor EMP-Devolucao GCV",
+            "Devolução GCV",
+            "Valor EMP-Devolução GCV",
             "UO",
-            "Nome da Unidade Orcamentaria",
+            "Nome da Unidade Orçamentária",
             "UG",
             "Nome da Unidade Gestora",
-            "Dotacao Orcamentaria",
-            "Funcao",
-            "Subfuncao",
+            "Dotação Orçamentária",
+            "Função",
+            "Subfunção",
             "Programa de Governo",
             "PAOE",
             "Natureza de Despesa",
@@ -9611,18 +9611,18 @@ def api_relatorio_emp_download():
             "Elemento",
             "Fonte",
             "Iduso",
-            "Historico",
+            "Histórico",
             "Tipo de Despesa",
             "Credor",
             "Nome do Credor",
             "CPF/CNPJ do Credor",
             "Categoria do Credor",
             "Tipo Empenho",
-            "Situacao",
-            "Data emissao",
-            "Data criacao",
-            "NÂº Contrato",
-            "NÂº ConvÃªnio",
+            "Situação",
+            "Data emissão",
+            "Data criação",
+            "Nº Contrato",
+            "Nº Convênio",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -9756,72 +9756,72 @@ def api_relatorio_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "ExercÃ­cio",
+            "exercicio": "ExercÃƒÂ­cio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
             "adj_concedente": "Adjunta Concedente",
-            "chave_dotacao": "Controle de DotaÃ§Ã£o",
+            "chave_dotacao": "Controle de DotaÃƒÂ§ÃƒÂ£o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotaÃ§Ã£o",
+            "valor_dotacao": "Valor da DotaÃƒÂ§ÃƒÂ£o",
             "valor_estorno": "Valor do Estorno",
             "valor_ped_emp": "Valor do PED/EMP",
-            "valor_atual": "Valor da DotaÃ§Ã£o Atualizada",
-            "situacao": "SituaÃ§Ã£o",
+            "valor_atual": "Valor da DotaÃƒÂ§ÃƒÂ£o Atualizada",
+            "situacao": "SituaÃƒÂ§ÃƒÂ£o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "AÃ§Ã£o/PAOE",
+            "acao_paoe": "AÃƒÂ§ÃƒÂ£o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "RegiÃ£o",
-            "subacao_entrega": "SubAÃ§Ã£o/Entrega",
+            "regiao": "RegiÃƒÂ£o",
+            "subacao_entrega": "SubAÃƒÂ§ÃƒÂ£o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
             "subelemento": "Subelemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "justificativa_historico": "Justificativa/HistÃ³rico",
+            "justificativa_historico": "Justificativa/HistÃƒÂ³rico",
             "usuario_nome_perfil": "Criado/Alterado por",
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovaÃ§Ã£o",
-            "motivo_rejeicao": "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
+            "data_aprovacao": "Data da AprovaÃƒÂ§ÃƒÂ£o",
+            "motivo_rejeicao": "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "ExercÃ­cio",
+            "ExercÃƒÂ­cio",
             "Status",
             "Adjunta Solicitante",
             "Adjunta Concedente",
-            "Controle de DotaÃ§Ã£o",
+            "Controle de DotaÃƒÂ§ÃƒÂ£o",
             "Chave de Planejamento",
-            "Valor da DotaÃ§Ã£o",
+            "Valor da DotaÃƒÂ§ÃƒÂ£o",
             "Valor do Estorno",
             "Valor do PED/EMP",
-            "Valor da DotaÃ§Ã£o Atualizada",
-            "SituaÃ§Ã£o",
+            "Valor da DotaÃƒÂ§ÃƒÂ£o Atualizada",
+            "SituaÃƒÂ§ÃƒÂ£o",
             "UO",
             "Programa",
-            "AÃ§Ã£o/PAOE",
+            "AÃƒÂ§ÃƒÂ£o/PAOE",
             "Produto",
             "UG",
-            "RegiÃ£o",
-            "SubAÃ§Ã£o/Entrega",
+            "RegiÃƒÂ£o",
+            "SubAÃƒÂ§ÃƒÂ£o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
             "Subelemento",
             "Fonte",
             "Iduso",
-            "Justificativa/HistÃ³rico",
+            "Justificativa/HistÃƒÂ³rico",
             "Criado/Alterado por",
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovaÃ§Ã£o",
-            "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
+            "Data da AprovaÃƒÂ§ÃƒÂ£o",
+            "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -9953,22 +9953,22 @@ def api_relatorio_est_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "ExercÃ­cio",
+            "exercicio": "ExercÃƒÂ­cio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
-            "chave_dotacao": "Controle de DotaÃ§Ã£o",
+            "chave_dotacao": "Controle de DotaÃƒÂ§ÃƒÂ£o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotaÃ§Ã£o",
+            "valor_dotacao": "Valor da DotaÃƒÂ§ÃƒÂ£o",
             "valor_a_ser_est": "Valor do Estorno",
-            "saldo_dotacao_apos": "Saldo de DotaÃ§Ã£o",
-            "situacao": "SituaÃ§Ã£o",
+            "saldo_dotacao_apos": "Saldo de DotaÃƒÂ§ÃƒÂ£o",
+            "situacao": "SituaÃƒÂ§ÃƒÂ£o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "AÃ§Ã£o/PAOE",
+            "acao_paoe": "AÃƒÂ§ÃƒÂ£o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "RegiÃ£o",
-            "subacao_entrega": "SubAÃ§Ã£o/Entrega",
+            "regiao": "RegiÃƒÂ£o",
+            "subacao_entrega": "SubAÃƒÂ§ÃƒÂ£o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
@@ -9980,28 +9980,28 @@ def api_relatorio_est_dotacao_download():
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovaÃ§Ã£o",
-            "motivo_rejeicao": "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
+            "data_aprovacao": "Data da AprovaÃƒÂ§ÃƒÂ£o",
+            "motivo_rejeicao": "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "ExercÃ­cio",
+            "ExercÃƒÂ­cio",
             "Status",
             "Adjunta Solicitante",
-            "Controle de DotaÃ§Ã£o",
+            "Controle de DotaÃƒÂ§ÃƒÂ£o",
             "Chave de Planejamento",
-            "Valor da DotaÃ§Ã£o",
+            "Valor da DotaÃƒÂ§ÃƒÂ£o",
             "Valor do Estorno",
-            "Saldo de DotaÃ§Ã£o",
-            "SituaÃ§Ã£o",
+            "Saldo de DotaÃƒÂ§ÃƒÂ£o",
+            "SituaÃƒÂ§ÃƒÂ£o",
             "UO",
             "Programa",
-            "AÃ§Ã£o/PAOE",
+            "AÃƒÂ§ÃƒÂ£o/PAOE",
             "Produto",
             "UG",
-            "RegiÃ£o",
-            "SubAÃ§Ã£o/Entrega",
+            "RegiÃƒÂ£o",
+            "SubAÃƒÂ§ÃƒÂ£o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
@@ -10013,8 +10013,8 @@ def api_relatorio_est_dotacao_download():
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovaÃ§Ã£o",
-            "Justificativa da AprovaÃ§Ã£o/RejeiÃ§Ã£o",
+            "Data da AprovaÃƒÂ§ÃƒÂ£o",
+            "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -10117,11 +10117,11 @@ def api_relatorio_est_emp_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_est": "NÂº EST",
-            "numero_emp": "NÂº EMP",
+            "numero_est": "NÃ‚Âº EST",
+            "numero_emp": "NÃ‚Âº EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÂº PED",
+            "numero_ped": "NÃ‚Âº PED",
             "valor_emp": "Valor EMP",
             "valor_est_emp_sem_aqs": "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "valor_est_emp_com_aqs": "Valor Est EMP (Em LIQ com AQS)",
@@ -10144,11 +10144,11 @@ def api_relatorio_est_emp_download():
 
         col_order = [
             "Exercicio",
-            "NÂº EST",
-            "NÂº EMP",
+            "NÃ‚Âº EST",
+            "NÃ‚Âº EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÂº PED",
+            "NÃ‚Âº PED",
             "Valor EMP",
             "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "Valor Est EMP (Em LIQ com AQS)",
@@ -10277,46 +10277,46 @@ def api_relatorio_plan20_download():
         db.session.close()
 
         headers = [
-            ("ExercÃ­cio", "exercicio"),
+            ("ExercÃƒÂ­cio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("RegiÃ£o", "regiao"),
-            ("SubfunÃ§Ã£o + UG", "subfuncao_ug"),
+            ("RegiÃƒÂ£o", "regiao"),
+            ("SubfunÃƒÂ§ÃƒÂ£o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("PÃºblico Transversal (chave)", "publico_transversal_chave"),
+            ("PÃƒÂºblico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃ§Ã£o", "funcao"),
-            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
-            ("AÃ§Ã£o (P/A/OE)", "acao_paoe"),
-            ("SubfunÃ§Ã£o", "subfuncao"),
-            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
+            ("FunÃƒÂ§ÃƒÂ£o", "funcao"),
+            ("Unidade OrÃƒÂ§amentÃƒÂ¡ria", "unidade_orcamentaria"),
+            ("AÃƒÂ§ÃƒÂ£o (P/A/OE)", "acao_paoe"),
+            ("SubfunÃƒÂ§ÃƒÂ£o", "subfuncao"),
+            ("Objetivo EspecÃƒÂ­fico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("ResponsÃ¡vel pela AÃ§Ã£o", "responsavel_acao"),
-            ("Produto(s) da AÃ§Ã£o", "produto_acao"),
+            ("ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o", "responsavel_acao"),
+            ("Produto(s) da AÃƒÂ§ÃƒÂ£o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("RegiÃ£o do Produto", "regiao_produto"),
+            ("RegiÃƒÂ£o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("PÃºblico Transversal", "publico_transversal"),
-            ("SubAÃ§Ã£o/entrega", "subacao_entrega"),
-            ("ResponsÃ¡vel", "responsavel"),
+            ("PÃƒÂºblico Transversal", "publico_transversal"),
+            ("SubAÃƒÂ§ÃƒÂ£o/entrega", "subacao_entrega"),
+            ("ResponsÃƒÂ¡vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubAÃ§Ã£o", "produto_subacao"),
+            ("Produto da SubAÃƒÂ§ÃƒÂ£o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("RegiÃ£o da SubAÃ§Ã£o", "regiao_subacao"),
-            ("CÃ³digo", "codigo"),
-            ("MunicÃ­pio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubAÃ§Ã£o", "meta_subacao"),
+            ("RegiÃƒÂ£o da SubAÃƒÂ§ÃƒÂ£o", "regiao_subacao"),
+            ("CÃƒÂ³digo", "codigo"),
+            ("MunicÃƒÂ­pio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubAÃƒÂ§ÃƒÂ£o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("ResponsÃ¡vel da Etapa", "responsavel_etapa"),
+            ("ResponsÃƒÂ¡vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("RegiÃ£o da Etapa", "regiao_etapa"),
+            ("RegiÃƒÂ£o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -10325,10 +10325,10 @@ def api_relatorio_plan20_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("DescriÃ§Ã£o do Item de Despesa", "descricao_item_despesa"),
+            ("DescriÃƒÂ§ÃƒÂ£o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃ¡rio", "valor_unitario"),
+            ("Valor UnitÃƒÂ¡rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
         ]
 
@@ -10360,7 +10360,7 @@ def api_relatorio_plan20_download():
             idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
             numeric_cols = {
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃ¡rio"),
+                idx_map.get("Valor UnitÃƒÂ¡rio"),
                 idx_map.get("Valor Total"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -10370,7 +10370,7 @@ def api_relatorio_plan20_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("ExercÃ­cio") and isinstance(cell.value, (int, float, str)):
+                    if cell.col_idx == idx_map.get("ExercÃƒÂ­cio") and isinstance(cell.value, (int, float, str)):
                         try:
                             cell.value = int(str(cell.value).split(".")[0])
                         except Exception:
@@ -10475,49 +10475,49 @@ def api_relatorio_plan21_nger_download():
         db.session.close()
 
         headers = [
-            ("ExercÃ­cio", "exercicio"),
+            ("ExercÃƒÂ­cio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("RegiÃ£o", "regiao"),
-            ("SubfunÃ§Ã£o + UG", "subfuncao_ug"),
+            ("RegiÃƒÂ£o", "regiao"),
+            ("SubfunÃƒÂ§ÃƒÂ£o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("PÃºblico Transversal (chave)", "publico_transversal_chave"),
+            ("PÃƒÂºblico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃ§Ã£o", "funcao"),
-            ("Unidade OrÃ§amentÃ¡ria", "unidade_orcamentaria"),
-            ("AÃ§Ã£o (P/A/OE)", "acao_paoe"),
-            ("SubfunÃ§Ã£o", "subfuncao"),
-            ("Objetivo EspecÃ­fico", "objetivo_especifico"),
+            ("FunÃƒÂ§ÃƒÂ£o", "funcao"),
+            ("Unidade OrÃƒÂ§amentÃƒÂ¡ria", "unidade_orcamentaria"),
+            ("AÃƒÂ§ÃƒÂ£o (P/A/OE)", "acao_paoe"),
+            ("SubfunÃƒÂ§ÃƒÂ£o", "subfuncao"),
+            ("Objetivo EspecÃƒÂ­fico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("ResponsÃ¡vel pela AÃ§Ã£o", "responsavel_acao"),
-            ("Produto(s) da AÃ§Ã£o", "produto_acao"),
+            ("ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o", "responsavel_acao"),
+            ("Produto(s) da AÃƒÂ§ÃƒÂ£o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("RegiÃ£o do Produto", "regiao_produto"),
+            ("RegiÃƒÂ£o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("Meta CrÃ©dito", "meta_credito"),
+            ("Meta CrÃƒÂ©dito", "meta_credito"),
             ("Meta Anulada", "meta_anulada"),
             ("Meta Atual", "meta_atual"),
-            ("PÃºblico Transversal", "publico_transversal"),
-            ("SubaÃ§Ã£o/entrega", "subacao_entrega"),
-            ("ResponsÃ¡vel", "responsavel"),
+            ("PÃƒÂºblico Transversal", "publico_transversal"),
+            ("SubaÃƒÂ§ÃƒÂ£o/entrega", "subacao_entrega"),
+            ("ResponsÃƒÂ¡vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubaÃ§Ã£o", "produto_subacao"),
+            ("Produto da SubaÃƒÂ§ÃƒÂ£o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("RegiÃ£o da SubaÃ§Ã£o", "regiao_subacao"),
-            ("CÃ³digo", "codigo"),
-            ("MunicÃ­pio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubaÃ§Ã£o", "meta_subacao"),
+            ("RegiÃƒÂ£o da SubaÃƒÂ§ÃƒÂ£o", "regiao_subacao"),
+            ("CÃƒÂ³digo", "codigo"),
+            ("MunicÃƒÂ­pio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubaÃƒÂ§ÃƒÂ£o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("ResponsÃ¡vel da Etapa", "responsavel_etapa"),
+            ("ResponsÃƒÂ¡vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("RegiÃ£o da Etapa", "regiao_etapa"),
+            ("RegiÃƒÂ£o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -10526,13 +10526,13 @@ def api_relatorio_plan21_nger_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("DescriÃ§Ã£o do Item de Despesa", "descricao_item_despesa"),
+            ("DescriÃƒÂ§ÃƒÂ£o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃ¡rio", "valor_unitario"),
+            ("Valor UnitÃƒÂ¡rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
-            ("SuplementAÃ§Ã£o", "suplementacao"),
-            ("AnulAÃ§Ã£o", "anulacao"),
+            ("SuplementAÃƒÂ§ÃƒÂ£o", "suplementacao"),
+            ("AnulAÃƒÂ§ÃƒÂ£o", "anulacao"),
             ("Valor Atual", "valor_atual"),
         ]
 
@@ -10579,15 +10579,15 @@ def api_relatorio_plan21_nger_download():
             numeric_cols = {
                 idx_map.get("Meta do Produto"),
                 idx_map.get("Saldo Meta do Produto"),
-                idx_map.get("Meta CrÃ©dito"),
+                idx_map.get("Meta CrÃƒÂ©dito"),
                 idx_map.get("Meta Anulada"),
                 idx_map.get("Meta Atual"),
-                idx_map.get("Meta da SubaÃ§Ã£o"),
+                idx_map.get("Meta da SubaÃƒÂ§ÃƒÂ£o"),
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃ¡rio"),
+                idx_map.get("Valor UnitÃƒÂ¡rio"),
                 idx_map.get("Valor Total"),
-                idx_map.get("SuplementAÃ§Ã£o"),
-                idx_map.get("AnulAÃ§Ã£o"),
+                idx_map.get("SuplementAÃƒÂ§ÃƒÂ£o"),
+                idx_map.get("AnulAÃƒÂ§ÃƒÂ£o"),
                 idx_map.get("Valor Atual"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -10597,7 +10597,7 @@ def api_relatorio_plan21_nger_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("ExercÃ­cio") and isinstance(
+                    if cell.col_idx == idx_map.get("ExercÃƒÂ­cio") and isinstance(
                         cell.value, (int, float, str)
                     ):
                         try:
@@ -10970,7 +10970,7 @@ def api_perfil(perfil_id):
             return jsonify({"ok": True, "message": "Perfil excluido."})
         except IntegrityError:
             db.session.rollback()
-            return jsonify({"error": "NÃ£o foi possÃ­vel excluir este perfil."}), 400
+            return jsonify({"error": "NÃƒÂ£o foi possÃƒÂ­vel excluir este perfil."}), 400
 
     data = request.get_json() or {}
     nome = (data.get("nome") or perfil.nome).strip()
@@ -11035,6 +11035,9 @@ def api_perfil(perfil_id):
         )
     valor_ped = sum((_dec_or_zero(r.valor_ped) for r in ped_rows), Decimal("0"))
     ped_count = len(ped_rows)
+
+
+
 
 
 

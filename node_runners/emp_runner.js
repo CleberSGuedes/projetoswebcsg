@@ -578,14 +578,26 @@ function normalizarChavePlanejamentoTexto(chave) {
   return `* ${parts.join(" * ")} *`;
 }
 
+function normalizarTextoCasoRegra(texto) {
+  if (texto === null || texto === undefined) return "";
+  let out = corrigirTermosCorrompidos(String(texto));
+  out = out.replace(/\|/g, "*");
+  out = out.replace(/\s*\*\s*/g, "*");
+  out = out.replace(/\s+/g, " ").trim();
+  return normalizeSimple(out);
+}
+
+function normalizarTextoCasoRegraCompacto(texto) {
+  return normalizarTextoCasoRegra(texto).replace(/[^a-z0-9]+/g, "");
+}
+
 function carregarCasosEspecificos(jsonPath) {
   try {
     const casos = readJsonWithBom(jsonPath);
     const out = {};
     for (const [k, v] of Object.entries(casos)) {
       const chaveSaida = canonicalizarChave(corrigirTermosCorrompidos(String(v)));
-      const kCorrigido = corrigirTermosCorrompidos(k);
-      const kNorm = normalizeSimple(kCorrigido);
+      const kNorm = normalizarTextoCasoRegra(k);
       out[kNorm] = chaveSaida;
     }
     logEmpDebug(`[emp] chave_arrumar carregado: ${Object.keys(out).length} itens`);
@@ -651,7 +663,7 @@ async function carregarRegrasChaveBanco(db) {
     if (tipo === "chave_arrumar") {
       if (!destinoRaw) continue;
       const chaveSaida = canonicalizarChave(corrigirTermosCorrompidos(destinoRaw));
-      const origemNorm = normalizeSimple(corrigirTermosCorrompidos(origemRaw));
+      const origemNorm = normalizarTextoCasoRegra(origemRaw);
       if (origemNorm && chaveSaida) {
         casosEspecificos[origemNorm] = chaveSaida;
       }
@@ -882,7 +894,11 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
       )
     );
   }
-  const casosEntries = Object.entries(casos);
+  const casosEntries = Object.entries(casos).map(([casoNorm, chave]) => ({
+    casoNorm: String(casoNorm || ""),
+    casoCompacto: String(casoNorm || "").replace(/[^a-z0-9]+/g, ""),
+    chave,
+  }));
   const fuzzyCache = new Map();
 
   const resultados = [];
@@ -924,7 +940,7 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
 
     const histCanon = canonicalizarChave(histLimpo);
     const histPipe = paraPipe(histCanon);
-    const histPipeComp = normalizeSimple(histPipe);
+    const histPipeComp = normalizarTextoCasoRegra(histPipe);
 
     const chaveDireta = extrairChaveValidaDoHistorico(histCanon, chavesBase);
     if (chaveDireta) {
@@ -940,9 +956,15 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
     }
 
     let casoEncontrado = null;
-    const histComp = normalizeSimple(histCanon);
-    for (const [casoNorm, chave] of casosEntries) {
-      if (casoNorm && (histComp.includes(casoNorm) || histPipeComp.includes(casoNorm))) {
+    const histComp = normalizarTextoCasoRegra(histCanon);
+    const histCompCompacto = normalizarTextoCasoRegraCompacto(histCanon);
+    const histPipeCompCompacto = normalizarTextoCasoRegraCompacto(histPipe);
+    for (const { casoNorm, casoCompacto, chave } of casosEntries) {
+      const matchNormal = casoNorm && (histComp.includes(casoNorm) || histPipeComp.includes(casoNorm));
+      const matchCompacto =
+        casoCompacto &&
+        (histCompCompacto.includes(casoCompacto) || histPipeCompCompacto.includes(casoCompacto));
+      if (matchNormal || matchCompacto) {
         if (contarPartesChave(chave) === partesLinha) {
           casoEncontrado = chave;
           break;
