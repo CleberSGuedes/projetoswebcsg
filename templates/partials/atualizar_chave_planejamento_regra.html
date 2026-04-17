@@ -1,0 +1,145 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Regras de Chave de Planejamento</div>
+    <p class="muted">Cadastre e mantenha as regras usadas no tratamento de PED e EMP.</p>
+
+    <form id="form-chave-regra" class="form">
+      <input type="hidden" id="chave-regra-id" />
+      <div class="form-grid">
+        <label class="field">
+          <span>Tipo de regra</span>
+          <select id="chave-regra-tipo" required>
+            <option value="">Selecione...</option>
+            <option value="chaves_planejamento">chaves_planejamento</option>
+            <option value="chave_arrumar">chave_arrumar</option>
+            <option value="forcar_chave">forcar_chave</option>
+          </select>
+        </label>
+        <label class="field inline">
+          <input type="checkbox" id="chave-regra-ativo" checked />
+          <span>Ativo</span>
+        </label>
+        <label class="field" style="grid-column: span 2;" id="chave-regra-origem-wrap">
+          <span id="chave-regra-origem-label">Chave origem</span>
+          <input type="text" id="chave-regra-origem" required />
+        </label>
+        <label class="field" style="grid-column: span 2;" id="chave-regra-destino-wrap">
+          <span>Chave destino (obrigatoria para chave_arrumar/forcar_chave)</span>
+          <input type="text" id="chave-regra-destino" />
+        </label>
+        <label class="field" style="grid-column: span 2; display:none;" id="chave-regra-arquivo-wrap">
+          <span>Arquivo .xlsx (coluna obrigatoria: chave_origem)</span>
+          <input type="file" id="chave-regra-arquivo" accept=".xlsx" />
+        </label>
+        <label class="field" style="grid-column: span 2;">
+          <span>Observacao</span>
+          <input type="text" id="chave-regra-observacao" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit">Salvar</button>
+        <button class="btn btn-secondary sm" type="button" id="chave-regra-cancel">Limpar</button>
+        <div id="chave-regra-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="form no-print">
+      <div class="card-title" style="margin-bottom:10px;">Consulta de regras</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Campo</span>
+          <select id="chave-regra-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="id">ID</option>
+            <option value="chave_origem">Chave de Origem</option>
+            <option value="chave_destino">Chave de Destino</option>
+            <option value="num_emp">N&ordm; EMP</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="chave-regra-filtro-tipo">
+            <option value="">Selecione...</option>
+            <option value="chaves_planejamento">chaves_planejamento</option>
+            <option value="chave_arrumar">chave_arrumar</option>
+            <option value="forcar_chave">forcar_chave</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="chave-regra-filtro-valor" />
+        </label>
+        <div class="actions" style="align-items:flex-end;">
+          <button class="btn btn-primary sm" type="button" id="chave-regra-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Critérios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field dotacao-criteria-box">
+          <ul id="chave-regra-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
+          <button class="btn btn-danger sm" type="button" id="chave-regra-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="chave-regra-filtro-limpar">Limpar</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="button" id="chave-regra-filtro-aplicar">Consultar</button>
+        <div id="chave-regra-filtro-msg" class="muted"></div>
+      </div>
+    </div>
+
+    <div class="card-title">Lista de regras</div>
+    <div class="table-responsive">
+      <table class="table" id="chave-regra-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Tipo</th>
+            <th>Origem</th>
+            <th>Destino</th>
+            <th>N&ordm; EMP</th>
+            <th>Ativo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="chave-regra-table-body">
+          {% for r in regras %}
+          <tr data-id="{{ r.id }}"
+              data-tipo="{{ r.tipo_regra or '' }}"
+              data-origem="{{ r.chave_origem or '' }}"
+              data-destino="{{ r.chave_destino or '' }}"
+              data-observacao="{{ r.observacao or '' }}"
+              data-ativo="{{ '1' if r.ativo else '0' }}">
+            <td>{{ r.id }}</td>
+            <td>{{ r.tipo_regra or "" }}</td>
+            <td>{{ r.chave_origem or "" }}</td>
+            <td>{{ r.chave_destino or "" }}</td>
+            <td>{% if (r.tipo_regra or '') == 'forcar_chave' %}{{ r.chave_origem or "" }}{% endif %}</td>
+            <td>{{ 'Sim' if r.ativo else 'Nao' }}</td>
+            <td class="actions" style="display:flex; gap:6px;">
+              <button class="icon-btn sm select-chave-regra" type="button" data-id="{{ r.id }}" title="Editar"><i class="bi bi-pencil"></i></button>
+              <button class="icon-btn sm delete-chave-regra" type="button" data-id="{{ r.id }}" title="Desativar"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="table-foot no-print">
+      <div class="page-size">
+        <label for="chave-regra-page-size">Itens por p&aacute;gina</label>
+        <select id="chave-regra-page-size" class="input">
+          <option value="5" selected>5</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="chave-regra-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

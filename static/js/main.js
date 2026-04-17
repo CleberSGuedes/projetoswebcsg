@@ -3092,6 +3092,444 @@
     if (!hasRows && pagerEl) pagerEl.innerHTML = "";
   }
 
+  function initChavePlanejamentoRegra() {
+    const form = document.getElementById("form-chave-regra");
+    const msg = document.getElementById("chave-regra-msg");
+    if (!form || !msg) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const idEl = document.getElementById("chave-regra-id");
+    const tipoEl = document.getElementById("chave-regra-tipo");
+    const origemEl = document.getElementById("chave-regra-origem");
+    const origemWrapEl = document.getElementById("chave-regra-origem-wrap");
+    const origemLabelEl = document.getElementById("chave-regra-origem-label");
+    const destinoEl = document.getElementById("chave-regra-destino");
+    const destinoWrapEl = document.getElementById("chave-regra-destino-wrap");
+    const arquivoWrapEl = document.getElementById("chave-regra-arquivo-wrap");
+    const arquivoEl = document.getElementById("chave-regra-arquivo");
+    const observacaoEl = document.getElementById("chave-regra-observacao");
+    const ativoEl = document.getElementById("chave-regra-ativo");
+    const cancelBtn = document.getElementById("chave-regra-cancel");
+    const tableBody = document.getElementById("chave-regra-table-body");
+    const pageSizeEl = document.getElementById("chave-regra-page-size");
+    const paginationEl = document.getElementById("chave-regra-pagination");
+    const filtroMsg = document.getElementById("chave-regra-filtro-msg");
+    const filtroCampoEl = document.getElementById("chave-regra-filtro-campo");
+    const filtroTipoEl = document.getElementById("chave-regra-filtro-tipo");
+    const filtroValorEl = document.getElementById("chave-regra-filtro-valor");
+    const filtroListEl = document.getElementById("chave-regra-filtro-list");
+    const filtroAddBtn = document.getElementById("chave-regra-filtro-add");
+    const filtroRemoveBtn = document.getElementById("chave-regra-filtro-remove");
+    const filtroAplicarBtn = document.getElementById("chave-regra-filtro-aplicar");
+    const filtroLimparBtn = document.getElementById("chave-regra-filtro-limpar");
+    const rawFeatures = userMeta?.dataset?.features ? JSON.parse(userMeta.dataset.features || "[]") : [];
+    const hasPlanejamentoUpload =
+      Number(userNivel || 0) === 1 || rawFeatures.includes("painel/chaves_planejamento_upload");
+    const tipoPlanejamentoOption = tipoEl
+      ? tipoEl.querySelector("option[value='chaves_planejamento']")
+      : null;
+
+    const allRows = tableBody
+      ? Array.from(tableBody.querySelectorAll("tr[data-id]"))
+      : [];
+    let filteredRows = [...allRows];
+    let currentPage = 1;
+    let pageSize = parseInt(pageSizeEl?.value || "5", 10) || 5;
+    let criteriaApplied = false;
+    const criteria = [];
+    let criteriaSelected = -1;
+
+    const syncTipoFields = () => {
+      const tipo = String(tipoEl?.value || "").trim();
+      const isPlanejamento = tipo === "chaves_planejamento";
+      const isForcar = tipo === "forcar_chave";
+      if (origemLabelEl) origemLabelEl.textContent = isForcar ? "Nº EMP" : "Chave origem";
+      if (origemWrapEl) origemWrapEl.style.display = isPlanejamento ? "none" : "";
+      if (destinoWrapEl) destinoWrapEl.style.display = isPlanejamento ? "none" : "";
+      if (arquivoWrapEl) arquivoWrapEl.style.display = isPlanejamento ? "" : "none";
+      if (destinoEl) destinoEl.required = !isPlanejamento;
+      if (origemEl) origemEl.required = !isPlanejamento;
+      if (!isPlanejamento && arquivoEl) arquivoEl.value = "";
+      if (isPlanejamento && !hasPlanejamentoUpload) {
+        if (tipoEl) tipoEl.value = "";
+        if (arquivoEl) arquivoEl.value = "";
+        if (arquivoWrapEl) arquivoWrapEl.style.display = "none";
+        if (origemWrapEl) origemWrapEl.style.display = "";
+        if (destinoWrapEl) destinoWrapEl.style.display = "";
+        if (msg) {
+          msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+          msg.classList.add("text-error");
+        }
+      }
+    };
+
+    const limparForm = () => {
+      if (idEl) idEl.value = "";
+      if (tipoEl) tipoEl.value = "";
+      if (origemEl) origemEl.value = "";
+      if (destinoEl) destinoEl.value = "";
+      if (arquivoEl) arquivoEl.value = "";
+      if (observacaoEl) observacaoEl.value = "";
+      if (ativoEl) ativoEl.checked = true;
+      syncTipoFields();
+    };
+
+    const fillForm = (row) => {
+      if (!row) return;
+      if (idEl) idEl.value = row.dataset.id || "";
+      if (tipoEl) tipoEl.value = row.dataset.tipo || "";
+      if (origemEl) origemEl.value = row.dataset.origem || "";
+      if (destinoEl) destinoEl.value = row.dataset.destino || "";
+      if (observacaoEl) observacaoEl.value = row.dataset.observacao || "";
+      if (ativoEl) ativoEl.checked = (row.dataset.ativo || "1") === "1";
+      syncTipoFields();
+    };
+
+    const setFiltroMsg = (text, isError = false) => {
+      if (!filtroMsg) return;
+      filtroMsg.textContent = text || "";
+      filtroMsg.classList.toggle("text-error", !!isError);
+    };
+
+    const criteriaFieldLabel = (field) => {
+      if (field === "id") return "ID";
+      if (field === "chave_origem") return "Chave de Origem";
+      if (field === "chave_destino") return "Chave de Destino";
+      if (field === "num_emp") return "Nº EMP";
+      return field || "";
+    };
+
+    const getRowFieldValue = (row, field) => {
+      if (!row) return "";
+      if (field === "id") return String(row.dataset.id || "");
+      if (field === "chave_origem") return String(row.dataset.origem || "");
+      if (field === "chave_destino") return String(row.dataset.destino || "");
+      if (field === "num_emp") {
+        return String(row.dataset.tipo || "") === "forcar_chave"
+          ? String(row.dataset.origem || "")
+          : "";
+      }
+      return "";
+    };
+
+    const normalizeText = (v) =>
+      String(v || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const compareField = (field, rowValue, filterValue) => {
+      const rv = normalizeText(rowValue);
+      const fv = normalizeText(filterValue);
+      if (!fv) return false;
+      if (field === "id") return rv === fv;
+      if (field === "num_emp") {
+        const onlyDigits = (s) => String(s || "").replace(/\D+/g, "");
+        return onlyDigits(rv) === onlyDigits(fv) && onlyDigits(fv) !== "";
+      }
+      return rv.includes(fv);
+    };
+
+    const renderCriteriaList = () => {
+      if (!filtroListEl) return;
+      filtroListEl.innerHTML = "";
+      criteria.forEach((c, idx) => {
+        const li = document.createElement("li");
+        li.className = "pill";
+        li.textContent = `${criteriaFieldLabel(c.field)} | ${c.tipo} | ${c.value}`;
+        if (idx === criteriaSelected) li.classList.add("active");
+        li.addEventListener("click", () => {
+          criteriaSelected = idx;
+          renderCriteriaList();
+        });
+        filtroListEl.appendChild(li);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderTablePage();
+        });
+        paginationEl.appendChild(b);
+      };
+
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const renderTablePage = () => {
+      if (!criteriaApplied) {
+        allRows.forEach((row) => {
+          row.style.display = "none";
+        });
+        if (paginationEl) paginationEl.innerHTML = "";
+        return;
+      }
+      allRows.forEach((row) => {
+        row.style.display = "none";
+      });
+      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const start = (currentPage - 1) * pageSize;
+      const pageRows = filteredRows.slice(start, start + pageSize);
+      pageRows.forEach((row) => {
+        row.style.display = "";
+      });
+      renderPagination(totalPages);
+    };
+
+    const applyFilters = () => {
+      if (!criteria.length) {
+        criteriaApplied = false;
+        filteredRows = [];
+        currentPage = 1;
+        renderTablePage();
+        setFiltroMsg("Adicione ao menos um critério para consultar.", true);
+        return;
+      }
+
+      filteredRows = allRows.filter((row) =>
+        criteria.every((c) => {
+          const rowTipo = String(row.dataset.tipo || "");
+          if (rowTipo !== c.tipo) return false;
+          return compareField(c.field, getRowFieldValue(row, c.field), c.value);
+        })
+      );
+
+      criteriaApplied = true;
+      currentPage = 1;
+      renderTablePage();
+      if (!filteredRows.length) {
+        setFiltroMsg("Nenhuma regra encontrada para os filtros informados.", true);
+      } else {
+        setFiltroMsg(`Total encontrado: ${filteredRows.length}`);
+      }
+    };
+
+    if (filtroAddBtn) {
+      filtroAddBtn.addEventListener("click", () => {
+        const field = String(filtroCampoEl?.value || "").trim();
+        const tipo = String(filtroTipoEl?.value || "").trim();
+        const value = String(filtroValorEl?.value || "").trim();
+        if (!field || !tipo || !value) {
+          setFiltroMsg("Preencha Campo, Operador e Valor para adicionar o critério.", true);
+          return;
+        }
+        criteria.push({ field, tipo, value });
+        criteriaSelected = criteria.length - 1;
+        setFiltroMsg("");
+        renderCriteriaList();
+      });
+    }
+
+    if (filtroRemoveBtn) {
+      filtroRemoveBtn.addEventListener("click", () => {
+        if (criteriaSelected < 0 || criteriaSelected >= criteria.length) {
+          setFiltroMsg("Selecione um critério para remover.", true);
+          return;
+        }
+        criteria.splice(criteriaSelected, 1);
+        criteriaSelected = -1;
+        renderCriteriaList();
+        setFiltroMsg("");
+      });
+    }
+
+    if (filtroAplicarBtn) {
+      filtroAplicarBtn.addEventListener("click", () => applyFilters());
+    }
+    if (filtroLimparBtn) {
+      filtroLimparBtn.addEventListener("click", () => {
+        if (filtroCampoEl) filtroCampoEl.value = "";
+        if (filtroTipoEl) filtroTipoEl.value = "";
+        if (filtroValorEl) filtroValorEl.value = "";
+        criteria.length = 0;
+        criteriaSelected = -1;
+        renderCriteriaList();
+        setFiltroMsg("");
+        criteriaApplied = false;
+        filteredRows = [];
+        currentPage = 1;
+        renderTablePage();
+      });
+    }
+    [filtroValorEl].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          if (filtroAddBtn) filtroAddBtn.click();
+        }
+      });
+    });
+    if (pageSizeEl) {
+      pageSizeEl.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeEl.value || "5", 10) || 5;
+        currentPage = 1;
+        renderTablePage();
+      });
+    }
+
+    if (tableBody) {
+      tableBody.addEventListener("click", async (ev) => {
+        const selectBtn = ev.target.closest(".select-chave-regra");
+        if (selectBtn) {
+          const row = selectBtn.closest("tr[data-id]");
+          if (row) {
+            const rowTipo = String(row.dataset.tipo || "");
+            if (rowTipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
+              msg.textContent = "Usuario sem permissao para editar chaves_planejamento.";
+              msg.classList.add("text-error");
+              return;
+            }
+            fillForm(row);
+          }
+          return;
+        }
+        const deleteBtn = ev.target.closest(".delete-chave-regra");
+        if (deleteBtn) {
+          const id = deleteBtn.dataset.id;
+          if (!id) return;
+          msg.textContent = "Desativando...";
+          msg.classList.remove("text-error");
+          try {
+            const res = await fetch(`/api/chave-planejamento-regra/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: { "X-Requested-With": "fetch" },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Falha ao desativar regra.");
+            msg.textContent = data.message || "Regra desativada.";
+            loadPage("atualizar/chave_planejamento_regra");
+          } catch (err) {
+            console.error(err);
+            msg.textContent = err.message;
+            msg.classList.add("text-error");
+          }
+        }
+      });
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        msg.textContent = "";
+        msg.classList.remove("text-error");
+        limparForm();
+      });
+    }
+    if (tipoEl) {
+      tipoEl.addEventListener("change", () => {
+        syncTipoFields();
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      msg.textContent = "Salvando...";
+      msg.classList.remove("text-error");
+      const id = String(idEl?.value || "").trim();
+      const tipo = String(tipoEl?.value || "").trim();
+      if (tipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
+        msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+        msg.classList.add("text-error");
+        return;
+      }
+      if (tipo === "chaves_planejamento") {
+        const arquivo = arquivoEl?.files?.[0] || null;
+        if (!arquivo) {
+          msg.textContent = "Selecione um arquivo .xlsx para importar as chaves.";
+          msg.classList.add("text-error");
+          return;
+        }
+        const fd = new FormData();
+        fd.append("arquivo", arquivo);
+        fd.append("observacao", observacaoEl?.value || "");
+        fd.append("ativo", ativoEl?.checked ? "1" : "0");
+        try {
+          const res = await fetch("/api/chave-planejamento-regra/import", {
+            method: "POST",
+            headers: { "X-Requested-With": "fetch" },
+            body: fd,
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao importar chaves.");
+          const resumo = [
+            data.message || "Importação concluída.",
+            `Inseridas: ${data.inseridas || 0}`,
+            `Atualizadas: ${data.atualizadas || 0}`,
+            `Ignoradas (duplicadas no arquivo): ${data.ignoradas_duplicadas_arquivo || 0}`,
+            `Ignoradas (vazias): ${data.ignoradas_vazias || 0}`,
+          ].join(" | ");
+          msg.textContent = resumo;
+          loadPage("atualizar/chave_planejamento_regra");
+        } catch (err) {
+          console.error(err);
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        return;
+      }
+      const payload = {
+        tipo_regra: tipo,
+        chave_origem: origemEl?.value || "",
+        chave_destino: destinoEl?.value || "",
+        observacao: observacaoEl?.value || "",
+        ativo: !!ativoEl?.checked,
+      };
+      const url = id
+        ? `/api/chave-planejamento-regra/${encodeURIComponent(id)}`
+        : "/api/chave-planejamento-regra";
+      const method = id ? "PUT" : "POST";
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao salvar regra.");
+        msg.textContent = data.message || "Regra salva.";
+        loadPage("atualizar/chave_planejamento_regra");
+      } catch (err) {
+        console.error(err);
+        msg.textContent = err.message;
+        msg.classList.add("text-error");
+      }
+    });
+
+    syncTipoFields();
+    if (tipoPlanejamentoOption && !hasPlanejamentoUpload) {
+      tipoPlanejamentoOption.disabled = true;
+      tipoPlanejamentoOption.hidden = true;
+      if (tipoEl && tipoEl.value === "chaves_planejamento") {
+        tipoEl.value = "";
+      }
+    }
+    renderTablePage();
+  }
+
   function initRelatorioFip() {
     const table = document.getElementById("fip613-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
@@ -8552,6 +8990,9 @@
     }
     if (route === "atualizar/plan20-seduc") {
       initPlan20();
+    }
+    if (route === "atualizar/chave_planejamento_regra") {
+      initChavePlanejamentoRegra();
     }
     if (route === "cadastrar/dotacao") {
       initDotacao();

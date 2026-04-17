@@ -594,3 +594,21 @@ class AlterarMetaItem(db.Model):
     criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     alterado_em = db.Column(db.DateTime)
     excluido_em = db.Column(db.DateTime)
+
+
+class ChavePlanejamentoRegra(db.Model):
+    __tablename__ = "chave_planejamento_regra"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    tipo_regra = db.Column(
+        db.Enum("chaves_planejamento", "chave_arrumar", "forcar_chave"),
+        nullable=False,
+    )
+    chave_origem = db.Column(db.String(255), nullable=False)
+    chave_destino = db.Column(db.String(255))
+    observacao = db.Column(db.Text)
+    usuario_id = db.Column(db.BigInteger)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)

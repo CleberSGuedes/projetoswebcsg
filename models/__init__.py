@@ -24,4 +24,5 @@ from .user import (
     CadastrarSubacao,
     AlterarMeta,
     AlterarMetaItem,
+    ChavePlanejamentoRegra,
 )

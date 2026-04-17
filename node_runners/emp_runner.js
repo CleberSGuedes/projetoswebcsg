@@ -569,6 +569,15 @@ function carregarChavesPlanejamento(jsonPath) {
   }
 }
 
+function normalizarChavePlanejamentoTexto(chave) {
+  let bruto = corrigirTermosCorrompidos(String(chave || ""));
+  bruto = bruto.replace(/\*/g, " * ");
+  bruto = bruto.replace(/\s+/g, " ");
+  const parts = bruto.split("*").map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return "";
+  return `* ${parts.join(" * ")} *`;
+}
+
 function carregarCasosEspecificos(jsonPath) {
   try {
     const casos = readJsonWithBom(jsonPath);
@@ -601,6 +610,63 @@ function carregarForcarChaves(jsonPath) {
   } catch {
     return {};
   }
+}
+
+async function carregarRegrasChaveBanco(db) {
+  let rows = [];
+  if (db.kind === "mssql") {
+    const result = await db.pool
+      .request()
+      .query(
+        "SELECT tipo_regra, chave_origem, chave_destino FROM chave_planejamento_regra WHERE ativo = 1 AND excluido_em IS NULL"
+      );
+    rows = result?.recordset || [];
+  } else {
+    const [resultRows] = await db.pool.query(
+      "SELECT tipo_regra, chave_origem, chave_destino FROM chave_planejamento_regra WHERE ativo = 1 AND excluido_em IS NULL"
+    );
+    rows = resultRows || [];
+  }
+
+  const chavesPlanejamento = [];
+  const casosEspecificos = {};
+  const forcarMap = {};
+  const seen = new Set();
+
+  for (const row of rows) {
+    const tipo = String(row?.tipo_regra || "").trim().toLowerCase();
+    const origemRaw = String(row?.chave_origem || "").trim();
+    const destinoRaw = String(row?.chave_destino || "").trim();
+    if (!origemRaw) continue;
+
+    if (tipo === "chaves_planejamento") {
+      const chave = normalizarChavePlanejamentoTexto(origemRaw);
+      if (chave && !seen.has(chave)) {
+        seen.add(chave);
+        chavesPlanejamento.push(chave);
+      }
+      continue;
+    }
+
+    if (tipo === "chave_arrumar") {
+      if (!destinoRaw) continue;
+      const chaveSaida = canonicalizarChave(corrigirTermosCorrompidos(destinoRaw));
+      const origemNorm = normalizeSimple(corrigirTermosCorrompidos(origemRaw));
+      if (origemNorm && chaveSaida) {
+        casosEspecificos[origemNorm] = chaveSaida;
+      }
+      continue;
+    }
+
+    if (tipo === "forcar_chave") {
+      if (!destinoRaw) continue;
+      let chaveTexto = destinoRaw.replace(/\|/g, "*");
+      chaveTexto = corrigirTermosCorrompidos(chaveTexto);
+      forcarMap[String(origemRaw).trim()] = canonicalizarChave(chaveTexto);
+    }
+  }
+
+  return { chavesPlanejamento, casosEspecificos, forcarMap };
 }
 
 function extrairChaveValidaDoHistorico(hist, chaves) {
@@ -650,8 +716,8 @@ function extrairChaveDotDoHistorico(hist) {
   return null;
 }
 
-function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath, keyColName, partesChave, uploadId) {
-  const casosEspecificos = carregarCasosEspecificos(jsonCasosPath);
+function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecificos, keyColName, partesChave, uploadId) {
+  const casos = casosEspecificos || {};
   const chavesNorm = chavesPlanejamento.map((c) => canonicalizarChave(c));
 
   const levenshteinDistance = (a, b) => {
@@ -816,7 +882,7 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
       )
     );
   }
-  const casosEntries = Object.entries(casosEspecificos);
+  const casosEntries = Object.entries(casos);
   const fuzzyCache = new Map();
 
   const resultados = [];
@@ -940,14 +1006,14 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, jsonCasosPath
   return dataset;
 }
 
-function forcarChavesManualmente(dataset, keyColName) {
-  const substituicoes = carregarForcarChaves(JSON_FORCAR_PATH);
-  if (!Object.keys(substituicoes).length) return dataset;
+function forcarChavesManualmente(dataset, keyColName, substituicoes) {
+  const mapa = substituicoes || {};
+  if (!Object.keys(mapa).length) return dataset;
   if (!dataset.columns.includes("N\u00ba EMP")) return dataset;
   for (const row of dataset.rows) {
     const numEmp = String(row["N\u00ba EMP"] || "").trim();
-    if (substituicoes[numEmp]) {
-      row[keyColName] = canonicalizarChave(substituicoes[numEmp]);
+    if (mapa[numEmp]) {
+      row[keyColName] = canonicalizarChave(mapa[numEmp]);
       row.__forcar_chave = true;
     }
   }
@@ -1494,16 +1560,36 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   const keyColName = "Chave de Planejamento";
   const planejamentoAtivo = true;
 
-  const chavesPlanejamento = carregarChavesPlanejamento(JSON_CHAVES_PATH);
+  const db = await connect();
+  let regrasBanco = null;
+  try {
+    regrasBanco = await carregarRegrasChaveBanco(db);
+  } catch (err) {
+    logEmpDebug(`[emp] fallback para JSON (erro banco de regras): ${err?.message || err}`);
+  }
+
+  const chavesPlanejamento =
+    regrasBanco?.chavesPlanejamento?.length
+      ? regrasBanco.chavesPlanejamento
+      : carregarChavesPlanejamento(JSON_CHAVES_PATH);
+  const casosEspecificos =
+    regrasBanco?.casosEspecificos && Object.keys(regrasBanco.casosEspecificos).length
+      ? regrasBanco.casosEspecificos
+      : carregarCasosEspecificos(JSON_CASOS_PATH);
+  const forcarMap =
+    regrasBanco?.forcarMap && Object.keys(regrasBanco.forcarMap).length
+      ? regrasBanco.forcarMap
+      : carregarForcarChaves(JSON_FORCAR_PATH);
+
   df = identificarChavePlanejamento(
     df,
     chavesPlanejamento,
-    JSON_CASOS_PATH,
+    casosEspecificos,
     keyColName,
     partesPlanejamento,
     uploadId
   );
-  df = forcarChavesManualmente(df, keyColName);
+  df = forcarChavesManualmente(df, keyColName, forcarMap);
 
   df = adicionarNovasColunas(df, keyColName, planejamentoAtivo);
   if (!df) throw new Error("Falha ao adicionar novas colunas.");
@@ -1596,7 +1682,6 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     message: "Arquivo tratado gerado. Preparando gravação no banco.",
   });
 
-  const db = await connect();
   if (db.kind === "mssql") {
     await db.pool.request().query("UPDATE emp SET ativo = 0 WHERE ativo = 1");
   } else {

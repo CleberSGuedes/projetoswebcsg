@@ -15,7 +15,7 @@ from rapidfuzz import fuzz, process
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import db, Dotacao, EmpRegistro
+from models import db, Dotacao, EmpRegistro, ChavePlanejamentoRegra
 
 # Evita warnings de downcasting silencioso em replace
 pd.set_option("future.no_silent_downcasting", True)
@@ -236,6 +236,74 @@ def carregar_forcar_chave(json_path: Path) -> dict[str, str]:
     except Exception as e:
         print(f"Erro ao carregar forcar_chave: {e}")
         return {}
+
+
+def carregar_regras_chave_banco() -> tuple[list[str], dict[str, str], dict[str, str]]:
+    rows = (
+        ChavePlanejamentoRegra.query.filter(ChavePlanejamentoRegra.ativo == True)  # noqa: E712
+        .filter(ChavePlanejamentoRegra.excluido_em.is_(None))
+        .all()
+    )
+    if not rows:
+        return [], {}, {}
+
+    chaves_planejamento: list[str] = []
+    casos_especificos: dict[str, str] = {}
+    forcar_map: dict[str, str] = {}
+    seen_chaves = set()
+
+    for row in rows:
+        tipo = str(getattr(row, "tipo_regra", "") or "").strip().lower()
+        origem_raw = str(getattr(row, "chave_origem", "") or "").strip()
+        destino_raw = str(getattr(row, "chave_destino", "") or "").strip()
+        if not origem_raw:
+            continue
+
+        if tipo == "chaves_planejamento":
+            bruto = corrigir_caracteres(re.sub(r"\s+", " ", origem_raw))
+            if not bruto:
+                continue
+            if "*" in bruto:
+                parts = [p.strip() for p in bruto.split("*") if p.strip()]
+                chave = f"* {' * '.join(parts)} *" if parts else ""
+            else:
+                chave = bruto
+            if chave and chave not in seen_chaves:
+                seen_chaves.add(chave)
+                chaves_planejamento.append(chave)
+            continue
+
+        if tipo == "chave_arrumar":
+            if not destino_raw:
+                continue
+            origem = corrigir_caracteres(origem_raw)
+            destino = corrigir_caracteres(destino_raw)
+            if origem and destino:
+                casos_especificos[origem] = destino
+            continue
+
+        if tipo == "forcar_chave":
+            if not destino_raw:
+                continue
+            forcar_map[str(origem_raw).strip()] = corrigir_caracteres(str(destino_raw).strip())
+
+    return chaves_planejamento, casos_especificos, forcar_map
+
+
+def carregar_regras_chave_planejamento() -> tuple[list[str], dict[str, str], dict[str, str]]:
+    try:
+        chaves, casos, forcar = carregar_regras_chave_banco()
+        if chaves or casos or forcar:
+            return chaves, casos, forcar
+    except Exception as e:
+        print(f"Erro ao carregar regras de chave pelo banco: {e}")
+
+    # fallback temporario: arquivos JSON locais
+    return (
+        carregar_chaves_planejamento(JSON_CHAVES_PLANEJAMENTO),
+        carregar_casos_especificos(JSON_CASOS_ESPECIFICOS),
+        carregar_forcar_chave(JSON_FORCAR_CHAVE),
+    )
 
 
 def extrair_chave_valida_do_historico(hist_limpo: str, chaves_planejamento: list[str]) -> str | None:
@@ -1111,9 +1179,7 @@ def run_ped(
     file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
 ) -> tuple[int, Path, list[str], list[int]]:
     ensure_dirs()
-    chaves_planejamento = carregar_chaves_planejamento(JSON_CHAVES_PLANEJAMENTO)
-    casos_especificos = carregar_casos_especificos(JSON_CASOS_ESPECIFICOS)
-    forcar_map = carregar_forcar_chave(JSON_FORCAR_CHAVE)
+    chaves_planejamento, casos_especificos, forcar_map = carregar_regras_chave_planejamento()
 
     ped_df = preparar_aba_ped(file_path)
     if ped_df is None:

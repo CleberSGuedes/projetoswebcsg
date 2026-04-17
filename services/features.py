@@ -24,7 +24,12 @@ FEATURES = [
     {
         "id": "painel",
         "nome": "Painel",
-        "children": [],
+        "children": [
+            {
+                "id": "painel/chaves_planejamento_upload",
+                "nome": "Upload anual chaves_planejamento",
+            },
+        ],
     },
     {
         "id": "atualizar",
@@ -36,6 +41,7 @@ FEATURES = [
             {"id": "atualizar/est-emp", "nome": "Est Emp"},
             {"id": "atualizar/nob", "nome": "NOB"},
             {"id": "atualizar/plan20-seduc", "nome": "Plan20 - SEDUC"},
+            {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
         ],
     },
     {

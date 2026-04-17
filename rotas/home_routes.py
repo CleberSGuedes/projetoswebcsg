@@ -34,6 +34,7 @@ from models import (
     CadastrarSubacao,
     AlterarMeta,
     AlterarMetaItem,
+    ChavePlanejamentoRegra,
     ActiveSession,
     db,
 )
@@ -902,6 +903,279 @@ def partial_atualizar_ped():
 @require_feature("atualizar/emp")
 def partial_atualizar_emp():
     return render_template("partials/atualizar_emp.html")
+
+
+@home_bp.route("/partial/atualizar/chave_planejamento_regra")
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def partial_atualizar_chave_planejamento_regra():
+    regras = (
+        ChavePlanejamentoRegra.query.order_by(
+            ChavePlanejamentoRegra.tipo_regra.asc(),
+            ChavePlanejamentoRegra.chave_origem.asc(),
+            ChavePlanejamentoRegra.id.desc(),
+        ).all()
+    )
+    return render_template("partials/atualizar_chave_planejamento_regra.html", regras=regras)
+
+
+def _serialize_chave_regra(r: ChavePlanejamentoRegra) -> dict:
+    return {
+        "id": r.id,
+        "tipo_regra": (r.tipo_regra or "").strip(),
+        "chave_origem": (r.chave_origem or "").strip(),
+        "chave_destino": (r.chave_destino or "").strip(),
+        "observacao": (r.observacao or "").strip(),
+        "usuario_id": r.usuario_id,
+        "ativo": bool(r.ativo),
+        "criado_em": r.criado_em.isoformat() if getattr(r, "criado_em", None) else "",
+        "alterado_em": r.alterado_em.isoformat() if getattr(r, "alterado_em", None) else "",
+    }
+
+
+@home_bp.route("/api/chave-planejamento-regra", methods=["GET"])
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def api_chave_planejamento_regra_list():
+    regras = (
+        ChavePlanejamentoRegra.query.order_by(
+            ChavePlanejamentoRegra.tipo_regra.asc(),
+            ChavePlanejamentoRegra.chave_origem.asc(),
+            ChavePlanejamentoRegra.id.desc(),
+        ).all()
+    )
+    return jsonify({"ok": True, "rows": [_serialize_chave_regra(r) for r in regras]})
+
+
+@home_bp.route("/api/chave-planejamento-regra", methods=["POST"])
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def api_chave_planejamento_regra_create():
+    payload = request.get_json(silent=True) or {}
+    tipo = str(payload.get("tipo_regra") or "").strip()
+    origem = str(payload.get("chave_origem") or "").strip()
+    destino = str(payload.get("chave_destino") or "").strip()
+    observacao = str(payload.get("observacao") or "").strip()
+    ativo = bool(payload.get("ativo", True))
+
+    tipos_validos = {"chaves_planejamento", "chave_arrumar", "forcar_chave"}
+    if tipo not in tipos_validos:
+        return jsonify({"error": "Tipo de regra invalido."}), 400
+    if tipo == "chaves_planejamento" and not has_permission("painel/chaves_planejamento_upload"):
+        return jsonify({"error": "Usuario sem permissao para cadastrar chaves_planejamento."}), 403
+    if not origem:
+        return jsonify({"error": "Chave de origem obrigatoria."}), 400
+    if tipo in {"chave_arrumar", "forcar_chave"} and not destino:
+        return jsonify({"error": "Chave de destino obrigatoria para este tipo."}), 400
+
+    now = _now_local()
+    user_id = _resolve_usuario_id()
+    try:
+        existente = (
+            ChavePlanejamentoRegra.query.filter_by(tipo_regra=tipo, chave_origem=origem).first()
+        )
+        if existente:
+            existente.chave_destino = destino or None
+            existente.observacao = observacao or None
+            existente.ativo = ativo
+            existente.usuario_id = user_id or existente.usuario_id
+            existente.excluido_em = None if ativo else now
+            existente.alterado_em = now
+            db.session.flush()
+            row = existente
+            msg = "Regra atualizada."
+        else:
+            row = ChavePlanejamentoRegra(
+                tipo_regra=tipo,
+                chave_origem=origem,
+                chave_destino=destino or None,
+                observacao=observacao or None,
+                usuario_id=user_id,
+                ativo=ativo,
+                criado_em=now,
+                alterado_em=None,
+                excluido_em=None if ativo else now,
+            )
+            db.session.add(row)
+            db.session.flush()
+            msg = "Regra cadastrada."
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Ja existe uma regra com este tipo e chave de origem."}), 409
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar regra: {exc}"}), 500
+
+    return jsonify({"ok": True, "message": msg, "row": _serialize_chave_regra(row)})
+
+
+@home_bp.route("/api/chave-planejamento-regra/import", methods=["POST"])
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def api_chave_planejamento_regra_import():
+    if not has_permission("painel/chaves_planejamento_upload"):
+        return jsonify({"error": "Usuario sem permissao para importar chaves_planejamento."}), 403
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not getattr(arquivo, "filename", ""):
+        return jsonify({"error": "Arquivo .xlsx é obrigatório."}), 400
+    if not str(arquivo.filename).lower().endswith(".xlsx"):
+        return jsonify({"error": "Envie um arquivo .xlsx válido."}), 400
+
+    observacao_padrao = str(request.form.get("observacao") or "").strip()
+    ativo_flag = str(request.form.get("ativo") or "1").strip() not in {"0", "false", "False"}
+    user_id = _resolve_usuario_id()
+    now = _now_local()
+
+    try:
+        df = pd.read_excel(arquivo, dtype=str)
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao ler o arquivo .xlsx: {exc}"}), 400
+
+    if df is None or df.empty:
+        return jsonify({"error": "Arquivo sem dados para importação."}), 400
+
+    cols_norm = {str(c).strip().lower(): c for c in df.columns}
+    col_origem = cols_norm.get("chave_origem") or cols_norm.get("origem")
+    col_obs = cols_norm.get("observacao") or cols_norm.get("observação")
+    if not col_origem:
+        return jsonify({"error": "Coluna obrigatória não encontrada: chave_origem."}), 400
+
+    inseridas = 0
+    atualizadas = 0
+    ignoradas_duplicadas_arquivo = 0
+    ignoradas_vazias = 0
+    vistos = set()
+
+    try:
+        for _, raw in df.iterrows():
+            origem = str(raw.get(col_origem) or "").strip()
+            if not origem or origem.lower() in {"nan", "none"}:
+                ignoradas_vazias += 1
+                continue
+            if origem in vistos:
+                ignoradas_duplicadas_arquivo += 1
+                continue
+            vistos.add(origem)
+
+            obs_linha = observacao_padrao
+            if col_obs:
+                obs_raw = str(raw.get(col_obs) or "").strip()
+                if obs_raw and obs_raw.lower() not in {"nan", "none"}:
+                    obs_linha = obs_raw
+
+            existente = (
+                ChavePlanejamentoRegra.query.filter_by(
+                    tipo_regra="chaves_planejamento",
+                    chave_origem=origem,
+                ).first()
+            )
+            if existente:
+                existente.chave_destino = None
+                existente.observacao = obs_linha or None
+                existente.ativo = ativo_flag
+                existente.usuario_id = user_id or existente.usuario_id
+                existente.excluido_em = None if ativo_flag else now
+                existente.alterado_em = now
+                atualizadas += 1
+            else:
+                db.session.add(
+                    ChavePlanejamentoRegra(
+                        tipo_regra="chaves_planejamento",
+                        chave_origem=origem,
+                        chave_destino=None,
+                        observacao=obs_linha or None,
+                        usuario_id=user_id,
+                        ativo=ativo_flag,
+                        criado_em=now,
+                        alterado_em=None,
+                        excluido_em=None if ativo_flag else now,
+                    )
+                )
+                inseridas += 1
+
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao importar regras: {exc}"}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Importação de chaves concluída.",
+            "inseridas": inseridas,
+            "atualizadas": atualizadas,
+            "ignoradas_duplicadas_arquivo": ignoradas_duplicadas_arquivo,
+            "ignoradas_vazias": ignoradas_vazias,
+            "total_processadas": inseridas + atualizadas,
+        }
+    )
+
+
+@home_bp.route("/api/chave-planejamento-regra/<int:regra_id>", methods=["PUT"])
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def api_chave_planejamento_regra_update(regra_id: int):
+    row = ChavePlanejamentoRegra.query.filter_by(id=regra_id).first()
+    if not row:
+        return jsonify({"error": "Regra nao encontrada."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    tipo = str(payload.get("tipo_regra") or row.tipo_regra or "").strip()
+    origem = str(payload.get("chave_origem") or row.chave_origem or "").strip()
+    destino = str(payload.get("chave_destino") or "").strip()
+    observacao = str(payload.get("observacao") or "").strip()
+    ativo = bool(payload.get("ativo", row.ativo))
+
+    tipos_validos = {"chaves_planejamento", "chave_arrumar", "forcar_chave"}
+    if tipo not in tipos_validos:
+        return jsonify({"error": "Tipo de regra invalido."}), 400
+    if tipo == "chaves_planejamento" and not has_permission("painel/chaves_planejamento_upload"):
+        return jsonify({"error": "Usuario sem permissao para alterar chaves_planejamento."}), 403
+    if not origem:
+        return jsonify({"error": "Chave de origem obrigatoria."}), 400
+    if tipo in {"chave_arrumar", "forcar_chave"} and not destino:
+        return jsonify({"error": "Chave de destino obrigatoria para este tipo."}), 400
+
+    now = _now_local()
+    user_id = _resolve_usuario_id()
+    try:
+        row.tipo_regra = tipo
+        row.chave_origem = origem
+        row.chave_destino = destino or None
+        row.observacao = observacao or None
+        row.ativo = ativo
+        row.usuario_id = user_id or row.usuario_id
+        row.excluido_em = None if ativo else now
+        row.alterado_em = now
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Ja existe uma regra com este tipo e chave de origem."}), 409
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao atualizar regra: {exc}"}), 500
+
+    return jsonify({"ok": True, "message": "Regra atualizada.", "row": _serialize_chave_regra(row)})
+
+
+@home_bp.route("/api/chave-planejamento-regra/<int:regra_id>", methods=["DELETE"])
+@login_required
+@require_feature("atualizar/chave_planejamento_regra")
+def api_chave_planejamento_regra_delete(regra_id: int):
+    row = ChavePlanejamentoRegra.query.filter_by(id=regra_id).first()
+    if not row:
+        return jsonify({"error": "Regra nao encontrada."}), 404
+    try:
+        now = _now_local()
+        row.ativo = False
+        row.excluido_em = now
+        row.alterado_em = now
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir regra: {exc}"}), 500
+    return jsonify({"ok": True, "message": "Regra desativada com sucesso."})
 
 
 @home_bp.route("/partial/atualizar/est-emp")
@@ -7139,7 +7413,7 @@ def api_emp_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Arquivo recebido. O processamento ocorrerÃ¡ em segundo plano.",
+                "message": "Arquivo recebido. O processamento ocorrer\u00e1 em segundo plano.",
                 "job_id": registro.id,
             }
         )
@@ -7292,7 +7566,7 @@ def api_nob_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Arquivo recebido. O processamento ocorrerÃ¡ em segundo plano.",
+                "message": "Arquivo recebido. O processamento ocorrer\u00e1 em segundo plano.",
                 "job_id": registro.id,
             }
         )
