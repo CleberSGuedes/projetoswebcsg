@@ -612,3 +612,94 @@ class ChavePlanejamentoRegra(db.Model):
     criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     alterado_em = db.Column(db.DateTime)
     excluido_em = db.Column(db.DateTime)
+
+
+class ApiClient(db.Model):
+    __tablename__ = "api_clients"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(150), nullable=False)
+    client_id = db.Column(db.String(80), nullable=False, unique=True)
+    client_secret_hash = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.Enum("ativo", "inativo", "revogado"), nullable=False, server_default="ativo")
+    created_by_user_id = db.Column(db.BigInteger, nullable=True)
+    acesso_inicio_em = db.Column(db.DateTime, nullable=True)
+    acesso_fim_em = db.Column(db.DateTime, nullable=True)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class ApiClientScope(db.Model):
+    __tablename__ = "api_client_scopes"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    client_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("api_clients.id", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+    )
+    scope = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class ApiRefreshToken(db.Model):
+    __tablename__ = "api_refresh_tokens"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    client_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("api_clients.id", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+    )
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    jti = db.Column(db.String(36), nullable=True, unique=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    replaced_by_token_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("api_refresh_tokens.id", ondelete="SET NULL", onupdate="CASCADE"),
+        nullable=True,
+    )
+    created_ip = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class ApiAccessLog(db.Model):
+    __tablename__ = "api_access_logs"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    client_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("api_clients.id", ondelete="SET NULL", onupdate="CASCADE"),
+        nullable=True,
+    )
+    request_id = db.Column(db.String(36), nullable=True)
+    endpoint = db.Column(db.String(255), nullable=False)
+    metodo = db.Column(db.String(10), nullable=False)
+    query_params = db.Column(db.Text, nullable=True)
+    status_code = db.Column(db.SmallInteger, nullable=False)
+    ip = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    requested_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class ApiKey(db.Model):
+    __tablename__ = "api_keys"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    client_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("api_clients.id", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+    )
+    key_prefix = db.Column(db.String(16), nullable=False)
+    key_hash = db.Column(db.String(64), nullable=False, unique=True)
+    status = db.Column(db.Enum("ativo", "revogado", "expirado"), nullable=False, server_default="ativo")
+    expires_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())

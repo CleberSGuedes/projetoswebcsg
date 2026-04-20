@@ -19,6 +19,7 @@ FEATURES = [
             {"id": "usuarios/editar", "nome": "Editar"},
             {"id": "usuarios/perfil", "nome": "Perfil"},
             {"id": "usuarios/senha", "nome": "Alterar senha"},
+            {"id": "usuarios/api-acessos", "nome": "API de Acessos"},
         ],
     },
     {

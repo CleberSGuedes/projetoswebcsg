@@ -10,8 +10,11 @@ import unicodedata
 import subprocess
 import sys
 import threading
+import secrets
+import hashlib
 import pytz
 import pandas as pd
+from werkzeug.security import generate_password_hash, check_password_hash
 from models import (
     Usuario,
     Perfil,
@@ -35,6 +38,11 @@ from models import (
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    ApiClient,
+    ApiClientScope,
+    ApiRefreshToken,
+    ApiAccessLog,
+    ApiKey,
     ActiveSession,
     db,
 )
@@ -502,6 +510,18 @@ def partial_dashboard():
     except Exception:
         emp_planejamento_missing_lines = []
         emp_dotacao_missing = []
+
+    aprovar_por_nivel2 = ""
+    try:
+        perfil_n2 = (
+            Perfil.query.filter(Perfil.nivel == 2)
+            .filter(or_(Perfil.ativo.is_(None), Perfil.ativo == 1))
+            .order_by(Perfil.id.asc())
+            .first()
+        )
+        aprovar_por_nivel2 = (getattr(perfil_n2, "nome", "") or "").strip()
+    except Exception:
+        aprovar_por_nivel2 = ""
     t3 = datetime.utcnow()
     pendentes_raw = (
         Dotacao.query.with_entities(
@@ -610,7 +630,52 @@ def partial_dashboard():
                     "controle_subacao": controle,
                     "status_aprovacao": getattr(s, "status_aprovacao", "") or "",
                     "tipo_solicitacao": getattr(s, "tipo_solicitacao", "") or "",
-                    "perfil": perfil_nome,
+                    "perfil": aprovar_por_nivel2 or perfil_nome,
+                }
+            )
+    metas_aguardando = []
+    try:
+        t6 = datetime.utcnow()
+        metas_raw = (
+            AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
+            .filter(func.lower(AlterarMeta.status_aprovacao) == "aguardando")
+            .order_by(AlterarMeta.id.desc())
+            .all()
+        )
+        _log_timing("metas_aguardando", t6, len(metas_raw))
+    except Exception:
+        metas_raw = []
+    if metas_raw:
+        meta_user_ids = {m.usuario_id for m in metas_raw if m.usuario_id}
+        meta_usuarios_map = {}
+        meta_perfil_map = {}
+        if meta_user_ids:
+            meta_usuarios = Usuario.query.filter(Usuario.id.in_(list(meta_user_ids))).all()
+            meta_usuarios_map = {u.id: u for u in meta_usuarios}
+            meta_perfil_ids = {u.perfil_id for u in meta_usuarios if u.perfil_id}
+            if meta_perfil_ids:
+                meta_perfis = Perfil.query.filter(Perfil.id.in_(list(meta_perfil_ids))).all()
+                meta_perfil_map = {p.id: p for p in meta_perfis}
+
+        for m in metas_raw:
+            usuario = meta_usuarios_map.get(getattr(m, "usuario_id", None))
+            exercicio_ctrl = str(getattr(m, "exercicio", "") or _now_local().year)
+            adj_nome = (getattr(m, "responsavel_acao", "") or "").strip()
+            if not adj_nome and usuario:
+                perfil_id = getattr(usuario, "perfil_id", None)
+                if perfil_id:
+                    perfil_row = meta_perfil_map.get(perfil_id)
+                    adj_nome = (getattr(perfil_row, "nome", "") or "").strip()
+                if not adj_nome:
+                    adj_nome = (getattr(usuario, "perfil", "") or "").strip()
+            adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
+            controle_meta = f"META.{exercicio_ctrl}.{adj_token}.{m.id}"
+            metas_aguardando.append(
+                {
+                    "controle_meta": controle_meta,
+                    "status_aprovacao": getattr(m, "status_aprovacao", "") or "",
+                    "produto_acao": (getattr(m, "produto_acao", "") or "").strip(),
+                    "perfil": aprovar_por_nivel2 or "",
                 }
             )
     try:
@@ -634,6 +699,7 @@ def partial_dashboard():
         dotacoes_aguardando=pendentes,
         estornos_aguardando=estornos_aguardando,
         subacoes_aguardando=subacoes_aguardando,
+        metas_aguardando=metas_aguardando,
         emp_record=emp_record_payload,
     )
 
@@ -858,6 +924,623 @@ def partial_usuarios_perfil():
 @require_feature("usuarios/senha")
 def partial_usuarios_senha():
     return render_template("partials/usuarios_senha.html")
+
+
+API_SCOPE_OPTIONS = [
+    {"scope": "dados.emp.read", "label": "EMP (somente leitura)"},
+    {"scope": "dados.nob.read", "label": "NOB (somente leitura)"},
+    {"scope": "dados.ped.read", "label": "PED (somente leitura)"},
+    {"scope": "dados.est_emp.read", "label": "EST_EMP (somente leitura)"},
+    {"scope": "dados.fip613.read", "label": "FIP613 (somente leitura)"},
+]
+API_SCOPE_SET = {item["scope"] for item in API_SCOPE_OPTIONS}
+API_SCOPE_LABEL = {item["scope"]: item["label"] for item in API_SCOPE_OPTIONS}
+API_SCOPE_META_SERVIDOR_CAD = "__meta.servidor_cadastrado__"
+API_ACCESS_TOKEN_MINUTES = int(os.getenv("API_ACCESS_TOKEN_MINUTES", "60") or "60")
+API_ACCESS_TOKEN_MINUTES = max(5, API_ACCESS_TOKEN_MINUTES)
+
+
+def _sha256_hex(text: str) -> str:
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def _as_json_value(value):
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        try:
+            return float(value)
+        except Exception:
+            return str(value)
+    if isinstance(value, (datetime,)):
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+    return value
+
+
+def _log_api_access(
+    client_id: int | None,
+    endpoint: str,
+    metodo: str,
+    status_code: int,
+    duration_ms: int | None = None,
+):
+    try:
+        qp = None
+        try:
+            qp = json.dumps(dict(request.args), ensure_ascii=False)
+        except Exception:
+            qp = None
+        db.session.add(
+            ApiAccessLog(
+                client_id=client_id,
+                request_id=str(secrets.token_hex(8)),
+                endpoint=str(endpoint or "")[:255],
+                metodo=str(metodo or "")[:10],
+                query_params=qp,
+                status_code=int(status_code or 0),
+                ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:45],
+                user_agent=(request.headers.get("User-Agent") or "")[:255],
+                duration_ms=int(duration_ms) if duration_ms is not None else None,
+            )
+        )
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _api_scope_display(scope: str) -> str:
+    return API_SCOPE_LABEL.get(scope or "", scope or "")
+
+
+def _parse_dt_local_iso(value) -> datetime | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1]
+    text = text.replace("T", " ")
+    try:
+        return datetime.fromisoformat(text)
+    except Exception:
+        return None
+
+
+def _refresh_api_client_expirations() -> int:
+    now = _now_local()
+    rows = (
+        ApiClient.query.filter(ApiClient.status != "revogado")
+        .filter(ApiClient.acesso_fim_em.isnot(None))
+        .filter(ApiClient.acesso_fim_em < now)
+        .all()
+    )
+    if not rows:
+        return 0
+    for row in rows:
+        row.status = "revogado"
+        row.revoked_at = now
+    db.session.commit()
+    return len(rows)
+
+
+def _get_api_client_scopes(client_id: int) -> list[str]:
+    rows = (
+        ApiClientScope.query.filter_by(client_id=client_id)
+        .order_by(ApiClientScope.scope.asc())
+        .all()
+    )
+    return [str(r.scope or "").strip() for r in rows if str(r.scope or "").strip()]
+
+
+def _extract_bearer_token() -> str:
+    auth = str(request.headers.get("Authorization") or "").strip()
+    if not auth.lower().startswith("bearer "):
+        return ""
+    return auth[7:].strip()
+
+
+def require_api_scope(required_scope: str):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            _refresh_api_client_expirations()
+            token = _extract_bearer_token()
+            if not token:
+                _log_api_access(None, request.path, request.method, 401)
+                return jsonify({"error": "Token Bearer obrigatorio."}), 401
+
+            now = _now_local()
+            token_hash = _sha256_hex(token)
+            api_key = ApiKey.query.filter_by(key_hash=token_hash).first()
+            if not api_key or (api_key.status or "").lower() != "ativo":
+                _log_api_access(None, request.path, request.method, 401)
+                return jsonify({"error": "Token invalido."}), 401
+
+            if api_key.expires_at and api_key.expires_at < now:
+                try:
+                    api_key.status = "expirado"
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                _log_api_access(api_key.client_id, request.path, request.method, 401)
+                return jsonify({"error": "Token expirado."}), 401
+
+            client = db.session.get(ApiClient, api_key.client_id)
+            if not client:
+                _log_api_access(None, request.path, request.method, 401)
+                return jsonify({"error": "Cliente da API nao encontrado."}), 401
+
+            if (client.status or "").lower() != "ativo":
+                _log_api_access(client.id, request.path, request.method, 403)
+                return jsonify({"error": "Cliente da API inativo ou revogado."}), 403
+            if client.acesso_inicio_em and now < client.acesso_inicio_em:
+                _log_api_access(client.id, request.path, request.method, 403)
+                return jsonify({"error": "Acesso ainda nao iniciado."}), 403
+            if client.acesso_fim_em and now > client.acesso_fim_em:
+                try:
+                    client.status = "revogado"
+                    client.revoked_at = now
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                _log_api_access(client.id, request.path, request.method, 403)
+                return jsonify({"error": "Acesso expirado."}), 403
+
+            scopes = _get_api_client_scopes(client.id)
+            allowed_scopes = {s for s in scopes if s in API_SCOPE_SET}
+            if required_scope not in allowed_scopes:
+                _log_api_access(client.id, request.path, request.method, 403)
+                return jsonify({"error": "Escopo insuficiente para este recurso."}), 403
+
+            started = datetime.utcnow()
+            g.api_client = client
+            g.api_scopes = list(allowed_scopes)
+            try:
+                response = current_app.make_response(view(*args, **kwargs))
+            except Exception:
+                duration = int((datetime.utcnow() - started).total_seconds() * 1000)
+                _log_api_access(client.id, request.path, request.method, 500, duration)
+                raise
+
+            try:
+                api_key.last_used_at = now
+                client.last_used_at = now
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            duration = int((datetime.utcnow() - started).total_seconds() * 1000)
+            _log_api_access(client.id, request.path, request.method, int(response.status_code or 200), duration)
+            return response
+
+        return wrapped
+
+    return decorator
+
+
+def _serialize_api_client(row: ApiClient, scopes_map: dict[int, list[str]] | None = None) -> dict:
+    raw_scopes = list((scopes_map or {}).get(row.id, []))
+    servidor_cadastrado = API_SCOPE_META_SERVIDOR_CAD in raw_scopes
+    scopes = [s for s in raw_scopes if s in API_SCOPE_SET]
+    last_used = None
+    try:
+        last_used = row.last_used_at.isoformat() if row.last_used_at else None
+    except Exception:
+        last_used = str(row.last_used_at or "") or None
+    try:
+        inicio = row.acesso_inicio_em.isoformat() if row.acesso_inicio_em else None
+    except Exception:
+        inicio = str(row.acesso_inicio_em or "") or None
+    try:
+        fim = row.acesso_fim_em.isoformat() if row.acesso_fim_em else None
+    except Exception:
+        fim = str(row.acesso_fim_em or "") or None
+    return {
+        "id": row.id,
+        "nome": (row.nome or "").strip(),
+        "client_id": (row.client_id or "").strip(),
+        "status": (row.status or "").strip(),
+        "acesso_inicio_em": inicio,
+        "acesso_fim_em": fim,
+        "last_used_at": last_used,
+        "servidor_cadastrado": bool(servidor_cadastrado),
+        "scopes": scopes,
+        "scopes_label": [_api_scope_display(s) for s in scopes],
+        "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
+    }
+
+
+def _generate_client_id() -> str:
+    for _ in range(8):
+        candidate = f"cli_{secrets.token_hex(8)}"
+        exists = ApiClient.query.filter_by(client_id=candidate).first()
+        if not exists:
+            return candidate
+    return f"cli_{secrets.token_hex(12)}"
+
+
+def _generate_client_secret() -> str:
+    return f"sec_{secrets.token_urlsafe(24)}"
+
+
+def _replace_client_scopes(client_id: int, scopes: list[str]) -> None:
+    ApiClientScope.query.filter_by(client_id=client_id).delete(synchronize_session=False)
+    now = _now_local()
+    for sc in scopes:
+        db.session.add(ApiClientScope(client_id=client_id, scope=sc, created_at=now))
+
+
+@home_bp.route("/partial/usuarios/api-acessos")
+@login_required
+@require_feature("usuarios/api-acessos")
+def partial_usuarios_api_acessos():
+    return render_template("partials/usuarios_api_acessos.html", scope_options=API_SCOPE_OPTIONS)
+
+
+@home_bp.route("/api/api-clients", methods=["GET"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_list():
+    _refresh_api_client_expirations()
+    rows = ApiClient.query.order_by(ApiClient.created_at.desc(), ApiClient.id.desc()).all()
+    ids = [r.id for r in rows]
+    scopes_map = {i: [] for i in ids}
+    if ids:
+        scopes = (
+            ApiClientScope.query.filter(ApiClientScope.client_id.in_(ids))
+            .order_by(ApiClientScope.client_id.asc(), ApiClientScope.scope.asc())
+            .all()
+        )
+        for sc in scopes:
+            scopes_map.setdefault(sc.client_id, []).append((sc.scope or "").strip())
+    return jsonify({"ok": True, "rows": [_serialize_api_client(r, scopes_map) for r in rows]})
+
+
+@home_bp.route("/api/api-clients", methods=["POST"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_create():
+    payload = request.get_json(silent=True) or {}
+    nome = str(payload.get("nome") or "").strip()
+    status = str(payload.get("status") or "ativo").strip().lower()
+    scopes_raw = payload.get("scopes") or []
+    servidor_cadastrado = bool(payload.get("servidor_cadastrado", False))
+    acesso_inicio_em = _parse_dt_local_iso(payload.get("acesso_inicio_em"))
+    acesso_fim_em = _parse_dt_local_iso(payload.get("acesso_fim_em"))
+    scopes = []
+    for item in scopes_raw:
+        scope = str(item or "").strip()
+        if scope and scope in API_SCOPE_SET and scope not in scopes:
+            scopes.append(scope)
+
+    if not nome:
+        return jsonify({"error": "Nome do servidor e obrigatorio."}), 400
+    if status not in {"ativo", "inativo", "revogado"}:
+        return jsonify({"error": "Status invalido."}), 400
+    if not scopes:
+        return jsonify({"error": "Selecione ao menos um escopo."}), 400
+    if not acesso_inicio_em:
+        return jsonify({"error": "Data/hora de inicio e obrigatoria."}), 400
+    if acesso_fim_em and acesso_fim_em <= acesso_inicio_em:
+        return jsonify({"error": "Data/hora final deve ser maior que a inicial."}), 400
+    scopes_to_save = list(scopes)
+    if servidor_cadastrado:
+        scopes_to_save.append(API_SCOPE_META_SERVIDOR_CAD)
+
+    plain_secret = _generate_client_secret()
+    row = ApiClient(
+        nome=nome,
+        client_id=_generate_client_id(),
+        client_secret_hash=generate_password_hash(plain_secret),
+        status=status,
+        created_by_user_id=_resolve_usuario_id(),
+        acesso_inicio_em=acesso_inicio_em,
+        acesso_fim_em=acesso_fim_em,
+        revoked_at=_now_local() if status == "revogado" else None,
+    )
+    db.session.add(row)
+    db.session.flush()
+    _replace_client_scopes(row.id, scopes_to_save)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Servidor de API criado.",
+            "row": _serialize_api_client(row, {row.id: scopes_to_save}),
+            "credentials": {"client_id": row.client_id, "client_secret": plain_secret},
+        }
+    )
+
+
+@home_bp.route("/api/api-clients/<int:client_id>", methods=["PUT"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_update(client_id: int):
+    _refresh_api_client_expirations()
+    row = db.session.get(ApiClient, client_id)
+    if not row:
+        return jsonify({"error": "Servidor nao encontrado."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    nome = str(payload.get("nome") or row.nome or "").strip()
+    status = str(payload.get("status") or row.status or "ativo").strip().lower()
+    scopes_raw = payload.get("scopes") or []
+    servidor_cadastrado = bool(payload.get("servidor_cadastrado", False))
+    acesso_inicio_em = _parse_dt_local_iso(payload.get("acesso_inicio_em"))
+    acesso_fim_em = _parse_dt_local_iso(payload.get("acesso_fim_em"))
+    scopes = []
+    for item in scopes_raw:
+        scope = str(item or "").strip()
+        if scope and scope in API_SCOPE_SET and scope not in scopes:
+            scopes.append(scope)
+
+    if not nome:
+        return jsonify({"error": "Nome do servidor e obrigatorio."}), 400
+    if status not in {"ativo", "inativo", "revogado"}:
+        return jsonify({"error": "Status invalido."}), 400
+    if not scopes:
+        return jsonify({"error": "Selecione ao menos um escopo."}), 400
+    if not acesso_inicio_em:
+        return jsonify({"error": "Data/hora de inicio e obrigatoria."}), 400
+    if acesso_fim_em and acesso_fim_em <= acesso_inicio_em:
+        return jsonify({"error": "Data/hora final deve ser maior que a inicial."}), 400
+    scopes_to_save = list(scopes)
+    if servidor_cadastrado:
+        scopes_to_save.append(API_SCOPE_META_SERVIDOR_CAD)
+
+    row.nome = nome
+    row.status = status
+    row.acesso_inicio_em = acesso_inicio_em
+    row.acesso_fim_em = acesso_fim_em
+    if status == "revogado":
+        row.revoked_at = _now_local()
+    elif status in {"ativo", "inativo"}:
+        row.revoked_at = None
+
+    _replace_client_scopes(row.id, scopes_to_save)
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Servidor atualizado.", "row": _serialize_api_client(row, {row.id: scopes_to_save})})
+
+
+@home_bp.route("/api/api-clients/<int:client_id>/rotate-secret", methods=["POST"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_rotate_secret(client_id: int):
+    _refresh_api_client_expirations()
+    row = db.session.get(ApiClient, client_id)
+    if not row:
+        return jsonify({"error": "Servidor nao encontrado."}), 404
+
+    plain_secret = _generate_client_secret()
+    row.client_secret_hash = generate_password_hash(plain_secret)
+    if row.status == "revogado":
+        row.status = "ativo"
+        row.revoked_at = None
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Segredo rotacionado.",
+            "credentials": {"client_id": row.client_id, "client_secret": plain_secret},
+        }
+    )
+
+
+@home_bp.route("/api/api-clients/<int:client_id>/revoke", methods=["POST"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_revoke(client_id: int):
+    row = db.session.get(ApiClient, client_id)
+    if not row:
+        return jsonify({"error": "Servidor nao encontrado."}), 404
+    row.status = "revogado"
+    row.revoked_at = _now_local()
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Servidor revogado."})
+
+
+@home_bp.route("/api/api-clients/<int:client_id>", methods=["DELETE"])
+@login_required
+@require_feature("usuarios/api-acessos")
+def api_clients_delete(client_id: int):
+    row = db.session.get(ApiClient, client_id)
+    if not row:
+        return jsonify({"error": "Servidor nao encontrado."}), 404
+    try:
+        ApiClientScope.query.filter_by(client_id=row.id).delete(synchronize_session=False)
+        ApiKey.query.filter_by(client_id=row.id).delete(synchronize_session=False)
+        ApiRefreshToken.query.filter_by(client_id=row.id).delete(synchronize_session=False)
+        db.session.delete(row)
+        db.session.commit()
+        return jsonify({"ok": True, "message": "Servidor excluido."})
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir servidor: {exc}"}), 500
+
+
+@home_bp.route("/api/auth/token", methods=["POST"])
+def api_auth_token():
+    started = datetime.utcnow()
+    _refresh_api_client_expirations()
+    payload = request.get_json(silent=True) or {}
+    client_id = str(payload.get("client_id") or "").strip()
+    client_secret = str(payload.get("client_secret") or "")
+    client = ApiClient.query.filter_by(client_id=client_id).first() if client_id else None
+
+    def _deny(message: str, code: int = 401):
+        duration = int((datetime.utcnow() - started).total_seconds() * 1000)
+        _log_api_access(client.id if client else None, request.path, request.method, code, duration)
+        return jsonify({"error": message}), code
+
+    if not client_id or not client_secret:
+        return _deny("client_id e client_secret sao obrigatorios.", 400)
+    if not client or not check_password_hash(client.client_secret_hash or "", client_secret):
+        return _deny("Credenciais invalidas.", 401)
+    if (client.status or "").lower() != "ativo":
+        return _deny("Cliente da API inativo ou revogado.", 403)
+
+    now = _now_local()
+    if client.acesso_inicio_em and now < client.acesso_inicio_em:
+        return _deny("Acesso ainda nao iniciado.", 403)
+    if client.acesso_fim_em and now > client.acesso_fim_em:
+        try:
+            client.status = "revogado"
+            client.revoked_at = now
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return _deny("Acesso expirado.", 403)
+
+    all_scopes = _get_api_client_scopes(client.id)
+    scopes = [s for s in all_scopes if s in API_SCOPE_SET]
+    if not scopes:
+        return _deny("Cliente sem escopos habilitados.", 403)
+
+    expires_at = now + timedelta(minutes=API_ACCESS_TOKEN_MINUTES)
+    if client.acesso_fim_em and client.acesso_fim_em < expires_at:
+        expires_at = client.acesso_fim_em
+    if expires_at <= now:
+        return _deny("Acesso expirado.", 403)
+
+    token = f"atk_{secrets.token_urlsafe(32)}"
+    token_hash = _sha256_hex(token)
+    api_key = ApiKey(
+        client_id=client.id,
+        key_prefix=token[:16],
+        key_hash=token_hash,
+        status="ativo",
+        expires_at=expires_at,
+    )
+    try:
+        db.session.add(api_key)
+        client.last_used_at = now
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return _deny(f"Falha ao emitir token: {exc}", 500)
+
+    duration = int((datetime.utcnow() - started).total_seconds() * 1000)
+    _log_api_access(client.id, request.path, request.method, 200, duration)
+    return jsonify(
+        {
+            "ok": True,
+            "token_type": "Bearer",
+            "access_token": token,
+            "expires_at": expires_at.isoformat(),
+            "expires_in": int((expires_at - now).total_seconds()),
+            "scopes": scopes,
+        }
+    )
+
+
+def _api_query_model(model, table_name: str):
+    reserved = {"limit", "offset", "order_by", "order_dir", "fields"}
+    mapper = inspect(model)
+    col_keys = [c.key for c in mapper.columns]
+    if "ativo" not in col_keys:
+        return jsonify({"error": f"Tabela {table_name} sem coluna ativo."}), 500
+
+    try:
+        limit = int(str(request.args.get("limit", "500") or "500"))
+    except Exception:
+        limit = 500
+    try:
+        offset = int(str(request.args.get("offset", "0") or "0"))
+    except Exception:
+        offset = 0
+    limit = max(1, min(limit, 5000))
+    offset = max(0, offset)
+
+    query = db.session.query(model).filter(getattr(model, "ativo") == True)  # noqa: E712
+    for key, val in request.args.items():
+        if key in reserved:
+            continue
+        if key not in col_keys:
+            continue
+        text_val = str(val or "").strip()
+        if not text_val:
+            continue
+        if "," in text_val:
+            vals = [v.strip() for v in text_val.split(",") if v.strip()]
+            if vals:
+                query = query.filter(getattr(model, key).in_(vals))
+        else:
+            query = query.filter(getattr(model, key) == text_val)
+
+    order_by = str(request.args.get("order_by", "id") or "id")
+    order_dir = str(request.args.get("order_dir", "desc") or "desc").lower()
+    if order_by not in col_keys:
+        order_by = "id" if "id" in col_keys else col_keys[0]
+    order_col = getattr(model, order_by)
+    query = query.order_by(order_col.asc() if order_dir == "asc" else order_col.desc())
+
+    fields_param = str(request.args.get("fields") or "").strip()
+    if fields_param:
+        asked = [f.strip() for f in fields_param.split(",") if f.strip()]
+        fields = [f for f in asked if f in col_keys]
+    else:
+        fields = [f for f in col_keys if f != "raw_payload"]
+    if not fields:
+        fields = [f for f in col_keys if f != "raw_payload"] or col_keys
+
+    total = query.count()
+    rows = query.offset(offset).limit(limit).all()
+    data = []
+    for row in rows:
+        item = {}
+        for field in fields:
+            item[field] = _as_json_value(getattr(row, field, None))
+        data.append(item)
+
+    return jsonify(
+        {
+            "ok": True,
+            "table": table_name,
+            "total": int(total),
+            "limit": int(limit),
+            "offset": int(offset),
+            "count": len(data),
+            "data": data,
+        }
+    )
+
+
+@home_bp.route("/api/v1/dados/emp", methods=["GET"])
+@require_api_scope("dados.emp.read")
+def api_dados_emp():
+    return _api_query_model(EmpRegistro, "emp")
+
+
+@home_bp.route("/api/v1/dados/nob", methods=["GET"])
+@require_api_scope("dados.nob.read")
+def api_dados_nob():
+    return _api_query_model(NobRegistro, "nob")
+
+
+@home_bp.route("/api/v1/dados/ped", methods=["GET"])
+@require_api_scope("dados.ped.read")
+def api_dados_ped():
+    return _api_query_model(PedRegistro, "ped")
+
+
+@home_bp.route("/api/v1/dados/est-emp", methods=["GET"])
+@require_api_scope("dados.est_emp.read")
+def api_dados_est_emp():
+    return _api_query_model(EstEmpRegistro, "est_emp")
+
+
+@home_bp.route("/api/v1/dados/fip613", methods=["GET"])
+@require_api_scope("dados.fip613.read")
+def api_dados_fip613():
+    return _api_query_model(Fip613Registro, "fip613")
 
 
 @home_bp.route("/partial/painel")
@@ -7029,8 +7712,8 @@ def api_relatorio_fip613_download():
                 {
                     "UO": r.uo,
                     "UG": r.ug,
-                    "FunÃƒÂ§ÃƒÂ£o": r.funcao,
-                    "SubfunÃƒÂ§ÃƒÂ£o": r.subfuncao,
+                    "Fun\u00e7\u00e3o": r.funcao,
+                    "Subfun\u00e7\u00e3o": r.subfuncao,
                     "Programa": r.programa,
                     "Projeto/Atividade": r.projeto_atividade,
                     "Regional": r.regional,
@@ -7038,16 +7721,16 @@ def api_relatorio_fip613_download():
                     "Fonte de Recurso": str(r.fonte_recurso or ""),
                     "Iduso": r.iduso,
                     "Tipo de Recurso": r.tipo_recurso,
-                    "DotaÃƒÂ§ÃƒÂ£o Inicial": float(r.dotacao_inicial or 0),
-                    "CrÃƒÂ©d. Suplementar": float(r.cred_suplementar or 0),
-                    "CrÃƒÂ©d. Especial": float(r.cred_especial or 0),
-                    "CrÃƒÂ©d. ExtraordinÃƒÂ¡rio": float(r.cred_extraordinario or 0),
-                    "ReduÃƒÂ§ÃƒÂ£o": float(r.reducao or 0),
-                    "CrÃƒÂ©d. Autorizado": float(r.cred_autorizado or 0),
+                    "Dota\u00e7\u00e3o Inicial": float(r.dotacao_inicial or 0),
+                    "Cr\u00e9d. Suplementar": float(r.cred_suplementar or 0),
+                    "Cr\u00e9d. Especial": float(r.cred_especial or 0),
+                    "Cr\u00e9d. Extraordin\u00e1rio": float(r.cred_extraordinario or 0),
+                    "Redu\u00e7\u00e3o": float(r.reducao or 0),
+                    "Cr\u00e9d. Autorizado": float(r.cred_autorizado or 0),
                     "Bloqueado/Conting.": float(r.bloqueado_conting or 0),
                     "Reserva Empenho": float(r.reserva_empenho or 0),
                     "Saldo de Destaque": float(r.saldo_destaque or 0),
-                    "Saldo DotaÃƒÂ§ÃƒÂ£o": float(r.saldo_dotacao or 0),
+                    "Saldo Dota\u00e7\u00e3o": float(r.saldo_dotacao or 0),
                     "Empenhado": float(r.empenhado or 0),
                     "Liquidado": float(r.liquidado or 0),
                     "A liquidar": float(r.a_liquidar or 0),
@@ -7086,12 +7769,12 @@ def api_relatorio_fip613_download():
             df.to_excel(output, index=False)
             output.seek(0)
 
-            # aplica fonte e formato numÃƒÂ©rico no Excel
+            # aplica fonte e formato num\u00e9rico no Excel
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
             number_format = "[Blue]#,##0.00;[Red]-#,##0.00;0"
-            # colunas numÃƒÂ©ricas comeÃƒÂ§am em 12 (1-based) atÃƒÂ© o final
+            # colunas num\u00e9ricas come\u00e7am em 12 (1-based) at\u00e9 o final
             numeric_cols = set(range(12, ws.max_column + 1))
             for row in ws.iter_rows():
                 for cell in row:
@@ -9331,21 +10014,21 @@ def api_relatorio_nob_download():
 
         rename_map = {
             "exercicio": "Exercicio",
-            "numero_nob": "NÃ‚Âº NOB",
-            "numero_nob_estorno": "NÃ‚Âº NOB Estorno/Estornado",
-            "numero_liq": "NÃ‚Âº LIQ",
-            "numero_emp": "NÃ‚Âº EMP",
+            "numero_nob": "N\u00ba NOB",
+            "numero_nob_estorno": "N\u00ba NOB Estorno/Estornado",
+            "numero_liq": "N\u00ba LIQ",
+            "numero_emp": "N\u00ba EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÃ‚Âº PED",
+            "numero_ped": "N\u00ba PED",
             "valor_nob": "Valor NOB",
-            "devolucao_gcv": "Devolucao GCV",
+            "devolucao_gcv": "Devolu\u00e7\u00e3o GCV",
             "valor_nob_gcv": "Valor NOB - GCV",
             "uo": "UO",
             "ug": "UG",
-            "dotacao_orcamentaria": "Dotacao Orcamentaria",
-            "funcao": "Funcao",
-            "subfuncao": "Subfuncao",
+            "dotacao_orcamentaria": "Dota\u00e7\u00e3o Or\u00e7ament\u00e1ria",
+            "funcao": "Fun\u00e7\u00e3o",
+            "subfuncao": "Subfun\u00e7\u00e3o",
             "programa_governo": "Programa de Governo",
             "paoe": "PAOE",
             "natureza_despesa": "Natureza de Despesa",
@@ -9357,7 +10040,7 @@ def api_relatorio_nob_download():
             "fonte": "Fonte",
             "nome_fonte_recurso": "Nome da Fonte de Recurso",
             "iduso": "Iduso",
-            "historico_liq": "Historico LIQ",
+            "historico_liq": "Hist\u00f3rico LIQ",
             "nome_credor_principal": "Nome do Credor Principal",
             "cpf_cnpj_credor_principal": "CPF/CNPJ do Credor Principal",
             "credor": "Credor",
@@ -9371,21 +10054,21 @@ def api_relatorio_nob_download():
 
         col_order = [
             "Exercicio",
-            "NÃ‚Âº NOB",
-            "NÃ‚Âº NOB Estorno/Estornado",
-            "NÃ‚Âº LIQ",
-            "NÃ‚Âº EMP",
+            "N\u00ba NOB",
+            "N\u00ba NOB Estorno/Estornado",
+            "N\u00ba LIQ",
+            "N\u00ba EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÃ‚Âº PED",
+            "N\u00ba PED",
             "Valor NOB",
-            "Devolucao GCV",
+            "Devolu\u00e7\u00e3o GCV",
             "Valor NOB - GCV",
             "UO",
             "UG",
-            "Dotacao Orcamentaria",
-            "Funcao",
-            "Subfuncao",
+            "Dota\u00e7\u00e3o Or\u00e7ament\u00e1ria",
+            "Fun\u00e7\u00e3o",
+            "Subfun\u00e7\u00e3o",
             "Programa de Governo",
             "PAOE",
             "Natureza de Despesa",
@@ -9397,7 +10080,7 @@ def api_relatorio_nob_download():
             "Fonte",
             "Nome da Fonte de Recurso",
             "Iduso",
-            "Historico LIQ",
+            "Hist\u00f3rico LIQ",
             "Nome do Credor Principal",
             "CPF/CNPJ do Credor Principal",
             "Credor",
@@ -9756,72 +10439,72 @@ def api_relatorio_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "ExercÃƒÂ­cio",
+            "exercicio": "Exerc\u00edcio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
             "adj_concedente": "Adjunta Concedente",
-            "chave_dotacao": "Controle de DotaÃƒÂ§ÃƒÂ£o",
+            "chave_dotacao": "Controle de Dota\u00e7\u00e3o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotaÃƒÂ§ÃƒÂ£o",
+            "valor_dotacao": "Valor da Dota\u00e7\u00e3o",
             "valor_estorno": "Valor do Estorno",
             "valor_ped_emp": "Valor do PED/EMP",
-            "valor_atual": "Valor da DotaÃƒÂ§ÃƒÂ£o Atualizada",
-            "situacao": "SituaÃƒÂ§ÃƒÂ£o",
+            "valor_atual": "Valor da Dota\u00e7\u00e3o Atualizada",
+            "situacao": "Situa\u00e7\u00e3o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "AÃƒÂ§ÃƒÂ£o/PAOE",
+            "acao_paoe": "A\u00e7\u00e3o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "RegiÃƒÂ£o",
-            "subacao_entrega": "SubAÃƒÂ§ÃƒÂ£o/Entrega",
+            "regiao": "Regi\u00e3o",
+            "subacao_entrega": "SubA\u00e7\u00e3o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
             "subelemento": "Subelemento",
             "fonte": "Fonte",
             "iduso": "Iduso",
-            "justificativa_historico": "Justificativa/HistÃƒÂ³rico",
+            "justificativa_historico": "Justificativa/Hist\u00f3rico",
             "usuario_nome_perfil": "Criado/Alterado por",
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovaÃƒÂ§ÃƒÂ£o",
-            "motivo_rejeicao": "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
+            "data_aprovacao": "Data da Aprova\u00e7\u00e3o",
+            "motivo_rejeicao": "Justificativa da Aprova\u00e7\u00e3o/Rejei\u00e7\u00e3o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "ExercÃƒÂ­cio",
+            "Exerc\u00edcio",
             "Status",
             "Adjunta Solicitante",
             "Adjunta Concedente",
-            "Controle de DotaÃƒÂ§ÃƒÂ£o",
+            "Controle de Dota\u00e7\u00e3o",
             "Chave de Planejamento",
-            "Valor da DotaÃƒÂ§ÃƒÂ£o",
+            "Valor da Dota\u00e7\u00e3o",
             "Valor do Estorno",
             "Valor do PED/EMP",
-            "Valor da DotaÃƒÂ§ÃƒÂ£o Atualizada",
-            "SituaÃƒÂ§ÃƒÂ£o",
+            "Valor da Dota\u00e7\u00e3o Atualizada",
+            "Situa\u00e7\u00e3o",
             "UO",
             "Programa",
-            "AÃƒÂ§ÃƒÂ£o/PAOE",
+            "A\u00e7\u00e3o/PAOE",
             "Produto",
             "UG",
-            "RegiÃƒÂ£o",
-            "SubAÃƒÂ§ÃƒÂ£o/Entrega",
+            "Regi\u00e3o",
+            "SubA\u00e7\u00e3o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
             "Subelemento",
             "Fonte",
             "Iduso",
-            "Justificativa/HistÃƒÂ³rico",
+            "Justificativa/Hist\u00f3rico",
             "Criado/Alterado por",
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovaÃƒÂ§ÃƒÂ£o",
-            "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
+            "Data da Aprova\u00e7\u00e3o",
+            "Justificativa da Aprova\u00e7\u00e3o/Rejei\u00e7\u00e3o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -9953,22 +10636,22 @@ def api_relatorio_est_dotacao_download():
 
         df = pd.DataFrame(data)
         rename_map = {
-            "exercicio": "ExercÃƒÂ­cio",
+            "exercicio": "Exerc\u00edcio",
             "status_aprovacao": "Status",
             "adjunta_solicitante": "Adjunta Solicitante",
-            "chave_dotacao": "Controle de DotaÃƒÂ§ÃƒÂ£o",
+            "chave_dotacao": "Controle de Dota\u00e7\u00e3o",
             "chave_planejamento": "Chave de Planejamento",
-            "valor_dotacao": "Valor da DotaÃƒÂ§ÃƒÂ£o",
+            "valor_dotacao": "Valor da Dota\u00e7\u00e3o",
             "valor_a_ser_est": "Valor do Estorno",
-            "saldo_dotacao_apos": "Saldo de DotaÃƒÂ§ÃƒÂ£o",
-            "situacao": "SituaÃƒÂ§ÃƒÂ£o",
+            "saldo_dotacao_apos": "Saldo de Dota\u00e7\u00e3o",
+            "situacao": "Situa\u00e7\u00e3o",
             "uo": "UO",
             "programa": "Programa",
-            "acao_paoe": "AÃƒÂ§ÃƒÂ£o/PAOE",
+            "acao_paoe": "A\u00e7\u00e3o/PAOE",
             "produto": "Produto",
             "ug": "UG",
-            "regiao": "RegiÃƒÂ£o",
-            "subacao_entrega": "SubAÃƒÂ§ÃƒÂ£o/Entrega",
+            "regiao": "Regi\u00e3o",
+            "subacao_entrega": "SubA\u00e7\u00e3o/Entrega",
             "etapa": "Etapa",
             "natureza_despesa": "Natureza de Despesa",
             "elemento": "Elemento",
@@ -9980,28 +10663,28 @@ def api_relatorio_est_dotacao_download():
             "criado_em": "Criado em",
             "alterado_em": "Alterado em",
             "aprovado_por_nome_perfil": "Aprovado por",
-            "data_aprovacao": "Data da AprovaÃƒÂ§ÃƒÂ£o",
-            "motivo_rejeicao": "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
+            "data_aprovacao": "Data da Aprova\u00e7\u00e3o",
+            "motivo_rejeicao": "Justificativa da Aprova\u00e7\u00e3o/Rejei\u00e7\u00e3o",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "ExercÃƒÂ­cio",
+            "Exerc\u00edcio",
             "Status",
             "Adjunta Solicitante",
-            "Controle de DotaÃƒÂ§ÃƒÂ£o",
+            "Controle de Dota\u00e7\u00e3o",
             "Chave de Planejamento",
-            "Valor da DotaÃƒÂ§ÃƒÂ£o",
+            "Valor da Dota\u00e7\u00e3o",
             "Valor do Estorno",
-            "Saldo de DotaÃƒÂ§ÃƒÂ£o",
-            "SituaÃƒÂ§ÃƒÂ£o",
+            "Saldo de Dota\u00e7\u00e3o",
+            "Situa\u00e7\u00e3o",
             "UO",
             "Programa",
-            "AÃƒÂ§ÃƒÂ£o/PAOE",
+            "A\u00e7\u00e3o/PAOE",
             "Produto",
             "UG",
-            "RegiÃƒÂ£o",
-            "SubAÃƒÂ§ÃƒÂ£o/Entrega",
+            "Regi\u00e3o",
+            "SubA\u00e7\u00e3o/Entrega",
             "Etapa",
             "Natureza de Despesa",
             "Elemento",
@@ -10013,8 +10696,8 @@ def api_relatorio_est_dotacao_download():
             "Criado em",
             "Alterado em",
             "Aprovado por",
-            "Data da AprovaÃƒÂ§ÃƒÂ£o",
-            "Justificativa da AprovaÃƒÂ§ÃƒÂ£o/RejeiÃƒÂ§ÃƒÂ£o",
+            "Data da Aprova\u00e7\u00e3o",
+            "Justificativa da Aprova\u00e7\u00e3o/Rejei\u00e7\u00e3o",
         ]
         col_order = [c for c in col_order if c in df.columns]
         if col_order:
@@ -10116,55 +10799,55 @@ def api_relatorio_est_emp_download():
                 df[col] = df[col].apply(_format_date)
 
         rename_map = {
-            "exercicio": "Exercicio",
-            "numero_est": "NÃ‚Âº EST",
-            "numero_emp": "NÃ‚Âº EMP",
+            "exercicio": "Exerc\u00edcio",
+            "numero_est": "N\u00ba EST",
+            "numero_emp": "N\u00ba EMP",
             "empenho_atual": "Empenho Atual",
             "empenho_rp": "Empenho RP",
-            "numero_ped": "NÃ‚Âº PED",
+            "numero_ped": "N\u00ba PED",
             "valor_emp": "Valor EMP",
             "valor_est_emp_sem_aqs": "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "valor_est_emp_com_aqs": "Valor Est EMP (Em LIQ com AQS)",
             "valor_emp_liquido": "Valor EMP - (A LIQ/Em LIQ sem AQS) - (Em LIQ com AQS)",
             "uo": "UO",
-            "nome_unidade_orcamentaria": "Nome da Unidade Orcamentaria",
+            "nome_unidade_orcamentaria": "Nome da Unidade Or\u00e7ament\u00e1ria",
             "ug": "UG",
             "nome_unidade_gestora": "Nome da Unidade Gestora",
-            "dotacao_orcamentaria": "Dotacao Orcamentaria",
-            "historico": "Historico",
+            "dotacao_orcamentaria": "Dota\u00e7\u00e3o Or\u00e7ament\u00e1ria",
+            "historico": "Hist\u00f3rico",
             "credor": "Credor",
             "nome_credor": "Nome do Credor",
             "cpf_cnpj_credor": "CPF/CNPJ do Credor",
-            "data_criacao": "Data Criacao",
-            "data_emissao": "Data Emissao",
-            "situacao": "Situacao",
+            "data_criacao": "Data Cria\u00e7\u00e3o",
+            "data_emissao": "Data Emiss\u00e3o",
+            "situacao": "Situa\u00e7\u00e3o",
             "rp": "RP",
         }
         df.rename(columns=rename_map, inplace=True)
 
         col_order = [
-            "Exercicio",
-            "NÃ‚Âº EST",
-            "NÃ‚Âº EMP",
+            "Exerc\u00edcio",
+            "N\u00ba EST",
+            "N\u00ba EMP",
             "Empenho Atual",
             "Empenho RP",
-            "NÃ‚Âº PED",
+            "N\u00ba PED",
             "Valor EMP",
             "Valor Est EMP (A LIQ/Em LIQ sem AQS)",
             "Valor Est EMP (Em LIQ com AQS)",
             "Valor EMP - (A LIQ/Em LIQ sem AQS) - (Em LIQ com AQS)",
             "UO",
-            "Nome da Unidade Orcamentaria",
+            "Nome da Unidade Or\u00e7ament\u00e1ria",
             "UG",
             "Nome da Unidade Gestora",
-            "Dotacao Orcamentaria",
-            "Historico",
+            "Dota\u00e7\u00e3o Or\u00e7ament\u00e1ria",
+            "Hist\u00f3rico",
             "Credor",
             "Nome do Credor",
             "CPF/CNPJ do Credor",
-            "Data Criacao",
-            "Data Emissao",
-            "Situacao",
+            "Data Cria\u00e7\u00e3o",
+            "Data Emiss\u00e3o",
+            "Situa\u00e7\u00e3o",
             "RP",
         ]
         col_order = [c for c in col_order if c in df.columns]
@@ -10277,46 +10960,46 @@ def api_relatorio_plan20_download():
         db.session.close()
 
         headers = [
-            ("ExercÃƒÂ­cio", "exercicio"),
+            ("Exerc\u00edcio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("RegiÃƒÂ£o", "regiao"),
-            ("SubfunÃƒÂ§ÃƒÂ£o + UG", "subfuncao_ug"),
+            ("Regi\u00e3o", "regiao"),
+            ("Subfun\u00e7\u00e3o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("PÃƒÂºblico Transversal (chave)", "publico_transversal_chave"),
+            ("P\u00fablico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃƒÂ§ÃƒÂ£o", "funcao"),
-            ("Unidade OrÃƒÂ§amentÃƒÂ¡ria", "unidade_orcamentaria"),
-            ("AÃƒÂ§ÃƒÂ£o (P/A/OE)", "acao_paoe"),
-            ("SubfunÃƒÂ§ÃƒÂ£o", "subfuncao"),
-            ("Objetivo EspecÃƒÂ­fico", "objetivo_especifico"),
+            ("Fun\u00e7\u00e3o", "funcao"),
+            ("Unidade Or\u00e7ament\u00e1ria", "unidade_orcamentaria"),
+            ("A\u00e7\u00e3o (P/A/OE)", "acao_paoe"),
+            ("Subfun\u00e7\u00e3o", "subfuncao"),
+            ("Objetivo Espec\u00edfico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o", "responsavel_acao"),
-            ("Produto(s) da AÃƒÂ§ÃƒÂ£o", "produto_acao"),
+            ("Respons\u00e1vel pela A\u00e7\u00e3o", "responsavel_acao"),
+            ("Produto(s) da A\u00e7\u00e3o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("RegiÃƒÂ£o do Produto", "regiao_produto"),
+            ("Regi\u00e3o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("PÃƒÂºblico Transversal", "publico_transversal"),
-            ("SubAÃƒÂ§ÃƒÂ£o/entrega", "subacao_entrega"),
-            ("ResponsÃƒÂ¡vel", "responsavel"),
+            ("P\u00fablico Transversal", "publico_transversal"),
+            ("SubA\u00e7\u00e3o/entrega", "subacao_entrega"),
+            ("Respons\u00e1vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubAÃƒÂ§ÃƒÂ£o", "produto_subacao"),
+            ("Produto da SubA\u00e7\u00e3o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("RegiÃƒÂ£o da SubAÃƒÂ§ÃƒÂ£o", "regiao_subacao"),
-            ("CÃƒÂ³digo", "codigo"),
-            ("MunicÃƒÂ­pio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubAÃƒÂ§ÃƒÂ£o", "meta_subacao"),
+            ("Regi\u00e3o da SubA\u00e7\u00e3o", "regiao_subacao"),
+            ("C\u00f3digo", "codigo"),
+            ("Munic\u00edpio(s) da entrega", "municipios_entrega"),
+            ("Meta da SubA\u00e7\u00e3o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("ResponsÃƒÂ¡vel da Etapa", "responsavel_etapa"),
+            ("Respons\u00e1vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("RegiÃƒÂ£o da Etapa", "regiao_etapa"),
+            ("Regi\u00e3o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -10325,10 +11008,10 @@ def api_relatorio_plan20_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("DescriÃƒÂ§ÃƒÂ£o do Item de Despesa", "descricao_item_despesa"),
+            ("Descri\u00e7\u00e3o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃƒÂ¡rio", "valor_unitario"),
+            ("Valor Unit\u00e1rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
         ]
 
@@ -10360,7 +11043,7 @@ def api_relatorio_plan20_download():
             idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
             numeric_cols = {
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃƒÂ¡rio"),
+                idx_map.get("Valor Unit\u00e1rio"),
                 idx_map.get("Valor Total"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -10370,7 +11053,7 @@ def api_relatorio_plan20_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("ExercÃƒÂ­cio") and isinstance(cell.value, (int, float, str)):
+                    if cell.col_idx == idx_map.get("Exerc\u00edcio") and isinstance(cell.value, (int, float, str)):
                         try:
                             cell.value = int(str(cell.value).split(".")[0])
                         except Exception:
@@ -10475,49 +11158,49 @@ def api_relatorio_plan21_nger_download():
         db.session.close()
 
         headers = [
-            ("ExercÃƒÂ­cio", "exercicio"),
+            ("Exerc\u00edcio", "exercicio"),
             ("Chave de Planejamento", "chave_planejamento"),
-            ("RegiÃƒÂ£o", "regiao"),
-            ("SubfunÃƒÂ§ÃƒÂ£o + UG", "subfuncao_ug"),
+            ("Regi\u00e3o", "regiao"),
+            ("Subfun\u00e7\u00e3o + UG", "subfuncao_ug"),
             ("ADJ", "adj"),
             ("Macropolitica", "macropolitica"),
             ("Pilar", "pilar"),
             ("Eixo", "eixo"),
             ("Politica_Decreto", "politica_decreto"),
-            ("PÃƒÂºblico Transversal (chave)", "publico_transversal_chave"),
+            ("P\u00fablico Transversal (chave)", "publico_transversal_chave"),
             ("Programa", "programa"),
-            ("FunÃƒÂ§ÃƒÂ£o", "funcao"),
-            ("Unidade OrÃƒÂ§amentÃƒÂ¡ria", "unidade_orcamentaria"),
-            ("AÃƒÂ§ÃƒÂ£o (P/A/OE)", "acao_paoe"),
-            ("SubfunÃƒÂ§ÃƒÂ£o", "subfuncao"),
-            ("Objetivo EspecÃƒÂ­fico", "objetivo_especifico"),
+            ("Fun\u00e7\u00e3o", "funcao"),
+            ("Unidade Or\u00e7ament\u00e1ria", "unidade_orcamentaria"),
+            ("A\u00e7\u00e3o (P/A/OE)", "acao_paoe"),
+            ("Subfun\u00e7\u00e3o", "subfuncao"),
+            ("Objetivo Espec\u00edfico", "objetivo_especifico"),
             ("Esfera", "esfera"),
-            ("ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o", "responsavel_acao"),
-            ("Produto(s) da AÃƒÂ§ÃƒÂ£o", "produto_acao"),
+            ("Respons\u00e1vel pela A\u00e7\u00e3o", "responsavel_acao"),
+            ("Produto(s) da A\u00e7\u00e3o", "produto_acao"),
             ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("RegiÃƒÂ£o do Produto", "regiao_produto"),
+            ("Regi\u00e3o do Produto", "regiao_produto"),
             ("Meta do Produto", "meta_produto"),
             ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("Meta CrÃƒÂ©dito", "meta_credito"),
+            ("Meta Cr\u00e9dito", "meta_credito"),
             ("Meta Anulada", "meta_anulada"),
             ("Meta Atual", "meta_atual"),
-            ("PÃƒÂºblico Transversal", "publico_transversal"),
-            ("SubaÃƒÂ§ÃƒÂ£o/entrega", "subacao_entrega"),
-            ("ResponsÃƒÂ¡vel", "responsavel"),
+            ("P\u00fablico Transversal", "publico_transversal"),
+            ("Suba\u00e7\u00e3o/entrega", "subacao_entrega"),
+            ("Respons\u00e1vel", "responsavel"),
             ("Prazo", "prazo"),
             ("Unid. Gestora", "unid_gestora"),
             ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubaÃƒÂ§ÃƒÂ£o", "produto_subacao"),
+            ("Produto da Suba\u00e7\u00e3o", "produto_subacao"),
             ("Unidade de Medida", "unidade_medida"),
-            ("RegiÃƒÂ£o da SubaÃƒÂ§ÃƒÂ£o", "regiao_subacao"),
-            ("CÃƒÂ³digo", "codigo"),
-            ("MunicÃƒÂ­pio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubaÃƒÂ§ÃƒÂ£o", "meta_subacao"),
+            ("Regi\u00e3o da Suba\u00e7\u00e3o", "regiao_subacao"),
+            ("C\u00f3digo", "codigo"),
+            ("Munic\u00edpio(s) da entrega", "municipios_entrega"),
+            ("Meta da Suba\u00e7\u00e3o", "meta_subacao"),
             ("Detalhamento do produto", "detalhamento_produto"),
             ("Etapa", "etapa"),
-            ("ResponsÃƒÂ¡vel da Etapa", "responsavel_etapa"),
+            ("Respons\u00e1vel da Etapa", "responsavel_etapa"),
             ("Prazo da Etapa", "prazo_etapa"),
-            ("RegiÃƒÂ£o da Etapa", "regiao_etapa"),
+            ("Regi\u00e3o da Etapa", "regiao_etapa"),
             ("Natureza", "natureza"),
             ("Cat.Econ", "cat_econ"),
             ("Grupo", "grupo"),
@@ -10526,13 +11209,13 @@ def api_relatorio_plan21_nger_download():
             ("Subelemento", "subelemento"),
             ("Fonte", "fonte"),
             ("IDU", "idu"),
-            ("DescriÃƒÂ§ÃƒÂ£o do Item de Despesa", "descricao_item_despesa"),
+            ("Descri\u00e7\u00e3o do Item de Despesa", "descricao_item_despesa"),
             ("Unid. Medida", "unid_medida_item"),
             ("Quantidade", "quantidade"),
-            ("Valor UnitÃƒÂ¡rio", "valor_unitario"),
+            ("Valor Unit\u00e1rio", "valor_unitario"),
             ("Valor Total", "valor_total"),
-            ("SuplementAÃƒÂ§ÃƒÂ£o", "suplementacao"),
-            ("AnulAÃƒÂ§ÃƒÂ£o", "anulacao"),
+            ("Suplementa\u00e7\u00e3o", "suplementacao"),
+            ("Anula\u00e7\u00e3o", "anulacao"),
             ("Valor Atual", "valor_atual"),
         ]
 
@@ -10579,15 +11262,15 @@ def api_relatorio_plan21_nger_download():
             numeric_cols = {
                 idx_map.get("Meta do Produto"),
                 idx_map.get("Saldo Meta do Produto"),
-                idx_map.get("Meta CrÃƒÂ©dito"),
+                idx_map.get("Meta Cr\u00e9dito"),
                 idx_map.get("Meta Anulada"),
                 idx_map.get("Meta Atual"),
-                idx_map.get("Meta da SubaÃƒÂ§ÃƒÂ£o"),
+                idx_map.get("Meta da Suba\u00e7\u00e3o"),
                 idx_map.get("Quantidade"),
-                idx_map.get("Valor UnitÃƒÂ¡rio"),
+                idx_map.get("Valor Unit\u00e1rio"),
                 idx_map.get("Valor Total"),
-                idx_map.get("SuplementAÃƒÂ§ÃƒÂ£o"),
-                idx_map.get("AnulAÃƒÂ§ÃƒÂ£o"),
+                idx_map.get("Suplementa\u00e7\u00e3o"),
+                idx_map.get("Anula\u00e7\u00e3o"),
                 idx_map.get("Valor Atual"),
             }
             numeric_cols = {c for c in numeric_cols if c}
@@ -10597,7 +11280,7 @@ def api_relatorio_plan21_nger_download():
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("ExercÃƒÂ­cio") and isinstance(
+                    if cell.col_idx == idx_map.get("Exerc\u00edcio") and isinstance(
                         cell.value, (int, float, str)
                     ):
                         try:

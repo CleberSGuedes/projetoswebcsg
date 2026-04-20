@@ -25,4 +25,9 @@ from .user import (
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    ApiClient,
+    ApiClientScope,
+    ApiRefreshToken,
+    ApiAccessLog,
+    ApiKey,
 )

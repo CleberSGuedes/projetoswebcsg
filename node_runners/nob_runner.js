@@ -374,6 +374,14 @@ function dedupeColumns(columns) {
   });
 }
 
+function buildRecordDedupeKey(record) {
+  const numeroNob = String(record["Nº NOB"] ?? "").trim().toUpperCase();
+  const numeroEmp = String(record["Nº EMP"] ?? "").trim().toUpperCase();
+  const valorNob = String(record["Valor NOB"] ?? "").trim();
+  const devolucaoGcv = String(record["Devolução GCV"] ?? "").trim();
+  return [numeroNob, numeroEmp, valorNob, devolucaoGcv].join("|");
+}
+
 function moveColumnsAfter(columns, reference, colsToMove) {
   const existing = colsToMove.filter((col) => columns.includes(col));
   if (!existing.length) return columns;
@@ -666,6 +674,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   let dbProgress = 60;
 
   const bufferRows = [];
+  const seenRecordKeys = new Set();
 
   const detectHeader = (cachedRows) => {
     const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
@@ -746,6 +755,12 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
     record["Valor NOB"] = formatNumberPtBr(valNob);
     record["Devolução GCV"] = formatNumberPtBr(valGcv);
     record["Valor NOB - GCV"] = formatNumberPtBr(valNob - valGcv);
+
+    const dedupeKey = buildRecordDedupeKey(record);
+    if (seenRecordKeys.has(dedupeKey)) {
+      return;
+    }
+    seenRecordKeys.add(dedupeKey);
 
     if ("Data NOB" in record) {
       record["Data NOB"] = formatDateOutput(record["Data NOB"]);

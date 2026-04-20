@@ -342,6 +342,281 @@
     });
   }
 
+  function initApiAcessos() {
+    const form = document.getElementById("form-api-client");
+    const msg = document.getElementById("api-client-msg");
+    const tbody = document.getElementById("api-client-tbody");
+    const btnLimpar = document.getElementById("api-client-limpar");
+    const boxCred = document.getElementById("api-client-secret-box");
+    const credId = document.getElementById("api-client-secret-id");
+    const credSecret = document.getElementById("api-client-secret-value");
+    if (!form || !msg || !tbody) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const esc = (v) =>
+      String(v ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const setMsg = (text, isErr = false) => {
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", !!isErr);
+    };
+
+    const getScopesFromForm = () =>
+      Array.from(form.querySelectorAll(".api-scope:checked"))
+        .map((el) => String(el.value || "").trim())
+        .filter(Boolean);
+
+    const setScopesToForm = (scopes) => {
+      const set = new Set(Array.isArray(scopes) ? scopes : []);
+      form.querySelectorAll(".api-scope").forEach((el) => {
+        el.checked = set.has(String(el.value || "").trim());
+      });
+    };
+
+    const toDateTimeLocal = (value) => {
+      if (!value) return "";
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return "";
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    };
+
+    const resetForm = () => {
+      document.getElementById("api-client-id").value = "";
+      document.getElementById("api-client-nome").value = "";
+      document.getElementById("api-client-status").value = "ativo";
+      const now = new Date();
+      now.setSeconds(0, 0);
+      document.getElementById("api-acesso-inicio").value = toDateTimeLocal(now.toISOString());
+      document.getElementById("api-acesso-fim").value = "";
+      form.querySelectorAll(".api-scope").forEach((el) => {
+        el.checked = true;
+      });
+      const chkInterno = document.getElementById("api-servidor-cadastrado");
+      if (chkInterno) chkInterno.checked = false;
+      if (boxCred) boxCred.style.display = "none";
+      if (credId) credId.textContent = "";
+      if (credSecret) credSecret.textContent = "";
+      setMsg("");
+    };
+
+    const showCredentials = (clientId, clientSecret) => {
+      if (!boxCred || !credId || !credSecret) return;
+      credId.textContent = clientId || "";
+      credSecret.textContent = clientSecret || "";
+      boxCred.style.display = "";
+    };
+
+    const formatDateTime = (value) => {
+      if (!value) return "";
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return String(value);
+      return dt.toLocaleString("pt-BR");
+    };
+
+    const renderRows = (rows) => {
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum servidor cadastrado.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list
+        .map(
+          (r) => `
+          <tr data-id="${esc(r.id)}"
+              data-nome="${esc(r.nome)}"
+              data-status="${esc(r.status)}"
+              data-servidor-cadastrado="${r.servidor_cadastrado ? "1" : "0"}"
+              data-acesso-inicio="${esc(r.acesso_inicio_em || "")}"
+              data-acesso-fim="${esc(r.acesso_fim_em || "")}"
+              data-scopes="${esc((r.scopes || []).join(","))}">
+            <td>${esc(r.nome)}</td>
+            <td><code>${esc(r.client_id)}</code></td>
+            <td>${esc(r.status)}</td>
+            <td>${r.servidor_cadastrado ? "Interno (servidor cadastrado)" : "Externo"}</td>
+            <td>${esc(formatDateTime(r.acesso_inicio_em))}</td>
+            <td>${esc(r.acesso_fim_em ? formatDateTime(r.acesso_fim_em) : "Permanente")}</td>
+            <td>${esc((r.scopes_label || []).join(" | "))}</td>
+            <td>${esc(formatDateTime(r.last_used_at))}</td>
+            <td class="actions" style="display:flex; gap:6px;">
+              <button class="icon-btn sm api-select" data-id="${esc(r.id)}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
+              <button class="icon-btn sm api-rotate" data-id="${esc(r.id)}" type="button" title="Rotacionar segredo"><i class="bi bi-arrow-repeat"></i></button>
+              <button class="icon-btn sm api-revoke" data-id="${esc(r.id)}" type="button" title="Revogar"><i class="bi bi-slash-circle"></i></button>
+              <button class="icon-btn sm api-delete" data-id="${esc(r.id)}" type="button" title="Excluir"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>`
+        )
+        .join("");
+
+      tbody.querySelectorAll(".api-select").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const row = btn.closest("tr[data-id]");
+          if (!row) return;
+          document.getElementById("api-client-id").value = row.dataset.id || "";
+          document.getElementById("api-client-nome").value = row.dataset.nome || "";
+          document.getElementById("api-client-status").value = row.dataset.status || "ativo";
+          document.getElementById("api-acesso-inicio").value = toDateTimeLocal(row.dataset.acessoInicio || "");
+          document.getElementById("api-acesso-fim").value = toDateTimeLocal(row.dataset.acessoFim || "");
+          const interno = String(row.dataset.servidorCadastrado || "") === "1";
+          const chkInterno = document.getElementById("api-servidor-cadastrado");
+          if (chkInterno) chkInterno.checked = interno;
+          const scopes = String(row.dataset.scopes || "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean);
+          setScopesToForm(scopes);
+          if (boxCred) boxCred.style.display = "none";
+          setMsg("Cliente carregado para edicao.");
+        });
+      });
+
+      tbody.querySelectorAll(".api-rotate").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          if (!id) return;
+          setMsg("Rotacionando segredo...");
+          try {
+            const res = await fetch(`/api/api-clients/${encodeURIComponent(id)}/rotate-secret`, {
+              method: "POST",
+              headers: { "X-Requested-With": "fetch" },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Falha ao rotacionar segredo.");
+            showCredentials(data?.credentials?.client_id || "", data?.credentials?.client_secret || "");
+            setMsg(data.message || "Segredo rotacionado.");
+            await loadRows();
+          } catch (err) {
+            console.error(err);
+            setMsg(err.message || "Falha ao rotacionar segredo.", true);
+          }
+        });
+      });
+
+      tbody.querySelectorAll(".api-revoke").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          if (!id) return;
+          setMsg("Revogando cliente...");
+          try {
+            const res = await fetch(`/api/api-clients/${encodeURIComponent(id)}/revoke`, {
+              method: "POST",
+              headers: { "X-Requested-With": "fetch" },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Falha ao revogar cliente.");
+            setMsg(data.message || "Cliente revogado.");
+            await loadRows();
+          } catch (err) {
+            console.error(err);
+            setMsg(err.message || "Falha ao revogar cliente.", true);
+          }
+        });
+      });
+
+      tbody.querySelectorAll(".api-delete").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          if (!id) return;
+          if (!window.confirm("Deseja realmente excluir este servidor de API?")) return;
+          setMsg("Excluindo servidor...");
+          try {
+            const res = await fetch(`/api/api-clients/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: { "X-Requested-With": "fetch" },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Falha ao excluir servidor.");
+            setMsg(data.message || "Servidor excluido.");
+            if (String(document.getElementById("api-client-id")?.value || "") === String(id)) {
+              resetForm();
+            }
+            await loadRows();
+          } catch (err) {
+            console.error(err);
+            setMsg(err.message || "Falha ao excluir servidor.", true);
+          }
+        });
+      });
+    };
+
+    const loadRows = async () => {
+      try {
+        const res = await fetch("/api/api-clients", { headers: { "X-Requested-With": "fetch" } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar clientes.");
+        renderRows(data.rows || []);
+      } catch (err) {
+        console.error(err);
+        tbody.innerHTML = `<tr><td colspan="9" class="text-error">${esc(err.message || "Falha ao carregar.")}</td></tr>`;
+      }
+    };
+
+    if (btnLimpar) {
+      btnLimpar.addEventListener("click", () => resetForm());
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      setMsg("Salvando servidor...");
+      const id = document.getElementById("api-client-id").value;
+      const payload = {
+        nome: document.getElementById("api-client-nome").value,
+        status: document.getElementById("api-client-status").value || "ativo",
+        acesso_inicio_em: document.getElementById("api-acesso-inicio")?.value || "",
+        acesso_fim_em: document.getElementById("api-acesso-fim")?.value || "",
+        servidor_cadastrado: !!document.getElementById("api-servidor-cadastrado")?.checked,
+        scopes: getScopesFromForm(),
+      };
+      if (!payload.nome.trim()) {
+        setMsg("Informe o nome do servidor.", true);
+        return;
+      }
+      if (!payload.scopes.length) {
+        setMsg("Selecione ao menos um escopo.", true);
+        return;
+      }
+      if (!payload.acesso_inicio_em) {
+        setMsg("Informe a data/hora de inicio.", true);
+        return;
+      }
+      try {
+        const isUpdate = !!id;
+        const url = isUpdate
+          ? `/api/api-clients/${encodeURIComponent(id)}`
+          : "/api/api-clients";
+        const res = await fetch(url, {
+          method: isUpdate ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao salvar servidor.");
+        if (!isUpdate && data?.credentials) {
+          showCredentials(data.credentials.client_id || "", data.credentials.client_secret || "");
+        } else if (boxCred) {
+          boxCred.style.display = "none";
+        }
+        setMsg(data.message || "Servidor salvo.");
+        await loadRows();
+        if (!isUpdate) {
+          document.getElementById("api-client-id").value = "";
+        }
+      } catch (err) {
+        console.error(err);
+        setMsg(err.message || "Falha ao salvar servidor.", true);
+      }
+    });
+
+    resetForm();
+    loadRows();
+  }
+
   function applyMenuPermissions(features = []) {
     if (!menu) return;
     const allowed = new Set(["dashboard", "logout", ...features]);
@@ -8971,6 +9246,9 @@
     }
     if (route === "usuarios/senha") {
       initUsuariosSenha();
+    }
+    if (route === "usuarios/api-acessos") {
+      initApiAcessos();
     }
     if (route === "painel") {
       initPainel();

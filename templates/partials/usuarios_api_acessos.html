@@ -1,0 +1,87 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">API de Acessos</div>
+    <p class="muted">
+      Cadastre servidores para consumo de dados em modo somente leitura.
+    </p>
+    <form id="form-api-client" class="form">
+      <input type="hidden" id="api-client-id" />
+      <div class="form-grid">
+        <label class="field">
+          <span>Nome do Servidor</span>
+          <input type="text" id="api-client-nome" maxlength="150" required />
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select id="api-client-status">
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+            <option value="revogado">Revogado</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Data/Hora inicio</span>
+          <input type="datetime-local" id="api-acesso-inicio" required />
+        </label>
+        <label class="field">
+          <span>Data/Hora final (opcional)</span>
+          <input type="datetime-local" id="api-acesso-fim" />
+        </label>
+        <label class="field inline">
+          <input type="checkbox" id="api-servidor-cadastrado" />
+          <span>Servidor cadastrado na aplicacao</span>
+        </label>
+      </div>
+      <div class="card mini">
+        <div class="card-title" style="margin-bottom: 6px;">Escopos permitidos</div>
+        <div class="form-grid">
+          {% for item in scope_options %}
+          <label class="field inline">
+            <input type="checkbox" class="api-scope" value="{{ item.scope }}" checked />
+            <span>{{ item.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit">Salvar cliente</button>
+        <button class="btn sm" id="api-client-limpar" type="button">Limpar</button>
+        <div id="api-client-msg" class="muted"></div>
+      </div>
+      <div id="api-client-secret-box" class="card mini" style="display:none;">
+        <div class="card-title" style="margin-bottom: 4px;">Credencial gerada</div>
+        <div class="muted">Guarde estes dados em local seguro:</div>
+        <div style="margin-top:8px; font-family:monospace; font-size:12px;">
+          <div><strong>client_id:</strong> <span id="api-client-secret-id"></span></div>
+          <div><strong>client_secret:</strong> <span id="api-client-secret-value"></span></div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Servidores cadastrados</div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Client ID</th>
+            <th>Status</th>
+            <th>Tipo de acesso</th>
+            <th>Inicio</th>
+            <th>Fim</th>
+            <th>Escopos</th>
+            <th>Ultimo uso</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="api-client-tbody">
+          <tr>
+            <td colspan="9" class="muted">Carregando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
