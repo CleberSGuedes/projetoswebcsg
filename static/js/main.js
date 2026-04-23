@@ -7606,11 +7606,21 @@
     const filterCancel = document.getElementById("meta-fisica-filtro-cancel");
     const filterApply = document.getElementById("meta-fisica-filtro-apply");
     const filterMsg = document.getElementById("meta-fisica-filtro-msg");
+    const approveBtn = document.getElementById("meta-fisica-approve");
     const editBtn = document.getElementById("meta-fisica-edit");
     const deleteBtn = document.getElementById("meta-fisica-delete");
     const printBtn = document.getElementById("meta-fisica-print");
     const editBadge = document.getElementById("meta-fisica-editing-badge");
+    const saveBtn = document.getElementById("meta-fisica-save");
+    const approvalFields = document.getElementById("meta-fisica-aprovacao-fields");
+    const approvalQuestionLabel = document.getElementById("meta-fisica-aprovacao-pergunta");
+    const approvalJustificativa = document.getElementById("meta-fisica-justificativa-aprovacao");
+    const approvalRadios = form
+      ? Array.from(form.querySelectorAll('input[name="meta-fisica-aprovada"]'))
+      : [];
     const currentUserPerfilId = String(metaPage?.dataset?.userPerfilId || "").trim();
+    const nivelAtual = parseInt(String(metaPage?.dataset?.userNivel || userNivel || "").trim(), 10);
+    const canApprove = nivelAtual === 1 || nivelAtual === 2;
     const rowRequiredKeys = [
       "unidade_orcamentaria",
       "programa",
@@ -7626,6 +7636,10 @@
     let regionCatalog = [];
     let editingMetaId = "";
     let editingControle = "";
+    let approvalMode = false;
+    let approvingMetaId = "";
+    let approvingControle = "";
+    const defaultSaveLabel = saveBtn ? saveBtn.textContent : "Salvar";
     const criteria = [];
     let criteriaSelected = -1;
     const fieldLabels = {
@@ -7848,13 +7862,13 @@
     };
     const buildAdjustedLinesHtml = (row) => {
       const baseRaw = parseDec(row.meta_produto);
+      if (row.is_novo) {
+        return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(rowAdjusted(row)))}" readonly />`;
+      }
       if (baseRaw === null) {
         return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="" readonly />`;
       }
       const base = baseRaw;
-      if (row.is_novo) {
-        return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(rowAdjusted(row)))}" readonly />`;
-      }
       const creditoItems = getFieldItems(row, "meta_credito");
       const anuladaItems = getFieldItems(row, "meta_anulada");
       const movementRows = getMovementRowsCount(row);
@@ -7884,14 +7898,15 @@
       const lockedCount = readOnly ? getLockedItemCount(row, field) : 0;
       const entryEnabled = !!row?.[`entry_enable_${field}`];
       if (row.is_novo) {
+        const disabledNovo = readOnly ? "readonly" : "";
         const inputsNovo = items
           .map((val, itemIdx) => `<div class="meta-fisica-multi-line">
-            <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" />
-            ${itemIdx > 0 ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
+            <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" ${disabledNovo} />
+            ${itemIdx > 0 && !readOnly ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
           </div>`)
           .join("");
         return `<div class="meta-fisica-multi-wrap">${inputsNovo}
-          ${allowAdd ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
+          ${allowAdd && !readOnly ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
         </div>`;
       }
 
@@ -7902,12 +7917,12 @@
       for (let itemIdx = 0; itemIdx < movementRows; itemIdx += 1) {
         const val = items[itemIdx] ?? "";
         const isLocked = readOnly && itemIdx < lockedCount;
-        const disabled = isLocked || !entryEnabled ? "readonly" : "";
+        const disabled = readOnly || isLocked || !entryEnabled ? "readonly" : "";
         const labelText = getMovementLabel(row, itemIdx);
         inputs += `<div class="meta-fisica-multi-line">
           <span class="meta-fisica-mov-label">${labelText}</span>
           <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" ${disabled} />
-          ${itemIdx >= lockedCount && !isLocked ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
+          ${!readOnly && itemIdx >= lockedCount && !isLocked ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
         </div>`;
       }
       return `<div class="meta-fisica-multi-wrap">${inputs}
@@ -8087,11 +8102,30 @@
       const criadoEm = formatPrintDate(meta?.criado_em || "");
       const usuarioNome = meta?.usuario_nome || "";
       const usuarioPerfil = meta?.usuario_perfil || String(metaPage?.dataset?.userPerfil || "").trim();
+      const status = String(meta?.status_aprovacao || "").trim().toLowerCase();
+      const aprovadoPorNome = String(meta?.aprovado_por_nome || "").trim();
+      const aprovadoPorPerfil = String(meta?.aprovado_por_perfil || "").trim();
+      const dataAprovacao = formatPrintDate(meta?.data_aprovacao || "");
       const footerLine2 = [usuarioNome, usuarioPerfil, criadoEm ? `cadastrado em ${criadoEm}` : "", controle]
         .map((p) => String(p || "").trim())
         .filter(Boolean)
         .join(" - ");
-      const watermarkText = "AGUARDANDO";
+      const statusEventoLabel =
+        status === "rejeitado"
+          ? "rejeitado em"
+          : status === "aprovado"
+            ? "aprovado em"
+            : "aprovado em";
+      const footerLine3 = [
+        [aprovadoPorNome, aprovadoPorPerfil].map((p) => String(p || "").trim()).filter(Boolean).join(" - "),
+        dataAprovacao ? `${statusEventoLabel} ${dataAprovacao}` : "",
+      ]
+        .map((p) => String(p || "").trim())
+        .filter(Boolean)
+        .join(" - ");
+      let watermarkText = "";
+      if (status === "aguardando") watermarkText = "AGUARDANDO";
+      if (status === "rejeitado") watermarkText = "Rejeitado";
       const html = `<!doctype html>
   <html>
   <head>
@@ -8124,7 +8158,7 @@
     </style>
   </head>
   <body>
-    <div class="print-watermark">${watermarkText}</div>
+    ${watermarkText ? `<div class="print-watermark">${watermarkText}</div>` : ""}
     <div class="print-header">
       <div class="print-brand">
         <img src="/static/img/logo.jpg" alt="Logo" />
@@ -8146,6 +8180,7 @@
       <img src="/static/img/logo.jpg" alt="Logo" />
       <div class="print-footer-text">
         ${footerLine2 ? `<div>${esc(footerLine2)}</div>` : ""}
+        ${footerLine3 ? `<div>${esc(footerLine3)}</div>` : ""}
       </div>
       <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
     </div>
@@ -8293,6 +8328,28 @@
     const resetEditMode = () => {
       editingMetaId = "";
       editingControle = "";
+      approvalMode = false;
+      approvingMetaId = "";
+      approvingControle = "";
+      if (approvalFields) approvalFields.style.display = "none";
+      if (approvalJustificativa) {
+        approvalJustificativa.value = "";
+        approvalJustificativa.required = false;
+      }
+      approvalRadios.forEach((r) => {
+        r.checked = r.value === "sim";
+      });
+      if (saveBtn) saveBtn.textContent = defaultSaveLabel;
+      const controls = [
+        ...Object.values(selects).filter(Boolean),
+        consultBtn,
+        addRowBtn,
+        clearBtn,
+        justificativaInput,
+      ].filter(Boolean);
+      controls.forEach((el) => {
+        el.disabled = false;
+      });
       if (editBadge) {
         editBadge.textContent = "";
         editBadge.style.display = "none";
@@ -8302,6 +8359,15 @@
     const setEditMode = (metaId, controle) => {
       editingMetaId = String(metaId || "").trim();
       editingControle = String(controle || "").trim();
+      approvalMode = false;
+      approvingMetaId = "";
+      approvingControle = "";
+      if (approvalFields) approvalFields.style.display = "none";
+      if (approvalJustificativa) {
+        approvalJustificativa.value = "";
+        approvalJustificativa.required = false;
+      }
+      if (saveBtn) saveBtn.textContent = defaultSaveLabel;
       if (!editBadge) return;
       if (!editingMetaId) {
         editBadge.textContent = "";
@@ -8312,8 +8378,45 @@
       editBadge.style.display = "inline";
     };
 
+    const setApprovalMode = (metaId, controle) => {
+      approvalMode = true;
+      approvingMetaId = String(metaId || "").trim();
+      approvingControle = String(controle || "").trim();
+      editingMetaId = "";
+      editingControle = "";
+      if (approvalFields) approvalFields.style.display = "";
+      if (approvalQuestionLabel) {
+        approvalQuestionLabel.textContent = approvingControle
+          ? `*Deseja aprovar o registro ${approvingControle}?`
+          : "*Deseja aprovar o registro (Controle de Meta)?";
+      }
+      if (approvalJustificativa) {
+        approvalJustificativa.value = "";
+        approvalJustificativa.required = true;
+      }
+      approvalRadios.forEach((r) => {
+        r.checked = r.value === "sim";
+      });
+      if (saveBtn) saveBtn.textContent = "Confirmar Aprovação";
+      const controls = [
+        ...Object.values(selects).filter(Boolean),
+        consultBtn,
+        addRowBtn,
+        clearBtn,
+        justificativaInput,
+      ].filter(Boolean);
+      controls.forEach((el) => {
+        el.disabled = true;
+      });
+      if (editBadge) {
+        editBadge.textContent = `- Aprovação do registro ${approvingControle || `<id:${approvingMetaId}>`}`;
+        editBadge.style.display = "inline";
+      }
+    };
+
     const updateSummaryActionButtons = () => {
       const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+      if (approveBtn) approveBtn.disabled = !selected || !canApprove;
       if (deleteBtn) deleteBtn.disabled = !selected;
       if (editBtn) editBtn.disabled = !selected;
     };
@@ -8332,6 +8435,11 @@
       const linhas = parseSummaryLinhas(row);
       return {
         controle: row?.dataset?.controleMeta || "",
+        status_aprovacao: String(row?.dataset?.statusAprovacao || "").trim(),
+        aprovado_por: String(row?.dataset?.aprovadoPor || "").trim(),
+        aprovado_por_nome: String(row?.dataset?.aprovadoPorNome || "").trim(),
+        aprovado_por_perfil: String(row?.dataset?.aprovadoPorPerfil || "").trim(),
+        data_aprovacao: String(row?.dataset?.dataAprovacao || "").trim(),
         criado_em: row?.dataset?.criadoEm || "",
         usuario_nome: String(row?.dataset?.usuarioNome || "").trim(),
         usuario_perfil: String(row?.dataset?.usuarioPerfil || "").trim(),
@@ -8479,13 +8587,14 @@
       }
       tbody.innerHTML = tableRows
         .map((row, idx) => {
+          const forceReadOnly = approvalMode;
           const readOnlyNew = row.is_novo ? "" : "readonly";
-          const creditoReadOnly = !!row.lock_meta_credito;
-          const anuladaReadOnly = row.is_novo ? true : !!row.lock_meta_anulada;
-          const creditoAllowAdd = !!row.allow_add_meta_credito;
-          const anuladaAllowAdd = !!row.allow_add_meta_anulada;
+          const creditoReadOnly = forceReadOnly || !!row.lock_meta_credito;
+          const anuladaReadOnly = forceReadOnly || (row.is_novo ? true : !!row.lock_meta_anulada);
+          const creditoAllowAdd = forceReadOnly ? false : !!row.allow_add_meta_credito;
+          const anuladaAllowAdd = forceReadOnly ? false : !!row.allow_add_meta_anulada;
           let regionFieldHtml = "";
-          if (row.is_novo) {
+          if (row.is_novo && !forceReadOnly) {
             const options = getAvailableRegionOptions(idx);
             const selectedKey = normalizeRegionKey(row.regiao_produto);
             const hasSelected = selectedKey && options.some((opt) => getCatalogCode(opt) === selectedKey);
@@ -8500,12 +8609,15 @@
               })
               .join("");
             regionFieldHtml = `
-              <select class="meta-fisica-cell meta-fisica-region-select" data-field="regiao_produto" ${options.length ? "" : "disabled"}>
-                ${selectOptions}
-              </select>
+              <div class="meta-fisica-region-new-wrap">
+                <select class="meta-fisica-cell meta-fisica-region-select" data-field="regiao_produto" ${options.length ? "" : "disabled"}>
+                  ${selectOptions}
+                </select>
+                <button type="button" class="meta-fisica-remove-row-btn" data-remove-row="${idx}" title="Remover linha">-</button>
+              </div>
             `;
           } else {
-            regionFieldHtml = `<input type="text" class="meta-fisica-cell" data-field="regiao_produto" value="${esc(row.regiao_produto || "")}" ${readOnlyNew} />`;
+            regionFieldHtml = `<input type="text" class="meta-fisica-cell" data-field="regiao_produto" value="${esc(row.regiao_produto || "")}" readonly />`;
           }
           return `
             <tr data-idx="${idx}">
@@ -8747,6 +8859,21 @@
       });
 
       tbody.addEventListener("click", (ev) => {
+        const removeRowBtn = ev.target.closest("[data-remove-row]");
+        if (removeRowBtn) {
+          const idx = Number(removeRowBtn.getAttribute("data-remove-row") || "-1");
+          if (!Number.isInteger(idx) || idx < 0 || idx >= tableRows.length) return;
+          if (!tableRows[idx]?.is_novo) return;
+          tableRows.splice(idx, 1);
+          const dup = validateDuplicateRegions();
+          if (dup) {
+            setMsg(`A região ${dup} já existe na tabela.`, true);
+          } else {
+            setMsg("");
+          }
+          renderRows();
+          return;
+        }
         const addBtn = ev.target.closest("[data-add-field]");
         if (addBtn) {
           const tr = addBtn.closest("tr[data-idx]");
@@ -8978,6 +9105,61 @@
       });
     }
 
+    if (approveBtn) {
+      approveBtn.style.display = canApprove ? "" : "none";
+      approveBtn.addEventListener("click", async () => {
+        const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+        if (!selected) {
+          setFilterMsg("Selecione um registro para aprovar.", true);
+          return;
+        }
+        if (!canApprove) {
+          setFilterMsg("Usuário sem permissão para aprovar o registro atual.", true);
+          return;
+        }
+        const controle = String(selected.dataset.controleMeta || "").trim() || "(sem controle)";
+        const status = String(selected.dataset.statusAprovacao || "").trim().toLowerCase();
+        if (status !== "aguardando") {
+          setFilterMsg(`Somente registros com status Aguardando podem ser aprovados (${controle}).`, true);
+          return;
+        }
+
+        const mapSelectToData = {
+          exercicio: "exercicio",
+          unidade_orcamentaria: "uo",
+          programa: "programa",
+          acao_paoe: "acaoPaoe",
+          adj_solicitante: "adjSolicitante",
+          produto_acao: "produtoAcao",
+          unid_medida_produto: "unidMedidaProduto",
+        };
+        Object.entries(selects).forEach(([key, el]) => {
+          if (!el) return;
+          const dataKey = mapSelectToData[key];
+          const v = String((dataKey && selected.dataset[dataKey]) || "").trim();
+          el.value = v;
+        });
+        if (justificativaInput) {
+          justificativaInput.value = String(selected.dataset.justificativa || "");
+        }
+        await loadOptions(false);
+        let baselineByRegion = {};
+        try {
+          baselineByRegion = await fetchPlanBaselineByRegion();
+        } catch (err) {
+          console.error(err);
+        }
+        const linhas = parseSummaryLinhas(selected);
+        tableRows = buildEditableRowsFromSummary(linhas, baselineByRegion);
+        hasConsulted = true;
+        lastQueryHadRows = tableRows.length > 0;
+        setApprovalMode(selected.dataset.id || "", controle);
+        renderRows();
+        setMsg("");
+        setFilterMsg("");
+      });
+    }
+
     if (editBtn) {
       editBtn.addEventListener("click", async () => {
         const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
@@ -9085,6 +9267,54 @@
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
+      if (approvalMode) {
+        const registroId = String(approvingMetaId || "").trim();
+        const controle = String(approvingControle || "").trim() || "(sem controle)";
+        if (!registroId) {
+          setMsg("Registro inválido para aprovação.", true);
+          return;
+        }
+        const aprovadoRadio = approvalRadios.find((r) => r.checked);
+        const aprovado = String(aprovadoRadio?.value || "").trim().toLowerCase();
+        if (!["sim", "nao"].includes(aprovado)) {
+          setMsg("Selecione Sim ou Não para concluir a aprovação.", true);
+          return;
+        }
+        const justificativaAprovacao = String(approvalJustificativa?.value || "").trim();
+        if (!justificativaAprovacao) {
+          setMsg("Informe a justificativa da decisão.", true);
+          return;
+        }
+        try {
+          const pendingPrintWin = prepareMetaFisicaPrintWindow();
+          setMsg("Processando aprovação...");
+          const res = await fetch(`/api/meta-fisica/${encodeURIComponent(registroId)}/aprovar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify({
+              meta_aprovada: aprovado,
+              motivo_rejeicao: justificativaAprovacao,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Falha ao aprovar registro ${controle}.`);
+          const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
+          const metaPrint = selected ? buildSummaryMetaForPrint(selected) : {};
+          metaPrint.controle = controle;
+          metaPrint.status_aprovacao = aprovado === "sim" ? "Aprovado" : "Rejeitado";
+          metaPrint.data_aprovacao = data?.data_aprovacao || "";
+          metaPrint.aprovado_por_nome = String(metaPage?.dataset?.userNome || "").trim();
+          metaPrint.aprovado_por_perfil = String(metaPage?.dataset?.userPerfil || "").trim();
+          openMetaFisicaPrintPopup(metaPrint, pendingPrintWin || null);
+          showToast(data.message || `Registro ${controle} processado com sucesso.`, "success");
+          resetEditMode();
+          await loadPage("cadastrar/plan_21-nger/meta_fisica");
+        } catch (err) {
+          console.error(err);
+          setMsg(err.message || `Falha ao aprovar registro ${controle}.`, true);
+        }
+        return;
+      }
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
@@ -9104,6 +9334,13 @@
         if (!row.is_novo && parseDec(row.meta_produto) === null) {
           setMsg(`Meta PTA/LOA inválida para a região ${regiao}.`, true);
           return;
+        }
+        if (row.is_novo) {
+          const metaAjustadaNova = parseDec(rowAdjusted(row));
+          if (metaAjustadaNova === null || metaAjustadaNova <= 0) {
+            setMsg(`Informe Acréscimo/Redução válido para gerar Meta Ajustada na região ${regiao}.`, true);
+            return;
+          }
         }
         const creditoItemsAll = getFieldItems(row, "meta_credito");
         const anuladaItemsAll = getFieldItems(row, "meta_anulada");

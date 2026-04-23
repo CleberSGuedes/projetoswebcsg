@@ -100,6 +100,123 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
     return matches[0] if matches else None
 
 
+def _normalize_header_token(value: object) -> str:
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
+    text = text.replace("º", "O").replace("°", "O")
+    text = re.sub(r"[^A-Z0-9]+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _detect_upload_layouts(file_path: Path) -> set[str]:
+    try:
+        df_raw = pd.read_excel(file_path, sheet_name=0, header=None, dtype=str, nrows=260)
+    except Exception:
+        return set()
+    if df_raw is None or df_raw.empty:
+        return set()
+
+    rows_tokens: list[set[str]] = []
+    all_tokens: list[str] = []
+    for _, row in df_raw.iterrows():
+        vals = [str(v).strip() if pd.notna(v) else "" for v in row.tolist()]
+        vals = [v for v in vals if v]
+        if not vals:
+            continue
+        tokens = {_normalize_header_token(v) for v in vals if v}
+        if not tokens:
+            continue
+        rows_tokens.append(tokens)
+        all_tokens.extend(tokens)
+
+    if not rows_tokens:
+        return set()
+
+    blob = " ".join(all_tokens)
+    detected: set[str] = set()
+
+    def _has(tokens: set[str], token: str) -> bool:
+        return token in tokens
+
+    def _has_prefix(tokens: set[str], prefix: str) -> bool:
+        return any(t.startswith(prefix) for t in tokens)
+
+    for tokens in rows_tokens:
+        has_exerc = any(t.startswith("EXERC") for t in tokens)
+        if not has_exerc:
+            # FIP613 costuma não ter "Exercício" no mesmo padrão.
+            fip_markers = {"UO", "UG", "FUNCAO", "SUBFUNCAO", "PROGRAMA", "PROJETO ATIVIDADE"}
+            if len(fip_markers.intersection(tokens)) >= 5:
+                detected.add("fip613")
+            continue
+
+        # PED
+        ped_core = _has(tokens, "N PED ESTORNO ESTORNADO") or _has(tokens, "VALOR PED")
+        ped_aux = {"N PED", "N EMP", "N CAD", "N NOBLIST", "N OS", "VALOR DO ESTORNO"}
+        if ped_core and len(ped_aux.intersection(tokens)) >= 3:
+            detected.add("ped")
+
+        # EMP
+        emp_core = _has(tokens, "N EMP") and _has(tokens, "N PED") and _has(tokens, "VALOR EMP")
+        emp_forbidden = _has(tokens, "N PED ESTORNO ESTORNADO") or _has(tokens, "VALOR PED")
+        emp_aux = {"HISTORICO", "DOTACAO ORCAMENTARIA", "TIPO EMPENHO", "SITUACAO", "DEVOLUCAO GCV"}
+        if emp_core and (not emp_forbidden) and len(emp_aux.intersection(tokens)) >= 2:
+            detected.add("emp")
+
+        # EST_EMP
+        est_emp_core = _has(tokens, "N EST") and _has(tokens, "N EMP") and _has(tokens, "N PED")
+        est_emp_aux = _has_prefix(tokens, "VALOR EST EMP")
+        if est_emp_core and est_emp_aux:
+            detected.add("est_emp")
+
+        # NOB
+        nob_core = _has(tokens, "N NOB") and (_has(tokens, "N NOB ESTORNO ESTORNADO") or _has(tokens, "VALOR NOB"))
+        nob_aux = _has(tokens, "N LIQ") or _has(tokens, "DATA NOB") or _has(tokens, "DATA CADASTRO NOB")
+        if nob_core and nob_aux:
+            detected.add("nob")
+
+    if (
+        "EXERCICIO IGUAL A" in blob
+        and "PROGRAMA" in blob
+        and ("ACAO P A OE" in blob or "ACAO PAOE" in blob)
+        and ("PUBLICO TRANSVERSAL" in blob or "PLANO DE ACAO POR PRODUTO" in blob)
+    ):
+        detected.add("plan20")
+
+    return detected
+
+
+def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label: str) -> str | None:
+    detected = _detect_upload_layouts(file_path)
+    if expected_kind in detected and len(detected) == 1:
+        return None
+
+    if not detected:
+        detected_text = "desconhecido"
+    else:
+        display_map = {
+            "ped": "PED",
+            "emp": "EMP",
+            "est_emp": "EST_EMP",
+            "nob": "NOB",
+            "fip613": "FIP613",
+            "plan20": "PLAN20",
+        }
+        detected_text = ", ".join(display_map.get(k, k.upper()) for k in sorted(detected))
+    if len(detected) > 1:
+        return (
+            f"Arquivo invalido para {expected_label}: layout ambiguo detectado ({detected_text}). "
+            f"Envie um arquivo exclusivo de {expected_label}."
+        )
+    return (
+        f"Arquivo invalido para {expected_label}: layout detectado ({detected_text}). "
+        f"Envie um arquivo de {expected_label}."
+    )
+
+
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
     node_env = os.environ.copy()
     node_max_old_space_mb = os.getenv("NODE_MAX_OLD_SPACE_MB", "4096").strip()
@@ -2171,15 +2288,31 @@ def partial_cadastrar_plan21_meta_fisica():
             if not user_perfil_nome:
                 user_perfil_nome = (getattr(user_row, "perfil", "") or "").strip()
     metas = (
-        AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
+        AlterarMeta.query.filter(
+            or_(
+                AlterarMeta.ativo == True,  # noqa: E712
+                func.lower(func.coalesce(AlterarMeta.status_aprovacao, "")) == "rejeitado",
+            )
+        )
         .order_by(AlterarMeta.id.desc())
         .all()
     )
     usuario_ids = {m.usuario_id for m in metas if m.usuario_id}
+    aprovado_ids = set()
+    for m in metas:
+        aprovado_id = getattr(m, "aprovado_por", None)
+        if not aprovado_id:
+            continue
+        try:
+            aprovado_ids.add(int(aprovado_id))
+        except Exception:
+            continue
     usuarios_map = {}
     perfil_map = {}
-    if usuario_ids:
-        usuarios = Usuario.query.filter(Usuario.id.in_(list(usuario_ids))).all()
+    all_user_ids = set(usuario_ids)
+    all_user_ids.update(aprovado_ids)
+    if all_user_ids:
+        usuarios = Usuario.query.filter(Usuario.id.in_(list(all_user_ids))).all()
         usuarios_map = {u.id: u for u in usuarios}
         perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
         if perfil_ids:
@@ -2211,6 +2344,32 @@ def partial_cadastrar_plan21_meta_fisica():
                     adj_nome = (getattr(usuario, "perfil", "") or "").strip()
         adj_token = _normalize_controle_token(adj_nome) or "SEMADJ"
         m.controle_meta = f"META.{exercicio_ctrl}.{adj_token}.{m.id}"
+        aprovado_nome = ""
+        aprovado_perfil_nome = ""
+        aprovado_id = getattr(m, "aprovado_por", None)
+        if aprovado_id:
+            try:
+                aprovado_id = int(aprovado_id)
+            except Exception:
+                aprovado_id = None
+        if aprovado_id:
+            aprovado_usuario = usuarios_map.get(aprovado_id)
+            aprovado_nome = (
+                (getattr(aprovado_usuario, "nome", "") or getattr(aprovado_usuario, "email", "") or "").strip()
+                if aprovado_usuario
+                else ""
+            )
+            aprovado_perfil_id = getattr(aprovado_usuario, "perfil_id", None) if aprovado_usuario else None
+            if aprovado_perfil_id:
+                aprovado_perfil_row = perfil_map.get(aprovado_perfil_id)
+                aprovado_perfil_nome = (getattr(aprovado_perfil_row, "nome", "") or "").strip()
+            if not aprovado_perfil_nome and aprovado_usuario:
+                aprovado_perfil_nome = (getattr(aprovado_usuario, "perfil", "") or "").strip()
+        m.aprovado_por_nome = aprovado_nome
+        m.aprovado_por_perfil = aprovado_perfil_nome
+        m.data_aprovacao_iso = (
+            getattr(m, "data_aprovacao", None).isoformat() if getattr(m, "data_aprovacao", None) else ""
+        )
         m.regioes_preview = ""
         m.linhas_count = 0
         m.regioes_payload = []
@@ -2240,6 +2399,7 @@ def partial_cadastrar_plan21_meta_fisica():
         user_nome=user_nome,
         user_perfil_id=user_perfil_id,
         user_perfil_nome=user_perfil_nome,
+        user_nivel=getattr(g, "user_nivel", "") or "",
         current_year=str(_now_local().year),
     )
 
@@ -3961,6 +4121,212 @@ def api_meta_fisica_create():
     )
 
 
+def _parse_int_list_unique(raw_value) -> list[int]:
+    values = raw_value
+    if isinstance(raw_value, str):
+        txt = raw_value.strip()
+        if not txt:
+            values = []
+        else:
+            try:
+                values = json.loads(txt)
+            except Exception:
+                values = []
+    if not isinstance(values, list):
+        values = []
+    out = []
+    seen = set()
+    for item in values:
+        try:
+            num = int(item)
+        except Exception:
+            num = 0
+        if num > 0 and num not in seen:
+            seen.add(num)
+            out.append(num)
+    return out
+
+
+def _parse_meta_rows_for_apply(registro: AlterarMeta) -> list[dict]:
+    reg_raw = (getattr(registro, "regiao_produto", "") or "").strip()
+    if not reg_raw:
+        return []
+    try:
+        parsed = json.loads(reg_raw)
+    except Exception:
+        parsed = []
+    if not isinstance(parsed, list):
+        parsed = []
+    rows = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        regiao = str(item.get("regiao_produto") or "").strip()
+        if not regiao:
+            continue
+        meta_produto = _parse_decimal(item.get("meta_produto")) or Decimal("0")
+        meta_credito = _parse_decimal(item.get("meta_credito")) or Decimal("0")
+        meta_anulada = _parse_decimal(item.get("meta_anulada")) or Decimal("0")
+        meta_atual = _parse_decimal(item.get("meta_atual"))
+        if meta_atual is None:
+            meta_atual = meta_produto + meta_credito - meta_anulada
+        plan21_ids = _parse_int_list_unique(item.get("plan21_ids"))
+        rows.append(
+            {
+                "regiao_produto": regiao,
+                "meta_produto": meta_produto,
+                "meta_credito": meta_credito,
+                "meta_anulada": meta_anulada,
+                "meta_atual": meta_atual,
+                "plan21_ids": plan21_ids,
+            }
+        )
+    return rows
+
+
+def _apply_meta_fisica_to_plan21(registro: AlterarMeta) -> list[int]:
+    rows = _parse_meta_rows_for_apply(registro)
+    if not rows:
+        return []
+
+    impacted_ids: list[int] = []
+
+    for row in rows:
+        for plan_id in row.get("plan21_ids") or []:
+            db.session.execute(
+                text(
+                    """
+                    UPDATE plan21_nger
+                    SET meta_credito = :meta_credito,
+                        meta_anulada = :meta_anulada,
+                        meta_atual = :meta_atual
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "meta_credito": row["meta_credito"],
+                    "meta_anulada": row["meta_anulada"],
+                    "meta_atual": row["meta_atual"],
+                    "id": int(plan_id),
+                },
+            )
+            impacted_ids.append(int(plan_id))
+
+    template_id = None
+    try:
+        template_id = int(getattr(registro, "plan21_nger_id", 0) or 0)
+    except Exception:
+        template_id = 0
+    if template_id <= 0:
+        plan_ids_fallback = _parse_int_list_unique(getattr(registro, "plan21_nger_ids", None))
+        if plan_ids_fallback:
+            template_id = plan_ids_fallback[-1]
+
+    template_row = {}
+    if template_id and template_id > 0:
+        template_sql = """
+            SELECT
+                exercicio,
+                programa,
+                funcao,
+                unidade_orcamentaria,
+                acao_paoe,
+                subfuncao,
+                objetivo_especifico,
+                esfera,
+                responsavel_acao,
+                produto_acao,
+                unid_medida_produto,
+                publico_transversal
+            FROM plan21_nger
+            WHERE id = :id
+            LIMIT 1
+        """
+        template_row = db.session.execute(text(template_sql), {"id": template_id}).mappings().first() or {}
+
+    for row in rows:
+        if row.get("plan21_ids"):
+            continue
+        insert_sql = text(
+            """
+            INSERT INTO plan21_nger (
+                exercicio,
+                programa,
+                funcao,
+                unidade_orcamentaria,
+                acao_paoe,
+                subfuncao,
+                objetivo_especifico,
+                esfera,
+                responsavel_acao,
+                produto_acao,
+                unid_medida_produto,
+                regiao_produto,
+                meta_produto,
+                meta_credito,
+                meta_anulada,
+                meta_atual,
+                publico_transversal,
+                ativo
+            )
+            VALUES (
+                :exercicio,
+                :programa,
+                :funcao,
+                :unidade_orcamentaria,
+                :acao_paoe,
+                :subfuncao,
+                :objetivo_especifico,
+                :esfera,
+                :responsavel_acao,
+                :produto_acao,
+                :unid_medida_produto,
+                :regiao_produto,
+                :meta_produto,
+                :meta_credito,
+                :meta_anulada,
+                :meta_atual,
+                :publico_transversal,
+                :ativo
+            )
+            """
+        )
+        insert_params = {
+            "exercicio": template_row.get("exercicio") or getattr(registro, "exercicio", None),
+            "programa": template_row.get("programa") or getattr(registro, "programa", None),
+            "funcao": template_row.get("funcao"),
+            "unidade_orcamentaria": template_row.get("unidade_orcamentaria")
+            or getattr(registro, "unidade_orcamentaria", None),
+            "acao_paoe": template_row.get("acao_paoe") or getattr(registro, "acao_paoe", None),
+            "subfuncao": template_row.get("subfuncao"),
+            "objetivo_especifico": template_row.get("objetivo_especifico"),
+            "esfera": template_row.get("esfera"),
+            "responsavel_acao": template_row.get("responsavel_acao")
+            or getattr(registro, "responsavel_acao", None),
+            "produto_acao": template_row.get("produto_acao") or getattr(registro, "produto_acao", None),
+            "unid_medida_produto": template_row.get("unid_medida_produto")
+            or getattr(registro, "unid_medida_produto", None),
+            "regiao_produto": row.get("regiao_produto"),
+            "meta_produto": row.get("meta_produto") or Decimal("0"),
+            "meta_credito": row.get("meta_credito") or Decimal("0"),
+            "meta_anulada": row.get("meta_anulada") or Decimal("0"),
+            "meta_atual": row.get("meta_atual") or Decimal("0"),
+            "publico_transversal": template_row.get("publico_transversal"),
+            "ativo": True,
+        }
+        result = db.session.execute(insert_sql, insert_params)
+        new_id = 0
+        try:
+            new_id = int(getattr(result, "lastrowid", 0) or 0)
+        except Exception:
+            new_id = 0
+        if new_id > 0:
+            impacted_ids.append(new_id)
+
+    impacted_unique = sorted(set(int(v) for v in impacted_ids if int(v) > 0))
+    return impacted_unique
+
+
 @home_bp.route("/api/meta-fisica/<int:meta_id>", methods=["DELETE"])
 @login_required
 @require_feature("cadastrar/plan_21-nger/meta_fisica")
@@ -4032,6 +4398,96 @@ def api_meta_fisica_delete(meta_id: int):
             "message": f"Registro {controle_meta} excluido com sucesso.",
             "controle_meta": controle_meta,
             "id": registro.id,
+        }
+    )
+
+
+@home_bp.route("/api/meta-fisica/<int:meta_id>/aprovar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def api_meta_fisica_aprovar(meta_id: int):
+    registro = (
+        AlterarMeta.query.filter(AlterarMeta.id == meta_id)
+        .filter(AlterarMeta.ativo == True)  # noqa: E712
+        .first()
+    )
+    if not registro:
+        return jsonify({"error": "Registro de meta nao encontrado."}), 404
+
+    status_atual = str(getattr(registro, "status_aprovacao", "") or "").strip().lower()
+    if status_atual != "aguardando":
+        return jsonify({"error": "Registro de meta ja foi processado."}), 400
+
+    try:
+        nivel_int = int(getattr(g, "user_nivel", 0) or 0)
+    except (TypeError, ValueError):
+        nivel_int = 0
+    if nivel_int not in (1, 2):
+        return jsonify({"error": "Usuario sem permissao para aprovar o registro atual."}), 403
+
+    data = request.get_json() or {}
+    aprovado_raw = str(data.get("meta_aprovada") or "").strip().lower()
+    aprovado = aprovado_raw if aprovado_raw in ("sim", "nao") else ""
+    if not aprovado:
+        return jsonify({"error": "Informe se deseja aprovar o registro (Sim ou Nao)."}), 400
+    motivo = str(data.get("motivo_rejeicao") or "").strip()
+    if not motivo:
+        return jsonify({"error": "Justificativa da decisao obrigatoria."}), 400
+
+    usuario_id = _resolve_usuario_id()
+    if usuario_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+
+    now = _now_local()
+    try:
+        impacted_ids = []
+        if aprovado == "sim":
+            impacted_ids = _apply_meta_fisica_to_plan21(registro)
+            registro.status_aprovacao = "Aprovado"
+            registro.situacao = "ativo"
+            registro.motivo_rejeicao = motivo
+            if impacted_ids:
+                registro.plan21_nger_id = impacted_ids[-1]
+                registro.plan21_nger_ids = json.dumps(impacted_ids, ensure_ascii=False)
+        else:
+            registro.status_aprovacao = "Rejeitado"
+            registro.situacao = "inativo"
+            registro.ativo = False
+            registro.excluido_em = now
+            registro.motivo_rejeicao = motivo
+            (
+                db.session.query(AlterarMetaItem)
+                .filter(AlterarMetaItem.alterar_meta_id == registro.id)
+                .filter(AlterarMetaItem.ativo == True)  # noqa: E712
+                .update(
+                    {
+                        AlterarMetaItem.ativo: False,
+                        AlterarMetaItem.alterado_em: now,
+                        AlterarMetaItem.excluido_em: now,
+                    },
+                    synchronize_session=False,
+                )
+            )
+
+        registro.aprovado_por = str(usuario_id)
+        registro.data_aprovacao = now
+        registro.alterado_em = now
+
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao aprovar registro de meta: {exc}"}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Registro de meta aprovado com sucesso."
+            if aprovado == "sim"
+            else "Registro de meta rejeitado com sucesso.",
+            "id": registro.id,
+            "status_aprovacao": registro.status_aprovacao,
+            "data_aprovacao": registro.data_aprovacao.isoformat() if getattr(registro, "data_aprovacao", None) else "",
+            "aprovado_por": registro.aprovado_por or "",
         }
     )
 
@@ -7419,6 +7875,14 @@ def api_fip613_upload():
         save_path = UPLOAD_DIR / stored_name
         arquivo.save(save_path)
 
+        layout_error = _validate_upload_layout(save_path, "fip613", "FIP613")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
+
         registro = Fip613Upload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -7865,6 +8329,14 @@ def api_ped_upload():
         save_path = PED_UPLOAD_DIR / stored_name
         arquivo.save(save_path)
 
+        layout_error = _validate_upload_layout(save_path, "ped", "PED")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
+
         registro = PedUpload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -8084,6 +8556,14 @@ def api_emp_upload():
         save_path = EMP_UPLOAD_DIR / stored_name
         arquivo.save(save_path)
 
+        layout_error = _validate_upload_layout(save_path, "emp", "EMP")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
+
         registro = EmpUpload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -8182,6 +8662,14 @@ def api_est_emp_upload():
         save_path = EST_EMP_UPLOAD_DIR / stored_name
         arquivo.save(save_path)
 
+        layout_error = _validate_upload_layout(save_path, "est_emp", "EST_EMP")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
+
         registro = EstEmpUpload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -8236,6 +8724,14 @@ def api_nob_upload():
         stored_name = f"nob_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
         save_path = NOB_UPLOAD_DIR / stored_name
         arquivo.save(save_path)
+
+        layout_error = _validate_upload_layout(save_path, "nob", "NOB")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
 
         registro = NobUpload(
             user_email=user_email,
@@ -8902,6 +9398,14 @@ def api_plan20_upload():
         stored_name = f"plan20_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
         save_path = PLAN20_UPLOAD_DIR / stored_name
         arquivo.save(save_path)
+
+        layout_error = _validate_upload_layout(save_path, "plan20", "PLAN20")
+        if layout_error:
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": layout_error}), 400
 
         output_path = run_plan20(save_path, PLAN20_OUTPUT_DIR)
 

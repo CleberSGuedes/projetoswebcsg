@@ -314,6 +314,41 @@ def extrair_chave_valida_do_historico(hist_limpo: str, chaves_planejamento: list
 
 
 def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[str], casos_especificos: dict[str, str]) -> pd.DataFrame:
+    def _normalize_col_label(value: Any) -> str:
+        text = unicodedata.normalize("NFKD", str(value or ""))
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return re.sub(r"[^A-Za-z0-9]+", "", text).upper()
+
+    def _get_row_value_by_aliases(row: pd.Series, aliases: set[str]) -> Any:
+        for col in row.index:
+            if _normalize_col_label(col) in aliases:
+                return row.get(col)
+        return None
+
+    def _build_fallback_chave_8026(row: pd.Series, partes_planejamento: int) -> str | None:
+        paoe_val = _get_row_value_by_aliases(
+            row,
+            {"PAOE", "ACAOPAOE"},
+        )
+        paoe_match = re.search(r"\d+", str(paoe_val or ""))
+        paoe_key = (paoe_match.group(0).lstrip("0") or "0") if paoe_match else ""
+        if paoe_key != "8026":
+            return None
+
+        dotacao_val = _get_row_value_by_aliases(row, {"DOTACAOORCAMENTARIA"})
+        partes_dotacao = [p.strip() for p in str(dotacao_val or "").split(".") if p.strip()]
+        if len(partes_dotacao) < 7:
+            return None
+
+        regiao = re.sub(r"\D", "", partes_dotacao[6]) or partes_dotacao[6].strip().upper()
+        if not regiao:
+            return None
+
+        partes_chave = [f"R{regiao}", "126.1", "SAAS", "EPI", "P_EPI_", "E_EPI", "_EPI_"]
+        if partes_planejamento >= 8:
+            partes_chave.append("XII")
+        return f"* {' * '.join(partes_chave)} *"
+
     def _vazio_emp_ou_estorno(v: Any) -> bool:
         if v is None or (isinstance(v, (int, float)) and v == 0):
             return True
@@ -346,8 +381,9 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
         if (not _vazio_emp_ou_estorno(ped_estorno)) or (not _vazio_emp_ou_estorno(num_emp)):
             return "IGNORADO"
 
+        chave_fallback_8026 = _build_fallback_chave_8026(row, partes_planejamento)
         if hist == "NÃO INFORMADO":
-            return "NÃO IDENTIFICADO"
+            return chave_fallback_8026 or "NÃO IDENTIFICADO"
 
         hist_text = str(hist or "")
         dot_match = re.search(r"\bDOT\.(\d{4})\.([A-Z0-9_-]+)\.(\d+)\*", hist_text, re.IGNORECASE)
@@ -391,7 +427,7 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
             if match:
                 print(f"Chave aproximada identificada por fuzzy: {match[0]}")
                 return match[0]
-        return "NÃO IDENTIFICADO"
+        return chave_fallback_8026 or "NÃO IDENTIFICADO"
 
     df["Chave"] = df.apply(encontrar_chave, axis=1)
     return df

@@ -728,6 +728,47 @@ function extrairChaveDotDoHistorico(hist) {
   return null;
 }
 
+function normalizeColLabel(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "")
+    .toUpperCase();
+}
+
+function getRowValueByAliases(row, aliases) {
+  if (!row || typeof row !== "object") return "";
+  const aliasSet = new Set((aliases || []).map((a) => normalizeColLabel(a)));
+  for (const key of Object.keys(row)) {
+    if (aliasSet.has(normalizeColLabel(key))) {
+      return row[key];
+    }
+  }
+  return "";
+}
+
+function buildFallbackChave8026(row, partesLinha) {
+  const paoeRaw = getRowValueByAliases(row, ["PAOE", "Ação (P/A/OE)", "Acao (P/A/OE)", "Ação/PAOE", "Acao/PAOE"]);
+  const paoeMatch = String(paoeRaw || "").match(/\d+/);
+  const paoeKey = paoeMatch ? paoeMatch[0].replace(/^0+/, "") || "0" : "";
+  if (paoeKey !== "8026") return null;
+
+  const dotacaoRaw = getRowValueByAliases(row, ["Dotação Orçamentária", "Dotacao Orcamentaria"]);
+  const partesDotacao = String(dotacaoRaw || "")
+    .split(".")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (partesDotacao.length < 7) return null;
+
+  let regiao = String(partesDotacao[6] || "").replace(/\D/g, "");
+  if (!regiao) regiao = String(partesDotacao[6] || "").trim().toUpperCase();
+  if (!regiao) return null;
+
+  const partes = [`R${regiao}`, "126.1", "SAAS", "EPI", "P_EPI_", "E_EPI", "_EPI_"];
+  if (partesLinha >= 8) partes.push("XII");
+  return canonicalizarChave(`* ${partes.join(" * ")} *`);
+}
+
 function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecificos, keyColName, partesChave, uploadId) {
   const casos = casosEspecificos || {};
   const chavesNorm = chavesPlanejamento.map((c) => canonicalizarChave(c));
@@ -922,10 +963,11 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
     const chavesBase = chavesByPartes.get(partesLinha) || [];
     const chavesSetBase = chavesSetByPartes.get(partesLinha) || new Set();
     const chavesPipeSetBase = chavesPipeSetByPartes.get(partesLinha) || new Set();
+    const chaveFallback8026 = buildFallbackChave8026(row, partesLinha);
 
     const hist = row["Hist\u00f3rico"] || "";
     if (hist === "NÃO INFORMADO") {
-      resultados.push("NÃO IDENTIFICADO");
+      resultados.push(chaveFallback8026 || "NÃO IDENTIFICADO");
       maybeUpdateProgress();
       continue;
     }
@@ -1011,7 +1053,11 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
         continue;
       }
     }
-    resultados.push(chaveJanela === "NÃO IDENTIFICADO" ? chaveJanela : canonicalizarChave(chaveJanela));
+    if (chaveJanela === "NÃO IDENTIFICADO") {
+      resultados.push(chaveFallback8026 || "NÃO IDENTIFICADO");
+    } else {
+      resultados.push(canonicalizarChave(chaveJanela));
+    }
     maybeUpdateProgress();
   }
 

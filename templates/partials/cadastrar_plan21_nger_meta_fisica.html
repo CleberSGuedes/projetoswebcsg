@@ -1,4 +1,4 @@
-<div class="grid" id="meta-fisica-page" data-user-id="{{ user_id }}" data-user-nome="{{ user_nome }}" data-user-perfil-id="{{ user_perfil_id or '' }}" data-user-perfil="{{ user_perfil_nome or '' }}">
+<div class="grid" id="meta-fisica-page" data-user-id="{{ user_id }}" data-user-nome="{{ user_nome }}" data-user-perfil-id="{{ user_perfil_id or '' }}" data-user-perfil="{{ user_perfil_nome or '' }}" data-user-nivel="{{ user_nivel or '' }}">
   <div class="card no-print">
     <div class="card-title" id="meta-fisica-form-title">
       Meta F&iacute;sica do Produto da A&ccedil;&atilde;o - Base de dados PTA ({{ current_year }})
@@ -77,6 +77,26 @@
         <label class="field field-full">
           <span>Justificativa</span>
           <textarea id="meta-fisica-justificativa" name="justificativa" rows="3" style="resize:vertical;"></textarea>
+        </label>
+      </div>
+
+      <div class="form-section" id="meta-fisica-aprovacao-fields" style="display:none;">
+        <label class="field">
+          <span id="meta-fisica-aprovacao-pergunta">*Deseja aprovar o registro (Controle de Meta)?</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="meta-fisica-aprovada" value="sim" checked />
+              <span>Sim</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="meta-fisica-aprovada" value="nao" />
+              <span>N&atilde;o</span>
+            </label>
+          </div>
+        </label>
+        <label class="field field-full">
+          <span>*Justificativa da decis&atilde;o</span>
+          <textarea id="meta-fisica-justificativa-aprovacao" rows="3"></textarea>
         </label>
       </div>
 
@@ -164,10 +184,14 @@
           </thead>
           <tbody>
             {% for m in metas %}
-              <tr class="dotacao-summary-row meta-fisica-summary-row"
+              <tr class="dotacao-summary-row meta-fisica-summary-row {% if (m.status_aprovacao or '')|lower == 'rejeitado' %}subacao-rejeitado{% endif %}"
                   data-id="{{ m.id or '' }}"
                   data-controle-meta="{{ m.controle_meta or '' }}"
                   data-status-aprovacao="{{ m.status_aprovacao or '' }}"
+                  data-aprovado-por="{{ m.aprovado_por or '' }}"
+                  data-aprovado-por-nome="{{ m.aprovado_por_nome or '' }}"
+                  data-aprovado-por-perfil="{{ m.aprovado_por_perfil or '' }}"
+                  data-data-aprovacao="{{ m.data_aprovacao_iso or '' }}"
                   data-criador-perfil-id="{{ m.criador_perfil_id or '' }}"
                   data-usuario-nome="{{ m.criador_nome or '' }}"
                   data-usuario-perfil="{{ m.criador_perfil_nome or '' }}"
