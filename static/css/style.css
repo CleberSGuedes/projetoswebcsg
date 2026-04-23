@@ -656,11 +656,11 @@ a { color: inherit; text-decoration: none; }
 /* Relatorio Plan21_NGER: destaque de colunas financeiras */
 #plan21-relatorio-tabela th:nth-child(23),
 #plan21-relatorio-tabela td:nth-child(23) {
-  background: rgba(52, 127, 230, 0.14);
+  background: rgba(31, 155, 126, 0.12);
 }
 #plan21-relatorio-tabela th:nth-child(24),
 #plan21-relatorio-tabela td:nth-child(24) {
-  background: rgba(220, 72, 72, 0.14);
+  background: rgba(31, 155, 126, 0.16);
 }
 #plan21-relatorio-tabela th:nth-child(25),
 #plan21-relatorio-tabela td:nth-child(25) {
@@ -668,11 +668,11 @@ a { color: inherit; text-decoration: none; }
 }
 #plan21-relatorio-tabela th:nth-child(57),
 #plan21-relatorio-tabela td:nth-child(57) {
-  background: rgba(52, 127, 230, 0.14);
+  background: rgba(31, 155, 126, 0.12);
 }
 #plan21-relatorio-tabela th:nth-child(58),
 #plan21-relatorio-tabela td:nth-child(58) {
-  background: rgba(220, 72, 72, 0.14);
+  background: rgba(31, 155, 126, 0.16);
 }
 #plan21-relatorio-tabela th:nth-child(59),
 #plan21-relatorio-tabela td:nth-child(59) {
@@ -681,11 +681,11 @@ a { color: inherit; text-decoration: none; }
 
 .theme-dark #plan21-relatorio-tabela th:nth-child(23),
 .theme-dark #plan21-relatorio-tabela td:nth-child(23) {
-  background: rgba(92, 152, 255, 0.2);
+  background: rgba(61, 214, 183, 0.14);
 }
 .theme-dark #plan21-relatorio-tabela th:nth-child(24),
 .theme-dark #plan21-relatorio-tabela td:nth-child(24) {
-  background: rgba(255, 115, 115, 0.2);
+  background: rgba(61, 214, 183, 0.18);
 }
 .theme-dark #plan21-relatorio-tabela th:nth-child(25),
 .theme-dark #plan21-relatorio-tabela td:nth-child(25) {
@@ -693,11 +693,11 @@ a { color: inherit; text-decoration: none; }
 }
 .theme-dark #plan21-relatorio-tabela th:nth-child(57),
 .theme-dark #plan21-relatorio-tabela td:nth-child(57) {
-  background: rgba(92, 152, 255, 0.2);
+  background: rgba(61, 214, 183, 0.14);
 }
 .theme-dark #plan21-relatorio-tabela th:nth-child(58),
 .theme-dark #plan21-relatorio-tabela td:nth-child(58) {
-  background: rgba(255, 115, 115, 0.2);
+  background: rgba(61, 214, 183, 0.18);
 }
 .theme-dark #plan21-relatorio-tabela th:nth-child(59),
 .theme-dark #plan21-relatorio-tabela td:nth-child(59) {

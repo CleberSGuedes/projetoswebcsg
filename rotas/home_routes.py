@@ -3622,10 +3622,6 @@ def api_meta_fisica_options():
             "produto_acao": (selected.get("produto_acao") or "").strip(),
             "unid_medida_produto": (selected.get("unid_medida_produto") or "").strip(),
         }
-        adj_sel = (selected.get("adj_solicitante") or "").strip()
-        if adj_sel:
-            hist_where.append("am.responsavel_acao = :adj_solicitante")
-            hist_params["adj_solicitante"] = adj_sel
         hist_sql = f"""
             SELECT ai.regiao_codigo, ai.tipo, ai.valor, ai.ordem, ai.id, am.id AS alterar_meta_id
             FROM alterar_meta_item ai
