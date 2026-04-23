@@ -58,15 +58,25 @@
         <div class="menu-group" id="menu-relatorios">
           <div class="menu-item menu-parent" data-submenu="submenu-relatorios" title="Relatórios"><i class="bi bi-bar-chart-line"></i> <span>Relatórios</span></div>
           <div class="submenu" id="submenu-relatorios">
-            <a href="#" data-route="relatorios/fip613" class="menu-item" title="Relatório FIP 613"><i class="bi bi-file-earmark-bar-graph"></i> <span>FIP 613</span></a>
-            <a href="#" data-route="relatorios/plan20-seduc" class="menu-item" title="Relatório Plan20 - SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Plan20 - SEDUC</span></a>
-            <a href="#" data-route="relatorios/plan21-nger" class="menu-item" title="Relatório Plan21 - NGER"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Plan21_NGER</span></a>
-            <a href="#" data-route="relatorios/ped" class="menu-item" title="Relatório PED"><i class="bi bi-graph-up"></i> <span>PED</span></a>
-            <a href="#" data-route="relatorios/emp" class="menu-item" title="Relatório EMP"><i class="bi bi-clipboard-data"></i> <span>EMP</span></a>
-            <a href="#" data-route="relatorios/est-emp" class="menu-item" title="Relatório Est EMP"><i class="bi bi-clipboard-check"></i> <span>Est EMP</span></a>
-            <a href="#" data-route="relatorios/nob" class="menu-item" title="Relatório NOB"><i class="bi bi-clipboard-plus"></i> <span>NOB</span></a>
-            <a href="#" data-route="relatorios/dotacao" class="menu-item" title="Relatório Dotação"><i class="bi bi-clipboard-data"></i> <span>Dotação</span></a>
-            <a href="#" data-route="relatorios/est-dotacao" class="menu-item" title="Relatório Estorno de Dotação"><i class="bi bi-clipboard-minus"></i> <span>Estorno de Dotação</span></a>
+            <div class="menu-group" id="menu-relatorios-planejamento">
+              <div class="menu-item menu-parent" data-submenu="submenu-relatorios-planejamento" title="Planejamento"><i class="bi bi-diagram-3"></i> <span>Planejamento</span></div>
+              <div class="submenu" id="submenu-relatorios-planejamento">
+                <a href="#" data-route="relatorios/plan20-seduc" class="menu-item" title="Relatório Plan20 - SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN20 - SEDUC</span></a>
+                <a href="#" data-route="relatorios/plan21-nger" class="menu-item" title="Relatório Plan21 - NGER"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN21_NGER</span></a>
+              </div>
+            </div>
+            <div class="menu-group" id="menu-relatorios-execucao">
+              <div class="menu-item menu-parent" data-submenu="submenu-relatorios-execucao" title="Execução"><i class="bi bi-bar-chart-steps"></i> <span>Execução</span></div>
+              <div class="submenu" id="submenu-relatorios-execucao">
+                <a href="#" data-route="relatorios/fip613" class="menu-item" title="Relatório FIP 613"><i class="bi bi-file-earmark-bar-graph"></i> <span>FIP 613</span></a>
+                <a href="#" data-route="relatorios/ped" class="menu-item" title="Relatório PED"><i class="bi bi-graph-up"></i> <span>PED</span></a>
+                <a href="#" data-route="relatorios/emp" class="menu-item" title="Relatório EMP"><i class="bi bi-clipboard-data"></i> <span>EMP</span></a>
+                <a href="#" data-route="relatorios/est-emp" class="menu-item" title="Relatório Est EMP"><i class="bi bi-clipboard-check"></i> <span>EST EMP</span></a>
+                <a href="#" data-route="relatorios/nob" class="menu-item" title="Relatório NOB"><i class="bi bi-clipboard-plus"></i> <span>NOB</span></a>
+                <a href="#" data-route="relatorios/dotacao" class="menu-item" title="Relatório Dotação"><i class="bi bi-clipboard-data"></i> <span>DOTAÇÃO</span></a>
+                <a href="#" data-route="relatorios/est-dotacao" class="menu-item" title="Relatório Estorno de Dotação"><i class="bi bi-clipboard-minus"></i> <span>ESTORNO DE DOTAÇÃO</span></a>
+              </div>
+            </div>
           </div>
         </div>
         <div class="menu-group" id="menu-usuarios">
@@ -79,7 +89,7 @@
             <a href="#" data-route="usuarios/api-acessos" class="menu-item" title="API de Acessos"><i class="bi bi-hdd-network"></i> <span>API de Acessos</span></a>
           </div>
         </div>
-        <a href="#" data-route="painel" class="menu-item" title="Painel"><i class="bi bi-grid"></i> <span>Painel</span></a>
+        <a href="#" data-route="painel" class="menu-item" title="Painel - Permissões"><i class="bi bi-grid"></i> <span>Painel - Permissões</span></a>
         {% endif %}
         <a href="#" data-route="logout" class="menu-item" title="Sair"><i class="bi bi-box-arrow-right"></i> <span>Sair</span></a>
       </nav>
@@ -117,7 +127,7 @@
       <main id="content-area" data-initial="{{ initial_content or 'dashboard' }}"></main>
 
       <footer class="footer">
-        (c) 2025-2026 SEDUC-MT | Nucleo de Gestao Estrategica para Resultados - NGER | Sistema de Planejamento e Orçamento | Desenvolvido por Cleber S. Guedes | RELEASE_2_2026_04_23.1
+        (c) 2025-2026 SEDUC-MT | Nucleo de Gestao Estrategica para Resultados - NGER | Sistema de Planejamento e Orçamento | Desenvolvido por Cleber S. Guedes | RELEASE_2_2026_04_23.2
       </footer>
     </div>
   </div>

@@ -5031,10 +5031,10 @@
           <td>${r.unid_medida_produto ?? ""}</td>
           <td>${r.regiao_produto ?? ""}</td>
           <td>${r.meta_produto ?? ""}</td>
-          <td>${r.saldo_meta_produto ?? ""}</td>
           <td>${r.meta_credito ?? ""}</td>
           <td>${r.meta_anulada ?? ""}</td>
           <td>${r.meta_atual ?? ""}</td>
+          <td>${r.saldo_meta_produto ?? ""}</td>
           <td>${r.publico_transversal ?? ""}</td>
           <td>${r.subacao_entrega ?? ""}</td>
           <td>${r.responsavel ?? ""}</td>
@@ -5108,10 +5108,10 @@
       "unid_medida_produto",
       "regiao_produto",
       "meta_produto",
-      "saldo_meta_produto",
       "meta_credito",
       "meta_anulada",
       "meta_atual",
+      "saldo_meta_produto",
       "publico_transversal",
       "subacao_entrega",
       "responsavel",
