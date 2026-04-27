@@ -7800,6 +7800,28 @@
       const anulada = anuladaRaw || 0;
       return metaBase + credito - anulada;
     };
+    const getTableTotals = () => {
+      let totalMetaPta = 0;
+      let totalCredito = 0;
+      let totalAnulada = 0;
+      let totalAjustada = 0;
+      tableRows.forEach((row) => {
+        const metaBase = parseDec(row?.meta_produto);
+        if (metaBase !== null) totalMetaPta += metaBase;
+        const credito = parseDec(sumFieldItems(row, "meta_credito"));
+        if (credito !== null) totalCredito += credito;
+        const anulada = parseDec(sumFieldItems(row, "meta_anulada"));
+        if (anulada !== null) totalAnulada += anulada;
+        const ajustada = parseDec(rowAdjusted(row));
+        if (ajustada !== null) totalAjustada += ajustada;
+      });
+      return {
+        meta_pta: totalMetaPta,
+        acrescimo: totalCredito,
+        reducao: totalAnulada,
+        meta_ajustada: totalAjustada,
+      };
+    };
     const getFieldItems = (row, field) => {
       const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
       const arr = Array.isArray(row[key]) ? row[key].map((v) => String(v ?? "")) : [];
@@ -7857,8 +7879,8 @@
     };
     const getMovementLabel = (row, movementIdx) => {
       const total = getMovementRowsCount(row);
-      if (total > 1 && movementIdx === 0) return "Histórico";
-      return "Movimentação";
+      if (total <= 1) return "Movimentação";
+      return movementIdx < total - 1 ? "Histórico" : "Movimentação";
     };
     const buildAdjustedLinesHtml = (row) => {
       const baseRaw = parseDec(row.meta_produto);
@@ -7895,7 +7917,7 @@
       const items = getFieldItems(row, field);
       const fieldCss = field === "meta_credito" ? "meta-fisica-cell-credito" : "meta-fisica-cell-anulada";
       const canAdd = allowAdd && canAddMovement(row, field);
-      const lockedCount = readOnly ? getLockedItemCount(row, field) : 0;
+      const lockedCount = getLockedItemCount(row, field);
       const entryEnabled = !!row?.[`entry_enable_${field}`];
       if (row.is_novo) {
         const disabledNovo = readOnly ? "readonly" : "";
@@ -7916,8 +7938,9 @@
       </div>`;
       for (let itemIdx = 0; itemIdx < movementRows; itemIdx += 1) {
         const val = items[itemIdx] ?? "";
-        const isLocked = readOnly && itemIdx < lockedCount;
-        const disabled = readOnly || isLocked || !entryEnabled ? "readonly" : "";
+        const isLocked = itemIdx < lockedCount;
+        const isUnlockedItem = itemIdx >= lockedCount;
+        const disabled = readOnly || isLocked || (isUnlockedItem && !entryEnabled) ? "readonly" : "";
         const labelText = getMovementLabel(row, itemIdx);
         inputs += `<div class="meta-fisica-multi-line">
           <span class="meta-fisica-mov-label">${labelText}</span>
@@ -7987,43 +8010,94 @@
       return "Sem registros.";
     };
 
+    const parsePositiveList = (list) => (Array.isArray(list) ? list : [])
+      .map((v) => parseDec(v))
+      .filter((n) => n !== null && n > 0);
+
+    const extractLinhaMovHist = (linha) => {
+      const histCreditoItems = parsePositiveList(linha?.meta_credito_historico_items);
+      const histAnuladaItems = parsePositiveList(linha?.meta_anulada_historico_items);
+      const histCreditoScalar = parseDec(linha?.meta_credito_historico);
+      const histAnuladaScalar = parseDec(linha?.meta_anulada_historico);
+
+      const hasCreditoMovList = Array.isArray(linha?.meta_credito_mov_items);
+      const hasAnuladaMovList = Array.isArray(linha?.meta_anulada_mov_items);
+      const fullCredito = parsePositiveList(linha?.meta_credito_items);
+      const fullAnulada = parsePositiveList(linha?.meta_anulada_items);
+      let movCredito = parsePositiveList(linha?.meta_credito_mov_items);
+      let movAnulada = parsePositiveList(linha?.meta_anulada_mov_items);
+
+      // Fallback legado: só reconstrói movimento via "full - histórico"
+      // quando a lista explícita de movimento não existe no payload.
+      if (!hasCreditoMovList && fullCredito.length) {
+        movCredito = fullCredito.slice(Math.min(histCreditoItems.length, fullCredito.length));
+        if (!histCreditoItems.length && histCreditoScalar !== null && histCreditoScalar > 0) {
+          let consumed = false;
+          movCredito = movCredito.filter((n) => {
+            if (!consumed && Math.abs(n - histCreditoScalar) < 0.000001) {
+              consumed = true;
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+      if (!hasAnuladaMovList && fullAnulada.length) {
+        movAnulada = fullAnulada.slice(Math.min(histAnuladaItems.length, fullAnulada.length));
+        if (!histAnuladaItems.length && histAnuladaScalar !== null && histAnuladaScalar > 0) {
+          let consumed = false;
+          movAnulada = movAnulada.filter((n) => {
+            if (!consumed && Math.abs(n - histAnuladaScalar) < 0.000001) {
+              consumed = true;
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+
+      if (!histCreditoItems.length && !hasCreditoMovList && histCreditoScalar !== null && histCreditoScalar > 0) {
+        histCreditoItems.push(histCreditoScalar);
+      }
+      if (!histAnuladaItems.length && !hasAnuladaMovList && histAnuladaScalar !== null && histAnuladaScalar > 0) {
+        histAnuladaItems.push(histAnuladaScalar);
+      }
+
+      return { histCreditoItems, histAnuladaItems, movCredito, movAnulada };
+    };
+
     const buildMetaFisicaPrintTable = (meta) => {
       const linhas = Array.isArray(meta?.linhas) ? meta.linhas : [];
+      let totalMetaPta = 0;
+      let totalAcrescimo = 0;
+      let totalReducao = 0;
+      let totalMetaAjustada = 0;
       const linhasHtml = linhas
         .map((l) => {
+          try {
           const reg = l?.regiao_produto || "";
-          const isNovo = !!l?.is_novo;
           const metaBase = parseDec(l?.meta_produto) ?? 0;
           let acumulado = metaBase;
-          const creditoNums = (Array.isArray(l?.meta_credito_items) ? l.meta_credito_items : [])
-            .map((v) => parseDec(v))
-            .filter((n) => n !== null && n > 0);
-          const anuladaNums = (Array.isArray(l?.meta_anulada_items) ? l.meta_anulada_items : [])
-            .map((v) => parseDec(v))
-            .filter((n) => n !== null && n > 0);
+          const {
+            histCreditoItems,
+            histAnuladaItems,
+            movCredito,
+            movAnulada,
+          } = extractLinhaMovHist(l);
 
-          let histCredito = parseDec(l?.meta_credito_historico);
-          let histAnulada = parseDec(l?.meta_anulada_historico);
-          if (!(histCredito > 0)) histCredito = null;
-          if (!(histAnulada > 0)) histAnulada = null;
-
-          const movCredito = [...creditoNums];
-          const movAnulada = [...anuladaNums];
-
-          const consumeFirstEqual = (arr, value) => {
-            if (!arr.length || value === null || value === undefined) return;
-            const idx = arr.findIndex((n) => Math.abs(n - value) < 0.000001);
-            if (idx >= 0) arr.splice(idx, 1);
-          };
-
-          if (histCredito !== null) consumeFirstEqual(movCredito, histCredito);
-          if (histAnulada !== null) consumeFirstEqual(movAnulada, histAnulada);
-
-          // Compatibilidade com registros antigos sem campos de histórico explícitos.
-          if (histCredito === null && histAnulada === null && !isNovo && (movCredito.length > 1 || movAnulada.length > 1)) {
-            if (movCredito.length) histCredito = movCredito.shift();
-            if (movAnulada.length) histAnulada = movAnulada.shift();
+          if (!movCredito.length && !movAnulada.length) {
+            const fallbackCredito = parseDec(l?.meta_credito);
+            const fallbackAnulada = parseDec(l?.meta_anulada);
+            if (fallbackCredito !== null && fallbackCredito > 0) movCredito = [fallbackCredito];
+            if (fallbackAnulada !== null && fallbackAnulada > 0) movAnulada = [fallbackAnulada];
           }
+
+          const creditoSeries = [...histCreditoItems, ...movCredito];
+          const anuladaSeries = [...histAnuladaItems, ...movAnulada];
+          const movementRows = Math.max(creditoSeries.length, anuladaSeries.length);
+          totalMetaPta += metaBase;
+          totalAcrescimo += creditoSeries.reduce((acc, n) => acc + (n || 0), 0);
+          totalReducao += anuladaSeries.reduce((acc, n) => acc + (n || 0), 0);
 
           const rows = [];
           rows.push(`<tr>
@@ -8034,31 +8108,35 @@
             <td>${esc(fmtNum(acumulado))}</td>
           </tr>`);
 
-          if (histCredito !== null || histAnulada !== null) {
-            acumulado += (histCredito || 0) - (histAnulada || 0);
-            rows.push(`<tr>
-              <td colspan="2">Histórico</td>
-              <td>${esc(histCredito ? fmtNum(histCredito) : "")}</td>
-              <td>${esc(histAnulada ? fmtNum(histAnulada) : "")}</td>
-              <td>${esc(fmtNum(acumulado))}</td>
-            </tr>`);
-          }
-
-          const maxMov = Math.max(movCredito.length, movAnulada.length);
-          for (let i = 0; i < maxMov; i += 1) {
-            const c = movCredito[i] ?? 0;
-            const a = movAnulada[i] ?? 0;
+          for (let i = 0; i < movementRows; i += 1) {
+            const c = creditoSeries[i] ?? 0;
+            const a = anuladaSeries[i] ?? 0;
             if (!(c > 0) && !(a > 0)) continue;
+            const label = movementRows <= 1 || i === movementRows - 1 ? "Movimentação" : "Histórico";
             acumulado += c - a;
             rows.push(`<tr>
-              <td colspan="2">Movimentação</td>
+              <td colspan="2">${label}</td>
               <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
               <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
               <td>${esc(fmtNum(acumulado))}</td>
             </tr>`);
           }
 
+          totalMetaAjustada += acumulado;
+
           return rows.join("");
+          } catch (lineErr) {
+            console.error("Erro ao montar linha da impressão meta física:", lineErr, l);
+            const reg = l?.regiao_produto || "";
+            const metaBase = parseDec(l?.meta_produto) ?? 0;
+            return `<tr>
+              <td>${esc(reg)}</td>
+              <td>${esc(fmtNum(metaBase))}</td>
+              <td></td>
+              <td></td>
+              <td>${esc(fmtNum(metaBase))}</td>
+            </tr>`;
+          }
         })
         .join("");
 
@@ -8087,6 +8165,13 @@
                   </thead>
                   <tbody>
                     ${linhasHtml || '<tr><td colspan="5">Sem linhas</td></tr>'}
+                    <tr class="print-total-row">
+                      <td>TOTAIS</td>
+                      <td>${esc(fmtNum(totalMetaPta))}</td>
+                      <td>${esc(fmtNum(totalAcrescimo))}</td>
+                      <td>${esc(fmtNum(totalReducao))}</td>
+                      <td>${esc(fmtNum(totalMetaAjustada))}</td>
+                    </tr>
                   </tbody>
                 </table>
               </td>
@@ -8154,6 +8239,7 @@
       .print-inner th, .print-inner td { border: 1px solid #000; padding: 4px 6px; font-size: 9px; vertical-align: top; }
       .print-inner th { background: #f8f8f8; }
       .print-inner tbody td { text-align: center; vertical-align: middle; }
+      .print-inner .print-total-row td { font-weight: 700; background: #f3f3f3; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
     </style>
   </head>
@@ -8432,10 +8518,81 @@
     };
 
     const buildSummaryMetaForPrint = (row) => {
-      const linhas = parseSummaryLinhas(row);
+      const linhasRaw = parseSummaryLinhas(row);
+      const linhas = linhasRaw.map((l) => ({ ...(l || {}) }));
+      const selectedId = Number(row?.dataset?.id || "0");
+      const selectedStatus = String(row?.dataset?.statusAprovacao || "").trim().toLowerCase();
+      try {
+        const selectedKey = [
+          String(row?.dataset?.exercicio || "").trim(),
+          String(row?.dataset?.uo || "").trim(),
+          String(row?.dataset?.programa || "").trim(),
+          String(row?.dataset?.acaoPaoe || "").trim(),
+          String(row?.dataset?.produtoAcao || "").trim(),
+          String(row?.dataset?.unidMedidaProduto || "").trim(),
+        ].join("|");
+        const summaryRows = getSummaryRows();
+        const historicoByRegiao = {};
+        if (selectedId > 0) {
+          summaryRows
+            .filter((r) => {
+              const id = Number(r?.dataset?.id || "0");
+              if (!(id > 0) || id >= selectedId) return false;
+              if (String(r?.dataset?.statusAprovacao || "").trim().toLowerCase() !== "aprovado") return false;
+              const key = [
+                String(r?.dataset?.exercicio || "").trim(),
+                String(r?.dataset?.uo || "").trim(),
+                String(r?.dataset?.programa || "").trim(),
+                String(r?.dataset?.acaoPaoe || "").trim(),
+                String(r?.dataset?.produtoAcao || "").trim(),
+                String(r?.dataset?.unidMedidaProduto || "").trim(),
+              ].join("|");
+              return key === selectedKey;
+            })
+            .sort((a, b) => Number(a?.dataset?.id || "0") - Number(b?.dataset?.id || "0"))
+            .forEach((r) => {
+              const linhasPrev = parseSummaryLinhas(r);
+              linhasPrev.forEach((lp) => {
+                const reg = String(lp?.regiao_produto || "").trim();
+                if (!reg) return;
+                const bucket = historicoByRegiao[reg] || { credito: [], anulada: [] };
+                const extracted = extractLinhaMovHist(lp);
+                bucket.credito.push(...extracted.movCredito);
+                bucket.anulada.push(...extracted.movAnulada);
+                historicoByRegiao[reg] = bucket;
+              });
+            });
+        }
+        linhas.forEach((l) => {
+          const reg = String(l?.regiao_produto || "").trim();
+          if (!reg) return;
+          const extracted = extractLinhaMovHist(l);
+          const prior = historicoByRegiao[reg];
+          if (!prior || (!prior.credito.length && !prior.anulada.length)) return;
+          const hasCurrentMovement = (extracted.movCredito.length + extracted.movAnulada.length) > 0;
+          // Só injeta histórico anterior quando o registro selecionado possui
+          // movimentação própria nesta região. Caso contrário, mantém a última
+          // movimentação como "Movimentação" (não converte para histórico).
+          if (!hasCurrentMovement) return;
+          const needsCredito = prior.credito.length > extracted.histCreditoItems.length;
+          const needsAnulada = prior.anulada.length > extracted.histAnuladaItems.length;
+          if (needsCredito || needsAnulada) {
+            if (needsCredito) {
+              l.meta_credito_historico_items = prior.credito.map((n) => String(n));
+            }
+            if (needsAnulada) {
+              l.meta_anulada_historico_items = prior.anulada.map((n) => String(n));
+            }
+            l.meta_credito_historico = "";
+            l.meta_anulada_historico = "";
+          }
+        });
+      } catch (buildErr) {
+        console.error("Falha ao montar enriquecimento de histórico para impressão:", buildErr);
+      }
       return {
         controle: row?.dataset?.controleMeta || "",
-        status_aprovacao: String(row?.dataset?.statusAprovacao || "").trim(),
+        status_aprovacao: selectedStatus,
         aprovado_por: String(row?.dataset?.aprovadoPor || "").trim(),
         aprovado_por_nome: String(row?.dataset?.aprovadoPorNome || "").trim(),
         aprovado_por_perfil: String(row?.dataset?.aprovadoPorPerfil || "").trim(),
@@ -8585,12 +8742,13 @@
           `<tr><td colspan="5" class="muted">${esc(getRowsEmptyMessage())}</td></tr>`;
         return;
       }
-      tbody.innerHTML = tableRows
+      const totals = getTableTotals();
+      const rowsHtml = tableRows
         .map((row, idx) => {
           const forceReadOnly = approvalMode;
           const readOnlyNew = row.is_novo ? "" : "readonly";
-          const creditoReadOnly = forceReadOnly || !!row.lock_meta_credito;
-          const anuladaReadOnly = forceReadOnly || (row.is_novo ? true : !!row.lock_meta_anulada);
+          const creditoReadOnly = forceReadOnly;
+          const anuladaReadOnly = forceReadOnly;
           const creditoAllowAdd = forceReadOnly ? false : !!row.allow_add_meta_credito;
           const anuladaAllowAdd = forceReadOnly ? false : !!row.allow_add_meta_anulada;
           let regionFieldHtml = "";
@@ -8630,6 +8788,14 @@
           `;
         })
         .join("");
+      tbody.innerHTML = `${rowsHtml}
+        <tr class="meta-fisica-total-row">
+          <td><strong>TOTAIS</strong></td>
+          <td><input type="text" class="meta-fisica-cell" value="${esc(fmtNum(totals.meta_pta))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-credito" value="${esc(fmtNum(totals.acrescimo))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-anulada" value="${esc(fmtNum(totals.reducao))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell" value="${esc(fmtNum(totals.meta_ajustada))}" readonly /></td>
+        </tr>`;
       tableRows.forEach((row, idx) => {
         if (!row.is_novo) return;
         const tr = tbody.querySelector(`tr[data-idx="${idx}"]`);
@@ -8732,6 +8898,7 @@
             allow_add_meta_anulada: true,
             allow_start_meta_credito: !hasMovFromDb,
             allow_start_meta_anulada: !hasMovFromDb,
+            allow_cross_add: true,
             entry_enable_meta_credito: false,
             entry_enable_meta_anulada: false,
             is_novo: false,
@@ -9260,8 +9427,40 @@
           setFilterMsg("Selecione um registro para imprimir.", true);
           return;
         }
-        const meta = buildSummaryMetaForPrint(selected);
-        openMetaFisicaPrintPopup(meta);
+        try {
+          const meta = buildSummaryMetaForPrint(selected);
+          openMetaFisicaPrintPopup(meta);
+        } catch (err) {
+          console.error(err);
+          try {
+            const metaFallback = {
+              controle: selected?.dataset?.controleMeta || "",
+              status_aprovacao: String(selected?.dataset?.statusAprovacao || "").trim(),
+              aprovado_por: String(selected?.dataset?.aprovadoPor || "").trim(),
+              aprovado_por_nome: String(selected?.dataset?.aprovadoPorNome || "").trim(),
+              aprovado_por_perfil: String(selected?.dataset?.aprovadoPorPerfil || "").trim(),
+              data_aprovacao: String(selected?.dataset?.dataAprovacao || "").trim(),
+              criado_em: selected?.dataset?.criadoEm || "",
+              usuario_nome: String(selected?.dataset?.usuarioNome || "").trim(),
+              usuario_perfil: String(selected?.dataset?.usuarioPerfil || "").trim(),
+              exercicio: selected?.dataset?.exercicio || "",
+              unidade_orcamentaria: selected?.dataset?.uo || "",
+              programa: selected?.dataset?.programa || "",
+              acao_paoe: selected?.dataset?.acaoPaoe || "",
+              adj_solicitante: selected?.dataset?.adjSolicitante || "",
+              produto_acao: selected?.dataset?.produtoAcao || "",
+              unid_medida_produto: selected?.dataset?.unidMedidaProduto || "",
+              justificativa: selected?.dataset?.justificativa || "",
+              linhas: parseSummaryLinhas(selected),
+            };
+            openMetaFisicaPrintPopup(metaFallback);
+            setFilterMsg("Impressão gerada em modo de compatibilidade.", false);
+          } catch (err2) {
+            console.error(err2);
+            const msg = String(err2?.message || err?.message || "Falha ao gerar impressão para o registro selecionado.");
+            setFilterMsg(msg, true);
+          }
+        }
       });
     }
 
@@ -9374,6 +9573,16 @@
           if (n === null || n <= 0) return false;
           return !(row.lock_meta_anulada && idx < anuladaLockCount);
         });
+        const creditoHistoricoItems = creditoItemsAll.filter((v, idx) => {
+          const n = parseDec(v);
+          if (n === null || n <= 0) return false;
+          return !!(row.lock_meta_credito && idx < creditoLockCount);
+        });
+        const anuladaHistoricoItems = anuladaItemsAll.filter((v, idx) => {
+          const n = parseDec(v);
+          if (n === null || n <= 0) return false;
+          return !!(row.lock_meta_anulada && idx < anuladaLockCount);
+        });
         rowsPayload.push({
           regiao_produto: regiao,
           meta_produto: row.meta_produto,
@@ -9384,6 +9593,7 @@
             return n !== null && n > 0;
           }),
           meta_credito_mov_items: creditoMovItems,
+          meta_credito_historico_items: creditoHistoricoItems,
           meta_credito_historico: creditoHistorico ? String(creditoHistorico).replace(".", ",") : "",
           meta_anulada_items: row.is_novo
             ? []
@@ -9392,6 +9602,7 @@
               return n !== null && n > 0;
             }),
           meta_anulada_mov_items: row.is_novo ? [] : anuladaMovItems,
+          meta_anulada_historico_items: row.is_novo ? [] : anuladaHistoricoItems,
           meta_anulada_historico: row.is_novo ? "" : (anuladaHistorico ? String(anuladaHistorico).replace(".", ",") : ""),
           has_historico_movimento: !!(creditoHistorico || anuladaHistorico),
           is_novo: !!row.is_novo,

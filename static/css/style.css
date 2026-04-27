@@ -1140,6 +1140,16 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
 }
 
+#meta-fisica-page .meta-fisica-table .meta-fisica-total-row td {
+  background: #eef5f7;
+  border-top: 2px solid #c6d8e2;
+  font-weight: 700;
+}
+
+#meta-fisica-page .meta-fisica-table .meta-fisica-total-row .meta-fisica-cell {
+  font-weight: 700;
+}
+
 @media (max-width: 1650px) {
   #meta-fisica-page {
     grid-template-columns: minmax(0, 1fr);
