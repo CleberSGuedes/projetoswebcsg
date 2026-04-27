@@ -7612,6 +7612,8 @@
     const printBtn = document.getElementById("meta-fisica-print");
     const editBadge = document.getElementById("meta-fisica-editing-badge");
     const saveBtn = document.getElementById("meta-fisica-save");
+    const totalMetaPtaEl = document.getElementById("meta-fisica-total-meta-pta");
+    const totalMetaAjustadaEl = document.getElementById("meta-fisica-total-meta-ajustada");
     const approvalFields = document.getElementById("meta-fisica-aprovacao-fields");
     const approvalQuestionLabel = document.getElementById("meta-fisica-aprovacao-pergunta");
     const approvalJustificativa = document.getElementById("meta-fisica-justificativa-aprovacao");
@@ -7822,6 +7824,83 @@
         meta_ajustada: totalAjustada,
       };
     };
+    const renderResumoTotais = () => {
+      const totals = getTableTotals();
+      if (totalMetaPtaEl) totalMetaPtaEl.textContent = fmtNum(totals.meta_pta) || "0,00";
+      if (totalMetaAjustadaEl) totalMetaAjustadaEl.textContent = fmtNum(totals.meta_ajustada) || "0,00";
+    };
+    const refreshTotalsDisplay = () => {
+      const totals = getTableTotals();
+      const values = {
+        meta_pta: totals.meta_pta,
+        acrescimo: totals.acrescimo,
+        reducao: totals.reducao,
+        meta_ajustada: totals.meta_ajustada,
+      };
+      Object.entries(values).forEach(([key, rawValue]) => {
+        const input = tbody?.querySelector(`.meta-fisica-total-row input[data-total-field="${key}"]`);
+        if (!input) return;
+        input.value = fmtNum(rawValue) || "0,00";
+      });
+      renderResumoTotais();
+    };
+    const openMetaFisicaSaveConfirmModal = ({ totalMetaPta, totalMetaAjustada, message }) =>
+      new Promise((resolve) => {
+        const existing = document.getElementById("meta-fisica-save-confirm-overlay");
+        if (existing) existing.remove();
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        overlay.id = "meta-fisica-save-confirm-overlay";
+        overlay.innerHTML = `
+          <div class="modal-card meta-fisica-save-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="meta-fisica-save-confirm-title">
+            <div class="modal-header">
+              <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+              <div class="modal-header-text">
+                <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+                <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+              </div>
+            </div>
+            <div class="modal-body">
+              <div class="modal-title" id="meta-fisica-save-confirm-title">Confirmação de Salvamento da Meta Física</div>
+              <table class="table meta-fisica-save-confirm-table">
+                <tbody>
+                  <tr>
+                    <th>Total META PTA/LOA</th>
+                    <td>${esc(fmtNum(totalMetaPta) || "0,00")}</td>
+                  </tr>
+                  <tr>
+                    <th>Total META AJUSTADA</th>
+                    <td>${esc(fmtNum(totalMetaAjustada) || "0,00")}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="meta-fisica-save-confirm-msg">${esc(message || "")}</p>
+            </div>
+            <div class="modal-footer meta-fisica-save-confirm-footer">
+              <button type="button" class="btn btn-danger sm" data-mf-confirm-action="cancelar">Cancelar</button>
+              <button type="button" class="btn btn-primary sm" data-mf-confirm-action="salvar">Salvar</button>
+            </div>
+          </div>
+        `;
+        const finish = (ok) => {
+          document.removeEventListener("keydown", onKeyDown, true);
+          overlay.remove();
+          resolve(!!ok);
+        };
+        const onKeyDown = (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            finish(false);
+          }
+        };
+        overlay.addEventListener("click", (ev) => {
+          if (ev.target === overlay) finish(false);
+        });
+        overlay.querySelector('[data-mf-confirm-action="cancelar"]')?.addEventListener("click", () => finish(false));
+        overlay.querySelector('[data-mf-confirm-action="salvar"]')?.addEventListener("click", () => finish(true));
+        document.addEventListener("keydown", onKeyDown, true);
+        document.body.appendChild(overlay);
+      });
     const getFieldItems = (row, field) => {
       const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
       const arr = Array.isArray(row[key]) ? row[key].map((v) => String(v ?? "")) : [];
@@ -7870,17 +7949,50 @@
       }
       return items.length;
     };
-    const getMovementRowsCount = (row) =>
-      Math.max(getMovementCountForField(row, "meta_credito"), getMovementCountForField(row, "meta_anulada"));
     const getLockedItemCount = (row, field) => {
       const key = field === "meta_credito" ? "lock_meta_credito_count" : "lock_meta_anulada_count";
       const raw = Number(row?.[key] ?? 0);
       return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
     };
+    const getLineBlockInfo = (row) => {
+      const creditoItems = getFieldItems(row, "meta_credito");
+      const anuladaItems = getFieldItems(row, "meta_anulada");
+      const creditoLock = Math.min(getLockedItemCount(row, "meta_credito"), creditoItems.length);
+      const anuladaLock = Math.min(getLockedItemCount(row, "meta_anulada"), anuladaItems.length);
+      const creditoMov = Math.max(creditoItems.length - creditoLock, 0);
+      const anuladaMov = Math.max(anuladaItems.length - anuladaLock, 0);
+      const histRows = Math.max(creditoLock, anuladaLock);
+      const movRows = Math.max(creditoMov, anuladaMov);
+      return { histRows, movRows, total: histRows + movRows };
+    };
+    const buildAlignedFieldLines = (row, field) => {
+      const items = getFieldItems(row, field);
+      const lockCount = Math.min(getLockedItemCount(row, field), items.length);
+      const { histRows, movRows } = getLineBlockInfo(row);
+      const histVals = items.slice(0, lockCount);
+      const movVals = items.slice(lockCount);
+      const lines = [];
+      for (let i = 0; i < histRows; i += 1) {
+        if (i < histVals.length) {
+          lines.push({ val: histVals[i], itemIdx: i, isLocked: true });
+        } else {
+          lines.push({ val: "", itemIdx: -1, isLocked: true });
+        }
+      }
+      for (let i = 0; i < movRows; i += 1) {
+        if (i < movVals.length) {
+          lines.push({ val: movVals[i], itemIdx: lockCount + i, isLocked: false });
+        } else {
+          lines.push({ val: "", itemIdx: -1, isLocked: false });
+        }
+      }
+      return lines;
+    };
+    const getMovementRowsCount = (row) => getLineBlockInfo(row).total;
     const getMovementLabel = (row, movementIdx) => {
-      const total = getMovementRowsCount(row);
+      const { histRows, total } = getLineBlockInfo(row);
       if (total <= 1) return "Movimentação";
-      return movementIdx < total - 1 ? "Histórico" : "Movimentação";
+      return movementIdx < histRows ? "Histórico" : "Movimentação";
     };
     const buildAdjustedLinesHtml = (row) => {
       const baseRaw = parseDec(row.meta_produto);
@@ -7891,16 +8003,16 @@
         return `<input type="text" class="meta-fisica-cell" data-field="meta_atual" value="" readonly />`;
       }
       const base = baseRaw;
-      const creditoItems = getFieldItems(row, "meta_credito");
-      const anuladaItems = getFieldItems(row, "meta_anulada");
-      const movementRows = getMovementRowsCount(row);
+      const creditoLines = buildAlignedFieldLines(row, "meta_credito");
+      const anuladaLines = buildAlignedFieldLines(row, "meta_anulada");
+      const movementRows = Math.max(creditoLines.length, anuladaLines.length);
       let acumulado = base;
       let html = `<div class="meta-fisica-adjust-line">
         <input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(base))}" readonly />
       </div>`;
       for (let i = 0; i < movementRows; i += 1) {
-        const c = parseDec(creditoItems[i]) || 0;
-        const a = parseDec(anuladaItems[i]) || 0;
+        const c = parseDec(creditoLines[i]?.val) || 0;
+        const a = parseDec(anuladaLines[i]?.val) || 0;
         acumulado += c - a;
         html += `<div class="meta-fisica-adjust-line">
           <input type="text" class="meta-fisica-cell" data-field="meta_atual" value="${esc(fmtNum(acumulado))}" readonly />
@@ -7932,20 +8044,22 @@
         </div>`;
       }
 
-      const movementRows = getMovementRowsCount(row);
+      const lines = buildAlignedFieldLines(row, field);
       let inputs = `<div class="meta-fisica-multi-line">
         <input type="text" class="meta-fisica-cell ${fieldCss}" value="" readonly />
       </div>`;
-      for (let itemIdx = 0; itemIdx < movementRows; itemIdx += 1) {
-        const val = items[itemIdx] ?? "";
-        const isLocked = itemIdx < lockedCount;
-        const isUnlockedItem = itemIdx >= lockedCount;
-        const disabled = readOnly || isLocked || (isUnlockedItem && !entryEnabled) ? "readonly" : "";
-        const labelText = getMovementLabel(row, itemIdx);
+      for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
+        const line = lines[lineIdx];
+        const val = line?.val ?? "";
+        const mappedIdx = Number.isInteger(line?.itemIdx) ? line.itemIdx : -1;
+        const isLocked = !!line?.isLocked;
+        const isUnlockedItem = mappedIdx >= 0 && !isLocked;
+        const disabled = readOnly || isLocked || !isUnlockedItem || (isUnlockedItem && !entryEnabled) ? "readonly" : "";
+        const labelText = getMovementLabel(row, lineIdx);
         inputs += `<div class="meta-fisica-multi-line">
           <span class="meta-fisica-mov-label">${labelText}</span>
-          <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" ${disabled} />
-          ${!readOnly && itemIdx >= lockedCount && !isLocked ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${itemIdx}" title="Remover lançamento">-</button>` : ""}
+          <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${mappedIdx}" value="${esc(formatByUnidade(val))}" ${disabled} />
+          ${!readOnly && isUnlockedItem ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${mappedIdx}" title="Remover lançamento">-</button>` : ""}
         </div>`;
       }
       return `<div class="meta-fisica-multi-wrap">${inputs}
@@ -8020,12 +8134,20 @@
       const histCreditoScalar = parseDec(linha?.meta_credito_historico);
       const histAnuladaScalar = parseDec(linha?.meta_anulada_historico);
 
-      const hasCreditoMovList = Array.isArray(linha?.meta_credito_mov_items);
-      const hasAnuladaMovList = Array.isArray(linha?.meta_anulada_mov_items);
+      const rawMovCreditoList = Array.isArray(linha?.meta_credito_mov_items)
+        ? linha.meta_credito_mov_items
+        : [];
+      const rawMovAnuladaList = Array.isArray(linha?.meta_anulada_mov_items)
+        ? linha.meta_anulada_mov_items
+        : [];
+      // Tratar lista vazia como "sem lista de movimento" para permitir
+      // reconstrução via full-hist em registros legados.
+      const hasCreditoMovList = rawMovCreditoList.length > 0;
+      const hasAnuladaMovList = rawMovAnuladaList.length > 0;
       const fullCredito = parsePositiveList(linha?.meta_credito_items);
       const fullAnulada = parsePositiveList(linha?.meta_anulada_items);
-      let movCredito = parsePositiveList(linha?.meta_credito_mov_items);
-      let movAnulada = parsePositiveList(linha?.meta_anulada_mov_items);
+      let movCredito = parsePositiveList(rawMovCreditoList);
+      let movAnulada = parsePositiveList(rawMovAnuladaList);
 
       // Fallback legado: só reconstrói movimento via "full - histórico"
       // quando a lista explícita de movimento não existe no payload.
@@ -8062,6 +8184,15 @@
       if (!histAnuladaItems.length && !hasAnuladaMovList && histAnuladaScalar !== null && histAnuladaScalar > 0) {
         histAnuladaItems.push(histAnuladaScalar);
       }
+      if (!movCredito.length && !movAnulada.length && !histCreditoItems.length && !histAnuladaItems.length) {
+        const metaBase = parseDec(linha?.meta_produto);
+        const metaAtual = parseDec(linha?.meta_atual);
+        if (metaBase !== null && metaAtual !== null) {
+          const delta = metaAtual - metaBase;
+          if (delta > 0.000001) movCredito = [delta];
+          if (delta < -0.000001) movAnulada = [Math.abs(delta)];
+        }
+      }
 
       return { histCreditoItems, histAnuladaItems, movCredito, movAnulada };
     };
@@ -8078,14 +8209,14 @@
           const reg = l?.regiao_produto || "";
           const metaBase = parseDec(l?.meta_produto) ?? 0;
           let acumulado = metaBase;
-          const {
+          let {
             histCreditoItems,
             histAnuladaItems,
             movCredito,
             movAnulada,
           } = extractLinhaMovHist(l);
 
-          if (!movCredito.length && !movAnulada.length) {
+          if (!movCredito.length && !movAnulada.length && !histCreditoItems.length && !histAnuladaItems.length) {
             const fallbackCredito = parseDec(l?.meta_credito);
             const fallbackAnulada = parseDec(l?.meta_anulada);
             if (fallbackCredito !== null && fallbackCredito > 0) movCredito = [fallbackCredito];
@@ -8094,7 +8225,8 @@
 
           const creditoSeries = [...histCreditoItems, ...movCredito];
           const anuladaSeries = [...histAnuladaItems, ...movAnulada];
-          const movementRows = Math.max(creditoSeries.length, anuladaSeries.length);
+          const histRowsCount = Math.max(histCreditoItems.length, histAnuladaItems.length);
+          const movRowsCount = Math.max(movCredito.length, movAnulada.length);
           totalMetaPta += metaBase;
           totalAcrescimo += creditoSeries.reduce((acc, n) => acc + (n || 0), 0);
           totalReducao += anuladaSeries.reduce((acc, n) => acc + (n || 0), 0);
@@ -8108,14 +8240,25 @@
             <td>${esc(fmtNum(acumulado))}</td>
           </tr>`);
 
-          for (let i = 0; i < movementRows; i += 1) {
-            const c = creditoSeries[i] ?? 0;
-            const a = anuladaSeries[i] ?? 0;
+          for (let i = 0; i < histRowsCount; i += 1) {
+            const c = histCreditoItems[i] ?? 0;
+            const a = histAnuladaItems[i] ?? 0;
             if (!(c > 0) && !(a > 0)) continue;
-            const label = movementRows <= 1 || i === movementRows - 1 ? "Movimentação" : "Histórico";
             acumulado += c - a;
             rows.push(`<tr>
-              <td colspan="2">${label}</td>
+              <td colspan="2">Histórico</td>
+              <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
+              <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
+              <td>${esc(fmtNum(acumulado))}</td>
+            </tr>`);
+          }
+          for (let i = 0; i < movRowsCount; i += 1) {
+            const c = movCredito[i] ?? 0;
+            const a = movAnulada[i] ?? 0;
+            if (!(c > 0) && !(a > 0)) continue;
+            acumulado += c - a;
+            rows.push(`<tr>
+              <td colspan="2">Movimentação</td>
               <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
               <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
               <td>${esc(fmtNum(acumulado))}</td>
@@ -8522,74 +8665,135 @@
       const linhas = linhasRaw.map((l) => ({ ...(l || {}) }));
       const selectedId = Number(row?.dataset?.id || "0");
       const selectedStatus = String(row?.dataset?.statusAprovacao || "").trim().toLowerCase();
+
+      const normalizeMatchText = (value) =>
+        String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      const sameContext = (candidateRow) => {
+        const fields = ["exercicio", "uo", "programa", "acaoPaoe", "produtoAcao", "unidMedidaProduto"];
+        return fields.every((f) => normalizeMatchText(candidateRow?.dataset?.[f] || "") === normalizeMatchText(row?.dataset?.[f] || ""));
+      };
+      const toSeries = (linha, field) => {
+        const listKey = field === "credito" ? "meta_credito_items" : "meta_anulada_items";
+        const scalarKey = field === "credito" ? "meta_credito" : "meta_anulada";
+        const arr = parsePositiveList(linha?.[listKey]);
+        if (arr.length) return arr;
+        const scalar = parseDec(linha?.[scalarKey]);
+        return scalar !== null && scalar > 0 ? [scalar] : [];
+      };
+      const _eqNum = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.000001;
+      const splitByPrevious = (prevSeries, currSeries) => {
+        if (!currSeries.length) return { hist: [], mov: [] };
+        if (!prevSeries.length) return { hist: [], mov: currSeries.slice() };
+        let prefix = 0;
+        while (
+          prefix < prevSeries.length &&
+          prefix < currSeries.length &&
+          _eqNum(prevSeries[prefix], currSeries[prefix])
+        ) {
+          prefix += 1;
+        }
+        return {
+          hist: currSeries.slice(0, prefix),
+          mov: currSeries.slice(prefix),
+        };
+      };
+
       try {
-        const selectedKey = [
-          String(row?.dataset?.exercicio || "").trim(),
-          String(row?.dataset?.uo || "").trim(),
-          String(row?.dataset?.programa || "").trim(),
-          String(row?.dataset?.acaoPaoe || "").trim(),
-          String(row?.dataset?.produtoAcao || "").trim(),
-          String(row?.dataset?.unidMedidaProduto || "").trim(),
-        ].join("|");
-        const summaryRows = getSummaryRows();
-        const historicoByRegiao = {};
         if (selectedId > 0) {
-          summaryRows
+          const approvedBeforeRows = getSummaryRows()
             .filter((r) => {
               const id = Number(r?.dataset?.id || "0");
               if (!(id > 0) || id >= selectedId) return false;
               if (String(r?.dataset?.statusAprovacao || "").trim().toLowerCase() !== "aprovado") return false;
-              const key = [
-                String(r?.dataset?.exercicio || "").trim(),
-                String(r?.dataset?.uo || "").trim(),
-                String(r?.dataset?.programa || "").trim(),
-                String(r?.dataset?.acaoPaoe || "").trim(),
-                String(r?.dataset?.produtoAcao || "").trim(),
-                String(r?.dataset?.unidMedidaProduto || "").trim(),
-              ].join("|");
-              return key === selectedKey;
+              return sameContext(r);
             })
-            .sort((a, b) => Number(a?.dataset?.id || "0") - Number(b?.dataset?.id || "0"))
-            .forEach((r) => {
-              const linhasPrev = parseSummaryLinhas(r);
-              linhasPrev.forEach((lp) => {
-                const reg = String(lp?.regiao_produto || "").trim();
-                if (!reg) return;
-                const bucket = historicoByRegiao[reg] || { credito: [], anulada: [] };
-                const extracted = extractLinhaMovHist(lp);
-                bucket.credito.push(...extracted.movCredito);
-                bucket.anulada.push(...extracted.movAnulada);
-                historicoByRegiao[reg] = bucket;
-              });
+            .sort((a, b) => Number(a?.dataset?.id || "0") - Number(b?.dataset?.id || "0"));
+
+          const regionState = {};
+          approvedBeforeRows.forEach((approvedRow) => {
+            const priorLinhas = parseSummaryLinhas(approvedRow);
+            priorLinhas.forEach((pl) => {
+              const key = normalizeRegionKey(String(pl?.regiao_produto || "").trim());
+              if (!key) return;
+              const prevFullCred = Array.isArray(regionState[key]?.fullCred) ? regionState[key].fullCred : [];
+              const prevFullAnu = Array.isArray(regionState[key]?.fullAnu) ? regionState[key].fullAnu : [];
+              const currCred = toSeries(pl, "credito");
+              const currAnu = toSeries(pl, "anulada");
+              const splitCred = splitByPrevious(prevFullCred, currCred);
+              const splitAnu = splitByPrevious(prevFullAnu, currAnu);
+              const hasMov = splitCred.mov.length > 0 || splitAnu.mov.length > 0;
+              if (!regionState[key] || hasMov) {
+                regionState[key] = {
+                  fullCred: currCred,
+                  fullAnu: currAnu,
+                  histCred: splitCred.hist,
+                  histAnu: splitAnu.hist,
+                  movCred: splitCred.mov,
+                  movAnu: splitAnu.mov,
+                };
+              } else {
+                regionState[key].fullCred = currCred;
+                regionState[key].fullAnu = currAnu;
+              }
             });
+          });
+
+          linhas.forEach((cl) => {
+            const key = normalizeRegionKey(String(cl?.regiao_produto || "").trim());
+            if (!key) return;
+            const prevFullCred = Array.isArray(regionState[key]?.fullCred) ? regionState[key].fullCred : [];
+            const prevFullAnu = Array.isArray(regionState[key]?.fullAnu) ? regionState[key].fullAnu : [];
+            const currCred = toSeries(cl, "credito");
+            const currAnu = toSeries(cl, "anulada");
+            const splitCred = splitByPrevious(prevFullCred, currCred);
+            const splitAnu = splitByPrevious(prevFullAnu, currAnu);
+            const hasCurrentMov = splitCred.mov.length > 0 || splitAnu.mov.length > 0;
+
+            let useHistCred = splitCred.hist;
+            let useHistAnu = splitAnu.hist;
+            let useMovCred = splitCred.mov;
+            let useMovAnu = splitAnu.mov;
+
+            // Se o registro atual não mexeu na região, preserva o último
+            // snapshot que teve movimento para manter a leitura consistente.
+            if (!hasCurrentMov && regionState[key]) {
+              useHistCred = Array.isArray(regionState[key].histCred) ? regionState[key].histCred : [];
+              useHistAnu = Array.isArray(regionState[key].histAnu) ? regionState[key].histAnu : [];
+              useMovCred = Array.isArray(regionState[key].movCred) ? regionState[key].movCred : [];
+              useMovAnu = Array.isArray(regionState[key].movAnu) ? regionState[key].movAnu : [];
+            } else {
+              regionState[key] = {
+                fullCred: currCred,
+                fullAnu: currAnu,
+                histCred: splitCred.hist,
+                histAnu: splitAnu.hist,
+                movCred: splitCred.mov,
+                movAnu: splitAnu.mov,
+              };
+            }
+
+            cl.meta_credito_historico_items = useHistCred.map((n) => String(n));
+            cl.meta_credito_mov_items = useMovCred.map((n) => String(n));
+            cl.meta_anulada_historico_items = useHistAnu.map((n) => String(n));
+            cl.meta_anulada_mov_items = useMovAnu.map((n) => String(n));
+            cl.meta_credito_historico = useHistCred.length
+              ? String(useHistCred.reduce((acc, n) => acc + n, 0))
+              : "";
+            cl.meta_anulada_historico = useHistAnu.length
+              ? String(useHistAnu.reduce((acc, n) => acc + n, 0))
+              : "";
+            cl.has_historico_movimento = useHistCred.length > 0 || useHistAnu.length > 0;
+          });
         }
-        linhas.forEach((l) => {
-          const reg = String(l?.regiao_produto || "").trim();
-          if (!reg) return;
-          const extracted = extractLinhaMovHist(l);
-          const prior = historicoByRegiao[reg];
-          if (!prior || (!prior.credito.length && !prior.anulada.length)) return;
-          const hasCurrentMovement = (extracted.movCredito.length + extracted.movAnulada.length) > 0;
-          // Só injeta histórico anterior quando o registro selecionado possui
-          // movimentação própria nesta região. Caso contrário, mantém a última
-          // movimentação como "Movimentação" (não converte para histórico).
-          if (!hasCurrentMovement) return;
-          const needsCredito = prior.credito.length > extracted.histCreditoItems.length;
-          const needsAnulada = prior.anulada.length > extracted.histAnuladaItems.length;
-          if (needsCredito || needsAnulada) {
-            if (needsCredito) {
-              l.meta_credito_historico_items = prior.credito.map((n) => String(n));
-            }
-            if (needsAnulada) {
-              l.meta_anulada_historico_items = prior.anulada.map((n) => String(n));
-            }
-            l.meta_credito_historico = "";
-            l.meta_anulada_historico = "";
-          }
-        });
-      } catch (buildErr) {
-        console.error("Falha ao montar enriquecimento de histórico para impressão:", buildErr);
+      } catch (err) {
+        console.error("Falha ao separar histórico/movimentação para impressão:", err);
       }
+
       return {
         controle: row?.dataset?.controleMeta || "",
         status_aprovacao: selectedStatus,
@@ -8740,6 +8944,7 @@
       if (!tableRows.length) {
         tbody.innerHTML =
           `<tr><td colspan="5" class="muted">${esc(getRowsEmptyMessage())}</td></tr>`;
+        renderResumoTotais();
         return;
       }
       const totals = getTableTotals();
@@ -8791,10 +8996,10 @@
       tbody.innerHTML = `${rowsHtml}
         <tr class="meta-fisica-total-row">
           <td><strong>TOTAIS</strong></td>
-          <td><input type="text" class="meta-fisica-cell" value="${esc(fmtNum(totals.meta_pta))}" readonly /></td>
-          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-credito" value="${esc(fmtNum(totals.acrescimo))}" readonly /></td>
-          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-anulada" value="${esc(fmtNum(totals.reducao))}" readonly /></td>
-          <td><input type="text" class="meta-fisica-cell" value="${esc(fmtNum(totals.meta_ajustada))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell" data-total-field="meta_pta" value="${esc(fmtNum(totals.meta_pta))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-credito" data-total-field="acrescimo" value="${esc(fmtNum(totals.acrescimo))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell meta-fisica-cell-anulada" data-total-field="reducao" value="${esc(fmtNum(totals.reducao))}" readonly /></td>
+          <td><input type="text" class="meta-fisica-cell" data-total-field="meta_ajustada" value="${esc(fmtNum(totals.meta_ajustada))}" readonly /></td>
         </tr>`;
       tableRows.forEach((row, idx) => {
         if (!row.is_novo) return;
@@ -8806,6 +9011,7 @@
           select.value = desired;
         }
       });
+      refreshTotalsDisplay();
     };
 
     const loadOptions = async (loadRows = false) => {
@@ -8854,6 +9060,12 @@
           const histAnuladaItemsRaw = Array.isArray(row.meta_anulada_historico_items)
             ? row.meta_anulada_historico_items.map((v) => String(v ?? ""))
             : [];
+          const movCreditoItemsRaw = Array.isArray(row.meta_credito_mov_items)
+            ? row.meta_credito_mov_items.map((v) => String(v ?? ""))
+            : [];
+          const movAnuladaItemsRaw = Array.isArray(row.meta_anulada_mov_items)
+            ? row.meta_anulada_mov_items.map((v) => String(v ?? ""))
+            : [];
           const histCreditoItems = histCreditoItemsRaw.filter((v) => {
             const n = parseDec(v);
             return n !== null && n > 0;
@@ -8862,27 +9074,36 @@
             const n = parseDec(v);
             return n !== null && n > 0;
           });
+          let movCreditoItems = movCreditoItemsRaw.filter((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
+          let movAnuladaItems = movAnuladaItemsRaw.filter((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
           const creditoDbVal = parseDec(row.meta_credito);
           const anuladaDbVal = parseDec(row.meta_anulada);
-          const fallbackHistCredito =
-            histCreditoItems.length > 0
-              ? histCreditoItems
-              : creditoDbVal !== null && creditoDbVal > 0
-                ? [String(creditoDbVal).replace(".", ",")]
-                : [];
-          const fallbackHistAnulada =
-            histAnuladaItems.length > 0
-              ? histAnuladaItems
-              : anuladaDbVal !== null && anuladaDbVal > 0
-                ? [String(anuladaDbVal).replace(".", ",")]
-                : [];
-          const lockCreditoFromDb = fallbackHistCredito.length > 0;
-          const lockAnuladaFromDb = fallbackHistAnulada.length > 0;
-          const lockedCreditoCount = fallbackHistCredito.length;
-          const lockedAnuladaCount = fallbackHistAnulada.length;
-          const hasMovFromDb = lockCreditoFromDb || lockAnuladaFromDb;
-          const creditoItems = lockCreditoFromDb ? [...fallbackHistCredito] : [];
-          const anuladaItems = lockAnuladaFromDb ? [...fallbackHistAnulada] : [];
+          // Fallback legado: quando backend ainda não envia *_mov_items,
+          // reconstrói movimento pela diferença entre total e histórico.
+          if (!movCreditoItems.length && creditoDbVal !== null && creditoDbVal > 0) {
+            const histCreditoTotal = histCreditoItems.reduce((acc, item) => acc + (parseDec(item) || 0), 0);
+            const creditoDelta = creditoDbVal - histCreditoTotal;
+            if (creditoDelta > 0.000001) movCreditoItems = [String(creditoDelta)];
+          }
+          if (!movAnuladaItems.length && anuladaDbVal !== null && anuladaDbVal > 0) {
+            const histAnuladaTotal = histAnuladaItems.reduce((acc, item) => acc + (parseDec(item) || 0), 0);
+            const anuladaDelta = anuladaDbVal - histAnuladaTotal;
+            if (anuladaDelta > 0.000001) movAnuladaItems = [String(anuladaDelta)];
+          }
+
+          const creditoItems = [...histCreditoItems, ...movCreditoItems];
+          const anuladaItems = [...histAnuladaItems, ...movAnuladaItems];
+          const lockedCreditoCount = histCreditoItems.length;
+          const lockedAnuladaCount = histAnuladaItems.length;
+          const lockCreditoFromDb = lockedCreditoCount > 0;
+          const lockAnuladaFromDb = lockedAnuladaCount > 0;
+          const hasMovFromDb = creditoItems.length > 0 || anuladaItems.length > 0;
           return {
             regiao_produto: row.regiao_produto || "",
             meta_produto: row.meta_produto || "",
@@ -8937,6 +9158,7 @@
         const itemIdx = Number(input.dataset.itemIdx || "0");
         if (field === "meta_credito" || field === "meta_anulada") {
           const itemIdx = Number(input.dataset.itemIdx || "0");
+          if (!Number.isInteger(itemIdx) || itemIdx < 0) return;
           const lockCount = getLockedItemCount(tableRows[idx], field);
           const isLocked =
             itemIdx >= 0 &&
@@ -8980,6 +9202,7 @@
           setMsg("");
         }
         updateAdjustedDisplay(tr, tableRows[idx]);
+        refreshTotalsDisplay();
       });
 
       tbody.addEventListener("change", (ev) => {
@@ -9009,6 +9232,7 @@
         const field = input.dataset.field;
         if (field !== "meta_credito" && field !== "meta_anulada") return;
         const itemIdx = Number(input.dataset.itemIdx || "0");
+        if (!Number.isInteger(itemIdx) || itemIdx < 0) return;
         const lockCount = getLockedItemCount(tableRows[idx], field);
         const isLocked =
           itemIdx >= 0 &&
@@ -9023,6 +9247,7 @@
         setFieldItems(tableRows[idx], field, items);
         input.value = formatByUnidade(masked);
         updateAdjustedDisplay(tr, tableRows[idx]);
+        refreshTotalsDisplay();
       });
 
       tbody.addEventListener("click", (ev) => {
@@ -9651,6 +9876,23 @@
         justificativa: justificativaInput?.value || "",
         rows: rowsPayload,
       };
+
+      const totalsBeforeSave = getTableTotals();
+      const totalMetaPta = Number(totalsBeforeSave.meta_pta || 0);
+      const totalMetaAjustada = Number(totalsBeforeSave.meta_ajustada || 0);
+      const totalsAreEqual = Math.abs(totalMetaAjustada - totalMetaPta) < 0.000001;
+      const confirmationMessage = totalsAreEqual
+        ? "A Meta Ajustada está igual a Meta PTA/LOA. Deseja salvar mesmo assim?"
+        : "A Meta Ajustada está diferente da Meta PTA/LOA. Essa divergência deve ser devidamente justificada. Deseja salvar mesmo assim?";
+      const saveConfirmed = await openMetaFisicaSaveConfirmModal({
+        totalMetaPta,
+        totalMetaAjustada,
+        message: confirmationMessage,
+      });
+      if (!saveConfirmed) {
+        setMsg("Salvamento cancelado.");
+        return;
+      }
 
       try {
         const pendingPrintWin = prepareMetaFisicaPrintWindow();

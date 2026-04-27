@@ -3627,6 +3627,7 @@ def api_meta_fisica_options():
             grouped[regiao]["plan21_ids"].append(row_id_int)
 
     historico_map = {}
+    movimento_map = {}
     if has_all_required:
         hist_where = [
             "am.ativo = 1",
@@ -3664,6 +3665,33 @@ def api_meta_fisica_options():
                     out.append(val)
             return out
 
+        def _series_equal(a_list, b_list) -> bool:
+            if len(a_list) != len(b_list):
+                return False
+            for idx, a_val in enumerate(a_list):
+                if abs(a_val - b_list[idx]) >= Decimal("0.000001"):
+                    return False
+            return True
+
+        def _series_has_prefix(full_list, prefix_list) -> bool:
+            if len(prefix_list) > len(full_list):
+                return False
+            for idx, p_val in enumerate(prefix_list):
+                if abs(full_list[idx] - p_val) >= Decimal("0.000001"):
+                    return False
+            return True
+
+        latest_snapshot_by_region = {}
+
+        def _resolve_mov_items(full_list, prev_list, fallback_mov_list):
+            if not full_list:
+                return []
+            if _series_equal(full_list, prev_list):
+                return []
+            if _series_has_prefix(full_list, prev_list):
+                return full_list[len(prev_list):]
+            return fallback_mov_list if fallback_mov_list else list(full_list)
+
         for meta_row in hist_meta_rows:
             regiao_raw = str(meta_row.get("regiao_produto") or "").strip()
             if not regiao_raw:
@@ -3683,69 +3711,58 @@ def api_meta_fisica_options():
                 if not regiao_key:
                     continue
 
-                hist_credito = _parse_positive_item_list(item.get("meta_credito_historico_items"))
-                hist_anulada = _parse_positive_item_list(item.get("meta_anulada_historico_items"))
-
                 full_credito = _parse_positive_item_list(item.get("meta_credito_items"))
                 full_anulada = _parse_positive_item_list(item.get("meta_anulada_items"))
                 mov_credito = _parse_positive_item_list(item.get("meta_credito_mov_items"))
                 mov_anulada = _parse_positive_item_list(item.get("meta_anulada_mov_items"))
 
-                # Fonte principal: itens completos (full) - histórico; evita
-                # duplicidades legadas quando mov_items foi gravado incorretamente.
-                if full_credito:
-                    cut = min(len(hist_credito), len(full_credito))
-                    mov_credito = full_credito[cut:]
-                    if not hist_credito:
-                        hist_credito_sum = _parse_decimal(item.get("meta_credito_historico"))
-                        if hist_credito_sum is not None and hist_credito_sum > Decimal("0"):
-                            consumed = False
-                            tmp = []
-                            for n in mov_credito:
-                                if not consumed and abs(n - hist_credito_sum) < Decimal("0.000001"):
-                                    consumed = True
-                                    continue
-                                tmp.append(n)
-                            if consumed:
-                                mov_credito = tmp
-                if full_anulada:
-                    cut = min(len(hist_anulada), len(full_anulada))
-                    mov_anulada = full_anulada[cut:]
-                    if not hist_anulada:
-                        hist_anulada_sum = _parse_decimal(item.get("meta_anulada_historico"))
-                        if hist_anulada_sum is not None and hist_anulada_sum > Decimal("0"):
-                            consumed = False
-                            tmp = []
-                            for n in mov_anulada:
-                                if not consumed and abs(n - hist_anulada_sum) < Decimal("0.000001"):
-                                    consumed = True
-                                    continue
-                                tmp.append(n)
-                            if consumed:
-                                mov_anulada = tmp
-
-                if not mov_credito and not mov_anulada:
+                # Fallback para legados sem arrays de itens.
+                if not full_credito:
                     fallback_credito = _parse_decimal(item.get("meta_credito"))
-                    fallback_anulada = _parse_decimal(item.get("meta_anulada"))
                     if fallback_credito is not None and fallback_credito > Decimal("0"):
-                        mov_credito = [fallback_credito]
+                        full_credito = [fallback_credito]
+                if not full_anulada:
+                    fallback_anulada = _parse_decimal(item.get("meta_anulada"))
                     if fallback_anulada is not None and fallback_anulada > Decimal("0"):
-                        mov_anulada = [fallback_anulada]
+                        full_anulada = [fallback_anulada]
 
-                if not mov_credito and not mov_anulada:
-                    continue
+                prev_snapshot = latest_snapshot_by_region.get(regiao_key) or {
+                    "full_credito": [],
+                    "full_anulada": [],
+                }
+                prev_credito = list(prev_snapshot.get("full_credito") or [])
+                prev_anulada = list(prev_snapshot.get("full_anulada") or [])
 
-                bucket = historico_map.setdefault(
-                    regiao_key,
-                    {
-                        "meta_credito_historico_items": [],
-                        "meta_anulada_historico_items": [],
-                    },
+                mov_credito = _resolve_mov_items(full_credito, prev_credito, mov_credito)
+                mov_anulada = _resolve_mov_items(full_anulada, prev_anulada, mov_anulada)
+
+                should_update_snapshot = (
+                    regiao_key not in latest_snapshot_by_region
+                    or bool(mov_credito)
+                    or bool(mov_anulada)
                 )
-                for val in mov_credito:
-                    bucket["meta_credito_historico_items"].append(str(val))
-                for val in mov_anulada:
-                    bucket["meta_anulada_historico_items"].append(str(val))
+                if should_update_snapshot:
+                    # Mantém o último snapshot com movimentação da região.
+                    # Se um ID mais novo não trouxe mudança nesta região,
+                    # preserva a classificação anterior (histórico + movimento).
+                    latest_snapshot_by_region[regiao_key] = {
+                        "prev_credito": prev_credito,
+                        "prev_anulada": prev_anulada,
+                        "full_credito": list(full_credito),
+                        "full_anulada": list(full_anulada),
+                        "mov_credito": list(mov_credito),
+                        "mov_anulada": list(mov_anulada),
+                    }
+
+        for regiao_key, snap in latest_snapshot_by_region.items():
+            historico_map[regiao_key] = {
+                "meta_credito_historico_items": [str(v) for v in (snap.get("prev_credito") or [])],
+                "meta_anulada_historico_items": [str(v) for v in (snap.get("prev_anulada") or [])],
+            }
+            movimento_map[regiao_key] = {
+                "meta_credito_mov_items": [str(v) for v in (snap.get("mov_credito") or [])],
+                "meta_anulada_mov_items": [str(v) for v in (snap.get("mov_anulada") or [])],
+            }
 
     def _regiao_sort_key(val: str):
         txt = str(val or "").strip()
@@ -3769,8 +3786,17 @@ def api_meta_fisica_options():
                 "meta_anulada_historico_items": [],
             },
         )
+        mov_item = movimento_map.get(
+            regiao_key,
+            {
+                "meta_credito_mov_items": [],
+                "meta_anulada_mov_items": [],
+            },
+        )
         hist_credito_items = hist_item.get("meta_credito_historico_items") or []
         hist_anulada_items = hist_item.get("meta_anulada_historico_items") or []
+        mov_credito_items = mov_item.get("meta_credito_mov_items") or []
+        mov_anulada_items = mov_item.get("meta_anulada_mov_items") or []
         meta_credito_historico = Decimal("0")
         for v in hist_credito_items:
             parsed = _parse_decimal(v)
@@ -3792,6 +3818,8 @@ def api_meta_fisica_options():
                 "meta_anulada_historico": str(meta_anulada_historico),
                 "meta_credito_historico_items": hist_credito_items,
                 "meta_anulada_historico_items": hist_anulada_items,
+                "meta_credito_mov_items": mov_credito_items,
+                "meta_anulada_mov_items": mov_anulada_items,
                 "plan21_nger_id": ids[0] if ids else None,
                 "plan21_ids": ids,
             }
