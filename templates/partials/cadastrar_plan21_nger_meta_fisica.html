@@ -177,7 +177,7 @@
       </div>
     </div>
 
-    <div class="dotacao-summary no-print" id="meta-fisica-summary">
+    <div class="dotacao-summary consulta-summary no-print" id="meta-fisica-summary">
       <div class="table-responsive">
         <table class="table" id="meta-fisica-summary-table">
           <thead>
@@ -243,6 +243,19 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="table-foot no-print">
+        <div class="page-size">
+          <label for="meta-fisica-page-size">Itens por página</label>
+          <select id="meta-fisica-page-size" class="input">
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div id="meta-fisica-pagination" class="pagination"></div>
       </div>
     </div>
     <div class="actions no-print" style="justify-content:flex-end; margin-top:10px;">

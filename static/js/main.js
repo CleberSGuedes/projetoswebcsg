@@ -2453,6 +2453,7 @@
     const setResultsVisible = (show) => {
       if (!dotacaoSummary) return;
       dotacaoSummary.classList.toggle("dotacao-summary-hidden", !show);
+      dotacaoSummary.classList.toggle("consulta-summary-hidden", !show);
       if (!show) {
         getRows().forEach((row) => row.classList.remove("selected"));
         clearPagination();
@@ -7596,6 +7597,10 @@
     const metaPage = document.getElementById("meta-fisica-page");
     const summaryBox = document.getElementById("meta-fisica-summary");
     const summaryBody = document.querySelector("#meta-fisica-summary-table tbody");
+    const summaryTable = document.getElementById("meta-fisica-summary-table");
+    const summaryTableWrap = summaryBox ? summaryBox.querySelector(".table-responsive") : null;
+    const pageSizeSelect = document.getElementById("meta-fisica-page-size");
+    const paginationEl = document.getElementById("meta-fisica-pagination");
     const filterField = document.getElementById("meta-fisica-filtro-campo");
     const filterOp = document.getElementById("meta-fisica-filtro-operador");
     const filterValue = document.getElementById("meta-fisica-filtro-valor");
@@ -7644,6 +7649,8 @@
     const defaultSaveLabel = saveBtn ? saveBtn.textContent : "Salvar";
     const criteria = [];
     let criteriaSelected = -1;
+    let summaryPageSize = parseInt(pageSizeSelect?.value || "5", 10) || 5;
+    let summaryCurrentPage = 1;
     const fieldLabels = {
       controle_meta: "Controle de Meta",
       exercicio: "Exercício",
@@ -8523,6 +8530,15 @@
     const setResultsVisible = (show) => {
       if (!summaryBox) return;
       summaryBox.classList.toggle("dotacao-summary-hidden", !show);
+      summaryBox.classList.toggle("consulta-summary-hidden", !show);
+      if (!show) {
+        getSummaryRows().forEach((row) => row.classList.remove("selected"));
+        if (paginationEl) paginationEl.innerHTML = "";
+        if (summaryTableWrap) {
+          summaryTableWrap.style.height = "";
+          summaryTableWrap.style.maxHeight = "";
+        }
+      }
     };
 
     const getFilteredSummaryRows = () => {
@@ -8533,16 +8549,95 @@
       );
     };
 
-    const applyCriteriaToResults = () => {
+    const updateSummaryViewportHeight = (rowsOnPage) => {
+      if (!summaryTableWrap) return;
+      const headerHeight = summaryTable?.tHead?.offsetHeight || 40;
+      const sampleRow =
+        summaryBody?.querySelector(".meta-fisica-summary-row") ||
+        summaryBody?.querySelector("tr");
+      const rowHeight = sampleRow?.offsetHeight || 36;
+      const visibleRows = Math.max(0, Number(rowsOnPage || 0));
+      if (visibleRows === 0) {
+        const emptyHeight = Math.max(72, headerHeight + 24);
+        summaryTableWrap.style.height = `${emptyHeight}px`;
+        summaryTableWrap.style.maxHeight = `${emptyHeight}px`;
+        return;
+      }
+      const contentHeight = headerHeight + (rowHeight * visibleRows) + 10;
+      const viewportCap = Math.max(220, Math.floor(window.innerHeight * 0.52));
+      const finalHeight = Math.min(contentHeight, viewportCap);
+      summaryTableWrap.style.height = `${finalHeight}px`;
+      summaryTableWrap.style.maxHeight = `${finalHeight}px`;
+    };
+
+    const renderSummaryPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "page-btn";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === summaryCurrentPage) return;
+          summaryCurrentPage = page;
+          renderSummaryPage();
+        });
+        paginationEl.appendChild(b);
+      };
+      addBtn("<<", 1, summaryCurrentPage === 1);
+      addBtn("<", Math.max(1, summaryCurrentPage - 1), summaryCurrentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, summaryCurrentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      if (start > 1) {
+        addBtn("1", 1, false, summaryCurrentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          paginationEl.appendChild(ellipsis);
+        }
+      }
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === summaryCurrentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        paginationEl.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, summaryCurrentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, summaryCurrentPage + 1), summaryCurrentPage === totalPages);
+      addBtn(">>", totalPages, summaryCurrentPage === totalPages);
+    };
+
+    const renderSummaryPage = () => {
       const rows = getSummaryRows();
       const filtered = getFilteredSummaryRows();
-      const visible = new Set(filtered);
       rows.forEach((row) => {
-        row.style.display = visible.has(row) ? "" : "none";
-        if (!visible.has(row)) {
-          row.classList.remove("selected");
-        }
+        row.style.display = "none";
+        row.classList.remove("selected");
       });
+      const totalPages = Math.max(1, Math.ceil(filtered.length / summaryPageSize));
+      if (summaryCurrentPage > totalPages) summaryCurrentPage = totalPages;
+      const startIdx = (summaryCurrentPage - 1) * summaryPageSize;
+      const pageRows = filtered.slice(startIdx, startIdx + summaryPageSize);
+      pageRows.forEach((row) => {
+        row.style.display = "";
+      });
+      updateSummaryViewportHeight(pageRows.length);
+      renderSummaryPagination(totalPages);
+    };
+
+    const applyCriteriaToResults = (resetPage = true) => {
+      if (resetPage) summaryCurrentPage = 1;
+      const filtered = getFilteredSummaryRows();
+      renderSummaryPage();
       if (!filtered.length) {
         setFilterMsg("Nenhum registro encontrado para os critérios informados.", true);
       }
@@ -9489,7 +9584,7 @@
           return;
         }
         setResultsVisible(true);
-        applyCriteriaToResults();
+        applyCriteriaToResults(true);
         if (getFilteredSummaryRows().length) {
           setFilterMsg("");
         }
@@ -9914,6 +10009,28 @@
       } catch (err) {
         console.error(err);
         setMsg(err.message || "Falha ao salvar.", true);
+      }
+    });
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        summaryPageSize = parseInt(pageSizeSelect.value || "5", 10) || 5;
+        if (
+          summaryBox &&
+          !summaryBox.classList.contains("dotacao-summary-hidden") &&
+          !summaryBox.classList.contains("consulta-summary-hidden")
+        ) {
+          applyCriteriaToResults(false);
+        }
+      });
+    }
+    window.addEventListener("resize", () => {
+      if (
+        summaryBox &&
+        !summaryBox.classList.contains("dotacao-summary-hidden") &&
+        !summaryBox.classList.contains("consulta-summary-hidden")
+      ) {
+        renderSummaryPage();
       }
     });
 
@@ -11169,6 +11286,7 @@
     const setResultsVisible = (show) => {
       if (!summaryBox) return;
       summaryBox.classList.toggle("dotacao-summary-hidden", !show);
+      summaryBox.classList.toggle("consulta-summary-hidden", !show);
       if (!show && paginationEl) paginationEl.innerHTML = "";
     };
 
@@ -13739,6 +13857,7 @@
     const setResultsVisible = (show) => {
       if (!subacaoSummary) return;
       subacaoSummary.classList.toggle("dotacao-summary-hidden", !show);
+      subacaoSummary.classList.toggle("consulta-summary-hidden", !show);
       if (!show) {
         getRows().forEach((row) => row.classList.remove("selected"));
         clearPagination();
