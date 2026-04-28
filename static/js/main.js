@@ -7671,6 +7671,7 @@
 
     const setMsg = (text, isError = false) => {
       msg.textContent = text || "";
+      msg.style.whiteSpace = "pre-line";
       msg.classList.toggle("text-error", !!isError);
     };
     const setFilterMsg = (text, isError = false) => {
@@ -7959,7 +7960,25 @@
     const getLockedItemCount = (row, field) => {
       const key = field === "meta_credito" ? "lock_meta_credito_count" : "lock_meta_anulada_count";
       const raw = Number(row?.[key] ?? 0);
-      return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
+      if (!Number.isFinite(raw) || raw <= 0) return 0;
+      const itemsLen = getFieldItems(row, field).length;
+      return Math.min(Math.trunc(raw), itemsLen);
+    };
+    const setLockedItemCount = (row, field, count) => {
+      const keyCount = field === "meta_credito" ? "lock_meta_credito_count" : "lock_meta_anulada_count";
+      const keyLock = field === "meta_credito" ? "lock_meta_credito" : "lock_meta_anulada";
+      const itemsLen = getFieldItems(row, field).length;
+      const safe = Math.max(0, Math.min(Number.isFinite(Number(count)) ? Math.trunc(Number(count)) : 0, itemsLen));
+      row[keyCount] = safe;
+      row[keyLock] = safe > 0;
+    };
+    const freezeExistingMovements = (row) => {
+      const creditoLen = getFieldItems(row, "meta_credito").length;
+      const anuladaLen = getFieldItems(row, "meta_anulada").length;
+      setLockedItemCount(row, "meta_credito", creditoLen);
+      setLockedItemCount(row, "meta_anulada", anuladaLen);
+      row.entry_enable_meta_credito = false;
+      row.entry_enable_meta_anulada = false;
     };
     const getLineBlockInfo = (row) => {
       const creditoItems = getFieldItems(row, "meta_credito");
@@ -9377,6 +9396,11 @@
             setMsg("Preencha um lançamento antes de adicionar outro.", true);
             return;
           }
+          if (!tableRows[idx].is_novo) {
+            // Ao criar nova sublinha em linha existente, todo conteúdo anterior
+            // passa a ser histórico/bloqueado; apenas a nova sublinha fica editável.
+            freezeExistingMovements(tableRows[idx]);
+          }
           tableRows[idx][`allow_start_${field}`] = false;
           tableRows[idx][`entry_enable_${field}`] = true;
           const items = getFieldItems(tableRows[idx], field);
@@ -9843,23 +9867,21 @@
         setMsg(`A região ${dup} já existe na tabela.`, true);
         return;
       }
+      const validationErrors = [];
+      const addValidationError = (message) => {
+        const txt = String(message || "").trim();
+        if (!txt) return;
+        if (!validationErrors.includes(txt)) validationErrors.push(txt);
+      };
       const rowsPayload = [];
       for (const row of tableRows) {
         const regiao = String(row.regiao_produto || "").trim();
         if (!regiao) {
-          setMsg("Informe a região em todas as linhas.", true);
-          return;
+          addValidationError("Selecione a região em todas as novas linhas adicionadas.");
+          continue;
         }
         if (!row.is_novo && parseDec(row.meta_produto) === null) {
-          setMsg(`Meta PTA/LOA inválida para a região ${regiao}.`, true);
-          return;
-        }
-        if (row.is_novo) {
-          const metaAjustadaNova = parseDec(rowAdjusted(row));
-          if (metaAjustadaNova === null || metaAjustadaNova <= 0) {
-            setMsg(`Informe Acréscimo/Redução válido para gerar Meta Ajustada na região ${regiao}.`, true);
-            return;
-          }
+          addValidationError(`Meta PTA/LOA inválida para a região ${regiao}.`);
         }
         const creditoItemsAll = getFieldItems(row, "meta_credito");
         const anuladaItemsAll = getFieldItems(row, "meta_anulada");
@@ -9931,32 +9953,80 @@
         });
       }
       if (!rowsPayload.length) {
-        setMsg("Adicione ao menos uma linha de meta física.", true);
-        return;
+        if (!validationErrors.length) {
+          addValidationError("Adicione ao menos uma linha de meta física.");
+        }
       }
       for (const row of tableRows) {
+        const regiaoAtual = String(row?.regiao_produto || "").trim();
+        if (!regiaoAtual) continue;
         const creditoItems = getFieldItems(row, "meta_credito");
         const creditoLockCount = getLockedItemCount(row, "meta_credito");
-        for (let i = 0; i < creditoItems.length; i += 1) {
+        const creditoUnlockedStart = Math.max(0, creditoLockCount);
+        const creditoUnlocked = creditoItems.slice(creditoUnlockedStart);
+        const requireUnlockedCredito = row.is_novo || creditoUnlocked.length > 0;
+        for (let i = creditoUnlockedStart; i < creditoItems.length; i += 1) {
           if (row.lock_meta_credito && i < creditoLockCount) continue;
           const item = creditoItems[i];
+          const creditoNum = parseDec(item);
+          if (
+            requireUnlockedCredito &&
+            (creditoNum === null || creditoNum <= 0)
+          ) {
+            addValidationError(`Preencha todos os lançamentos de Acréscimo adicionados na região ${regiaoAtual} antes de salvar.`);
+            break;
+          }
           const errCredito = validateValorByUnidade(item, "Acréscimo");
           if (errCredito) {
-            setMsg(errCredito, true);
-            return;
+            addValidationError(`${errCredito} Região: ${regiaoAtual}.`);
+            break;
           }
         }
         const anuladaItems = getFieldItems(row, "meta_anulada");
         const anuladaLockCount = getLockedItemCount(row, "meta_anulada");
-        for (let i = 0; i < anuladaItems.length; i += 1) {
+        const anuladaUnlockedStart = Math.max(0, anuladaLockCount);
+        const anuladaUnlocked = anuladaItems.slice(anuladaUnlockedStart);
+        const requireUnlockedAnulada = !row.is_novo
+          ? anuladaUnlocked.length > 0
+          : anuladaUnlocked.length > 1
+          || anuladaItems.some((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
+        for (let i = anuladaUnlockedStart; i < anuladaItems.length; i += 1) {
           if (row.lock_meta_anulada && i < anuladaLockCount) continue;
           const item = anuladaItems[i];
+          const anuladaNum = parseDec(item);
+          if (
+            requireUnlockedAnulada &&
+            (anuladaNum === null || anuladaNum <= 0)
+          ) {
+            addValidationError(`Preencha todos os lançamentos de Redução adicionados na região ${regiaoAtual} antes de salvar.`);
+            break;
+          }
           const errAnulada = validateValorByUnidade(item, "Redução");
           if (errAnulada) {
-            setMsg(errAnulada, true);
-            return;
+            addValidationError(`${errAnulada} Região: ${regiaoAtual}.`);
+            break;
           }
         }
+      }
+
+      const justificativaText = String(justificativaInput?.value || "").trim();
+      if (!justificativaText) {
+        addValidationError("Informe a justificativa para salvar a Meta Física.");
+      }
+
+      if (validationErrors.length) {
+        if (justificativaInput && !justificativaText) {
+          justificativaInput.value = "";
+          justificativaInput.focus();
+          if (typeof justificativaInput.reportValidity === "function") {
+            justificativaInput.reportValidity();
+          }
+        }
+        setMsg(validationErrors.join("\n"), true);
+        return;
       }
 
       const payload = {
@@ -9968,7 +10038,7 @@
         adj_solicitante: selects.adj_solicitante?.value || "",
         produto_acao: selects.produto_acao?.value || "",
         unid_medida_produto: selects.unid_medida_produto?.value || "",
-        justificativa: justificativaInput?.value || "",
+        justificativa: justificativaText,
         rows: rowsPayload,
       };
 
@@ -9977,7 +10047,7 @@
       const totalMetaAjustada = Number(totalsBeforeSave.meta_ajustada || 0);
       const totalsAreEqual = Math.abs(totalMetaAjustada - totalMetaPta) < 0.000001;
       const confirmationMessage = totalsAreEqual
-        ? "A Meta Ajustada está igual a Meta PTA/LOA. Deseja salvar mesmo assim?"
+        ? "A Meta Ajustada está igual à Meta PTA/LOA. A justificativa deve estar devidamente preenchida. Deseja salvar mesmo assim?"
         : "A Meta Ajustada está diferente da Meta PTA/LOA. Essa divergência deve ser devidamente justificada. Deseja salvar mesmo assim?";
       const saveConfirmed = await openMetaFisicaSaveConfirmModal({
         totalMetaPta,
