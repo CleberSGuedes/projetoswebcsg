@@ -7669,10 +7669,20 @@
       lte: "Menor igual a",
     };
 
+    let msgClearTimer = null;
     const setMsg = (text, isError = false) => {
+      if (msgClearTimer) {
+        clearTimeout(msgClearTimer);
+        msgClearTimer = null;
+      }
       msg.textContent = text || "";
       msg.style.whiteSpace = "pre-line";
       msg.classList.toggle("text-error", !!isError);
+    };
+    const clearMsgOnUserAction = () => {
+      if (!msg?.textContent) return;
+      msg.textContent = "";
+      msg.classList.remove("text-error");
     };
     const setFilterMsg = (text, isError = false) => {
       if (!filterMsg) return;
@@ -7745,16 +7755,14 @@
       return String(n).replace(".", ",");
     };
     const sanitizeDecimalInput = (value) => {
-      let raw = String(value ?? "").replace(/[^\d,.\-]/g, "");
-      const negative = raw.startsWith("-") ? "-" : "";
-      raw = raw.replace(/-/g, "");
+      let raw = String(value ?? "").replace(/[^\d,.]/g, "");
       const firstSepIdx = raw.search(/[,.]/);
       if (firstSepIdx >= 0) {
         const intPart = raw.slice(0, firstSepIdx).replace(/[,.]/g, "");
         const decPart = raw.slice(firstSepIdx + 1).replace(/[,.]/g, "");
-        return `${negative}${intPart}${decPart ? `,${decPart}` : ","}`;
+        return `${intPart}${decPart ? `,${decPart}` : ","}`;
       }
-      return `${negative}${raw}`;
+      return raw;
     };
     const getUnidadeTipo = () => String(selects.unid_medida_produto?.value || "").trim().toLowerCase();
     const sanitizeByUnidade = (value) => {
@@ -7909,6 +7917,53 @@
         document.addEventListener("keydown", onKeyDown, true);
         document.body.appendChild(overlay);
       });
+    const openMetaFisicaNegativeTotalsModal = ({ produtoAcao, linhas }) =>
+      new Promise((resolve) => {
+        const existing = document.getElementById("meta-fisica-negative-totals-overlay");
+        if (existing) existing.remove();
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        overlay.id = "meta-fisica-negative-totals-overlay";
+        const produtoTxt = String(produtoAcao || "").trim() || "(Produto da Ação não informado)";
+        const linhasHtml = (Array.isArray(linhas) ? linhas : [])
+          .map((txt) => `<li>${esc(String(txt || ""))}</li>`)
+          .join("");
+        overlay.innerHTML = `
+          <div class="modal-card meta-fisica-save-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="meta-fisica-negative-title">
+            <div class="modal-header">
+              <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+              <div class="modal-header-text">
+                <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+                <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+              </div>
+            </div>
+            <div class="modal-body">
+              <div class="modal-title" id="meta-fisica-negative-title">Meta Física do Produto ${esc(produtoTxt)} está negativa. Por favor realize os ajustes necessários.</div>
+              <ul style="margin: 8px 0 0 18px; padding: 0;">${linhasHtml}</ul>
+            </div>
+            <div class="modal-footer meta-fisica-save-confirm-footer">
+              <button type="button" class="btn btn-primary sm" data-mf-neg-action="ok">Ok</button>
+            </div>
+          </div>
+        `;
+        const finish = () => {
+          document.removeEventListener("keydown", onKeyDown, true);
+          overlay.remove();
+          resolve(true);
+        };
+        const onKeyDown = (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            finish();
+          }
+        };
+        overlay.addEventListener("click", (ev) => {
+          if (ev.target === overlay) finish();
+        });
+        overlay.querySelector('[data-mf-neg-action="ok"]')?.addEventListener("click", finish);
+        document.addEventListener("keydown", onKeyDown, true);
+        document.body.appendChild(overlay);
+      });
     const getFieldItems = (row, field) => {
       const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
       const arr = Array.isArray(row[key]) ? row[key].map((v) => String(v ?? "")) : [];
@@ -7964,6 +8019,20 @@
       const itemsLen = getFieldItems(row, field).length;
       return Math.min(Math.trunc(raw), itemsLen);
     };
+    const getUnlockedItemsCount = (row, field) => {
+      const itemsLen = getFieldItems(row, field).length;
+      const locked = getLockedItemCount(row, field);
+      return Math.max(0, itemsLen - locked);
+    };
+    const hasActiveEditableMovement = (row) => {
+      const creditoAtivo =
+        !!row?.entry_enable_meta_credito &&
+        getUnlockedItemsCount(row, "meta_credito") > 0;
+      const anuladaAtiva =
+        !!row?.entry_enable_meta_anulada &&
+        getUnlockedItemsCount(row, "meta_anulada") > 0;
+      return creditoAtivo || anuladaAtiva;
+    };
     const setLockedItemCount = (row, field, count) => {
       const keyCount = field === "meta_credito" ? "lock_meta_credito_count" : "lock_meta_anulada_count";
       const keyLock = field === "meta_credito" ? "lock_meta_credito" : "lock_meta_anulada";
@@ -7973,12 +8042,34 @@
       row[keyLock] = safe > 0;
     };
     const freezeExistingMovements = (row) => {
+      if (!row?.__preFreezeSnapshot) {
+        row.__preFreezeSnapshot = {
+          lock_meta_credito_count: getLockedItemCount(row, "meta_credito"),
+          lock_meta_anulada_count: getLockedItemCount(row, "meta_anulada"),
+          entry_enable_meta_credito: !!row.entry_enable_meta_credito,
+          entry_enable_meta_anulada: !!row.entry_enable_meta_anulada,
+          allow_start_meta_credito: !!row.allow_start_meta_credito,
+          allow_start_meta_anulada: !!row.allow_start_meta_anulada,
+        };
+      }
       const creditoLen = getFieldItems(row, "meta_credito").length;
       const anuladaLen = getFieldItems(row, "meta_anulada").length;
       setLockedItemCount(row, "meta_credito", creditoLen);
       setLockedItemCount(row, "meta_anulada", anuladaLen);
       row.entry_enable_meta_credito = false;
       row.entry_enable_meta_anulada = false;
+    };
+    const restoreFrozenMovementsIfPossible = (row) => {
+      const snap = row?.__preFreezeSnapshot;
+      if (!snap) return;
+      if (hasActiveEditableMovement(row)) return;
+      setLockedItemCount(row, "meta_credito", snap.lock_meta_credito_count || 0);
+      setLockedItemCount(row, "meta_anulada", snap.lock_meta_anulada_count || 0);
+      row.entry_enable_meta_credito = !!snap.entry_enable_meta_credito;
+      row.entry_enable_meta_anulada = !!snap.entry_enable_meta_anulada;
+      row.allow_start_meta_credito = !!snap.allow_start_meta_credito;
+      row.allow_start_meta_anulada = !!snap.allow_start_meta_anulada;
+      delete row.__preFreezeSnapshot;
     };
     const getLineBlockInfo = (row) => {
       const creditoItems = getFieldItems(row, "meta_credito");
@@ -8054,11 +8145,14 @@
     const buildMovementCell = (row, idx, field, readOnly = false, allowAdd = false) => {
       const items = getFieldItems(row, field);
       const fieldCss = field === "meta_credito" ? "meta-fisica-cell-credito" : "meta-fisica-cell-anulada";
-      const canAdd = allowAdd && canAddMovement(row, field);
+      const rowAdjustedVal = parseDec(rowAdjusted(row));
+      const blockReducaoByAdjusted = field === "meta_anulada" && rowAdjustedVal !== null && rowAdjustedVal <= 0;
+      const canAdd = allowAdd && !blockReducaoByAdjusted && canAddMovement(row, field);
       const lockedCount = getLockedItemCount(row, field);
       const entryEnabled = !!row?.[`entry_enable_${field}`];
+      const isBlockedReductionOnNewRow = row.is_novo && field === "meta_anulada";
       if (row.is_novo) {
-        const disabledNovo = readOnly ? "readonly" : "";
+        const disabledNovo = readOnly || isBlockedReductionOnNewRow ? "readonly" : "";
         const inputsNovo = items
           .map((val, itemIdx) => `<div class="meta-fisica-multi-line">
             <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${itemIdx}" value="${esc(formatByUnidade(val))}" ${disabledNovo} />
@@ -8066,7 +8160,7 @@
           </div>`)
           .join("");
         return `<div class="meta-fisica-multi-wrap">${inputsNovo}
-          ${allowAdd && !readOnly ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
+          ${allowAdd && !readOnly && !isBlockedReductionOnNewRow ? `<button type="button" class="meta-fisica-item-add" data-add-field="${field}" ${canAdd ? "" : "disabled"} title="Novo lançamento">+</button>` : ""}
         </div>`;
       }
 
@@ -9262,6 +9356,7 @@
       });
 
       tbody.addEventListener("input", (ev) => {
+        clearMsgOnUserAction();
         const input = ev.target.closest("input[data-field]");
         if (!input) return;
         const tr = input.closest("tr[data-idx]");
@@ -9320,6 +9415,7 @@
       });
 
       tbody.addEventListener("change", (ev) => {
+        clearMsgOnUserAction();
         const select = ev.target.closest('select[data-field="regiao_produto"]');
         if (!select) return;
         const tr = select.closest("tr[data-idx]");
@@ -9337,6 +9433,7 @@
       });
 
       tbody.addEventListener("focusout", (ev) => {
+        clearMsgOnUserAction();
         const input = ev.target.closest("input[data-field]");
         if (!input) return;
         const tr = input.closest("tr[data-idx]");
@@ -9365,6 +9462,7 @@
       });
 
       tbody.addEventListener("click", (ev) => {
+        clearMsgOnUserAction();
         const removeRowBtn = ev.target.closest("[data-remove-row]");
         if (removeRowBtn) {
           const idx = Number(removeRowBtn.getAttribute("data-remove-row") || "-1");
@@ -9392,6 +9490,10 @@
             (field === "meta_credito" && !!tableRows[idx].allow_add_meta_credito) ||
             (field === "meta_anulada" && !!tableRows[idx].allow_add_meta_anulada);
           if (!allowAdd) return;
+          if (!tableRows[idx].is_novo && hasActiveEditableMovement(tableRows[idx])) {
+            setMsg("Remova primeiro a movimentação atual da região antes de adicionar uma nova sublinha.", true);
+            return;
+          }
           if (!canAddMovement(tableRows[idx], field)) {
             setMsg("Preencha um lançamento antes de adicionar outro.", true);
             return;
@@ -9431,6 +9533,7 @@
             tableRows[idx][`entry_enable_${field}`] = false;
             tableRows[idx][`allow_start_${field}`] = true;
           }
+          restoreFrozenMovementsIfPossible(tableRows[idx]);
           renderRows();
         }
       });
@@ -9438,6 +9541,7 @@
 
     if (addRowBtn) {
       addRowBtn.addEventListener("click", () => {
+        clearMsgOnUserAction();
         if (!hasAllRowFiltersSelected()) {
           setMsg("Preencha os filtros obrigatórios e clique em Consultar antes de adicionar linha.", true);
           return;
@@ -9478,6 +9582,7 @@
 
     if (clearBtn) {
       clearBtn.addEventListener("click", async () => {
+        clearMsgOnUserAction();
         resetEditMode();
         if (justificativaInput) justificativaInput.value = "";
         Object.entries(selects).forEach(([key, el]) => {
@@ -9495,6 +9600,7 @@
 
     if (consultBtn) {
       consultBtn.addEventListener("click", async () => {
+        clearMsgOnUserAction();
         resetEditMode();
         if (!hasAllRowFiltersSelected()) {
           setMsg("Preencha todos os filtros obrigatórios antes de consultar.", true);
@@ -9506,12 +9612,32 @@
         hasConsulted = true;
         setMsg("");
         await loadOptions(true);
+        const totalsAfterConsult = getTableTotals();
+        const totalPta = parseDec(totalsAfterConsult.meta_pta);
+        const totalAjustada = parseDec(totalsAfterConsult.meta_ajustada);
+        const linhasNegativas = [];
+        if (totalPta !== null && totalPta < 0) {
+          linhasNegativas.push(`META PTA/LOA está negativo (${fmtNum(totalPta)}).`);
+        }
+        if (totalAjustada !== null && totalAjustada < 0) {
+          linhasNegativas.push(`META AJUSTADA está negativo (${fmtNum(totalAjustada)}).`);
+        }
+        if (linhasNegativas.length) {
+          const produtoSelecionado = selects.produto_acao?.selectedOptions?.[0]?.textContent
+            || selects.produto_acao?.value
+            || "";
+          await openMetaFisicaNegativeTotalsModal({
+            produtoAcao: produtoSelecionado,
+            linhas: linhasNegativas,
+          });
+        }
       });
     }
 
     Object.values(selects).forEach((el) => {
       if (!el || el === selects.exercicio || el === selects.adj_solicitante) return;
       el.addEventListener("change", () => {
+        clearMsgOnUserAction();
         resetEditMode();
         hasConsulted = false;
         lastQueryHadRows = false;
@@ -9520,6 +9646,7 @@
     });
     if (selects.adj_solicitante) {
       selects.adj_solicitante.addEventListener("change", () => {
+        clearMsgOnUserAction();
         resetEditMode();
       });
     }
@@ -9883,6 +10010,12 @@
         if (!row.is_novo && parseDec(row.meta_produto) === null) {
           addValidationError(`Meta PTA/LOA inválida para a região ${regiao}.`);
         }
+        const ajustadaRegiao = parseDec(rowAdjusted(row));
+        if (ajustadaRegiao !== null && ajustadaRegiao < 0) {
+          addValidationError(
+            `A Meta Ajustada da região ${regiao} não pode ser negativa (${fmtNum(ajustadaRegiao)}).`
+          );
+        }
         const creditoItemsAll = getFieldItems(row, "meta_credito");
         const anuladaItemsAll = getFieldItems(row, "meta_anulada");
         const creditoLockCount = getLockedItemCount(row, "meta_credito");
@@ -10015,6 +10148,14 @@
       const justificativaText = String(justificativaInput?.value || "").trim();
       if (!justificativaText) {
         addValidationError("Informe a justificativa para salvar a Meta Física.");
+      }
+
+      const totalsForValidation = getTableTotals();
+      const totalMetaAjustadaValid = parseDec(totalsForValidation.meta_ajustada);
+      if (totalMetaAjustadaValid !== null && totalMetaAjustadaValid < 0) {
+        addValidationError(
+          `O Total da Meta Ajustada não pode ser negativo (${fmtNum(totalMetaAjustadaValid)}).`
+        );
       }
 
       if (validationErrors.length) {
