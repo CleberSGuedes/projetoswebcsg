@@ -10188,8 +10188,8 @@
       const totalMetaAjustada = Number(totalsBeforeSave.meta_ajustada || 0);
       const totalsAreEqual = Math.abs(totalMetaAjustada - totalMetaPta) < 0.000001;
       const confirmationMessage = totalsAreEqual
-        ? "A Meta Ajustada está igual à Meta PTA/LOA. A justificativa deve estar devidamente preenchida. Deseja salvar mesmo assim?"
-        : "A Meta Ajustada está diferente da Meta PTA/LOA. Essa divergência deve ser devidamente justificada. Deseja salvar mesmo assim?";
+        ? "A META AJUSTADA está igual à META PTA/LOA.\nTodas as alterações nas metas físicas das regiões  (acréscimos/reduções) estão devidamente justificadas?\nDeseja salvar as alterações?"
+        : "A META AJUSTADA está diferente da META PTA/LOA.\nA divergência entre as metas físicas das regiões (acréscimos/reduções) devem ser devidamente justificadas.\nDeseja salvar as alterações?";
       const saveConfirmed = await openMetaFisicaSaveConfirmModal({
         totalMetaPta,
         totalMetaAjustada,
