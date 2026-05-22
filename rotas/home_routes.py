@@ -84,6 +84,40 @@ NOB_UPLOAD_DIR = Path("upload/nob")
 NOB_OUTPUT_DIR = Path("outputs/td_nob")
 NODE_RUNNER = Path(__file__).resolve().parents[1] / "node_runners" / "run.js"
 NODE_EXE = os.getenv("NODE_EXE", "node")
+META_FISICA_OPTIONS_CACHE_TTL_S = max(
+    0, int(os.getenv("META_FISICA_OPTIONS_CACHE_TTL_S", "60") or "60")
+)
+_meta_fisica_options_cache_lock = threading.Lock()
+_meta_fisica_options_cache: dict[tuple, tuple[float, dict]] = {}
+
+
+def _cache_get_meta_fisica_options(cache_key: tuple):
+    if META_FISICA_OPTIONS_CACHE_TTL_S <= 0:
+        return None
+    now_ts = datetime.utcnow().timestamp()
+    with _meta_fisica_options_cache_lock:
+        item = _meta_fisica_options_cache.get(cache_key)
+        if not item:
+            return None
+        expires_at, payload = item
+        if expires_at <= now_ts:
+            _meta_fisica_options_cache.pop(cache_key, None)
+            return None
+        # cópia rasa para evitar mutação acidental fora do cache
+        return dict(payload)
+
+
+def _cache_set_meta_fisica_options(cache_key: tuple, payload: dict) -> None:
+    if META_FISICA_OPTIONS_CACHE_TTL_S <= 0:
+        return
+    expires_at = datetime.utcnow().timestamp() + META_FISICA_OPTIONS_CACHE_TTL_S
+    with _meta_fisica_options_cache_lock:
+        _meta_fisica_options_cache[cache_key] = (expires_at, dict(payload))
+
+
+def _cache_invalidate_meta_fisica_options() -> None:
+    with _meta_fisica_options_cache_lock:
+        _meta_fisica_options_cache.clear()
 
 
 def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
@@ -3499,7 +3533,16 @@ def api_dotacao_options():
 @login_required
 @require_feature("cadastrar/plan_21-nger/meta_fisica")
 def api_meta_fisica_options():
+    def _arg_as_bool(name: str, default: bool = False) -> bool:
+        raw = (request.args.get(name) or "").strip().lower()
+        if not raw:
+            return default
+        return raw in {"1", "true", "t", "yes", "y", "sim", "s"}
+
     current_year = str(_now_local().year)
+    include_rows = _arg_as_bool("include_rows", default=True)
+    include_history = _arg_as_bool("include_history", default=True)
+    include_option_rows = _arg_as_bool("include_option_rows", default=False)
     field_cols = {
         "exercicio": "exercicio",
         "unidade_orcamentaria": "unidade_orcamentaria",
@@ -3516,54 +3559,116 @@ def api_meta_fisica_options():
         if val:
             selected[key] = val
     selected["exercicio"] = current_year
+    ignore_meta_id_for_cache = 0
+    try:
+        ignore_meta_id_for_cache = int((request.args.get("meta_id") or "").strip() or 0)
+    except Exception:
+        ignore_meta_id_for_cache = 0
+
+    cache_key = (
+        "meta_fisica_options_v3",
+        include_rows,
+        include_history,
+        include_option_rows,
+        ignore_meta_id_for_cache,
+        tuple(sorted((k, str(v)) for k, v in selected.items())),
+    )
+    cached_payload = _cache_get_meta_fisica_options(cache_key)
+    if cached_payload is not None:
+        return jsonify(cached_payload)
+
     selected_for_cascade = {k: v for k, v in selected.items() if k != "adj_solicitante"}
 
-    options = {}
-    for key, col in field_cols.items():
-        if key == "adj_solicitante":
-            adj_rows = _safe_query_mappings(
-                """
-                SELECT abreviacao AS value
-                FROM adj
-                WHERE ativo = 1
-                ORDER BY abreviacao
-                """
-            )
-            adj_vals = []
-            for row in adj_rows:
-                raw_val = row.get("value")
-                if raw_val is None:
-                    continue
-                txt = str(raw_val).strip()
-                if txt:
-                    adj_vals.append(txt)
-            options[key] = sorted(set(adj_vals), key=lambda x: x.lower())
+    # Opções em uma única consulta (evita N queries por troca de filtro).
+    options = {k: [] for k in field_cols.keys()}
+    options["exercicio"] = [current_year]
+    where = ["ativo = 1", "exercicio = :exercicio"]
+    params = {"exercicio": current_year}
+    for s_key, s_val in selected_for_cascade.items():
+        if s_key == "exercicio":
             continue
-        where = ["ativo = 1"]
-        params = {}
-        for s_key, s_val in selected_for_cascade.items():
-            if s_key == key:
+        if not s_val:
+            continue
+        where.append(f"{field_cols[s_key]} = :{s_key}")
+        params[s_key] = s_val
+    options_sql = f"""
+        SELECT DISTINCT
+            exercicio,
+            unidade_orcamentaria,
+            programa,
+            acao_paoe,
+            produto_acao,
+            unid_medida_produto
+        FROM plan21_nger
+        WHERE {' AND '.join(where)}
+    """
+    options_rows = _safe_query_mappings(options_sql, params)
+    for row in options_rows:
+        for key in (
+            "unidade_orcamentaria",
+            "programa",
+            "acao_paoe",
+            "produto_acao",
+            "unid_medida_produto",
+        ):
+            val = row.get(field_cols[key])
+            if val is None:
                 continue
-            if s_key == "exercicio":
-                where.append("CAST(exercicio AS CHAR) = :exercicio")
-                params["exercicio"] = s_val
-            else:
-                where.append(f"{field_cols[s_key]} = :{s_key}")
-                params[s_key] = s_val
-        sql = f"SELECT DISTINCT {col} AS value FROM plan21_nger WHERE {' AND '.join(where)} ORDER BY {col}"
-        rows = _safe_query_mappings(sql, params)
-        vals = []
-        for row in rows:
-            raw_val = row.get("value")
-            if raw_val is None:
-                continue
-            txt = str(raw_val).strip()
+            txt = str(val).strip()
             if txt:
-                vals.append(txt)
-        if key == "exercicio":
-            options[key] = [current_year]
-        else:
-            options[key] = sorted(set(vals), key=lambda x: x.lower())
+                options[key].append(txt)
+    for key in (
+        "unidade_orcamentaria",
+        "programa",
+        "acao_paoe",
+        "produto_acao",
+        "unid_medida_produto",
+    ):
+        options[key] = sorted(set(options[key]), key=lambda x: x.lower())
+
+    # adj_solicitante permanece catálogo separado da tabela adj.
+    adj_rows = _safe_query_mappings(
+        """
+        SELECT abreviacao AS value
+        FROM adj
+        WHERE ativo = 1
+        ORDER BY abreviacao
+        """
+    )
+    adj_vals = []
+    for row in adj_rows:
+        raw_val = row.get("value")
+        if raw_val is None:
+            continue
+        txt = str(raw_val).strip()
+        if txt:
+            adj_vals.append(txt)
+    options["adj_solicitante"] = sorted(set(adj_vals), key=lambda x: x.lower())
+
+    option_rows = []
+    if include_option_rows:
+        option_rows_sql = """
+            SELECT DISTINCT
+                unidade_orcamentaria,
+                programa,
+                acao_paoe,
+                produto_acao,
+                unid_medida_produto
+            FROM plan21_nger
+            WHERE ativo = 1
+              AND exercicio = :exercicio
+        """
+        option_rows_raw = _safe_query_mappings(option_rows_sql, {"exercicio": current_year})
+        for row in option_rows_raw:
+            option_rows.append(
+                {
+                    "unidade_orcamentaria": str(row.get("unidade_orcamentaria") or "").strip(),
+                    "programa": str(row.get("programa") or "").strip(),
+                    "acao_paoe": str(row.get("acao_paoe") or "").strip(),
+                    "produto_acao": str(row.get("produto_acao") or "").strip(),
+                    "unid_medida_produto": str(row.get("unid_medida_produto") or "").strip(),
+                }
+            )
 
     required_for_rows = (
         "unidade_orcamentaria",
@@ -3573,9 +3678,33 @@ def api_meta_fisica_options():
         "unid_medida_produto",
     )
     has_all_required = all((selected.get(k) or "").strip() for k in required_for_rows)
+    pending_meta = None
+    if include_rows and include_history and has_all_required:
+        ignore_meta_id = ignore_meta_id_for_cache
+        pending_query = (
+            AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
+            .filter(func.lower(func.coalesce(AlterarMeta.status_aprovacao, "")) == "aguardando")
+            .filter(AlterarMeta.exercicio == int(current_year))
+            .filter(AlterarMeta.unidade_orcamentaria == (selected.get("unidade_orcamentaria") or "").strip())
+            .filter(AlterarMeta.programa == (selected.get("programa") or "").strip())
+            .filter(AlterarMeta.acao_paoe == (selected.get("acao_paoe") or "").strip())
+            .filter(AlterarMeta.produto_acao == (selected.get("produto_acao") or "").strip())
+            .filter(AlterarMeta.unid_medida_produto == (selected.get("unid_medida_produto") or "").strip())
+        )
+        if ignore_meta_id > 0:
+            pending_query = pending_query.filter(AlterarMeta.id != ignore_meta_id)
+        pending_registro = pending_query.order_by(AlterarMeta.id.desc()).first()
+        if pending_registro:
+            adj_token = _normalize_controle_token(getattr(pending_registro, "responsavel_acao", "") or "") or "SEMADJ"
+            pending_exercicio = str(getattr(pending_registro, "exercicio", "") or current_year)
+            controle = f"META.{pending_exercicio}.{adj_token}.{pending_registro.id}"
+            pending_meta = {
+                "id": pending_registro.id,
+                "controle": controle,
+            }
     plan_rows = []
-    if has_all_required:
-        where_rows = ["ativo = 1", "CAST(exercicio AS CHAR) = :exercicio"]
+    if include_rows and has_all_required and not pending_meta:
+        where_rows = ["ativo = 1", "exercicio = :exercicio"]
         params_rows = {"exercicio": current_year}
         for key in required_for_rows:
             where_rows.append(f"{field_cols[key]} = :{key}")
@@ -3604,7 +3733,7 @@ def api_meta_fisica_options():
                 "latest_id": 0,
                 "plan21_ids": [],
             }
-        # Para a mesma regiao, mantÃƒÂ©m o maior valor de meta_produto.
+        # Para a mesma região, mantém o maior valor de meta_produto.
         if meta_val is not None:
             current_max = grouped[regiao].get("meta_produto_max")
             if current_max is None or meta_val > current_max:
@@ -3628,11 +3757,11 @@ def api_meta_fisica_options():
 
     historico_map = {}
     movimento_map = {}
-    if has_all_required:
+    if include_rows and include_history and has_all_required:
         hist_where = [
             "am.ativo = 1",
             "LOWER(COALESCE(am.status_aprovacao, '')) = 'aprovado'",
-            "CAST(am.exercicio AS CHAR) = :exercicio",
+            "am.exercicio = :exercicio",
             "am.unidade_orcamentaria = :unidade_orcamentaria",
             "am.programa = :programa",
             "am.acao_paoe = :acao_paoe",
@@ -3655,114 +3784,95 @@ def api_meta_fisica_options():
         """
         hist_meta_rows = _safe_query_mappings(hist_sql, hist_params)
 
-        def _parse_positive_item_list(raw_items):
-            if not isinstance(raw_items, list):
-                return []
-            out = []
-            for raw in raw_items:
-                val = _parse_decimal(raw)
-                if val is not None and val > Decimal("0"):
-                    out.append(val)
-            return out
-
-        def _series_equal(a_list, b_list) -> bool:
-            if len(a_list) != len(b_list):
-                return False
-            for idx, a_val in enumerate(a_list):
-                if abs(a_val - b_list[idx]) >= Decimal("0.000001"):
-                    return False
-            return True
-
-        def _series_has_prefix(full_list, prefix_list) -> bool:
-            if len(prefix_list) > len(full_list):
-                return False
-            for idx, p_val in enumerate(prefix_list):
-                if abs(full_list[idx] - p_val) >= Decimal("0.000001"):
-                    return False
-            return True
-
-        latest_snapshot_by_region = {}
-
-        def _resolve_mov_items(full_list, prev_list, fallback_mov_list):
-            if not full_list:
-                return []
-            if _series_equal(full_list, prev_list):
-                return []
-            if _series_has_prefix(full_list, prev_list):
-                return full_list[len(prev_list):]
-            return fallback_mov_list if fallback_mov_list else list(full_list)
-
+        # Regra temporal para novo cadastro: todo movimento aprovado anterior e
+        # ainda não contabilizado em uma linha anterior entra como histórico.
+        approved_ids = []
         for meta_row in hist_meta_rows:
-            regiao_raw = str(meta_row.get("regiao_produto") or "").strip()
-            if not regiao_raw:
-                continue
             try:
-                parsed_rows = json.loads(regiao_raw)
+                mid = int(meta_row.get("id") or 0)
             except Exception:
-                parsed_rows = []
-            if not isinstance(parsed_rows, list):
-                continue
-
-            for item in parsed_rows:
-                if not isinstance(item, dict):
+                mid = 0
+            if mid > 0 and mid not in approved_ids:
+                approved_ids.append(mid)
+        if approved_ids:
+            approved_ids_csv = ",".join(str(int(x)) for x in approved_ids)
+            temporal_items_rows = _safe_query_mappings(
+                """
+                SELECT alterar_meta_id, regiao_codigo, tipo, valor, ordem, id
+                FROM alterar_meta_item
+                WHERE ativo = 1
+                  AND alterar_meta_id IN (""" + approved_ids_csv + """)
+                ORDER BY alterar_meta_id ASC, ordem ASC, id ASC
+                """,
+                {},
+            )
+            items_by_meta_region = {}
+            for it in temporal_items_rows:
+                try:
+                    meta_id = int(it.get("alterar_meta_id") or 0)
+                except Exception:
+                    meta_id = 0
+                reg = str(it.get("regiao_codigo") or "").strip()
+                reg_key = _normalize_codigo_num(reg) or reg.lower()
+                if meta_id <= 0 or not reg_key:
                     continue
-                regiao_codigo = str(item.get("regiao_produto") or "").strip()
-                regiao_key = _normalize_codigo_num(regiao_codigo) or regiao_codigo.lower()
-                if not regiao_key:
-                    continue
+                items_by_meta_region.setdefault(meta_id, {}).setdefault(reg_key, []).append(it)
 
-                full_credito = _parse_positive_item_list(item.get("meta_credito_items"))
-                full_anulada = _parse_positive_item_list(item.get("meta_anulada_items"))
-                mov_credito = _parse_positive_item_list(item.get("meta_credito_mov_items"))
-                mov_anulada = _parse_positive_item_list(item.get("meta_anulada_mov_items"))
+            def _same_pair_for_options(left: tuple[str, str], right: tuple[str, str]) -> bool:
+                for idx in (0, 1):
+                    l_val = _parse_decimal(left[idx])
+                    r_val = _parse_decimal(right[idx])
+                    l_num = l_val if l_val is not None else Decimal("0")
+                    r_num = r_val if r_val is not None else Decimal("0")
+                    if abs(l_num - r_num) >= Decimal("0.000001"):
+                        return False
+                return True
 
-                # Fallback para legados sem arrays de itens.
-                if not full_credito:
-                    fallback_credito = _parse_decimal(item.get("meta_credito"))
-                    if fallback_credito is not None and fallback_credito > Decimal("0"):
-                        full_credito = [fallback_credito]
-                if not full_anulada:
-                    fallback_anulada = _parse_decimal(item.get("meta_anulada"))
-                    if fallback_anulada is not None and fallback_anulada > Decimal("0"):
-                        full_anulada = [fallback_anulada]
+            def _strip_prefix_for_options(
+                hist_pairs: list[tuple[str, str]],
+                pairs: list[tuple[str, str]],
+            ) -> list[tuple[str, str]]:
+                if not hist_pairs or not pairs or len(pairs) < len(hist_pairs):
+                    return pairs
+                for idx, hist_pair in enumerate(hist_pairs):
+                    if not _same_pair_for_options(hist_pair, pairs[idx]):
+                        return pairs
+                return pairs[len(hist_pairs):]
 
-                prev_snapshot = latest_snapshot_by_region.get(regiao_key) or {
-                    "full_credito": [],
-                    "full_anulada": [],
+            temporal_history_by_region = {}
+            for mid in approved_ids:
+                by_region = items_by_meta_region.get(int(mid), {})
+                for reg_key, reg_rows in by_region.items():
+                    cred_list, anu_list = _build_aligned_lists_from_items(reg_rows)
+                    size = max(len(cred_list), len(anu_list))
+                    if size <= 0:
+                        continue
+                    pairs = []
+                    for i in range(size):
+                        c = str(cred_list[i] if i < len(cred_list) else "" or "").strip()
+                        a = str(anu_list[i] if i < len(anu_list) else "" or "").strip()
+                        if c or a:
+                            pairs.append((c, a))
+                    if not pairs:
+                        continue
+                    current_hist = list(temporal_history_by_region.get(reg_key) or [])
+                    hist_delta = _strip_prefix_for_options(current_hist, pairs)
+                    if hist_delta:
+                        temporal_history_by_region.setdefault(reg_key, []).extend(hist_delta)
+
+            historico_map = {}
+            movimento_map = {}
+            for reg_key, pairs in temporal_history_by_region.items():
+                hist_credito_items = [p[0] for p in pairs]
+                hist_anulada_items = [p[1] for p in pairs]
+                historico_map[reg_key] = {
+                    "meta_credito_historico_items": hist_credito_items,
+                    "meta_anulada_historico_items": hist_anulada_items,
                 }
-                prev_credito = list(prev_snapshot.get("full_credito") or [])
-                prev_anulada = list(prev_snapshot.get("full_anulada") or [])
-
-                mov_credito = _resolve_mov_items(full_credito, prev_credito, mov_credito)
-                mov_anulada = _resolve_mov_items(full_anulada, prev_anulada, mov_anulada)
-
-                should_update_snapshot = (
-                    regiao_key not in latest_snapshot_by_region
-                    or bool(mov_credito)
-                    or bool(mov_anulada)
-                )
-                if should_update_snapshot:
-                    # Mantém o último snapshot com movimentação da região.
-                    # Se um ID mais novo não trouxe mudança nesta região,
-                    # preserva a classificação anterior (histórico + movimento).
-                    latest_snapshot_by_region[regiao_key] = {
-                        "prev_credito": prev_credito,
-                        "prev_anulada": prev_anulada,
-                        "full_credito": list(full_credito),
-                        "full_anulada": list(full_anulada),
-                        "mov_credito": list(mov_credito),
-                        "mov_anulada": list(mov_anulada),
-                    }
-
-        for regiao_key, snap in latest_snapshot_by_region.items():
-            historico_map[regiao_key] = {
-                "meta_credito_historico_items": [str(v) for v in (snap.get("prev_credito") or [])],
-                "meta_anulada_historico_items": [str(v) for v in (snap.get("prev_anulada") or [])],
-            }
-            movimento_map[regiao_key] = {
-                "meta_credito_mov_items": [str(v) for v in (snap.get("mov_credito") or [])],
-                "meta_anulada_mov_items": [str(v) for v in (snap.get("mov_anulada") or [])],
-            }
+                movimento_map[reg_key] = {
+                    "meta_credito_mov_items": [],
+                    "meta_anulada_mov_items": [],
+                }
 
     def _regiao_sort_key(val: str):
         txt = str(val or "").strip()
@@ -3775,55 +3885,56 @@ def api_meta_fisica_options():
         return (1, txt.lower(), txt.lower())
 
     rows_out = []
-    for regiao in sorted(grouped.keys(), key=_regiao_sort_key):
-        item = grouped[regiao]
-        ids = item["plan21_ids"]
-        regiao_key = _normalize_codigo_num(regiao) or regiao.lower()
-        hist_item = historico_map.get(
-            regiao_key,
-            {
-                "meta_credito_historico_items": [],
-                "meta_anulada_historico_items": [],
-            },
-        )
-        mov_item = movimento_map.get(
-            regiao_key,
-            {
-                "meta_credito_mov_items": [],
-                "meta_anulada_mov_items": [],
-            },
-        )
-        hist_credito_items = hist_item.get("meta_credito_historico_items") or []
-        hist_anulada_items = hist_item.get("meta_anulada_historico_items") or []
-        mov_credito_items = mov_item.get("meta_credito_mov_items") or []
-        mov_anulada_items = mov_item.get("meta_anulada_mov_items") or []
-        meta_credito_historico = Decimal("0")
-        for v in hist_credito_items:
-            parsed = _parse_decimal(v)
-            if parsed is not None:
-                meta_credito_historico += parsed
-        meta_anulada_historico = Decimal("0")
-        for v in hist_anulada_items:
-            parsed = _parse_decimal(v)
-            if parsed is not None:
-                meta_anulada_historico += parsed
-        rows_out.append(
-            {
-                "regiao_produto": item["regiao_produto"],
-                "meta_produto": item["meta_produto"],
-                "meta_credito": item["meta_credito"],
-                "meta_anulada": item["meta_anulada"],
-                "meta_atual": item["meta_atual"],
-                "meta_credito_historico": str(meta_credito_historico),
-                "meta_anulada_historico": str(meta_anulada_historico),
-                "meta_credito_historico_items": hist_credito_items,
-                "meta_anulada_historico_items": hist_anulada_items,
-                "meta_credito_mov_items": mov_credito_items,
-                "meta_anulada_mov_items": mov_anulada_items,
-                "plan21_nger_id": ids[0] if ids else None,
-                "plan21_ids": ids,
-            }
-        )
+    if include_rows:
+        for regiao in sorted(grouped.keys(), key=_regiao_sort_key):
+            item = grouped[regiao]
+            ids = item["plan21_ids"]
+            regiao_key = _normalize_codigo_num(regiao) or regiao.lower()
+            hist_item = historico_map.get(
+                regiao_key,
+                {
+                    "meta_credito_historico_items": [],
+                    "meta_anulada_historico_items": [],
+                },
+            )
+            mov_item = movimento_map.get(
+                regiao_key,
+                {
+                    "meta_credito_mov_items": [],
+                    "meta_anulada_mov_items": [],
+                },
+            )
+            hist_credito_items = hist_item.get("meta_credito_historico_items") or []
+            hist_anulada_items = hist_item.get("meta_anulada_historico_items") or []
+            mov_credito_items = mov_item.get("meta_credito_mov_items") or []
+            mov_anulada_items = mov_item.get("meta_anulada_mov_items") or []
+            meta_credito_historico = Decimal("0")
+            for v in hist_credito_items:
+                parsed = _parse_decimal(v)
+                if parsed is not None:
+                    meta_credito_historico += parsed
+            meta_anulada_historico = Decimal("0")
+            for v in hist_anulada_items:
+                parsed = _parse_decimal(v)
+                if parsed is not None:
+                    meta_anulada_historico += parsed
+            rows_out.append(
+                {
+                    "regiao_produto": item["regiao_produto"],
+                    "meta_produto": item["meta_produto"],
+                    "meta_credito": item["meta_credito"],
+                    "meta_anulada": item["meta_anulada"],
+                    "meta_atual": item["meta_atual"],
+                    "meta_credito_historico": str(meta_credito_historico),
+                    "meta_anulada_historico": str(meta_anulada_historico),
+                    "meta_credito_historico_items": hist_credito_items,
+                    "meta_anulada_historico_items": hist_anulada_items,
+                    "meta_credito_mov_items": mov_credito_items,
+                    "meta_anulada_mov_items": mov_anulada_items,
+                    "plan21_nger_id": ids[0] if ids else None,
+                    "plan21_ids": ids,
+                }
+            )
 
     regioes_catalog_rows = _safe_query_mappings(
         """
@@ -3852,14 +3963,16 @@ def api_meta_fisica_options():
             }
         )
 
-    return jsonify(
-        {
-            "current_year": current_year,
-            "options": options,
-            "rows": rows_out,
-            "regioes_catalog": regioes_catalog,
-        }
-    )
+    payload = {
+        "current_year": current_year,
+        "options": options,
+        "rows": rows_out,
+        "regioes_catalog": regioes_catalog,
+        "option_rows": option_rows,
+        "pending_meta": pending_meta,
+    }
+    _cache_set_meta_fisica_options(cache_key, payload)
+    return jsonify(payload)
 
 
 @home_bp.route("/api/meta-fisica", methods=["POST"])
@@ -3886,14 +3999,14 @@ def api_meta_fisica_create():
         try:
             meta_id = int(meta_id_raw)
         except Exception:
-            return jsonify({"error": "ID de registro invÃ¡lido para ediÃ§Ã£o."}), 400
+            return jsonify({"error": "ID de registro inválido para edição."}), 400
         registro_existente = (
             AlterarMeta.query.filter(AlterarMeta.id == meta_id)
             .filter(AlterarMeta.ativo == True)  # noqa: E712
             .first()
         )
         if not registro_existente:
-            return jsonify({"error": "Registro de meta nÃ£o encontrado para ediÃ§Ã£o."}), 404
+            return jsonify({"error": "Registro de meta não encontrado para edição."}), 404
         criador_registro = None
         if getattr(registro_existente, "usuario_id", None):
             criador_registro = Usuario.query.filter_by(id=registro_existente.usuario_id).first()
@@ -3910,7 +4023,7 @@ def api_meta_fisica_create():
             return jsonify({"error": f"Somente registros com status Aguardando podem ser editados ({controle_meta})."}), 400
         perfil_criador = getattr(criador_registro, "perfil_id", None) if criador_registro else None
         if not _current_user_matches_perfil(perfil_criador):
-            return jsonify({"error": f"UsuÃ¡rio sem permissÃ£o para editar registro {controle_meta}."}), 403
+            return jsonify({"error": f"Usuário sem permissão para editar registro {controle_meta}."}), 403
 
     if exercicio_raw != current_year:
         return jsonify({"error": "Exercicio invalido para o ano corrente."}), 400
@@ -3943,6 +4056,13 @@ def api_meta_fisica_create():
             if txt:
                 out.append(txt)
         return out
+    def _parse_item_list_aligned(raw_items):
+        if not isinstance(raw_items, list):
+            return []
+        out = []
+        for raw in raw_items:
+            out.append(str(raw or "").strip())
+        return out
 
     def _validate_item_value(val: Decimal, regiao_produto: str, field_name: str):
         if val == Decimal("0"):
@@ -3966,10 +4086,10 @@ def api_meta_fisica_create():
         meta_produto = _parse_decimal(row.get("meta_produto"))
         credito_items_raw = _parse_item_list(row.get("meta_credito_items"))
         anulada_items_raw = _parse_item_list(row.get("meta_anulada_items"))
-        credito_mov_items_raw = _parse_item_list(row.get("meta_credito_mov_items"))
-        anulada_mov_items_raw = _parse_item_list(row.get("meta_anulada_mov_items"))
-        credito_hist_items_raw = _parse_item_list(row.get("meta_credito_historico_items"))
-        anulada_hist_items_raw = _parse_item_list(row.get("meta_anulada_historico_items"))
+        credito_mov_items_aligned_raw = _parse_item_list_aligned(row.get("meta_credito_mov_items"))
+        anulada_mov_items_aligned_raw = _parse_item_list_aligned(row.get("meta_anulada_mov_items"))
+        credito_hist_items_aligned_raw = _parse_item_list_aligned(row.get("meta_credito_historico_items"))
+        anulada_hist_items_aligned_raw = _parse_item_list_aligned(row.get("meta_anulada_historico_items"))
         meta_credito_historico = _parse_decimal(row.get("meta_credito_historico"))
         meta_anulada_historico = _parse_decimal(row.get("meta_anulada_historico"))
         has_historico_movimento = bool(row.get("has_historico_movimento"))
@@ -4010,22 +4130,24 @@ def api_meta_fisica_create():
 
         has_credito_mov_key = isinstance(row, dict) and ("meta_credito_mov_items" in row)
         has_anulada_mov_key = isinstance(row, dict) and ("meta_anulada_mov_items" in row)
-        credito_mov_source = credito_mov_items_raw if has_credito_mov_key else credito_items_raw
-        anulada_mov_source = anulada_mov_items_raw if has_anulada_mov_key else anulada_items_raw
+        credito_mov_source = credito_mov_items_aligned_raw if has_credito_mov_key else credito_items_raw
+        anulada_mov_source = anulada_mov_items_aligned_raw if has_anulada_mov_key else anulada_items_raw
 
         credito_hist_items = []
-        for item_raw in credito_hist_items_raw:
+        for item_raw in credito_hist_items_aligned_raw:
             item_val = _parse_decimal(item_raw)
             if item_val is not None and item_val > Decimal("0"):
                 credito_hist_items.append(item_val)
         anulada_hist_items = []
-        for item_raw in anulada_hist_items_raw:
+        for item_raw in anulada_hist_items_aligned_raw:
             item_val = _parse_decimal(item_raw)
             if item_val is not None and item_val > Decimal("0"):
                 anulada_hist_items.append(item_val)
 
         credito_mov_items = []
         for item_raw in credito_mov_source:
+            if str(item_raw or "").strip() == "":
+                continue
             item_val = _parse_decimal(item_raw)
             if item_val is None:
                 return jsonify({"error": f"Acrescimo invalido para a regiao {regiao_produto}."}), 400
@@ -4037,6 +4159,8 @@ def api_meta_fisica_create():
 
         anulada_mov_items = []
         for item_raw in anulada_mov_source:
+            if str(item_raw or "").strip() == "":
+                continue
             item_val = _parse_decimal(item_raw)
             if item_val is None:
                 return jsonify({"error": f"Reducao invalida para a regiao {regiao_produto}."}), 400
@@ -4066,6 +4190,10 @@ def api_meta_fisica_create():
                 "anulada_mov_items": anulada_mov_items,
                 "meta_credito_mov_items": [str(i.get("valor")) for i in credito_mov_items],
                 "meta_anulada_mov_items": [str(i.get("valor")) for i in anulada_mov_items],
+                "meta_credito_mov_items_aligned": credito_mov_items_aligned_raw,
+                "meta_anulada_mov_items_aligned": anulada_mov_items_aligned_raw,
+                "meta_credito_historico_items_aligned": credito_hist_items_aligned_raw,
+                "meta_anulada_historico_items_aligned": anulada_hist_items_aligned_raw,
                 "meta_credito_historico_items": [str(v) for v in credito_hist_items],
                 "meta_anulada_historico_items": [str(v) for v in anulada_hist_items],
                 "meta_credito_historico": meta_credito_historico,
@@ -4075,7 +4203,7 @@ def api_meta_fisica_create():
             }
         )
 
-    # IDs do plan21_nger para os filtros do formulÃƒÂ¡rio (ordem crescente)
+    # IDs do plan21_nger para os filtros do formulário (ordem crescente)
     filters_where_base = [
         "ativo = 1",
         "CAST(exercicio AS CHAR) = :exercicio",
@@ -4125,7 +4253,7 @@ def api_meta_fisica_create():
     all_plan_ids = sorted(all_plan_ids_set)
     plan21_nger_id_latest = all_plan_ids[-1] if all_plan_ids else None
 
-    # Salvar como registro ÃƒÂºnico com dados da tabela em JSON (fÃƒÂ¡cil reconstruÃƒÂ§ÃƒÂ£o)
+    # Salvar como registro único com dados da tabela em JSON (fácil reconstrução)
     meta_produto_total = Decimal("0")
     meta_credito_total = Decimal("0")
     meta_anulada_total = Decimal("0")
@@ -4150,8 +4278,10 @@ def api_meta_fisica_create():
                 "is_novo": bool(row.get("is_novo")),
                 "meta_credito_items": [str(i.get("valor")) for i in row.get("credito_items", [])],
                 "meta_anulada_items": [str(i.get("valor")) for i in row.get("anulada_items", [])],
-                "meta_credito_mov_items": [str(v) for v in row.get("meta_credito_mov_items", [])],
-                "meta_anulada_mov_items": [str(v) for v in row.get("meta_anulada_mov_items", [])],
+                "meta_credito_mov_items": [str(v) for v in row.get("meta_credito_mov_items_aligned", row.get("meta_credito_mov_items", []))],
+                "meta_anulada_mov_items": [str(v) for v in row.get("meta_anulada_mov_items_aligned", row.get("meta_anulada_mov_items", []))],
+                "meta_credito_historico_items": [str(v) for v in row.get("meta_credito_historico_items_aligned", row.get("meta_credito_historico_items", []))],
+                "meta_anulada_historico_items": [str(v) for v in row.get("meta_anulada_historico_items_aligned", row.get("meta_anulada_historico_items", []))],
                 "meta_credito_historico": str(row.get("meta_credito_historico")) if row.get("meta_credito_historico") is not None else "",
                 "meta_anulada_historico": str(row.get("meta_anulada_historico")) if row.get("meta_anulada_historico") is not None else "",
                 "has_historico_movimento": bool(row.get("has_historico_movimento")),
@@ -4251,6 +4381,7 @@ def api_meta_fisica_create():
                     )
                 )
         db.session.commit()
+        _cache_invalidate_meta_fisica_options()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao salvar meta fisica: {exc}"}), 500
@@ -4342,10 +4473,287 @@ def _parse_meta_rows_for_apply(registro: AlterarMeta) -> list[dict]:
                 "meta_credito": meta_credito,
                 "meta_anulada": meta_anulada,
                 "meta_atual": meta_atual,
+                "meta_credito_items": item.get("meta_credito_items") if isinstance(item.get("meta_credito_items"), list) else [],
+                "meta_anulada_items": item.get("meta_anulada_items") if isinstance(item.get("meta_anulada_items"), list) else [],
+                "meta_credito_historico_items": item.get("meta_credito_historico_items")
+                if isinstance(item.get("meta_credito_historico_items"), list)
+                else [],
+                "meta_anulada_historico_items": item.get("meta_anulada_historico_items")
+                if isinstance(item.get("meta_anulada_historico_items"), list)
+                else [],
+                "meta_credito_mov_items": item.get("meta_credito_mov_items")
+                if isinstance(item.get("meta_credito_mov_items"), list)
+                else [],
+                "meta_anulada_mov_items": item.get("meta_anulada_mov_items")
+                if isinstance(item.get("meta_anulada_mov_items"), list)
+                else [],
                 "plan21_ids": plan21_ids,
             }
         )
     return rows
+
+
+def _build_aligned_lists_from_items(item_rows: list[dict]) -> tuple[list[str], list[str]]:
+    # Preserva o pareamento contábil por "ordem":
+    # itens de acréscimo/redução com a mesma ordem devem ocupar a mesma linha.
+    grouped = {}
+    order_keys = []
+    for it in item_rows or []:
+        tipo = str(it.get("tipo") or "").strip().lower()
+        val = _parse_decimal(it.get("valor"))
+        if val is None or val <= Decimal("0"):
+            continue
+        ordem = it.get("ordem")
+        try:
+            ordem_key = int(ordem) if ordem is not None else None
+        except Exception:
+            ordem_key = None
+        if ordem_key is None:
+            try:
+                ordem_key = int(it.get("id") or 0)
+            except Exception:
+                ordem_key = 0
+        if ordem_key not in grouped:
+            grouped[ordem_key] = {"credito": "", "anulada": ""}
+            order_keys.append(ordem_key)
+        if tipo == "acrescimo":
+            grouped[ordem_key]["credito"] = str(val)
+        elif tipo == "reducao":
+            grouped[ordem_key]["anulada"] = str(val)
+
+    credito = []
+    anulada = []
+    for key in sorted(order_keys):
+        row = grouped.get(key) or {}
+        c = str(row.get("credito") or "").strip()
+        a = str(row.get("anulada") or "").strip()
+        if not c and not a:
+            continue
+        credito.append(c)
+        anulada.append(a)
+    return credito, anulada
+
+
+def _rebuild_meta_rows_from_alterar_meta_item(registro: AlterarMeta) -> list[dict]:
+    base_rows = _parse_meta_rows_for_apply(registro)
+    if not base_rows:
+        return []
+
+    registro_id = int(getattr(registro, "id", 0) or 0)
+    if registro_id <= 0:
+        return []
+
+    ctx = {
+        "exercicio": getattr(registro, "exercicio", None),
+        "unidade_orcamentaria": str(getattr(registro, "unidade_orcamentaria", "") or "").strip(),
+        "programa": str(getattr(registro, "programa", "") or "").strip(),
+        "acao_paoe": str(getattr(registro, "acao_paoe", "") or "").strip(),
+        "produto_acao": str(getattr(registro, "produto_acao", "") or "").strip(),
+        "unid_medida_produto": str(getattr(registro, "unid_medida_produto", "") or "").strip(),
+    }
+    region_keys_in_current = set()
+    for row in base_rows:
+        reg = str(row.get("regiao_produto") or "").strip()
+        reg_key = _normalize_codigo_num(reg) or reg.lower()
+        if reg_key:
+            region_keys_in_current.add(reg_key)
+
+    metas_ctx = (
+        AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
+        .filter(AlterarMeta.exercicio == ctx["exercicio"])
+        .filter(AlterarMeta.unidade_orcamentaria == ctx["unidade_orcamentaria"])
+        .filter(AlterarMeta.programa == ctx["programa"])
+        .filter(AlterarMeta.acao_paoe == ctx["acao_paoe"])
+        .filter(AlterarMeta.produto_acao == ctx["produto_acao"])
+        .filter(AlterarMeta.unid_medida_produto == ctx["unid_medida_produto"])
+        .filter(AlterarMeta.id <= registro_id)
+        .order_by(AlterarMeta.id.asc())
+        .all()
+    )
+    metas_chain = []
+    for m in metas_ctx:
+        mid = int(getattr(m, "id", 0) or 0)
+        if mid <= 0:
+            continue
+        if mid == registro_id:
+            metas_chain.append(mid)
+            continue
+        st = str(getattr(m, "status_aprovacao", "") or "").strip().lower()
+        if st == "aprovado":
+            metas_chain.append(mid)
+
+    if not metas_chain:
+        metas_chain = [registro_id]
+
+    status_registro_atual = str(getattr(registro, "status_aprovacao", "") or "").strip().lower()
+    latest_approved_totals_by_region = {}
+    if status_registro_atual != "aprovado":
+        for m in metas_ctx:
+            mid = int(getattr(m, "id", 0) or 0)
+            if mid <= 0 or mid >= registro_id:
+                continue
+            st = str(getattr(m, "status_aprovacao", "") or "").strip().lower()
+            if st != "aprovado":
+                continue
+            for prev_row in _parse_meta_rows_for_apply(m):
+                prev_reg = str(prev_row.get("regiao_produto") or "").strip()
+                prev_key = _normalize_codigo_num(prev_reg) or prev_reg.lower()
+                if not prev_key or prev_key not in region_keys_in_current:
+                    continue
+                latest_approved_totals_by_region[prev_key] = {
+                    "meta_credito": _parse_decimal(prev_row.get("meta_credito")) or Decimal("0"),
+                    "meta_anulada": _parse_decimal(prev_row.get("meta_anulada")) or Decimal("0"),
+                }
+
+    meta_ids_csv = ",".join(str(int(x)) for x in metas_chain)
+    chain_items_rows = _safe_query_mappings(
+        """
+        SELECT alterar_meta_id, regiao_codigo, tipo, valor, ordem, id
+        FROM alterar_meta_item
+        WHERE ativo = 1
+          AND alterar_meta_id IN (""" + meta_ids_csv + """)
+        ORDER BY alterar_meta_id ASC, ordem ASC, id ASC
+        """,
+        {},
+    )
+    items_by_meta_region = {}
+    for it in chain_items_rows:
+        meta_id = int(it.get("alterar_meta_id") or 0)
+        reg = str(it.get("regiao_codigo") or "").strip()
+        reg_key = _normalize_codigo_num(reg) or reg.lower()
+        if not reg_key or reg_key not in region_keys_in_current:
+            continue
+        items_by_meta_region.setdefault(meta_id, {}).setdefault(reg_key, []).append(it)
+
+    def _same_meta_pair(left: tuple[str, str], right: tuple[str, str]) -> bool:
+        for idx in (0, 1):
+            l_val = _parse_decimal(left[idx])
+            r_val = _parse_decimal(right[idx])
+            l_num = l_val if l_val is not None else Decimal("0")
+            r_num = r_val if r_val is not None else Decimal("0")
+            if abs(l_num - r_num) >= Decimal("0.000001"):
+                return False
+        return True
+
+    def _strip_historico_prefix(
+        hist_pairs: list[tuple[str, str]],
+        mov_pairs: list[tuple[str, str]],
+    ) -> list[tuple[str, str]]:
+        if not hist_pairs or not mov_pairs or len(mov_pairs) < len(hist_pairs):
+            return mov_pairs
+        for idx, hist_pair in enumerate(hist_pairs):
+            if not _same_meta_pair(hist_pair, mov_pairs[idx]):
+                return mov_pairs
+        return mov_pairs[len(hist_pairs):]
+
+    historico_by_region = {}
+    movimento_by_region = {}
+    for mid in metas_chain:
+        by_region = items_by_meta_region.get(int(mid), {})
+        for reg_key in region_keys_in_current:
+            reg_rows = by_region.get(reg_key, [])
+            cred_list, anu_list = _build_aligned_lists_from_items(reg_rows)
+            size = max(len(cred_list), len(anu_list))
+            if size <= 0:
+                continue
+            pairs = []
+            for i in range(size):
+                c = str(cred_list[i] if i < len(cred_list) else "" or "").strip()
+                a = str(anu_list[i] if i < len(anu_list) else "" or "").strip()
+                if c or a:
+                    pairs.append((c, a))
+            if not pairs:
+                continue
+            if int(mid) == registro_id:
+                current_hist = list(historico_by_region.get(reg_key) or [])
+                current_mov = _strip_historico_prefix(current_hist, pairs)
+                if current_mov:
+                    movimento_by_region.setdefault(reg_key, []).extend(current_mov)
+            else:
+                current_hist = list(historico_by_region.get(reg_key) or [])
+                hist_delta = _strip_historico_prefix(current_hist, pairs)
+                if hist_delta:
+                    historico_by_region.setdefault(reg_key, []).extend(hist_delta)
+
+    def _fmt_meta_decimal(value: Decimal) -> str:
+        if value <= Decimal("0"):
+            return ""
+        txt = format(value, "f")
+        if "." in txt:
+            txt = txt.rstrip("0").rstrip(".")
+        return txt
+
+    out = []
+    for row in base_rows:
+        reg = str(row.get("regiao_produto") or "").strip()
+        reg_key = _normalize_codigo_num(reg) or reg.lower()
+        if status_registro_atual != "aprovado":
+            approved_totals = latest_approved_totals_by_region.get(reg_key) or {}
+            hist_credito_total = approved_totals.get("meta_credito") or Decimal("0")
+            hist_anulada_total = approved_totals.get("meta_anulada") or Decimal("0")
+            current_credito_total = _parse_decimal(row.get("meta_credito")) or Decimal("0")
+            current_anulada_total = _parse_decimal(row.get("meta_anulada")) or Decimal("0")
+            mov_credito_total = current_credito_total - hist_credito_total
+            mov_anulada_total = current_anulada_total - hist_anulada_total
+            hist_pairs = list(historico_by_region.get(reg_key) or [])
+            mov_pairs = []
+            if mov_credito_total > Decimal("0") or mov_anulada_total > Decimal("0"):
+                mov_pairs.append(
+                    (
+                        _fmt_meta_decimal(mov_credito_total),
+                        _fmt_meta_decimal(mov_anulada_total),
+                    )
+                )
+        else:
+            hist_pairs = list(historico_by_region.get(reg_key) or [])
+            timeline_mov_pairs = list(movimento_by_region.get(reg_key) or [])
+            mov_pairs = _strip_historico_prefix(hist_pairs, timeline_mov_pairs)
+        hist_credito_items = [p[0] for p in hist_pairs]
+        hist_anulada_items = [p[1] for p in hist_pairs]
+        mov_credito_items = [p[0] for p in mov_pairs]
+        mov_anulada_items = [p[1] for p in mov_pairs]
+        meta_credito_historico = Decimal("0")
+        for v in hist_credito_items:
+            p = _parse_decimal(v)
+            if p is not None:
+                meta_credito_historico += p
+        meta_anulada_historico = Decimal("0")
+        for v in hist_anulada_items:
+            p = _parse_decimal(v)
+            if p is not None:
+                meta_anulada_historico += p
+        out.append(
+            {
+                "regiao_produto": reg,
+                "meta_produto": str(row.get("meta_produto") or Decimal("0")),
+                "meta_credito": str(row.get("meta_credito") or Decimal("0")),
+                "meta_anulada": str(row.get("meta_anulada") or Decimal("0")),
+                "meta_atual": str(row.get("meta_atual") or Decimal("0")),
+                "meta_credito_historico": str(meta_credito_historico),
+                "meta_anulada_historico": str(meta_anulada_historico),
+                "meta_credito_historico_items": hist_credito_items,
+                "meta_anulada_historico_items": hist_anulada_items,
+                "meta_credito_mov_items": mov_credito_items,
+                "meta_anulada_mov_items": mov_anulada_items,
+                "plan21_ids": row.get("plan21_ids") or [],
+            }
+        )
+    return out
+
+
+@home_bp.route("/api/meta-fisica/<int:meta_id>/linhas", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/meta_fisica")
+def api_meta_fisica_linhas(meta_id: int):
+    registro = (
+        AlterarMeta.query.filter(AlterarMeta.id == meta_id)
+        .filter(AlterarMeta.ativo == True)  # noqa: E712
+        .first()
+    )
+    if not registro:
+        return jsonify({"error": "Registro de meta não encontrado."}), 404
+    linhas = _rebuild_meta_rows_from_alterar_meta_item(registro)
+    return jsonify({"linhas": linhas})
 
 
 def _apply_meta_fisica_to_plan21(registro: AlterarMeta) -> list[int]:
@@ -4552,6 +4960,7 @@ def api_meta_fisica_delete(meta_id: int):
             )
         )
         db.session.commit()
+        _cache_invalidate_meta_fisica_options()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao excluir registro {controle_meta}: {exc}"}), 500
@@ -4638,6 +5047,7 @@ def api_meta_fisica_aprovar(meta_id: int):
         registro.alterado_em = now
 
         db.session.commit()
+        _cache_invalidate_meta_fisica_options()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao aprovar registro de meta: {exc}"}), 500
@@ -4674,7 +5084,7 @@ def api_subacao_options():
         val = (request.args.get(key) or "").strip()
         if val:
             selected[key] = val
-    # forÃƒÂ§a o exercicio ao ano atual
+    # força o exercício ao ano atual
     selected["exercicio"] = current_year
     plan_options = {}
     for key, col in plan_fields.items():

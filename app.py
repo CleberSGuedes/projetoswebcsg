@@ -5,9 +5,11 @@ from datetime import datetime, timedelta
 import secrets
 import logging
 import os
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import SimpleNamespace
+from time import perf_counter
 import uuid
 from werkzeug.exceptions import HTTPException
 from sqlalchemy import update, select, delete, func, text
@@ -21,6 +23,13 @@ from rotas import register_blueprints
 
 mail = Mail()
 SESSION_TIMEOUT = timedelta(hours=2)
+ACTIVE_SESSIONS_COUNT_TTL_S = max(
+    0, int(os.getenv("ACTIVE_SESSIONS_COUNT_TTL_S", "15") or "15")
+)
+PROFILE_CACHE_TTL_S = max(0, int(os.getenv("PROFILE_CACHE_TTL_S", "120") or "120"))
+REQUEST_SLOW_MS = max(0, int(os.getenv("REQUEST_SLOW_MS", "800") or "800"))
+_active_sessions_count_cache_lock = threading.Lock()
+_active_sessions_count_cache = {"expires_at": 0.0, "value": 0}
 
 
 def _setup_logging(app: Flask) -> None:
@@ -172,6 +181,35 @@ def _as_int_or_none(value):
         return None
 
 
+def _now_ts() -> float:
+    try:
+        return datetime.utcnow().timestamp()
+    except Exception:
+        return 0.0
+
+
+def _get_cached_active_sessions_count(cutoff: datetime) -> int:
+    now_ts = _now_ts()
+    if ACTIVE_SESSIONS_COUNT_TTL_S > 0:
+        with _active_sessions_count_cache_lock:
+            if _active_sessions_count_cache["expires_at"] > now_ts:
+                return int(_active_sessions_count_cache["value"] or 0)
+    result = _execute_with_retry(
+        select(func.count())
+        .select_from(ActiveSession)
+        .where(ActiveSession.last_activity >= cutoff)
+    )
+    if result is None:
+        _safe_session_rollback()
+        return 0
+    count_val = int(result.scalar() or 0)
+    if ACTIVE_SESSIONS_COUNT_TTL_S > 0:
+        with _active_sessions_count_cache_lock:
+            _active_sessions_count_cache["value"] = count_val
+            _active_sessions_count_cache["expires_at"] = now_ts + ACTIVE_SESSIONS_COUNT_TTL_S
+    return count_val
+
+
 def _restore_cached_user_context(user) -> bool:
     if not isinstance(user, dict):
         return False
@@ -233,10 +271,29 @@ def create_app():
         if wants_utf8 and "charset=" not in content_type.lower():
             response.headers["Content-Type"] = f"{mimetype}; charset=utf-8"
         response.charset = "utf-8"
+        try:
+            started = getattr(g, "_req_started_at", None)
+            if started is not None:
+                elapsed_ms = (perf_counter() - started) * 1000.0
+                if elapsed_ms >= REQUEST_SLOW_MS:
+                    app.logger.warning(
+                        "slow_request method=%s path=%s status=%s elapsed_ms=%.2f xhr=%s",
+                        request.method,
+                        request.path,
+                        getattr(response, "status_code", ""),
+                        elapsed_ms,
+                        bool(request.headers.get("X-Requested-With")),
+                    )
+        except Exception:
+            pass
         return response
 
     @app.before_request
     def load_current_user():
+        try:
+            g._req_started_at = perf_counter()
+        except Exception:
+            pass
         if request.path.startswith("/static/") or request.path == "/favicon.ico":
             return
         g.user = None
@@ -432,6 +489,29 @@ def create_app():
         g.user = user
         perfil_id = user.get("perfil_id")
         perfil_nome = (user.get("perfil") or "").strip()
+        perfil_cached_at = user.get("_perfil_cached_at")
+        try:
+            perfil_cached_at = float(perfil_cached_at or 0.0)
+        except Exception:
+            perfil_cached_at = 0.0
+        if perfil_id and user.get("nivel") is not None and PROFILE_CACHE_TTL_S > 0:
+            now_ts = _now_ts()
+            if now_ts > 0 and (now_ts - perfil_cached_at) <= PROFILE_CACHE_TTL_S:
+                g.user_perfil_id = _as_int_or_none(perfil_id)
+                g.user_nivel = _as_int_or_none(user.get("nivel"))
+                if g.user_perfil_id and g.user_nivel is not None:
+                    try:
+                        g.active_sessions_count = _get_cached_active_sessions_count(cutoff)
+                    except Exception:
+                        g.active_sessions_count = 0
+                    _debug_probe(
+                        "preload_success_profile_cache",
+                        path=request.path,
+                        email=user.get("email"),
+                        perfil_id=getattr(g, "user_perfil_id", None),
+                        nivel=getattr(g, "user_nivel", None),
+                    )
+                    return
         try:
             perfil_row = db.session.get(Perfil, perfil_id) if perfil_id else None
             if not perfil_row and perfil_nome:
@@ -503,31 +583,14 @@ def create_app():
             user["perfil"] = (perfil_row.nome or "").strip()
             user["perfil_id"] = perfil_row.id
             user["nivel"] = perfil_row.nivel
+            user["_perfil_cached_at"] = _now_ts()
             session["user"] = user
         if perfil_row:
             g.user_perfil_id = perfil_row.id
             g.user_nivel = perfil_row.nivel
         try:
-            result = _execute_with_retry(
-                select(func.count())
-                .select_from(ActiveSession)
-                .where(ActiveSession.last_activity >= cutoff)
-            )
-            if result is None:
-                _safe_session_rollback()
-                try:
-                    app.logger.warning(
-                        "auth preload active_sessions_count failed, keeping cached session email=%s path=%s",
-                        user.get("email"),
-                        request.path,
-                    )
-                except Exception:
-                    pass
-                _debug_probe("preload_active_sessions_count_failed_cached_session_kept", path=request.path, email=user.get("email"))
-                return
-            g.active_sessions_count = result.scalar() or 0
-        except SQLAlchemyError:
-            _safe_session_rollback()
+            g.active_sessions_count = _get_cached_active_sessions_count(cutoff)
+        except Exception:
             try:
                 app.logger.warning(
                     "auth preload active_sessions_count exception, keeping cached session email=%s path=%s",

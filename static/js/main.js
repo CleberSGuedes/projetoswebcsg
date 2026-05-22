@@ -7651,6 +7651,8 @@
     let criteriaSelected = -1;
     let summaryPageSize = parseInt(pageSizeSelect?.value || "5", 10) || 5;
     let summaryCurrentPage = 1;
+    let loadOptionsAbortController = null;
+    let optionRowsCatalog = [];
     const fieldLabels = {
       controle_meta: "Controle de Meta",
       exercicio: "Exercício",
@@ -7660,6 +7662,13 @@
       produto_acao: "Produto da Ação",
       regiao_produto: "Região PTA/LOA",
     };
+    const cascadeOptionKeys = [
+      "unidade_orcamentaria",
+      "programa",
+      "acao_paoe",
+      "produto_acao",
+      "unid_medida_produto",
+    ];
     const opLabels = {
       eq: "Igual a",
       contains: "Contém",
@@ -7964,6 +7973,55 @@
         document.addEventListener("keydown", onKeyDown, true);
         document.body.appendChild(overlay);
       });
+    const openMetaFisicaPendingModal = ({ controle }) =>
+      new Promise((resolve) => {
+        const existing = document.getElementById("meta-fisica-pending-overlay");
+        if (existing) existing.remove();
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        overlay.id = "meta-fisica-pending-overlay";
+        const controleTxt = String(controle || "").trim() || "(registro aguardando)";
+        overlay.innerHTML = `
+          <div class="modal-card meta-fisica-save-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="meta-fisica-pending-title">
+            <div class="modal-header">
+              <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+              <div class="modal-header-text">
+                <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+                <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+              </div>
+            </div>
+            <div class="modal-body">
+              <div class="modal-title" id="meta-fisica-pending-title">Alteração de Meta Física aguardando aprovação</div>
+              <p class="meta-fisica-save-confirm-msg">
+                Já existe um registro de alteração de meta aguardando aprovação para estes filtros: ${esc(controleTxt)}.
+              </p>
+              <p class="meta-fisica-save-confirm-msg">
+                Só é possível cadastrar outro ajuste após a aprovação ou rejeição do registro atual.
+              </p>
+            </div>
+            <div class="modal-footer meta-fisica-save-confirm-footer">
+              <button type="button" class="btn btn-primary sm" data-mf-pending-action="ok">Ok</button>
+            </div>
+          </div>
+        `;
+        const finish = () => {
+          document.removeEventListener("keydown", onKeyDown, true);
+          overlay.remove();
+          resolve(true);
+        };
+        const onKeyDown = (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            finish();
+          }
+        };
+        overlay.addEventListener("click", (ev) => {
+          if (ev.target === overlay) finish();
+        });
+        overlay.querySelector('[data-mf-pending-action="ok"]')?.addEventListener("click", finish);
+        document.addEventListener("keydown", onKeyDown, true);
+        document.body.appendChild(overlay);
+      });
     const getFieldItems = (row, field) => {
       const key = field === "meta_credito" ? "meta_credito_items" : "meta_anulada_items";
       const arr = Array.isArray(row[key]) ? row[key].map((v) => String(v ?? "")) : [];
@@ -7979,6 +8037,25 @@
           ? items.map((v) => String(v ?? ""))
           : (row?.is_novo ? [""] : []);
       row[field] = sumFieldItems(row, field);
+    };
+    const cloneRowForRollback = (row) => {
+      if (!row || typeof row !== "object") return null;
+      const copy = { ...row };
+      [
+        "meta_credito_items",
+        "meta_anulada_items",
+        "plan21_ids",
+      ].forEach((k) => {
+        copy[k] = Array.isArray(row[k]) ? row[k].map((v) => String(v ?? "")) : [];
+      });
+      return copy;
+    };
+    const restoreRowFromSnapshot = (row, snapshot) => {
+      if (!row || !snapshot) return;
+      Object.keys(row).forEach((k) => {
+        delete row[k];
+      });
+      Object.assign(row, cloneRowForRollback(snapshot) || {});
     };
     const sumFieldItems = (row, field) => {
       const items = getFieldItems(row, field);
@@ -8052,10 +8129,32 @@
           allow_start_meta_anulada: !!row.allow_start_meta_anulada,
         };
       }
-      const creditoLen = getFieldItems(row, "meta_credito").length;
-      const anuladaLen = getFieldItems(row, "meta_anulada").length;
-      setLockedItemCount(row, "meta_credito", creditoLen);
-      setLockedItemCount(row, "meta_anulada", anuladaLen);
+      // Materializa as linhas exatamente como estavam renderizadas antes do freeze
+      // para não colapsar histórico/movimentação em uma única linha.
+      const materializeAlignedItems = (field) => {
+        const items = getFieldItems(row, field);
+        const lockCount = Math.min(getLockedItemCount(row, field), items.length);
+        const { histRows, movRows } = getLineBlockInfo(row);
+        const histVals = items.slice(0, lockCount);
+        const movVals = items.slice(lockCount);
+        const aligned = [];
+        for (let i = 0; i < histRows; i += 1) {
+          aligned.push(i < histVals.length ? String(histVals[i] ?? "") : "");
+        }
+        for (let i = 0; i < movRows; i += 1) {
+          aligned.push(i < movVals.length ? String(movVals[i] ?? "") : "");
+        }
+        return aligned.length ? aligned : [""];
+      };
+      const creditoAligned = materializeAlignedItems("meta_credito");
+      const anuladaAligned = materializeAlignedItems("meta_anulada");
+      const totalRowsBeforeFreeze = Math.max(creditoAligned.length, anuladaAligned.length, 1);
+      while (creditoAligned.length < totalRowsBeforeFreeze) creditoAligned.push("");
+      while (anuladaAligned.length < totalRowsBeforeFreeze) anuladaAligned.push("");
+      setFieldItems(row, "meta_credito", creditoAligned);
+      setFieldItems(row, "meta_anulada", anuladaAligned);
+      setLockedItemCount(row, "meta_credito", totalRowsBeforeFreeze);
+      setLockedItemCount(row, "meta_anulada", totalRowsBeforeFreeze);
       row.entry_enable_meta_credito = false;
       row.entry_enable_meta_anulada = false;
     };
@@ -8107,8 +8206,7 @@
     };
     const getMovementRowsCount = (row) => getLineBlockInfo(row).total;
     const getMovementLabel = (row, movementIdx) => {
-      const { histRows, total } = getLineBlockInfo(row);
-      if (total <= 1) return "Movimentação";
+      const { histRows } = getLineBlockInfo(row);
       return movementIdx < histRows ? "Histórico" : "Movimentação";
     };
     const buildAdjustedLinesHtml = (row) => {
@@ -8179,7 +8277,13 @@
         inputs += `<div class="meta-fisica-multi-line">
           <span class="meta-fisica-mov-label">${labelText}</span>
           <input type="text" inputmode="decimal" class="meta-fisica-cell ${fieldCss}" data-field="${field}" data-item-idx="${mappedIdx}" value="${esc(formatByUnidade(val))}" ${disabled} />
-          ${!readOnly && isUnlockedItem ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${mappedIdx}" title="Remover lançamento">-</button>` : ""}
+          ${
+            !readOnly &&
+            isUnlockedItem &&
+            (!!row?.has_new_movement || !!entryEnabled)
+              ? `<button type="button" class="meta-fisica-item-remove" data-remove-field="${field}" data-remove-idx="${mappedIdx}" title="Remover lançamento">-</button>`
+              : ""
+          }
         </div>`;
       }
       return `<div class="meta-fisica-multi-wrap">${inputs}
@@ -8229,6 +8333,30 @@
         select.value = current;
       }
     };
+    const refreshCascadeOptionsFromCatalog = () => {
+      if (!Array.isArray(optionRowsCatalog) || !optionRowsCatalog.length) return false;
+      const selected = {};
+      cascadeOptionKeys.forEach((k) => {
+        selected[k] = String(selects[k]?.value || "").trim();
+      });
+      cascadeOptionKeys.forEach((targetKey) => {
+        const values = [];
+        optionRowsCatalog.forEach((row) => {
+          if (!row) return;
+          for (const otherKey of cascadeOptionKeys) {
+            if (otherKey === targetKey) continue;
+            const sel = selected[otherKey];
+            if (sel && String(row[otherKey] || "").trim() !== sel) {
+              return;
+            }
+          }
+          const val = String(row[targetKey] || "").trim();
+          if (val) values.push(val);
+        });
+        applySelectOptions(selects[targetKey], Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "pt-BR")), true);
+      });
+      return true;
+    };
     const hasAllRowFiltersSelected = () =>
       rowRequiredKeys.every((key) => String(selects[key]?.value || "").trim() !== "");
     const getRowsEmptyMessage = () => {
@@ -8247,10 +8375,17 @@
     const parsePositiveList = (list) => (Array.isArray(list) ? list : [])
       .map((v) => parseDec(v))
       .filter((n) => n !== null && n > 0);
+    const parseAlignedList = (list) => (Array.isArray(list) ? list : [])
+      .map((v) => {
+        const n = parseDec(v);
+        return n !== null && n > 0 ? n : null;
+      });
+    const sumPositiveAligned = (list) => (Array.isArray(list) ? list : [])
+      .reduce((acc, n) => acc + ((n !== null && n > 0) ? n : 0), 0);
 
-    const extractLinhaMovHist = (linha) => {
-      const histCreditoItems = parsePositiveList(linha?.meta_credito_historico_items);
-      const histAnuladaItems = parsePositiveList(linha?.meta_anulada_historico_items);
+    const normalizeMetaLinhaSeries = (linha) => {
+      const histCreditoItems = parseAlignedList(linha?.meta_credito_historico_items);
+      const histAnuladaItems = parseAlignedList(linha?.meta_anulada_historico_items);
       const histCreditoScalar = parseDec(linha?.meta_credito_historico);
       const histAnuladaScalar = parseDec(linha?.meta_anulada_historico);
 
@@ -8266,13 +8401,14 @@
       const hasAnuladaMovList = rawMovAnuladaList.length > 0;
       const fullCredito = parsePositiveList(linha?.meta_credito_items);
       const fullAnulada = parsePositiveList(linha?.meta_anulada_items);
-      let movCredito = parsePositiveList(rawMovCreditoList);
-      let movAnulada = parsePositiveList(rawMovAnuladaList);
+      let movCredito = parseAlignedList(rawMovCreditoList);
+      let movAnulada = parseAlignedList(rawMovAnuladaList);
 
       // Fallback legado: só reconstrói movimento via "full - histórico"
       // quando a lista explícita de movimento não existe no payload.
       if (!hasCreditoMovList && fullCredito.length) {
-        movCredito = fullCredito.slice(Math.min(histCreditoItems.length, fullCredito.length));
+        const histCredPosCount = histCreditoItems.filter((n) => n !== null && n > 0).length;
+        movCredito = fullCredito.slice(Math.min(histCredPosCount, fullCredito.length));
         if (!histCreditoItems.length && histCreditoScalar !== null && histCreditoScalar > 0) {
           let consumed = false;
           movCredito = movCredito.filter((n) => {
@@ -8285,7 +8421,8 @@
         }
       }
       if (!hasAnuladaMovList && fullAnulada.length) {
-        movAnulada = fullAnulada.slice(Math.min(histAnuladaItems.length, fullAnulada.length));
+        const histAnuPosCount = histAnuladaItems.filter((n) => n !== null && n > 0).length;
+        movAnulada = fullAnulada.slice(Math.min(histAnuPosCount, fullAnulada.length));
         if (!histAnuladaItems.length && histAnuladaScalar !== null && histAnuladaScalar > 0) {
           let consumed = false;
           movAnulada = movAnulada.filter((n) => {
@@ -8298,13 +8435,18 @@
         }
       }
 
-      if (!histCreditoItems.length && !hasCreditoMovList && histCreditoScalar !== null && histCreditoScalar > 0) {
+      if (!histCreditoItems.some((n) => n !== null && n > 0) && histCreditoScalar !== null && histCreditoScalar > 0) {
         histCreditoItems.push(histCreditoScalar);
       }
-      if (!histAnuladaItems.length && !hasAnuladaMovList && histAnuladaScalar !== null && histAnuladaScalar > 0) {
+      if (!histAnuladaItems.some((n) => n !== null && n > 0) && histAnuladaScalar !== null && histAnuladaScalar > 0) {
         histAnuladaItems.push(histAnuladaScalar);
       }
-      if (!movCredito.length && !movAnulada.length && !histCreditoItems.length && !histAnuladaItems.length) {
+      if (
+        !movCredito.some((n) => n !== null && n > 0) &&
+        !movAnulada.some((n) => n !== null && n > 0) &&
+        !histCreditoItems.some((n) => n !== null && n > 0) &&
+        !histAnuladaItems.some((n) => n !== null && n > 0)
+      ) {
         const metaBase = parseDec(linha?.meta_produto);
         const metaAtual = parseDec(linha?.meta_atual);
         if (metaBase !== null && metaAtual !== null) {
@@ -8314,7 +8456,30 @@
         }
       }
 
-      return { histCreditoItems, histAnuladaItems, movCredito, movAnulada };
+      const creditoSeries = [...histCreditoItems, ...movCredito];
+      const anuladaSeries = [...histAnuladaItems, ...movAnulada];
+      const hasAny =
+        creditoSeries.some((n) => n !== null && n > 0) ||
+        anuladaSeries.some((n) => n !== null && n > 0);
+      return {
+        histCreditoItems,
+        histAnuladaItems,
+        movCredito,
+        movAnulada,
+        creditoSeries,
+        anuladaSeries,
+        hasAny,
+      };
+    };
+
+    const extractLinhaMovHist = (linha) => {
+      const normalized = normalizeMetaLinhaSeries(linha);
+      return {
+        histCreditoItems: normalized.histCreditoItems,
+        histAnuladaItems: normalized.histAnuladaItems,
+        movCredito: normalized.movCredito,
+        movAnulada: normalized.movAnulada,
+      };
     };
 
     const buildMetaFisicaPrintTable = (meta) => {
@@ -8323,33 +8488,46 @@
       let totalAcrescimo = 0;
       let totalReducao = 0;
       let totalMetaAjustada = 0;
+      const toAlignedNums = (list) => (Array.isArray(list) ? list : []).map((v) => {
+        const n = parseDec(v);
+        return n !== null && n > 0 ? n : null;
+      });
+      const extractLinhaForPrint = (linha) => {
+        let histCreditoItems = toAlignedNums(linha?.meta_credito_historico_items);
+        let histAnuladaItems = toAlignedNums(linha?.meta_anulada_historico_items);
+        let movCredito = toAlignedNums(linha?.meta_credito_mov_items);
+        let movAnulada = toAlignedNums(linha?.meta_anulada_mov_items);
+        return { histCreditoItems, histAnuladaItems, movCredito, movAnulada };
+      };
+      const buildAdjustmentRows = (histCreditoItems, histAnuladaItems, movCredito, movAnulada) => {
+        const rawRows = [];
+        const histRowsCount = Math.max(histCreditoItems.length, histAnuladaItems.length);
+        for (let i = 0; i < histRowsCount; i += 1) {
+          const c = histCreditoItems[i] ?? null;
+          const a = histAnuladaItems[i] ?? null;
+          if ((c > 0) || (a > 0)) rawRows.push({ c, a, label: "Histórico" });
+        }
+        const movRowsCount = Math.max(movCredito.length, movAnulada.length);
+        for (let i = 0; i < movRowsCount; i += 1) {
+          const c = movCredito[i] ?? null;
+          const a = movAnulada[i] ?? null;
+          if ((c > 0) || (a > 0)) rawRows.push({ c, a, label: "Movimentação" });
+        }
+        return rawRows;
+      };
       const linhasHtml = linhas
         .map((l) => {
           try {
           const reg = l?.regiao_produto || "";
           const metaBase = parseDec(l?.meta_produto) ?? 0;
           let acumulado = metaBase;
-          let {
-            histCreditoItems,
-            histAnuladaItems,
-            movCredito,
-            movAnulada,
-          } = extractLinhaMovHist(l);
-
-          if (!movCredito.length && !movAnulada.length && !histCreditoItems.length && !histAnuladaItems.length) {
-            const fallbackCredito = parseDec(l?.meta_credito);
-            const fallbackAnulada = parseDec(l?.meta_anulada);
-            if (fallbackCredito !== null && fallbackCredito > 0) movCredito = [fallbackCredito];
-            if (fallbackAnulada !== null && fallbackAnulada > 0) movAnulada = [fallbackAnulada];
-          }
+          let { histCreditoItems, histAnuladaItems, movCredito, movAnulada } = extractLinhaForPrint(l);
 
           const creditoSeries = [...histCreditoItems, ...movCredito];
           const anuladaSeries = [...histAnuladaItems, ...movAnulada];
-          const histRowsCount = Math.max(histCreditoItems.length, histAnuladaItems.length);
-          const movRowsCount = Math.max(movCredito.length, movAnulada.length);
           totalMetaPta += metaBase;
-          totalAcrescimo += creditoSeries.reduce((acc, n) => acc + (n || 0), 0);
-          totalReducao += anuladaSeries.reduce((acc, n) => acc + (n || 0), 0);
+          totalAcrescimo += sumPositiveAligned(creditoSeries);
+          totalReducao += sumPositiveAligned(anuladaSeries);
 
           const rows = [];
           rows.push(`<tr>
@@ -8360,25 +8538,18 @@
             <td>${esc(fmtNum(acumulado))}</td>
           </tr>`);
 
-          for (let i = 0; i < histRowsCount; i += 1) {
-            const c = histCreditoItems[i] ?? 0;
-            const a = histAnuladaItems[i] ?? 0;
-            if (!(c > 0) && !(a > 0)) continue;
-            acumulado += c - a;
+          const classifiedRows = buildAdjustmentRows(
+            histCreditoItems,
+            histAnuladaItems,
+            movCredito,
+            movAnulada
+          );
+          for (const adjRow of classifiedRows) {
+            const c = adjRow.c ?? null;
+            const a = adjRow.a ?? null;
+            acumulado += (c || 0) - (a || 0);
             rows.push(`<tr>
-              <td colspan="2">Histórico</td>
-              <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
-              <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
-              <td>${esc(fmtNum(acumulado))}</td>
-            </tr>`);
-          }
-          for (let i = 0; i < movRowsCount; i += 1) {
-            const c = movCredito[i] ?? 0;
-            const a = movAnulada[i] ?? 0;
-            if (!(c > 0) && !(a > 0)) continue;
-            acumulado += c - a;
-            rows.push(`<tr>
-              <td colspan="2">Movimentação</td>
+              <td colspan="2">${esc(adjRow.label)}</td>
               <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
               <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
               <td>${esc(fmtNum(acumulado))}</td>
@@ -8404,44 +8575,50 @@
         .join("");
 
       return `
-        <table class="print-table">
-          <tbody>
-            <tr><th>Exercício</th><td>${esc(meta?.exercicio || "")}</td></tr>
-            <tr><th>UO</th><td>${esc(meta?.unidade_orcamentaria || "")}</td></tr>
-            <tr><th>Programa de Governo</th><td>${esc(meta?.programa || "")}</td></tr>
-            <tr><th>Ação/PAOE</th><td>${esc(meta?.acao_paoe || "")}</td></tr>
-            <tr><th>Adjunta Solicitante</th><td>${esc(meta?.adj_solicitante || "")}</td></tr>
-            <tr><th>Produto da Ação</th><td>${esc(meta?.produto_acao || "")}</td></tr>
-            <tr><th>Unidade de Medida</th><td>${esc(meta?.unid_medida_produto || "")}</td></tr>
-            <tr>
-              <th class="print-table-label-metas">Tabela de Metas</th>
-              <td>
-                <table class="print-inner">
-                  <thead>
-                    <tr>
-                      <th>REGIÃO PTA/LOA</th>
-                      <th>META PTA/LOA</th>
-                      <th>ACRÉSCIMO</th>
-                      <th>REDUÇÃO</th>
-                      <th>META AJUSTADA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${linhasHtml || '<tr><td colspan="5">Sem linhas</td></tr>'}
-                    <tr class="print-total-row">
-                      <td>TOTAIS</td>
-                      <td>${esc(fmtNum(totalMetaPta))}</td>
-                      <td>${esc(fmtNum(totalAcrescimo))}</td>
-                      <td>${esc(fmtNum(totalReducao))}</td>
-                      <td>${esc(fmtNum(totalMetaAjustada))}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-            <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
-          </tbody>
-        </table>
+        <section class="print-section">
+          <table class="print-table print-data-table">
+            <tbody>
+              <tr><th>Exercício</th><td>${esc(meta?.exercicio || "")}</td></tr>
+              <tr><th>UO</th><td>${esc(meta?.unidade_orcamentaria || "")}</td></tr>
+              <tr><th>Programa de Governo</th><td>${esc(meta?.programa || "")}</td></tr>
+              <tr><th>Ação/PAOE</th><td>${esc(meta?.acao_paoe || "")}</td></tr>
+              <tr><th>Adjunta Solicitante</th><td>${esc(meta?.adj_solicitante || "")}</td></tr>
+              <tr><th>Produto da Ação</th><td>${esc(meta?.produto_acao || "")}</td></tr>
+              <tr><th>Unidade de Medida</th><td>${esc(meta?.unid_medida_produto || "")}</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="print-section print-metas-section">
+          <div class="print-section-title">Tabela de Metas</div>
+          <table class="print-table print-metas-table">
+            <thead>
+              <tr>
+                <th>REGIÃO PTA/LOA</th>
+                <th>META PTA/LOA</th>
+                <th>ACRÉSCIMO</th>
+                <th>REDUÇÃO</th>
+                <th>META AJUSTADA</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhasHtml || '<tr><td colspan="5">Sem linhas</td></tr>'}
+              <tr class="print-total-row">
+                <td>TOTAIS</td>
+                <td>${esc(fmtNum(totalMetaPta))}</td>
+                <td>${esc(fmtNum(totalAcrescimo))}</td>
+                <td>${esc(fmtNum(totalReducao))}</td>
+                <td>${esc(fmtNum(totalMetaAjustada))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="print-section print-justificativa-section">
+          <table class="print-table print-data-table">
+            <tbody>
+              <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
+            </tbody>
+          </table>
+        </section>
       `;
     };
 
@@ -8480,47 +8657,59 @@
     <meta charset="utf-8" />
     <title>Alterar Meta Física</title>
     <style>
-      body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 80px; }
-      .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
-      .print-brand { display: flex; align-items: center; gap: 12px; }
-      .print-brand img { height: 48px; }
-      .print-brand-title { font-weight: 700; font-size: 16px; }
-      .print-brand-subtitle { font-size: 12px; color: #333; }
-      .print-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 18px; }
+      @page { margin: 8mm 5mm 10mm; }
+      body { font-family: Arial, sans-serif; color: #000; margin: 0 12px; padding: 0; }
+      .print-page-header { position: fixed; top: 0; left: 12px; right: 12px; background: #fff; z-index: 2; }
+      .print-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 3px; border-bottom: 1px dashed #000; }
+      .print-brand { display: flex; align-items: center; gap: 8px; }
+      .print-brand img { height: 34px; }
+      .print-brand-title { font-weight: 700; font-size: 13px; }
+      .print-brand-subtitle { font-size: 10px; color: #333; }
+      .print-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 8px; }
       .print-title { text-align: center; font-weight: 700; flex: 1; text-transform: uppercase; }
-      .print-title-key { min-width: 200px; font-size: 12px; }
-      .print-title-date { min-width: 200px; text-align: right; font-size: 12px; }
-      .print-footer { position: fixed; left: 20px; right: 20px; bottom: 12px; border-top: 1px dashed #000; font-size: 11px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-      .print-footer img { height: 36px; }
-      .print-footer-text { flex: 1; text-align: center; line-height: 1.35; }
-      .print-body { margin-top: 2em; }
+      .print-title-key { min-width: 150px; font-size: 10px; }
+      .print-title-date { min-width: 150px; text-align: right; font-size: 10px; }
+      .print-footer { position: fixed; left: 12px; right: 12px; bottom: 4px; border-top: 1px dashed #000; background: #fff; font-size: 9px; padding-top: 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px; z-index: 2; }
+      .print-footer img { height: 26px; }
+      .print-footer-text { flex: 1; text-align: center; line-height: 1.15; }
+      .print-body { margin-top: 76px; padding-bottom: 46px; }
+      .print-section { break-inside: auto; page-break-inside: auto; margin-bottom: 10px; }
+      .print-section-title { border: 1px solid #000; border-bottom: 0; background: #f1f1f1; font-size: 10px; font-weight: 700; padding: 6px 8px; }
       .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
       .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
       .print-table th { width: 35%; background: #f1f1f1; }
-      .print-table th.print-table-label-metas { vertical-align: middle; text-align: left; }
-      .print-inner { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .print-inner th, .print-inner td { border: 1px solid #000; padding: 4px 6px; font-size: 9px; vertical-align: top; }
-      .print-inner th { background: #f8f8f8; }
-      .print-inner tbody td { text-align: center; vertical-align: middle; }
-      .print-inner .print-total-row td { font-weight: 700; background: #f3f3f3; }
+      .print-metas-table { margin-bottom: 0; }
+      .print-metas-table thead { display: table-header-group; }
+      .print-metas-table th, .print-metas-table td { padding: 4px 6px; font-size: 9px; text-align: center; vertical-align: middle; }
+      .print-metas-table th { width: auto; background: #f8f8f8; }
+      .print-metas-table tr { break-inside: avoid; page-break-inside: avoid; }
+      .print-data-table tr, .print-justificativa-section tr { break-inside: avoid; page-break-inside: avoid; }
+      .print-total-row td { font-weight: 700; background: #f3f3f3; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
+      @media print {
+        .print-page-header { top: 0; left: 0; right: 0; }
+        .print-footer { bottom: 0; left: 0; right: 0; }
+        .print-body { margin-top: 70px; padding-bottom: 38px; }
+      }
     </style>
   </head>
   <body>
     ${watermarkText ? `<div class="print-watermark">${watermarkText}</div>` : ""}
-    <div class="print-header">
-      <div class="print-brand">
-        <img src="/static/img/logo.jpg" alt="Logo" />
-        <div class="print-brand-text">
-          <div class="print-brand-title">Sistema de Planejamento e Orçamento</div>
-          <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
+    <div class="print-page-header">
+      <div class="print-header">
+        <div class="print-brand">
+          <img src="/static/img/logo.jpg" alt="Logo" />
+          <div class="print-brand-text">
+            <div class="print-brand-title">Sistema de Planejamento e Orçamento</div>
+            <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="print-title-row">
-      <div class="print-title-key">${esc(controle)}</div>
-      <div class="print-title">Alterar Meta Física</div>
-      <div class="print-title-date">${esc(criadoEm)}</div>
+      <div class="print-title-row">
+        <div class="print-title-key">${esc(controle)}</div>
+        <div class="print-title">Alterar Meta Física</div>
+        <div class="print-title-date">${esc(criadoEm)}</div>
+      </div>
     </div>
     <div class="print-body">
       ${buildMetaFisicaPrintTable(meta)}
@@ -8778,7 +8967,7 @@
       });
       if (saveBtn) saveBtn.textContent = defaultSaveLabel;
       const controls = [
-        ...Object.values(selects).filter(Boolean),
+        ...Object.values(selects).filter((el) => el && el !== selects.exercicio),
         consultBtn,
         addRowBtn,
         clearBtn,
@@ -8787,6 +8976,9 @@
       controls.forEach((el) => {
         el.disabled = false;
       });
+      if (selects.exercicio) {
+        selects.exercicio.disabled = true;
+      }
       if (editBadge) {
         editBadge.textContent = "";
         editBadge.style.display = "none";
@@ -8867,6 +9059,20 @@
         return [];
       }
     };
+    const fetchMetaLinhasById = async (metaId) => {
+      const id = String(metaId || "").trim();
+      if (!id) return [];
+      try {
+        const res = await fetch(`/api/meta-fisica/${encodeURIComponent(id)}/linhas`, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await res.json();
+        if (!res.ok) return [];
+        return Array.isArray(data?.linhas) ? data.linhas : [];
+      } catch (err) {
+        return [];
+      }
+    };
 
     const buildSummaryMetaForPrint = (row) => {
       const linhasRaw = parseSummaryLinhas(row);
@@ -8912,7 +9118,13 @@
       };
 
       try {
-        if (selectedId > 0) {
+        const hasStructuredLists = linhas.some((cl) =>
+          Array.isArray(cl?.meta_credito_historico_items) ||
+          Array.isArray(cl?.meta_anulada_historico_items) ||
+          Array.isArray(cl?.meta_credito_mov_items) ||
+          Array.isArray(cl?.meta_anulada_mov_items)
+        );
+        if (selectedId > 0 && !hasStructuredLists) {
           const approvedBeforeRows = getSummaryRows()
             .filter((r) => {
               const id = Number(r?.dataset?.id || "0");
@@ -9024,6 +9236,63 @@
       };
     };
 
+    const buildCurrentFormMetaForPrint = (selectedRow) => {
+      const linhas = (Array.isArray(tableRows) ? tableRows : [])
+        .filter((row) => !row?.is_novo)
+        .map((row) => {
+          const creditoItemsAll = getFieldItems(row, "meta_credito");
+          const anuladaItemsAll = getFieldItems(row, "meta_anulada");
+          const creditoLockCount = getLockedItemCount(row, "meta_credito");
+          const anuladaLockCount = getLockedItemCount(row, "meta_anulada");
+          const toAligned = (v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0 ? String(v ?? "").trim() : "";
+          };
+          const creditoHist = creditoItemsAll
+            .map((v, idx) => (row.lock_meta_credito && idx < creditoLockCount ? toAligned(v) : null))
+            .filter((v) => v !== null);
+          const anuladaHist = anuladaItemsAll
+            .map((v, idx) => (row.lock_meta_anulada && idx < anuladaLockCount ? toAligned(v) : null))
+            .filter((v) => v !== null);
+          const creditoMov = creditoItemsAll
+            .map((v, idx) => (!(row.lock_meta_credito && idx < creditoLockCount) ? toAligned(v) : null))
+            .filter((v) => v !== null);
+          const anuladaMov = anuladaItemsAll
+            .map((v, idx) => (!(row.lock_meta_anulada && idx < anuladaLockCount) ? toAligned(v) : null))
+            .filter((v) => v !== null);
+          return {
+            regiao_produto: String(row?.regiao_produto || "").trim(),
+            meta_produto: row?.meta_produto ?? "",
+            meta_credito_items: creditoItemsAll.map((v) => toAligned(v)),
+            meta_anulada_items: anuladaItemsAll.map((v) => toAligned(v)),
+            meta_credito_historico_items: creditoHist,
+            meta_anulada_historico_items: anuladaHist,
+            meta_credito_mov_items: creditoMov,
+            meta_anulada_mov_items: anuladaMov,
+          };
+        });
+      return {
+        controle: selectedRow?.dataset?.controleMeta || "",
+        status_aprovacao: String(selectedRow?.dataset?.statusAprovacao || "").trim(),
+        aprovado_por: String(selectedRow?.dataset?.aprovadoPor || "").trim(),
+        aprovado_por_nome: String(selectedRow?.dataset?.aprovadoPorNome || "").trim(),
+        aprovado_por_perfil: String(selectedRow?.dataset?.aprovadoPorPerfil || "").trim(),
+        data_aprovacao: String(selectedRow?.dataset?.dataAprovacao || "").trim(),
+        criado_em: selectedRow?.dataset?.criadoEm || "",
+        usuario_nome: String(selectedRow?.dataset?.usuarioNome || "").trim(),
+        usuario_perfil: String(selectedRow?.dataset?.usuarioPerfil || "").trim(),
+        exercicio: selects.exercicio?.value || selectedRow?.dataset?.exercicio || "",
+        unidade_orcamentaria: selects.unidade_orcamentaria?.value || selectedRow?.dataset?.uo || "",
+        programa: selects.programa?.value || selectedRow?.dataset?.programa || "",
+        acao_paoe: selects.acao_paoe?.value || selectedRow?.dataset?.acaoPaoe || "",
+        adj_solicitante: selects.adj_solicitante?.value || selectedRow?.dataset?.adjSolicitante || "",
+        produto_acao: selects.produto_acao?.value || selectedRow?.dataset?.produtoAcao || "",
+        unid_medida_produto: selects.unid_medida_produto?.value || selectedRow?.dataset?.unidMedidaProduto || "",
+        justificativa: String(justificativaInput?.value || "").trim() || selectedRow?.dataset?.justificativa || "",
+        linhas,
+      };
+    };
+
     const _lockCountByBaseline = (items, baselineTotal) => {
       const base = Number(baselineTotal || 0);
       if (!Number.isFinite(base) || base <= 0) return 0;
@@ -9042,21 +9311,35 @@
     const buildEditableRowsFromSummary = (linhas, baselineByRegion = {}) =>
       (Array.isArray(linhas) ? linhas : []).map((row) => {
         const isNovo = !!row?.is_novo;
-        const creditoItems = Array.isArray(row?.meta_credito_items)
-          ? row.meta_credito_items
-              .map((v) => String(v ?? ""))
-              .filter((v) => (parseDec(v) || 0) > 0)
-          : [];
-        const anuladaItems = Array.isArray(row?.meta_anulada_items)
-          ? row.meta_anulada_items
-              .map((v) => String(v ?? ""))
-              .filter((v) => (parseDec(v) || 0) > 0)
-          : [];
+        const hasStructuredLists =
+          Array.isArray(row?.meta_credito_historico_items) ||
+          Array.isArray(row?.meta_anulada_historico_items) ||
+          Array.isArray(row?.meta_credito_mov_items) ||
+          Array.isArray(row?.meta_anulada_mov_items);
+        const normalized = hasStructuredLists ? normalizeMetaLinhaSeries(row) : null;
+        // Preserva a estrutura de linhas (incluindo vazios de pareamento)
+        // para não colapsar históricos de colunas opostas na mesma linha.
+        const creditoItems = normalized
+          ? normalized.creditoSeries.map((n) => (n !== null && n > 0 ? String(n) : ""))
+          : (Array.isArray(row?.meta_credito_items)
+            ? row.meta_credito_items.map((v) => String(v ?? ""))
+            : []);
+        const anuladaItems = normalized
+          ? normalized.anuladaSeries.map((n) => (n !== null && n > 0 ? String(n) : ""))
+          : (Array.isArray(row?.meta_anulada_items)
+            ? row.meta_anulada_items.map((v) => String(v ?? ""))
+            : []);
         const creditoMovItems = Array.isArray(row?.meta_credito_mov_items)
           ? row.meta_credito_mov_items.map((v) => String(v ?? ""))
           : [];
         const anuladaMovItems = Array.isArray(row?.meta_anulada_mov_items)
           ? row.meta_anulada_mov_items.map((v) => String(v ?? ""))
+          : [];
+        const creditoHistItemsRaw = Array.isArray(row?.meta_credito_historico_items)
+          ? row.meta_credito_historico_items.map((v) => String(v ?? ""))
+          : [];
+        const anuladaHistItemsRaw = Array.isArray(row?.meta_anulada_historico_items)
+          ? row.meta_anulada_historico_items.map((v) => String(v ?? ""))
           : [];
         const creditoHistorico = parseDec(row?.meta_credito_historico);
         const anuladaHistorico = parseDec(row?.meta_anulada_historico);
@@ -9067,6 +9350,7 @@
         const hasAnuladaMovList = Array.isArray(row?.meta_anulada_mov_items);
         const creditoMovLen = creditoMovItems.filter((v) => (parseDec(v) || 0) > 0).length;
         const anuladaMovLen = anuladaMovItems.filter((v) => (parseDec(v) || 0) > 0).length;
+        const hasCurrentMovement = creditoMovLen > 0 || anuladaMovLen > 0;
         let lockCreditoCount = 0;
         let lockAnuladaCount = 0;
         const regKey = normalizeRegionKey(String(row?.regiao_produto || ""));
@@ -9076,30 +9360,66 @@
 
         if (!isNovo) {
           // Regra principal: bloquear somente o que veio do plan21_nger (baseline da consulta).
-          if ((baselineCredito || 0) > 0 && creditoPositivos.length > 0) {
+          if (normalized && normalized.histCreditoItems.length > 0) {
+            lockCreditoCount = normalized.histCreditoItems.length;
+          } else if ((baselineCredito || 0) > 0 && creditoPositivos.length > 0) {
             lockCreditoCount = _lockCountByBaseline(creditoItems, baselineCredito);
-          } else if (hasHistoricoMov && (creditoHistorico || 0) > 0 && creditoPositivos.length > 0) {
+          } else if (hasHistoricoMov && creditoPositivos.length > 0) {
             // Fallback para registros legados sem baseline encontrado.
-            if (hasCreditoMovList && creditoMovLen <= creditoPositivos.length) {
+            const histCountByItems = creditoHistItemsRaw.filter((v) => {
+              const n = parseDec(v);
+              return n !== null && n > 0;
+            }).length;
+            if (histCountByItems > 0) {
+              lockCreditoCount = histCountByItems;
+            } else if ((creditoHistorico || 0) > 0 && hasCreditoMovList && creditoMovLen <= creditoPositivos.length) {
               lockCreditoCount = Math.max(0, creditoPositivos.length - creditoMovLen);
-            } else {
+            } else if ((creditoHistorico || 0) > 0) {
               lockCreditoCount = 1;
             }
           }
 
-          if ((baselineAnulada || 0) > 0 && anuladaPositivos.length > 0) {
+          if (normalized && normalized.histAnuladaItems.length > 0) {
+            lockAnuladaCount = normalized.histAnuladaItems.length;
+          } else if ((baselineAnulada || 0) > 0 && anuladaPositivos.length > 0) {
             lockAnuladaCount = _lockCountByBaseline(anuladaItems, baselineAnulada);
-          } else if (hasHistoricoMov && (anuladaHistorico || 0) > 0 && anuladaPositivos.length > 0) {
+          } else if (hasHistoricoMov && anuladaPositivos.length > 0) {
             // Fallback para registros legados sem baseline encontrado.
-            if (hasAnuladaMovList && anuladaMovLen <= anuladaPositivos.length) {
+            const histCountByItems = anuladaHistItemsRaw.filter((v) => {
+              const n = parseDec(v);
+              return n !== null && n > 0;
+            }).length;
+            if (histCountByItems > 0) {
+              lockAnuladaCount = histCountByItems;
+            } else if ((anuladaHistorico || 0) > 0 && hasAnuladaMovList && anuladaMovLen <= anuladaPositivos.length) {
               lockAnuladaCount = Math.max(0, anuladaPositivos.length - anuladaMovLen);
-            } else {
+            } else if ((anuladaHistorico || 0) > 0) {
               lockAnuladaCount = 1;
             }
           }
         }
         const creditoEditableCount = Math.max(0, creditoPositivos.length - lockCreditoCount);
         const anuladaEditableCount = Math.max(0, anuladaPositivos.length - lockAnuladaCount);
+        let activeMovementField = "";
+        if (hasCurrentMovement) {
+          if (creditoMovLen > 0 && anuladaMovLen <= 0) {
+            activeMovementField = "meta_credito";
+          } else if (anuladaMovLen > 0 && creditoMovLen <= 0) {
+            activeMovementField = "meta_anulada";
+          }
+        }
+        const hasUnlockedCredito = creditoItems
+          .slice(lockCreditoCount)
+          .some((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
+        const hasUnlockedAnulada = anuladaItems
+          .slice(lockAnuladaCount)
+          .some((v) => {
+            const n = parseDec(v);
+            return n !== null && n > 0;
+          });
         return {
           regiao_produto: String(row?.regiao_produto || "").trim(),
           meta_produto: row?.meta_produto ?? "",
@@ -9113,11 +9433,13 @@
           lock_meta_anulada_count: lockAnuladaCount,
           allow_add_meta_credito: isNovo ? true : true,
           allow_add_meta_anulada: isNovo ? false : true,
-          allow_start_meta_credito: isNovo ? true : (creditoPositivos.length === 0 && anuladaPositivos.length === 0),
-          allow_start_meta_anulada: isNovo ? true : (creditoPositivos.length === 0 && anuladaPositivos.length === 0),
+          allow_start_meta_credito: isNovo ? true : !hasCurrentMovement,
+          allow_start_meta_anulada: isNovo ? true : !hasCurrentMovement,
           allow_cross_add: !isNovo,
-          entry_enable_meta_credito: creditoEditableCount > 0,
-          entry_enable_meta_anulada: anuladaEditableCount > 0,
+          entry_enable_meta_credito: creditoEditableCount > 0 || hasUnlockedCredito,
+          entry_enable_meta_anulada: anuladaEditableCount > 0 || hasUnlockedAnulada,
+          has_new_movement: hasCurrentMovement || hasUnlockedCredito || hasUnlockedAnulada,
+          active_movement_field: activeMovementField,
           is_novo: isNovo,
           plan21_nger_id: row?.plan21_nger_id || null,
           plan21_ids: Array.isArray(row?.plan21_ids) ? row.plan21_ids : [],
@@ -9126,6 +9448,8 @@
 
     const fetchPlanBaselineByRegion = async () => {
       const url = new URL("/api/meta-fisica/options", window.location.origin);
+      url.searchParams.set("include_rows", "1");
+      url.searchParams.set("include_history", "0");
       Object.entries(selects).forEach(([key, el]) => {
         if (!el) return;
         const val = String(el.value || "").trim();
@@ -9222,18 +9546,59 @@
       refreshTotalsDisplay();
     };
 
-    const loadOptions = async (loadRows = false) => {
+    const loadOptions = async (loadRows = false, includeOptionRows = false) => {
+      if (selects.exercicio) {
+        selects.exercicio.disabled = true;
+      }
+      if (loadOptionsAbortController) {
+        try {
+          loadOptionsAbortController.abort();
+        } catch (e) {
+          // noop
+        }
+      }
+      loadOptionsAbortController = new AbortController();
+      const controller = loadOptionsAbortController;
+      const signal = controller.signal;
       try {
         const url = new URL("/api/meta-fisica/options", window.location.origin);
+        if (loadRows) {
+          url.searchParams.set("include_rows", "1");
+          url.searchParams.set("include_history", "1");
+        } else {
+          url.searchParams.set("include_rows", "0");
+          url.searchParams.set("include_history", "0");
+        }
+        if (includeOptionRows) {
+          url.searchParams.set("include_option_rows", "1");
+        }
+        const currentMetaId = String(editingMetaId || approvingMetaId || "").trim();
+        if (currentMetaId) {
+          url.searchParams.set("meta_id", currentMetaId);
+        }
         Object.entries(selects).forEach(([key, el]) => {
           if (!el) return;
           const val = String(el.value || "").trim();
           if (val) url.searchParams.set(key, val);
         });
-        const res = await fetch(url.toString(), { headers: { "X-Requested-With": "fetch" } });
+        const res = await fetch(url.toString(), {
+          headers: { "X-Requested-With": "fetch" },
+          signal,
+        });
+        if (signal.aborted) return;
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar opções.");
+        if (signal.aborted) return;
         regionCatalog = Array.isArray(data.regioes_catalog) ? data.regioes_catalog : [];
+        if (Array.isArray(data.option_rows) && data.option_rows.length) {
+          optionRowsCatalog = data.option_rows;
+        }
+        if (loadRows && data.pending_meta) {
+          tableRows = [];
+          lastQueryHadRows = false;
+          renderRows();
+          return { pendingMeta: data.pending_meta };
+        }
 
         applySelectOptions(selects.exercicio, data.options?.exercicio || [], false);
         if (selects.exercicio) {
@@ -9262,56 +9627,16 @@
         }
 
         const loadedRows = (data.rows || []).map((row) => {
-          const histCreditoItemsRaw = Array.isArray(row.meta_credito_historico_items)
-            ? row.meta_credito_historico_items.map((v) => String(v ?? ""))
-            : [];
-          const histAnuladaItemsRaw = Array.isArray(row.meta_anulada_historico_items)
-            ? row.meta_anulada_historico_items.map((v) => String(v ?? ""))
-            : [];
-          const movCreditoItemsRaw = Array.isArray(row.meta_credito_mov_items)
-            ? row.meta_credito_mov_items.map((v) => String(v ?? ""))
-            : [];
-          const movAnuladaItemsRaw = Array.isArray(row.meta_anulada_mov_items)
-            ? row.meta_anulada_mov_items.map((v) => String(v ?? ""))
-            : [];
-          const histCreditoItems = histCreditoItemsRaw.filter((v) => {
-            const n = parseDec(v);
-            return n !== null && n > 0;
-          });
-          const histAnuladaItems = histAnuladaItemsRaw.filter((v) => {
-            const n = parseDec(v);
-            return n !== null && n > 0;
-          });
-          let movCreditoItems = movCreditoItemsRaw.filter((v) => {
-            const n = parseDec(v);
-            return n !== null && n > 0;
-          });
-          let movAnuladaItems = movAnuladaItemsRaw.filter((v) => {
-            const n = parseDec(v);
-            return n !== null && n > 0;
-          });
-          const creditoDbVal = parseDec(row.meta_credito);
-          const anuladaDbVal = parseDec(row.meta_anulada);
-          // Fallback legado: quando backend ainda não envia *_mov_items,
-          // reconstrói movimento pela diferença entre total e histórico.
-          if (!movCreditoItems.length && creditoDbVal !== null && creditoDbVal > 0) {
-            const histCreditoTotal = histCreditoItems.reduce((acc, item) => acc + (parseDec(item) || 0), 0);
-            const creditoDelta = creditoDbVal - histCreditoTotal;
-            if (creditoDelta > 0.000001) movCreditoItems = [String(creditoDelta)];
-          }
-          if (!movAnuladaItems.length && anuladaDbVal !== null && anuladaDbVal > 0) {
-            const histAnuladaTotal = histAnuladaItems.reduce((acc, item) => acc + (parseDec(item) || 0), 0);
-            const anuladaDelta = anuladaDbVal - histAnuladaTotal;
-            if (anuladaDelta > 0.000001) movAnuladaItems = [String(anuladaDelta)];
-          }
-
-          const creditoItems = [...histCreditoItems, ...movCreditoItems];
-          const anuladaItems = [...histAnuladaItems, ...movAnuladaItems];
-          const lockedCreditoCount = histCreditoItems.length;
-          const lockedAnuladaCount = histAnuladaItems.length;
+          const normalized = normalizeMetaLinhaSeries(row);
+          const creditoItems = normalized.creditoSeries.map((n) => (n !== null && n > 0 ? String(n) : ""));
+          const anuladaItems = normalized.anuladaSeries.map((n) => (n !== null && n > 0 ? String(n) : ""));
+          const lockedCreditoCount = normalized.histCreditoItems.length;
+          const lockedAnuladaCount = normalized.histAnuladaItems.length;
           const lockCreditoFromDb = lockedCreditoCount > 0;
           const lockAnuladaFromDb = lockedAnuladaCount > 0;
-          const hasMovFromDb = creditoItems.length > 0 || anuladaItems.length > 0;
+          const hasMovFromDb =
+            normalized.movCredito.some((n) => n !== null && n > 0) ||
+            normalized.movAnulada.some((n) => n !== null && n > 0);
           return {
             regiao_produto: row.regiao_produto || "",
             meta_produto: row.meta_produto || "",
@@ -9338,11 +9663,22 @@
         tableRows = [...loadedRows, ...manualRows];
         lastQueryHadRows = loadedRows.length > 0;
         renderRows();
+        return { data };
       } catch (err) {
+        if (err?.name === "AbortError") return;
         console.error(err);
         setMsg(err.message || "Falha ao carregar opções.", true);
+      } finally {
+        if (loadOptionsAbortController === controller) {
+          loadOptionsAbortController = null;
+        }
+        if (selects.exercicio) {
+          selects.exercicio.disabled = true;
+        }
       }
+      return null;
     };
+
 
     if (tbody) {
       tbody.addEventListener("focusin", (ev) => {
@@ -9498,13 +9834,23 @@
             setMsg("Preencha um lançamento antes de adicionar outro.", true);
             return;
           }
+          // Snapshot da região para rollback atômico se remover a sublinha nova.
+          if (!tableRows[idx].__new_movement_snapshot) {
+            tableRows[idx].__new_movement_snapshot = cloneRowForRollback(tableRows[idx]);
+          }
           if (!tableRows[idx].is_novo) {
             // Ao criar nova sublinha em linha existente, todo conteúdo anterior
             // passa a ser histórico/bloqueado; apenas a nova sublinha fica editável.
             freezeExistingMovements(tableRows[idx]);
           }
+          const oppositeField = field === "meta_credito" ? "meta_anulada" : "meta_credito";
           tableRows[idx][`allow_start_${field}`] = false;
+          tableRows[idx][`allow_start_${oppositeField}`] = false;
           tableRows[idx][`entry_enable_${field}`] = true;
+          // Regra de negócio: ajuste por vez (somente a coluna clicada fica ativa).
+          tableRows[idx][`entry_enable_${oppositeField}`] = false;
+          tableRows[idx].active_movement_field = field;
+          tableRows[idx].has_new_movement = true;
           const items = getFieldItems(tableRows[idx], field);
           items.push("");
           setFieldItems(tableRows[idx], field, items);
@@ -9521,6 +9867,56 @@
           const removeIdx = Number(removeBtn.getAttribute("data-remove-idx") || "-1");
           if (field !== "meta_credito" && field !== "meta_anulada") return;
           if (removeIdx < 0) return;
+          // Remoção atômica apenas da movimentação nova criada nesta edição.
+          if (
+            !tableRows[idx]?.is_novo &&
+            !!tableRows[idx]?.has_new_movement &&
+            (
+              !tableRows[idx]?.active_movement_field ||
+              tableRows[idx].active_movement_field === field
+            )
+          ) {
+            const snapshot = tableRows[idx].__new_movement_snapshot;
+            if (snapshot) {
+              restoreRowFromSnapshot(tableRows[idx], snapshot);
+            } else {
+              const items = getFieldItems(tableRows[idx], field);
+              if (removeIdx >= items.length) return;
+              items.splice(removeIdx, 1);
+              setFieldItems(tableRows[idx], field, items);
+              const lockCountAfter = getLockedItemCount(tableRows[idx], field);
+              const unlockedHasValue = getFieldItems(tableRows[idx], field)
+                .slice(lockCountAfter)
+                .some((item) => {
+                  const n = parseDec(item);
+                  return n !== null && n > 0;
+                });
+              tableRows[idx][`entry_enable_${field}`] = unlockedHasValue;
+            }
+            const hasCreditoUnlocked = getFieldItems(tableRows[idx], "meta_credito")
+              .slice(getLockedItemCount(tableRows[idx], "meta_credito"))
+              .some((item) => {
+                const n = parseDec(item);
+                return n !== null && n > 0;
+              });
+            const hasAnuladaUnlocked = getFieldItems(tableRows[idx], "meta_anulada")
+              .slice(getLockedItemCount(tableRows[idx], "meta_anulada"))
+              .some((item) => {
+                const n = parseDec(item);
+                return n !== null && n > 0;
+              });
+            tableRows[idx].has_new_movement = hasCreditoUnlocked || hasAnuladaUnlocked;
+            tableRows[idx].active_movement_field = hasCreditoUnlocked
+              ? "meta_credito"
+              : (hasAnuladaUnlocked ? "meta_anulada" : "");
+            delete tableRows[idx].__new_movement_snapshot;
+            renderRows();
+            return;
+          }
+          if (!tableRows[idx]?.is_novo) {
+            setMsg("Não é permitido remover movimentações já validadas da base. Remova apenas a sublinha nova criada na edição.", true);
+            return;
+          }
           const items = getFieldItems(tableRows[idx], field);
           if (removeIdx >= items.length) return;
           items.splice(removeIdx, 1);
@@ -9532,6 +9928,9 @@
           if (!stillHasAny) {
             tableRows[idx][`entry_enable_${field}`] = false;
             tableRows[idx][`allow_start_${field}`] = true;
+            if (tableRows[idx].active_movement_field === field) {
+              tableRows[idx].active_movement_field = "";
+            }
           }
           restoreFrozenMovementsIfPossible(tableRows[idx]);
           renderRows();
@@ -9611,7 +10010,14 @@
         }
         hasConsulted = true;
         setMsg("");
-        await loadOptions(true);
+        const loadResult = await loadOptions(true);
+        if (loadResult?.pendingMeta) {
+          hasConsulted = false;
+          await openMetaFisicaPendingModal({
+            controle: loadResult.pendingMeta.controle || "",
+          });
+          return;
+        }
         const totalsAfterConsult = getTableTotals();
         const totalPta = parseDec(totalsAfterConsult.meta_pta);
         const totalAjustada = parseDec(totalsAfterConsult.meta_ajustada);
@@ -9641,7 +10047,12 @@
         resetEditMode();
         hasConsulted = false;
         lastQueryHadRows = false;
-        loadOptions(false);
+        const usedCatalog = refreshCascadeOptionsFromCatalog();
+        if (!usedCatalog) {
+          loadOptions(false, true);
+        } else {
+          renderRows();
+        }
       });
     });
     if (selects.adj_solicitante) {
@@ -9787,7 +10198,8 @@
         } catch (err) {
           console.error(err);
         }
-        const linhas = parseSummaryLinhas(selected);
+        const linhasFromApi = await fetchMetaLinhasById(selected.dataset.id || "");
+        const linhas = linhasFromApi.length ? linhasFromApi : parseSummaryLinhas(selected);
         tableRows = buildEditableRowsFromSummary(linhas, baselineByRegion);
         hasConsulted = true;
         lastQueryHadRows = tableRows.length > 0;
@@ -9842,7 +10254,8 @@
         } catch (err) {
           console.error(err);
         }
-        const linhas = parseSummaryLinhas(selected);
+        const linhasFromApi = await fetchMetaLinhasById(selected.dataset.id || "");
+        const linhas = linhasFromApi.length ? linhasFromApi : parseSummaryLinhas(selected);
         tableRows = buildEditableRowsFromSummary(linhas, baselineByRegion);
         hasConsulted = true;
         lastQueryHadRows = tableRows.length > 0;
@@ -9892,45 +10305,36 @@
     }
 
     if (printBtn) {
-      printBtn.addEventListener("click", () => {
+      printBtn.addEventListener("click", async () => {
         const selected = summaryBody?.querySelector(".meta-fisica-summary-row.selected");
         if (!selected) {
           setFilterMsg("Selecione um registro para imprimir.", true);
           return;
         }
         try {
-          const meta = buildSummaryMetaForPrint(selected);
+          const selectedId = String(selected?.dataset?.id || "").trim();
+          const linhasFromApi = await fetchMetaLinhasById(selectedId);
+          if (!linhasFromApi.length) {
+            throw new Error("Não foi possível carregar as linhas estruturadas da impressão.");
+          }
+          const useCurrentFormState =
+            !!selectedId &&
+            !!editingMetaId &&
+            selectedId === String(editingMetaId).trim() &&
+            Array.isArray(tableRows) &&
+            tableRows.length > 0;
+          const meta = useCurrentFormState
+            ? buildCurrentFormMetaForPrint(selected)
+            : (() => {
+              const base = buildSummaryMetaForPrint(selected);
+              if (linhasFromApi.length) base.linhas = linhasFromApi;
+              return base;
+            })();
           openMetaFisicaPrintPopup(meta);
         } catch (err) {
           console.error(err);
-          try {
-            const metaFallback = {
-              controle: selected?.dataset?.controleMeta || "",
-              status_aprovacao: String(selected?.dataset?.statusAprovacao || "").trim(),
-              aprovado_por: String(selected?.dataset?.aprovadoPor || "").trim(),
-              aprovado_por_nome: String(selected?.dataset?.aprovadoPorNome || "").trim(),
-              aprovado_por_perfil: String(selected?.dataset?.aprovadoPorPerfil || "").trim(),
-              data_aprovacao: String(selected?.dataset?.dataAprovacao || "").trim(),
-              criado_em: selected?.dataset?.criadoEm || "",
-              usuario_nome: String(selected?.dataset?.usuarioNome || "").trim(),
-              usuario_perfil: String(selected?.dataset?.usuarioPerfil || "").trim(),
-              exercicio: selected?.dataset?.exercicio || "",
-              unidade_orcamentaria: selected?.dataset?.uo || "",
-              programa: selected?.dataset?.programa || "",
-              acao_paoe: selected?.dataset?.acaoPaoe || "",
-              adj_solicitante: selected?.dataset?.adjSolicitante || "",
-              produto_acao: selected?.dataset?.produtoAcao || "",
-              unid_medida_produto: selected?.dataset?.unidMedidaProduto || "",
-              justificativa: selected?.dataset?.justificativa || "",
-              linhas: parseSummaryLinhas(selected),
-            };
-            openMetaFisicaPrintPopup(metaFallback);
-            setFilterMsg("Impressão gerada em modo de compatibilidade.", false);
-          } catch (err2) {
-            console.error(err2);
-            const msg = String(err2?.message || err?.message || "Falha ao gerar impressão para o registro selecionado.");
-            setFilterMsg(msg, true);
-          }
+          const msg = String(err?.message || "Falha ao gerar impressão para o registro selecionado.");
+          setFilterMsg(msg, true);
         }
       });
     }
@@ -10038,26 +10442,22 @@
                 return n !== null && n > 0 ? acc + n : acc;
               }, 0)
             : "";
-        const creditoMovItems = creditoItemsAll.filter((v, idx) => {
+        const toAlignedToken = (v) => {
           const n = parseDec(v);
-          if (n === null || n <= 0) return false;
-          return !(row.lock_meta_credito && idx < creditoLockCount);
-        });
-        const anuladaMovItems = anuladaItemsAll.filter((v, idx) => {
-          const n = parseDec(v);
-          if (n === null || n <= 0) return false;
-          return !(row.lock_meta_anulada && idx < anuladaLockCount);
-        });
-        const creditoHistoricoItems = creditoItemsAll.filter((v, idx) => {
-          const n = parseDec(v);
-          if (n === null || n <= 0) return false;
-          return !!(row.lock_meta_credito && idx < creditoLockCount);
-        });
-        const anuladaHistoricoItems = anuladaItemsAll.filter((v, idx) => {
-          const n = parseDec(v);
-          if (n === null || n <= 0) return false;
-          return !!(row.lock_meta_anulada && idx < anuladaLockCount);
-        });
+          return n !== null && n > 0 ? String(v ?? "").trim() : "";
+        };
+        const creditoMovItems = creditoItemsAll
+          .map((v, idx) => (!(row.lock_meta_credito && idx < creditoLockCount) ? toAlignedToken(v) : null))
+          .filter((v) => v !== null);
+        const anuladaMovItems = anuladaItemsAll
+          .map((v, idx) => (!(row.lock_meta_anulada && idx < anuladaLockCount) ? toAlignedToken(v) : null))
+          .filter((v) => v !== null);
+        const creditoHistoricoItems = creditoItemsAll
+          .map((v, idx) => (row.lock_meta_credito && idx < creditoLockCount ? toAlignedToken(v) : null))
+          .filter((v) => v !== null);
+        const anuladaHistoricoItems = anuladaItemsAll
+          .map((v, idx) => (row.lock_meta_anulada && idx < anuladaLockCount ? toAlignedToken(v) : null))
+          .filter((v) => v !== null);
         rowsPayload.push({
           regiao_produto: regiao,
           meta_produto: row.meta_produto,
@@ -10246,7 +10646,7 @@
     });
 
     resetEditMode();
-    loadOptions(false);
+    loadOptions(false, true);
   }
 
   function initRoute(route) {
