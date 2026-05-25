@@ -49,14 +49,15 @@ def _safe_session_rollback() -> None:
     try:
         db.session.rollback()
     except Exception:
-        try:
-            db.session.remove()
-        except Exception:
-            pass
-        try:
-            db.engine.dispose()
-        except Exception:
-            pass
+        pass
+    try:
+        db.session.remove()
+    except Exception:
+        pass
+    try:
+        db.engine.dispose()
+    except Exception:
+        pass
 
 
 def _execute_with_retry(stmt, attempts: int = 2, backoff_s: float = 0.2):

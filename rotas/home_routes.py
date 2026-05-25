@@ -385,14 +385,15 @@ def _safe_session_rollback() -> None:
     try:
         db.session.rollback()
     except Exception:
-        try:
-            db.session.remove()
-        except Exception:
-            pass
-        try:
-            db.engine.dispose()
-        except Exception:
-            pass
+        pass
+    try:
+        db.session.remove()
+    except Exception:
+        pass
+    try:
+        db.engine.dispose()
+    except Exception:
+        pass
 
 
 def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
@@ -403,6 +404,10 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
             return db.session.execute(stmt)
         except (OperationalError, ResourceClosedError) as exc:
             _safe_session_rollback()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
             try:
                 with db.engine.connect() as conn:
                     return conn.execute(stmt)
@@ -425,6 +430,68 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
                         pass
                 continue
     return None
+
+
+def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    for idx in range(max(1, attempts)):
+        try:
+            return db.session.execute(stmt).all()
+        except (OperationalError, ResourceClosedError, SQLAlchemyError, IndexError) as exc:
+            _safe_session_rollback()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            if idx < attempts - 1:
+                try:
+                    current_app.logger.warning(
+                        "DB fetch retry %s/%s failed: %s",
+                        idx + 1,
+                        attempts,
+                        exc,
+                    )
+                except Exception:
+                    pass
+                try:
+                    import time
+
+                    time.sleep(backoff_s * (idx + 1))
+                except Exception:
+                    pass
+    return []
+
+
+def _fetch_scalars_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    for idx in range(max(1, attempts)):
+        try:
+            return db.session.execute(stmt).scalars().all()
+        except (OperationalError, ResourceClosedError, SQLAlchemyError, IndexError) as exc:
+            _safe_session_rollback()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            if idx < attempts - 1:
+                try:
+                    current_app.logger.warning(
+                        "DB scalar fetch retry %s/%s failed: %s",
+                        idx + 1,
+                        attempts,
+                        exc,
+                    )
+                except Exception:
+                    pass
+                try:
+                    import time
+
+                    time.sleep(backoff_s * (idx + 1))
+                except Exception:
+                    pass
+    return []
 
 
 def _debug_probe(event: str, **fields) -> None:
@@ -605,23 +672,21 @@ def partial_dashboard():
         cutoff = datetime.utcnow() - timedelta(hours=2)
         try:
             t0 = datetime.utcnow()
-            result = _execute_with_retry(
+            rows = _fetch_all_with_retry(
                 select(ActiveSession.email, ActiveSession.last_activity)
                 .where(ActiveSession.last_activity >= cutoff)
                 .order_by(ActiveSession.last_activity.desc())
             )
-            rows = result.all() if result is not None else []
             _log_timing("active_sessions", t0, len(rows))
             emails = [(_row_value(r, "email", 0) or "") for r in rows if _row_value(r, "email", 0)]
             usuarios = {}
             if emails:
                 try:
                     t1 = datetime.utcnow()
-                    users_result = _execute_with_retry(
+                    users_rows = _fetch_all_with_retry(
                         select(Usuario.email, Usuario.nome).where(Usuario.email.in_(emails))
                     )
-                    if users_result is not None:
-                        usuarios = dict(users_result.all())
+                    usuarios = dict(users_rows)
                     _log_timing("active_sessions_users", t1, len(usuarios))
                 except NotImplementedError:
                     _safe_session_rollback()
@@ -648,10 +713,9 @@ def partial_dashboard():
     if not ped_dotacao_missing:
         try:
             t2 = datetime.utcnow()
-            ped_result = _execute_with_retry(
+            ped_keys = _fetch_scalars_all_with_retry(
                 select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
             )
-            ped_keys = ped_result.scalars().all() if ped_result is not None else []
             ped_keys = [
                 _normalize_dotacao_key(k)
                 for k in ped_keys
@@ -659,10 +723,8 @@ def partial_dashboard():
             ]
             ped_keys = {k for k in ped_keys if k}
             if ped_keys:
-                dotacao_keys = (
-                    Dotacao.query.with_entities(Dotacao.chave_dotacao)
-                    .filter(Dotacao.chave_dotacao.isnot(None))
-                    .all()
+                dotacao_keys = _fetch_all_with_retry(
+                    select(Dotacao.chave_dotacao).where(Dotacao.chave_dotacao.isnot(None))
                 )
                 dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
                 missing = sorted([k for k in ped_keys if k not in dotacao_keys])
@@ -674,7 +736,12 @@ def partial_dashboard():
     emp_planejamento_missing_lines: list[int] = []
     emp_dotacao_missing: list[str] = []
     try:
-        last_emp = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
+        last_emp = (
+            _fetch_scalars_all_with_retry(
+                select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(1)
+            )
+            or [None]
+        )[0]
         if last_emp:
             status_data = read_status("emp", last_emp.id) or {}
             raw_lines = status_data.get("planejamento_missing_lines") or []
@@ -690,17 +757,21 @@ def partial_dashboard():
     aprovar_por_nivel2 = ""
     try:
         perfil_n2 = (
-            Perfil.query.filter(Perfil.nivel == 2)
-            .filter(or_(Perfil.ativo.is_(None), Perfil.ativo == 1))
-            .order_by(Perfil.id.asc())
-            .first()
-        )
+            _fetch_scalars_all_with_retry(
+                select(Perfil)
+                .where(Perfil.nivel == 2)
+                .where(or_(Perfil.ativo.is_(None), Perfil.ativo == 1))
+                .order_by(Perfil.id.asc())
+                .limit(1)
+            )
+            or [None]
+        )[0]
         aprovar_por_nivel2 = (getattr(perfil_n2, "nome", "") or "").strip()
     except Exception:
         aprovar_por_nivel2 = ""
     t3 = datetime.utcnow()
     try:
-        pendentes_result = _execute_with_retry(
+        pendentes_raw = _fetch_all_with_retry(
             select(
                 Dotacao.chave_dotacao,
                 Dotacao.valor_atual,
@@ -712,7 +783,6 @@ def partial_dashboard():
             .where(func.lower(Dotacao.status_aprovacao) == "aguardando")
             .order_by(Dotacao.id.desc())
         )
-        pendentes_raw = pendentes_result.all() if pendentes_result is not None else []
         _log_timing("pendentes_raw", t3, len(pendentes_raw))
     except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError, SQLAlchemyError) as exc:
         _safe_session_rollback()
@@ -734,7 +804,7 @@ def partial_dashboard():
     estornos_aguardando = []
     try:
         t4 = datetime.utcnow()
-        est_result = _execute_with_retry(
+        est_raw = _fetch_all_with_retry(
             text(
                 """
                 SELECT id, chave_dotacao, valor_a_ser_est, valor_dotacao, status_aprovacao, perfil_id
@@ -744,14 +814,13 @@ def partial_dashboard():
                 """
             )
         )
-        est_raw = est_result.fetchall() if est_result is not None else []
         _log_timing("estornos_raw", t4, len(est_raw))
     except Exception:
         est_raw = []
     est_perfil_ids = [r[5] for r in est_raw if len(r) > 5 and r[5]]
     est_adj_map = {}
     if est_perfil_ids:
-        perfis = Perfil.query.filter(Perfil.id.in_(est_perfil_ids)).all()
+        perfis = _fetch_scalars_all_with_retry(select(Perfil).where(Perfil.id.in_(est_perfil_ids)))
         est_adj_map = {p.id: p.nome for p in perfis if p and p.nome}
     for row in est_raw:
         chave = row[1] if len(row) > 1 else ""
@@ -773,11 +842,11 @@ def partial_dashboard():
     subacoes_aguardando = []
     try:
         t5 = datetime.utcnow()
-        subacoes_raw = (
-            CadastrarSubacao.query.filter(CadastrarSubacao.ativo == True)  # noqa: E712
-            .filter(func.lower(CadastrarSubacao.status_aprovacao) == "aguardando")
+        subacoes_raw = _fetch_scalars_all_with_retry(
+            select(CadastrarSubacao)
+            .where(CadastrarSubacao.ativo == True)  # noqa: E712
+            .where(func.lower(CadastrarSubacao.status_aprovacao) == "aguardando")
             .order_by(CadastrarSubacao.id.desc())
-            .all()
         )
         _log_timing("subacoes_aguardando", t5, len(subacoes_raw))
     except Exception:
@@ -788,11 +857,11 @@ def partial_dashboard():
         perfil_map = {}
         perfil_ids = set()
         if usuario_ids:
-            usuarios = Usuario.query.filter(Usuario.id.in_(usuario_ids)).all()
+            usuarios = _fetch_scalars_all_with_retry(select(Usuario).where(Usuario.id.in_(usuario_ids)))
             usuarios_map = {u.id: u for u in usuarios}
             perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
         if perfil_ids:
-            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
+            perfis = _fetch_scalars_all_with_retry(select(Perfil).where(Perfil.id.in_(perfil_ids)))
             perfil_map = {p.id: p for p in perfis}
         for s in subacoes_raw:
             usuario = usuarios_map.get(s.usuario_id)
@@ -817,11 +886,11 @@ def partial_dashboard():
     metas_aguardando = []
     try:
         t6 = datetime.utcnow()
-        metas_raw = (
-            AlterarMeta.query.filter(AlterarMeta.ativo == True)  # noqa: E712
-            .filter(func.lower(AlterarMeta.status_aprovacao) == "aguardando")
+        metas_raw = _fetch_scalars_all_with_retry(
+            select(AlterarMeta)
+            .where(AlterarMeta.ativo == True)  # noqa: E712
+            .where(func.lower(AlterarMeta.status_aprovacao) == "aguardando")
             .order_by(AlterarMeta.id.desc())
-            .all()
         )
         _log_timing("metas_aguardando", t6, len(metas_raw))
     except Exception:
@@ -831,11 +900,11 @@ def partial_dashboard():
         meta_usuarios_map = {}
         meta_perfil_map = {}
         if meta_user_ids:
-            meta_usuarios = Usuario.query.filter(Usuario.id.in_(list(meta_user_ids))).all()
+            meta_usuarios = _fetch_scalars_all_with_retry(select(Usuario).where(Usuario.id.in_(list(meta_user_ids))))
             meta_usuarios_map = {u.id: u for u in meta_usuarios}
             meta_perfil_ids = {u.perfil_id for u in meta_usuarios if u.perfil_id}
             if meta_perfil_ids:
-                meta_perfis = Perfil.query.filter(Perfil.id.in_(list(meta_perfil_ids))).all()
+                meta_perfis = _fetch_scalars_all_with_retry(select(Perfil).where(Perfil.id.in_(list(meta_perfil_ids))))
                 meta_perfil_map = {p.id: p for p in meta_perfis}
 
         for m in metas_raw:
@@ -925,20 +994,15 @@ def _load_permissoes_perfil(perfil_id: int | None):
     if perfil_id is None:
         return []
     try:
-        result = _execute_with_retry(
+        rows = _fetch_scalars_all_with_retry(
             select(PerfilPermissao.feature).where(
                 PerfilPermissao.perfil_id == perfil_id,
                 PerfilPermissao.ativo == True,  # noqa: E712
                 PerfilPermissao.feature.isnot(None),
             )
         )
-        try:
-            rows = result.scalars().all() if result is not None else []
-        except (ResourceClosedError, OperationalError):
-            _safe_session_rollback()
-            rows = []
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError):
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
         _safe_session_rollback()
         return []
 
@@ -947,20 +1011,15 @@ def _load_permissoes_nivel(nivel: int | None):
     if nivel is None:
         return []
     try:
-        result = _execute_with_retry(
+        rows = _fetch_scalars_all_with_retry(
             select(NivelPermissao.feature).where(
                 NivelPermissao.nivel == nivel,
                 NivelPermissao.ativo == True,  # noqa: E712
                 NivelPermissao.feature.isnot(None),
             )
         )
-        try:
-            rows = result.scalars().all() if result is not None else []
-        except (ResourceClosedError, OperationalError):
-            _safe_session_rollback()
-            rows = []
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError):
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
         _safe_session_rollback()
         return []
 
@@ -977,25 +1036,21 @@ def _add_parent_features(features: list[str]) -> list[str]:
 
 def _load_permissoes_por_nivel_perfis(nivel: int):
     try:
-        perfis = Perfil.query.filter(Perfil.nivel == nivel).all()
+        perfis = _fetch_scalars_all_with_retry(select(Perfil).where(Perfil.nivel == nivel))
         perfil_ids = [p.id for p in perfis]
         if not perfil_ids:
             return []
-        feats = (
-            db.session.execute(
-                select(PerfilPermissao.feature).where(
-                    PerfilPermissao.perfil_id.in_(perfil_ids),
-                    PerfilPermissao.ativo == True,  # noqa: E712
-                    PerfilPermissao.feature.isnot(None),
-                )
+        feats = _fetch_scalars_all_with_retry(
+            select(PerfilPermissao.feature).where(
+                PerfilPermissao.perfil_id.in_(perfil_ids),
+                PerfilPermissao.ativo == True,  # noqa: E712
+                PerfilPermissao.feature.isnot(None),
             )
-            .scalars()
-            .all()
         )
         feats = [f for f in feats if f]
         return _add_parent_features(list(set(feats)))
-    except (ProgrammingError, NoSuchColumnError):
-        db.session.rollback()
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+        _safe_session_rollback()
         return []
 
 
