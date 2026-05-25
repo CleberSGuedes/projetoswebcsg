@@ -8615,6 +8615,8 @@
         })
         .join("");
 
+      const motivoRejeicao = String(meta?.motivo_rejeicao || "").trim();
+      const showMotivoRejeicao = String(meta?.status_aprovacao || "").trim().toLowerCase() === "rejeitado" && motivoRejeicao;
       return `
         <section class="print-section">
           <table class="print-table print-data-table">
@@ -8657,6 +8659,7 @@
           <table class="print-table print-data-table">
             <tbody>
               <tr><th>Justificativa</th><td>${esc(formatJustificativaWithControle(meta?.controle, meta?.justificativa || ""))}</td></tr>
+              ${showMotivoRejeicao ? `<tr><th>Motivo da Rejeição</th><td>${esc(motivoRejeicao)}</td></tr>` : ""}
             </tbody>
           </table>
         </section>
@@ -9297,6 +9300,7 @@
         aprovado_por_nome: String(row?.dataset?.aprovadoPorNome || "").trim(),
         aprovado_por_perfil: String(row?.dataset?.aprovadoPorPerfil || "").trim(),
         data_aprovacao: String(row?.dataset?.dataAprovacao || "").trim(),
+        motivo_rejeicao: String(row?.dataset?.motivoRejeicao || "").trim(),
         criado_em: row?.dataset?.criadoEm || "",
         usuario_nome: String(row?.dataset?.usuarioNome || "").trim(),
         usuario_perfil: String(row?.dataset?.usuarioPerfil || "").trim(),
@@ -9354,6 +9358,7 @@
         aprovado_por_nome: String(selectedRow?.dataset?.aprovadoPorNome || "").trim(),
         aprovado_por_perfil: String(selectedRow?.dataset?.aprovadoPorPerfil || "").trim(),
         data_aprovacao: String(selectedRow?.dataset?.dataAprovacao || "").trim(),
+        motivo_rejeicao: String(selectedRow?.dataset?.motivoRejeicao || "").trim(),
         criado_em: selectedRow?.dataset?.criadoEm || "",
         usuario_nome: String(selectedRow?.dataset?.usuarioNome || "").trim(),
         usuario_perfil: String(selectedRow?.dataset?.usuarioPerfil || "").trim(),
@@ -10390,7 +10395,8 @@
         try {
           const selectedId = String(selected?.dataset?.id || "").trim();
           const linhasFromApi = await fetchMetaLinhasById(selectedId);
-          if (!linhasFromApi.length) {
+          const linhasFallback = parseSummaryLinhas(selected);
+          if (!linhasFromApi.length && !linhasFallback.length) {
             throw new Error("Não foi possível carregar as linhas estruturadas da impressão.");
           }
           const useCurrentFormState =
@@ -10404,6 +10410,7 @@
             : (() => {
               const base = buildSummaryMetaForPrint(selected);
               if (linhasFromApi.length) base.linhas = linhasFromApi;
+              else if (linhasFallback.length) base.linhas = linhasFallback;
               return base;
             })();
           openMetaFisicaPrintPopup(meta);
@@ -10452,6 +10459,7 @@
           const metaPrint = selected ? buildSummaryMetaForPrint(selected) : {};
           metaPrint.controle = controle;
           metaPrint.status_aprovacao = aprovado === "sim" ? "Aprovado" : "Rejeitado";
+          metaPrint.motivo_rejeicao = aprovado === "nao" ? justificativaAprovacao : "";
           metaPrint.data_aprovacao = data?.data_aprovacao || "";
           metaPrint.aprovado_por_nome = String(metaPage?.dataset?.userNome || "").trim();
           metaPrint.aprovado_por_perfil = String(metaPage?.dataset?.userPerfil || "").trim();

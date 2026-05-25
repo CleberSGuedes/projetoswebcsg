@@ -4757,7 +4757,12 @@ def _rebuild_meta_rows_from_alterar_meta_item(registro: AlterarMeta) -> list[dic
 def api_meta_fisica_linhas(meta_id: int):
     registro = (
         AlterarMeta.query.filter(AlterarMeta.id == meta_id)
-        .filter(AlterarMeta.ativo == True)  # noqa: E712
+        .filter(
+            or_(
+                AlterarMeta.ativo == True,  # noqa: E712
+                func.lower(func.coalesce(AlterarMeta.status_aprovacao, "")) == "rejeitado",
+            )
+        )
         .first()
     )
     if not registro:
