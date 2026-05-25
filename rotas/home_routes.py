@@ -699,20 +699,25 @@ def partial_dashboard():
     except Exception:
         aprovar_por_nivel2 = ""
     t3 = datetime.utcnow()
-    pendentes_raw = (
-        Dotacao.query.with_entities(
-            Dotacao.chave_dotacao,
-            Dotacao.valor_atual,
-            Dotacao.valor_dotacao,
-            Dotacao.status_aprovacao,
-            Dotacao.adj_concedente,
+    try:
+        pendentes_result = _execute_with_retry(
+            select(
+                Dotacao.chave_dotacao,
+                Dotacao.valor_atual,
+                Dotacao.valor_dotacao,
+                Dotacao.status_aprovacao,
+                Dotacao.adj_concedente,
+            )
+            .where(Dotacao.ativo == True)  # noqa: E712
+            .where(func.lower(Dotacao.status_aprovacao) == "aguardando")
+            .order_by(Dotacao.id.desc())
         )
-        .filter(Dotacao.ativo == True)  # noqa: E712
-        .filter(func.lower(Dotacao.status_aprovacao) == "aguardando")
-        .order_by(Dotacao.id.desc())
-        .all()
-    )
-    _log_timing("pendentes_raw", t3, len(pendentes_raw))
+        pendentes_raw = pendentes_result.all() if pendentes_result is not None else []
+        _log_timing("pendentes_raw", t3, len(pendentes_raw))
+    except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError, SQLAlchemyError) as exc:
+        _safe_session_rollback()
+        current_app.logger.warning("dashboard pendentes_raw unavailable: %s", exc)
+        pendentes_raw = []
     pendentes = []
     for chave, valor_atual, valor_dot, status, adj_concedente in pendentes_raw:
         valor_base = valor_atual if valor_atual is not None else valor_dot
@@ -3990,7 +3995,12 @@ def api_meta_fisica_create():
     adj_solicitante = str(data.get("adj_solicitante") or "").strip()
     produto_acao = str(data.get("produto_acao") or "").strip()
     unid_medida_produto = str(data.get("unid_medida_produto") or "").strip()
-    justificativa = str(data.get("justificativa") or "").strip()
+    justificativa = re.sub(
+        r"^META\.[^*\r\n]+\*\s*",
+        "",
+        str(data.get("justificativa") or "").strip(),
+        flags=re.IGNORECASE,
+    ).strip()
     rows = data.get("rows") or []
 
     registro_existente = None

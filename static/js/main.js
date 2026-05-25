@@ -2816,7 +2816,7 @@
     .print-footer-note { margin-top: 4px; font-size: 10px; font-weight: 400; }
     .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
     .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 8px; vertical-align: top; word-break: break-word; }
-    .print-table th { width: auto; white-space: nowrap; background: #f1f1f1; text-transform: uppercase; }
+    .print-table th { width: auto; white-space: nowrap; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; text-transform: uppercase; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
     .print-gap { height: 10px; }
     .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 65px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
   </style>
@@ -7677,6 +7677,46 @@
       gte: "Maior igual a",
       lte: "Menor igual a",
     };
+    let justificativaProtectedPrefix = "";
+    const getMetaJustificativaPrefix = (controle) => {
+      const txt = String(controle || "").trim();
+      return txt ? `${txt}* ` : "";
+    };
+    const stripAnyMetaJustificativaPrefix = (value) =>
+      String(value || "").replace(/^META\.[^*\r\n]+\*\s*/i, "").trimStart();
+    const formatJustificativaWithControle = (controle, value) => {
+      const prefix = getMetaJustificativaPrefix(controle);
+      const text = stripAnyMetaJustificativaPrefix(value);
+      return prefix ? `${prefix}${text}` : text;
+    };
+    const setJustificativaProtectedValue = (controle, value) => {
+      if (!justificativaInput) return;
+      justificativaProtectedPrefix = getMetaJustificativaPrefix(controle);
+      justificativaInput.value = justificativaProtectedPrefix
+        ? `${justificativaProtectedPrefix}${stripAnyMetaJustificativaPrefix(value)}`
+        : String(value || "");
+      if (justificativaProtectedPrefix && document.activeElement === justificativaInput) {
+        const pos = Math.max(justificativaInput.selectionStart || 0, justificativaProtectedPrefix.length);
+        justificativaInput.setSelectionRange(pos, pos);
+      }
+    };
+    const clearJustificativaProtection = () => {
+      justificativaProtectedPrefix = "";
+    };
+    const getJustificativaEditableText = () =>
+      stripAnyMetaJustificativaPrefix(justificativaInput?.value || "").trim();
+    const keepJustificativaPrefixProtected = () => {
+      if (!justificativaInput || !justificativaProtectedPrefix) return;
+      if (!String(justificativaInput.value || "").startsWith(justificativaProtectedPrefix)) {
+        justificativaInput.value = `${justificativaProtectedPrefix}${stripAnyMetaJustificativaPrefix(justificativaInput.value)}`;
+      }
+      const minPos = justificativaProtectedPrefix.length;
+      const start = justificativaInput.selectionStart || 0;
+      const end = justificativaInput.selectionEnd || 0;
+      if (start < minPos || end < minPos) {
+        justificativaInput.setSelectionRange(Math.max(start, minPos), Math.max(end, minPos));
+      }
+    };
 
     let msgClearTimer = null;
     const setMsg = (text, isError = false) => {
@@ -8548,7 +8588,8 @@
             const c = adjRow.c ?? null;
             const a = adjRow.a ?? null;
             acumulado += (c || 0) - (a || 0);
-            rows.push(`<tr>
+            const rowClass = adjRow.label === "Movimentação" ? ' class="print-movimentacao-row"' : "";
+            rows.push(`<tr${rowClass}>
               <td colspan="2">${esc(adjRow.label)}</td>
               <td>${esc(c > 0 ? fmtNum(c) : "")}</td>
               <td>${esc(a > 0 ? fmtNum(a) : "")}</td>
@@ -8615,7 +8656,7 @@
         <section class="print-section print-justificativa-section">
           <table class="print-table print-data-table">
             <tbody>
-              <tr><th>Justificativa</th><td>${esc(meta?.justificativa || "")}</td></tr>
+              <tr><th>Justificativa</th><td>${esc(formatJustificativaWithControle(meta?.controle, meta?.justificativa || ""))}</td></tr>
             </tbody>
           </table>
         </section>
@@ -8672,24 +8713,25 @@
       .print-footer { position: fixed; left: 12px; right: 12px; bottom: 4px; border-top: 1px dashed #000; background: #fff; font-size: 9px; padding-top: 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px; z-index: 2; }
       .print-footer img { height: 26px; }
       .print-footer-text { flex: 1; text-align: center; line-height: 1.15; }
-      .print-body { margin-top: 76px; padding-bottom: 46px; }
+      .print-body { margin-top: 92px; padding-bottom: 46px; }
       .print-section { break-inside: auto; page-break-inside: auto; margin-bottom: 10px; }
-      .print-section-title { border: 1px solid #000; border-bottom: 0; background: #f1f1f1; font-size: 10px; font-weight: 700; padding: 6px 8px; }
+      .print-section-title { border: 1px solid #000; border-bottom: 0; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; font-size: 10px; font-weight: 700; padding: 6px 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
       .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
-      .print-table th { width: 35%; background: #f1f1f1; }
+      .print-table th { width: 26%; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-metas-table { margin-bottom: 0; }
       .print-metas-table thead { display: table-header-group; }
       .print-metas-table th, .print-metas-table td { padding: 4px 6px; font-size: 9px; text-align: center; vertical-align: middle; }
-      .print-metas-table th { width: auto; background: #f8f8f8; }
+      .print-metas-table th { width: auto; background: #e5e5e5; box-shadow: inset 0 0 0 9999px #e5e5e5; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-metas-table tr { break-inside: avoid; page-break-inside: avoid; }
       .print-data-table tr, .print-justificativa-section tr { break-inside: avoid; page-break-inside: avoid; }
-      .print-total-row td { font-weight: 700; background: #f3f3f3; }
+      .print-movimentacao-row td { background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+      .print-total-row td { font-weight: 700; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
       @media print {
         .print-page-header { top: 0; left: 0; right: 0; }
         .print-footer { bottom: 0; left: 0; right: 0; }
-        .print-body { margin-top: 70px; padding-bottom: 38px; }
+        .print-body { margin-top: 88px; padding-bottom: 38px; }
       }
     </style>
   </head>
@@ -8991,6 +9033,7 @@
       approvalMode = false;
       approvingMetaId = "";
       approvingControle = "";
+      clearJustificativaProtection();
       if (approvalFields) approvalFields.style.display = "none";
       if (approvalJustificativa) {
         approvalJustificativa.value = "";
@@ -9049,6 +9092,27 @@
       if (deleteBtn) deleteBtn.disabled = !selected;
       if (editBtn) editBtn.disabled = !selected;
     };
+
+    if (justificativaInput) {
+      justificativaInput.addEventListener("keydown", (ev) => {
+        if (!justificativaProtectedPrefix) return;
+        const minPos = justificativaProtectedPrefix.length;
+        const start = justificativaInput.selectionStart || 0;
+        const end = justificativaInput.selectionEnd || 0;
+        const isDeleteKey = ev.key === "Backspace" || ev.key === "Delete";
+        const touchesPrefix =
+          start < minPos ||
+          (ev.key === "Backspace" && start <= minPos && start === end) ||
+          (ev.key === "Delete" && start < minPos);
+        if (isDeleteKey && touchesPrefix) {
+          ev.preventDefault();
+          justificativaInput.setSelectionRange(minPos, minPos);
+        }
+      });
+      ["input", "focus", "click", "keyup", "select"].forEach((eventName) => {
+        justificativaInput.addEventListener(eventName, keepJustificativaPrefixProtected);
+      });
+    }
 
     const parseSummaryLinhas = (row) => {
       const raw = row?.getAttribute("data-linhas") || "[]";
@@ -10189,7 +10253,7 @@
           el.value = v;
         });
         if (justificativaInput) {
-          justificativaInput.value = String(selected.dataset.justificativa || "");
+          setJustificativaProtectedValue(controle, selected.dataset.justificativa || "");
         }
         await loadOptions(false);
         let baselineByRegion = {};
@@ -10245,7 +10309,7 @@
           el.value = v;
         });
         if (justificativaInput) {
-          justificativaInput.value = String(selected.dataset.justificativa || "");
+          setJustificativaProtectedValue(controle, selected.dataset.justificativa || "");
         }
         await loadOptions(false);
         let baselineByRegion = {};
@@ -10545,7 +10609,7 @@
         }
       }
 
-      const justificativaText = String(justificativaInput?.value || "").trim();
+      const justificativaText = getJustificativaEditableText();
       if (!justificativaText) {
         addValidationError("Informe a justificativa para salvar a Meta Física.");
       }
@@ -14895,10 +14959,10 @@
       .print-body { margin-top: 4em; }
       .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
       .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
-      .print-table th { width: 35%; background: #f1f1f1; }
+      .print-table th { width: 35%; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-inner { width: 100%; border-collapse: collapse; table-layout: fixed; }
       .print-inner th, .print-inner td { border: 1px solid #000; padding: 4px 6px; font-size: 9px; vertical-align: top; }
-      .print-inner th { background: #f8f8f8; }
+      .print-inner th { background: #e5e5e5; box-shadow: inset 0 0 0 9999px #e5e5e5; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: \"Arial Black\", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
     </style>
   </head>

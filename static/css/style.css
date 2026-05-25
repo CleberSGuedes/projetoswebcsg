@@ -993,6 +993,33 @@ a { color: inherit; text-decoration: none; }
   -webkit-appearance: none;
 }
 
+.meta-fisica-item-remove {
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  position: relative;
+  font-size: 0;
+  line-height: 0;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.meta-fisica-item-remove::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 1px;
+  border-radius: 1px;
+  color: currentColor;
+  background: currentColor;
+  text-indent: 0;
+}
+
 .meta-fisica-item-add::before {
   content: "";
   position: absolute;
