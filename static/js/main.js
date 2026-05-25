@@ -9033,13 +9033,25 @@
       approvalMode = false;
       approvingMetaId = "";
       approvingControle = "";
-      clearJustificativaProtection();
       if (approvalFields) approvalFields.style.display = "none";
       if (approvalJustificativa) {
         approvalJustificativa.value = "";
         approvalJustificativa.required = false;
       }
       if (saveBtn) saveBtn.textContent = defaultSaveLabel;
+      const controls = [
+        ...Object.values(selects).filter((el) => el && el !== selects.exercicio),
+        consultBtn,
+        addRowBtn,
+        clearBtn,
+        justificativaInput,
+      ].filter(Boolean);
+      controls.forEach((el) => {
+        el.disabled = false;
+      });
+      if (selects.exercicio) {
+        selects.exercicio.disabled = true;
+      }
       if (!editBadge) return;
       if (!editingMetaId) {
         editBadge.textContent = "";
@@ -10323,8 +10335,8 @@
         tableRows = buildEditableRowsFromSummary(linhas, baselineByRegion);
         hasConsulted = true;
         lastQueryHadRows = tableRows.length > 0;
-        renderRows();
         setEditMode(selected.dataset.id || "", controle);
+        renderRows();
         setMsg("");
         setFilterMsg("");
       });
@@ -10561,7 +10573,12 @@
         const creditoLockCount = getLockedItemCount(row, "meta_credito");
         const creditoUnlockedStart = Math.max(0, creditoLockCount);
         const creditoUnlocked = creditoItems.slice(creditoUnlockedStart);
-        const requireUnlockedCredito = row.is_novo || creditoUnlocked.length > 0;
+        const creditoUnlockedHasValue = creditoUnlocked.some((v) => {
+          const n = parseDec(v);
+          return n !== null && n > 0;
+        });
+        const requireUnlockedCredito = row.is_novo ||
+          (row.active_movement_field === "meta_credito" && !creditoUnlockedHasValue);
         for (let i = creditoUnlockedStart; i < creditoItems.length; i += 1) {
           if (row.lock_meta_credito && i < creditoLockCount) continue;
           const item = creditoItems[i];
@@ -10573,6 +10590,7 @@
             addValidationError(`Preencha todos os lançamentos de Acréscimo adicionados na região ${regiaoAtual} antes de salvar.`);
             break;
           }
+          if (creditoNum === null) continue;
           const errCredito = validateValorByUnidade(item, "Acréscimo");
           if (errCredito) {
             addValidationError(`${errCredito} Região: ${regiaoAtual}.`);
@@ -10583,8 +10601,12 @@
         const anuladaLockCount = getLockedItemCount(row, "meta_anulada");
         const anuladaUnlockedStart = Math.max(0, anuladaLockCount);
         const anuladaUnlocked = anuladaItems.slice(anuladaUnlockedStart);
+        const anuladaUnlockedHasValue = anuladaUnlocked.some((v) => {
+          const n = parseDec(v);
+          return n !== null && n > 0;
+        });
         const requireUnlockedAnulada = !row.is_novo
-          ? anuladaUnlocked.length > 0
+          ? row.active_movement_field === "meta_anulada" && !anuladaUnlockedHasValue
           : anuladaUnlocked.length > 1
           || anuladaItems.some((v) => {
             const n = parseDec(v);
@@ -10601,6 +10623,7 @@
             addValidationError(`Preencha todos os lançamentos de Redução adicionados na região ${regiaoAtual} antes de salvar.`);
             break;
           }
+          if (anuladaNum === null) continue;
           const errAnulada = validateValorByUnidade(item, "Redução");
           if (errAnulada) {
             addValidationError(`${errAnulada} Região: ${regiaoAtual}.`);
