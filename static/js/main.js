@@ -8728,7 +8728,7 @@
       .print-metas-table th { width: auto; background: #e5e5e5; box-shadow: inset 0 0 0 9999px #e5e5e5; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-metas-table tr { break-inside: avoid; page-break-inside: avoid; }
       .print-data-table tr, .print-justificativa-section tr { break-inside: avoid; page-break-inside: avoid; }
-      .print-movimentacao-row td { background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+      .print-movimentacao-row td { background: #eeeeee; box-shadow: inset 0 0 0 9999px #eeeeee; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-total-row td { font-weight: 700; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
       .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
       @media print {
