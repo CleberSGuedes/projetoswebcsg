@@ -82,7 +82,7 @@
   </div>
 </div>
 
-<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or subacoes_aguardando or metas_aguardando or ped_dotacao_missing or ped_planejamento_missing_lines or emp_planejamento_missing_lines or emp_dotacao_missing) else 0 }}" style="display:none;">
+<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or subacoes_aguardando or metas_aguardando or etapas_aguardando or ped_dotacao_missing or ped_planejamento_missing_lines or emp_planejamento_missing_lines or emp_dotacao_missing) else 0 }}" style="display:none;">
   <div class="modal-card">
     <div class="modal-header">
       <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
@@ -181,6 +181,34 @@
                   <td>{{ m.status_aprovacao }}</td>
                   <td>{{ m.produto_acao }}</td>
                   <td>{{ m.perfil }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {% if etapas_aguardando %}
+        <div class="modal-title" style="margin-top:16px;">PTA Gerencial - Etapas Aguardando Aprovação</div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Controle de Etapa</th>
+                <th>Status</th>
+                <th>Tipo de Solicitação</th>
+                <th>Etapa</th>
+                <th>Aprovar por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in etapas_aguardando %}
+                <tr>
+                  <td>{{ e.controle_etapa }}</td>
+                  <td>{{ e.status_aprovacao }}</td>
+                  <td>{{ e.tipo_solicitacao }}</td>
+                  <td>{{ e.etapa }}</td>
+                  <td>{{ e.perfil }}</td>
                 </tr>
               {% endfor %}
             </tbody>

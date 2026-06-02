@@ -35,6 +35,7 @@ from models import (
     Adj,
     Dotacao,
     CadastrarSubacao,
+    CadastrarEtapa,
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
@@ -89,6 +90,8 @@ META_FISICA_OPTIONS_CACHE_TTL_S = max(
 )
 _meta_fisica_options_cache_lock = threading.Lock()
 _meta_fisica_options_cache: dict[tuple, tuple[float, dict]] = {}
+_etapa_options_cache_lock = threading.Lock()
+_etapa_options_cache: dict[tuple, tuple[float, dict]] = {}
 
 
 def _cache_get_meta_fisica_options(cache_key: tuple):
@@ -118,6 +121,34 @@ def _cache_set_meta_fisica_options(cache_key: tuple, payload: dict) -> None:
 def _cache_invalidate_meta_fisica_options() -> None:
     with _meta_fisica_options_cache_lock:
         _meta_fisica_options_cache.clear()
+
+
+def _cache_get_etapa_options(cache_key: tuple):
+    if META_FISICA_OPTIONS_CACHE_TTL_S <= 0:
+        return None
+    now_ts = datetime.utcnow().timestamp()
+    with _etapa_options_cache_lock:
+        item = _etapa_options_cache.get(cache_key)
+        if not item:
+            return None
+        expires_at, payload = item
+        if expires_at <= now_ts:
+            _etapa_options_cache.pop(cache_key, None)
+            return None
+        return dict(payload)
+
+
+def _cache_set_etapa_options(cache_key: tuple, payload: dict) -> None:
+    if META_FISICA_OPTIONS_CACHE_TTL_S <= 0:
+        return
+    expires_at = datetime.utcnow().timestamp() + META_FISICA_OPTIONS_CACHE_TTL_S
+    with _etapa_options_cache_lock:
+        _etapa_options_cache[cache_key] = (expires_at, dict(payload))
+
+
+def _cache_invalidate_etapa_options() -> None:
+    with _etapa_options_cache_lock:
+        _etapa_options_cache.clear()
 
 
 def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
@@ -928,6 +959,50 @@ def partial_dashboard():
                     "perfil": aprovar_por_nivel2 or "",
                 }
             )
+    etapas_aguardando = []
+    try:
+        t7 = datetime.utcnow()
+        etapas_raw = _fetch_scalars_all_with_retry(
+            select(CadastrarEtapa)
+            .where(CadastrarEtapa.ativo == True)  # noqa: E712
+            .where(func.lower(CadastrarEtapa.status_aprovacao) == "aguardando")
+            .order_by(CadastrarEtapa.id.desc())
+        )
+        _log_timing("etapas_aguardando", t7, len(etapas_raw))
+    except Exception:
+        etapas_raw = []
+    if etapas_raw:
+        etapa_user_ids = {e.usuario_id for e in etapas_raw if e.usuario_id}
+        etapa_usuarios_map = {}
+        etapa_perfil_map = {}
+        if etapa_user_ids:
+            etapa_usuarios = _fetch_scalars_all_with_retry(select(Usuario).where(Usuario.id.in_(list(etapa_user_ids))))
+            etapa_usuarios_map = {u.id: u for u in etapa_usuarios}
+            etapa_perfil_ids = {u.perfil_id for u in etapa_usuarios if u.perfil_id}
+            if etapa_perfil_ids:
+                etapa_perfis = _fetch_scalars_all_with_retry(select(Perfil).where(Perfil.id.in_(list(etapa_perfil_ids))))
+                etapa_perfil_map = {p.id: p for p in etapa_perfis}
+        for e in etapas_raw:
+            usuario = etapa_usuarios_map.get(getattr(e, "usuario_id", None))
+            perfil_nome = ""
+            perfil_id = getattr(usuario, "perfil_id", None) if usuario else None
+            if perfil_id:
+                perfil_nome = (getattr(etapa_perfil_map.get(perfil_id), "nome", "") or "").strip()
+            exercicio_ctrl = str(getattr(e, "exercicio", "") or _now_local().year)
+            controle_etapa = (
+                f"ETAPA.{exercicio_ctrl}.{perfil_nome}.{e.id}"
+                if perfil_nome
+                else f"ETAPA.{exercicio_ctrl}.{e.id}"
+            )
+            etapas_aguardando.append(
+                {
+                    "controle_etapa": controle_etapa,
+                    "status_aprovacao": getattr(e, "status_aprovacao", "") or "",
+                    "tipo_solicitacao": getattr(e, "tipo_solicitacao", "") or "",
+                    "etapa": (getattr(e, "etapa_nova", "") or getattr(e, "etapa_origem", "") or "").strip(),
+                    "perfil": aprovar_por_nivel2 or "",
+                }
+            )
     try:
         emp_record = get_emp_record_snapshot()
     except Exception:
@@ -950,6 +1025,7 @@ def partial_dashboard():
         estornos_aguardando=estornos_aguardando,
         subacoes_aguardando=subacoes_aguardando,
         metas_aguardando=metas_aguardando,
+        etapas_aguardando=etapas_aguardando,
         emp_record=emp_record_payload,
     )
 
@@ -2380,6 +2456,91 @@ def partial_cadastrar_plan21_subacao():
         user_id=user_id,
         user_perfil_id=user_perfil_id,
         user_nome=user_nome,
+        current_year=str(_now_local().year),
+    )
+
+
+@home_bp.route("/partial/cadastrar/plan_21-nger/etapa")
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def partial_cadastrar_plan21_etapa():
+    user_id = _resolve_usuario_id() or ""
+    user_perfil_id = str(_resolve_usuario_perfil_id() or "").strip()
+    user_session = session.get("user") or {}
+    user_nome = (user_session.get("nome") or "").strip()
+    etapas = (
+        CadastrarEtapa.query.filter(
+            (CadastrarEtapa.ativo == True)  # noqa: E712
+            | (func.lower(CadastrarEtapa.status_aprovacao) == "rejeitado")
+        )
+        .order_by(CadastrarEtapa.id.desc())
+        .all()
+    )
+    usuario_ids = {e.usuario_id for e in etapas if e.usuario_id}
+    aprovado_ids = set()
+    for e in etapas:
+        aprovado_id = getattr(e, "aprovado_por", None)
+        if not aprovado_id:
+            continue
+        try:
+            aprovado_ids.add(int(aprovado_id))
+        except Exception:
+            continue
+    all_user_ids = set(usuario_ids)
+    all_user_ids.update(aprovado_ids)
+    usuarios_map = {}
+    perfil_map = {}
+    if all_user_ids:
+        usuarios = Usuario.query.filter(Usuario.id.in_(all_user_ids)).all()
+        usuarios_map = {u.id: u for u in usuarios}
+        perfil_ids = {u.perfil_id for u in usuarios if u.perfil_id}
+        if perfil_ids:
+            perfis = Perfil.query.filter(Perfil.id.in_(perfil_ids)).all()
+            perfil_map = {p.id: p for p in perfis}
+    for e in etapas:
+        usuario = usuarios_map.get(e.usuario_id)
+        perfil_id = getattr(usuario, "perfil_id", None)
+        perfil_nome = ""
+        if perfil_id:
+            perfil_nome = (getattr(perfil_map.get(perfil_id), "nome", "") or "").strip()
+        exercicio = getattr(e, "exercicio", "") or ""
+        e.controle_etapa = f"ETAPA.{exercicio}.{perfil_nome}.{e.id}" if perfil_nome else f"ETAPA.{exercicio}.{e.id}"
+        e.usuario_nome = (
+            (getattr(usuario, "nome", "") or getattr(usuario, "email", "") or "").strip()
+            if usuario
+            else ""
+        )
+        e.usuario_perfil = perfil_nome
+        e.criador_perfil_id = str(perfil_id or "").strip() if perfil_id else ""
+        aprovado_nome = ""
+        aprovado_perfil = ""
+        aprovado_id = getattr(e, "aprovado_por", None)
+        if aprovado_id:
+            try:
+                aprovado_id = int(aprovado_id)
+            except Exception:
+                aprovado_id = None
+        if aprovado_id:
+            aprovado_usuario = usuarios_map.get(aprovado_id)
+            aprovado_nome = (
+                (getattr(aprovado_usuario, "nome", "") or getattr(aprovado_usuario, "email", "") or "").strip()
+                if aprovado_usuario
+                else ""
+            )
+            aprovado_perfil_id = getattr(aprovado_usuario, "perfil_id", None) if aprovado_usuario else None
+            if aprovado_perfil_id:
+                aprovado_perfil = (getattr(perfil_map.get(aprovado_perfil_id), "nome", "") or "").strip()
+        e.aprovado_por_nome = aprovado_nome
+        e.aprovado_por_perfil = aprovado_perfil
+        e.criado_em_iso = e.criado_em.isoformat() if getattr(e, "criado_em", None) else ""
+        e.data_aprovacao_iso = e.data_aprovacao.isoformat() if getattr(e, "data_aprovacao", None) else ""
+    return render_template(
+        "partials/cadastrar_plan21_nger_etapa.html",
+        etapas=etapas,
+        user_id=user_id,
+        user_perfil_id=user_perfil_id,
+        user_nome=user_nome,
+        user_nivel=str(getattr(g, "user_nivel", "") or ""),
         current_year=str(_now_local().year),
     )
 
@@ -5136,11 +5297,475 @@ def api_meta_fisica_aprovar(meta_id: int):
     )
 
 
+@home_bp.route("/api/etapa/options", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_options():
+    current_year = str(_now_local().year)
+    cols = set(_plan21_columns())
+    fields = {
+        "exercicio": "exercicio",
+        "unidade_orcamentaria": "unidade_orcamentaria",
+        "programa": "programa",
+        "produto_acao": "produto_acao",
+        "acao_paoe": "acao_paoe",
+        "subacao_entrega": "subacao_entrega",
+    }
+    selected = {}
+    for key in fields:
+        val = (request.args.get(key) or "").strip()
+        if val:
+            selected[key] = val
+    selected["exercicio"] = selected.get("exercicio") or current_year
+    cache_key = (
+        "etapa_options_v2",
+        tuple(sorted((k, str(v)) for k, v in selected.items())),
+    )
+    cached_payload = _cache_get_etapa_options(cache_key)
+    if cached_payload is not None:
+        return jsonify(cached_payload)
+
+    payload = {key: [] for key in fields}
+    payload["exercicio"] = [current_year]
+    where = ["ativo = 1"] if "ativo" in cols else []
+    params = {}
+    for key, col in fields.items():
+        if key == "exercicio":
+            continue
+        val = (selected.get(key) or "").strip()
+        if val and col in cols:
+            where.append(f"{col} = :{key}")
+            params[key] = val
+    if "exercicio" in cols:
+        where.append("exercicio = :exercicio")
+        params["exercicio"] = selected["exercicio"]
+    select_cols = [f"{col} AS {key}" for key, col in fields.items() if key != "exercicio" and col in cols]
+    if select_cols:
+        sql = f"SELECT DISTINCT {', '.join(select_cols)} FROM plan21_nger"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        option_rows = _safe_query_mappings(sql, params)
+        for row in option_rows:
+            for key in ("produto_acao", "acao_paoe", "subacao_entrega"):
+                val = row.get(key)
+                if val is None:
+                    continue
+                text_val = str(val).strip()
+                if text_val:
+                    payload[key].append(text_val)
+    for key in ("unidade_orcamentaria", "programa", "produto_acao", "acao_paoe", "subacao_entrega"):
+        payload[key] = sorted(set(payload[key]), key=lambda v: v.lower())
+
+    option_rows = []
+    option_select_cols = [
+        "id",
+        "unidade_orcamentaria",
+        "programa",
+        "produto_acao",
+        "acao_paoe",
+        "subacao_entrega",
+        "codigo",
+        "municipios_entrega",
+        "etapa",
+        "responsavel_etapa",
+    ]
+    option_select_parts = [c for c in option_select_cols if c in cols]
+    option_select_parts.append("prazo_etapa" if "prazo_etapa" in cols else "NULL AS prazo_etapa")
+    option_where = ["ativo = 1"] if "ativo" in cols else []
+    option_params = {}
+    if "exercicio" in cols:
+        option_where.append("exercicio = :exercicio")
+        option_params["exercicio"] = selected["exercicio"]
+    option_sql = f"SELECT {', '.join(option_select_parts)} FROM plan21_nger"
+    if option_where:
+        option_sql += " WHERE " + " AND ".join(option_where)
+    option_sql += " ORDER BY id"
+    for row in _safe_query_mappings(option_sql, option_params):
+        option_rows.append(
+            {
+                "id": row.get("id"),
+                "unidade_orcamentaria": str(row.get("unidade_orcamentaria") or "").strip(),
+                "programa": str(row.get("programa") or "").strip(),
+                "produto_acao": str(row.get("produto_acao") or "").strip(),
+                "acao_paoe": str(row.get("acao_paoe") or "").strip(),
+                "subacao_entrega": str(row.get("subacao_entrega") or "").strip(),
+                "codigo": str(row.get("codigo") or "").strip(),
+                "municipios_entrega": str(row.get("municipios_entrega") or "").strip(),
+                "etapa": str(row.get("etapa") or "").strip(),
+                "responsavel_etapa": str(row.get("responsavel_etapa") or "").strip(),
+                "prazo_etapa": str(row.get("prazo_etapa") or "").strip(),
+            }
+        )
+    payload["option_rows"] = option_rows
+
+    adj_rows = _safe_query_mappings(
+        """
+        SELECT abreviacao AS value
+        FROM adj
+        WHERE ativo = 1
+        ORDER BY abreviacao
+        """
+    )
+    adj_vals = []
+    for row in adj_rows:
+        raw_val = row.get("value")
+        if raw_val is None:
+            continue
+        txt = str(raw_val).strip()
+        if txt:
+            adj_vals.append(txt)
+    payload["adj_solicitante"] = sorted(set(adj_vals), key=lambda v: v.lower())
+
+    responsaveis_nger = []
+    usuarios_nger = Usuario.query.filter(Usuario.perfil_id == 2).order_by(Usuario.nome).all()
+    for usuario in usuarios_nger:
+        nome = (getattr(usuario, "nome", "") or "").strip()
+        email = (getattr(usuario, "email", "") or "").strip()
+        label = nome or email
+        if label:
+            responsaveis_nger.append(label)
+    payload["responsaveis_nger"] = responsaveis_nger
+
+    etapa_filters = {
+        "exercicio": selected.get("exercicio", ""),
+        "unidade_orcamentaria": selected.get("unidade_orcamentaria", ""),
+        "programa": selected.get("programa", ""),
+        "produto_acao": selected.get("produto_acao", ""),
+        "acao_paoe": selected.get("acao_paoe", ""),
+        "subacao_entrega": selected.get("subacao_entrega", ""),
+    }
+    etapa_rows = _load_etapa_plan21_rows(etapa_filters)
+    etapas = []
+    seen = set()
+    for row in etapa_rows:
+        etapa = (row.get("etapa") or "").strip()
+        if not etapa or etapa in seen:
+            continue
+        seen.add(etapa)
+        etapas.append(
+            {
+                "id": row.get("id"),
+                "value": etapa,
+                "label": etapa,
+                "responsavel_etapa": row.get("responsavel_etapa") or "",
+                "prazo_etapa": row.get("prazo_etapa") or "",
+            }
+        )
+    payload["etapas"] = etapas
+    _cache_set_etapa_options(cache_key, payload)
+    return jsonify(payload)
+
+
+@home_bp.route("/api/etapa/plan21-rows", methods=["GET"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_plan21_rows():
+    filters = {
+        "exercicio": (request.args.get("exercicio") or "").strip(),
+        "unidade_orcamentaria": (request.args.get("unidade_orcamentaria") or "").strip(),
+        "programa": (request.args.get("programa") or "").strip(),
+        "produto_acao": (request.args.get("produto_acao") or "").strip(),
+        "acao_paoe": (request.args.get("acao_paoe") or "").strip(),
+        "subacao_entrega": (request.args.get("subacao_entrega") or "").strip(),
+    }
+    etapa = (request.args.get("etapa") or "").strip()
+    validar_exclusao = (request.args.get("validar_exclusao") or "").strip().lower() in {"1", "true", "sim"}
+    rows = _load_etapa_plan21_rows(filters, etapa=etapa or None)
+    if validar_exclusao:
+        err = _validate_etapa_exclusao_sem_memoria(rows, etapa)
+        if err:
+            return jsonify({"error": err}), 400
+    return jsonify({"rows": rows})
+
+
+def _apply_etapa_payload(registro: CadastrarEtapa, data: dict):
+    tipo = (data.get("tipo_solicitacao") or "cadastrar").strip().lower()
+    if tipo not in {"cadastrar", "alterar", "excluir"}:
+        return "Tipo de solicitacao invalido."
+    exercicio_raw = (data.get("exercicio") or "").strip()
+    try:
+        exercicio = int(exercicio_raw)
+    except ValueError:
+        return "Exercicio invalido."
+    filters = {
+        "exercicio": exercicio_raw,
+        "unidade_orcamentaria": (data.get("unidade_orcamentaria") or "").strip(),
+        "programa": (data.get("programa") or "").strip(),
+        "produto_acao": (data.get("produto_acao") or "").strip(),
+        "acao_paoe": (data.get("acao_paoe") or "").strip(),
+        "subacao_entrega": (data.get("subacao_entrega") or "").strip(),
+        "adj_solicitante": (data.get("adj_solicitante") or "").strip(),
+    }
+    missing_filter = [k for k, v in filters.items() if not v]
+    if missing_filter:
+        return f"Campos obrigatorios ausentes: {', '.join(missing_filter)}."
+    etapa_nova = (data.get("etapa_nova") or "").strip()
+    responsavel_novo = (data.get("responsavel_etapa_novo") or "").strip()
+    cpf_novo = re.sub(r"\D", "", (data.get("cpf_responsavel_etapa_novo") or ""))
+    email_novo = (data.get("email_responsavel_etapa_novo") or "").strip()
+    data_inicio = _parse_etapa_date(data.get("data_inicio_novo") or "")
+    data_fim = _parse_etapa_date(data.get("data_fim_novo") or "")
+    justificativa = (data.get("justificativa") or "").strip()
+    responsavel_nger = (data.get("responsavel_nger") or "").strip()
+    municipio_filtro = (data.get("municipios_entrega") or "").strip()
+    source_rows = []
+    source_id_raw = data.get("plan21_nger_id")
+    source_id = None
+    if source_id_raw:
+        try:
+            source_id = int(source_id_raw)
+        except (TypeError, ValueError):
+            source_id = None
+    if tipo != "excluir":
+        required = {
+            "etapa_nova": etapa_nova,
+            "responsavel_etapa_novo": responsavel_novo,
+            "cpf_responsavel_etapa_novo": cpf_novo,
+            "email_responsavel_etapa_novo": email_novo,
+            "data_inicio_novo": data_inicio,
+            "data_fim_novo": data_fim,
+            "justificativa": justificativa,
+        }
+    else:
+        required = {
+            "plan21_nger_id": source_id,
+            "justificativa": justificativa,
+        }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return f"Campos obrigatorios ausentes: {', '.join(missing)}."
+    if cpf_novo and not _is_valid_cpf(cpf_novo):
+        return "CPF do responsavel da etapa invalido."
+    if email_novo and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_novo):
+        return "E-mail do responsavel da etapa invalido."
+    if data_inicio and data_fim and data_fim < data_inicio:
+        return "Data de fim nao pode ser anterior a data de inicio."
+
+    if tipo in {"alterar", "excluir"}:
+        if not source_id:
+            return "Selecione uma etapa ja cadastrada."
+        selected = _load_etapa_plan21_rows(filters, source_id=source_id)
+        if not selected:
+            return "Etapa selecionada nao encontrada na plan21_nger."
+        etapa_origem = (selected[0].get("etapa") or "").strip()
+        source_rows = _load_etapa_plan21_rows(filters, etapa=etapa_origem)
+        if not source_rows:
+            source_rows = selected
+        if tipo == "excluir":
+            err = _validate_etapa_exclusao_sem_memoria(source_rows, etapa_origem)
+            if err:
+                return err
+    else:
+        source_rows = _load_etapa_plan21_rows(filters)
+        if municipio_filtro:
+            filtered_source_rows = [
+                row for row in source_rows if (row.get("municipios_entrega") or "").strip() == municipio_filtro
+            ]
+            if filtered_source_rows:
+                source_rows = filtered_source_rows
+        if not source_rows:
+            return "Nenhuma linha base encontrada na plan21_nger para cadastrar a etapa."
+
+    first = source_rows[0]
+    origem_inicio, origem_fim = _split_etapa_prazo(first.get("prazo_etapa"))
+    ids = []
+    for row in source_rows:
+        try:
+            ids.append(int(row.get("id")))
+        except (TypeError, ValueError):
+            continue
+    registro.exercicio = exercicio
+    registro.unidade_orcamentaria = first.get("unidade_orcamentaria") or ""
+    registro.programa = first.get("programa") or ""
+    registro.acao_paoe = filters["acao_paoe"]
+    registro.responsavel_acao = first.get("responsavel_acao") or filters["adj_solicitante"]
+    registro.produto_acao = filters["produto_acao"]
+    registro.adj_solicitante = filters["adj_solicitante"]
+    registro.subacao_entrega = filters["subacao_entrega"]
+    registro.chave_planejamento = first.get("chave_planejamento") or ""
+    registro.tipo_solicitacao = tipo
+    registro.plan21_nger_id = ids[0] if ids else None
+    registro.plan21_nger_ids = json.dumps(ids) if len(ids) > 1 else None
+    registro.etapa_origem = first.get("etapa") or ""
+    registro.responsavel_etapa_origem = first.get("responsavel_etapa") or ""
+    registro.data_inicio_origem = origem_inicio
+    registro.data_fim_origem = origem_fim
+    registro.etapa_nova = etapa_nova
+    registro.responsavel_etapa_novo = responsavel_novo
+    registro.cpf_responsavel_etapa_novo = cpf_novo
+    registro.email_responsavel_etapa_novo = email_novo
+    registro.data_inicio_novo = data_inicio
+    registro.data_fim_novo = data_fim
+    registro.justificativa = justificativa
+    registro.responsavel_nger = responsavel_nger
+    registro.status_aprovacao = "Aguardando"
+    registro.situacao = "Aguardando"
+    registro.alterado_em = _now_local()
+    return None
+
+
+@home_bp.route("/api/etapa", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_create():
+    data = request.get_json() or {}
+    registro = CadastrarEtapa(
+        usuario_id=_resolve_usuario_id(),
+        ativo=True,
+        criado_em=_now_local(),
+    )
+    err = _apply_etapa_payload(registro, data)
+    if err:
+        return jsonify({"error": err}), 400
+    db.session.add(registro)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar etapa: {exc}"}), 500
+    return jsonify({"etapa": _etapa_payload(registro)})
+
+
+@home_bp.route("/api/etapa/<int:etapa_id>", methods=["PUT"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_update(etapa_id):
+    registro = db.session.get(CadastrarEtapa, etapa_id)
+    if not registro or registro.excluido_em is not None:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+    status = (registro.status_aprovacao or "").strip().lower()
+    if status and status != "aguardando":
+        return jsonify({"error": "Somente registros com status Aguardando podem ser editados."}), 400
+    criador = Usuario.query.filter_by(id=registro.usuario_id).first() if registro.usuario_id else None
+    if not _current_user_matches_perfil(getattr(criador, "perfil_id", None)):
+        return jsonify({"error": "Usuario sem permissao para editar o registro de etapa."}), 403
+    err = _apply_etapa_payload(registro, request.get_json() or {})
+    if err:
+        return jsonify({"error": err}), 400
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao salvar etapa: {exc}"}), 500
+    return jsonify({"etapa": _etapa_payload(registro)})
+
+
+@home_bp.route("/api/etapa/<int:etapa_id>", methods=["DELETE"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_delete(etapa_id):
+    registro = db.session.get(CadastrarEtapa, etapa_id)
+    if not registro or registro.ativo is False:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+    status = (registro.status_aprovacao or "").strip().lower()
+    if status and status != "aguardando":
+        return jsonify({"error": "Somente registros com status Aguardando podem ser excluidos."}), 400
+    criador = Usuario.query.filter_by(id=registro.usuario_id).first() if registro.usuario_id else None
+    if not _current_user_matches_perfil(getattr(criador, "perfil_id", None)):
+        return jsonify({"error": "Usuario sem permissao para excluir o registro de etapa."}), 403
+    registro.ativo = False
+    registro.excluido_em = _now_local()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao excluir etapa: {exc}"}), 500
+    return jsonify({"ok": True})
+
+
+def _apply_etapa_to_plan21(registro: CadastrarEtapa) -> list[int]:
+    ids = _extract_etapa_plan21_ids(registro)
+    if not ids:
+        raise ValueError("Referencia plan21_nger nao encontrada para etapa.")
+    prazo = _format_etapa_prazo(registro.data_inicio_novo, registro.data_fim_novo)
+    overrides = {
+        "etapa": registro.etapa_nova,
+        "responsavel_etapa": registro.responsavel_etapa_novo,
+        "prazo_etapa": prazo,
+        "ativo": True,
+    }
+    tipo = (registro.tipo_solicitacao or "cadastrar").strip().lower()
+    if tipo == "excluir":
+        rows = _load_plan21_full_rows_by_ids(ids)
+        err = _validate_etapa_exclusao_sem_memoria(rows, registro.etapa_origem)
+        if err:
+            raise ValueError(err)
+        new_ids = _clone_etapa_exclusao_base_rows(rows)
+        Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).update({"ativo": False}, synchronize_session=False)
+        return new_ids
+    source_ids = [ids[0]] if tipo == "cadastrar" else ids
+    nullify = _etapa_nullify_cols() if tipo == "cadastrar" else set()
+    new_ids = []
+    for source_id in source_ids:
+        new_id = _clone_plan21_row(source_id, overrides=overrides, nullify=nullify)
+        if new_id:
+            new_ids.append(new_id)
+    if tipo == "alterar":
+        Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).update({"ativo": False}, synchronize_session=False)
+    return new_ids
+
+
+@home_bp.route("/api/etapa/<int:etapa_id>/aprovar", methods=["POST"])
+@login_required
+@require_feature("cadastrar/plan_21-nger/etapa")
+def api_etapa_aprovar(etapa_id):
+    registro = db.session.get(CadastrarEtapa, etapa_id)
+    if not registro or registro.ativo is False:
+        return jsonify({"error": "Registro nao encontrado."}), 404
+    status_atual = (registro.status_aprovacao or "").strip().lower()
+    if status_atual and status_atual != "aguardando":
+        return jsonify({"error": "Etapa ja foi processada."}), 400
+    try:
+        nivel_int = int(getattr(g, "user_nivel", 0) or 0)
+    except (TypeError, ValueError):
+        nivel_int = 0
+    if nivel_int not in (1, 2):
+        return jsonify({"error": "Usuario sem permissao para aprovar a etapa atual."}), 403
+    data = request.get_json() or {}
+    aprovado = (data.get("etapa_aprovada") or "sim").strip().lower()
+    aprovado = aprovado if aprovado in {"sim", "nao"} else "sim"
+    motivo = (data.get("motivo_rejeicao") or "").strip()
+    if not motivo:
+        return jsonify({"error": "Justificativa obrigatoria."}), 400
+    novos_ids = []
+    if aprovado == "sim":
+        try:
+            novos_ids = _apply_etapa_to_plan21(registro)
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify({"error": f"Falha ao aprovar etapa: {exc}"}), 500
+        registro.status_aprovacao = "Aprovado"
+        registro.situacao = "Aprovado"
+        if novos_ids:
+            registro.plan21_nger_id = novos_ids[-1]
+            registro.plan21_nger_ids = json.dumps(novos_ids) if len(novos_ids) > 1 else None
+    else:
+        registro.status_aprovacao = "Rejeitado"
+        registro.situacao = "Rejeitado"
+        registro.ativo = False
+        registro.excluido_em = _now_local()
+    usuarios_id = _resolve_usuario_id()
+    if usuarios_id is None:
+        return jsonify({"error": "Usuario nao encontrado."}), 400
+    registro.aprovado_por = str(usuarios_id)
+    registro.data_aprovacao = _now_local()
+    registro.motivo_rejeicao = motivo
+    registro.alterado_em = _now_local()
+    try:
+        db.session.commit()
+        _cache_invalidate_etapa_options()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao aprovar etapa: {exc}"}), 500
+    return jsonify({"ok": True, "message": "Etapa atualizada.", "etapa": _etapa_payload(registro)})
+
+
 @home_bp.route("/api/subacao/options", methods=["GET"])
 @login_required
 @require_feature("cadastrar/plan_21-nger/subacao")
 def api_subacao_options():
     current_year = str(_now_local().year)
+    cols = set(_plan21_columns())
     plan_fields = {
         "exercicio": Plan21Nger.exercicio,
         "uo": Plan21Nger.uo,
@@ -5175,6 +5800,53 @@ def api_subacao_options():
             plan_options[key] = [current_year]
         else:
             plan_options[key] = sorted(set(values), key=lambda v: v.lower())
+
+    option_rows = []
+    option_select_cols = [
+        "id",
+        "exercicio",
+        "unidade_orcamentaria",
+        "programa",
+        "acao_paoe",
+        "responsavel_acao",
+        "produto_acao",
+        "subfuncao_ug",
+        "adj",
+        "macropolitica",
+        "pilar",
+        "eixo",
+        "politica_decreto",
+        "regiao_produto",
+    ]
+    option_select_parts = [c for c in option_select_cols if c in cols]
+    option_where = ["ativo = 1"] if "ativo" in cols else []
+    option_params = {}
+    if "exercicio" in cols:
+        option_where.append("exercicio = :exercicio")
+        option_params["exercicio"] = current_year
+    option_sql = f"SELECT {', '.join(option_select_parts)} FROM plan21_nger"
+    if option_where:
+        option_sql += " WHERE " + " AND ".join(option_where)
+    option_sql += " ORDER BY id"
+    for row in _safe_query_mappings(option_sql, option_params):
+        option_rows.append(
+            {
+                "id": row.get("id"),
+                "exercicio": str(row.get("exercicio") or "").strip(),
+                "uo": str(row.get("unidade_orcamentaria") or "").strip(),
+                "programa": str(row.get("programa") or "").strip(),
+                "acao_paoe": str(row.get("acao_paoe") or "").strip(),
+                "responsavel_acao": str(row.get("responsavel_acao") or "").strip(),
+                "produto_acao": str(row.get("produto_acao") or "").strip(),
+                "subfuncao_ug": str(row.get("subfuncao_ug") or "").strip(),
+                "adj": str(row.get("adj") or "").strip(),
+                "macropolitica": str(row.get("macropolitica") or "").strip(),
+                "pilar": str(row.get("pilar") or "").strip(),
+                "eixo": str(row.get("eixo") or "").strip(),
+                "politica_decreto": str(row.get("politica_decreto") or "").strip(),
+                "regiao_produto": str(row.get("regiao_produto") or "").strip(),
+            }
+        )
 
     # Ponte com plan21_nger para filtrar parte da chave do planejamento
     ponte_params = {}
@@ -5466,6 +6138,15 @@ def api_subacao_options():
             }
         )
 
+    responsaveis_nger = []
+    usuarios_nger = Usuario.query.filter(Usuario.perfil_id == 2).order_by(Usuario.nome).all()
+    for usuario in usuarios_nger:
+        nome = (getattr(usuario, "nome", "") or "").strip()
+        email = (getattr(usuario, "email", "") or "").strip()
+        label = nome or email
+        if label:
+            responsaveis_nger.append(label)
+
     return jsonify(
         {
             "plan21": plan_options,
@@ -5479,6 +6160,8 @@ def api_subacao_options():
             "politicas": politicas,
             "publicos": publicos,
             "municipios": municipios,
+            "responsaveis_nger": responsaveis_nger,
+            "option_rows": option_rows,
         }
     )
 
@@ -5515,6 +6198,529 @@ def _subacao_payload(registro: CadastrarSubacao) -> dict:
         "status_aprovacao": registro.status_aprovacao,
         "tipo_edicao": registro.tipo_edicao,
     }
+
+
+def _format_etapa_prazo(data_inicio, data_fim) -> str:
+    inicio = data_inicio.strftime("%d/%m/%Y") if hasattr(data_inicio, "strftime") else str(data_inicio or "").strip()
+    fim = data_fim.strftime("%d/%m/%Y") if hasattr(data_fim, "strftime") else str(data_fim or "").strip()
+    return f"{inicio} à {fim}".strip()
+
+
+def _parse_etapa_date(value: str):
+    token = (value or "").strip()
+    if not token:
+        return None
+    try:
+        return datetime.strptime(token, "%Y-%m-%d").date()
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(token, "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def _split_etapa_prazo(value: str | None) -> tuple:
+    token = str(value or "").strip()
+    if not token:
+        return None, None
+    parts = re.split(r"\s+(?:à|a|ate|até)\s+", token, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return None, None
+    return _parse_etapa_date(parts[0]), _parse_etapa_date(parts[1])
+
+
+def _extract_etapa_plan21_ids(registro: CadastrarEtapa) -> list[int]:
+    ids = []
+    raw_ids = registro.plan21_nger_ids
+    if raw_ids:
+        try:
+            parsed = json.loads(raw_ids) if isinstance(raw_ids, str) else raw_ids
+            if isinstance(parsed, list):
+                for val in parsed:
+                    try:
+                        num = int(val)
+                        if num > 0:
+                            ids.append(num)
+                    except (TypeError, ValueError):
+                        continue
+        except (TypeError, ValueError):
+            pass
+    if not ids and registro.plan21_nger_id:
+        try:
+            num = int(registro.plan21_nger_id)
+            if num > 0:
+                ids.append(num)
+        except (TypeError, ValueError):
+            pass
+    return ids
+
+
+def _etapa_payload(registro: CadastrarEtapa) -> dict:
+    return {
+        "id": registro.id,
+        "exercicio": registro.exercicio,
+        "unidade_orcamentaria": registro.unidade_orcamentaria,
+        "programa": registro.programa,
+        "acao_paoe": registro.acao_paoe,
+        "responsavel_acao": registro.responsavel_acao,
+        "produto_acao": registro.produto_acao,
+        "adj_solicitante": registro.adj_solicitante,
+        "subacao_entrega": registro.subacao_entrega,
+        "chave_planejamento": registro.chave_planejamento,
+        "tipo_solicitacao": registro.tipo_solicitacao,
+        "plan21_nger_id": registro.plan21_nger_id,
+        "plan21_nger_ids": registro.plan21_nger_ids,
+        "etapa_origem": registro.etapa_origem,
+        "responsavel_etapa_origem": registro.responsavel_etapa_origem,
+        "data_inicio_origem": registro.data_inicio_origem.isoformat() if registro.data_inicio_origem else "",
+        "data_fim_origem": registro.data_fim_origem.isoformat() if registro.data_fim_origem else "",
+        "etapa_nova": registro.etapa_nova,
+        "responsavel_etapa_novo": registro.responsavel_etapa_novo,
+        "cpf_responsavel_etapa_novo": registro.cpf_responsavel_etapa_novo,
+        "email_responsavel_etapa_novo": registro.email_responsavel_etapa_novo,
+        "data_inicio_novo": registro.data_inicio_novo.isoformat() if registro.data_inicio_novo else "",
+        "data_fim_novo": registro.data_fim_novo.isoformat() if registro.data_fim_novo else "",
+        "justificativa": registro.justificativa,
+        "responsavel_nger": registro.responsavel_nger,
+        "status_aprovacao": registro.status_aprovacao,
+        "situacao": registro.situacao,
+        "criado_em": registro.criado_em.isoformat() if getattr(registro, "criado_em", None) else "",
+        "data_aprovacao": registro.data_aprovacao.isoformat() if getattr(registro, "data_aprovacao", None) else "",
+        "motivo_rejeicao": registro.motivo_rejeicao or "",
+    }
+
+
+def _load_etapa_plan21_rows(filters: dict, etapa: str | None = None, source_id: int | None = None) -> list[dict]:
+    cols = set(_plan21_columns())
+    select_cols = [
+        "id",
+        "exercicio",
+        "unidade_orcamentaria",
+        "programa",
+        "acao_paoe",
+        "responsavel_acao",
+        "produto_acao",
+        "chave_planejamento",
+        "subacao_entrega",
+        "codigo",
+        "municipios_entrega",
+        "etapa",
+        "responsavel_etapa",
+    ]
+    select_parts = [c for c in select_cols if c in cols]
+    select_parts.append("prazo_etapa" if "prazo_etapa" in cols else "NULL AS prazo_etapa")
+    where = ["ativo = 1"] if "ativo" in cols else []
+    params = {}
+    field_map = {
+        "exercicio": "exercicio",
+        "unidade_orcamentaria": "unidade_orcamentaria",
+        "programa": "programa",
+        "acao_paoe": "acao_paoe",
+        "responsavel_acao": "responsavel_acao",
+        "produto_acao": "produto_acao",
+        "subacao_entrega": "subacao_entrega",
+        "chave_planejamento": "chave_planejamento",
+    }
+    for key, col in field_map.items():
+        val = (filters.get(key) or "").strip()
+        if val and col in cols:
+            where.append(f"{col} = :{key}")
+            params[key] = val
+    if etapa and "etapa" in cols:
+        where.append("etapa = :etapa")
+        params["etapa"] = etapa
+    if source_id:
+        where.append("id = :source_id")
+        params["source_id"] = source_id
+    sql = f"SELECT {', '.join(select_parts)} FROM plan21_nger"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id"
+    return [dict(r) for r in _safe_query_mappings(sql, params)]
+
+
+def _etapa_nullify_cols() -> set:
+    return {
+        "regiao_etapa",
+        "natureza",
+        "fonte",
+        "idu",
+        "descricao_item_despesa",
+        "unid_medida_item",
+        "quantidade",
+        "valor_unitario",
+        "valor_total",
+        "suplementacao",
+        "anulacao",
+        "valor_atual",
+        "cat_econ",
+        "grupo",
+        "modalidade",
+        "elemento",
+        "subelemento",
+    }
+
+
+def _plan21_cols_before_etapa() -> list[str]:
+    cols = _plan21_columns()
+    if "etapa" not in cols:
+        return [col for col in cols if col not in {"id", "ativo"}]
+    return [col for col in cols[: cols.index("etapa")] if col not in {"id", "ativo"}]
+
+
+def _etapa_clear_cols() -> set[str]:
+    cols = set(_plan21_columns())
+    etapa_cols = {
+        "etapa",
+        "responsavel_etapa",
+        "cpf_responsavel_etapa",
+        "email_responsavel_etapa",
+        "prazo_etapa",
+        "regiao_etapa",
+    }
+    return {col for col in etapa_cols if col in cols}.union(_etapa_memoria_cols())
+
+
+def _normalize_plan21_signature_value(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return " ".join(value.replace("\xa0", " ").split())
+    return value
+
+
+def _plan21_before_etapa_signature(row: dict, signature_cols: list[str]) -> tuple:
+    return tuple((col, _normalize_plan21_signature_value(row.get(col))) for col in signature_cols)
+
+
+def _load_plan21_full_rows_by_ids(ids: list[int]) -> list[dict]:
+    clean_ids = []
+    for val in ids or []:
+        try:
+            num = int(val)
+            if num > 0:
+                clean_ids.append(num)
+        except (TypeError, ValueError):
+            continue
+    clean_ids = sorted(set(clean_ids))
+    if not clean_ids:
+        return []
+    params = {}
+    placeholders = []
+    for idx, row_id in enumerate(clean_ids):
+        key = f"id_{idx}"
+        params[key] = row_id
+        placeholders.append(f":{key}")
+    cols = _plan21_columns()
+    sql = (
+        f"SELECT {', '.join(f'`{col}`' for col in cols)} "
+        f"FROM plan21_nger WHERE id IN ({', '.join(placeholders)}) ORDER BY id"
+    )
+    return [dict(row) for row in db.session.execute(text(sql), params).mappings().all()]
+
+
+def _plan21_empty_etapa_where(cols: set[str]) -> list[str]:
+    conditions = []
+    for col in ("etapa", "responsavel_etapa", "prazo_etapa", "regiao_etapa"):
+        if col in cols:
+            conditions.append(_plan21_empty_marker_sql(col))
+    return conditions
+
+
+def _plan21_empty_marker_sql(col: str) -> str:
+    raw = f"TRIM(CAST(`{col}` AS CHAR))"
+    normalized = (
+        f"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({raw}, CHAR(160), ''), "
+        "' ', ''), '.', ''), ',', ''), '/', ''), '-', '')"
+    )
+    return (
+        f"(`{col}` IS NULL OR {raw} = '' OR {raw} IN ('-', '–', '—') "
+        f"OR {normalized} REGEXP '^0+$')"
+    )
+
+
+def _plan21_empty_memory_where(cols: set[str]) -> list[str]:
+    conditions = []
+    for col in _etapa_memoria_cols():
+        if col in cols:
+            conditions.append(_plan21_empty_marker_sql(col))
+    return conditions
+
+
+def _active_base_row_without_etapa_exists(source_row: dict, signature_cols: list[str]) -> bool:
+    cols = set(_plan21_columns())
+    where = ["`ativo` = 1"] if "ativo" in cols else []
+    where.extend(_plan21_empty_etapa_where(cols))
+    where.extend(_plan21_empty_memory_where(cols))
+    params = {}
+    for idx, col in enumerate(signature_cols):
+        key = f"sig_{idx}"
+        value = source_row.get(col)
+        if value is None:
+            where.append(f"`{col}` IS NULL")
+        else:
+            where.append(f"`{col}` = :{key}")
+            params[key] = value
+    if source_row.get("id") is not None:
+        where.append("`id` <> :source_id")
+        params["source_id"] = source_row.get("id")
+    sql = "SELECT id FROM plan21_nger"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " LIMIT 1"
+    return db.session.execute(text(sql), params).first() is not None
+
+
+def _clone_etapa_exclusao_base_rows(rows: list[dict]) -> list[int]:
+    if not rows:
+        return []
+    signature_cols = _plan21_cols_before_etapa()
+    grouped: dict[tuple, dict] = {}
+    for row in rows:
+        row_id = row.get("id")
+        if not row_id:
+            continue
+        signature = _plan21_before_etapa_signature(row, signature_cols)
+        if signature not in grouped:
+            grouped[signature] = row
+    nullify = _etapa_clear_cols()
+    overrides = {"ativo": True}
+    new_ids = []
+    for row in grouped.values():
+        if _active_base_row_without_etapa_exists(row, signature_cols):
+            continue
+        new_id = _clone_plan21_row(int(row["id"]), overrides=overrides, nullify=nullify)
+        if new_id:
+            new_ids.append(new_id)
+    return new_ids
+
+
+def _etapa_memoria_cols() -> list[str]:
+    cols = _plan21_columns()
+    memoria_cols = [
+        "regiao_etapa",
+        "natureza",
+        "cat_econ",
+        "grupo",
+        "modalidade",
+        "elemento",
+        "subelemento",
+        "fonte",
+        "idu",
+        "descricao_item_despesa",
+        "unid_medida_item",
+        "quantidade",
+        "valor_unitario",
+        "valor_total",
+        "suplementacao",
+        "anulacao",
+        "valor_atual",
+    ]
+    return [col for col in memoria_cols if col in cols]
+
+
+def _subacao_cols() -> list[str]:
+    cols = set(_plan21_columns())
+    subacao_cols = [
+        "subacao_entrega",
+        "responsavel",
+        "prazo",
+        "unid_gestora",
+        "unidade_setorial_planejamento",
+        "produto_subacao",
+        "unidade_medida",
+        "regiao_subacao",
+        "codigo",
+        "municipios_entrega",
+        "meta_subacao",
+        "detalhamento_produto",
+    ]
+    return [col for col in subacao_cols if col in cols]
+
+
+def _subacao_etapa_cols() -> list[str]:
+    cols = set(_plan21_columns())
+    etapa_cols = ["etapa", "responsavel_etapa", "prazo_etapa"]
+    return [col for col in etapa_cols if col in cols]
+
+
+def _subacao_clear_cols() -> set[str]:
+    return set(_subacao_cols()).union(_subacao_etapa_cols()).union(_etapa_memoria_cols())
+
+
+def _plan21_cols_before_subacao() -> list[str]:
+    cols = _plan21_columns()
+    if "subacao_entrega" not in cols:
+        return [col for col in cols if col not in {"id", "ativo"}]
+    return [col for col in cols[: cols.index("subacao_entrega")] if col not in {"id", "ativo"}]
+
+
+def _plan21_empty_subacao_where(cols: set[str]) -> list[str]:
+    conditions = []
+    for col in _subacao_cols():
+        if col in cols:
+            conditions.append(_plan21_empty_marker_sql(col))
+    return conditions
+
+
+def _active_base_row_without_subacao_exists(source_row: dict, signature_cols: list[str]) -> bool:
+    cols = set(_plan21_columns())
+    where = ["`ativo` = 1"] if "ativo" in cols else []
+    where.extend(_plan21_empty_subacao_where(cols))
+    where.extend(_plan21_empty_etapa_where(cols))
+    where.extend(_plan21_empty_memory_where(cols))
+    params = {}
+    for idx, col in enumerate(signature_cols):
+        key = f"sig_sub_{idx}"
+        value = source_row.get(col)
+        if value is None:
+            where.append(f"`{col}` IS NULL")
+        else:
+            where.append(f"`{col}` = :{key}")
+            params[key] = value
+    if source_row.get("id") is not None:
+        where.append("`id` <> :source_id")
+        params["source_id"] = source_row.get("id")
+    sql = "SELECT id FROM plan21_nger"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " LIMIT 1"
+    return db.session.execute(text(sql), params).first() is not None
+
+
+def _clone_subacao_exclusao_base_rows(rows: list[dict]) -> list[int]:
+    if not rows:
+        return []
+    signature_cols = _plan21_cols_before_subacao()
+    grouped: dict[tuple, dict] = {}
+    for row in rows:
+        row_id = row.get("id")
+        if not row_id:
+            continue
+        signature = _plan21_before_etapa_signature(row, signature_cols)
+        if signature not in grouped:
+            grouped[signature] = row
+    nullify = _subacao_clear_cols()
+    overrides = {"ativo": True}
+    new_ids = []
+    for row in grouped.values():
+        if _active_base_row_without_subacao_exists(row, signature_cols):
+            continue
+        new_id = _clone_plan21_row(int(row["id"]), overrides=overrides, nullify=nullify)
+        if new_id:
+            new_ids.append(new_id)
+    return new_ids
+
+
+def _value_has_content(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        return value != 0
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            value = value.decode("utf-8", errors="ignore")
+        except Exception:
+            return bool(value)
+    if isinstance(value, str):
+        token = value.replace("\xa0", " ").strip()
+        if not token:
+            return False
+        if token in {"-", "–", "—"} or set(token) <= {"-", "–", "—"}:
+            return False
+        compact = re.sub(r"[\s\.\,\-_/]", "", token)
+        if compact and set(compact) == {"0"}:
+            return False
+        number_token = token.replace(".", "").replace(",", ".")
+        try:
+            return Decimal(number_token) != 0
+        except Exception:
+            return True
+    return True
+
+
+def _validate_etapa_exclusao_sem_memoria(rows: list[dict], etapa_nome: str | None = None) -> str | None:
+    ids = []
+    for row in rows or []:
+        try:
+            ids.append(int(row.get("id")))
+        except (TypeError, ValueError):
+            continue
+    ids = sorted(set(i for i in ids if i > 0))
+    if not ids:
+        return None
+    memoria_cols = _etapa_memoria_cols()
+    if not memoria_cols:
+        return None
+    placeholders = []
+    params = {}
+    for idx, row_id in enumerate(ids):
+        key = f"id_{idx}"
+        placeholders.append(f":{key}")
+        params[key] = row_id
+    select_cols = ["id", *memoria_cols]
+    sql = (
+        f"SELECT {', '.join(f'`{col}`' for col in select_cols)} "
+        f"FROM plan21_nger WHERE id IN ({', '.join(placeholders)})"
+    )
+    result_rows = db.session.execute(text(sql), params).mappings().all()
+    for row in result_rows:
+        if any(_value_has_content(row.get(col)) for col in memoria_cols):
+            etapa = (etapa_nome or "").strip()
+            if not etapa:
+                etapa = next((str(src.get("etapa") or "").strip() for src in rows if src.get("etapa")), "")
+            return (
+                f'Não é possível excluir a Etapa "{etapa}", pois existem Memórias de Cálculo vinculadas a ela. '
+                "Para realizar a exclusão, exclua previamente todas as Memórias de Cálculo associadas a esta Etapa."
+            )
+    return None
+
+
+def _validate_subacao_exclusao_sem_vinculos(rows: list[dict], subacao_nome: str | None = None) -> str | None:
+    ids = []
+    for row in rows or []:
+        try:
+            ids.append(int(row.get("id")))
+        except (TypeError, ValueError):
+            continue
+    ids = sorted(set(i for i in ids if i > 0))
+    if not ids:
+        return None
+    check_cols = [*_subacao_etapa_cols(), *_etapa_memoria_cols()]
+    if not check_cols:
+        return None
+    placeholders = []
+    params = {}
+    for idx, row_id in enumerate(ids):
+        key = f"id_{idx}"
+        placeholders.append(f":{key}")
+        params[key] = row_id
+    select_cols = ["id", *check_cols]
+    sql = (
+        f"SELECT {', '.join(f'`{col}`' for col in select_cols)} "
+        f"FROM plan21_nger WHERE id IN ({', '.join(placeholders)})"
+    )
+    result_rows = db.session.execute(text(sql), params).mappings().all()
+    etapa_cols = set(_subacao_etapa_cols())
+    memoria_cols = set(_etapa_memoria_cols())
+    subacao = (subacao_nome or "").strip()
+    if not subacao:
+        subacao = next((str(src.get("subacao_entrega") or "").strip() for src in rows if src.get("subacao_entrega")), "")
+    for row in result_rows:
+        if any(_value_has_content(row.get(col)) for col in etapa_cols):
+            return (
+                f'Não é possível excluir a Subação "{subacao}", pois existem Etapas vinculadas a ela. '
+                "Para realizar a exclusão, exclua previamente todas as Etapas associadas a esta Subação."
+            )
+        if any(_value_has_content(row.get(col)) for col in memoria_cols):
+            return (
+                f'Não é possível excluir a Subação "{subacao}", pois existem Memórias de Cálculo vinculadas a ela. '
+                "Para realizar a exclusão, exclua previamente todas as Memórias de Cálculo associadas a esta Subação."
+            )
+    return None
 
 
 def _parse_json_list(value) -> list:
@@ -5776,13 +6982,19 @@ def _apply_subacao_alterar(registro: CadastrarSubacao) -> list[int]:
     return new_ids
 
 
-def _apply_subacao_excluir(registro: CadastrarSubacao) -> None:
+def _apply_subacao_excluir(registro: CadastrarSubacao) -> list[int]:
     ids = _extract_plan21_ids(registro)
     if not ids:
         raise ValueError("Referencia plan21_nger nao encontrada para excluir.")
+    rows = _load_plan21_full_rows_by_ids(ids)
+    err = _validate_subacao_exclusao_sem_vinculos(rows, registro.subacao_entrega)
+    if err:
+        raise ValueError(err)
+    new_ids = _clone_subacao_exclusao_base_rows(rows)
     Plan21Nger.query.filter(Plan21Nger.id.in_(ids)).update(
         {"ativo": False}, synchronize_session=False
     )
+    return new_ids
 
 
 def _load_plan21_edit_rows(filters: dict) -> list[dict]:
@@ -5842,6 +7054,9 @@ def _load_plan21_edit_rows(filters: dict) -> list[dict]:
           codigo,
           municipios_entrega,
           meta_subacao,
+          etapa,
+          responsavel_etapa,
+          prazo_etapa,
           detalhamento_produto,
           valor_atual
         FROM plan21_nger
@@ -5932,6 +7147,27 @@ def api_subacao_plan21_edit_options():
 
     options = {key: build_options(key) for key in edit_fields.keys()}
 
+    option_where = ["ativo = 1"]
+    option_params = {}
+    for k, col_name in plan_fields.items():
+        val = selected.get(k, "")
+        if val:
+            option_where.append(f"{col_name} = :{k}")
+            option_params[k] = val
+    option_cols = ["id", *plan_fields.values(), *edit_fields.values()]
+    option_sql = f"SELECT {', '.join(option_cols)} FROM plan21_nger"
+    if option_where:
+        option_sql += " WHERE " + " AND ".join(option_where)
+    option_sql += " ORDER BY id"
+    option_rows = []
+    for row in _safe_query_mappings(option_sql, option_params):
+        item = {"id": row.get("id")}
+        for key, col_name in plan_fields.items():
+            item[key] = "" if row.get(col_name) is None else str(row.get(col_name)).strip()
+        for key, col_name in edit_fields.items():
+            item[key] = "" if row.get(col_name) is None else str(row.get(col_name)).strip()
+        option_rows.append(item)
+
     pair_where = ["ativo = 1"]
     pair_params = {}
     for k, col_name in plan_fields.items():
@@ -6017,7 +7253,7 @@ def api_subacao_plan21_edit_options():
     for codigo_s, municipio_s, meta_value in pair_entries:
         pairs.append({"codigo": codigo_s, "municipio": municipio_s, "meta": meta_value})
 
-    return jsonify({"options": options, "pairs": pairs})
+    return jsonify({"options": options, "pairs": pairs, "option_rows": option_rows})
 
 
 @home_bp.route("/api/subacao/plan21-municipios", methods=["GET"])
@@ -6560,6 +7796,9 @@ def api_subacao_editar():
                     "codigo": getattr(r, "codigo", None),
                     "municipios_entrega": getattr(r, "municipios_entrega", None),
                     "meta_subacao": getattr(r, "meta_subacao", None),
+                    "etapa": getattr(r, "etapa", None),
+                    "responsavel_etapa": getattr(r, "responsavel_etapa", None),
+                    "prazo_etapa": getattr(r, "prazo_etapa", None),
                     "detalhamento_produto": getattr(r, "detalhamento_produto", None),
                     "valor_atual": getattr(r, "valor_atual", None),
                 }
@@ -6614,6 +7853,23 @@ def api_subacao_editar():
             )
 
     if edit_mode == "excluir":
+        for row in rows:
+            etapa_val = (str(row.get("etapa") or "").strip())
+            responsavel_etapa_val = (str(row.get("responsavel_etapa") or "").strip())
+            prazo_etapa_val = (str(row.get("prazo_etapa") or "").strip())
+            if etapa_val or responsavel_etapa_val or prazo_etapa_val:
+                subacao_nome = (filters.get("subacao_entrega") or row.get("subacao_entrega") or "").strip()
+                return (
+                    jsonify(
+                        {
+                            "error": (
+                                f'Não é possível excluir a Subação "{subacao_nome}", pois existem Etapas vinculadas a ela. '
+                                "Para realizar a exclusão, exclua previamente todas as Etapas associadas a esta Subação."
+                            )
+                        }
+                    ),
+                    400,
+                )
         for row in rows:
             val = row.get("valor_atual")
             if val is None or val == "":
@@ -7113,7 +8369,7 @@ def api_subacao_aprovar(subacao_id):
             elif tipo == "alterar":
                 novos_ids = _apply_subacao_alterar(registro)
             elif tipo == "excluir":
-                _apply_subacao_excluir(registro)
+                novos_ids = _apply_subacao_excluir(registro)
             else:
                 return jsonify({"error": "Tipo de solicitacao invalido."}), 400
         except Exception as exc:
@@ -7121,12 +8377,14 @@ def api_subacao_aprovar(subacao_id):
             return jsonify({"error": f"Falha ao aprovar subacao: {exc}"}), 500
 
         registro.status_aprovacao = "Aprovado"
+        registro.situacao = "Aprovado"
         registro.motivo_rejeicao = motivo
         if novos_ids:
             registro.plan21_nger_id = novos_ids[-1]
             registro.plan21_nger_ids = json.dumps(novos_ids) if len(novos_ids) > 1 else None
     else:
         registro.status_aprovacao = "Rejeitado"
+        registro.situacao = "Rejeitado"
         registro.ativo = False
         registro.excluido_em = _now_local()
         registro.motivo_rejeicao = motivo

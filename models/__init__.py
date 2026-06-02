@@ -22,6 +22,7 @@ from .user import (
     Adj,
     Dotacao,
     CadastrarSubacao,
+    CadastrarEtapa,
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,

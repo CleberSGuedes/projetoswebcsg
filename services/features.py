@@ -52,6 +52,7 @@ FEATURES = [
             {"id": "cadastrar/est-dotacao", "nome": "Estorno de Dotacao"},
             {"id": "cadastrar/plan_21-nger/meta_fisica", "nome": "Plan 21 - NGER - Meta Fisica"},
             {"id": "cadastrar/plan_21-nger/subacao", "nome": "Plan 21 - NGER - Subacao"},
+            {"id": "cadastrar/plan_21-nger/etapa", "nome": "Plan 21 - NGER - Etapa"},
         ],
     },
     {

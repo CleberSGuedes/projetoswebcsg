@@ -548,6 +548,48 @@ class CadastrarSubacao(db.Model):
     excluido_em = db.Column(db.DateTime)
 
 
+class CadastrarEtapa(db.Model):
+    __tablename__ = "cadastrar_etapa"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    exercicio = db.Column(db.Integer)
+    unidade_orcamentaria = db.Column(db.String(255))
+    programa = db.Column(db.String(255))
+    acao_paoe = db.Column(db.String(255))
+    responsavel_acao = db.Column(db.String(255))
+    produto_acao = db.Column(db.Text)
+    adj_solicitante = db.Column(db.String(255))
+    subacao_entrega = db.Column(db.Text)
+    chave_planejamento = db.Column(db.String(255))
+    tipo_solicitacao = db.Column(db.Enum("cadastrar", "alterar", "excluir"), nullable=False, server_default="cadastrar")
+    plan21_nger_id = db.Column(db.BigInteger)
+    plan21_nger_ids = db.Column(db.Text)
+    etapa_origem = db.Column(db.Text)
+    responsavel_etapa_origem = db.Column(db.String(255))
+    cpf_responsavel_etapa_origem = db.Column(db.String(14))
+    email_responsavel_etapa_origem = db.Column(db.String(255))
+    data_inicio_origem = db.Column(db.Date)
+    data_fim_origem = db.Column(db.Date)
+    etapa_nova = db.Column(db.Text)
+    responsavel_etapa_novo = db.Column(db.String(255))
+    cpf_responsavel_etapa_novo = db.Column(db.String(14))
+    email_responsavel_etapa_novo = db.Column(db.String(255))
+    data_inicio_novo = db.Column(db.Date)
+    data_fim_novo = db.Column(db.Date)
+    justificativa = db.Column(db.Text)
+    responsavel_nger = db.Column(db.String(255))
+    usuario_id = db.Column(db.BigInteger)
+    status_aprovacao = db.Column(db.String(50))
+    situacao = db.Column(db.String(50))
+    aprovado_por = db.Column(db.String(255))
+    data_aprovacao = db.Column(db.DateTime)
+    motivo_rejeicao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
 class AlterarMeta(db.Model):
     __tablename__ = "alterar_meta"
 

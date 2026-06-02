@@ -5,8 +5,10 @@
 
   <div class="card no-print">
 
-    <div class="card-title">Subação - Base de dados PTA {{ current_year }}</div>
-    <div class="alert alert-info" id="subacao-edit-banner" style="display:none;"></div>
+    <div class="card-title">
+      Subação - Base de dados PTA {{ current_year }}
+      <span id="subacao-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span>
+    </div>
 
     <form id="form-subacao" class="form" novalidate>
 
@@ -914,7 +916,9 @@
 
               <span>*Responsável pelo NGER</span>
 
-              <input type="text" id="subacao-edit-responsavel-nger" />
+              <select id="subacao-edit-responsavel-nger">
+                <option value="">Carregando...</option>
+              </select>
 
             </label>
 
@@ -985,7 +989,9 @@
 
             <span>*Responsável pelo NGER</span>
 
-            <input type="text" id="subacao-responsavel-nger" name="responsavel_nger" required />
+            <select id="subacao-responsavel-nger" name="responsavel_nger" required>
+              <option value="">Carregando...</option>
+            </select>
 
           </label>
 

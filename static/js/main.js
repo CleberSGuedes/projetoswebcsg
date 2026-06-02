@@ -2790,7 +2790,7 @@
       const adjConc = rows[0]?.dataset?.adjConcedente || "";
       const isEmprestada = adjConc && adjConc !== adjSolic;
       let watermarkText = "";
-      if (status === "aguardando") watermarkText = "AGUARDANDO VALIDAÇÃO";
+      if (status === "aguardando") watermarkText = "AGUARDANDO";
       if (status === "rejeitado") watermarkText = "Sem Validade";
       const showRegularizacao = isEmprestada && status !== "rejeitado";
       const html = `<!doctype html>
@@ -10799,6 +10799,9 @@
     if (route === "cadastrar/plan_21-nger/subacao") {
       initSubacaoPlan21();
     }
+    if (route === "cadastrar/plan_21-nger/etapa") {
+      initEtapaPlan21();
+    }
     if (route === "relatorios/fip613") {
       initRelatorioFip();
     }
@@ -12605,6 +12608,1226 @@
     }
   }
 
+  function initEtapaPlan21() {
+    const page = document.getElementById("etapa-page");
+    const form = document.getElementById("form-etapa");
+    const msg = document.getElementById("etapa-msg");
+    if (!page || !form || !msg) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const currentUserPerfilId = String(page.dataset.userPerfilId || userPerfilId || "").trim();
+    const nivelAtual = parseInt(String(page.dataset.userNivel || userNivel || "").trim(), 10);
+    const fields = {
+      id: document.getElementById("etapa-id"),
+      plan21Id: document.getElementById("etapa-plan21-id"),
+      exercicio: document.getElementById("etapa-exercicio"),
+      uo: document.getElementById("etapa-uo"),
+      programa: document.getElementById("etapa-programa"),
+      produto: document.getElementById("etapa-produto-acao"),
+      acao: document.getElementById("etapa-acao"),
+      subacao: document.getElementById("etapa-subacao"),
+      adj: document.getElementById("etapa-adj-solicitante"),
+      etapaSelect: document.getElementById("etapa-select"),
+      origem: document.getElementById("etapa-origem"),
+      responsavelOrigem: document.getElementById("etapa-responsavel-origem"),
+      prazoOrigem: document.getElementById("etapa-prazo-origem"),
+      municipio: document.getElementById("etapa-municipio"),
+      etapaNova: document.getElementById("etapa-nova"),
+      responsavelNovo: document.getElementById("etapa-responsavel-novo"),
+      cpfNovo: document.getElementById("etapa-cpf-novo"),
+      emailNovo: document.getElementById("etapa-email-novo"),
+      inicioNovo: document.getElementById("etapa-data-inicio-novo"),
+      fimNovo: document.getElementById("etapa-data-fim-novo"),
+      justificativa: document.getElementById("etapa-justificativa"),
+      responsavelNger: document.getElementById("etapa-responsavel-nger"),
+      justificativaAprovacao: document.getElementById("etapa-justificativa-aprovacao"),
+    };
+    const formSection = document.getElementById("etapa-form-section");
+    const formTitle = document.getElementById("etapa-form-title");
+    const origemGrid = document.getElementById("etapa-origem-grid");
+    const selectWrap = document.getElementById("etapa-select-wrap");
+    const cadastrarQuestion = document.getElementById("etapa-cadastrar-question");
+    const excluirQuestion = document.getElementById("etapa-excluir-question");
+    const consultarWrap = document.getElementById("etapa-consultar-wrap");
+    const consultarBtn = document.getElementById("etapa-consultar");
+    const approvalFields = document.getElementById("etapa-aprovacao-fields");
+    const novoFieldWraps = Array.from(form.querySelectorAll("[data-etapa-novo-field]"));
+    const municipioWrap = document.getElementById("etapa-municipio-wrap");
+    const saveBtn = document.getElementById("etapa-save");
+    const clearBtn = document.getElementById("etapa-clear");
+    const editBadge = document.getElementById("etapa-editing-badge");
+    const summary = document.getElementById("etapa-summary");
+    const table = document.getElementById("etapa-summary-table");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const resultsPlaceholder = document.getElementById("etapa-results-placeholder");
+    const resultsTableWrap = document.getElementById("etapa-results-table-wrap");
+    const resultsFooter = document.getElementById("etapa-results-footer");
+    const pageSizeSelect = document.getElementById("etapa-page-size");
+    const paginationEl = document.getElementById("etapa-pagination");
+    const approveBtn = document.getElementById("etapa-approve");
+    const editBtn = document.getElementById("etapa-edit");
+    const deleteBtn = document.getElementById("etapa-delete");
+    const printBtn = document.getElementById("etapa-print");
+    const filterField = document.getElementById("etapa-filtro-campo");
+    const filterForm = document.getElementById("etapa-filtro-form");
+    const filterOp = document.getElementById("etapa-filtro-operador");
+    const filterValue = document.getElementById("etapa-filtro-valor");
+    const filterAdd = document.getElementById("etapa-filtro-add");
+    const filterList = document.getElementById("etapa-filtro-list");
+    const filterRemove = document.getElementById("etapa-filtro-remove");
+    const filterClear = document.getElementById("etapa-filtro-clear");
+    const filterCancel = document.getElementById("etapa-filtro-cancel");
+    const filterApply = document.getElementById("etapa-filtro-apply");
+    const filterMsg = document.getElementById("etapa-filtro-msg");
+    let selectedRow = null;
+    let approvalMode = false;
+    let approvalDisabledSnapshot = null;
+    let pageSize = parseInt(pageSizeSelect?.value || "5", 10) || 5;
+    let currentPage = 1;
+    const filters = [];
+    let filterSelected = -1;
+    const optionsCache = new Map();
+    let optionRowsCatalog = [];
+    let adjOptionsCatalog = [];
+    let responsaveisNgerCatalog = [];
+    let etapaNumberPrefix = "";
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const setMsg = (text, isError = false) => {
+      const rawText = String(text || "");
+      if (rawText.startsWith("Não é possível excluir a Etapa")) {
+        let html = esc(rawText)
+          .replace(
+            /(Não é possível excluir a Etapa &quot;)(.*?)(&quot;, pois existem )/,
+            "$1<strong>$2</strong>$3"
+          )
+          .replace(/Memórias de Cálculo/g, "<strong>Memórias de Cálculo</strong>");
+        msg.innerHTML = html;
+      } else {
+        msg.textContent = rawText;
+      }
+      msg.classList.toggle("text-error", Boolean(isError));
+    };
+    const getRadio = (name) => form.querySelector(`input[name="${name}"]:checked`)?.value || "";
+    const setRadio = (name, value) => {
+      const input = form.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (input) input.checked = true;
+    };
+    const clearRadio = (name) => {
+      form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+        input.checked = false;
+      });
+    };
+    const fillSelect = (select, values, placeholder = "Selecione...") => {
+      if (!select) return;
+      const prev = select.value;
+      select.innerHTML = `<option value="">${placeholder}</option>`;
+      (values || []).forEach((item) => {
+        const opt = document.createElement("option");
+        if (typeof item === "string") {
+          opt.value = item;
+          opt.textContent = item;
+        } else {
+          opt.value = item.value ?? item.label ?? "";
+          opt.textContent = item.label ?? item.value ?? "";
+          if (item.id) opt.dataset.id = item.id;
+          if (item.responsavel_etapa) opt.dataset.responsavelEtapa = item.responsavel_etapa;
+          if (item.prazo_etapa) opt.dataset.prazoEtapa = item.prazo_etapa;
+        }
+        select.appendChild(opt);
+      });
+      if (prev && Array.from(select.options).some((opt) => opt.value === prev)) {
+        select.value = prev;
+      }
+    };
+    const setSelectValueFallback = (select, value) => {
+      if (!select) return;
+      const text = String(value || "");
+      if (text && !Array.from(select.options).some((opt) => opt.value === text)) {
+        const opt = document.createElement("option");
+        opt.value = text;
+        opt.textContent = text;
+        select.appendChild(opt);
+      }
+      select.value = text;
+    };
+    const filterParams = () => {
+      const params = new URLSearchParams();
+      if (fields.exercicio?.value) params.set("exercicio", fields.exercicio.value);
+      return params;
+    };
+    const extractMunicipioNameEtapa = (label, value) => {
+      const raw = String(label || "").trim();
+      if (!raw) return String(value || "").trim();
+      const parts = raw.split(" - ");
+      return parts.length >= 2 ? parts.slice(1).join(" - ").trim() : raw;
+    };
+    const buildEtapaPrefix = (municipioLabel, municipioValue) => {
+      const valueRaw = String(municipioValue || "").trim();
+      if (!valueRaw) return "";
+      const labelRaw = String(municipioLabel || "").trim().toLowerCase();
+      const valueLower = valueRaw.toLowerCase();
+      if (
+        valueRaw.startsWith("5100000") ||
+        valueLower === "estado" ||
+        valueLower.includes("estado mato grosso") ||
+        labelRaw === "estado" ||
+        labelRaw.includes("estado mato grosso")
+      ) {
+        return "";
+      }
+      const name = extractMunicipioNameEtapa(municipioLabel, municipioValue);
+      return name ? `${name} * ` : "";
+    };
+    const stripEtapaLeadingNumber = (value) =>
+      String(value || "").replace(/^\s*\d+\s*[-–—]\s*/, "");
+    const extractEtapaLeadingNumberPrefix = (value) => {
+      const match = String(value || "").match(/^\s*(\d+\s*[-–—]\s*)/);
+      return match ? match[1].replace(/[–—]/g, "-") : "";
+    };
+    const currentEtapaRequiredPrefix = () => {
+      const numberPrefix = mode() === "alterar" ? etapaNumberPrefix : "";
+      if (!fields.municipio || mode() === "excluir") return numberPrefix;
+      const selected = fields.municipio.selectedOptions?.[0];
+      const municipioPrefix = buildEtapaPrefix(selected?.textContent || "", fields.municipio.value || "");
+      return `${municipioPrefix}${numberPrefix}`;
+    };
+    const cleanEtapaSuffixForPrefix = (value) => {
+      let suffix = String(value || "");
+      const municipioPrefixes = Array.from(fields.municipio?.options || [])
+        .map((opt) => buildEtapaPrefix(opt.textContent || "", opt.value || ""))
+        .filter(Boolean);
+      municipioPrefixes.forEach((p) => {
+        if (suffix.startsWith(p)) suffix = suffix.slice(p.length).trimStart();
+      });
+      if (etapaNumberPrefix && suffix.startsWith(etapaNumberPrefix)) {
+        suffix = suffix.slice(etapaNumberPrefix.length).trimStart();
+      }
+      return stripEtapaLeadingNumber(suffix);
+    };
+    const applyEtapaPrefix = () => {
+      if (!fields.etapaNova || mode() === "excluir") return;
+      const prefix = currentEtapaRequiredPrefix();
+      if (!prefix) return;
+      const current = String(fields.etapaNova.value || "");
+      if (!current) {
+        fields.etapaNova.value = prefix;
+        return;
+      }
+      if (current.startsWith(prefix)) return;
+      const suffix = cleanEtapaSuffixForPrefix(current);
+      fields.etapaNova.value = `${prefix}${suffix}`.slice(0, 260);
+    };
+    const protectEtapaPrefix = () => {
+      if (!fields.etapaNova || mode() === "excluir") return;
+      const prefix = currentEtapaRequiredPrefix();
+      if (!prefix) return;
+      const current = String(fields.etapaNova.value || "");
+      if (current.startsWith(prefix)) return;
+      const cleaned = cleanEtapaSuffixForPrefix(current.replace(prefix.trim(), "").trimStart());
+      fields.etapaNova.value = `${prefix}${cleaned}`.slice(0, 260);
+      try {
+        fields.etapaNova.setSelectionRange(prefix.length, prefix.length);
+      } catch (e) {
+        // noop
+      }
+    };
+    const uniqueSorted = (values) =>
+      Array.from(new Set((values || []).map((v) => String(v || "").trim()).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+      );
+    const catalogRowsFor = (skipKey = "") => {
+      const selected = {
+        unidade_orcamentaria: fields.uo?.value || "",
+        programa: fields.programa?.value || "",
+        produto_acao: fields.produto?.value || "",
+        acao_paoe: fields.acao?.value || "",
+        subacao_entrega: fields.subacao?.value || "",
+      };
+      return optionRowsCatalog.filter((row) =>
+        Object.entries(selected).every(([key, value]) => {
+          if (key === skipKey || !value) return true;
+          return String(row[key] || "") === value;
+        })
+      );
+    };
+    const refreshCascadeOptionsFromCatalog = () => {
+      if (!optionRowsCatalog.length) return false;
+      fillSelect(fields.uo, uniqueSorted(catalogRowsFor("unidade_orcamentaria").map((r) => r.unidade_orcamentaria)));
+      fillSelect(fields.programa, uniqueSorted(catalogRowsFor("programa").map((r) => r.programa)));
+      fillSelect(fields.produto, uniqueSorted(catalogRowsFor("produto_acao").map((r) => r.produto_acao)));
+      fillSelect(fields.acao, uniqueSorted(catalogRowsFor("acao_paoe").map((r) => r.acao_paoe)));
+      fillSelect(fields.subacao, uniqueSorted(catalogRowsFor("subacao_entrega").map((r) => r.subacao_entrega)));
+      fillSelect(fields.adj, adjOptionsCatalog);
+      const etapaRows = catalogRowsFor("");
+      const municipioMap = new Map();
+      etapaRows.forEach((row) => {
+        const municipio = String(row.municipios_entrega || "").trim();
+        const codigo = String(row.codigo || "").trim();
+        if (!municipio) return;
+        const key = `${codigo}::${municipio}`;
+        if (!municipioMap.has(key)) {
+          municipioMap.set(key, {
+            value: municipio,
+            label: codigo ? `${codigo} - ${municipio}` : municipio,
+            codigo,
+          });
+        }
+      });
+      const municipios = Array.from(municipioMap.values());
+      fillSelect(fields.municipio, municipios);
+      if (municipioWrap) municipioWrap.style.display = municipios.length > 1 ? "" : "none";
+      if (fields.municipio) {
+        if (municipios.length === 1) {
+          fields.municipio.value = municipios[0].value;
+        } else if (municipios.length > 1) {
+          fields.municipio.value = "";
+        }
+      }
+      const seenEtapas = new Set();
+      const etapas = [];
+      etapaRows.forEach((row) => {
+        const etapa = String(row.etapa || "").trim();
+        if (!etapa || seenEtapas.has(etapa)) return;
+        seenEtapas.add(etapa);
+        etapas.push({
+          id: row.id,
+          value: etapa,
+          label: etapa,
+          responsavel_etapa: row.responsavel_etapa || "",
+          prazo_etapa: row.prazo_etapa || "",
+        });
+      });
+      fillSelect(fields.etapaSelect, etapas);
+      return true;
+    };
+    const loadOptions = async () => {
+      if (fields.exercicio) fields.exercicio.disabled = true;
+      const params = filterParams().toString();
+      let data = optionsCache.get(params);
+      if (!data) {
+        const res = await fetch(`/api/etapa/options?${params}`);
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar opcoes.");
+        optionsCache.set(params, data);
+      }
+      optionRowsCatalog = Array.isArray(data.option_rows) ? data.option_rows : [];
+      adjOptionsCatalog = data.adj_solicitante || [];
+      responsaveisNgerCatalog = data.responsaveis_nger || [];
+      fillSelect(fields.exercicio, data.exercicio || []);
+      if (fields.exercicio) {
+        fields.exercicio.value = (data.exercicio || [])[0] || fields.exercicio.value || "";
+        fields.exercicio.disabled = true;
+      }
+      if (!refreshCascadeOptionsFromCatalog()) {
+        fillSelect(fields.produto, data.produto_acao || []);
+        fillSelect(fields.uo, data.unidade_orcamentaria || []);
+        fillSelect(fields.programa, data.programa || []);
+        fillSelect(fields.acao, data.acao_paoe || []);
+        fillSelect(fields.subacao, data.subacao_entrega || []);
+        fillSelect(fields.adj, data.adj_solicitante || []);
+        fillSelect(fields.etapaSelect, data.etapas || []);
+      }
+      fillSelect(fields.responsavelNger, responsaveisNgerCatalog);
+    };
+    const mode = () => {
+      if (getRadio("etapa_alterar") === "sim") return "alterar";
+      if (getRadio("etapa_cadastrar") === "sim") return "cadastrar";
+      if (getRadio("etapa_excluir") === "sim") return "excluir";
+      return "";
+    };
+    const hideEtapaForm = () => {
+      if (formSection) formSection.style.display = "none";
+      if (origemGrid) origemGrid.style.display = "none";
+      if (approvalFields && !approvalMode) approvalFields.style.display = "none";
+    };
+    const setEtapaApprovalProtected = (enabled) => {
+      if (enabled && approvalDisabledSnapshot) {
+        setEtapaApprovalProtected(false);
+      }
+      const controls = Array.from(form.querySelectorAll("button, input, select, textarea"));
+      if (enabled) {
+        approvalDisabledSnapshot = new Map();
+      }
+      controls.forEach((el) => {
+        if (el.type === "hidden") return;
+        if (approvalFields && approvalFields.contains(el)) {
+          el.disabled = false;
+          return;
+        }
+        if (enabled && approvalDisabledSnapshot) {
+          approvalDisabledSnapshot.set(el, el.disabled);
+          el.disabled = true;
+          return;
+        }
+        if (!enabled && approvalDisabledSnapshot?.has(el)) {
+          el.disabled = approvalDisabledSnapshot.get(el);
+        }
+      });
+      if (!enabled) {
+        approvalDisabledSnapshot = null;
+      }
+      if (saveBtn) saveBtn.disabled = false;
+      if (clearBtn) clearBtn.disabled = Boolean(enabled);
+      if (approvalFields) {
+        approvalFields.querySelectorAll("input, select, textarea, button").forEach((el) => {
+          el.disabled = false;
+        });
+      }
+    };
+    const resetEtapaFormFields = ({ keepEtapaSelect = false } = {}) => {
+      if (fields.id) fields.id.value = "";
+      if (fields.plan21Id) fields.plan21Id.value = "";
+      [
+        fields.origem,
+        fields.responsavelOrigem,
+        fields.prazoOrigem,
+        fields.etapaNova,
+        fields.responsavelNovo,
+        fields.cpfNovo,
+        fields.emailNovo,
+        fields.inicioNovo,
+        fields.fimNovo,
+        fields.justificativa,
+        fields.responsavelNger,
+        fields.justificativaAprovacao,
+      ].forEach((el) => {
+        if (el) el.value = "";
+      });
+      etapaNumberPrefix = "";
+      if (fields.municipio) fields.municipio.value = "";
+      if (fields.etapaSelect && !keepEtapaSelect) fields.etapaSelect.value = "";
+      if (editBadge) {
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
+      }
+      if (saveBtn) saveBtn.textContent = "Salvar";
+    };
+    const syncQuestions = () => {
+      const qAlterar = getRadio("etapa_alterar");
+      const qCadastrar = getRadio("etapa_cadastrar");
+      if (cadastrarQuestion) cadastrarQuestion.style.display = qAlterar === "nao" ? "" : "none";
+      if (excluirQuestion) excluirQuestion.style.display = qAlterar === "nao" && qCadastrar === "nao" ? "" : "none";
+    };
+    const syncMode = (showForm = false) => {
+      const m = mode();
+      const isAlterar = m === "alterar";
+      const isExcluir = m === "excluir";
+      syncQuestions();
+      if (selectWrap) selectWrap.style.display = isAlterar || isExcluir ? "" : "none";
+      if (consultarWrap) consultarWrap.style.display = m ? "" : "none";
+      if (formSection) formSection.style.display = showForm && m ? "" : "none";
+      if (origemGrid) origemGrid.style.display = showForm && (isAlterar || isExcluir) ? "" : "none";
+      if (formTitle) {
+        formTitle.textContent = isExcluir
+          ? "Excluir Etapa"
+          : isAlterar
+            ? "Alterar Etapa - antes e depois"
+            : "Cadastrar Nova Etapa";
+      }
+      const novoFields = [
+        fields.etapaNova,
+        fields.responsavelNovo,
+        fields.cpfNovo,
+        fields.emailNovo,
+        fields.inicioNovo,
+        fields.fimNovo,
+      ];
+      novoFields.forEach((el) => {
+        if (el) el.disabled = isExcluir;
+      });
+      novoFieldWraps.forEach((wrap) => {
+        wrap.style.display = isExcluir ? "none" : "";
+      });
+      if (municipioWrap && !isExcluir) {
+        municipioWrap.style.display = (fields.municipio?.options?.length || 0) > 2 ? "" : "none";
+      }
+      if (!isAlterar && !isExcluir && fields.plan21Id) fields.plan21Id.value = "";
+      if (!m) hideEtapaForm();
+    };
+    const clearForm = () => {
+      setEtapaApprovalProtected(false);
+      approvalMode = false;
+      form.reset();
+      resetEtapaFormFields();
+      if (approvalFields) approvalFields.style.display = "none";
+      syncMode(false);
+      setMsg("");
+      loadOptions().catch((err) => setMsg(err.message, true));
+    };
+    const loadSelectedEtapa = async () => {
+      if (!fields.etapaSelect?.value) return;
+      const currentMode = mode();
+      let row = currentMode === "excluir"
+        ? null
+        : catalogRowsFor("").find((item) => String(item.etapa || "") === fields.etapaSelect.value);
+      if (!row) {
+        const params = new URLSearchParams();
+        if (fields.exercicio?.value) params.set("exercicio", fields.exercicio.value);
+        if (fields.uo?.value) params.set("unidade_orcamentaria", fields.uo.value);
+        if (fields.programa?.value) params.set("programa", fields.programa.value);
+        if (fields.produto?.value) params.set("produto_acao", fields.produto.value);
+        if (fields.acao?.value) params.set("acao_paoe", fields.acao.value);
+        if (fields.subacao?.value) params.set("subacao_entrega", fields.subacao.value);
+        params.set("etapa", fields.etapaSelect.value);
+        if (currentMode === "excluir") params.set("validar_exclusao", "1");
+        const res = await fetch(`/api/etapa/plan21-rows?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar etapa.");
+        row = (data.rows || [])[0];
+      }
+      if (!row) {
+        setMsg("Etapa selecionada nao encontrada.", true);
+        return;
+      }
+      fields.plan21Id.value = row.id || "";
+      fields.origem.value = row.etapa || "";
+      fields.responsavelOrigem.value = row.responsavel_etapa || "";
+      fields.prazoOrigem.value = row.prazo_etapa || "";
+      if (mode() !== "excluir") {
+        etapaNumberPrefix = mode() === "alterar" ? extractEtapaLeadingNumberPrefix(row.etapa || "") : "";
+        fields.etapaNova.value = `${etapaNumberPrefix}${stripEtapaLeadingNumber(row.etapa || "")}`.slice(0, 260);
+        fields.responsavelNovo.value = row.responsavel_etapa || "";
+        const municipioCount = Math.max(0, (fields.municipio?.options?.length || 0) - 1);
+        if (fields.municipio && row.municipios_entrega && municipioCount <= 1) {
+          setSelectValueFallback(fields.municipio, row.municipios_entrega || "");
+          applyEtapaPrefix();
+        } else if (fields.municipio && municipioCount > 1) {
+          fields.municipio.value = "";
+        }
+      }
+    };
+    const payload = () => ({
+      tipo_solicitacao: approvalMode ? selectedRow?.dataset.tipoSolicitacao || mode() : mode(),
+      exercicio: fields.exercicio?.value || "",
+      unidade_orcamentaria: fields.uo?.value || "",
+      programa: fields.programa?.value || "",
+      produto_acao: fields.produto?.value || "",
+      acao_paoe: fields.acao?.value || "",
+      subacao_entrega: fields.subacao?.value || "",
+      adj_solicitante: fields.adj?.value || "",
+      plan21_nger_id: fields.plan21Id?.value || "",
+      municipios_entrega: fields.municipio?.value || "",
+      etapa_nova: fields.etapaNova?.value || "",
+      responsavel_etapa_novo: fields.responsavelNovo?.value || "",
+      cpf_responsavel_etapa_novo: fields.cpfNovo?.value || "",
+      email_responsavel_etapa_novo: fields.emailNovo?.value || "",
+      data_inicio_novo: fields.inicioNovo?.value || "",
+      data_fim_novo: fields.fimNovo?.value || "",
+      justificativa: fields.justificativa?.value || "",
+      responsavel_nger: fields.responsavelNger?.value || "",
+    });
+    const buildPrintDatasetFromPayload = (registro, payloadData) => ({
+      controleEtapa: registro?.controle_etapa || `ETAPA.${payloadData.exercicio || ""}.${registro?.id || ""}`,
+      statusAprovacao: registro?.status_aprovacao || "Aguardando",
+      tipoSolicitacao: registro?.tipo_solicitacao || payloadData.tipo_solicitacao || "",
+      criadoEm: registro?.criado_em || "",
+      usuarioNome: String(page.dataset.userNome || "").trim(),
+      usuarioPerfil: "",
+      aprovadoPorNome: "",
+      aprovadoPorPerfil: "",
+      dataAprovacao: "",
+      motivoRejeicao: registro?.motivo_rejeicao || "",
+      exercicio: registro?.exercicio || payloadData.exercicio || "",
+      acaoPaoe: registro?.acao_paoe || payloadData.acao_paoe || "",
+      produtoAcao: registro?.produto_acao || payloadData.produto_acao || "",
+      subacaoEntrega: registro?.subacao_entrega || payloadData.subacao_entrega || "",
+      etapaOrigem: registro?.etapa_origem || fields.origem?.value || "",
+      responsavelEtapaOrigem: registro?.responsavel_etapa_origem || fields.responsavelOrigem?.value || "",
+      etapaNova: registro?.etapa_nova || payloadData.etapa_nova || "",
+      responsavelEtapaNovo: registro?.responsavel_etapa_novo || payloadData.responsavel_etapa_novo || "",
+      cpfResponsavelEtapaNovo: registro?.cpf_responsavel_etapa_novo || payloadData.cpf_responsavel_etapa_novo || "",
+      dataInicioNovo: registro?.data_inicio_novo || payloadData.data_inicio_novo || "",
+      dataFimNovo: registro?.data_fim_novo || payloadData.data_fim_novo || "",
+      justificativa: registro?.justificativa || payloadData.justificativa || "",
+      responsavelNger: registro?.responsavel_nger || payloadData.responsavel_nger || "",
+    });
+    const etapaPrintTitle = (tipo) => {
+      const key = String(tipo || "").toLowerCase();
+      if (key === "alterar") return "ALTERAR ETAPA";
+      if (key === "excluir") return "EXCLUIR ETAPA";
+      return "CADASTRAR ETAPA";
+    };
+    const formatEtapaPrintDate = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return raw;
+      return parsed.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+    const etapaPrintRows = (d) => {
+      const formatDateOnly = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return raw;
+        return parsed.toLocaleDateString("pt-BR");
+      };
+      const prazo = [formatDateOnly(d.dataInicioNovo), formatDateOnly(d.dataFimNovo)].filter(Boolean).join(" à ");
+      const controlePrefix = d.controleEtapa ? `${d.controleEtapa}* ` : "";
+      const stripControleJustificativaPrefix = (value) =>
+        String(value || "").replace(/^ETAPA\.[^*]+\*\s*/i, "").trimStart();
+      const justificativaPrint = controlePrefix
+        ? `${controlePrefix}${stripControleJustificativaPrefix(d.justificativa)}`
+        : d.justificativa;
+      const motivoRejeicao = String(d.motivoRejeicao || d.motivo_rejeicao || "").trim();
+      const statusAprovacao = String(d.statusAprovacao || d.status_aprovacao || "").trim().toLowerCase();
+      const rejectionRows = statusAprovacao === "rejeitado" && motivoRejeicao
+        ? [["Motivo da Rejeição", motivoRejeicao, true]]
+        : [];
+      const formatCpf = (value) => {
+        const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+        if (digits.length !== 11) return String(value || "").trim();
+        return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+      };
+      const cpfNovo = formatCpf(d.cpfResponsavelEtapaNovo);
+      const responsavelAlterado = cpfNovo
+        ? `${d.responsavelEtapaNovo || ""} - CPF: ${cpfNovo}`.trim()
+        : d.responsavelEtapaNovo;
+      const contextRows = [
+        ["Exercício", d.exercicio],
+        ["Ação/PAOE", d.acaoPaoe],
+        ["Produto da Ação", d.produtoAcao],
+        ["Subação/Entrega", d.subacaoEntrega],
+      ];
+      const tipoSolicitacao = String(d.tipoSolicitacao || "").trim().toLowerCase();
+      let rows;
+      if (tipoSolicitacao === "cadastrar") {
+        rows = [
+          ...contextRows,
+          ["Nome da Etapa", d.etapaNova],
+          ["Responsável", responsavelAlterado],
+          ["Prazo", prazo],
+          ["Justificativa", justificativaPrint],
+          ["Responsável NGER", d.responsavelNger],
+          ...rejectionRows,
+        ];
+      } else if (tipoSolicitacao === "excluir") {
+        rows = [
+          ...contextRows,
+          ["Nome da Etapa", d.etapaOrigem],
+          ["Responsável", d.responsavelEtapaOrigem],
+          ["Justificativa", justificativaPrint],
+          ["Responsável NGER", d.responsavelNger],
+          ...rejectionRows,
+        ];
+      } else {
+        rows = [
+          ...contextRows,
+          ["Nome da Etapa", d.etapaOrigem],
+          ["Responsável", d.responsavelEtapaOrigem],
+          ["Nome da Etapa Alterada", d.etapaNova, true],
+          ["Responsável Alterado", responsavelAlterado, true],
+          ["Novo Prazo", prazo, true],
+          ["Justificativa", justificativaPrint],
+          ["Responsável NGER", d.responsavelNger],
+          ...rejectionRows,
+        ];
+      }
+      rows = rows.filter((row) => String(row[1] || "").trim());
+      return `
+        <table class="print-table">
+          <tbody>
+            ${rows
+              .map(([label, value, highlight]) => `<tr${highlight ? ' class="print-row-highlight"' : ""}><th>${esc(label)}</th><td>${esc(value)}</td></tr>`)
+              .join("")}
+          </tbody>
+        </table>
+      `;
+    };
+    const prepareEtapaPrintWindow = () => {
+      const win = window.open("", "_blank");
+      if (!win) return null;
+      try {
+        win.document.open();
+        win.document.write("<!doctype html><html><head><meta charset=\"utf-8\" /><title>Preparando impressão...</title></head><body>Preparando impressão...</body></html>");
+        win.document.close();
+      } catch (err) {
+        // noop
+      }
+      return win;
+    };
+    const printEtapaRecord = (d, targetWin = null) => {
+      const titulo = etapaPrintTitle(d.tipoSolicitacao);
+      const controle = d.controleEtapa || "";
+      const criadoEm = formatEtapaPrintDate(d.criadoEm || "");
+      const usuarioNome = d.usuarioNome || "";
+      const usuarioPerfil = d.usuarioPerfil || "";
+      const aprovadoNome = d.aprovadoPorNome || "";
+      const aprovadoPerfil = d.aprovadoPorPerfil || "";
+      const aprovadoEm = formatEtapaPrintDate(d.dataAprovacao || "");
+      const status = String(d.statusAprovacao || "").trim().toLowerCase();
+      const joinNonEmptyLocal = (parts, sep = " - ") =>
+        (parts || []).map((part) => String(part || "").trim()).filter(Boolean).join(sep);
+      const footerLine2 = joinNonEmptyLocal([
+        joinNonEmptyLocal([usuarioNome, usuarioPerfil]),
+        criadoEm ? `cadastrado em ${criadoEm}` : "",
+        controle,
+      ]);
+      const statusEventoLabel =
+        status === "rejeitado" ? "rejeitado em" : status === "aprovado" ? "aprovado em" : "aprovado em";
+      const footerLine3 = joinNonEmptyLocal([
+        joinNonEmptyLocal([aprovadoNome, aprovadoPerfil]),
+        aprovadoEm ? `${statusEventoLabel} ${aprovadoEm}` : "",
+      ]);
+      let watermarkText = "";
+      if (status === "aguardando") watermarkText = "AGUARDANDO";
+      if (status === "rejeitado") watermarkText = "REJEITADO";
+      const win = targetWin && !targetWin.closed ? targetWin : window.open("", "_blank");
+      if (!win) return;
+      win.document.open();
+      win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Etapa</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #000; margin: 12px 20px 24px; padding-bottom: 80px; }
+          .print-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #000; }
+          .print-brand { display: flex; align-items: center; gap: 12px; }
+          .print-brand img { height: 48px; }
+          .print-brand-title { font-weight: 700; font-size: 16px; }
+          .print-brand-subtitle { font-size: 12px; color: #333; }
+          .print-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 18px; }
+          .print-title { text-align: center; font-weight: 700; flex: 1; text-transform: uppercase; }
+          .print-title-key { min-width: 200px; font-size: 12px; }
+          .print-title-date { min-width: 200px; text-align: right; font-size: 12px; }
+          .print-footer { position: fixed; left: 20px; right: 20px; bottom: 12px; border-top: 1px dashed #000; font-size: 11px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+          .print-footer img { height: 36px; }
+          .print-footer-text { flex: 1; text-align: center; line-height: 1.35; }
+          .print-body { margin-top: 4em; }
+          .print-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
+          .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; vertical-align: top; word-break: break-word; }
+          .print-table th { width: 180px; background: #dddddd; box-shadow: inset 0 0 0 9999px #dddddd; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+          .print-row-highlight td { background: #eeeeee; box-shadow: inset 0 0 0 9999px #eeeeee; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+          .print-watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; color: rgba(0,0,0,0.12); font-family: "Arial Black", Arial, sans-serif; text-transform: uppercase; white-space: pre-line; text-align: center; pointer-events: none; }
+        </style>
+        </head><body>
+        ${watermarkText ? `<div class="print-watermark">${esc(watermarkText)}</div>` : ""}
+        <div class="print-header">
+          <div class="print-brand">
+            <img src="/static/img/logo.jpg" alt="Logo" />
+            <div class="print-brand-text">
+              <div class="print-brand-title">Sistema de Planejamento e Orçamento</div>
+              <div class="print-brand-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+        </div>
+        <div class="print-title-row">
+          <div class="print-title-key">${esc(controle)}</div>
+          <div class="print-title">${esc(titulo)}</div>
+          <div class="print-title-date">${esc(criadoEm)}</div>
+        </div>
+        <div class="print-body">${etapaPrintRows(d)}</div>
+        <div class="print-footer">
+          <img src="/static/img/logo.jpg" alt="Logo" />
+          <div class="print-footer-text">
+            ${footerLine2 ? `<div>${esc(footerLine2)}</div>` : ""}
+            ${footerLine3 ? `<div>${esc(footerLine3)}</div>` : ""}
+          </div>
+          <img src="/static/img/logoseduc.jpg" alt="Logo Seduc" />
+        </div>
+        </body></html>`);
+      win.document.close();
+      win.focus();
+      win.print();
+    };
+
+    const allRows = () => Array.from(tbody ? tbody.querySelectorAll("tr") : []);
+    const datasetKey = (field) => String(field || "").replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
+    const parseFilterValue = (value) => {
+      const raw = String(value ?? "").trim();
+      if (!raw) return { raw, num: null };
+      const num = Number(raw.replace(/\./g, "").replace(",", "."));
+      return Number.isNaN(num) ? { raw, num: null } : { raw, num };
+    };
+    const compareFilterValues = (left, right, op) => {
+      const l = parseFilterValue(left);
+      const r = parseFilterValue(right);
+      if (l.num !== null && r.num !== null) {
+        if (op === "eq") return l.num === r.num;
+        if (op === "gt") return l.num > r.num;
+        if (op === "lt") return l.num < r.num;
+        if (op === "gte") return l.num >= r.num;
+        if (op === "lte") return l.num <= r.num;
+      }
+      const lraw = l.raw.toLowerCase();
+      const rraw = r.raw.toLowerCase();
+      const cmp = lraw.localeCompare(rraw, "pt-BR", { sensitivity: "base" });
+      if (op === "eq") return cmp === 0;
+      if (op === "contains") return lraw.includes(rraw);
+      if (op === "gt") return cmp > 0;
+      if (op === "lt") return cmp < 0;
+      if (op === "gte") return cmp >= 0;
+      if (op === "lte") return cmp <= 0;
+      return false;
+    };
+    const rowMatchesFilters = (row) => {
+      if (!filters.length) return true;
+      return filters.every((f) => {
+        const raw = String(row.dataset[datasetKey(f.field)] || "");
+        const val = String(f.value || "");
+        return compareFilterValues(raw, val, f.op);
+      });
+    };
+    const visibleRows = () => allRows().filter(rowMatchesFilters);
+    const renderPagination = () => {
+      const rows = visibleRows();
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      allRows().forEach((row) => (row.style.display = "none"));
+      rows.forEach((row, idx) => {
+        const show = idx >= (currentPage - 1) * pageSize && idx < currentPage * pageSize;
+        row.style.display = show ? "" : "none";
+      });
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "page-btn";
+        btn.textContent = label;
+        if (disabled) btn.disabled = true;
+        if (active) btn.classList.add("active");
+        btn.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderPagination();
+        });
+        paginationEl.appendChild(btn);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      if (start > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          paginationEl.appendChild(ellipsis);
+        }
+      }
+      for (let p = 1; p <= totalPages; p += 1) {
+        if (p < start || p > end) continue;
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        paginationEl.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+    const renderFilterList = () => {
+      if (!filterList) return;
+      filterList.innerHTML = "";
+      const opLabels = {
+        eq: "Igual a",
+        contains: "Contém",
+        gt: "Maior que",
+        lt: "Menor que",
+        gte: "Maior igual a",
+        lte: "Menor igual a",
+      };
+      filters.forEach((f, idx) => {
+        const li = document.createElement("li");
+        li.className = "pill";
+        li.dataset.idx = String(idx);
+        li.textContent = `${f.label} ${opLabels[f.op] || f.op} ${f.value}`;
+        if (idx === filterSelected) li.classList.add("selected");
+        li.addEventListener("click", () => {
+          filterSelected = idx;
+          renderFilterList();
+        });
+        filterList.appendChild(li);
+      });
+    };
+    const fillFromRow = (row, forApproval = false) => {
+      if (!row) return;
+      setEtapaApprovalProtected(false);
+      approvalMode = Boolean(forApproval);
+      if (fields.id) fields.id.value = row.dataset.id || "";
+      setRadio("etapa_alterar", row.dataset.tipoSolicitacao === "alterar" ? "sim" : "nao");
+      setRadio("etapa_cadastrar", row.dataset.tipoSolicitacao === "cadastrar" ? "sim" : "nao");
+      setSelectValueFallback(fields.exercicio, row.dataset.exercicio || "");
+      setSelectValueFallback(fields.uo, row.dataset.unidadeOrcamentaria || "");
+      setSelectValueFallback(fields.programa, row.dataset.programa || "");
+      setSelectValueFallback(fields.produto, row.dataset.produtoAcao || "");
+      setSelectValueFallback(fields.acao, row.dataset.acaoPaoe || "");
+      setSelectValueFallback(fields.subacao, row.dataset.subacaoEntrega || "");
+      setSelectValueFallback(fields.adj, row.dataset.adjSolicitante || "");
+      fields.plan21Id.value = row.dataset.plan21NgerId || "";
+      fields.origem.value = row.dataset.etapaOrigem || "";
+      fields.responsavelOrigem.value = row.dataset.responsavelEtapaOrigem || "";
+      fields.prazoOrigem.value = [row.dataset.dataInicioOrigem, row.dataset.dataFimOrigem].filter(Boolean).join(" à ");
+      fields.etapaNova.value = row.dataset.etapaNova || "";
+      fields.responsavelNovo.value = row.dataset.responsavelEtapaNovo || "";
+      fields.cpfNovo.value = row.dataset.cpfResponsavelEtapaNovo || "";
+      fields.emailNovo.value = row.dataset.emailResponsavelEtapaNovo || "";
+      fields.inicioNovo.value = row.dataset.dataInicioNovo || "";
+      fields.fimNovo.value = row.dataset.dataFimNovo || "";
+      fields.justificativa.value = row.dataset.justificativa || "";
+      fields.responsavelNger.value = row.dataset.responsavelNger || "";
+      syncMode(true);
+      if (approvalFields) approvalFields.style.display = forApproval ? "" : "none";
+      if (saveBtn) saveBtn.textContent = forApproval ? "Confirmar Aprovação" : "Salvar";
+      setEtapaApprovalProtected(Boolean(forApproval));
+      if (editBadge) {
+        const controle = row.dataset.controleEtapa || row.dataset.id || "";
+        editBadge.textContent = forApproval
+          ? `- Aprovação do registro ${controle}`
+          : `- Edição do registro ${controle}`;
+        editBadge.style.display = "inline";
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      setMsg("");
+      try {
+        if (approvalMode) {
+          const id = selectedRow?.dataset.id || fields.id?.value;
+          const aprovado = form.querySelector('input[name="etapa-aprovada"]:checked')?.value || "sim";
+          const motivo = fields.justificativaAprovacao?.value || "";
+          const pendingPrintWin = prepareEtapaPrintWindow();
+          const res = await fetch(`/api/etapa/${encodeURIComponent(id)}/aprovar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify({ etapa_aprovada: aprovado, motivo_rejeicao: motivo }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            if (pendingPrintWin && !pendingPrintWin.closed) pendingPrintWin.close();
+            throw new Error(data.error || "Falha ao aprovar.");
+          }
+          const printData = {
+            ...(selectedRow?.dataset || {}),
+            ...(data.etapa ? buildPrintDatasetFromPayload(data.etapa, payload()) : {}),
+            controleEtapa: selectedRow?.dataset.controleEtapa || data.etapa?.controle_etapa || "",
+            statusAprovacao: aprovado === "sim" ? "Aprovado" : "Rejeitado",
+            motivoRejeicao: aprovado === "nao" ? motivo : "",
+            motivo_rejeicao: aprovado === "nao" ? motivo : "",
+            dataAprovacao: data.etapa?.data_aprovacao || "",
+            usuarioNome: selectedRow?.dataset.usuarioNome || "",
+            usuarioPerfil: selectedRow?.dataset.usuarioPerfil || "",
+            aprovadoPorNome: String(page.dataset.userNome || "").trim(),
+          };
+          printEtapaRecord(printData, pendingPrintWin || null);
+          await loadPage("cadastrar/plan_21-nger/etapa");
+          return;
+        }
+        const m = mode();
+        if (!m) throw new Error("Selecione se deseja alterar, cadastrar ou excluir uma etapa.");
+        if ((m === "alterar" || m === "excluir") && !fields.plan21Id?.value) throw new Error("Selecione uma etapa cadastrada.");
+        const editId = fields.id?.value || "";
+        const payloadData = payload();
+        const res = await fetch(editId ? `/api/etapa/${encodeURIComponent(editId)}` : "/api/etapa", {
+          method: editId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify(payloadData),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
+        printEtapaRecord(buildPrintDatasetFromPayload(data.etapa || {}, payloadData));
+        await loadPage("cadastrar/plan_21-nger/etapa");
+      } catch (err) {
+        setMsg(err.message || "Falha ao salvar.", true);
+      }
+    });
+
+    [fields.uo, fields.programa, fields.produto, fields.acao, fields.subacao].forEach((select) => {
+      if (!select) return;
+      select.addEventListener("change", () => {
+        refreshCascadeOptionsFromCatalog();
+      });
+    });
+    const requiredEtapaFilters = [
+      { el: fields.exercicio, label: "Exercício" },
+      { el: fields.uo, label: "UO" },
+      { el: fields.programa, label: "Programa de Governo" },
+      { el: fields.produto, label: "Produto da Ação" },
+      { el: fields.acao, label: "Ação/PAOE" },
+      { el: fields.subacao, label: "Subação/Entrega" },
+      { el: fields.adj, label: "Adjunta Solicitante" },
+    ];
+    const validateEtapaRequiredFilters = () => {
+      const missing = requiredEtapaFilters.find((item) => !String(item.el?.value || "").trim());
+      if (!missing) return true;
+      hideEtapaForm();
+      resetEtapaFormFields();
+      syncMode(false);
+      setMsg(`Preencha todos os filtros obrigatórios antes de consultar. Campo pendente: ${missing.label}.`, true);
+      if (missing.el && !missing.el.disabled) {
+        try {
+          missing.el.focus();
+        } catch (err) {
+          // noop
+        }
+      }
+      return false;
+    };
+    form.querySelectorAll('input[name="etapa_alterar"], input[name="etapa_cadastrar"], input[name="etapa_excluir"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.name === "etapa_alterar") {
+          clearRadio("etapa_cadastrar");
+          clearRadio("etapa_excluir");
+        }
+        if (input.name === "etapa_cadastrar") {
+          clearRadio("etapa_excluir");
+        }
+        if (input.value === "sim" && input.checked) {
+          ["etapa_alterar", "etapa_cadastrar", "etapa_excluir"].forEach((name) => {
+            if (name === input.name) return;
+            if (name === "etapa_excluir") {
+              const excluirSim = form.querySelector('input[name="etapa_excluir"][value="sim"]');
+              if (excluirSim) excluirSim.checked = false;
+            } else {
+              setRadio(name, "nao");
+            }
+          });
+        }
+        hideEtapaForm();
+        resetEtapaFormFields();
+        syncMode(false);
+      });
+    });
+    consultarBtn?.addEventListener("click", async () => {
+      try {
+        setMsg("");
+        const m = mode();
+        resetEtapaFormFields({ keepEtapaSelect: true });
+        if (!m) {
+          setMsg("Responda Sim para uma das opções antes de consultar.", true);
+          return;
+        }
+        if (!validateEtapaRequiredFilters()) {
+          return;
+        }
+        if ((m === "alterar" || m === "excluir") && !fields.etapaSelect?.value) {
+          setMsg("Selecione uma etapa cadastrada antes de consultar.", true);
+          return;
+        }
+        if (m === "alterar" || m === "excluir") {
+          await loadSelectedEtapa();
+        }
+        syncMode(true);
+      } catch (err) {
+        setMsg(err.message || "Falha ao consultar etapa.", true);
+      }
+    });
+    form.addEventListener("input", () => setMsg(""));
+    form.addEventListener("change", () => setMsg(""));
+    fields.etapaSelect?.addEventListener("change", () => {
+      setMsg("");
+      hideEtapaForm();
+      resetEtapaFormFields({ keepEtapaSelect: true });
+      syncMode(false);
+    });
+    fields.municipio?.addEventListener("change", applyEtapaPrefix);
+    fields.etapaNova?.addEventListener("input", protectEtapaPrefix);
+    fields.etapaNova?.addEventListener("blur", protectEtapaPrefix);
+    fields.cpfNovo?.addEventListener("input", () => {
+      const digits = fields.cpfNovo.value.replace(/\D/g, "").slice(0, 11);
+      fields.cpfNovo.value = digits
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+    });
+    clearBtn?.addEventListener("click", clearForm);
+
+    tbody?.addEventListener("click", (ev) => {
+      const row = ev.target.closest("tr");
+      if (!row) return;
+      allRows().forEach((r) => r.classList.remove("selected"));
+      row.classList.add("selected");
+      selectedRow = row;
+    });
+    approveBtn?.addEventListener("click", () => {
+      setMsg("");
+      if (!selectedRow) return setFilterMsg("Selecione um registro para aprovar.", true);
+      const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
+      if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser aprovados.", true);
+      if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuario sem permissao para aprovar.", true);
+      setFilterMsg("");
+      fillFromRow(selectedRow, true);
+    });
+    editBtn?.addEventListener("click", () => {
+      setMsg("");
+      if (!selectedRow) return setFilterMsg("Selecione um registro para editar.", true);
+      const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
+      if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser editados.", true);
+      if (selectedRow.dataset.criadorPerfilId && selectedRow.dataset.criadorPerfilId !== currentUserPerfilId) {
+        return setFilterMsg("Usuario sem permissao para editar este registro.", true);
+      }
+      setFilterMsg("");
+      fillFromRow(selectedRow, false);
+    });
+    deleteBtn?.addEventListener("click", async () => {
+      setMsg("");
+      if (!selectedRow) return setFilterMsg("Selecione um registro para excluir.", true);
+      const controle = String(selectedRow.dataset.controleEtapa || "").trim() || "(sem controle)";
+      const status = String(selectedRow.dataset.statusAprovacao || "").trim().toLowerCase();
+      if (status !== "aguardando") {
+        setFilterMsg(`Somente registros com status Aguardando podem ser excluídos (${controle}).`, true);
+        return;
+      }
+      const criadorPerfilId = String(selectedRow.dataset.criadorPerfilId || "").trim();
+      if (!currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
+        setFilterMsg(`Usuário sem permissão para excluir registro ${controle}.`, true);
+        return;
+      }
+      const etapaId = String(selectedRow.dataset.id || "").trim();
+      if (!etapaId) {
+        setFilterMsg(`Registro inválido para exclusão (${controle}).`, true);
+        return;
+      }
+      if (!confirm("Confirma a exclusao do registro de etapa selecionado?")) return;
+      try {
+        const res = await fetch(`/api/etapa/${encodeURIComponent(etapaId)}`, {
+          method: "DELETE",
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Falha ao excluir registro ${controle}.`);
+        showToast(data.message || `Registro ${controle} excluído com sucesso.`, "success");
+        await loadPage("cadastrar/plan_21-nger/etapa");
+      } catch (err) {
+        setFilterMsg(err.message || `Falha ao excluir registro ${controle}.`, true);
+      }
+    });
+    printBtn?.addEventListener("click", () => {
+      setMsg("");
+      if (!selectedRow) return setFilterMsg("Selecione um registro para imprimir.", true);
+      setFilterMsg("");
+      printEtapaRecord(selectedRow.dataset);
+    });
+    const setFilterMsg = (text, isError = false) => {
+      if (!filterMsg) return;
+      filterMsg.textContent = text || "";
+      filterMsg.classList.toggle("text-error", Boolean(isError));
+    };
+    const clearFilterMsgOnUserAction = () => {
+      if (!filterMsg?.textContent) return;
+      setFilterMsg("");
+    };
+    [filterForm, summary].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("input", clearFilterMsgOnUserAction, true);
+      el.addEventListener("change", clearFilterMsgOnUserAction, true);
+      el.addEventListener("click", clearFilterMsgOnUserAction, true);
+    });
+    const setResultsVisible = (visible) => {
+      if (summary) summary.style.display = "";
+      if (resultsPlaceholder) resultsPlaceholder.style.display = visible ? "none" : "";
+      if (resultsTableWrap) resultsTableWrap.style.display = visible ? "" : "none";
+      if (resultsFooter) resultsFooter.style.display = visible ? "" : "none";
+      if (!visible) {
+        selectedRow = null;
+        allRows().forEach((row) => {
+          row.style.display = "none";
+          row.classList.remove("selected");
+        });
+      }
+    };
+    filterAdd?.addEventListener("click", () => {
+      const field = filterField?.value || "";
+      const value = filterValue?.value || "";
+      if (!field || !value) {
+        setFilterMsg("Informe campo e valor.", true);
+        return;
+      }
+      if (field !== "exercicio" && !filters.some((f) => f.field === "exercicio")) {
+        setFilterMsg("Informe o critério de Exercício antes dos demais.", true);
+        return;
+      }
+      filters.push({
+        field,
+        op: filterOp?.value || "eq",
+        value,
+        label: filterField.options[filterField.selectedIndex]?.textContent || field,
+      });
+      filterSelected = filters.length - 1;
+      if (filterValue) filterValue.value = "";
+      renderFilterList();
+      setResultsVisible(false);
+      setFilterMsg("");
+      currentPage = 1;
+    });
+    filterRemove?.addEventListener("click", () => {
+      if (filterSelected < 0 || filterSelected >= filters.length) {
+        setFilterMsg("Selecione um critério para remover.", true);
+        return;
+      }
+      filters.splice(filterSelected, 1);
+      filterSelected = -1;
+      renderFilterList();
+      setResultsVisible(false);
+      setFilterMsg("");
+    });
+    filterClear?.addEventListener("click", () => {
+      filters.length = 0;
+      filterSelected = -1;
+      renderFilterList();
+      setResultsVisible(false);
+      setFilterMsg("");
+    });
+    filterCancel?.addEventListener("click", () => {
+      filters.length = 0;
+      filterSelected = -1;
+      renderFilterList();
+      setResultsVisible(false);
+      allRows().forEach((row) => {
+        row.style.display = "none";
+        row.classList.remove("selected");
+      });
+      if (filterField) filterField.value = "";
+      if (filterOp) filterOp.value = "eq";
+      if (filterValue) filterValue.value = "";
+      setFilterMsg("");
+    });
+    filterApply?.addEventListener("click", () => {
+      if (!filters.some((f) => f.field === "exercicio")) {
+        setFilterMsg("Informe o critério de Exercício antes de consultar.", true);
+        return;
+      }
+      setResultsVisible(true);
+      renderPagination();
+      if (visibleRows().length) {
+        setFilterMsg("");
+      } else {
+        setFilterMsg("Nenhum registro encontrado para os critérios informados.", true);
+      }
+    });
+    pageSizeSelect?.addEventListener("change", () => {
+      pageSize = parseInt(pageSizeSelect.value || "5", 10) || 5;
+      renderPagination();
+    });
+
+    loadOptions().catch((err) => setMsg(err.message, true));
+    syncMode(false);
+    setResultsVisible(false);
+    renderPagination();
+  }
+
   function initSubacaoPlan21() {
     const form = document.getElementById("form-subacao");
     const msg = document.getElementById("subacao-msg");
@@ -12732,7 +13955,7 @@
     const approvalFields = document.getElementById("subacao-aprovacao-fields");
     const approvalQuestionLabel = document.getElementById("subacao-aprovacao-pergunta");
     const approvalJustificativa = document.getElementById("subacao-justificativa-aprovacao");
-    const editBanner = document.getElementById("subacao-edit-banner");
+    const editBadge = document.getElementById("subacao-editing-badge");
     const approvalRadios = form
       ? Array.from(form.querySelectorAll('input[name="subacao-aprovada"]'))
       : [];
@@ -12828,23 +14051,19 @@
       if (clearBtn) clearBtn.disabled = disabled;
     };
       const updateEditingBanner = () => {
-        if (!editBanner) return;
+        if (!editBadge) return;
         const registroId = String(idInput?.value || "").trim();
         const controle = String(currentControleSubacao || "").trim();
         if (controle || registroId) {
           const ref = controle || registroId;
-          if (approvalMode) {
-            editBanner.textContent =
-              `Aprovando registro existente (${ref}).`;
-          } else {
-            editBanner.textContent =
-              `Editando registro existente (${ref}). Ao salvar, o registro será atualizado.`;
-          }
-          editBanner.style.display = "";
+          editBadge.textContent = approvalMode
+            ? `- Aprovação do registro ${ref}`
+            : `- Edição do registro ${ref}`;
+          editBadge.style.display = "inline";
           return;
         }
-        editBanner.textContent = "";
-        editBanner.style.display = "none";
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
       };
       const updateApprovalQuestion = () => {
         if (!approvalQuestionLabel) return;
@@ -14140,7 +15359,7 @@
       return true;
     };
 
-    const setOptions = (select, items, placeholder, valueKey = "value", labelKey = "label") => {
+    const setOptions = (select, items, placeholder, valueKey = "value", labelKey = "label", preserveMissing = false) => {
       if (!select) return;
       const current = select.value;
       select.innerHTML = "";
@@ -14169,9 +15388,17 @@
         );
         if (alt) select.value = alt.value;
       }
+      if (preserveMissing && current && select.value !== current) {
+        const preserved = document.createElement("option");
+        preserved.value = current;
+        preserved.textContent = current;
+        preserved.dataset.preserved = "1";
+        select.appendChild(preserved);
+        select.value = current;
+      }
     };
 
-    const setOptionsFromLabel = (select, items, placeholder) => {
+    const setOptionsFromLabel = (select, items, placeholder, preserveMissing = false) => {
       if (!select) return;
       const current = select.value;
       const seen = new Set();
@@ -14192,6 +15419,55 @@
         select.appendChild(o);
       });
       if (current) select.value = current;
+      if (preserveMissing && current && select.value !== current) {
+        const preserved = document.createElement("option");
+        preserved.value = current;
+        preserved.textContent = current;
+        preserved.dataset.preserved = "1";
+        select.appendChild(preserved);
+        select.value = current;
+      }
+    };
+
+    let planCatalogRows = [];
+    const subacaoPlanOptionKeys = [
+      "exercicio",
+      "uo",
+      "programa",
+      "acao_paoe",
+      "responsavel_acao",
+      "produto_acao",
+    ];
+    const catalogRowsForPlanKey = (targetKey) => {
+      if (!planCatalogRows.length) return [];
+      return planCatalogRows.filter((row) => {
+        for (const key of subacaoPlanOptionKeys) {
+          if (key === targetKey) continue;
+          const selectedValue = String(planSelects[key]?.value || "").trim();
+          if (selectedValue && String(row[key] || "").trim() !== selectedValue) {
+            return false;
+          }
+        }
+        return true;
+      });
+    };
+    const refreshPlanCascadeOptionsFromCatalog = () => {
+      if (!planCatalogRows.length) return false;
+      subacaoPlanOptionKeys.forEach((targetKey) => {
+        const select = planSelects[targetKey];
+        if (!select) return;
+        const values = [];
+        const seen = new Set();
+        catalogRowsForPlanKey(targetKey).forEach((row) => {
+          const value = String(row[targetKey] || "").trim();
+          if (!value || seen.has(value)) return;
+          seen.add(value);
+          values.push(value);
+        });
+        values.sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+        setOptions(select, values, "Selecione...", "value", "label", true);
+      });
+      return true;
     };
 
     let pendingOptionsAbort = null;
@@ -14223,33 +15499,38 @@
         if (!res.ok) return;
         const data = await res.json();
         if (seq !== optionsSeq) return;
+        if (Array.isArray(data.option_rows) && data.option_rows.length) {
+          planCatalogRows = data.option_rows;
+        }
         const plan = data.plan21 || {};
-        setOptions(planSelects.exercicio, plan.exercicio || [], "Selecione...");
-        setOptions(planSelects.uo, plan.uo || [], "Selecione...");
-        setOptions(planSelects.programa, plan.programa || [], "Selecione...");
-        setOptions(planSelects.acao_paoe, plan.acao_paoe || [], "Selecione...");
-        setOptions(planSelects.responsavel_acao, plan.responsavel_acao || [], "Selecione...");
-        setOptions(planSelects.produto_acao, plan.produto_acao || [], "Selecione...");
+        if (!refreshPlanCascadeOptionsFromCatalog()) {
+          setOptions(planSelects.exercicio, plan.exercicio || [], "Selecione...", "value", "label", true);
+          setOptions(planSelects.uo, plan.uo || [], "Selecione...", "value", "label", true);
+          setOptions(planSelects.programa, plan.programa || [], "Selecione...", "value", "label", true);
+          setOptions(planSelects.acao_paoe, plan.acao_paoe || [], "Selecione...", "value", "label", true);
+          setOptions(planSelects.responsavel_acao, plan.responsavel_acao || [], "Selecione...", "value", "label", true);
+          setOptions(planSelects.produto_acao, plan.produto_acao || [], "Selecione...", "value", "label", true);
+        }
 
-        setOptions(chaveSelects.regiao, data.regioes || [], "Selecione...");
+        setOptions(chaveSelects.regiao, data.regioes || [], "Selecione...", "value", "label", true);
         if (chaveSelects.regiao) {
           lastRegiaoValue = chaveSelects.regiao.value || lastRegiaoValue;
         }
-        setOptions(chaveSelects.subfuncao, data.subfuncoes || [], "Selecione...");
-        setOptions(chaveSelects.ug, data.ugs || [], "Selecione...");
-        setOptions(chaveSelects.adj, data.adjs || [], "Selecione...");
-        setOptions(chaveSelects.macropolitica, data.macropoliticas || [], "Selecione...");
+        setOptions(chaveSelects.subfuncao, data.subfuncoes || [], "Selecione...", "value", "label", true);
+        setOptions(chaveSelects.ug, data.ugs || [], "Selecione...", "value", "label", true);
+        setOptions(chaveSelects.adj, data.adjs || [], "Selecione...", "value", "label", true);
+        setOptions(chaveSelects.macropolitica, data.macropoliticas || [], "Selecione...", "value", "label", true);
         if (chaveSelects.pilar) {
           const pilares = Array.isArray(data.pilares) ? data.pilares : [];
           if (pilares.length) {
-            setOptions(chaveSelects.pilar, pilares, "Selecione...");
+            setOptions(chaveSelects.pilar, pilares, "Selecione...", "value", "label", true);
           } else if (!chaveSelects.pilar.value) {
             setOptions(chaveSelects.pilar, [], "Selecione...");
           }
         }
-        setOptions(chaveSelects.eixo, data.eixos || [], "Selecione...");
-        setOptions(chaveSelects.politica_decr, data.politicas || [], "Selecione...");
-        setOptions(chaveSelects.publico_transversal, data.publicos || [], "Selecione...");
+        setOptions(chaveSelects.eixo, data.eixos || [], "Selecione...", "value", "label", true);
+        setOptions(chaveSelects.politica_decr, data.politicas || [], "Selecione...", "value", "label", true);
+        setOptions(chaveSelects.publico_transversal, data.publicos || [], "Selecione...", "value", "label", true);
 
         setOptionsFromLabel(regiaoEntregaSelect, data.regioes || [], "Selecione...");
         setOptions(codigoSelect, data.municipios || [], "Selecione...", "codigo", "label");
@@ -14260,6 +15541,8 @@
         if (editMunicipioNovoSelect) {
           setOptions(editMunicipioNovoSelect, data.municipios || [], "Selecione...", "nome", "label");
         }
+        setOptions(responsavelNgerInput, data.responsaveis_nger || [], "Selecione...");
+        setOptions(editResponsavelNgerInput, data.responsaveis_nger || [], "Selecione...");
         formatKey();
         syncBridges();
       } catch (err) {
@@ -14269,6 +15552,57 @@
 
     let pendingEditAbort = null;
     let editOptionsSeq = 0;
+    let editCatalogRows = [];
+    const getEditSelectMap = () => ({
+      chave_planejamento: editChaveSelect,
+      subacao_entrega: editSubacaoSelect,
+      responsavel: editResponsavelSelect,
+      prazo: editPrazoSelect,
+      unid_gestora: editUnidGestoraSelect,
+      unidade_setorial_planejamento: editUnidadeSetorialSelect,
+      produto_subacao: editProdutoSelect,
+      regiao_subacao: editRegiaoSelect,
+    });
+    const editOptionKeys = Object.keys(getEditSelectMap());
+    const catalogRowsForEditKey = (targetKey) => {
+      if (!editCatalogRows.length) return [];
+      const editSelectMap = getEditSelectMap();
+      return editCatalogRows.filter((row) => {
+        for (const key of subacaoPlanOptionKeys) {
+          const selectedValue = String(planSelects[key]?.value || "").trim();
+          if (selectedValue && String(row[key] || "").trim() !== selectedValue) {
+            return false;
+          }
+        }
+        for (const key of editOptionKeys) {
+          if (key === targetKey) continue;
+          const selectedValue = String(editSelectMap[key]?.value || "").trim();
+          if (selectedValue && String(row[key] || "").trim() !== selectedValue) {
+            return false;
+          }
+        }
+        return true;
+      });
+    };
+    const refreshEditOptionsFromCatalog = () => {
+      if (!editCatalogRows.length) return false;
+      const editSelectMap = getEditSelectMap();
+      editOptionKeys.forEach((targetKey) => {
+        const select = editSelectMap[targetKey];
+        if (!select) return;
+        const values = [];
+        const seen = new Set();
+        catalogRowsForEditKey(targetKey).forEach((row) => {
+          const value = String(row[targetKey] || "").trim();
+          if (!value || seen.has(value)) return;
+          seen.add(value);
+          values.push({ label: value });
+        });
+        values.sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+        setOptionsFromLabel(select, values, "Selecione...", true);
+      });
+      return true;
+    };
 
       const loadEditOptions = async () => {
         if (!editarGrid) return;
@@ -14281,16 +15615,7 @@
       Object.entries(planSelects).forEach(([key, el]) => {
         if (el?.value) url.searchParams.set(key, el.value);
       });
-      const editSelectMap = {
-        chave_planejamento: editChaveSelect,
-        subacao_entrega: editSubacaoSelect,
-        responsavel: editResponsavelSelect,
-        prazo: editPrazoSelect,
-        unid_gestora: editUnidGestoraSelect,
-        unidade_setorial_planejamento: editUnidadeSetorialSelect,
-        produto_subacao: editProdutoSelect,
-        regiao_subacao: editRegiaoSelect,
-      };
+      const editSelectMap = getEditSelectMap();
       Object.entries(editSelectMap).forEach(([key, el]) => {
         if (!el?.value) return;
         url.searchParams.set(key, el.value);
@@ -14303,11 +15628,16 @@
         if (!res.ok) return;
         const data = await res.json();
         if (seq !== editOptionsSeq) return;
+        if (Array.isArray(data.option_rows) && data.option_rows.length) {
+          editCatalogRows = data.option_rows;
+        }
         const options = data.options || {};
-          Object.entries(editSelectMap).forEach(([key, el]) => {
-            if (!el) return;
-            setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...");
-          });
+          if (!refreshEditOptionsFromCatalog()) {
+            Object.entries(editSelectMap).forEach(([key, el]) => {
+              if (!el) return;
+              setOptionsFromLabel(el, (options[key] || []).map((v) => ({ label: v })), "Selecione...", true);
+            });
+          }
           if (pendingEditPref) {
             const applyIfAvailable = (el, value) => {
               if (!el || !value) return;
@@ -14966,7 +16296,7 @@
           " - "
         );
         let watermarkText = "";
-        if (status === "aguardando") watermarkText = "AGUARDANDO VALIDAÇÃO";
+        if (status === "aguardando") watermarkText = "AGUARDANDO";
         if (status === "rejeitado") watermarkText = "REJEITADO";
         const html = `<!doctype html>
   <html>
@@ -15260,6 +16590,7 @@
         if (!el) return;
         el.addEventListener("change", () => {
           el.dataset.touched = "1";
+          refreshPlanCascadeOptionsFromCatalog();
           loadOptions();
           const modeValue = getModeValue();
           if (modeValue === "editar" || modeValue === "excluir") {
@@ -15335,7 +16666,10 @@
         editRegiaoSelect,
       ].filter(Boolean);
         editReloadSelects.forEach((sel) => {
-          sel.addEventListener("change", loadEditOptions);
+          sel.addEventListener("change", () => {
+            refreshEditOptionsFromCatalog();
+            loadEditOptions();
+          });
         });
           if (editSubacaoSelect) {
             editSubacaoSelect.addEventListener("change", () => {
@@ -15349,6 +16683,7 @@
               editMunicipioItems.length = 0;
               renderEditMunicipioList();
               pendingEditPref = null;
+              refreshEditOptionsFromCatalog();
               loadEditOptions();
             });
           }
@@ -15889,6 +17224,10 @@
           });
           const data = await res.json();
             if (!res.ok) {
+              try {
+                if (printWin && !printWin.closed) printWin.close();
+              } catch (_) {}
+              window.__subacaoAutoPrintWin = null;
               setMsg(data.error || "Falha ao salvar.", true);
               return;
             }
@@ -16013,6 +17352,10 @@
         });
         const data = await res.json();
         if (!res.ok) {
+          try {
+            if (printWin && !printWin.closed) printWin.close();
+          } catch (_) {}
+          window.__subacaoAutoPrintWin = null;
           setMsg(data.error || "Falha ao salvar.", true);
           return;
         }

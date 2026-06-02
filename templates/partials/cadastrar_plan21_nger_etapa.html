@@ -1,0 +1,355 @@
+<div class="grid" id="etapa-page"
+     data-user-id="{{ user_id }}"
+     data-user-nome="{{ user_nome }}"
+     data-user-perfil-id="{{ user_perfil_id or '' }}"
+     data-user-nivel="{{ user_nivel or '' }}">
+
+  <div class="card no-print">
+    <div class="card-title">
+      Etapa - PTA Gerencial {{ current_year }}
+      <span id="etapa-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span>
+    </div>
+
+    <form id="form-etapa" class="form" novalidate>
+      <input type="hidden" id="etapa-id" />
+      <input type="hidden" id="etapa-plan21-id" />
+
+      <div class="form-section">
+        <div class="form-grid">
+          <label class="field">
+            <span>*Exerc&iacute;cio</span>
+            <select id="etapa-exercicio" required disabled>
+              <option value="{{ current_year }}" selected>{{ current_year }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*UO</span>
+            <select id="etapa-uo" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*Programa de Governo</span>
+            <select id="etapa-programa" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*Produto da A&ccedil;&atilde;o</span>
+            <select id="etapa-produto-acao" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*A&ccedil;&atilde;o/PAOE</span>
+            <select id="etapa-acao" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*Suba&ccedil;&atilde;o/Entrega</span>
+            <select id="etapa-subacao" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>*Adjunta Solicitante</span>
+            <select id="etapa-adj-solicitante" required>
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-grid">
+          <label class="field">
+            <span>*Deseja Alterar Etapa?</span>
+            <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="etapa_alterar" value="sim" />
+                <span>Sim</span>
+              </label>
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="etapa_alterar" value="nao" />
+                <span>N&atilde;o</span>
+              </label>
+            </div>
+          </label>
+          <label class="field" id="etapa-cadastrar-question" style="display:none;">
+            <span>*Deseja cadastrar nova Etapa?</span>
+            <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="etapa_cadastrar" value="sim" />
+                <span>Sim</span>
+              </label>
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="etapa_cadastrar" value="nao" />
+                <span>N&atilde;o</span>
+              </label>
+            </div>
+          </label>
+          <label class="field" id="etapa-excluir-question" style="display:none;">
+            <span>*Deseja excluir Etapa existente?</span>
+            <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+              <label style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="radio" name="etapa_excluir" value="sim" />
+                <span>Sim</span>
+              </label>
+            </div>
+          </label>
+          <label class="field" id="etapa-select-wrap" style="display:none;">
+            <span>*Etapa</span>
+            <select id="etapa-select">
+              <option value="">Selecione...</option>
+            </select>
+          </label>
+          <div class="field field-inline align-end" id="etapa-consultar-wrap" style="display:none;">
+            <button class="btn btn-primary sm" type="button" id="etapa-consultar">Consultar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section" id="etapa-form-section" style="display:none;">
+        <div class="form-section-title" id="etapa-form-title">Dados da Etapa</div>
+
+        <div class="form-grid" id="etapa-origem-grid" style="display:none;">
+          <label class="field">
+            <span>Etapa atual</span>
+            <input type="text" id="etapa-origem" readonly class="locked-field" />
+          </label>
+          <label class="field">
+            <span>Respons&aacute;vel atual</span>
+            <input type="text" id="etapa-responsavel-origem" readonly class="locked-field" />
+          </label>
+          <label class="field">
+            <span>Prazo atual</span>
+            <input type="text" id="etapa-prazo-origem" readonly class="locked-field" />
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field" id="etapa-municipio-wrap" data-etapa-novo-field="1" style="display:none;">
+            <span>*Munic&iacute;pio</span>
+            <select id="etapa-municipio">
+              <option value="">Selecione...</option>
+            </select>
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*Etapa</span>
+            <input type="text" id="etapa-nova" maxlength="260" />
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*Respons&aacute;vel</span>
+            <input type="text" id="etapa-responsavel-novo" />
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*CPF</span>
+            <input type="text" id="etapa-cpf-novo" inputmode="numeric" maxlength="14" />
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*E-mail</span>
+            <input type="email" id="etapa-email-novo" />
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*Data de In&iacute;cio</span>
+            <input type="date" id="etapa-data-inicio-novo" />
+          </label>
+          <label class="field" data-etapa-novo-field="1">
+            <span>*Data de Fim</span>
+            <input type="date" id="etapa-data-fim-novo" />
+          </label>
+          <label class="field field-full">
+            <span>*Justificativa</span>
+            <textarea id="etapa-justificativa" rows="3" style="resize:vertical;"></textarea>
+          </label>
+          <label class="field">
+            <span>Respons&aacute;vel NGER</span>
+            <select id="etapa-responsavel-nger">
+              <option value="">Carregando...</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-section" id="etapa-aprovacao-fields" style="display:none;">
+        <label class="field">
+          <span id="etapa-aprovacao-pergunta">*Deseja aprovar o registro (Controle de Etapa)?</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="etapa-aprovada" value="sim" checked />
+              <span>Sim</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="etapa-aprovada" value="nao" />
+              <span>N&atilde;o</span>
+            </label>
+          </div>
+        </label>
+        <label class="field field-full">
+          <span>*Justificativa da decis&atilde;o</span>
+          <textarea id="etapa-justificativa-aprovacao" rows="3"></textarea>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="etapa-save">Salvar</button>
+        <button class="btn btn-danger sm" type="button" id="etapa-clear">Limpar Formul&aacute;rio</button>
+        <div id="etapa-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="form no-print" id="etapa-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Crit&eacute;rios para filtro de resultados</div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Campo</span>
+          <select id="etapa-filtro-campo">
+            <option value="">Selecione...</option>
+            <option value="exercicio">*Exerc&iacute;cio</option>
+            <option value="controle_etapa">Controle de Etapa</option>
+            <option value="acao_paoe">A&ccedil;&atilde;o/PAOE</option>
+            <option value="produto_acao">Produto da A&ccedil;&atilde;o</option>
+            <option value="subacao_entrega">Suba&ccedil;&atilde;o/Entrega</option>
+            <option value="etapa_nova">Etapa</option>
+            <option value="status_aprovacao">Status</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Operador</span>
+          <select id="etapa-filtro-operador">
+            <option value="eq">Igual a</option>
+            <option value="contains">Cont&eacute;m</option>
+            <option value="gt">Maior que</option>
+            <option value="lt">Menor que</option>
+            <option value="gte">Maior igual a</option>
+            <option value="lte">Menor igual a</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input type="text" id="etapa-filtro-valor" />
+        </label>
+        <div class="actions" style="align-items:flex-end;">
+          <button class="btn btn-primary sm" type="button" id="etapa-filtro-add">Adicionar</button>
+        </div>
+      </div>
+      <div class="card-title" style="margin:16px 0 8px;">Crit&eacute;rios definidos para a consulta:</div>
+      <div class="form-grid dotacao-criteria-row">
+        <div class="field dotacao-criteria-box">
+          <ul id="etapa-filtro-list" class="pill-list" style="min-height:40px;"></ul>
+        </div>
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
+          <button class="btn btn-danger sm" type="button" id="etapa-filtro-remove">Remover</button>
+          <button class="btn btn-secondary sm" type="button" id="etapa-filtro-clear">Limpar</button>
+        </div>
+      </div>
+      <div class="actions dotacao-criteria-actions">
+        <button class="btn btn-danger sm" type="button" id="etapa-filtro-cancel">Cancelar</button>
+        <button class="btn btn-primary sm" type="button" id="etapa-filtro-apply">Consultar</button>
+        <div id="etapa-filtro-msg" class="muted"></div>
+      </div>
+    </div>
+
+    <div class="dotacao-summary consulta-summary no-print" id="etapa-summary">
+      <div class="etapa-results-placeholder" id="etapa-results-placeholder"></div>
+      <div class="table-responsive" id="etapa-results-table-wrap">
+        <table class="table" id="etapa-summary-table">
+          <thead>
+            <tr>
+              <th>Controle de Etapa</th>
+              <th>Status</th>
+              <th>Tipo</th>
+              <th>Exerc&iacute;cio</th>
+              <th>A&ccedil;&atilde;o/PAOE</th>
+              <th>Produto da A&ccedil;&atilde;o</th>
+              <th>Suba&ccedil;&atilde;o/Entrega</th>
+              <th>Etapa Origem</th>
+              <th>Etapa Nova</th>
+              <th>Respons&aacute;vel</th>
+              <th>Data In&iacute;cio</th>
+              <th>Data Fim</th>
+              <th>Justificativa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in etapas %}
+              <tr class="dotacao-summary-row etapa-summary-row {% if (e.status_aprovacao or '')|lower == 'rejeitado' %}subacao-rejeitado{% endif %}"
+                  data-id="{{ e.id or '' }}"
+                  data-controle-etapa="{{ e.controle_etapa or '' }}"
+                  data-status-aprovacao="{{ e.status_aprovacao or '' }}"
+                  data-tipo-solicitacao="{{ e.tipo_solicitacao or '' }}"
+                  data-criador-perfil-id="{{ e.criador_perfil_id or '' }}"
+                  data-usuario-nome="{{ e.usuario_nome or '' }}"
+                  data-usuario-perfil="{{ e.usuario_perfil or '' }}"
+                  data-aprovado-por="{{ e.aprovado_por or '' }}"
+                  data-aprovado-por-nome="{{ e.aprovado_por_nome or '' }}"
+                  data-aprovado-por-perfil="{{ e.aprovado_por_perfil or '' }}"
+                  data-data-aprovacao="{{ e.data_aprovacao_iso or '' }}"
+                  data-criado-em="{{ e.criado_em_iso or '' }}"
+                  data-motivo-rejeicao="{{ e.motivo_rejeicao or '' }}"
+                  data-exercicio="{{ e.exercicio or '' }}"
+                  data-unidade-orcamentaria="{{ e.unidade_orcamentaria or '' }}"
+                  data-programa="{{ e.programa or '' }}"
+                  data-acao-paoe="{{ e.acao_paoe or '' }}"
+                  data-responsavel-acao="{{ e.responsavel_acao or '' }}"
+                  data-produto-acao="{{ e.produto_acao or '' }}"
+                  data-adj-solicitante="{{ e.adj_solicitante or '' }}"
+                  data-subacao-entrega="{{ (e.subacao_entrega or '')|e }}"
+                  data-chave-planejamento="{{ e.chave_planejamento or '' }}"
+                  data-plan21-nger-id="{{ e.plan21_nger_id or '' }}"
+                  data-plan21-nger-ids="{{ e.plan21_nger_ids or '' }}"
+                  data-etapa-origem="{{ (e.etapa_origem or '')|e }}"
+                  data-responsavel-etapa-origem="{{ e.responsavel_etapa_origem or '' }}"
+                  data-data-inicio-origem="{{ e.data_inicio_origem.isoformat() if e.data_inicio_origem else '' }}"
+                  data-data-fim-origem="{{ e.data_fim_origem.isoformat() if e.data_fim_origem else '' }}"
+                  data-etapa-nova="{{ (e.etapa_nova or '')|e }}"
+                  data-responsavel-etapa-novo="{{ e.responsavel_etapa_novo or '' }}"
+                  data-cpf-responsavel-etapa-novo="{{ e.cpf_responsavel_etapa_novo or '' }}"
+                  data-email-responsavel-etapa-novo="{{ e.email_responsavel_etapa_novo or '' }}"
+                  data-data-inicio-novo="{{ e.data_inicio_novo.isoformat() if e.data_inicio_novo else '' }}"
+                  data-data-fim-novo="{{ e.data_fim_novo.isoformat() if e.data_fim_novo else '' }}"
+                  data-justificativa="{{ (e.justificativa or '')|e }}"
+                  data-responsavel-nger="{{ e.responsavel_nger or '' }}">
+                <td>{{ e.controle_etapa }}</td>
+                <td>{{ e.status_aprovacao }}</td>
+                <td>{{ e.tipo_solicitacao }}</td>
+                <td>{{ e.exercicio }}</td>
+                <td>{{ e.acao_paoe }}</td>
+                <td>{{ e.produto_acao }}</td>
+                <td>{{ e.subacao_entrega }}</td>
+                <td>{{ e.etapa_origem }}</td>
+                <td>{{ e.etapa_nova }}</td>
+                <td>{{ e.responsavel_etapa_novo }}</td>
+                <td>{{ e.data_inicio_novo.strftime('%d/%m/%Y') if e.data_inicio_novo else '' }}</td>
+                <td>{{ e.data_fim_novo.strftime('%d/%m/%Y') if e.data_fim_novo else '' }}</td>
+                <td>{{ e.justificativa }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-foot no-print" id="etapa-results-footer">
+        <div class="page-size">
+          <label for="etapa-page-size">Itens por p&aacute;gina</label>
+          <select id="etapa-page-size" class="input">
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div id="etapa-pagination" class="pagination"></div>
+      </div>
+      <div class="actions no-print etapa-result-actions">
+        <button class="btn btn-primary sm" type="button" id="etapa-approve">Aprovar</button>
+        <button class="btn btn-secondary sm" type="button" id="etapa-edit">Editar</button>
+        <button class="btn btn-danger sm" type="button" id="etapa-delete">Excluir</button>
+        <button class="btn btn-primary sm" type="button" id="etapa-print">Imprimir</button>
+      </div>
+    </div>
+  </div>
+</div>

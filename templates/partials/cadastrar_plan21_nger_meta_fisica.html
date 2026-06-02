@@ -127,7 +127,7 @@
   <div class="card">
     <div class="form no-print" id="meta-fisica-filtro-form">
       <div class="card-title" style="margin-bottom:10px;">Crit&eacute;rios para filtro de resultados</div>
-      <div class="form-grid">
+      <div class="form-grid meta-fisica-filter-grid">
         <label class="field">
           <span>Campo</span>
           <select id="meta-fisica-filtro-campo">
@@ -156,7 +156,7 @@
           <span>Valor</span>
           <input type="text" id="meta-fisica-filtro-valor" />
         </label>
-        <div class="field field-inline align-end">
+        <div class="actions" style="align-items:flex-end;">
           <button class="btn btn-primary sm" type="button" id="meta-fisica-filtro-add">Adicionar</button>
         </div>
       </div>
@@ -165,12 +165,12 @@
         <div class="field dotacao-criteria-box">
           <ul id="meta-fisica-filtro-list" class="pill-list" style="min-height:40px;"></ul>
         </div>
-        <div class="field field-inline" style="gap:8px; align-items:flex-start;">
+        <div class="actions" style="justify-content:flex-end; flex-direction:column;">
           <button class="btn btn-danger sm" type="button" id="meta-fisica-filtro-remove">Remover</button>
           <button class="btn btn-secondary sm" type="button" id="meta-fisica-filtro-clear">Limpar</button>
         </div>
       </div>
-      <div class="actions" style="margin-top:8px;">
+      <div class="actions dotacao-criteria-actions">
         <button class="btn btn-danger sm" type="button" id="meta-fisica-filtro-cancel">Cancelar</button>
         <button class="btn btn-primary sm" type="button" id="meta-fisica-filtro-apply">Consultar</button>
         <div id="meta-fisica-filtro-msg" class="muted"></div>
