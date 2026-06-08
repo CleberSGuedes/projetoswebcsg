@@ -1,9 +1,10 @@
 <div class="grid" id="subacao-page"
      data-user-perfil-id="{{ user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
-     data-user-nome="{{ user_nome }}">
+     data-user-nome="{{ user_nome }}"
+     data-view-mode="{{ view_mode or 'formulario' }}">
 
-  <div class="card no-print">
+  <div class="card no-print" {% if view_mode == 'consultar' %}style="display:none;"{% endif %}>
 
     <div class="card-title">
       Subação - Base de dados PTA {{ current_year }}
@@ -277,7 +278,7 @@
 
         <label class="field">
 
-          <span>*CPF do Responsável da Subação/Entrega</span>
+          <span>*CPF do Responsável da Subação</span>
 
           <input type="text" id="subacao-cpf" name="cpf_responsavel" inputmode="numeric" maxlength="14" required />
 
@@ -706,7 +707,7 @@
 
             <label class="field" data-edit-group="subacao_name responsavel_name">
 
-              <span>*CPF do Responsável da Subação/Entrega</span>
+              <span>*CPF do Responsável da Subação</span>
 
               <input type="text" id="subacao-edit-cpf" inputmode="numeric" maxlength="14" />
 
@@ -1053,9 +1054,10 @@
 
 
 
-  <div class="card">
+  <div class="card" {% if view_mode != 'consultar' %}style="display:none;"{% endif %}>
 
     <div class="form no-print" id="subacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Consultar Subação</div>
       <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">

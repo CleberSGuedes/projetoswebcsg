@@ -27,6 +27,9 @@ ACTIVE_SESSIONS_COUNT_TTL_S = max(
     0, int(os.getenv("ACTIVE_SESSIONS_COUNT_TTL_S", "15") or "15")
 )
 PROFILE_CACHE_TTL_S = max(0, int(os.getenv("PROFILE_CACHE_TTL_S", "120") or "120"))
+ACTIVE_SESSION_CHECK_TTL_S = max(
+    0, int(os.getenv("ACTIVE_SESSION_CHECK_TTL_S", "15") or "15")
+)
 REQUEST_SLOW_MS = max(0, int(os.getenv("REQUEST_SLOW_MS", "800") or "800"))
 _active_sessions_count_cache_lock = threading.Lock()
 _active_sessions_count_cache = {"expires_at": 0.0, "value": 0}
@@ -325,6 +328,31 @@ def create_app():
 
         now = datetime.utcnow()
         cutoff = now - SESSION_TIMEOUT
+        now_ts = _now_ts()
+        active_session_checked_at = user.get("_active_session_checked_at")
+        try:
+            active_session_checked_at = float(active_session_checked_at or 0.0)
+        except Exception:
+            active_session_checked_at = 0.0
+        if (
+            ACTIVE_SESSION_CHECK_TTL_S > 0
+            and now_ts > 0
+            and active_session_checked_at > 0
+            and (now_ts - active_session_checked_at) <= ACTIVE_SESSION_CHECK_TTL_S
+            and _restore_cached_user_context(user)
+        ):
+            try:
+                g.active_sessions_count = _get_cached_active_sessions_count(cutoff)
+            except Exception:
+                g.active_sessions_count = 0
+            _debug_probe(
+                "preload_success_active_session_cache",
+                path=request.path,
+                email=user.get("email"),
+                perfil_id=getattr(g, "user_perfil_id", None),
+                nivel=getattr(g, "user_nivel", None),
+            )
+            return
         try:
             active_row = _fetch_active_session(user.get("email"))
         except SQLAlchemyError:
@@ -488,6 +516,8 @@ def create_app():
                 _debug_probe("preload_last_activity_exception_cached_session_kept", path=request.path, email=user.get("email"))
             return
         g.user = user
+        user["_active_session_checked_at"] = now_ts
+        session["user"] = user
         perfil_id = user.get("perfil_id")
         perfil_nome = (user.get("perfil") or "").strip()
         perfil_cached_at = user.get("_perfil_cached_at")

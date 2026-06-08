@@ -1,9 +1,11 @@
 <div class="grid" id="est-dotacao-page"
      data-user-perfil-id="{{ g.user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
-     data-user-nome="{{ user_nome }}">
-  <div class="card">
+     data-user-nome="{{ user_nome }}"
+     data-view-mode="{{ view_mode or 'formulario' }}">
+  <div class="card" {% if view_mode != 'consultar' %}style="display:none;"{% endif %}>
     <div class="form no-print" id="est-dotacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Consultar Estorno de Dotação</div>
       <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">
@@ -181,15 +183,18 @@
       </div>
     </div>
     <div class="actions no-print dotacao-actions">
-      <button class="btn btn-primary sm" type="button" id="est-dotacao-cadastrar">Cadastrar Estorno</button>
+      <button class="btn btn-primary sm" type="button" id="est-dotacao-cadastrar">Novo Estorno</button>
       <button class="btn btn-secondary sm" type="button" id="est-dotacao-edit" style="display:none;">Editar</button>
       <button class="btn btn-danger sm" type="button" id="est-dotacao-delete" style="display:none;">Excluir</button>
       <button class="btn btn-primary sm" type="button" id="est-dotacao-approve" style="display:none;">Aprovar</button>
     </div>
   </div>
 
-  <div class="card no-print">
-    <div class="card-title">Cadastrar Estorno de Dotação</div>
+  <div class="card no-print" {% if view_mode == 'consultar' %}style="display:none;"{% endif %}>
+    <div class="card-title">
+      Cadastrar Estorno de Dotação
+      <span id="est-dotacao-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span>
+    </div>
     <form id="est-dotacao-form" class="form">
       <input type="hidden" id="est-dotacao-id" />
       <div class="form-grid">

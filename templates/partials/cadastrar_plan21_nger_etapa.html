@@ -2,9 +2,10 @@
      data-user-id="{{ user_id }}"
      data-user-nome="{{ user_nome }}"
      data-user-perfil-id="{{ user_perfil_id or '' }}"
-     data-user-nivel="{{ user_nivel or '' }}">
+     data-user-nivel="{{ user_nivel or '' }}"
+     data-view-mode="{{ view_mode or 'formulario' }}">
 
-  <div class="card no-print">
+  <div class="card no-print" {% if view_mode == 'consultar' %}style="display:none;"{% endif %}>
     <div class="card-title">
       Etapa - PTA Gerencial {{ current_year }}
       <span id="etapa-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span>
@@ -200,8 +201,9 @@
     </form>
   </div>
 
-  <div class="card">
+  <div class="card" {% if view_mode != 'consultar' %}style="display:none;"{% endif %}>
     <div class="form no-print" id="etapa-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Consultar Etapa</div>
       <div class="card-title" style="margin-bottom:10px;">Crit&eacute;rios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">

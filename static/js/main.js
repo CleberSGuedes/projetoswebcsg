@@ -10,6 +10,35 @@
   const themeLightBtn = document.getElementById("theme-light");
   const themeDarkBtn = document.getElementById("theme-dark");
   let multiFilterClickBound = false;
+  const appLoadingOverlay = document.getElementById("app-loading-overlay");
+  const appLoadingTitle = document.getElementById("app-loading-title");
+  const appLoadingSubtitle = document.getElementById("app-loading-subtitle");
+  let appLoadingCount = 0;
+
+  function showAppLoading(title = "Carregando...", subtitle = "Aguarde enquanto a aplicação processa a solicitação.") {
+    appLoadingCount += 1;
+    if (!appLoadingOverlay) return;
+    if (appLoadingTitle) appLoadingTitle.textContent = title || "Carregando...";
+    if (appLoadingSubtitle) {
+      appLoadingSubtitle.textContent = subtitle || "Aguarde enquanto a aplicação processa a solicitação.";
+    }
+    appLoadingOverlay.hidden = false;
+    document.body.classList.add("app-loading-active");
+  }
+
+  function hideAppLoading(force = false) {
+    if (force) {
+      appLoadingCount = 0;
+    } else {
+      appLoadingCount = Math.max(0, appLoadingCount - 1);
+    }
+    if (appLoadingCount > 0 || !appLoadingOverlay) return;
+    appLoadingOverlay.hidden = true;
+    document.body.classList.remove("app-loading-active");
+  }
+
+  window.showAppLoading = showAppLoading;
+  window.hideAppLoading = hideAppLoading;
 
   function applyTheme(theme) {
     const body = document.body;
@@ -52,6 +81,7 @@
       await logout();
       return;
     }
+    showAppLoading("Carregando página...", "Aguarde enquanto a página é carregada.");
     try {
       const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
       if (res.status === 401) {
@@ -68,6 +98,8 @@
     } catch (err) {
       content.innerHTML = '<div class="card"><div class="card-title">Erro</div><p>Falha ao carregar.</p></div>';
       console.error(err);
+    } finally {
+      hideAppLoading();
     }
   }
 
@@ -82,12 +114,16 @@
     });
 
     // expand only the ancestors of the active route (avoid opening nested by default)
-    document.querySelectorAll(".menu-group").forEach((group) => group.classList.remove("open"));
+    document.querySelectorAll(".menu-group").forEach((group) => {
+      group.classList.remove("open");
+      group.classList.remove("active-ancestor");
+    });
     const activeLink = document.querySelector(`.menu-item[data-route="${route}"]`);
     if (activeLink) {
       let parentGroup = activeLink.closest(".menu-group");
       while (parentGroup) {
         parentGroup.classList.add("open");
+        parentGroup.classList.add("active-ancestor");
         parentGroup = parentGroup.parentElement?.closest(".menu-group");
       }
     }
@@ -108,6 +144,21 @@
     const collapsed = sidebar.classList.contains("collapsed");
     icon.classList.toggle("bi-chevron-right", collapsed);
     icon.classList.toggle("bi-chevron-left", !collapsed);
+    toggle.setAttribute("aria-label", collapsed ? "Expandir menu" : "Recolher menu");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  function updateSidebarExpandedWidth() {
+    if (!sidebar || !menu) return;
+    const measure = sidebar.cloneNode(true);
+    measure.classList.remove("collapsed");
+    measure.classList.add("open", "sidebar-width-measure");
+    measure.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+    measure.querySelectorAll(".menu-group").forEach((group) => group.classList.add("open"));
+    document.body.appendChild(measure);
+    const measuredWidth = Math.ceil(measure.getBoundingClientRect().width) + 4;
+    measure.remove();
+    sidebar.style.setProperty("--sidebar-expanded-width", `${Math.max(160, measuredWidth)}px`);
   }
 
   function setUserMeta() {
@@ -126,6 +177,10 @@
     });
     const countLabel = activeCount ? ` | Logados: ${activeCount}` : "";
     userMeta.textContent = `${name} - ${formatted}${countLabel}`;
+  }
+
+  if (sidebar && window.matchMedia("(max-width: 860px)").matches) {
+    sidebar.classList.add("collapsed");
   }
 
   if (toggle) {
@@ -620,12 +675,22 @@
   function applyMenuPermissions(features = []) {
     if (!menu) return;
     const allowed = new Set(["dashboard", "logout", ...features]);
+    const isAllowedRoute = (route) => {
+      if (!route) return false;
+      if (allowed.has(route)) return true;
+      if (route.startsWith("cadastrar/dotacao/")) return allowed.has("cadastrar/dotacao");
+      if (route.startsWith("cadastrar/est-dotacao/")) return allowed.has("cadastrar/est-dotacao");
+      if (route.startsWith("cadastrar/plan_21-nger/meta_fisica/")) return allowed.has("cadastrar/plan_21-nger/meta_fisica");
+      if (route.startsWith("cadastrar/plan_21-nger/subacao/")) return allowed.has("cadastrar/plan_21-nger/subacao");
+      if (route.startsWith("cadastrar/plan_21-nger/etapa/")) return allowed.has("cadastrar/plan_21-nger/etapa");
+      return false;
+    };
 
     // Children: show only allowed
     menu.querySelectorAll(".submenu [data-route]").forEach((link) => {
       const route = link.getAttribute("data-route");
       if (!route) return;
-      link.style.display = allowed.has(route) ? "" : "none";
+      link.style.display = isAllowedRoute(route) ? "" : "none";
     });
 
     // Parents: show if any allowed child
@@ -634,7 +699,7 @@
       if (!submenu) return;
       const parentId = group.id?.replace("menu-", "") || "";
       const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some((item) =>
-        allowed.has(item.getAttribute("data-route"))
+        isAllowedRoute(item.getAttribute("data-route"))
       );
       const parentAllowed = parentId && allowed.has(parentId);
       group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
@@ -645,8 +710,10 @@
       const route = item.getAttribute("data-route");
       if (!route) return;
       if (route === "logout") return;
-      item.style.display = allowed.has(route) ? "" : "none";
+      item.style.display = isAllowedRoute(route) ? "" : "none";
     });
+
+    requestAnimationFrame(updateSidebarExpandedWidth);
   }
 
   function showToast(message, type = "success", timeout = 3500) {
@@ -2187,6 +2254,8 @@
     const approvalJustificativa = document.getElementById("dotacao-justificativa-aprovacao");
     const approvalRadios = document.querySelectorAll("input[name='dotacao-aprovada']");
     const dotacaoPage = document.getElementById("dotacao-page");
+    const pageMode = String(dotacaoPage?.dataset?.viewMode || "formulario").trim();
+    const editBadge = document.getElementById("dotacao-editing-badge");
     const currentUserPerfilId = String(dotacaoPage?.dataset?.userPerfilId || userPerfilId || "").trim();
     const currentUserId = dotacaoPage?.dataset?.userId || "";
     const currentUserNome = dotacaoPage?.dataset?.userNome || "";
@@ -2197,6 +2266,8 @@
     let updating = false;
     const baseSaldoKeys = new Set(["exercicio", "chave_planejamento"]);
     let approvalMode = false;
+    const pendingStorageKey = "spo.dotacao.pendingAction";
+    let dotacaoOptionsRequestSeq = 0;
 
     const currentOptionFilters = () => {
       const params = {};
@@ -2445,6 +2516,35 @@
       if (!summaryBody) return [];
       return Array.from(summaryBody.querySelectorAll(".dotacao-summary-row"));
     };
+    const rowSnapshot = (row) => (row ? Object.fromEntries(Object.entries(row.dataset || {})) : {});
+    const rowFromSnapshot = (dataset) => ({ dataset: dataset || {} });
+    const openDotacaoFormulario = (action, row) => {
+      try {
+        sessionStorage.setItem(
+          pendingStorageKey,
+          JSON.stringify({
+            action,
+            dataset: rowSnapshot(row),
+          })
+        );
+      } catch (err) {
+        // noop
+      }
+      loadPage("cadastrar/dotacao/formulario");
+    };
+    const updateEditBadge = (action, row) => {
+      if (!editBadge) return;
+      const controle = String(row?.dataset?.chaveDotacao || row?.dataset?.id || "").trim();
+      if (!controle || !action) {
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
+        return;
+      }
+      editBadge.textContent = action === "approve"
+        ? `- Aprovação do registro ${controle}`
+        : `- Edição do registro ${controle}`;
+      editBadge.style.display = "inline";
+    };
 
     const clearPagination = () => {
       if (paginationEl) paginationEl.innerHTML = "";
@@ -2643,6 +2743,30 @@
       });
       updateJustificativaPrefix();
       loadSaldo();
+    };
+    const restorePendingFormulario = async () => {
+      if (pageMode !== "formulario") return;
+      let pending = null;
+      try {
+        pending = JSON.parse(sessionStorage.getItem(pendingStorageKey) || "null");
+        sessionStorage.removeItem(pendingStorageKey);
+      } catch (err) {
+        pending = null;
+      }
+      if (!pending || !pending.dataset) return;
+      const row = rowFromSnapshot(pending.dataset);
+      if (pending.action === "edit") {
+        setApprovalMode(false);
+        await fillFormFromRow(row);
+        updateEditBadge("edit", row);
+        return;
+      }
+      if (pending.action === "approve") {
+        setApprovalMode(true);
+        await fillFormFromRow(row);
+        updateEditBadge("approve", row);
+        if (approvalJustificativa) approvalJustificativa.value = "";
+      }
     };
 
     const escapeHtml = (value) => {
@@ -2865,19 +2989,30 @@
     };
 
     const setSelectOptions = (select, options, current) => {
-      const keep = options.includes(current) ? current : "";
+      const currentValue = String(current || "");
+      const optionValues = (options || []).map((opt) => String(opt || ""));
+      const keep = currentValue && optionValues.includes(currentValue) ? currentValue : "";
       select.innerHTML = '<option value="">Selecione...</option>';
-      options.forEach((opt) => {
+      optionValues.forEach((opt) => {
         const o = document.createElement("option");
         o.value = opt;
         o.textContent = opt;
         select.appendChild(o);
       });
-      if (keep) select.value = keep;
+      if (keep) {
+        select.value = keep;
+      } else if (currentValue) {
+        const o = document.createElement("option");
+        o.value = currentValue;
+        o.textContent = currentValue;
+        select.appendChild(o);
+        select.value = currentValue;
+      }
     };
 
     const setAdjOptions = (options, current) => {
-      const keep = options.some((o) => String(o.id) === current) ? current : "";
+      const currentValue = String(current || "");
+      const keep = options.some((o) => String(o.id) === currentValue) ? currentValue : "";
       adjSelect.innerHTML = '<option value="">Selecione...</option>';
       options.forEach((opt) => {
         const o = document.createElement("option");
@@ -2885,20 +3020,38 @@
         o.textContent = opt.label || "";
         adjSelect.appendChild(o);
       });
-      if (keep) adjSelect.value = keep;
+      if (keep) {
+        adjSelect.value = keep;
+      } else if (currentValue) {
+        const o = document.createElement("option");
+        o.value = currentValue;
+        o.textContent = currentValue;
+        adjSelect.appendChild(o);
+        adjSelect.value = currentValue;
+      }
     };
 
     const setPerfilOptions = (select, options, current) => {
       if (!select) return;
-      const keep = options.includes(current) ? current : "";
+      const currentValue = String(current || "");
+      const optionValues = (options || []).map((opt) => String(opt || ""));
+      const keep = optionValues.includes(currentValue) ? currentValue : "";
       select.innerHTML = '<option value="">Selecione...</option>';
-      options.forEach((opt) => {
+      optionValues.forEach((opt) => {
         const o = document.createElement("option");
         o.value = opt;
         o.textContent = opt;
         select.appendChild(o);
       });
-      if (keep) select.value = keep;
+      if (keep) {
+        select.value = keep;
+      } else if (currentValue) {
+        const o = document.createElement("option");
+        o.value = currentValue;
+        o.textContent = currentValue;
+        select.appendChild(o);
+        select.value = currentValue;
+      }
     };
 
     const getCurrentYear = () => {
@@ -2909,25 +3062,32 @@
 
     const loadOptions = async () => {
       const params = currentSaldoFilters();
+      const requestSeq = ++dotacaoOptionsRequestSeq;
       const url = new URL("/api/dotacao/options", window.location.origin);
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
       try {
         const res = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar opcoes.");
+        if (requestSeq !== dotacaoOptionsRequestSeq) return;
+        const currentValues = Object.fromEntries(
+          Object.entries(selects).map(([key, el]) => [key, el?.value || ""])
+        );
+        const currentAdj = adjSelect.value;
+        const currentAdjConcedente = adjConcedenteSelect?.value || "";
         updating = true;
         Object.entries(selects).forEach(([key, el]) => {
           let opts = (data.options && data.options[key]) || [];
           if (key === "exercicio") {
             opts = [getCurrentYear()];
           }
-          setSelectOptions(el, opts, el.value);
+          setSelectOptions(el, opts, currentValues[key]);
         });
         if (Array.isArray(data.adj)) {
-          setAdjOptions(data.adj, adjSelect.value);
+          setAdjOptions(data.adj, currentAdj);
         }
         if (Array.isArray(data.perfis) && adjConcedenteSelect) {
-          setPerfilOptions(adjConcedenteSelect, data.perfis, adjConcedenteSelect.value);
+          setPerfilOptions(adjConcedenteSelect, data.perfis, currentAdjConcedente);
         }
         updateJustificativaPrefix();
       } catch (err) {
@@ -3116,8 +3276,13 @@
           setFilterMsg("Somente dotações com status Aguardando podem ser editadas.", true);
           return;
         }
+        if (pageMode === "consultar") {
+          openDotacaoFormulario("edit", selected);
+          return;
+        }
         setApprovalMode(false);
         await fillFormFromRow(selected);
+        updateEditBadge("edit", selected);
       });
     }
 
@@ -3224,7 +3389,7 @@
             radio.checked = radio.value === "nao";
           });
           toggleAdjConcedente();
-          await loadPage("cadastrar/dotacao");
+          await loadPage("cadastrar/dotacao/consultar");
         } catch (err) {
           console.error(err);
           msg.textContent = err.message || "Falha ao aprovar.";
@@ -3279,7 +3444,7 @@
         });
         setApprovalMode(false);
         toggleAdjConcedente();
-        await loadPage("cadastrar/dotacao");
+        await loadPage("cadastrar/dotacao/consultar");
       } catch (err) {
         console.error(err);
         msg.textContent = err.message || "Falha ao salvar.";
@@ -3335,8 +3500,13 @@
           setFilterMsg("Usuário sem permissão para aprovar a dotação atual.", true);
           return;
         }
+        if (pageMode === "consultar") {
+          openDotacaoFormulario("approve", selected);
+          return;
+        }
         setApprovalMode(true);
         await fillFormFromRow(selected);
+        updateEditBadge("approve", selected);
         if (approvalJustificativa) approvalJustificativa.value = "";
       });
     }
@@ -3346,6 +3516,7 @@
     updateJustificativaPrefix();
     toggleAdjConcedente();
     setApprovalMode(false);
+    restorePendingFormulario();
     if (pageSizeSelect) {
       pageSizeSelect.addEventListener("change", () => {
         pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
@@ -7595,6 +7766,26 @@
     const consultBtn = document.getElementById("meta-fisica-consultar");
     const justificativaInput = document.getElementById("meta-fisica-justificativa");
     const metaPage = document.getElementById("meta-fisica-page");
+    const metaViewMode = String(metaPage?.dataset.viewMode || "formulario");
+    const metaIsConsultaView = metaViewMode === "consultar";
+    const metaPendingActionKey = "spo.metaFisica.pendingAction";
+    const metaRowSnapshot = (row) => (row ? Object.fromEntries(Object.entries(row.dataset || {})) : {});
+    const ensureMetaPendingRow = (pending) => {
+      const pendingId = String(pending?.id || "").trim();
+      let row = pendingId
+        ? summaryBody?.querySelector(`.meta-fisica-summary-row[data-id="${CSS.escape(pendingId)}"]`)
+        : null;
+      if (!row && summaryBody && pending?.dataset) {
+        row = document.createElement("tr");
+        row.className = "meta-fisica-summary-row selected";
+        row.style.display = "none";
+        Object.entries(pending.dataset || {}).forEach(([key, value]) => {
+          row.dataset[key] = value == null ? "" : String(value);
+        });
+        summaryBody.appendChild(row);
+      }
+      return row;
+    };
     const summaryBox = document.getElementById("meta-fisica-summary");
     const summaryBody = document.querySelector("#meta-fisica-summary-table tbody");
     const summaryTable = document.getElementById("meta-fisica-summary-table");
@@ -9084,7 +9275,7 @@
       approvalRadios.forEach((r) => {
         r.checked = r.value === "sim";
       });
-      if (saveBtn) saveBtn.textContent = "Confirmar Aprovação";
+      if (saveBtn) saveBtn.textContent = "Confirmar";
       const controls = [
         ...Object.values(selects).filter(Boolean),
         consultBtn,
@@ -10253,6 +10444,18 @@
           setFilterMsg(`Somente registros com status Aguardando podem ser aprovados (${controle}).`, true);
           return;
         }
+        if (metaIsConsultaView) {
+          sessionStorage.setItem(
+            metaPendingActionKey,
+            JSON.stringify({
+              action: "approve",
+              id: selected.dataset.id || "",
+              dataset: metaRowSnapshot(selected),
+            })
+          );
+          await loadPage("cadastrar/plan_21-nger/meta_fisica/formulario");
+          return;
+        }
 
         const mapSelectToData = {
           exercicio: "exercicio",
@@ -10307,6 +10510,18 @@
         const criadorPerfilId = String(selected.dataset.criadorPerfilId || "").trim();
         if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
           setFilterMsg(`Usuário sem permissão para editar registro ${controle}.`, true);
+          return;
+        }
+        if (metaIsConsultaView) {
+          sessionStorage.setItem(
+            metaPendingActionKey,
+            JSON.stringify({
+              action: "edit",
+              id: selected.dataset.id || "",
+              dataset: metaRowSnapshot(selected),
+            })
+          );
+          await loadPage("cadastrar/plan_21-nger/meta_fisica/formulario");
           return;
         }
 
@@ -10378,7 +10593,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || `Falha ao excluir registro ${controle}.`);
           showToast(data.message || `Registro ${controle} excluído com sucesso.`, "success");
-          await loadPage("cadastrar/plan_21-nger/meta_fisica");
+          await loadPage("cadastrar/plan_21-nger/meta_fisica/consultar");
         } catch (err) {
           setFilterMsg(err.message || `Falha ao excluir registro ${controle}.`, true);
         }
@@ -10466,7 +10681,7 @@
           openMetaFisicaPrintPopup(metaPrint, pendingPrintWin || null);
           showToast(data.message || `Registro ${controle} processado com sucesso.`, "success");
           resetEditMode();
-          await loadPage("cadastrar/plan_21-nger/meta_fisica");
+          await loadPage("cadastrar/plan_21-nger/meta_fisica/consultar");
         } catch (err) {
           console.error(err);
           setMsg(err.message || `Falha ao aprovar registro ${controle}.`, true);
@@ -10711,7 +10926,7 @@
           openMetaFisicaPrintPopup(data.meta_fisica, pendingPrintWin || null);
         }
         resetEditMode();
-        await loadPage("cadastrar/plan_21-nger/meta_fisica");
+        await loadPage("cadastrar/plan_21-nger/meta_fisica/consultar");
       } catch (err) {
         console.error(err);
         setMsg(err.message || "Falha ao salvar.", true);
@@ -10742,6 +10957,33 @@
 
     resetEditMode();
     loadOptions(false, true);
+    if (!metaIsConsultaView) {
+      const pendingRaw = sessionStorage.getItem(metaPendingActionKey);
+      if (pendingRaw) {
+        sessionStorage.removeItem(metaPendingActionKey);
+        try {
+          const pending = JSON.parse(pendingRaw);
+          const row = ensureMetaPendingRow(pending);
+          if (row) {
+            summaryBody?.querySelectorAll(".meta-fisica-summary-row.selected").forEach((r) => {
+              r.classList.remove("selected");
+            });
+            row.classList.add("selected");
+            if (pending.action === "approve") {
+              if (approveBtn) approveBtn.disabled = false;
+              approveBtn?.click();
+            } else {
+              if (editBtn) editBtn.disabled = false;
+              editBtn?.click();
+            }
+          } else {
+            setMsg("Registro selecionado na consulta não foi encontrado.", true);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
   }
 
   function initRoute(route) {
@@ -10787,19 +11029,19 @@
     if (route === "atualizar/chave_planejamento_regra") {
       initChavePlanejamentoRegra();
     }
-    if (route === "cadastrar/dotacao") {
+    if (route === "cadastrar/dotacao" || route.startsWith("cadastrar/dotacao/")) {
       initDotacao();
     }
-    if (route === "cadastrar/est-dotacao") {
+    if (route === "cadastrar/est-dotacao" || route.startsWith("cadastrar/est-dotacao/")) {
       initEstDotacao();
     }
-    if (route === "cadastrar/plan_21-nger/meta_fisica") {
+    if (route === "cadastrar/plan_21-nger/meta_fisica" || route.startsWith("cadastrar/plan_21-nger/meta_fisica/")) {
       initMetaFisicaPlan21();
     }
-    if (route === "cadastrar/plan_21-nger/subacao") {
+    if (route === "cadastrar/plan_21-nger/subacao" || route.startsWith("cadastrar/plan_21-nger/subacao/")) {
       initSubacaoPlan21();
     }
-    if (route === "cadastrar/plan_21-nger/etapa") {
+    if (route === "cadastrar/plan_21-nger/etapa" || route.startsWith("cadastrar/plan_21-nger/etapa/")) {
       initEtapaPlan21();
     }
     if (route === "relatorios/fip613") {
@@ -11825,6 +12067,8 @@
     const justificativaInput = document.getElementById("est-dotacao-justificativa");
     const msg = document.getElementById("est-dotacao-msg");
     const estPage = document.getElementById("est-dotacao-page");
+    const pageMode = String(estPage?.dataset?.viewMode || "formulario").trim();
+    const editBadge = document.getElementById("est-dotacao-editing-badge");
     const currentUserPerfilId = String(estPage?.dataset?.userPerfilId || userPerfilId || "").trim();
     const currentUserId = estPage?.dataset?.userId || "";
     const pageSizeSelect = document.getElementById("est-dotacao-page-size");
@@ -11891,10 +12135,44 @@
     let currentPage = 1;
     let isEditMode = false;
     let isApprovalMode = false;
+    const pendingStorageKey = "spo.estDotacao.pendingAction";
 
     const getActiveTable = () => (tipoSelect?.value === "estorno" ? estornoTable : dotacaoTable);
     const getRows = () => Array.from(getActiveTable().querySelectorAll(".dotacao-summary-row"));
     const getAllRows = () => Array.from(document.querySelectorAll("#est-dotacao-summary .dotacao-summary-row"));
+    const rowSnapshot = (row) => (row ? Object.fromEntries(Object.entries(row.dataset || {})) : {});
+    const rowFromSnapshot = (dataset) => ({ dataset: dataset || {} });
+    const openEstornoFormulario = (action, row) => {
+      try {
+        sessionStorage.setItem(
+          pendingStorageKey,
+          JSON.stringify({
+            action,
+            dataset: rowSnapshot(row),
+          })
+        );
+      } catch (err) {
+        // noop
+      }
+      loadPage("cadastrar/est-dotacao/formulario");
+    };
+    const updateEditBadge = (action, row) => {
+      if (!editBadge) return;
+      const controle = String(row?.dataset?.chaveDotacao || row?.dataset?.id || "").trim();
+      if (!controle || !action) {
+        editBadge.textContent = "";
+        editBadge.style.display = "none";
+        return;
+      }
+      if (action === "approve") {
+        editBadge.textContent = `- Aprovação do registro ${controle}`;
+      } else if (action === "edit") {
+        editBadge.textContent = `- Edição do registro ${controle}`;
+      } else {
+        editBadge.textContent = `- Novo estorno da dotação ${controle}`;
+      }
+      editBadge.style.display = "inline";
+    };
 
     const renderCriteria = () => {
       if (!filterList) return;
@@ -12125,6 +12403,40 @@
       getAllRows().forEach((el) => el.classList.remove("selected"));
       if (row) row.classList.add("selected");
     };
+    const fillFormFromDotacao = (selected) => {
+      if (!selected) return;
+      const adjunta = String(selected.dataset.adjunta || "").trim();
+      if (adjuntaInput) adjuntaInput.value = adjunta;
+      if (uoInput) uoInput.value = selected.dataset.uo || "";
+      if (programaInput) programaInput.value = selected.dataset.programa || "";
+      if (acaoInput) acaoInput.value = selected.dataset.paoe || "";
+      if (produtoInput) produtoInput.value = selected.dataset.produto || "";
+      if (chaveInput) chaveInput.value = selected.dataset.chavePlanejamento || "";
+      if (regiaoInput) regiaoInput.value = selected.dataset.regiao || "";
+      if (ugInput) ugInput.value = selected.dataset.ug || "";
+      if (naturezaInput) naturezaInput.value = selected.dataset.natureza || "";
+      if (elementoInput) elementoInput.value = selected.dataset.elemento || "";
+      if (subelementoInput) subelementoInput.value = selected.dataset.subelemento || "";
+      if (fonteInput) fonteInput.value = selected.dataset.fonte || "";
+      if (idusoInput) idusoInput.value = selected.dataset.iduso || "";
+      if (subacaoInput) subacaoInput.value = selected.dataset.subacao || "";
+      if (etapaInput) etapaInput.value = selected.dataset.etapa || "";
+      if (valorDotacaoInput) {
+        const v = selected.dataset.valor || "";
+        const num = parsePtBr(v);
+        valorDotacaoInput.value = num === null ? v : formatPtBr(num);
+      }
+      if (form) form.dataset.chaveDotacao = selected.dataset.chaveDotacao || "";
+      updateEstornoMode();
+      if (justificativaInput) justificativaInput.value = "";
+      setCurrentYear();
+      if (estIdInput) estIdInput.value = "";
+      isEditMode = false;
+      setApprovalMode(false);
+      updateEditBadge("new", selected);
+      if (msg) msg.textContent = "";
+      setFilterMsg("");
+    };
 
     getAllRows().forEach((row) => {
       row.addEventListener("click", () => {
@@ -12220,40 +12532,15 @@
           setFilterMsg("Selecione um registro para cadastrar estorno.", true);
           return;
         }
-        const adjunta = String(selected.dataset.adjunta || "").trim();
         if (!currentUserPerfilId || currentUserPerfilId !== String(selected.dataset.perfilId || "").trim()) {
           setFilterMsg("Usuário sem permissão de cadastrar estorno.", true);
           return;
         }
-        if (adjuntaInput) adjuntaInput.value = adjunta;
-        if (uoInput) uoInput.value = selected.dataset.uo || "";
-        if (programaInput) programaInput.value = selected.dataset.programa || "";
-        if (acaoInput) acaoInput.value = selected.dataset.paoe || "";
-        if (produtoInput) produtoInput.value = selected.dataset.produto || "";
-        if (chaveInput) chaveInput.value = selected.dataset.chavePlanejamento || "";
-        if (regiaoInput) regiaoInput.value = selected.dataset.regiao || "";
-        if (ugInput) ugInput.value = selected.dataset.ug || "";
-        if (naturezaInput) naturezaInput.value = selected.dataset.natureza || "";
-        if (elementoInput) elementoInput.value = selected.dataset.elemento || "";
-        if (subelementoInput) subelementoInput.value = selected.dataset.subelemento || "";
-        if (fonteInput) fonteInput.value = selected.dataset.fonte || "";
-        if (idusoInput) idusoInput.value = selected.dataset.iduso || "";
-        if (subacaoInput) subacaoInput.value = selected.dataset.subacao || "";
-        if (etapaInput) etapaInput.value = selected.dataset.etapa || "";
-        if (valorDotacaoInput) {
-          const v = selected.dataset.valor || "";
-          const num = parsePtBr(v);
-          valorDotacaoInput.value = num === null ? v : formatPtBr(num);
+        if (pageMode === "consultar") {
+          openEstornoFormulario("new", selected);
+          return;
         }
-        if (form) form.dataset.chaveDotacao = selected.dataset.chaveDotacao || "";
-        updateEstornoMode();
-        if (justificativaInput) justificativaInput.value = "";
-        setCurrentYear();
-        if (estIdInput) estIdInput.value = "";
-        isEditMode = false;
-        setApprovalMode(false);
-        if (msg) msg.textContent = "";
-        setFilterMsg("");
+        fillFormFromDotacao(selected);
       });
     }
 
@@ -12300,6 +12587,34 @@
       if (msg) msg.textContent = "";
       setFilterMsg("");
     };
+    const restorePendingFormulario = () => {
+      if (pageMode !== "formulario") return;
+      let pending = null;
+      try {
+        pending = JSON.parse(sessionStorage.getItem(pendingStorageKey) || "null");
+        sessionStorage.removeItem(pendingStorageKey);
+      } catch (err) {
+        pending = null;
+      }
+      if (!pending || !pending.dataset) return;
+      const row = rowFromSnapshot(pending.dataset);
+      if (pending.action === "new") {
+        fillFormFromDotacao(row);
+        return;
+      }
+      if (pending.action === "edit") {
+        fillFormFromEstorno(row);
+        setEditFieldsEnabled(true);
+        updateEditBadge("edit", row);
+        return;
+      }
+      if (pending.action === "approve") {
+        fillFormFromEstorno(row);
+        setApprovalMode(true);
+        updateEditBadge("approve", row);
+      }
+    };
+    restorePendingFormulario();
 
     const canEditOrDeleteEstorno = (row) => {
       if (!row) return false;
@@ -12311,16 +12626,6 @@
       const criadorPerfilId = String(row.dataset.criadorPerfilId || "").trim();
       if (!criadorPerfilId || !currentUserPerfilId || currentUserPerfilId !== criadorPerfilId) {
         setFilterMsg("Usuário sem permissão para alterar o estorno atual.", true);
-        return false;
-      }
-      if (step === 3 && municipioItems.length > 0 && municipiosPendentes.length > 0) {
-        setMsg(`Faltam ${municipiosPendentes.length} etapa(s) para concluir os municípios.`, true);
-        if (etapaMunicipioSelect) etapaMunicipioSelect.focus();
-        return false;
-      }
-      if (step === 3 && municipioItems.length > 0 && municipiosPendentes.length > 0) {
-        setMsg(`Faltam ${municipiosPendentes.length} etapa(s) para concluir os municípios.`, true);
-        if (etapaMunicipioSelect) etapaMunicipioSelect.focus();
         return false;
       }
       return true;
@@ -12349,8 +12654,13 @@
           return;
         }
         if (!canEditOrDeleteEstorno(selected)) return;
+        if (pageMode === "consultar") {
+          openEstornoFormulario("edit", selected);
+          return;
+        }
         fillFormFromEstorno(selected);
         setEditFieldsEnabled(true);
+        updateEditBadge("edit", selected);
       });
     }
 
@@ -12374,7 +12684,7 @@
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
-          await loadPage("cadastrar/est-dotacao");
+          await loadPage("cadastrar/est-dotacao/consultar");
         } catch (err) {
           setFilterMsg(err.message || "Falha ao excluir.", true);
         }
@@ -12398,8 +12708,13 @@
           setFilterMsg("Usuário sem permissão para aprovar o estorno atual.", true);
           return;
         }
+        if (pageMode === "consultar") {
+          openEstornoFormulario("approve", selected);
+          return;
+        }
         fillFormFromEstorno(selected);
         setApprovalMode(true);
+        updateEditBadge("approve", selected);
       });
     }
 
@@ -12409,6 +12724,7 @@
         const selected = summaryBody?.querySelector(".dotacao-summary-row.selected");
         const editId = String(estIdInput?.value || "").trim();
         const useEdit = isEditMode && editId;
+        const loadedChaveDotacao = String(form?.dataset?.chaveDotacao || "").trim();
         if (isApprovalMode) {
           if (!editId) {
             if (msg) {
@@ -12435,7 +12751,7 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Falha ao aprovar.");
             if (msg) msg.textContent = data.message || "Estorno atualizado.";
-            await loadPage("cadastrar/est-dotacao");
+            await loadPage("cadastrar/est-dotacao/consultar");
           } catch (err) {
             if (msg) {
               msg.textContent = err.message || "Falha ao aprovar.";
@@ -12444,7 +12760,7 @@
           }
           return;
         }
-        if (!useEdit && (!selected || selected.dataset.kind !== "dotacao")) {
+        if (!useEdit && !loadedChaveDotacao && (!selected || selected.dataset.kind !== "dotacao")) {
           if (msg) {
             msg.textContent = "Carregue uma dotação antes de salvar o estorno.";
             msg.classList.add("text-error");
@@ -12461,7 +12777,7 @@
           chave_planejamento: chaveInput?.value || "",
           chave_dotacao: useEdit
             ? form?.dataset?.chaveDotacao || ""
-            : summaryBody?.querySelector(".dotacao-summary-row.selected")?.dataset.chaveDotacao || "",
+            : loadedChaveDotacao || summaryBody?.querySelector(".dotacao-summary-row.selected")?.dataset.chaveDotacao || "",
           uo: uoInput?.value || "",
           programa: programaInput?.value || "",
           acao_paoe: acaoInput?.value || "",
@@ -12492,7 +12808,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
           if (msg) msg.textContent = data.message || "Estorno cadastrado.";
-          await loadPage("cadastrar/est-dotacao");
+          await loadPage("cadastrar/est-dotacao/consultar");
         } catch (err) {
           if (msg) {
             msg.textContent = err.message || "Falha ao salvar.";
@@ -12618,6 +12934,9 @@
 
     const currentUserPerfilId = String(page.dataset.userPerfilId || userPerfilId || "").trim();
     const nivelAtual = parseInt(String(page.dataset.userNivel || userNivel || "").trim(), 10);
+    const etapaViewMode = String(page.dataset.viewMode || "formulario");
+    const etapaIsConsultaView = etapaViewMode === "consultar";
+    const etapaPendingActionKey = "spo.etapa.pendingAction";
     const fields = {
       id: document.getElementById("etapa-id"),
       plan21Id: document.getElementById("etapa-plan21-id"),
@@ -13023,6 +13342,7 @@
       syncQuestions();
       if (selectWrap) selectWrap.style.display = isAlterar || isExcluir ? "" : "none";
       if (consultarWrap) consultarWrap.style.display = m ? "" : "none";
+      if (consultarBtn) consultarBtn.textContent = m === "cadastrar" ? "Cadastrar" : "Consultar";
       if (formSection) formSection.style.display = showForm && m ? "" : "none";
       if (origemGrid) origemGrid.style.display = showForm && (isAlterar || isExcluir) ? "" : "none";
       if (formTitle) {
@@ -13488,7 +13808,7 @@
       fields.responsavelNger.value = row.dataset.responsavelNger || "";
       syncMode(true);
       if (approvalFields) approvalFields.style.display = forApproval ? "" : "none";
-      if (saveBtn) saveBtn.textContent = forApproval ? "Confirmar Aprovação" : "Salvar";
+      if (saveBtn) saveBtn.textContent = forApproval ? "Confirmar" : "Salvar";
       setEtapaApprovalProtected(Boolean(forApproval));
       if (editBadge) {
         const controle = row.dataset.controleEtapa || row.dataset.id || "";
@@ -13532,7 +13852,7 @@
             aprovadoPorNome: String(page.dataset.userNome || "").trim(),
           };
           printEtapaRecord(printData, pendingPrintWin || null);
-          await loadPage("cadastrar/plan_21-nger/etapa");
+          await loadPage("cadastrar/plan_21-nger/etapa/consultar");
           return;
         }
         const m = mode();
@@ -13548,7 +13868,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao salvar.");
         printEtapaRecord(buildPrintDatasetFromPayload(data.etapa || {}, payloadData));
-        await loadPage("cadastrar/plan_21-nger/etapa");
+        await loadPage("cadastrar/plan_21-nger/etapa/consultar");
       } catch (err) {
         setMsg(err.message || "Falha ao salvar.", true);
       }
@@ -13667,6 +13987,14 @@
       const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser aprovados.", true);
       if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuario sem permissao para aprovar.", true);
+      if (etapaIsConsultaView) {
+        sessionStorage.setItem(
+          etapaPendingActionKey,
+          JSON.stringify({ action: "approve", id: selectedRow.dataset.id || "" })
+        );
+        loadPage("cadastrar/plan_21-nger/etapa/formulario");
+        return;
+      }
       setFilterMsg("");
       fillFromRow(selectedRow, true);
     });
@@ -13677,6 +14005,14 @@
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser editados.", true);
       if (selectedRow.dataset.criadorPerfilId && selectedRow.dataset.criadorPerfilId !== currentUserPerfilId) {
         return setFilterMsg("Usuario sem permissao para editar este registro.", true);
+      }
+      if (etapaIsConsultaView) {
+        sessionStorage.setItem(
+          etapaPendingActionKey,
+          JSON.stringify({ action: "edit", id: selectedRow.dataset.id || "" })
+        );
+        loadPage("cadastrar/plan_21-nger/etapa/formulario");
+        return;
       }
       setFilterMsg("");
       fillFromRow(selectedRow, false);
@@ -13709,7 +14045,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Falha ao excluir registro ${controle}.`);
         showToast(data.message || `Registro ${controle} excluído com sucesso.`, "success");
-        await loadPage("cadastrar/plan_21-nger/etapa");
+        await loadPage("cadastrar/plan_21-nger/etapa/consultar");
       } catch (err) {
         setFilterMsg(err.message || `Falha ao excluir registro ${controle}.`, true);
       }
@@ -13826,6 +14162,28 @@
     syncMode(false);
     setResultsVisible(false);
     renderPagination();
+    if (!etapaIsConsultaView) {
+      const pendingRaw = sessionStorage.getItem(etapaPendingActionKey);
+      if (pendingRaw) {
+        sessionStorage.removeItem(etapaPendingActionKey);
+        try {
+          const pending = JSON.parse(pendingRaw);
+          const pendingId = String(pending?.id || "").trim();
+          const row = pendingId
+            ? tbody?.querySelector(`.etapa-summary-row[data-id="${CSS.escape(pendingId)}"]`)
+            : null;
+          if (row) {
+            row.click();
+            if (pending.action === "approve") approveBtn?.click();
+            else editBtn?.click();
+          } else {
+            setMsg("Registro selecionado na consulta não foi encontrado.", true);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
   }
 
   function initSubacaoPlan21() {
@@ -13834,6 +14192,46 @@
     if (!form || !msg) return;
     if (form.dataset.bound === "1") return;
     form.dataset.bound = "1";
+    const page = document.getElementById("subacao-page");
+    const subacaoViewMode = String(page?.dataset.viewMode || "formulario");
+    const subacaoIsConsultaView = subacaoViewMode === "consultar";
+    const subacaoPendingActionKey = "spo.subacao.pendingAction";
+    let subacaoPendingAction = null;
+    if (!subacaoIsConsultaView) {
+      try {
+        subacaoPendingAction = JSON.parse(sessionStorage.getItem(subacaoPendingActionKey) || "null");
+        sessionStorage.removeItem(subacaoPendingActionKey);
+      } catch (err) {
+        subacaoPendingAction = null;
+      }
+    }
+    const setSubacaoPendingLoading = (enabled) => {
+      if (enabled) {
+        showAppLoading("Carregando registro...", "Aguarde enquanto os dados da Subação são preparados.");
+      } else {
+        hideAppLoading();
+      }
+    };
+    if (subacaoPendingAction) {
+      setSubacaoPendingLoading(true);
+    }
+    const subacaoRowSnapshot = (row) => (row ? Object.fromEntries(Object.entries(row.dataset || {})) : {});
+    const ensureSubacaoPendingRow = (pending) => {
+      const pendingId = String(pending?.id || "").trim();
+      let row = pendingId
+        ? summaryBody?.querySelector(`.dotacao-summary-row[data-id="${CSS.escape(pendingId)}"]`)
+        : null;
+      if (!row && summaryBody && pending?.dataset) {
+        row = document.createElement("tr");
+        row.className = "dotacao-summary-row selected";
+        row.style.display = "none";
+        Object.entries(pending.dataset || {}).forEach(([key, value]) => {
+          row.dataset[key] = value == null ? "" : String(value);
+        });
+        summaryBody.appendChild(row);
+      }
+      return row;
+    };
 
       const stepButtons = Array.from(form.querySelectorAll(".wizard-step-btn"));
       const stepsWrap = document.getElementById("subacao-steps");
@@ -14022,7 +14420,7 @@
     };
     const setFormDisabled = (disabled) => {
       const fields = Array.from(form.querySelectorAll("button, input, select, textarea"));
-      if (disabled) {
+      if (disabled && !approvalDisabledSnapshot) {
         approvalDisabledSnapshot = new Map();
       }
       fields.forEach((el) => {
@@ -14030,7 +14428,7 @@
           el.disabled = false;
           return;
         }
-        if (disabled && approvalDisabledSnapshot) {
+        if (disabled && approvalDisabledSnapshot && !approvalDisabledSnapshot.has(el)) {
           approvalDisabledSnapshot.set(el, el.disabled);
         }
         el.disabled = disabled;
@@ -14250,6 +14648,10 @@
         if (editUnidadeSetorialSelect) editUnidadeSetorialSelect.disabled = true;
         syncRequiredByVisibility();
         if (isEdit) syncEditMode();
+        if (approvalMode) {
+          setFormDisabled(true);
+          syncApprovalFieldsVisibility();
+        }
       };
 
     const editGroupEls = editarGrid ? Array.from(editarGrid.querySelectorAll("[data-edit-group]")) : [];
@@ -15428,6 +15830,18 @@
         select.value = current;
       }
     };
+    const setSelectValueFallback = (select, value) => {
+      if (!select) return;
+      const text = String(value || "");
+      if (text && !Array.from(select.options || []).some((opt) => opt.value === text)) {
+        const opt = document.createElement("option");
+        opt.value = text;
+        opt.textContent = text;
+        opt.dataset.preserved = "1";
+        select.appendChild(opt);
+      }
+      select.value = text;
+    };
 
     let planCatalogRows = [];
     const subacaoPlanOptionKeys = [
@@ -16390,8 +16804,9 @@
     let isPrefill = false;
     let currentControleSubacao = "";
 
-    const fillFormFromRow = (row) => {
+    const fillFormFromRow = async (row) => {
       if (!row) return;
+      const initialStep = currentStep;
       let prefilledMunicipios = false;
         const chave = row.dataset.chave || "";
         currentControleSubacao = row.dataset.controleSubacao || "";
@@ -16444,24 +16859,24 @@
         updateQuestionVisibility();
         syncEditMode();
       }
-      if (planSelects.exercicio) planSelects.exercicio.value = row.dataset.exercicio || "";
-      if (planSelects.uo) planSelects.uo.value = row.dataset.uo || "";
-      if (planSelects.programa) planSelects.programa.value = row.dataset.programa || "";
-      if (planSelects.acao_paoe) planSelects.acao_paoe.value = row.dataset.acaoPaoe || "";
-      if (planSelects.responsavel_acao) planSelects.responsavel_acao.value = row.dataset.responsavelAcao || "";
-      if (planSelects.produto_acao) planSelects.produto_acao.value = row.dataset.produtoAcao || "";
+      if (planSelects.exercicio) setSelectValueFallback(planSelects.exercicio, row.dataset.exercicio || "");
+      if (planSelects.uo) setSelectValueFallback(planSelects.uo, row.dataset.uo || "");
+      if (planSelects.programa) setSelectValueFallback(planSelects.programa, row.dataset.programa || "");
+      if (planSelects.acao_paoe) setSelectValueFallback(planSelects.acao_paoe, row.dataset.acaoPaoe || "");
+      if (planSelects.responsavel_acao) setSelectValueFallback(planSelects.responsavel_acao, row.dataset.responsavelAcao || "");
+      if (planSelects.produto_acao) setSelectValueFallback(planSelects.produto_acao, row.dataset.produtoAcao || "");
 
-      chaveSelects.regiao.value = chaveParts.regiao || "";
-      chaveSelects.subfuncao.value = chaveParts.subfuncao || "";
+      setSelectValueFallback(chaveSelects.regiao, chaveParts.regiao || "");
+      setSelectValueFallback(chaveSelects.subfuncao, chaveParts.subfuncao || "");
       if (chaveParts.ug) {
-        chaveSelects.ug.value = String(chaveParts.ug).padStart(4, "0");
+        setSelectValueFallback(chaveSelects.ug, String(chaveParts.ug).padStart(4, "0"));
       }
-      chaveSelects.adj.value = chaveParts.adj || "";
-      chaveSelects.macropolitica.value = chaveParts.macropolitica || "";
-      chaveSelects.pilar.value = chaveParts.pilar || "";
-      chaveSelects.eixo.value = chaveParts.eixo || "";
-      chaveSelects.politica_decr.value = chaveParts.politica || "";
-      chaveSelects.publico_transversal.value = chaveParts.publico || "";
+      setSelectValueFallback(chaveSelects.adj, chaveParts.adj || "");
+      setSelectValueFallback(chaveSelects.macropolitica, chaveParts.macropolitica || "");
+      setSelectValueFallback(chaveSelects.pilar, chaveParts.pilar || "");
+      setSelectValueFallback(chaveSelects.eixo, chaveParts.eixo || "");
+      setSelectValueFallback(chaveSelects.politica_decr, chaveParts.politica || "");
+      setSelectValueFallback(chaveSelects.publico_transversal, chaveParts.publico || "");
       if (chaveInput) chaveInput.value = chave;
 
       if (subacaoEntregaInput) subacaoEntregaInput.value = subacaoEntregaRaw || "";
@@ -16470,16 +16885,16 @@
       if (cpfInput) cpfInput.value = row.dataset.cpf || "";
       if (dataInicioInput) dataInicioInput.value = prazoParts[0] || "";
       if (dataFimInput) dataFimInput.value = prazoParts[1] || "";
-      if (unidGestoraSelect) unidGestoraSelect.value = row.dataset.unidGestora || "";
-      if (unidadeSetorialSelect) unidadeSetorialSelect.value = row.dataset.unidadeSetorial || "";
-      if (produtoSubacaoSelect) produtoSubacaoSelect.value = row.dataset.produtoSubacao || "";
-      if (unidadeMedidaSelect) unidadeMedidaSelect.value = row.dataset.unidadeMedida || "";
-      if (regiaoEntregaSelect) regiaoEntregaSelect.value = row.dataset.regiaoSubacao || "";
+      if (unidGestoraSelect) setSelectValueFallback(unidGestoraSelect, row.dataset.unidGestora || "");
+      if (unidadeSetorialSelect) setSelectValueFallback(unidadeSetorialSelect, row.dataset.unidadeSetorial || "");
+      if (produtoSubacaoSelect) setSelectValueFallback(produtoSubacaoSelect, row.dataset.produtoSubacao || "");
+      if (unidadeMedidaSelect) setSelectValueFallback(unidadeMedidaSelect, row.dataset.unidadeMedida || "");
+      if (regiaoEntregaSelect) setSelectValueFallback(regiaoEntregaSelect, row.dataset.regiaoSubacao || "");
       const codigoPref = parseJsonArray(row.dataset.codigo)[0] || "";
       const municipioPref = parseJsonArray(row.dataset.municipio)[0] || "";
       const metaPref = parseJsonArray(row.dataset.meta)[0] || "";
-      if (codigoSelect) codigoSelect.value = codigoPref;
-      if (municipioSelect) municipioSelect.value = municipioPref;
+      if (codigoSelect) setSelectValueFallback(codigoSelect, codigoPref);
+      if (municipioSelect) setSelectValueFallback(municipioSelect, municipioPref);
       if (metaInput) metaInput.value = normalizeSubacaoMetaDisplay(metaPref);
       if (detalhamentoInput) detalhamentoInput.value = decodeHtmlEntities(row.dataset.detalhamento || "");
       if (etapaInput) etapaInput.value = parseJsonArray(row.dataset.etapa)[0] || "";
@@ -16543,8 +16958,8 @@
         syncEtapaMunicipioOptions();
         updateEtapaStepLabel();
       }
-        if (editChaveSelect) editChaveSelect.value = row.dataset.chave || "";
-        if (editSubacaoSelect) editSubacaoSelect.value = row.dataset.subacaoEntrega || "";
+        if (editChaveSelect) setSelectValueFallback(editChaveSelect, row.dataset.chave || "");
+        if (editSubacaoSelect) setSelectValueFallback(editSubacaoSelect, row.dataset.subacaoEntrega || "");
         if (editSubacaoInput) editSubacaoInput.value = subacaoEntregaRaw || "";
         if (editResponsavelInput) editResponsavelInput.value = row.dataset.responsavel || "";
         if (editCpfInput) editCpfInput.value = row.dataset.cpf || "";
@@ -16566,10 +16981,43 @@
           regiao_subacao: row.dataset.regiaoSubacao || "",
         };
         syncBridges();
-        loadEditOptions();
+        if (["editar", "alterar", "excluir"].includes(tipoSolic)) {
+          await loadEditOptions();
+        }
       formatMetaInput();
-      loadOptions();
-      setStep(1);
+      await loadOptions();
+      if (planSelects.exercicio) setSelectValueFallback(planSelects.exercicio, row.dataset.exercicio || "");
+      if (planSelects.uo) setSelectValueFallback(planSelects.uo, row.dataset.uo || "");
+      if (planSelects.programa) setSelectValueFallback(planSelects.programa, row.dataset.programa || "");
+      if (planSelects.acao_paoe) setSelectValueFallback(planSelects.acao_paoe, row.dataset.acaoPaoe || "");
+      if (planSelects.responsavel_acao) setSelectValueFallback(planSelects.responsavel_acao, row.dataset.responsavelAcao || "");
+      if (planSelects.produto_acao) setSelectValueFallback(planSelects.produto_acao, row.dataset.produtoAcao || "");
+      setSelectValueFallback(chaveSelects.regiao, chaveParts.regiao || "");
+      setSelectValueFallback(chaveSelects.subfuncao, chaveParts.subfuncao || "");
+      if (chaveParts.ug) setSelectValueFallback(chaveSelects.ug, String(chaveParts.ug).padStart(4, "0"));
+      setSelectValueFallback(chaveSelects.adj, chaveParts.adj || "");
+      setSelectValueFallback(chaveSelects.macropolitica, chaveParts.macropolitica || "");
+      setSelectValueFallback(chaveSelects.pilar, chaveParts.pilar || "");
+      setSelectValueFallback(chaveSelects.eixo, chaveParts.eixo || "");
+      setSelectValueFallback(chaveSelects.politica_decr, chaveParts.politica || "");
+      setSelectValueFallback(chaveSelects.publico_transversal, chaveParts.publico || "");
+      if (unidGestoraSelect) setSelectValueFallback(unidGestoraSelect, row.dataset.unidGestora || "");
+      if (unidadeSetorialSelect) setSelectValueFallback(unidadeSetorialSelect, row.dataset.unidadeSetorial || "");
+      if (produtoSubacaoSelect) setSelectValueFallback(produtoSubacaoSelect, row.dataset.produtoSubacao || "");
+      if (unidadeMedidaSelect) setSelectValueFallback(unidadeMedidaSelect, row.dataset.unidadeMedida || "");
+      if (regiaoEntregaSelect) setSelectValueFallback(regiaoEntregaSelect, row.dataset.regiaoSubacao || "");
+      if (codigoSelect) setSelectValueFallback(codigoSelect, codigoPref);
+      if (municipioSelect) setSelectValueFallback(municipioSelect, municipioPref);
+      if (editChaveSelect) setSelectValueFallback(editChaveSelect, row.dataset.chave || "");
+      if (editSubacaoSelect) setSelectValueFallback(editSubacaoSelect, row.dataset.subacaoEntrega || "");
+      if (["editar", "alterar", "excluir"].includes(tipoSolic)) {
+        await loadEditOptions();
+        if (editChaveSelect) setSelectValueFallback(editChaveSelect, row.dataset.chave || "");
+        if (editSubacaoSelect) setSelectValueFallback(editSubacaoSelect, row.dataset.subacaoEntrega || "");
+      }
+      if (currentStep === initialStep) {
+        setStep(1);
+      }
       if (!prefilledMunicipios) {
         municipioItems.length = 0;
         etapaItems.length = 0;
@@ -16585,6 +17033,25 @@
     };
 
     const getSelectedRow = () => summaryBody?.querySelector(".dotacao-summary-row.selected");
+
+    const loadSubacaoActionFromRow = async (row, action) => {
+      if (!row) return;
+      setSelectedRow(row);
+      currentControleSubacao = row.dataset.controleSubacao || "";
+      if (idInput && row.dataset.id) idInput.value = row.dataset.id;
+      if (action === "approve") {
+        setApprovalMode(true);
+        updateEditingBanner();
+        await fillFormFromRow(row);
+        setApprovalMode(true);
+        updateEditingBanner();
+        return;
+      }
+      setApprovalMode(false);
+      updateEditingBanner();
+      await fillFormFromRow(row);
+      updateEditingBanner();
+    };
 
       Object.values(planSelects).forEach((el) => {
         if (!el) return;
@@ -16831,12 +17298,19 @@
           setFilterMsg("Somente registros com status Aguardando podem ser aprovados.", true);
           return;
         }
-        currentControleSubacao = row.dataset.controleSubacao || "";
-        if (idInput && row.dataset.id) idInput.value = row.dataset.id;
-        updateEditingBanner();
-        await fillFormFromRow(row);
-        setApprovalMode(true);
-        updateEditingBanner();
+        if (subacaoIsConsultaView) {
+          sessionStorage.setItem(
+            subacaoPendingActionKey,
+            JSON.stringify({
+              action: "approve",
+              id: row.dataset.id || "",
+              dataset: subacaoRowSnapshot(row),
+            })
+          );
+          await loadPage("cadastrar/plan_21-nger/subacao/formulario");
+          return;
+        }
+        await loadSubacaoActionFromRow(row, "approve");
       });
     }
 
@@ -16863,7 +17337,19 @@
           setFilterMsg("Usuário sem permissão para editar o registro de controle de subação.", true);
           return;
         }
-        await fillFormFromRow(row);
+        if (subacaoIsConsultaView) {
+          sessionStorage.setItem(
+            subacaoPendingActionKey,
+            JSON.stringify({
+              action: "edit",
+              id: row.dataset.id || "",
+              dataset: subacaoRowSnapshot(row),
+            })
+          );
+          await loadPage("cadastrar/plan_21-nger/subacao/formulario");
+          return;
+        }
+        await loadSubacaoActionFromRow(row, "edit");
       });
     }
 
@@ -17080,7 +17566,7 @@
             window.__subacaoAutoPrintId = String(registroId);
           }
           setApprovalMode(false);
-          await loadPage("cadastrar/plan_21-nger/subacao");
+          await loadPage("cadastrar/plan_21-nger/subacao/consultar");
         } catch (err) {
           console.error(err);
           try {
@@ -17242,7 +17728,7 @@
                 window.__subacaoAutoPrintId = String(last.id);
               }
             }
-            await loadPage("cadastrar/plan_21-nger/subacao");
+            await loadPage("cadastrar/plan_21-nger/subacao/consultar");
           } catch (err) {
             console.error(err);
             try {
@@ -17369,7 +17855,7 @@
           } else if (data.subacao?.id) {
             window.__subacaoAutoPrintId = String(data.subacao.id);
           }
-          await loadPage("cadastrar/plan_21-nger/subacao");
+          await loadPage("cadastrar/plan_21-nger/subacao/consultar");
         } catch (err) {
           console.error(err);
           try {
@@ -17423,6 +17909,28 @@
     if (getModeValue() === "editar") {
       loadEditOptions();
     }
+    if (!subacaoIsConsultaView && subacaoPendingAction) {
+        try {
+          const pending = subacaoPendingAction;
+          const row = ensureSubacaoPendingRow(pending);
+          if (row) {
+            loadSubacaoActionFromRow(row, pending.action === "approve" ? "approve" : "edit")
+              .catch((err) => {
+                console.error(err);
+                setMsg("Falha ao carregar o registro selecionado.", true);
+              })
+              .finally(() => {
+                setSubacaoPendingLoading(false);
+              });
+          } else {
+            setMsg("Registro selecionado na consulta não foi encontrado.", true);
+            setSubacaoPendingLoading(false);
+          }
+        } catch (err) {
+          console.error(err);
+          setSubacaoPendingLoading(false);
+        }
+    }
   }
 
   if (menu) {
@@ -17431,6 +17939,15 @@
       if (parentToggle) {
         const targetId = parentToggle.getAttribute("data-submenu");
         const group = parentToggle.closest(".menu-group");
+        if (sidebar?.classList.contains("collapsed")) {
+          sidebar.classList.remove("collapsed");
+          sidebar.classList.add("open");
+          if (group && targetId && document.getElementById(targetId)) {
+            group.classList.add("open");
+          }
+          updateToggleIcon();
+          return;
+        }
         const isOpen = group?.classList.contains("open");
         if (group) {
           if (isOpen) {

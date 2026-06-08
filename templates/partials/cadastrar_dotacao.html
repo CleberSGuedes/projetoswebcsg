@@ -1,9 +1,10 @@
 <div class="grid" id="dotacao-page"
      data-user-perfil-id="{{ g.user_perfil_id or '' }}"
      data-user-id="{{ user_id }}"
-     data-user-nome="{{ user_nome }}">
-  <div class="card no-print">
-    <div class="card-title">Cadastrar Dotação</div>
+     data-user-nome="{{ user_nome }}"
+     data-view-mode="{{ view_mode or 'formulario' }}">
+  <div class="card no-print" {% if view_mode == 'consultar' %}style="display:none;"{% endif %}>
+    <div class="card-title">Cadastrar Dotação <span id="dotacao-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span></div>
     <form id="form-dotacao" class="form">
       <input type="hidden" id="dotacao-id" />
       <div class="form-grid">
@@ -170,8 +171,9 @@
     </form>
   </div>
 
-  <div class="card">
+  <div class="card" {% if view_mode != 'consultar' %}style="display:none;"{% endif %}>
     <div class="form no-print" id="dotacao-filtro-form">
+      <div class="card-title" style="margin-bottom:10px;">Consultar Dotação</div>
       <div class="card-title" style="margin-bottom:10px;">Critérios para filtro de resultados</div>
       <div class="form-grid">
         <label class="field">

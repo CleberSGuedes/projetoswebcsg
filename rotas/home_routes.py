@@ -2198,9 +2198,12 @@ def partial_atualizar_plan20():
 
 
 @home_bp.route("/partial/cadastrar/dotacao")
+@home_bp.route("/partial/cadastrar/dotacao/formulario")
+@home_bp.route("/partial/cadastrar/dotacao/consultar")
 @login_required
 @require_feature("cadastrar/dotacao")
 def partial_cadastrar_dotacao():
+    view_mode = "consultar" if request.path.rstrip("/").endswith("/consultar") else "formulario"
     user_session = session.get("user") or {}
     user_email = (user_session.get("email") or "").strip()
     user_nome = ""
@@ -2210,6 +2213,14 @@ def partial_cadastrar_dotacao():
         if usuario_row:
             user_nome = (usuario_row.nome or "").strip()
             user_id = str(usuario_row.id or "")
+    if view_mode != "consultar":
+        return render_template(
+            "partials/cadastrar_dotacao.html",
+            dotacoes=[],
+            user_id=user_id,
+            user_nome=user_nome,
+            view_mode=view_mode,
+        )
     rows = (
         db.session.query(Dotacao)
         .filter(
@@ -2343,13 +2354,17 @@ def partial_cadastrar_dotacao():
         dotacoes=dotacoes,
         user_id=user_id,
         user_nome=user_nome,
+        view_mode=view_mode,
     )
 
 
 @home_bp.route("/partial/cadastrar/plan_21-nger/subacao")
+@home_bp.route("/partial/cadastrar/plan_21-nger/subacao/formulario")
+@home_bp.route("/partial/cadastrar/plan_21-nger/subacao/consultar")
 @login_required
 @require_feature("cadastrar/plan_21-nger/subacao")
 def partial_cadastrar_plan21_subacao():
+    view_mode = "consultar" if request.path.rstrip("/").endswith("/consultar") else "formulario"
     user_id = _resolve_usuario_id() or ""
     user_perfil_id = str(_resolve_usuario_perfil_id() or "").strip()
     user_session = session.get("user") or {}
@@ -2457,13 +2472,17 @@ def partial_cadastrar_plan21_subacao():
         user_perfil_id=user_perfil_id,
         user_nome=user_nome,
         current_year=str(_now_local().year),
+        view_mode=view_mode,
     )
 
 
 @home_bp.route("/partial/cadastrar/plan_21-nger/etapa")
+@home_bp.route("/partial/cadastrar/plan_21-nger/etapa/formulario")
+@home_bp.route("/partial/cadastrar/plan_21-nger/etapa/consultar")
 @login_required
 @require_feature("cadastrar/plan_21-nger/etapa")
 def partial_cadastrar_plan21_etapa():
+    view_mode = "consultar" if request.path.rstrip("/").endswith("/consultar") else "formulario"
     user_id = _resolve_usuario_id() or ""
     user_perfil_id = str(_resolve_usuario_perfil_id() or "").strip()
     user_session = session.get("user") or {}
@@ -2542,13 +2561,17 @@ def partial_cadastrar_plan21_etapa():
         user_nome=user_nome,
         user_nivel=str(getattr(g, "user_nivel", "") or ""),
         current_year=str(_now_local().year),
+        view_mode=view_mode,
     )
 
 
 @home_bp.route("/partial/cadastrar/plan_21-nger/meta_fisica")
+@home_bp.route("/partial/cadastrar/plan_21-nger/meta_fisica/formulario")
+@home_bp.route("/partial/cadastrar/plan_21-nger/meta_fisica/consultar")
 @login_required
 @require_feature("cadastrar/plan_21-nger/meta_fisica")
 def partial_cadastrar_plan21_meta_fisica():
+    view_mode = "consultar" if request.path.rstrip("/").endswith("/consultar") else "formulario"
     user_id = _resolve_usuario_id() or ""
     user_session = session.get("user") or {}
     user_nome = (user_session.get("nome") or "").strip()
@@ -2681,13 +2704,17 @@ def partial_cadastrar_plan21_meta_fisica():
         user_perfil_nome=user_perfil_nome,
         user_nivel=getattr(g, "user_nivel", "") or "",
         current_year=str(_now_local().year),
+        view_mode=view_mode,
     )
 
 
 @home_bp.route("/partial/cadastrar/est-dotacao")
+@home_bp.route("/partial/cadastrar/est-dotacao/formulario")
+@home_bp.route("/partial/cadastrar/est-dotacao/consultar")
 @login_required
 @require_feature("cadastrar/est-dotacao")
 def partial_cadastrar_est_dotacao():
+    view_mode = "consultar" if request.path.rstrip("/").endswith("/consultar") else "formulario"
     user_session = session.get("user") or {}
     user_email = (user_session.get("email") or "").strip()
     user_nome = ""
@@ -2836,6 +2863,7 @@ def partial_cadastrar_est_dotacao():
         estornos=estorno_rows,
         user_id=user_id,
         user_nome=user_nome,
+        view_mode=view_mode,
     )
 
 
