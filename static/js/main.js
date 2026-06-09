@@ -8553,16 +8553,46 @@
     const applySelectOptions = (select, values, keepValue = true) => {
       if (!select) return;
       const current = keepValue ? select.value : "";
+      const normalizedValues = (values || []).map((val) => String(val));
       select.innerHTML = '<option value="">Selecione...</option>';
-      (values || []).forEach((val) => {
+      normalizedValues.forEach((val) => {
         const opt = document.createElement("option");
         opt.value = String(val);
         opt.textContent = String(val);
         select.appendChild(opt);
       });
-      if (current && (values || []).includes(current)) {
+      if (current && normalizedValues.includes(current)) {
         select.value = current;
       }
+    };
+    const setSelectValueFallback = (select, value) => {
+      if (!select) return;
+      const text = String(value || "").trim();
+      if (text && !Array.from(select.options || []).some((opt) => opt.value === text)) {
+        const opt = document.createElement("option");
+        opt.value = text;
+        opt.textContent = text;
+        opt.dataset.preserved = "1";
+        select.appendChild(opt);
+      }
+      select.value = text;
+    };
+    const metaSelectDatasetMap = {
+      exercicio: "exercicio",
+      unidade_orcamentaria: "uo",
+      programa: "programa",
+      acao_paoe: "acaoPaoe",
+      adj_solicitante: "adjSolicitante",
+      produto_acao: "produtoAcao",
+      unid_medida_produto: "unidMedidaProduto",
+    };
+    const applyMetaFiltersFromSummaryRow = (row) => {
+      Object.entries(selects).forEach(([key, el]) => {
+        if (!el) return;
+        const dataKey = metaSelectDatasetMap[key];
+        const value = String((dataKey && row?.dataset?.[dataKey]) || "").trim();
+        setSelectValueFallback(el, value);
+      });
     };
     const refreshCascadeOptionsFromCatalog = () => {
       if (!Array.isArray(optionRowsCatalog) || !optionRowsCatalog.length) return false;
@@ -10457,25 +10487,12 @@
           return;
         }
 
-        const mapSelectToData = {
-          exercicio: "exercicio",
-          unidade_orcamentaria: "uo",
-          programa: "programa",
-          acao_paoe: "acaoPaoe",
-          adj_solicitante: "adjSolicitante",
-          produto_acao: "produtoAcao",
-          unid_medida_produto: "unidMedidaProduto",
-        };
-        Object.entries(selects).forEach(([key, el]) => {
-          if (!el) return;
-          const dataKey = mapSelectToData[key];
-          const v = String((dataKey && selected.dataset[dataKey]) || "").trim();
-          el.value = v;
-        });
+        applyMetaFiltersFromSummaryRow(selected);
         if (justificativaInput) {
           setJustificativaProtectedValue(controle, selected.dataset.justificativa || "");
         }
         await loadOptions(false);
+        applyMetaFiltersFromSummaryRow(selected);
         let baselineByRegion = {};
         try {
           baselineByRegion = await fetchPlanBaselineByRegion();
@@ -10525,25 +10542,12 @@
           return;
         }
 
-        const mapSelectToData = {
-          exercicio: "exercicio",
-          unidade_orcamentaria: "uo",
-          programa: "programa",
-          acao_paoe: "acaoPaoe",
-          adj_solicitante: "adjSolicitante",
-          produto_acao: "produtoAcao",
-          unid_medida_produto: "unidMedidaProduto",
-        };
-        Object.entries(selects).forEach(([key, el]) => {
-          if (!el) return;
-          const dataKey = mapSelectToData[key];
-          const v = String((dataKey && selected.dataset[dataKey]) || "").trim();
-          el.value = v;
-        });
+        applyMetaFiltersFromSummaryRow(selected);
         if (justificativaInput) {
           setJustificativaProtectedValue(controle, selected.dataset.justificativa || "");
         }
         await loadOptions(false);
+        applyMetaFiltersFromSummaryRow(selected);
         let baselineByRegion = {};
         try {
           baselineByRegion = await fetchPlanBaselineByRegion();
