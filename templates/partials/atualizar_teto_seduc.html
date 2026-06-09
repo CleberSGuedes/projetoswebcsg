@@ -1,0 +1,54 @@
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Teto - SEDUC</div>
+    <p class="muted">Carregue os relatórios FIPLAN para atualizar o teto orçamentário.</p>
+
+    <form id="form-teto-seduc" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Exercício</span>
+          <input
+            type="text"
+            id="teto-seduc-exercicio"
+            name="exercicio"
+            inputmode="numeric"
+            maxlength="4"
+            pattern="[0-9]{4}"
+            placeholder="ex.: 20.. (ano a atualizar)"
+            required
+          />
+        </label>
+
+        <label class="field">
+          <span>Relatório FIPLAN</span>
+          <select id="teto-seduc-relatorio" name="relatorio" class="teto-required-select" required>
+            <option value="">Selecione</option>
+            <option value="momp">Plan 23 - Teto Orçamentário</option>
+            <option value="politicateto">Plan 134 - PTA Detalhado</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Arquivo Excel (.xlsx)</span>
+          <input
+            type="file"
+            id="teto-seduc-arquivo"
+            name="arquivo"
+            accept=".xlsx"
+            required
+          />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="teto-seduc-submit">
+          Carregar
+        </button>
+        <div id="teto-seduc-loading" class="muted" style="display:none;">
+          Processando o arquivo...
+        </div>
+        <div id="teto-seduc-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+</div>

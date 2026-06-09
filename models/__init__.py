@@ -26,6 +26,8 @@ from .user import (
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    Momp,
+    PoliticaTeto,
     ApiClient,
     ApiClientScope,
     ApiRefreshToken,

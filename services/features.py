@@ -34,9 +34,10 @@ FEATURES = [
             {"id": "atualizar/fip613", "nome": "FIP 613 (Atualizar)"},
             {"id": "atualizar/ped", "nome": "PED"},
             {"id": "atualizar/emp", "nome": "EMP"},
-            {"id": "atualizar/est-emp", "nome": "Est Emp"},
+            {"id": "atualizar/est-emp", "nome": "EST EMP"},
             {"id": "atualizar/nob", "nome": "NOB"},
-            {"id": "atualizar/plan20-seduc", "nome": "Plan20 - SEDUC"},
+            {"id": "atualizar/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+            {"id": "atualizar/teto-seduc", "nome": "Teto - SEDUC"},
             {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
             {
                 "id": "atualizar/chaves_planejamento_upload",
@@ -78,6 +79,13 @@ FEATURES = [
             {"id": "relatorios/nob", "nome": "NOB"},
             {"id": "relatorios/dotacao", "nome": "Dotação"},
             {"id": "relatorios/est-dotacao", "nome": "Estorno de Dotação"},
+        ],
+    },
+    {
+        "id": "paineis-dashboards",
+        "nome": "Painéis/Dashboards",
+        "children": [
+            {"id": "paineis-dashboards/teto-orcamentario", "nome": "Teto Orçamentário"},
         ],
     },
 ]

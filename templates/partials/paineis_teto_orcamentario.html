@@ -1,0 +1,79 @@
+<section class="teto-dashboard" id="teto-dashboard">
+  <div class="teto-dashboard-header">
+    <div>
+      <div class="card-title">Teto Orçamentário</div>
+      <p class="muted">Análise consolidada dos tetos MOMP e das políticas orçamentárias.</p>
+    </div>
+    <div class="teto-view-switch" role="tablist" aria-label="Visualização do painel">
+      <button class="teto-view-btn active" type="button" data-view="graficos" role="tab" aria-selected="true">
+        <i class="bi bi-bar-chart-line"></i><span>Gráficos</span>
+      </button>
+      <button class="teto-view-btn" type="button" data-view="tabelas" role="tab" aria-selected="false">
+        <i class="bi bi-table"></i><span>Tabelas</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="teto-filter-band">
+    <div class="teto-filter-heading">
+      <strong>Filtros</strong>
+      <div class="actions">
+        <button class="btn sm compact" id="teto-dashboard-refresh" type="button" title="Atualizar dados">
+          <i class="bi bi-arrow-clockwise"></i><span>Atualizar</span>
+        </button>
+        <button class="btn sm compact secondary" id="teto-dashboard-clear" type="button">
+          <i class="bi bi-eraser"></i><span>Limpar filtros</span>
+        </button>
+      </div>
+    </div>
+    <div class="teto-filter-grid form-grid">
+      <label class="field"><span>Exercício</span><select data-filter="exercicio"><option value="">Todos</option></select></label>
+      <label class="field"><span>Região</span><select data-filter="regiao"><option value="">Todas</option></select></label>
+      <label class="field"><span>Subfunção</span><select data-filter="subfuncao"><option value="">Todas</option></select></label>
+      <label class="field"><span>Grupo de despesa</span><select data-filter="grupo"><option value="">Todos</option></select></label>
+      <label class="field"><span>Tipificação da despesa</span><select data-filter="subgrupo"><option value="">Todas</option></select></label>
+      <label class="field"><span>Ação/PAOE</span><select data-filter="paoe"><option value="">Todas</option></select></label>
+      <label class="field"><span>Fonte</span><select data-filter="fonte"><option value="">Todas</option></select></label>
+      <label class="field"><span>ADJ</span><select data-filter="adj"><option value="">Todas</option></select></label>
+      <label class="field"><span>Macropolítica</span><select data-filter="macropolitica"><option value="">Todas</option></select></label>
+      <label class="field"><span>Pilar</span><select data-filter="pilar"><option value="">Todos</option></select></label>
+      <label class="field"><span>Eixo</span><select data-filter="eixo"><option value="">Todos</option></select></label>
+      <label class="field"><span>Política do decreto</span><select data-filter="politica"><option value="">Todas</option></select></label>
+    </div>
+    <div class="teto-active-filters" id="teto-active-filters" aria-live="polite"></div>
+  </div>
+
+  <div class="teto-dashboard-view active" data-view-panel="graficos">
+    <div class="teto-kpi-grid">
+      <div class="teto-kpi"><span>Teto total</span><strong id="teto-kpi-total">R$ 0,00</strong></div>
+      <div class="teto-kpi"><span>Fontes de recurso</span><strong id="teto-kpi-fontes">0</strong></div>
+      <div class="teto-kpi"><span>Grupos de despesa</span><strong id="teto-kpi-grupos">0</strong></div>
+      <div class="teto-kpi"><span>Ações/PAOE</span><strong id="teto-kpi-paoes">0</strong></div>
+    </div>
+
+    <div class="teto-chart-grid">
+      <section class="teto-panel"><h2>Teto por grupo de despesa</h2><div class="teto-chart" id="teto-chart-grupo"></div></section>
+      <section class="teto-panel"><h2>Teto por ADJ</h2><div class="teto-chart" id="teto-chart-adj"></div></section>
+      <section class="teto-panel teto-panel-wide"><h2>Pareto de macropolíticas</h2><div class="teto-chart" id="teto-chart-macro"></div></section>
+      <section class="teto-panel teto-panel-wide"><h2>Orçamento por ação/PAOE</h2><div class="teto-chart" id="teto-chart-paoe"></div></section>
+      <section class="teto-panel teto-panel-wide"><h2>Teto por exercício e grupo de despesa</h2><div class="teto-chart" id="teto-chart-exercicio"></div></section>
+    </div>
+  </div>
+
+  <div class="teto-dashboard-view" data-view-panel="tabelas" hidden>
+    <div class="teto-primary-tables">
+      <section class="teto-panel teto-table-panel">
+        <h2>Teto por fonte de recurso</h2>
+        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-fonte"><thead><tr><th>Fonte</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section class="teto-panel teto-table-panel">
+        <h2>Teto por grupo e tipificação da despesa</h2>
+        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-grupo"><thead><tr><th>Descrição</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+    <section class="teto-panel teto-table-panel">
+      <h2>Quadro Orçamentário de Médio Prazo (QOMP)</h2>
+      <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-qomp"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+</section>

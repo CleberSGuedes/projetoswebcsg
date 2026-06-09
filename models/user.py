@@ -656,6 +656,47 @@ class ChavePlanejamentoRegra(db.Model):
     excluido_em = db.Column(db.DateTime)
 
 
+class Momp(db.Model):
+    __tablename__ = "momp"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fonte = db.Column(db.String(255))
+    grupo_despesa = db.Column(db.String(255))
+    teto_despesa_momp = db.Column(db.String(255))
+    subteto_despesa_momp = db.Column(db.String(255))
+    teto_anual = db.Column(db.Numeric(15, 2))
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+    exercicio = db.Column(db.String(4))
+
+    politicas = db.relationship("PoliticaTeto", back_populates="momp", lazy="select")
+
+
+class PoliticaTeto(db.Model):
+    __tablename__ = "politicateto"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    momp_id = db.Column(db.Integer, db.ForeignKey("momp.id"), nullable=False)
+    regiao = db.Column(db.String(20))
+    subfuncao_ug = db.Column(db.String(20))
+    adj = db.Column(db.String(20))
+    macropolitica = db.Column(db.String(100))
+    pilar = db.Column(db.String(100))
+    eixo = db.Column(db.String(100))
+    politica_decreto = db.Column(db.String(100))
+    acao_paoe = db.Column(db.String(500))
+    teto_politica_decreto = db.Column(db.Numeric(15, 2))
+    chave_planejamento = db.Column(db.String(500))
+    saldo_anual = db.Column(db.Numeric(15, 2))
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+    publico_transversal = db.Column(db.String(100))
+
+    momp = db.relationship("Momp", back_populates="politicas")
+
+
 class ApiClient(db.Model):
     __tablename__ = "api_clients"
 

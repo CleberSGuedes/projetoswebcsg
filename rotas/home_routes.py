@@ -12,8 +12,10 @@ import sys
 import threading
 import secrets
 import hashlib
+import uuid
 import pytz
 import pandas as pd
+from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import (
     Usuario,
@@ -39,6 +41,8 @@ from models import (
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    Momp,
+    PoliticaTeto,
     ApiClient,
     ApiClientScope,
     ApiRefreshToken,
@@ -60,6 +64,12 @@ from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20
+from services.teto_seduc import (
+    detectar_tipo_relatorio,
+    fonte_key,
+    processar_plan23,
+    processar_plan134,
+)
 from services.ped_runner import (
     run_ped,
     move_existing_to_tmp,
@@ -1914,6 +1924,338 @@ def partial_atualizar_chave_planejamento_regra():
     return render_template("partials/atualizar_chave_planejamento_regra.html", regras=regras)
 
 
+@home_bp.route("/partial/atualizar/teto-seduc")
+@login_required
+@require_feature("atualizar/teto-seduc")
+def partial_atualizar_teto_seduc():
+    return render_template("partials/atualizar_teto_seduc.html")
+
+
+TETO_SEDUC_UPLOAD_DIR = Path("upload/teto_seduc")
+
+
+def _teto_text(value) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _teto_nullable_text(value):
+    text_value = _teto_text(value)
+    return text_value or None
+
+
+def _persistir_plan23(df: pd.DataFrame) -> dict:
+    inseridas = 0
+    desativadas = 0
+    vinculos_migrados = 0
+    now = _now_local()
+
+    for _, row in df.iterrows():
+        filtros = {
+            "exercicio": _teto_text(row.get("exercicio")),
+            "fonte": _teto_text(row.get("fonte")),
+            "grupo_despesa": _teto_text(row.get("grupo_despesa")),
+            "teto_despesa_momp": _teto_text(row.get("teto_despesa_momp")),
+            "subteto_despesa_momp": _teto_text(row.get("subteto_despesa_momp")),
+        }
+        antigos = Momp.query.filter_by(**filtros).all()
+        old_ids = [item.id for item in antigos]
+
+        novo = Momp(
+            **filtros,
+            teto_anual=Decimal(str(row.get("teto_anual") or 0)),
+            ativo=True,
+        )
+        db.session.add(novo)
+        db.session.flush()
+        inseridas += 1
+
+        if old_ids:
+            vinculos_migrados += (
+                PoliticaTeto.query.filter(PoliticaTeto.momp_id.in_(old_ids)).update(
+                    {
+                        PoliticaTeto.momp_id: novo.id,
+                        PoliticaTeto.alterado_em: now,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            desativadas += (
+                Momp.query.filter(Momp.id.in_(old_ids)).update(
+                    {
+                        Momp.ativo: False,
+                        Momp.alterado_em: now,
+                        Momp.excluido_em: now,
+                    },
+                    synchronize_session=False,
+                )
+            )
+
+    return {
+        "inseridas": inseridas,
+        "desativadas": desativadas,
+        "vinculos_migrados": vinculos_migrados,
+    }
+
+
+def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
+    momps = (
+        Momp.query.filter(
+            Momp.exercicio == exercicio,
+            Momp.ativo == True,  # noqa: E712
+        )
+        .order_by(Momp.id.asc())
+        .all()
+    )
+    if not momps:
+        raise ValueError(
+            f"Não existem registros MOMP ativos para o exercício {exercicio}. "
+            "Carregue primeiro o Plan 23."
+        )
+
+    exact_map = {}
+    numeric_map = {}
+    for momp in momps:
+        exact_key = (
+            _teto_text(momp.fonte),
+            _teto_text(momp.grupo_despesa),
+            _teto_text(momp.subteto_despesa_momp),
+        )
+        numeric_key = (
+            fonte_key(momp.fonte),
+            _teto_text(momp.grupo_despesa),
+            _teto_text(momp.subteto_despesa_momp),
+        )
+        exact_map.setdefault(exact_key, momp)
+        numeric_map.setdefault(numeric_key, momp)
+
+    preparados = []
+    sem_correspondencia = 0
+    for _, row in df.iterrows():
+        fonte = _teto_text(row.get("fonte"))
+        grupo = _teto_text(row.get("grupo_despesa"))
+        subteto = _teto_text(row.get("subteto_despesa_momp"))
+        momp = exact_map.get((fonte, grupo, subteto))
+        if momp is None:
+            momp = numeric_map.get((fonte_key(fonte), grupo, subteto))
+        if momp is None:
+            sem_correspondencia += 1
+            continue
+        preparados.append((momp.id, row))
+
+    if not preparados:
+        raise ValueError(
+            "Nenhuma linha do Plan 134 corresponde aos registros ativos da tabela MOMP "
+            f"para o exercício {exercicio}."
+        )
+
+    momp_ids = sorted({momp_id for momp_id, _ in preparados})
+    now = _now_local()
+    desativadas = PoliticaTeto.query.filter(
+        PoliticaTeto.momp_id.in_(momp_ids),
+        PoliticaTeto.ativo == True,  # noqa: E712
+    ).update(
+        {
+            PoliticaTeto.ativo: False,
+            PoliticaTeto.alterado_em: now,
+            PoliticaTeto.excluido_em: now,
+        },
+        synchronize_session=False,
+    )
+
+    for momp_id, row in preparados:
+        valor = row.get("teto_politica_decreto")
+        db.session.add(
+            PoliticaTeto(
+                momp_id=momp_id,
+                regiao=_teto_nullable_text(row.get("regiao")),
+                subfuncao_ug=_teto_nullable_text(row.get("subfuncao_ug")),
+                adj=_teto_nullable_text(row.get("adj")),
+                macropolitica=_teto_nullable_text(row.get("macropolitica")),
+                pilar=_teto_nullable_text(row.get("pilar")),
+                eixo=_teto_nullable_text(row.get("eixo")),
+                politica_decreto=_teto_nullable_text(row.get("politica_decreto")),
+                acao_paoe=_teto_nullable_text(row.get("acao_paoe")),
+                teto_politica_decreto=(
+                    Decimal(str(valor)) if value_not_blank(valor) else None
+                ),
+                chave_planejamento=_teto_nullable_text(row.get("chave_planejamento")),
+                publico_transversal=_teto_nullable_text(row.get("publico_transversal")),
+                ativo=True,
+            )
+        )
+
+    return {
+        "inseridas": len(preparados),
+        "desativadas": desativadas,
+        "sem_correspondencia": sem_correspondencia,
+    }
+
+
+def value_not_blank(value) -> bool:
+    return value is not None and not pd.isna(value) and str(value).strip() != ""
+
+
+def _start_teto_seduc_thread(
+    upload_id: int,
+    temp_path: Path,
+    relatorio: str,
+    exercicio: str,
+) -> None:
+    app = current_app._get_current_object()
+
+    def _runner() -> None:
+        with app.app_context():
+            try:
+                write_status(
+                    "teto_seduc",
+                    upload_id,
+                    "em processamento",
+                    "Arquivo recebido. Processamento iniciado.",
+                    progress=10,
+                )
+                tipo_detectado = detectar_tipo_relatorio(temp_path)
+                if tipo_detectado and tipo_detectado != relatorio:
+                    selecionado = (
+                        "Plan 23 - Teto Orçamentário"
+                        if relatorio == "momp"
+                        else "Plan 134 - PTA Detalhado"
+                    )
+                    arquivo_tipo = (
+                        "Plan 23 - Teto Orçamentário"
+                        if tipo_detectado == "momp"
+                        else "Plan 134 - PTA Detalhado"
+                    )
+                    raise ValueError(
+                        f"O relatório selecionado foi {selecionado}, "
+                        f"mas o arquivo enviado foi identificado como {arquivo_tipo}. "
+                        "Selecione a opção ou o arquivo correto."
+                    )
+                if relatorio == "momp":
+                    resultado = _persistir_plan23(processar_plan23(temp_path, exercicio))
+                    message = (
+                        "Plan 23 processado. "
+                        f"Registros inseridos: {resultado['inseridas']}; "
+                        f"anteriores desativados: {resultado['desativadas']}; "
+                        f"vínculos migrados: {resultado['vinculos_migrados']}."
+                    )
+                else:
+                    resultado = _persistir_plan134(processar_plan134(temp_path), exercicio)
+                    message = (
+                        "Plan 134 processado. "
+                        f"Registros inseridos: {resultado['inseridas']}; "
+                        f"anteriores desativados: {resultado['desativadas']}."
+                    )
+                    if resultado["sem_correspondencia"]:
+                        message += (
+                            " Linhas sem correspondência no MOMP: "
+                            f"{resultado['sem_correspondencia']}."
+                        )
+
+                db.session.commit()
+                write_status(
+                    "teto_seduc",
+                    upload_id,
+                    "processamento finalizado",
+                    message,
+                    progress=100,
+                )
+            except ValueError as exc:
+                db.session.rollback()
+                write_status(
+                    "teto_seduc",
+                    upload_id,
+                    "falha no processamento",
+                    str(exc),
+                    progress=100,
+                )
+            except Exception as exc:
+                db.session.rollback()
+                app.logger.exception(
+                    "Falha ao processar Teto - SEDUC (%s, exercício %s).",
+                    relatorio,
+                    exercicio,
+                )
+                write_status(
+                    "teto_seduc",
+                    upload_id,
+                    "falha no processamento",
+                    f"Falha ao processar o arquivo: {exc}",
+                    progress=100,
+                )
+            finally:
+                db.session.remove()
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    app.logger.warning(
+                        "Não foi possível remover o arquivo temporário %s.", temp_path
+                    )
+
+    threading.Thread(target=_runner, daemon=True).start()
+
+
+@home_bp.route("/api/teto-seduc/upload", methods=["POST"])
+@login_required
+@require_feature("atualizar/teto-seduc")
+def api_teto_seduc_upload():
+    exercicio = str(request.form.get("exercicio") or "").strip()
+    relatorio = str(request.form.get("relatorio") or "").strip()
+    arquivo = request.files.get("arquivo")
+
+    if not re.fullmatch(r"\d{4}", exercicio):
+        return jsonify({"error": "Informe um exercício válido com quatro dígitos."}), 400
+    if relatorio not in {"momp", "politicateto"}:
+        return jsonify({"error": "Selecione um relatório FIPLAN válido."}), 400
+    if not arquivo or not getattr(arquivo, "filename", ""):
+        return jsonify({"error": "Selecione um arquivo Excel."}), 400
+    if not str(arquivo.filename).lower().endswith(".xlsx"):
+        return jsonify({"error": "O arquivo precisa estar no formato .xlsx."}), 400
+
+    TETO_SEDUC_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    original = secure_filename(arquivo.filename) or "teto.xlsx"
+    upload_id = (uuid.uuid4().int % 2_000_000_000) + 1
+    temp_path = TETO_SEDUC_UPLOAD_DIR / f"{upload_id}-{original}"
+
+    try:
+        arquivo.save(temp_path)
+        write_status(
+            "teto_seduc",
+            upload_id,
+            "aguardando processamento",
+            "Arquivo recebido.",
+            progress=0,
+        )
+        _start_teto_seduc_thread(upload_id, temp_path, relatorio, exercicio)
+        return (
+            jsonify(
+                {
+                    "ok": True,
+                    "job_id": upload_id,
+                    "message": "Arquivo recebido. Processamento iniciado.",
+                }
+            ),
+            202,
+        )
+    except Exception as exc:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return jsonify({"error": f"Falha ao receber o arquivo: {exc}"}), 500
+
+
+@home_bp.route("/api/teto-seduc/status/<int:job_id>", methods=["GET"])
+@login_required
+@require_feature("atualizar/teto-seduc")
+def api_teto_seduc_status(job_id: int):
+    status_data = read_status("teto_seduc", job_id)
+    if not status_data:
+        return jsonify({"error": "Processamento não encontrado."}), 404
+    return jsonify({"ok": True, **status_data})
+
+
 def _serialize_chave_regra(r: ChavePlanejamentoRegra) -> dict:
     return {
         "id": r.id,
@@ -2952,6 +3294,77 @@ def partial_relatorios_plan20():
 @require_feature("relatorios/plan21-nger")
 def partial_relatorios_plan21_nger():
     return render_template("partials/relatorios_plan21_nger.html")
+
+
+@home_bp.route("/partial/paineis-dashboards/teto-orcamentario")
+@login_required
+@require_feature("paineis-dashboards/teto-orcamentario")
+def partial_paineis_teto_orcamentario():
+    return render_template("partials/paineis_teto_orcamentario.html")
+
+
+@home_bp.route("/api/paineis-dashboards/teto-orcamentario")
+@login_required
+@require_feature("paineis-dashboards/teto-orcamentario")
+def api_paineis_teto_orcamentario():
+    momp_rows = (
+        db.session.query(
+            Momp.id,
+            Momp.exercicio,
+            Momp.fonte,
+            Momp.grupo_despesa,
+            Momp.subteto_despesa_momp,
+            Momp.teto_anual,
+        )
+        .filter(Momp.ativo == 1, Momp.excluido_em.is_(None))
+        .all()
+    )
+    politica_rows = (
+        db.session.query(
+            PoliticaTeto.id,
+            PoliticaTeto.momp_id,
+            PoliticaTeto.regiao,
+            PoliticaTeto.subfuncao_ug,
+            PoliticaTeto.adj,
+            PoliticaTeto.macropolitica,
+            PoliticaTeto.pilar,
+            PoliticaTeto.eixo,
+            PoliticaTeto.politica_decreto,
+            PoliticaTeto.acao_paoe,
+            PoliticaTeto.teto_politica_decreto,
+        )
+        .filter(PoliticaTeto.ativo == 1, PoliticaTeto.excluido_em.is_(None))
+        .all()
+    )
+
+    momp = [
+        {
+            "id": row.id,
+            "exercicio": str(row.exercicio or "").strip(),
+            "fonte": str(row.fonte or "").strip(),
+            "grupo": str(row.grupo_despesa or "").strip(),
+            "subgrupo": str(row.subteto_despesa_momp or "").strip(),
+            "valor": float(row.teto_anual or 0),
+        }
+        for row in momp_rows
+    ]
+    politicas = [
+        {
+            "id": row.id,
+            "momp_id": row.momp_id,
+            "regiao": str(row.regiao or "").strip(),
+            "subfuncao": str(row.subfuncao_ug or "").strip(),
+            "adj": str(row.adj or "").strip(),
+            "macropolitica": str(row.macropolitica or "").strip(),
+            "pilar": str(row.pilar or "").strip(),
+            "eixo": str(row.eixo or "").strip(),
+            "politica": str(row.politica_decreto or "").strip(),
+            "paoe": str(row.acao_paoe or "").strip(),
+            "valor": float(row.teto_politica_decreto or 0),
+        }
+        for row in politica_rows
+    ]
+    return jsonify({"ok": True, "momp": momp, "politicas": politicas})
 
 
 @home_bp.route("/api/permissoes/<int:perfil_id>", methods=["GET", "POST"])

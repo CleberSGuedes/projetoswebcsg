@@ -14,6 +14,7 @@
   const appLoadingTitle = document.getElementById("app-loading-title");
   const appLoadingSubtitle = document.getElementById("app-loading-subtitle");
   let appLoadingCount = 0;
+  let tetoDashboardResizeTimer = null;
 
   function showAppLoading(title = "Carregando...", subtitle = "Aguarde enquanto a aplicação processa a solicitação.") {
     appLoadingCount += 1;
@@ -148,6 +149,19 @@
     toggle.setAttribute("aria-expanded", String(!collapsed));
   }
 
+  function resizeTetoDashboardCharts() {
+    const dashboard = document.getElementById("teto-dashboard");
+    if (!dashboard || typeof Plotly === "undefined") return;
+    const resize = () => {
+      dashboard.querySelectorAll(".teto-chart").forEach((chart) => {
+        if (!chart.hidden && chart.offsetParent !== null) Plotly.Plots.resize(chart);
+      });
+    };
+    requestAnimationFrame(resize);
+    window.clearTimeout(tetoDashboardResizeTimer);
+    tetoDashboardResizeTimer = window.setTimeout(resize, 340);
+  }
+
   function updateSidebarExpandedWidth() {
     if (!sidebar || !menu) return;
     const measure = sidebar.cloneNode(true);
@@ -188,6 +202,7 @@
       sidebar.classList.toggle("collapsed");
       sidebar.classList.toggle("open");
       updateToggleIcon();
+      resizeTetoDashboardCharts();
     });
     updateToggleIcon();
   }
@@ -702,7 +717,9 @@
         isAllowedRoute(item.getAttribute("data-route"))
       );
       const parentAllowed = parentId && allowed.has(parentId);
-      group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
+      const readyCategory =
+        group.dataset.menuReady === "true" && allowed.has("paineis-dashboards");
+      group.style.display = hasAllowedChild || parentAllowed || readyCategory ? "" : "none";
     });
 
     // Top-level items without submenu
@@ -3537,6 +3554,108 @@
     if (tableFootEl) tableFootEl.style.display = hasRows ? "" : "none";
     if (btnDownloadEl) btnDownloadEl.disabled = !hasRows;
     if (!hasRows && pagerEl) pagerEl.innerHTML = "";
+  }
+
+  function initTetoSeduc() {
+    const form = document.getElementById("form-teto-seduc");
+    if (!form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const exercicio = document.getElementById("teto-seduc-exercicio");
+    const submitBtn = document.getElementById("teto-seduc-submit");
+    const loading = document.getElementById("teto-seduc-loading");
+    const msg = document.getElementById("teto-seduc-msg");
+
+    const clearMessage = () => {
+      if (!msg) return;
+      msg.textContent = "";
+      msg.classList.remove("text-error");
+    };
+
+    form.addEventListener("input", clearMessage);
+    form.addEventListener("change", clearMessage);
+
+    if (exercicio) {
+      exercicio.addEventListener("input", () => {
+        exercicio.value = exercicio.value.replace(/\D/g, "").slice(0, 4);
+      });
+    }
+
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const waitForJob = async (jobId) => {
+      let networkFailures = 0;
+      for (let attempt = 0; attempt < 600; attempt += 1) {
+        await wait(1000);
+        try {
+          const response = await fetch(
+            `/api/teto-seduc/status/${encodeURIComponent(jobId)}`,
+            { headers: { "X-Requested-With": "fetch" } }
+          );
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Falha ao consultar o processamento.");
+          }
+          networkFailures = 0;
+          if (msg) msg.textContent = data.message || "Processando...";
+          if (data.state === "processamento finalizado") return data;
+          if (data.state === "falha no processamento") {
+            throw new Error(data.message || "Falha ao processar o arquivo.");
+          }
+        } catch (err) {
+          networkFailures += 1;
+          if (networkFailures >= 5 || !(err instanceof TypeError)) throw err;
+        }
+      }
+      throw new Error("O processamento excedeu o tempo máximo de acompanhamento.");
+    };
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!form.reportValidity()) return;
+
+      if (msg) {
+        msg.textContent = "";
+        msg.classList.remove("text-error");
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      showAppLoading(
+        "Processando Teto - SEDUC...",
+        "Aguarde enquanto o arquivo é tratado e gravado no banco de dados."
+      );
+
+      try {
+        const response = await fetch("/api/teto-seduc/upload", {
+          method: "POST",
+          headers: { "X-Requested-With": "fetch" },
+          body: new FormData(form),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Falha ao processar o arquivo.");
+        }
+        if (!data.job_id) {
+          throw new Error("O servidor não retornou o identificador do processamento.");
+        }
+        if (msg) msg.textContent = data.message || "Processamento iniciado.";
+        const result = await waitForJob(data.job_id);
+        if (msg) msg.textContent = result.message || "Processamento concluído.";
+        showToast(result.message || "Teto - SEDUC atualizado.", "success", 6000);
+        form.reset();
+      } catch (err) {
+        console.error(err);
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        showToast(err.message, "error", 6000);
+      } finally {
+        hideAppLoading();
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
   }
 
   function initChavePlanejamentoRegra() {
@@ -10990,6 +11109,498 @@
     }
   }
 
+  function initTetoOrcamentarioDashboard() {
+    const root = document.getElementById("teto-dashboard");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+    const dashboardResizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => resizeTetoDashboardCharts())
+        : null;
+    dashboardResizeObserver?.observe(root);
+
+    const state = { momp: [], politicas: [], filters: {} };
+    const filterEls = Array.from(root.querySelectorAll("[data-filter]"));
+    const statusEl = document.getElementById("teto-dashboard-status");
+    const activeFiltersEl = document.getElementById("teto-active-filters");
+    const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+    const number = new Intl.NumberFormat("pt-BR");
+    const oldChartPalette = [
+      "#345feb", "#048075", "#f8cb2e", "#f58220", "#ea1d2c", "#6a1b9a",
+      "#008FFB", "#9C27B0", "#FF4560", "#00E396", "#FEB019", "#775DD0",
+    ];
+    const groupColors = {
+      "1": "#345feb",
+      "3": "#048075",
+      "4": "#f8cb2e",
+    };
+    const adjColors = {
+      SAGP: "#ea1d2c",
+      SAAS: "#048075",
+      SAGE: "#f58220",
+      SAIP: "#008FFB",
+      SAGR: "#6a1b9a",
+      GAB: "#f8cb2e",
+      SARC: "#9C27B0",
+      SAEX: "#345feb",
+    };
+    const politicalKeys = ["regiao", "subfuncao", "paoe", "adj", "macropolitica", "pilar", "eixo", "politica"];
+
+    const clean = (value) => String(value ?? "").trim();
+    const codeOf = (value) => {
+      const text = clean(value);
+      return text.includes(" - ") ? text.split(" - ")[0].trim() : text;
+    };
+    const subfunctionOf = (value) => codeOf(value).split(".")[0].trim();
+    const unique = (values) =>
+      Array.from(new Set(values.map(clean).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" })
+      );
+    const sum = (rows) => rows.reduce((total, row) => total + Number(row.valor || 0), 0);
+    const groupSum = (rows, key, valueKey = "valor") => {
+      const grouped = new Map();
+      rows.forEach((row) => {
+        const label = clean(row[key]) || "Não informado";
+        grouped.set(label, (grouped.get(label) || 0) + Number(row[valueKey] || 0));
+      });
+      return Array.from(grouped, ([label, valor]) => ({ label, valor }))
+        .sort((a, b) => b.valor - a.valor);
+    };
+    const escapeHtml = (value) =>
+      clean(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    const percent = (value, total) => (total ? `${((value / total) * 100).toFixed(2).replace(".", ",")}%` : "-");
+    const plotConfig = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d"] };
+    const plotLayout = (extra = {}) => ({
+      margin: { t: 20, r: 24, b: 70, l: 70 },
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      font: { family: "Arial, sans-serif", size: 11, color: getComputedStyle(document.body).getPropertyValue("--text").trim() || "#24323d" },
+      separators: ",.",
+      ...extra,
+    });
+
+    const setStatus = (message, isError = false) => {
+      if (!statusEl) return;
+      statusEl.textContent = message || "";
+      statusEl.classList.toggle("text-error", isError);
+    };
+
+    const readFilters = () => {
+      filterEls.forEach((el) => {
+        state.filters[el.dataset.filter] = clean(el.value);
+      });
+      return state.filters;
+    };
+
+    const isPoliticalMode = () => politicalKeys.some((key) => Boolean(state.filters[key]));
+
+    const filteredData = () => {
+      readFilters();
+      let momp = state.momp.filter((row) =>
+        (!state.filters.exercicio || row.exercicio === state.filters.exercicio) &&
+        (!state.filters.fonte || row.fonte === state.filters.fonte) &&
+        (!state.filters.grupo || row.grupo === state.filters.grupo) &&
+        (!state.filters.subgrupo || row.subgrupo === state.filters.subgrupo)
+      );
+      const validIds = new Set(momp.map((row) => row.id));
+      let politicas = state.politicas.filter((row) => validIds.has(row.momp_id));
+      politicas = politicas.filter((row) =>
+        (!state.filters.regiao || row.regiao === state.filters.regiao) &&
+        (!state.filters.subfuncao || subfunctionOf(row.subfuncao) === state.filters.subfuncao) &&
+        (!state.filters.paoe || row.paoe === state.filters.paoe) &&
+        (!state.filters.adj || row.adj === state.filters.adj) &&
+        (!state.filters.macropolitica || row.macropolitica === state.filters.macropolitica) &&
+        (!state.filters.pilar || row.pilar === state.filters.pilar) &&
+        (!state.filters.eixo || row.eixo === state.filters.eixo) &&
+        (!state.filters.politica || row.politica === state.filters.politica)
+      );
+
+      if (isPoliticalMode()) {
+        const policyMompIds = new Set(politicas.map((row) => row.momp_id));
+        momp = momp.filter((row) => policyMompIds.has(row.id));
+      }
+      const mompById = new Map(momp.map((row) => [row.id, row]));
+      const joined = politicas
+        .map((row) => ({ ...mompById.get(row.momp_id), ...row, valor: Number(row.valor || 0) }))
+        .filter((row) => row.id && mompById.has(row.momp_id));
+      return { momp, politicas, joined, policyMode: isPoliticalMode() };
+    };
+
+    const setOptions = () => {
+      const specs = {
+        exercicio: unique(state.momp.map((row) => row.exercicio)),
+        fonte: unique(state.momp.map((row) => row.fonte)),
+        grupo: unique(state.momp.map((row) => row.grupo)),
+        subgrupo: unique(state.momp.map((row) => row.subgrupo)),
+        regiao: unique(state.politicas.map((row) => row.regiao)),
+        subfuncao: unique(state.politicas.map((row) => subfunctionOf(row.subfuncao))),
+        paoe: unique(state.politicas.map((row) => row.paoe)),
+        adj: unique(state.politicas.map((row) => row.adj)),
+        macropolitica: unique(state.politicas.map((row) => row.macropolitica)),
+        pilar: unique(state.politicas.map((row) => row.pilar)),
+        eixo: unique(state.politicas.map((row) => row.eixo)),
+        politica: unique(state.politicas.map((row) => row.politica)),
+      };
+      filterEls.forEach((el) => {
+        const current = clean(el.value);
+        const firstLabel = el.options[0]?.textContent || "Todos";
+        el.innerHTML = `<option value="">${escapeHtml(firstLabel)}</option>`;
+        (specs[el.dataset.filter] || []).forEach((value) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          el.appendChild(option);
+        });
+        if (Array.from(el.options).some((option) => option.value === current)) el.value = current;
+      });
+    };
+
+    const renderActiveFilters = () => {
+      if (!activeFiltersEl) return;
+      const labels = {
+        exercicio: "Exercício", regiao: "Região", subfuncao: "Subfunção", grupo: "Grupo",
+        subgrupo: "Tipificação", paoe: "PAOE", fonte: "Fonte", adj: "ADJ",
+        macropolitica: "Macropolítica", pilar: "Pilar", eixo: "Eixo", politica: "Política",
+      };
+      activeFiltersEl.innerHTML = Object.entries(state.filters)
+        .filter(([, value]) => value)
+        .map(([key, value]) => `<span class="teto-filter-chip">${escapeHtml(labels[key])}: ${escapeHtml(value)}</span>`)
+        .join("");
+    };
+
+    const emptyPlot = (id, message) => {
+      const el = document.getElementById(id);
+      if (!el || typeof Plotly === "undefined") return;
+      Plotly.react(el, [], plotLayout({
+        xaxis: { visible: false },
+        yaxis: { visible: false },
+        annotations: [{ text: message, x: 0.5, y: 0.5, xref: "paper", yref: "paper", showarrow: false }],
+      }), plotConfig);
+    };
+
+    const bindPlotFilter = (id, key, valueResolver) => {
+      const el = document.getElementById(id);
+      if (!el || typeof el.on !== "function") return;
+      if (typeof el.removeAllListeners === "function") el.removeAllListeners("plotly_click");
+      el.on("plotly_click", (event) => {
+        const point = event?.points?.[0];
+        const value = clean(valueResolver(point));
+        const select = root.querySelector(`[data-filter="${key}"]`);
+        if (!value || !select) return;
+        const option = Array.from(select.options).find((item) => item.value === value);
+        if (!option) return;
+        select.value = select.value === value ? "" : value;
+        render();
+      });
+    };
+
+    const renderKpis = ({ momp, politicas, joined, policyMode }) => {
+      const base = policyMode ? joined : momp;
+      const total = sum(base);
+      const fontes = new Set(base.map((row) => clean(row.fonte)).filter(Boolean)).size;
+      const grupos = new Set(base.map((row) => clean(row.grupo)).filter(Boolean)).size;
+      const paoes = new Set(politicas.map((row) => clean(row.paoe)).filter(Boolean)).size;
+      document.getElementById("teto-kpi-total").textContent = money.format(total);
+      document.getElementById("teto-kpi-fontes").textContent = number.format(fontes);
+      document.getElementById("teto-kpi-grupos").textContent = number.format(grupos);
+      document.getElementById("teto-kpi-paoes").textContent = number.format(paoes);
+    };
+
+    const renderCharts = (data) => {
+      if (typeof Plotly === "undefined") {
+        setStatus("Não foi possível carregar a biblioteca de gráficos.", true);
+        return;
+      }
+      const base = data.policyMode ? data.joined : data.momp;
+      const byGroup = groupSum(base, "grupo");
+      const groupEl = document.getElementById("teto-chart-grupo");
+      if (!byGroup.length || !sum(byGroup)) {
+        emptyPlot("teto-chart-grupo", "Sem dados para o grupo de despesa");
+      } else {
+        Plotly.react(groupEl, [{
+          type: "pie",
+          labels: byGroup.map((row) => row.label),
+          values: byGroup.map((row) => row.valor),
+          customdata: byGroup.map((row) => row.label),
+          textinfo: "percent",
+          textposition: "outside",
+          marker: {
+            colors: byGroup.map((row, index) =>
+              groupColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+            ),
+            line: { color: "#ffffff", width: 1 },
+          },
+          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<br>%{percent}<extra></extra>",
+        }], plotLayout({ margin: { t: 8, r: 20, b: 80, l: 20 }, legend: { orientation: "h", y: -0.18 } }), plotConfig);
+        bindPlotFilter("teto-chart-grupo", "grupo", (point) => point?.customdata);
+      }
+
+      const byAdj = groupSum(data.politicas, "adj");
+      if (!byAdj.length || !sum(byAdj)) {
+        emptyPlot("teto-chart-adj", "Sem dados para ADJ");
+      } else {
+        Plotly.react("teto-chart-adj", [{
+          type: "treemap",
+          labels: byAdj.map((row) => row.label),
+          parents: byAdj.map(() => ""),
+          values: byAdj.map((row) => row.valor),
+          customdata: byAdj.map((row) => row.label),
+          marker: {
+            colors: byAdj.map((row, index) =>
+              adjColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+            ),
+          },
+          textinfo: "label",
+          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<extra></extra>",
+        }], plotLayout({ margin: { t: 8, r: 8, b: 8, l: 8 } }), plotConfig);
+        bindPlotFilter("teto-chart-adj", "adj", (point) => point?.customdata);
+      }
+
+      const byMacro = groupSum(data.politicas, "macropolitica");
+      const macroTotal = sum(byMacro);
+      if (!byMacro.length || !macroTotal) {
+        emptyPlot("teto-chart-macro", "Sem dados para macropolíticas");
+      } else {
+        let running = 0;
+        const accumulated = byMacro.map((row) => {
+          running += row.valor;
+          return running / macroTotal;
+        });
+        Plotly.react("teto-chart-macro", [
+          {
+            type: "bar", name: "Teto (R$)", x: byMacro.map((row) => row.label),
+            y: byMacro.map((row) => row.valor), customdata: byMacro.map((row) => row.label),
+            marker: { color: "#636EFA" }, hovertemplate: "<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>",
+          },
+          {
+            type: "scatter", name: "Acumulado (%)", x: byMacro.map((row) => row.label),
+            y: accumulated, mode: "lines+markers", yaxis: "y2", line: { color: "#EF553B" },
+            hovertemplate: "<b>%{x}</b><br>%{y:.1%}<extra></extra>",
+          },
+        ], plotLayout({
+          xaxis: { tickangle: -35, automargin: true },
+          yaxis: { title: "Teto (R$)", rangemode: "tozero" },
+          yaxis2: { title: "Acumulado", overlaying: "y", side: "right", range: [0, 1], tickformat: ".0%" },
+          legend: { orientation: "h", y: -0.38 },
+          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: "#c23b3b", dash: "dash" } }],
+        }), plotConfig);
+        bindPlotFilter("teto-chart-macro", "macropolitica", (point) => point?.customdata || point?.x);
+      }
+
+      const byPaoe = groupSum(data.politicas, "paoe");
+      if (!byPaoe.length || !sum(byPaoe)) {
+        emptyPlot("teto-chart-paoe", "Sem dados para ação/PAOE");
+      } else {
+        const paoeCodes = byPaoe.map((row) => codeOf(row.label));
+        const paoeValues = byPaoe.map((row) => row.valor);
+        const paoeCategories = [...paoeCodes, "Total"];
+        Plotly.react("teto-chart-paoe", [{
+          type: "waterfall",
+          x: paoeCategories,
+          y: [...paoeValues, sum(byPaoe)],
+          measure: [...byPaoe.map(() => "relative"), "total"],
+          customdata: [
+            ...byPaoe.map((row) => [row.label, money.format(row.valor)]),
+            ["", money.format(sum(byPaoe))],
+          ],
+          textposition: "outside",
+          increasing: { marker: { color: "#3D9970" } },
+          decreasing: { marker: { color: "#FF4136" } },
+          totals: { marker: { color: "#0074D9" } },
+          connector: { line: { color: "#7b8790", width: 1 } },
+          hovertemplate: "<b>%{x}</b><br>%{customdata[1]}<extra></extra>",
+        }], plotLayout({
+          margin: { t: 20, r: 24, b: 85, l: 70 },
+          xaxis: {
+            type: "category",
+            categoryorder: "array",
+            categoryarray: paoeCategories,
+            tickangle: -45,
+            automargin: true,
+            showgrid: true,
+          },
+          yaxis: { title: "Teto (R$)", rangemode: "tozero", showgrid: true },
+        }), plotConfig);
+        bindPlotFilter("teto-chart-paoe", "paoe", (point) => point?.customdata?.[0]);
+      }
+
+      const years = unique(base.map((row) => row.exercicio));
+      const groups = unique(base.map((row) => row.grupo));
+      if (!years.length || !groups.length) {
+        emptyPlot("teto-chart-exercicio", "Sem dados para comparação por exercício");
+      } else {
+        const traces = groups.map((group, index) => ({
+          type: "bar",
+          name: codeOf(group),
+          x: years,
+          y: years.map((year) => sum(base.filter((row) => row.exercicio === year && row.grupo === group))),
+          customdata: years.map(() => group),
+          marker: {
+            color: groupColors[codeOf(group)] || oldChartPalette[index % oldChartPalette.length],
+          },
+          hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(group)}<br>R$ %{y:,.2f}<extra></extra>`,
+        }));
+        traces.push({
+          type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
+          y: years.map((year) => sum(base.filter((row) => row.exercicio === year))),
+          line: { color: "#B620E0", width: 2 },
+          hovertemplate: "<b>Exercício %{x}</b><br>Total: R$ %{y:,.2f}<extra></extra>",
+        });
+        Plotly.react("teto-chart-exercicio", traces, plotLayout({
+          barmode: "group",
+          xaxis: {
+            title: "Exercício",
+            type: "category",
+            categoryorder: "array",
+            categoryarray: years,
+            tickmode: "array",
+            tickvals: years,
+            ticktext: years,
+          },
+          yaxis: { title: "Teto (R$)", rangemode: "tozero" },
+          legend: { orientation: "h", y: -0.25 },
+        }), plotConfig);
+        bindPlotFilter("teto-chart-exercicio", "grupo", (point) => point?.customdata);
+      }
+    };
+
+    const renderTable = (tableId, rows) => {
+      const tbody = document.querySelector(`#${tableId} tbody`);
+      if (!tbody) return;
+      tbody.innerHTML = rows.map((row) => {
+        const rowClass = row.total ? "teto-row-total" : row.child ? "teto-row-child" : "";
+        return `<tr class="${rowClass}">${row.cells.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`;
+      }).join("");
+    };
+
+    const renderTables = (data) => {
+      const base = data.policyMode ? data.joined : data.momp;
+      const total = sum(base);
+      const sourceRows = groupSum(base, "fonte").map((row) => ({
+        cells: [codeOf(row.label), money.format(row.valor), percent(row.valor, total)],
+      }));
+      sourceRows.push({ total: true, cells: ["Total Geral", money.format(total), total ? "100,00%" : "-"] });
+      renderTable("teto-table-fonte", sourceRows);
+
+      const groupRows = [];
+      groupSum(base, "grupo").forEach((group) => {
+        groupRows.push({ cells: [group.label, money.format(group.valor), percent(group.valor, total)] });
+        groupSum(base.filter((row) => clean(row.grupo) === group.label), "subgrupo").forEach((subgroup) => {
+          groupRows.push({ child: true, cells: [`↳ ${subgroup.label}`, money.format(subgroup.valor), percent(subgroup.valor, total)] });
+        });
+      });
+      groupRows.push({ total: true, cells: ["Total Geral", money.format(total), total ? "100,00%" : "-"] });
+      renderTable("teto-table-grupo", groupRows);
+
+      const years = unique(base.map((row) => row.exercicio)).slice(0, 3);
+      const qompHead = document.querySelector("#teto-table-qomp thead");
+      const qompBody = document.querySelector("#teto-table-qomp tbody");
+      if (!qompHead || !qompBody) return;
+      qompHead.innerHTML = `<tr><th>Fonte</th><th>Grupo de despesa / Tipificação</th>${years
+        .map((year) => `<th class="teto-qomp-value-col">Teto anual (${escapeHtml(year)})</th><th>Perc. (%) (${escapeHtml(year)})</th>`).join("")}</tr>`;
+      const totalsByYear = Object.fromEntries(years.map((year) => [year, sum(base.filter((row) => row.exercicio === year))]));
+      const qompRows = [];
+      unique(base.map((row) => row.fonte)).forEach((fonte) => {
+        const sourceBase = base.filter((row) => row.fonte === fonte);
+        unique(sourceBase.map((row) => row.grupo)).forEach((grupo) => {
+          const groupBase = sourceBase.filter((row) => row.grupo === grupo);
+          qompRows.push({
+            source: true,
+            cells: [codeOf(fonte), grupo, ...years.flatMap((year) => {
+              const value = sum(groupBase.filter((row) => row.exercicio === year));
+              return [money.format(value), percent(value, totalsByYear[year])];
+            })],
+          });
+          unique(groupBase.map((row) => row.subgrupo)).forEach((subgrupo) => {
+            const subgroupBase = groupBase.filter((row) => row.subgrupo === subgrupo);
+            qompRows.push({
+              child: true,
+              cells: ["", `↳ ${subgrupo}`, ...years.flatMap((year) => {
+                const value = sum(subgroupBase.filter((row) => row.exercicio === year));
+                return [money.format(value), percent(value, totalsByYear[year])];
+              })],
+            });
+          });
+        });
+      });
+      qompRows.push({
+        total: true,
+        cells: ["", "Total Geral", ...years.flatMap((year) => [money.format(totalsByYear[year]), totalsByYear[year] ? "100,00%" : "-"])],
+      });
+      qompBody.innerHTML = qompRows.map((row) => {
+        const rowClass = row.total
+          ? "teto-row-total"
+          : row.child
+            ? "teto-row-child"
+            : row.source
+              ? "teto-row-source"
+              : "";
+        return `<tr class="${rowClass}">${row.cells.map((cell, index) =>
+          `<td${index >= 2 && index % 2 === 0 ? ' class="teto-qomp-value-col"' : ""}>${escapeHtml(cell)}</td>`
+        ).join("")}</tr>`;
+      }).join("");
+    };
+
+    const render = () => {
+      const data = filteredData();
+      renderActiveFilters();
+      renderKpis(data);
+      renderCharts(data);
+      renderTables(data);
+      const valueRows = data.policyMode ? data.joined.length : data.momp.length;
+      setStatus(`${number.format(valueRows)} registros considerados. Base monetária: ${data.policyMode ? "políticas orçamentárias" : "MOMP"}.`);
+    };
+
+    const load = async () => {
+      setStatus("Carregando dados...");
+      try {
+        const response = await fetch("/api/paineis-dashboards/teto-orcamentario", {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Falha ao carregar o painel.");
+        state.momp = Array.isArray(payload.momp) ? payload.momp : [];
+        state.politicas = Array.isArray(payload.politicas) ? payload.politicas : [];
+        setOptions();
+        render();
+      } catch (error) {
+        setStatus(error.message || "Falha ao carregar o painel.", true);
+      }
+    };
+
+    filterEls.forEach((el) => el.addEventListener("change", render));
+    document.getElementById("teto-dashboard-clear")?.addEventListener("click", () => {
+      filterEls.forEach((el) => { el.value = ""; });
+      render();
+    });
+    document.getElementById("teto-dashboard-refresh")?.addEventListener("click", load);
+    root.querySelectorAll(".teto-view-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const view = button.dataset.view;
+        root.querySelectorAll(".teto-view-btn").forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", String(active));
+        });
+        root.querySelectorAll("[data-view-panel]").forEach((panel) => {
+          const active = panel.dataset.viewPanel === view;
+          panel.hidden = !active;
+          panel.classList.toggle("active", active);
+        });
+        if (view === "graficos" && typeof Plotly !== "undefined") {
+          resizeTetoDashboardCharts();
+        }
+      });
+    });
+
+    load();
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
@@ -11029,6 +11640,9 @@
     }
     if (route === "atualizar/plan20-seduc") {
       initPlan20();
+    }
+    if (route === "atualizar/teto-seduc") {
+      initTetoSeduc();
     }
     if (route === "atualizar/chave_planejamento_regra") {
       initChavePlanejamentoRegra();
@@ -11074,6 +11688,9 @@
     }
     if (route === "relatorios/plan21-nger") {
       initRelatorioPlan21Nger();
+    }
+    if (route === "paineis-dashboards/teto-orcamentario") {
+      initTetoOrcamentarioDashboard();
     }
   }
 
@@ -17950,6 +18567,7 @@
             group.classList.add("open");
           }
           updateToggleIcon();
+          resizeTetoDashboardCharts();
           return;
         }
         const isOpen = group?.classList.contains("open");
