@@ -717,9 +717,7 @@
         isAllowedRoute(item.getAttribute("data-route"))
       );
       const parentAllowed = parentId && allowed.has(parentId);
-      const readyCategory =
-        group.dataset.menuReady === "true" && allowed.has("paineis-dashboards");
-      group.style.display = hasAllowedChild || parentAllowed || readyCategory ? "" : "none";
+      group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
     });
 
     // Top-level items without submenu
