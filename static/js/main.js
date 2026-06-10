@@ -11120,7 +11120,11 @@
     dashboardResizeObserver?.observe(root);
 
     const state = { momp: [], politicas: [], filters: {} };
+    let chartFilterTimer = null;
     const filterEls = Array.from(root.querySelectorAll("[data-filter]"));
+    const filterEmptyLabels = Object.fromEntries(
+      filterEls.map((el) => [el.dataset.filter, el.options[0]?.textContent || "Todos"])
+    );
     const statusEl = document.getElementById("teto-dashboard-status");
     const activeFiltersEl = document.getElementById("teto-active-filters");
     const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -11197,30 +11201,31 @@
       return state.filters;
     };
 
-    const isPoliticalMode = () => politicalKeys.some((key) => Boolean(state.filters[key]));
+    const isPoliticalMode = (filters = state.filters) =>
+      politicalKeys.some((key) => Boolean(filters[key]));
 
-    const filteredData = () => {
-      readFilters();
+    const filteredData = (filtersInput = null) => {
+      const filters = filtersInput || readFilters();
       let momp = state.momp.filter((row) =>
-        (!state.filters.exercicio || row.exercicio === state.filters.exercicio) &&
-        (!state.filters.fonte || row.fonte === state.filters.fonte) &&
-        (!state.filters.grupo || row.grupo === state.filters.grupo) &&
-        (!state.filters.subgrupo || row.subgrupo === state.filters.subgrupo)
+        (!filters.exercicio || row.exercicio === filters.exercicio) &&
+        (!filters.fonte || row.fonte === filters.fonte) &&
+        (!filters.grupo || row.grupo === filters.grupo) &&
+        (!filters.subgrupo || row.subgrupo === filters.subgrupo)
       );
       const validIds = new Set(momp.map((row) => row.id));
       let politicas = state.politicas.filter((row) => validIds.has(row.momp_id));
       politicas = politicas.filter((row) =>
-        (!state.filters.regiao || row.regiao === state.filters.regiao) &&
-        (!state.filters.subfuncao || subfunctionOf(row.subfuncao) === state.filters.subfuncao) &&
-        (!state.filters.paoe || row.paoe === state.filters.paoe) &&
-        (!state.filters.adj || row.adj === state.filters.adj) &&
-        (!state.filters.macropolitica || row.macropolitica === state.filters.macropolitica) &&
-        (!state.filters.pilar || row.pilar === state.filters.pilar) &&
-        (!state.filters.eixo || row.eixo === state.filters.eixo) &&
-        (!state.filters.politica || row.politica === state.filters.politica)
+        (!filters.regiao || row.regiao === filters.regiao) &&
+        (!filters.subfuncao || subfunctionOf(row.subfuncao) === filters.subfuncao) &&
+        (!filters.paoe || row.paoe === filters.paoe) &&
+        (!filters.adj || row.adj === filters.adj) &&
+        (!filters.macropolitica || row.macropolitica === filters.macropolitica) &&
+        (!filters.pilar || row.pilar === filters.pilar) &&
+        (!filters.eixo || row.eixo === filters.eixo) &&
+        (!filters.politica || row.politica === filters.politica)
       );
 
-      if (isPoliticalMode()) {
+      if (isPoliticalMode(filters)) {
         const policyMompIds = new Set(politicas.map((row) => row.momp_id));
         momp = momp.filter((row) => policyMompIds.has(row.id));
       }
@@ -11228,36 +11233,52 @@
       const joined = politicas
         .map((row) => ({ ...mompById.get(row.momp_id), ...row, valor: Number(row.valor || 0) }))
         .filter((row) => row.id && mompById.has(row.momp_id));
-      return { momp, politicas, joined, policyMode: isPoliticalMode() };
+      return { momp, politicas, joined, policyMode: isPoliticalMode(filters) };
     };
 
-    const setOptions = () => {
-      const specs = {
-        exercicio: unique(state.momp.map((row) => row.exercicio)),
-        fonte: unique(state.momp.map((row) => row.fonte)),
-        grupo: unique(state.momp.map((row) => row.grupo)),
-        subgrupo: unique(state.momp.map((row) => row.subgrupo)),
-        regiao: unique(state.politicas.map((row) => row.regiao)),
-        subfuncao: unique(state.politicas.map((row) => subfunctionOf(row.subfuncao))),
-        paoe: unique(state.politicas.map((row) => row.paoe)),
-        adj: unique(state.politicas.map((row) => row.adj)),
-        macropolitica: unique(state.politicas.map((row) => row.macropolitica)),
-        pilar: unique(state.politicas.map((row) => row.pilar)),
-        eixo: unique(state.politicas.map((row) => row.eixo)),
-        politica: unique(state.politicas.map((row) => row.politica)),
+    const optionValuesFor = (key, data) => {
+      const sources = {
+        exercicio: () => data.momp.map((row) => row.exercicio),
+        fonte: () => data.momp.map((row) => row.fonte),
+        grupo: () => data.momp.map((row) => row.grupo),
+        subgrupo: () => data.momp.map((row) => row.subgrupo),
+        regiao: () => data.politicas.map((row) => row.regiao),
+        subfuncao: () => data.politicas.map((row) => subfunctionOf(row.subfuncao)),
+        paoe: () => data.politicas.map((row) => row.paoe),
+        adj: () => data.politicas.map((row) => row.adj),
+        macropolitica: () => data.politicas.map((row) => row.macropolitica),
+        pilar: () => data.politicas.map((row) => row.pilar),
+        eixo: () => data.politicas.map((row) => row.eixo),
+        politica: () => data.politicas.map((row) => row.politica),
       };
-      filterEls.forEach((el) => {
-        const current = clean(el.value);
-        const firstLabel = el.options[0]?.textContent || "Todos";
-        el.innerHTML = `<option value="">${escapeHtml(firstLabel)}</option>`;
-        (specs[el.dataset.filter] || []).forEach((value) => {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = value;
-          el.appendChild(option);
+      return unique(sources[key]?.() || []);
+    };
+
+    const refreshFilterOptions = () => {
+      // Duas passagens estabilizam as listas quando uma combinação deixa
+      // alguma seleção anterior sem correspondência.
+      for (let pass = 0; pass < 2; pass += 1) {
+        filterEls.forEach((el) => {
+          const key = el.dataset.filter;
+          const current = clean(state.filters[key] ?? el.value);
+          const candidateFilters = { ...state.filters, [key]: "" };
+          const values = optionValuesFor(key, filteredData(candidateFilters));
+          el.innerHTML = `<option value="">${escapeHtml(filterEmptyLabels[key] || "Todos")}</option>`;
+          values.forEach((value) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = value;
+            el.appendChild(option);
+          });
+          if (current && values.includes(current)) {
+            el.value = current;
+            state.filters[key] = current;
+          } else {
+            el.value = "";
+            state.filters[key] = "";
+          }
         });
-        if (Array.from(el.options).some((option) => option.value === current)) el.value = current;
-      });
+      }
     };
 
     const renderActiveFilters = () => {
@@ -11294,8 +11315,12 @@
         if (!value || !select) return;
         const option = Array.from(select.options).find((item) => item.value === value);
         if (!option) return;
-        select.value = select.value === value ? "" : value;
-        render();
+        readFilters();
+        const nextValue = state.filters[key] === value ? "" : value;
+        select.value = nextValue;
+        state.filters[key] = nextValue;
+        window.clearTimeout(chartFilterTimer);
+        chartFilterTimer = window.setTimeout(() => render(), 0);
       });
     };
 
@@ -11344,7 +11369,9 @@
       if (!byAdj.length || !sum(byAdj)) {
         emptyPlot("teto-chart-adj", "Sem dados para ADJ");
       } else {
-        Plotly.react("teto-chart-adj", [{
+        const adjChart = document.getElementById("teto-chart-adj");
+        Plotly.purge(adjChart);
+        Plotly.newPlot(adjChart, [{
           type: "treemap",
           labels: byAdj.map((row) => row.label),
           parents: byAdj.map(() => ""),
@@ -11547,7 +11574,9 @@
     };
 
     const render = () => {
-      const data = filteredData();
+      readFilters();
+      refreshFilterOptions();
+      const data = filteredData(state.filters);
       renderActiveFilters();
       renderKpis(data);
       renderCharts(data);
@@ -11566,7 +11595,6 @@
         if (!response.ok) throw new Error(payload.error || "Falha ao carregar o painel.");
         state.momp = Array.isArray(payload.momp) ? payload.momp : [];
         state.politicas = Array.isArray(payload.politicas) ? payload.politicas : [];
-        setOptions();
         render();
       } catch (error) {
         setStatus(error.message || "Falha ao carregar o painel.", true);
@@ -11582,6 +11610,7 @@
     root.querySelectorAll(".teto-view-btn").forEach((button) => {
       button.addEventListener("click", () => {
         const view = button.dataset.view;
+        root.dataset.activeView = view;
         root.querySelectorAll(".teto-view-btn").forEach((item) => {
           const active = item === button;
           item.classList.toggle("active", active);

@@ -1953,6 +1953,12 @@ body.app-loading-active {
   margin: 0;
   font-size: 11px;
 }
+.teto-dashboard[data-active-view="graficos"] .teto-filter-grid .field:not([data-graph-filter]) {
+  display: none;
+}
+.teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
+  grid-template-columns: repeat(5, minmax(125px, 1fr));
+}
 .teto-filter-grid select {
   width: 100%;
   min-width: 0;
@@ -2118,15 +2124,24 @@ body.app-loading-active {
 
 @container teto-dashboard (max-width: 1350px) {
   .teto-filter-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
+  .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+  }
 }
 @container teto-dashboard (max-width: 1050px) {
   .teto-filter-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+  .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
   .teto-chart-grid { grid-template-columns: 1fr; }
   .teto-panel-wide { grid-column: auto; }
   .teto-primary-tables { grid-template-columns: 1fr; }
 }
 @container teto-dashboard (max-width: 820px) {
   .teto-filter-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+  .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
   .teto-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .teto-dashboard-header {
     align-items: stretch;
@@ -2153,6 +2168,9 @@ body.app-loading-active {
   .teto-filter-heading .btn { justify-content: center; }
   .teto-filter-grid,
   .teto-kpi-grid { grid-template-columns: 1fr; }
+  .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
+    grid-template-columns: 1fr;
+  }
   .teto-chart { height: 340px; min-height: 340px; }
 }
 
