@@ -1,0 +1,185 @@
+<section
+  id="modelos-chave-page"
+  class="planning-admin-page"
+  data-sources='{{ source_configs|tojson }}'
+>
+  <div class="planning-structure-header">
+    <div>
+      <div class="card-title">Modelos de Chave de Planejamento</div>
+      <p class="muted">Defina a vigência, a formatação e os componentes que formam cada versão da chave.</p>
+    </div>
+  </div>
+
+  <div class="planning-key-model-layout">
+    <div class="card">
+      <div class="planning-key-step-heading">
+        <span>Etapa 1</span>
+        <div class="card-title">Dados do modelo</div>
+      </div>
+      <form id="key-model-form" class="form" novalidate>
+        <input type="hidden" id="key-model-id" />
+        <div class="form-grid planning-key-model-grid">
+          <label class="field planning-key-wide">
+            <span>*Nome</span>
+            <input id="key-model-name" maxlength="150" required />
+          </label>
+          <label class="field">
+            <span>*Exercício inicial</span>
+            <input id="key-model-start" inputmode="numeric" maxlength="4" placeholder="Ex.: 2026" required />
+          </label>
+          <label class="field">
+            <span>Exercício final</span>
+            <input id="key-model-end" inputmode="numeric" maxlength="4" placeholder="Sem limite" />
+          </label>
+          <label class="field">
+            <span>Prefixo</span>
+            <input id="key-model-prefix" maxlength="20" value="* " />
+          </label>
+          <label class="field">
+            <span>Separador</span>
+            <input id="key-model-separator" maxlength="20" value=" * " />
+          </label>
+          <label class="field">
+            <span>Sufixo</span>
+            <input id="key-model-suffix" maxlength="20" value=" *" />
+          </label>
+          <label class="checkbox-field planning-key-active">
+            <input id="key-model-active" type="checkbox" checked />
+            <span>Ativo</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary sm" type="submit"><i class="bi bi-floppy"></i>Salvar</button>
+          <button class="btn btn-secondary sm" id="key-model-clear" type="button"><i class="bi bi-eraser"></i>Limpar</button>
+          <div id="key-model-message" class="muted" role="status"></div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="planning-structure-list-header">
+        <div class="card-title">Modelos cadastrados</div>
+        <button class="icon-btn" id="key-model-refresh" type="button" title="Atualizar lista">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="table-responsive planning-structure-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Modelo</th>
+              <th>Vigência</th>
+              <th>Componentes</th>
+              <th>Situação</th>
+              <th class="planning-structure-actions-column">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="key-model-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card planning-key-components-card" id="key-model-components-card" hidden>
+    <div class="planning-structure-list-header">
+      <div>
+        <div class="planning-key-step-heading">
+          <span>Etapa 2</span>
+          <div class="card-title">Partes da chave</div>
+        </div>
+        <p class="muted" id="key-model-selected"></p>
+      </div>
+    </div>
+    <form id="key-component-form" class="form" novalidate>
+      <input type="hidden" id="key-component-id" />
+      <div class="form-grid planning-key-component-grid">
+        <label class="field">
+          <span>*Código interno da parte</span>
+          <input id="key-component-code" maxlength="50" required />
+        </label>
+        <label class="field planning-key-wide">
+          <span>*Nome da parte</span>
+          <input id="key-component-name" maxlength="150" required />
+        </label>
+        <label class="field">
+          <span>*Ordem</span>
+          <input id="key-component-order" type="number" min="1" required />
+        </label>
+        <label class="field planning-key-wide">
+          <span>*Tabela de origem</span>
+          <select id="key-component-source" required>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Campo do identificador</span>
+          <select id="key-component-id-field" required disabled>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Campo do código</span>
+          <select id="key-component-code-field" required disabled>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Campo da descrição</span>
+          <select id="key-component-description-field" disabled>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Esta parte será agrupada com outra?</span>
+          <select id="key-component-group-enabled">
+            <option value="0" selected>Não</option>
+            <option value="1">Sim</option>
+          </select>
+        </label>
+        <div class="planning-key-group-fields" id="key-component-group-fields" hidden>
+          <label class="field">
+            <span>*Nome do agrupamento</span>
+            <input id="key-component-group" maxlength="50" placeholder="Ex.: subfuncao_ug" />
+          </label>
+          <label class="field">
+            <span>*Ordem dentro do agrupamento</span>
+            <input id="key-component-group-order" type="number" min="1" placeholder="Ex.: 1" />
+          </label>
+          <label class="field">
+            <span>*Separador entre os valores</span>
+            <input id="key-component-group-separator" maxlength="10" placeholder="Ex.: + " />
+          </label>
+        </div>
+        <label class="checkbox-field">
+          <input id="key-component-required" type="checkbox" checked />
+          <span>Obrigatório</span>
+        </label>
+        <label class="checkbox-field">
+          <input id="key-component-active" type="checkbox" checked />
+          <span>Ativo</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit"><i class="bi bi-plus-lg"></i>Salvar parte</button>
+        <button class="btn btn-secondary sm" id="key-component-clear" type="button"><i class="bi bi-eraser"></i>Limpar</button>
+        <div id="key-component-message" class="muted" role="status"></div>
+      </div>
+    </form>
+    <div class="table-responsive planning-structure-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ordem</th>
+            <th>Parte da chave</th>
+            <th>Origem</th>
+            <th>Código / descrição</th>
+            <th>Obrigatório</th>
+            <th>Situação</th>
+            <th class="planning-structure-actions-column">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="key-component-list"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

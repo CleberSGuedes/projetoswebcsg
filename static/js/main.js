@@ -5277,6 +5277,633 @@
     load();
   }
 
+  function initModelosChave() {
+    const page = document.getElementById("modelos-chave-page");
+    if (!page || page.dataset.bound === "1") return;
+    page.dataset.bound = "1";
+
+    const sources = JSON.parse(page.dataset.sources || "[]");
+    const modelForm = document.getElementById("key-model-form");
+    const modelList = document.getElementById("key-model-list");
+    const componentCard = document.getElementById("key-model-components-card");
+    const componentForm = document.getElementById("key-component-form");
+    const componentList = document.getElementById("key-component-list");
+    const sourceEl = document.getElementById("key-component-source");
+    const idFieldEl = document.getElementById("key-component-id-field");
+    const codeFieldEl = document.getElementById("key-component-code-field");
+    const descriptionFieldEl = document.getElementById("key-component-description-field");
+    const groupEnabledEl = document.getElementById("key-component-group-enabled");
+    const groupFieldsEl = document.getElementById("key-component-group-fields");
+    const modelMessage = document.getElementById("key-model-message");
+    const componentMessage = document.getElementById("key-component-message");
+
+    let rows = [];
+    let selectedModelId = null;
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    const setMessage = (element, message = "", error = false) => {
+      element.textContent = message;
+      element.classList.toggle("text-error", error);
+    };
+    const request = async (url, options = {}) => {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch",
+          ...(options.headers || {}),
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Falha ao processar a solicitação.");
+      return data;
+    };
+    const selectedModel = () =>
+      rows.find((row) => Number(row.id) === Number(selectedModelId));
+    const updateGroupFields = () => {
+      const enabled = groupEnabledEl.value === "1";
+      groupFieldsEl.hidden = !enabled;
+      [
+        document.getElementById("key-component-group"),
+        document.getElementById("key-component-group-order"),
+        document.getElementById("key-component-group-separator"),
+      ].forEach((element) => {
+        element.disabled = !enabled;
+        element.required = enabled;
+        if (!enabled) element.value = "";
+      });
+    };
+
+    const clearModel = () => {
+      document.getElementById("key-model-id").value = "";
+      document.getElementById("key-model-name").value = "";
+      document.getElementById("key-model-start").value = "";
+      document.getElementById("key-model-end").value = "";
+      document.getElementById("key-model-prefix").value = "* ";
+      document.getElementById("key-model-separator").value = " * ";
+      document.getElementById("key-model-suffix").value = " *";
+      document.getElementById("key-model-active").checked = true;
+      setMessage(modelMessage);
+    };
+    const clearComponent = () => {
+      document.getElementById("key-component-id").value = "";
+      document.getElementById("key-component-code").value = "";
+      document.getElementById("key-component-name").value = "";
+      document.getElementById("key-component-order").value = "";
+      groupEnabledEl.value = "0";
+      document.getElementById("key-component-group").value = "";
+      document.getElementById("key-component-group-order").value = "";
+      document.getElementById("key-component-group-separator").value = "";
+      document.getElementById("key-component-required").checked = true;
+      document.getElementById("key-component-active").checked = true;
+      sourceEl.value = "";
+      fillSourceFields();
+      updateGroupFields();
+      setMessage(componentMessage);
+    };
+    const fillSourceFields = () => {
+      const source = sources.find((item) => item.table === sourceEl.value);
+      const fields = source?.fields || [];
+      const enabled = Boolean(source);
+      const fill = (element, emptyLabel = "Selecione...") => {
+        element.innerHTML = [
+          `<option value="">${esc(emptyLabel)}</option>`,
+          ...fields.map((field) => `<option value="${esc(field)}">${esc(field)}</option>`),
+        ].join("");
+        element.disabled = !enabled;
+      };
+      fill(idFieldEl);
+      fill(codeFieldEl);
+      fill(descriptionFieldEl);
+    };
+    const renderComponents = () => {
+      const model = selectedModel();
+      componentCard.hidden = !model;
+      if (!model) return;
+      document.getElementById("key-model-selected").textContent =
+        `${model.nome} | Vigência: ${model.exercicio_inicio} a ${model.exercicio_fim || "sem limite"}`;
+      componentList.innerHTML = model.componentes.length
+        ? model.componentes
+            .map(
+              (item) => `
+                <tr>
+                  <td>${esc(item.ordem)}</td>
+                  <td><strong>${esc(item.nome)}</strong><br><span class="muted">${esc(item.codigo)}</span></td>
+                  <td>${esc(item.tabela_origem)}</td>
+                  <td>${esc(item.campo_codigo)}${item.campo_descricao ? ` / ${esc(item.campo_descricao)}` : ""}</td>
+                  <td>${item.obrigatorio ? "Sim" : "Não"}</td>
+                  <td><span class="status-badge ${item.ativo ? "active" : "inactive"}">${item.ativo ? "Ativo" : "Inativo"}</span></td>
+                  <td class="planning-structure-actions">
+                    <button class="icon-btn" type="button" data-component-edit="${item.id}" title="Editar componente"><i class="bi bi-pencil"></i></button>
+                    <button class="icon-btn" type="button" data-component-delete="${item.id}" title="Remover componente"><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>`
+            )
+            .join("")
+        : '<tr><td colspan="7" class="muted">Nenhum componente cadastrado.</td></tr>';
+    };
+    const renderModels = () => {
+      modelList.innerHTML = rows.length
+        ? rows
+            .map(
+              (item) => `
+                <tr class="${Number(item.id) === Number(selectedModelId) ? "selected-row" : ""}">
+                  <td>${esc(item.nome)}</td>
+                  <td>${esc(item.exercicio_inicio)} a ${esc(item.exercicio_fim || "sem limite")}</td>
+                  <td>${item.componentes.length}</td>
+                  <td><span class="status-badge ${item.ativo ? "active" : "inactive"}">${item.ativo ? "Ativo" : "Inativo"}</span></td>
+                  <td class="planning-structure-actions">
+                    <button class="icon-btn" type="button" data-model-select="${item.id}" title="Configurar componentes"><i class="bi bi-list-ol"></i></button>
+                    <button class="icon-btn" type="button" data-model-edit="${item.id}" title="Editar modelo"><i class="bi bi-pencil"></i></button>
+                  </td>
+                </tr>`
+            )
+            .join("")
+        : '<tr><td colspan="5" class="muted">Nenhum modelo cadastrado.</td></tr>';
+      renderComponents();
+    };
+    const load = async () => {
+      showAppLoading("Carregando modelos...", "Aguarde enquanto a estrutura é atualizada.");
+      try {
+        const data = await request("/api/estrutura-planejamento/modelos-chave");
+        rows = data.rows || [];
+        if (selectedModelId && !selectedModel()) selectedModelId = null;
+        renderModels();
+      } catch (error) {
+        setMessage(modelMessage, error.message, true);
+      } finally {
+        hideAppLoading();
+      }
+    };
+
+    sourceEl.innerHTML = [
+      '<option value="">Selecione...</option>',
+      ...sources.map(
+        (item) => `<option value="${esc(item.table)}">${esc(item.title)}</option>`
+      ),
+    ].join("");
+    fillSourceFields();
+    sourceEl.addEventListener("change", fillSourceFields);
+    groupEnabledEl.addEventListener("change", updateGroupFields);
+    document.getElementById("key-model-clear").addEventListener("click", clearModel);
+    document.getElementById("key-component-clear").addEventListener("click", clearComponent);
+    document.getElementById("key-model-refresh").addEventListener("click", load);
+
+    modelForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const id = document.getElementById("key-model-id").value;
+      const payload = {
+        nome: document.getElementById("key-model-name").value,
+        exercicio_inicio: document.getElementById("key-model-start").value,
+        exercicio_fim: document.getElementById("key-model-end").value,
+        prefixo: document.getElementById("key-model-prefix").value,
+        separador: document.getElementById("key-model-separator").value,
+        sufixo: document.getElementById("key-model-suffix").value,
+        ativo: document.getElementById("key-model-active").checked,
+      };
+      try {
+        const data = await request(
+          `/api/estrutura-planejamento/modelos-chave${id ? `/${id}` : ""}`,
+          { method: id ? "PUT" : "POST", body: JSON.stringify(payload) }
+        );
+        setMessage(modelMessage, data.message);
+        clearModel();
+        await load();
+      } catch (error) {
+        setMessage(modelMessage, error.message, true);
+      }
+    });
+
+    modelList.addEventListener("click", (event) => {
+      const selectButton = event.target.closest("[data-model-select]");
+      const editButton = event.target.closest("[data-model-edit]");
+      const id = Number(selectButton?.dataset.modelSelect || editButton?.dataset.modelEdit);
+      const model = rows.find((item) => Number(item.id) === id);
+      if (!model) return;
+      if (selectButton) {
+        selectedModelId = id;
+        clearComponent();
+        renderModels();
+        componentCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        document.getElementById("key-model-id").value = model.id;
+        document.getElementById("key-model-name").value = model.nome;
+        document.getElementById("key-model-start").value = model.exercicio_inicio;
+        document.getElementById("key-model-end").value = model.exercicio_fim || "";
+        document.getElementById("key-model-prefix").value = model.prefixo;
+        document.getElementById("key-model-separator").value = model.separador;
+        document.getElementById("key-model-suffix").value = model.sufixo;
+        document.getElementById("key-model-active").checked = model.ativo;
+        modelForm.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+
+    componentForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!selectedModelId) return;
+      const id = document.getElementById("key-component-id").value;
+      const payload = {
+        codigo: document.getElementById("key-component-code").value,
+        nome: document.getElementById("key-component-name").value,
+        ordem: document.getElementById("key-component-order").value,
+        tabela_origem: sourceEl.value,
+        campo_id: idFieldEl.value,
+        campo_codigo: codeFieldEl.value,
+        campo_descricao: descriptionFieldEl.value,
+        agrupador:
+          groupEnabledEl.value === "1"
+            ? document.getElementById("key-component-group").value
+            : "",
+        ordem_agrupador:
+          groupEnabledEl.value === "1"
+            ? document.getElementById("key-component-group-order").value
+            : "",
+        separador_agrupador:
+          groupEnabledEl.value === "1"
+            ? document.getElementById("key-component-group-separator").value
+            : "",
+        obrigatorio: document.getElementById("key-component-required").checked,
+        ativo: document.getElementById("key-component-active").checked,
+      };
+      try {
+        const url = id
+          ? `/api/estrutura-planejamento/modelos-chave/componentes/${id}`
+          : `/api/estrutura-planejamento/modelos-chave/${selectedModelId}/componentes`;
+        const data = await request(url, {
+          method: id ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+        });
+        setMessage(componentMessage, data.message);
+        clearComponent();
+        await load();
+      } catch (error) {
+        setMessage(componentMessage, error.message, true);
+      }
+    });
+
+    componentList.addEventListener("click", async (event) => {
+      const editButton = event.target.closest("[data-component-edit]");
+      const deleteButton = event.target.closest("[data-component-delete]");
+      const id = Number(editButton?.dataset.componentEdit || deleteButton?.dataset.componentDelete);
+      const component = selectedModel()?.componentes.find((item) => Number(item.id) === id);
+      if (!component) return;
+      if (deleteButton) {
+        if (!window.confirm(`Remover o componente "${component.nome}" deste modelo?`)) return;
+        try {
+          await request(`/api/estrutura-planejamento/modelos-chave/componentes/${id}`, {
+            method: "DELETE",
+          });
+          await load();
+        } catch (error) {
+          setMessage(componentMessage, error.message, true);
+        }
+        return;
+      }
+      document.getElementById("key-component-id").value = component.id;
+      document.getElementById("key-component-code").value = component.codigo;
+      document.getElementById("key-component-name").value = component.nome;
+      document.getElementById("key-component-order").value = component.ordem;
+      sourceEl.value = component.tabela_origem;
+      fillSourceFields();
+      idFieldEl.value = component.campo_id;
+      codeFieldEl.value = component.campo_codigo;
+      descriptionFieldEl.value = component.campo_descricao;
+      groupEnabledEl.value = component.agrupador ? "1" : "0";
+      updateGroupFields();
+      document.getElementById("key-component-group").value = component.agrupador;
+      document.getElementById("key-component-group-order").value = component.ordem_agrupador || "";
+      document.getElementById("key-component-group-separator").value = component.separador_agrupador;
+      document.getElementById("key-component-required").checked = component.obrigatorio;
+      document.getElementById("key-component-active").checked = component.ativo;
+      componentForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    clearModel();
+    clearComponent();
+    load();
+  }
+
+  function initCatalogoChave() {
+    const page = document.getElementById("catalogo-chave-page");
+    if (!page || page.dataset.bound === "1") return;
+    page.dataset.bound = "1";
+
+    const form = document.getElementById("key-catalog-form");
+    const modelEl = document.getElementById("key-catalog-model");
+    const componentsEl = document.getElementById("key-catalog-components");
+    const programEl = document.getElementById("key-catalog-program");
+    const actionEl = document.getElementById("key-catalog-action");
+    const productEl = document.getElementById("key-catalog-product");
+    const previewEl = document.getElementById("key-catalog-preview");
+    const listEl = document.getElementById("key-catalog-list");
+    const statusEl = document.getElementById("key-catalog-status");
+    const searchEl = document.getElementById("key-catalog-search");
+    const messageEl = document.getElementById("key-catalog-message");
+
+    let data = { models: [], rows: [], programs: [], actions: [], products: [] };
+    let builder = { model: null, components: [] };
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    const normalize = (value) =>
+      String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const setMessage = (message = "", error = false) => {
+      messageEl.textContent = message;
+      messageEl.classList.toggle("text-error", error);
+    };
+    const request = async (url, options = {}) => {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch",
+          ...(options.headers || {}),
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Falha ao processar a solicitação.");
+      return payload;
+    };
+    const selectedValues = () =>
+      Object.fromEntries(
+        [...componentsEl.querySelectorAll("[data-key-component]")].map((select) => [
+          select.dataset.keyComponent,
+          select.value,
+        ])
+      );
+    const fillSelect = (element, rows, placeholder) => {
+      element.innerHTML = [
+        `<option value="">${esc(placeholder)}</option>`,
+        ...rows.map(
+          (row) =>
+            `<option value="${row.id}">${esc(
+              [row.codigo, row.nome].filter(Boolean).join(" - ")
+            )}</option>`
+        ),
+      ].join("");
+    };
+    const updateContext = () => {
+      const programId = Number(programEl.value || 0);
+      const actionId = Number(actionEl.value || 0);
+      const actions = data.actions.filter(
+        (item) => !programId || Number(item.programa_id) === programId
+      );
+      const currentAction = actionEl.value;
+      fillSelect(
+        actionEl,
+        actions,
+        programId ? "Selecione..." : "Selecione primeiro um programa..."
+      );
+      actionEl.disabled = !programId;
+      if (actions.some((item) => String(item.id) === currentAction)) {
+        actionEl.value = currentAction;
+      }
+      const products = data.products.filter(
+        (item) => actionId && Number(item.acao_id) === actionId
+      );
+      const currentProduct = productEl.value;
+      fillSelect(
+        productEl,
+        products,
+        actionId ? "Selecione..." : "Selecione primeiro uma ação..."
+      );
+      productEl.disabled = !actionId;
+      if (products.some((item) => String(item.id) === currentProduct)) {
+        productEl.value = currentProduct;
+      }
+    };
+    const updatePreview = () => {
+      if (!builder.model) {
+        previewEl.textContent = "Selecione um modelo e seus componentes.";
+        return;
+      }
+      const tokens = builder.components
+        .map((component) => {
+          const select = componentsEl.querySelector(
+            `[data-key-component="${component.id}"]`
+          );
+          return select?.selectedOptions[0]?.dataset.code || "";
+        })
+        .filter(Boolean);
+      previewEl.textContent = `${builder.model.prefixo || ""}${tokens.join(
+        builder.model.separador || ""
+      )}${builder.model.sufixo || ""}`;
+    };
+    const renderBuilder = (values = {}) => {
+      componentsEl.innerHTML = builder.components
+        .map(
+          (component) => `
+            <label class="field">
+              <span>${component.obrigatorio ? "*" : ""}${esc(component.nome)}</span>
+              <select data-key-component="${component.id}" ${component.obrigatorio ? "required" : ""}>
+                <option value="">Selecione...</option>
+                ${component.options
+                  .map(
+                    (option) =>
+                      `<option value="${option.id}" data-code="${esc(option.codigo)}" ${
+                        String(values[component.id] || "") === String(option.id)
+                          ? "selected"
+                          : ""
+                      }>${esc(option.label || [option.codigo, option.descricao].filter(Boolean).join(" - "))}</option>`
+                  )
+                  .join("")}
+              </select>
+            </label>`
+        )
+        .join("");
+      updatePreview();
+    };
+    const loadBuilder = async (values = selectedValues()) => {
+      if (!modelEl.value) {
+        builder = { model: null, components: [] };
+        renderBuilder({});
+        return;
+      }
+      const result = await request(
+        "/api/estrutura-planejamento/catalogo-chave/opcoes",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            modelo_chave_id: modelEl.value,
+            selecionados: values,
+          }),
+        }
+      );
+      builder = { model: result.model, components: result.components || [] };
+      renderBuilder(values);
+    };
+    const renderList = () => {
+      const status = statusEl.value;
+      const search = normalize(searchEl.value);
+      const rows = data.rows.filter((row) => {
+        if (status && String(Number(row.ativo)) !== status) return false;
+        return (
+          !search ||
+          normalize(`${row.exercicio} ${row.modelo} ${row.chave_formatada}`).includes(search)
+        );
+      });
+      listEl.innerHTML = rows.length
+        ? rows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${esc(row.exercicio)}</td>
+                  <td>${esc(row.modelo)}</td>
+                  <td class="planning-key-value">${esc(row.chave_formatada)}</td>
+                  <td>${row.contextos.length}</td>
+                  <td><span class="status-badge ${row.ativo ? "active" : "inactive"}">${row.ativo ? "Ativa" : "Inativa"}</span></td>
+                  <td class="planning-structure-actions">
+                    <button class="icon-btn" type="button" data-key-copy="${row.id}" title="Copiar e ajustar"><i class="bi bi-copy"></i></button>
+                    <button class="icon-btn" type="button" data-key-status="${row.id}" title="${row.ativo ? "Desativar" : "Ativar"}"><i class="bi ${row.ativo ? "bi-slash-circle" : "bi-check-circle"}"></i></button>
+                  </td>
+                </tr>`
+            )
+            .join("")
+        : '<tr><td colspan="6" class="muted">Nenhuma chave encontrada.</td></tr>';
+    };
+    const clear = () => {
+      form.reset();
+      document.getElementById("key-catalog-origin").value = "";
+      document.getElementById("key-catalog-form-title").textContent = "Nova chave";
+      modelEl.value = "";
+      builder = { model: null, components: [] };
+      componentsEl.innerHTML = "";
+      previewEl.textContent = "Selecione um modelo e seus componentes.";
+      fillSelect(programEl, data.programs, "Selecione...");
+      actionEl.innerHTML = '<option value="">Selecione primeiro um programa...</option>';
+      actionEl.disabled = true;
+      productEl.innerHTML = '<option value="">Selecione primeiro uma ação...</option>';
+      productEl.disabled = true;
+      setMessage();
+    };
+    const load = async () => {
+      showAppLoading("Carregando catálogo...", "Aguarde enquanto as chaves são atualizadas.");
+      try {
+        data = await request("/api/estrutura-planejamento/catalogo-chave");
+        modelEl.innerHTML = [
+          '<option value="">Selecione...</option>',
+          ...data.models.map(
+            (model) =>
+              `<option value="${model.id}">${esc(model.nome)} (${model.exercicio_inicio}${model.exercicio_fim ? `-${model.exercicio_fim}` : "+"})</option>`
+          ),
+        ].join("");
+        fillSelect(programEl, data.programs, "Selecione...");
+        renderList();
+      } catch (error) {
+        setMessage(error.message, true);
+      } finally {
+        hideAppLoading();
+      }
+    };
+
+    modelEl.addEventListener("change", () => loadBuilder({}));
+    componentsEl.addEventListener("change", async (event) => {
+      const select = event.target.closest("[data-key-component]");
+      if (!select) return;
+      const values = selectedValues();
+      const index = builder.components.findIndex(
+        (item) => String(item.id) === select.dataset.keyComponent
+      );
+      builder.components.slice(index + 1).forEach((item) => {
+        values[item.id] = "";
+      });
+      try {
+        await loadBuilder(values);
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    });
+    programEl.addEventListener("change", () => {
+      actionEl.value = "";
+      productEl.value = "";
+      updateContext();
+    });
+    actionEl.addEventListener("change", () => {
+      productEl.value = "";
+      updateContext();
+    });
+    statusEl.addEventListener("change", renderList);
+    searchEl.addEventListener("input", renderList);
+    document.getElementById("key-catalog-clear").addEventListener("click", clear);
+    document.getElementById("key-catalog-refresh").addEventListener("click", load);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const values = selectedValues();
+      const payload = {
+        modelo_chave_id: modelEl.value,
+        exercicio: document.getElementById("key-catalog-exercise").value,
+        observacao: document.getElementById("key-catalog-note").value,
+        chave_origem_id: document.getElementById("key-catalog-origin").value,
+        produto_acao_id: productEl.value,
+        valores: values,
+        ativo: true,
+      };
+      try {
+        const result = await request("/api/estrutura-planejamento/catalogo-chave", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setMessage(`${result.message} ${result.chave_formatada}`);
+        clear();
+        await load();
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    });
+
+    listEl.addEventListener("click", async (event) => {
+      const copyButton = event.target.closest("[data-key-copy]");
+      const statusButton = event.target.closest("[data-key-status]");
+      const id = Number(copyButton?.dataset.keyCopy || statusButton?.dataset.keyStatus);
+      const row = data.rows.find((item) => Number(item.id) === id);
+      if (!row) return;
+      if (statusButton) {
+        try {
+          await request(
+            `/api/estrutura-planejamento/catalogo-chave/${id}/situacao`,
+            {
+              method: "PUT",
+              body: JSON.stringify({ ativo: !row.ativo }),
+            }
+          );
+          await load();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+        return;
+      }
+      clear();
+      document.getElementById("key-catalog-form-title").textContent = "Copiar e ajustar chave";
+      document.getElementById("key-catalog-origin").value = row.id;
+      document.getElementById("key-catalog-exercise").value = row.exercicio;
+      document.getElementById("key-catalog-note").value = `Cópia da chave ${row.id}`;
+      modelEl.value = row.modelo_chave_id;
+      const values = Object.fromEntries(
+        row.valores.map((value) => [value.componente_id, value.valor_id])
+      );
+      try {
+        await loadBuilder(values);
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    });
+
+    load();
+  }
+
   function initRelatorioEstruturaPlanejamento() {
     const page = document.getElementById("relatorio-estrutura-planejamento");
     const table = document.getElementById("planning-report-table");
@@ -13080,6 +13707,12 @@
     }
     if (route === "atualizar/estrutura-planejamento/componentes") {
       initEstruturaComponentes();
+    }
+    if (route === "atualizar/estrutura-planejamento/modelos-chave") {
+      initModelosChave();
+    }
+    if (route === "atualizar/estrutura-planejamento/catalogo-chave") {
+      initCatalogoChave();
     }
     if (route === "cadastrar/dotacao" || route.startsWith("cadastrar/dotacao/")) {
       initDotacao();

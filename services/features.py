@@ -58,6 +58,14 @@ FEATURES = [
                 "id": "atualizar/estrutura-planejamento/vinculos",
                 "nome": "Estrutura do Planejamento - Gerenciar Vínculos",
             },
+            {
+                "id": "atualizar/estrutura-planejamento/modelos-chave",
+                "nome": "Estrutura do Planejamento - Modelos de Chave",
+            },
+            {
+                "id": "atualizar/estrutura-planejamento/catalogo-chave",
+                "nome": "Estrutura do Planejamento - Catálogo de Chaves",
+            },
             {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
             {
                 "id": "atualizar/chaves_planejamento_upload",

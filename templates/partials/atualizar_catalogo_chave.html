@@ -1,0 +1,100 @@
+<section id="catalogo-chave-page" class="planning-admin-page">
+  <div class="planning-structure-header">
+    <div>
+      <div class="card-title">Catálogo de Chaves de Planejamento</div>
+      <p class="muted">Monte chaves válidas a partir dos modelos e vínculos cadastrados na estrutura do planejamento.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="key-catalog-form-title">Nova chave</div>
+    <form id="key-catalog-form" class="form" novalidate>
+      <input type="hidden" id="key-catalog-origin" />
+      <div class="form-grid planning-key-catalog-base-grid">
+        <label class="field">
+          <span>*Exercício</span>
+          <input id="key-catalog-exercise" inputmode="numeric" maxlength="4" placeholder="Ex.: 2026" required />
+        </label>
+        <label class="field planning-key-wide">
+          <span>*Modelo de chave</span>
+          <select id="key-catalog-model" required>
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field planning-key-wide">
+          <span>Observação</span>
+          <input id="key-catalog-note" maxlength="1000" />
+        </label>
+      </div>
+
+      <div id="key-catalog-components" class="form-grid planning-key-catalog-components"></div>
+
+      <fieldset class="planning-key-context">
+        <legend>Contexto de utilização</legend>
+        <div class="form-grid planning-key-context-grid">
+          <label class="field">
+            <span>Programa</span>
+            <select id="key-catalog-program"><option value="">Selecione...</option></select>
+          </label>
+          <label class="field">
+            <span>Ação/PAOE</span>
+            <select id="key-catalog-action" disabled><option value="">Selecione primeiro um programa...</option></select>
+          </label>
+          <label class="field">
+            <span>Produto da Ação</span>
+            <select id="key-catalog-product" disabled><option value="">Selecione primeiro uma ação...</option></select>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="planning-key-preview">
+        <span>Prévia da chave</span>
+        <strong id="key-catalog-preview">Selecione um modelo e seus componentes.</strong>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit"><i class="bi bi-floppy"></i>Salvar chave</button>
+        <button class="btn btn-secondary sm" id="key-catalog-clear" type="button"><i class="bi bi-eraser"></i>Limpar</button>
+        <div id="key-catalog-message" class="muted" role="status"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="planning-structure-list-header">
+      <div class="card-title">Chaves cadastradas</div>
+      <button class="icon-btn" id="key-catalog-refresh" type="button" title="Atualizar lista">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    <div class="form-grid planning-structure-filter-grid no-print">
+      <label class="field">
+        <span>Situação</span>
+        <select id="key-catalog-status">
+          <option value="">Todas</option>
+          <option value="1">Ativas</option>
+          <option value="0">Inativas</option>
+        </select>
+      </label>
+      <label class="field planning-structure-filter-search">
+        <span>Pesquisar</span>
+        <input id="key-catalog-search" type="search" placeholder="Exercício, modelo ou chave" />
+      </label>
+    </div>
+    <div class="table-responsive planning-structure-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Exercício</th>
+            <th>Modelo</th>
+            <th>Chave de planejamento</th>
+            <th>Contextos</th>
+            <th>Situação</th>
+            <th class="planning-structure-actions-column">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="key-catalog-list"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

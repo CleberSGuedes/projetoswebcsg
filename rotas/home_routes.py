@@ -66,6 +66,12 @@ from models import (
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    ModeloChave,
+    ModeloChaveComponente,
+    ChaveCatalogo,
+    ChaveCatalogoValor,
+    ChaveContexto,
+    ChaveCatalogoHistorico,
     ProgramaPlanejamento,
     AcaoPlanejamento,
     ProdutoAcaoPlanejamento,
@@ -2869,6 +2875,816 @@ def api_estrutura_mapeamentos_delete(mapping: str):
     return jsonify({"ok": True, "message": "Mapeamento removido com sucesso."})
 
 
+def _planning_key_source_registry() -> dict:
+    registry = {}
+    for source, config in PLANNING_COMPONENTS.items():
+        model = config["model"]
+        fields = ["id", *[field["name"] for field in config["fields"]]]
+        registry[model.__tablename__] = {
+            "source": source,
+            "title": config["title"],
+            "model": model,
+            "fields": fields,
+            "id_field": "id",
+            "code_field": config["label_fields"][0],
+            "description_field": (
+                config["label_fields"][1]
+                if len(config["label_fields"]) > 1
+                else config["label_fields"][0]
+            ),
+        }
+    registry.update(
+        {
+            ProgramaPlanejamento.__tablename__: {
+                "source": "programa_planejamento",
+                "title": "Programas",
+                "model": ProgramaPlanejamento,
+                "fields": ["id", "codigo", "nome"],
+                "id_field": "id",
+                "code_field": "codigo",
+                "description_field": "nome",
+            },
+            AcaoPlanejamento.__tablename__: {
+                "source": "acao_planejamento",
+                "title": "Ações/PAOE",
+                "model": AcaoPlanejamento,
+                "fields": ["id", "codigo", "nome"],
+                "id_field": "id",
+                "code_field": "codigo",
+                "description_field": "nome",
+            },
+            ProdutoAcaoPlanejamento.__tablename__: {
+                "source": "produto_acao_planejamento",
+                "title": "Produtos da Ação",
+                "model": ProdutoAcaoPlanejamento,
+                "fields": ["id", "codigo", "nome"],
+                "id_field": "id",
+                "code_field": "codigo",
+                "description_field": "nome",
+            },
+        }
+    )
+    return registry
+
+
+def _planning_key_source_configs() -> list[dict]:
+    configs = [
+        {
+            "table": table,
+            "title": config["title"],
+            "id_field": config["id_field"],
+            "fields": config["fields"],
+            "code_field": config["code_field"],
+            "description_field": config["description_field"],
+        }
+        for table, config in _planning_key_source_registry().items()
+    ]
+    priority = {
+        ProgramaPlanejamento.__tablename__: 0,
+        AcaoPlanejamento.__tablename__: 1,
+        ProdutoAcaoPlanejamento.__tablename__: 2,
+        Regiao.__tablename__: 3,
+    }
+    original_order = {
+        table: index
+        for index, table in enumerate(_planning_key_source_registry())
+    }
+    return sorted(
+        configs,
+        key=lambda item: (
+            priority.get(item["table"], 4),
+            original_order[item["table"]],
+        ),
+    )
+
+
+def _serialize_key_model(row: ModeloChave, include_components: bool = True) -> dict:
+    result = {
+        "id": row.id,
+        "nome": row.nome or "",
+        "exercicio_inicio": row.exercicio_inicio,
+        "exercicio_fim": row.exercicio_fim,
+        "separador": row.separador or "",
+        "prefixo": row.prefixo or "",
+        "sufixo": row.sufixo or "",
+        "ativo": bool(row.ativo),
+        "criado_em": row.criado_em.isoformat() if row.criado_em else "",
+        "alterado_em": row.alterado_em.isoformat() if row.alterado_em else "",
+    }
+    if include_components:
+        result["componentes"] = [
+            _serialize_key_model_component(component)
+            for component in ModeloChaveComponente.query.filter_by(
+                modelo_chave_id=row.id
+            )
+            .order_by(ModeloChaveComponente.ordem.asc())
+            .all()
+        ]
+    return result
+
+
+def _serialize_key_model_component(row: ModeloChaveComponente) -> dict:
+    return {
+        "id": row.id,
+        "modelo_chave_id": row.modelo_chave_id,
+        "codigo": row.codigo or "",
+        "nome": row.nome or "",
+        "ordem": row.ordem,
+        "obrigatorio": bool(row.obrigatorio),
+        "tabela_origem": row.tabela_origem or "",
+        "campo_id": row.campo_id or "id",
+        "campo_codigo": row.campo_codigo or "",
+        "campo_descricao": row.campo_descricao or "",
+        "agrupador": row.agrupador or "",
+        "ordem_agrupador": row.ordem_agrupador,
+        "separador_agrupador": row.separador_agrupador or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+@home_bp.route("/partial/atualizar/estrutura-planejamento/modelos-chave")
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def partial_atualizar_modelos_chave():
+    return render_template(
+        "partials/atualizar_modelos_chave.html",
+        source_configs=_planning_key_source_configs(),
+    )
+
+
+@home_bp.route("/api/estrutura-planejamento/modelos-chave", methods=["GET"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def api_modelos_chave_list():
+    rows = ModeloChave.query.order_by(
+        ModeloChave.exercicio_inicio.desc(), ModeloChave.nome.asc()
+    ).all()
+    return jsonify(
+        {
+            "ok": True,
+            "rows": [_serialize_key_model(row) for row in rows],
+            "sources": _planning_key_source_configs(),
+        }
+    )
+
+
+def _planning_key_model_values(payload: dict) -> tuple[dict | None, str | None]:
+    nome = _planning_text(payload.get("nome"), 150)
+    inicio = _planning_exercicio(payload.get("exercicio_inicio"))
+    fim_raw = payload.get("exercicio_fim")
+    fim = _planning_exercicio(fim_raw) if str(fim_raw or "").strip() else None
+    if not nome:
+        return None, "Informe o nome do modelo."
+    if not inicio:
+        return None, "Informe um exercício inicial válido."
+    if fim and fim < inicio:
+        return None, "O exercício final não pode ser anterior ao inicial."
+    return (
+        {
+            "nome": nome,
+            "exercicio_inicio": inicio,
+            "exercicio_fim": fim,
+            "separador": str(payload.get("separador", " * "))[:20],
+            "prefixo": str(payload.get("prefixo", "* "))[:20],
+            "sufixo": str(payload.get("sufixo", " *"))[:20],
+            "ativo": bool(payload.get("ativo", True)),
+        },
+        None,
+    )
+
+
+@home_bp.route("/api/estrutura-planejamento/modelos-chave", methods=["POST"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def api_modelos_chave_create():
+    values, error = _planning_key_model_values(request.get_json(silent=True) or {})
+    if error:
+        return jsonify({"error": error}), 400
+    duplicate = ModeloChave.query.filter(
+        func.lower(ModeloChave.nome) == values["nome"].lower(),
+        ModeloChave.exercicio_inicio == values["exercicio_inicio"],
+        ModeloChave.excluido_em.is_(None),
+    ).first()
+    if duplicate:
+        return jsonify({"error": "Já existe um modelo com esse nome e vigência."}), 409
+    row = ModeloChave(
+        **values,
+        usuario_id=_resolve_usuario_id(),
+        criado_em=_now_local(),
+    )
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao cadastrar modelo de chave")
+        return jsonify({"error": "Falha ao cadastrar o modelo de chave."}), 500
+    return jsonify({"ok": True, "message": "Modelo cadastrado com sucesso."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/modelos-chave/<int:model_id>", methods=["PUT"]
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def api_modelos_chave_update(model_id: int):
+    row = db.session.get(ModeloChave, model_id)
+    if not row or row.excluido_em:
+        return jsonify({"error": "Modelo não encontrado."}), 404
+    values, error = _planning_key_model_values(request.get_json(silent=True) or {})
+    if error:
+        return jsonify({"error": error}), 400
+    for key, value in values.items():
+        setattr(row, key, value)
+    row.usuario_id = _resolve_usuario_id() or row.usuario_id
+    row.alterado_em = _now_local()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Falha ao atualizar o modelo de chave."}), 500
+    return jsonify({"ok": True, "message": "Modelo atualizado com sucesso."})
+
+
+def _planning_key_component_values(
+    model_id: int, payload: dict
+) -> tuple[dict | None, str | None]:
+    registry = _planning_key_source_registry()
+    table = _planning_text(payload.get("tabela_origem"), 64)
+    source = registry.get(table)
+    if not source:
+        return None, "Selecione uma origem válida."
+    codigo = _planning_text(payload.get("codigo"), 50)
+    nome = _planning_text(payload.get("nome"), 150)
+    try:
+        ordem = int(payload.get("ordem"))
+    except (TypeError, ValueError):
+        ordem = 0
+    campo_id = _planning_text(payload.get("campo_id"), 64) or source["id_field"]
+    campo_codigo = _planning_text(payload.get("campo_codigo"), 64)
+    campo_descricao = _planning_text(payload.get("campo_descricao"), 64)
+    allowed_fields = set(source["fields"]) | {"id"}
+    if not codigo or not nome or ordem < 1:
+        return None, "Informe código, nome e ordem do componente."
+    if campo_id not in allowed_fields or campo_codigo not in allowed_fields:
+        return None, "Os campos selecionados não pertencem à tabela de origem."
+    if campo_descricao and campo_descricao not in allowed_fields:
+        return None, "O campo de descrição não pertence à tabela de origem."
+    agrupador = _planning_text(payload.get("agrupador"), 50) or None
+    ordem_agrupador = None
+    separador_agrupador = None
+    if agrupador:
+        try:
+            ordem_agrupador = int(payload.get("ordem_agrupador"))
+        except (TypeError, ValueError):
+            return None, "Informe uma ordem válida dentro do agrupamento."
+        separador_agrupador = str(
+            payload.get("separador_agrupador") or ""
+        )[:10]
+        if ordem_agrupador < 1 or not separador_agrupador.strip():
+            return None, "Informe a ordem e o separador do agrupamento."
+    return (
+        {
+            "modelo_chave_id": model_id,
+            "codigo": codigo,
+            "nome": nome,
+            "ordem": ordem,
+            "obrigatorio": bool(payload.get("obrigatorio", True)),
+            "tabela_origem": table,
+            "campo_id": campo_id,
+            "campo_codigo": campo_codigo,
+            "campo_descricao": campo_descricao or None,
+            "agrupador": agrupador,
+            "ordem_agrupador": ordem_agrupador,
+            "separador_agrupador": separador_agrupador,
+            "ativo": bool(payload.get("ativo", True)),
+        },
+        None,
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/modelos-chave/<int:model_id>/componentes",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def api_modelos_chave_component_create(model_id: int):
+    model = db.session.get(ModeloChave, model_id)
+    if not model or model.excluido_em:
+        return jsonify({"error": "Modelo não encontrado."}), 404
+    values, error = _planning_key_component_values(
+        model_id, request.get_json(silent=True) or {}
+    )
+    if error:
+        return jsonify({"error": error}), 400
+    duplicate = ModeloChaveComponente.query.filter(
+        ModeloChaveComponente.modelo_chave_id == model_id,
+        or_(
+            ModeloChaveComponente.codigo == values["codigo"],
+            ModeloChaveComponente.ordem == values["ordem"],
+        ),
+        ModeloChaveComponente.excluido_em.is_(None),
+    ).first()
+    if duplicate:
+        return jsonify({"error": "Já existe um componente com esse código ou ordem."}), 409
+    try:
+        db.session.add(ModeloChaveComponente(**values, criado_em=_now_local()))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Falha ao cadastrar o componente do modelo."}), 500
+    return jsonify({"ok": True, "message": "Componente adicionado ao modelo."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/modelos-chave/componentes/<int:component_id>",
+    methods=["PUT", "DELETE"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/modelos-chave")
+def api_modelos_chave_component_update(component_id: int):
+    row = db.session.get(ModeloChaveComponente, component_id)
+    if not row or row.excluido_em:
+        return jsonify({"error": "Componente não encontrado."}), 404
+    if request.method == "DELETE":
+        if ChaveCatalogoValor.query.filter_by(componente_id=row.id).first():
+            return jsonify(
+                {"error": "O componente já é utilizado por chaves do catálogo."}
+            ), 409
+        row.ativo = False
+        row.excluido_em = _now_local()
+        message = "Componente removido do modelo."
+    else:
+        values, error = _planning_key_component_values(
+            row.modelo_chave_id, request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 400
+        for key, value in values.items():
+            setattr(row, key, value)
+        row.alterado_em = _now_local()
+        message = "Componente atualizado com sucesso."
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Falha ao atualizar o componente do modelo."}), 500
+    return jsonify({"ok": True, "message": message})
+
+
+def _planning_key_source_options_for_component(
+    component: ModeloChaveComponente, selected: list[dict] | None = None
+) -> list[dict]:
+    registry = _planning_key_source_registry()
+    source_config = registry.get(component.tabela_origem)
+    if not source_config:
+        return []
+    source = source_config["source"]
+    model = source_config["model"]
+    allowed_ids = None
+    selected = selected or []
+    for selected_value in selected:
+        selected_source = selected_value.get("source")
+        try:
+            selected_id = int(selected_value.get("valor_id"))
+        except (TypeError, ValueError):
+            continue
+        for mapping in PLANNING_MAPPINGS.values():
+            left_field, left_source, _ = mapping["left"]
+            right_field, right_source, _ = mapping["right"]
+            if left_source == selected_source and right_source == source:
+                ids = {
+                    getattr(row, right_field)
+                    for row in mapping["model"].query.filter(
+                        getattr(mapping["model"], left_field) == selected_id
+                    ).all()
+                }
+            elif right_source == selected_source and left_source == source:
+                ids = {
+                    getattr(row, left_field)
+                    for row in mapping["model"].query.filter(
+                        getattr(mapping["model"], right_field) == selected_id
+                    ).all()
+                }
+            else:
+                continue
+            allowed_ids = ids if allowed_ids is None else allowed_ids & ids
+    query = model.query
+    if hasattr(model, "ativo"):
+        query = query.filter(model.ativo.is_(True))
+    if allowed_ids is not None:
+        if not allowed_ids:
+            return []
+        query = query.filter(model.id.in_(allowed_ids))
+    rows = query.order_by(model.id.asc()).all()
+    return [
+        {
+            "id": getattr(row, component.campo_id),
+            "codigo": str(getattr(row, component.campo_codigo, "") or ""),
+            "descricao": str(
+                getattr(row, component.campo_descricao, "") or ""
+            )
+            if component.campo_descricao
+            else "",
+            "label": _planning_source_label(source, row),
+            "source": source,
+        }
+        for row in rows
+    ]
+
+
+def _planning_key_format(
+    model: ModeloChave,
+    components: list[ModeloChaveComponente],
+    values: dict[int, dict],
+) -> str:
+    tokens = []
+    index = 0
+    while index < len(components):
+        component = components[index]
+        if component.agrupador:
+            group = []
+            group_name = component.agrupador
+            while index < len(components) and components[index].agrupador == group_name:
+                current = components[index]
+                value = values.get(current.id)
+                if value and value.get("codigo"):
+                    group.append(
+                        (
+                            current.ordem_agrupador or current.ordem,
+                            value["codigo"],
+                        )
+                    )
+                index += 1
+            group.sort(key=lambda item: item[0])
+            if group:
+                tokens.append(
+                    (component.separador_agrupador or " + ").join(
+                        value for _, value in group
+                    )
+                )
+            continue
+        value = values.get(component.id)
+        if value and value.get("codigo"):
+            tokens.append(value["codigo"])
+        index += 1
+    return f"{model.prefixo or ''}{(model.separador or '').join(tokens)}{model.sufixo or ''}"
+
+
+def _serialize_catalog_key(row: ChaveCatalogo) -> dict:
+    model = db.session.get(ModeloChave, row.modelo_chave_id)
+    values = (
+        ChaveCatalogoValor.query.filter_by(chave_catalogo_id=row.id)
+        .order_by(ChaveCatalogoValor.ordem.asc())
+        .all()
+    )
+    contexts = ChaveContexto.query.filter_by(chave_catalogo_id=row.id).all()
+    return {
+        "id": row.id,
+        "modelo_chave_id": row.modelo_chave_id,
+        "modelo": model.nome if model else "",
+        "exercicio": row.exercicio,
+        "chave_formatada": row.chave_formatada or "",
+        "chave_origem_id": row.chave_origem_id,
+        "observacao": row.observacao or "",
+        "ativo": bool(row.ativo),
+        "valores": [
+            {
+                "componente_id": value.componente_id,
+                "valor_id": value.valor_id,
+                "valor_codigo": value.valor_codigo,
+                "valor_descricao": value.valor_descricao or "",
+                "ordem": value.ordem,
+            }
+            for value in values
+        ],
+        "contextos": [
+            {
+                "id": context.id,
+                "produto_acao_id": context.produto_acao_id,
+                "ativo": bool(context.ativo),
+            }
+            for context in contexts
+        ],
+        "criado_em": row.criado_em.isoformat() if row.criado_em else "",
+        "alterado_em": row.alterado_em.isoformat() if row.alterado_em else "",
+    }
+
+
+@home_bp.route("/partial/atualizar/estrutura-planejamento/catalogo-chave")
+@login_required
+@require_feature("atualizar/estrutura-planejamento/catalogo-chave")
+def partial_atualizar_catalogo_chave():
+    return render_template("partials/atualizar_catalogo_chave.html")
+
+
+@home_bp.route("/api/estrutura-planejamento/catalogo-chave", methods=["GET"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/catalogo-chave")
+def api_catalogo_chave_list():
+    models = ModeloChave.query.filter(
+        ModeloChave.ativo.is_(True), ModeloChave.excluido_em.is_(None)
+    ).order_by(ModeloChave.exercicio_inicio.desc(), ModeloChave.nome.asc()).all()
+    keys = ChaveCatalogo.query.filter(ChaveCatalogo.excluido_em.is_(None)).order_by(
+        ChaveCatalogo.exercicio.desc(), ChaveCatalogo.id.desc()
+    ).all()
+    programs = ProgramaPlanejamento.query.filter_by(ativo=True).all()
+    actions = AcaoPlanejamento.query.filter_by(ativo=True).all()
+    products = ProdutoAcaoPlanejamento.query.filter_by(ativo=True).all()
+    return jsonify(
+        {
+            "ok": True,
+            "models": [_serialize_key_model(row) for row in models],
+            "rows": [_serialize_catalog_key(row) for row in keys],
+            "programs": [_serialize_programa(row) for row in programs],
+            "actions": [_serialize_acao(row) for row in actions],
+            "products": [_serialize_produto(row) for row in products],
+        }
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/catalogo-chave/opcoes", methods=["POST"]
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/catalogo-chave")
+def api_catalogo_chave_options():
+    payload = request.get_json(silent=True) or {}
+    try:
+        model_id = int(payload.get("modelo_chave_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione o modelo de chave."}), 400
+    model = db.session.get(ModeloChave, model_id)
+    if not model or not model.ativo or model.excluido_em:
+        return jsonify({"error": "Modelo de chave não encontrado."}), 404
+    components = (
+        ModeloChaveComponente.query.filter_by(
+            modelo_chave_id=model.id, ativo=True
+        )
+        .filter(ModeloChaveComponente.excluido_em.is_(None))
+        .order_by(ModeloChaveComponente.ordem.asc())
+        .all()
+    )
+    selected_payload = payload.get("selecionados") or {}
+    selected = []
+    component_by_id = {str(component.id): component for component in components}
+    for component_id, value_id in selected_payload.items():
+        component = component_by_id.get(str(component_id))
+        source_config = (
+            _planning_key_source_registry().get(component.tabela_origem)
+            if component
+            else None
+        )
+        if component and source_config and value_id not in (None, ""):
+            selected.append(
+                {
+                    "source": source_config["source"],
+                    "valor_id": value_id,
+                }
+            )
+    return jsonify(
+        {
+            "ok": True,
+            "model": _serialize_key_model(model, include_components=False),
+            "components": [
+                {
+                    **_serialize_key_model_component(component),
+                    "options": _planning_key_source_options_for_component(
+                        component,
+                        [
+                            item
+                            for item in selected
+                            if item["source"]
+                            != _planning_key_source_registry()[
+                                component.tabela_origem
+                            ]["source"]
+                        ],
+                    ),
+                }
+                for component in components
+            ],
+        }
+    )
+
+
+def _planning_key_payload_values(
+    model: ModeloChave, payload: dict
+) -> tuple[list[ModeloChaveComponente] | None, dict | None, str | None]:
+    components = (
+        ModeloChaveComponente.query.filter_by(
+            modelo_chave_id=model.id, ativo=True
+        )
+        .filter(ModeloChaveComponente.excluido_em.is_(None))
+        .order_by(ModeloChaveComponente.ordem.asc())
+        .all()
+    )
+    raw_values = payload.get("valores") or {}
+    result = {}
+    registry = _planning_key_source_registry()
+    selected = []
+    for component in components:
+        raw_id = raw_values.get(str(component.id), raw_values.get(component.id))
+        if raw_id in (None, ""):
+            if component.obrigatorio:
+                return None, None, f"Selecione {component.nome}."
+            continue
+        try:
+            value_id = int(raw_id)
+        except (TypeError, ValueError):
+            return None, None, f"Valor inválido para {component.nome}."
+        source = registry.get(component.tabela_origem)
+        row = db.session.get(source["model"], value_id) if source else None
+        if not row:
+            return None, None, f"Registro de {component.nome} não encontrado."
+        allowed_options = _planning_key_source_options_for_component(
+            component, selected
+        )
+        if value_id not in {
+            int(option["id"]) for option in allowed_options
+        }:
+            return (
+                None,
+                None,
+                f"O valor selecionado para {component.nome} não é compatível "
+                "com os componentes anteriores.",
+            )
+        result[component.id] = {
+            "id": value_id,
+            "codigo": str(getattr(row, component.campo_codigo, "") or ""),
+            "descricao": (
+                str(getattr(row, component.campo_descricao, "") or "")
+                if component.campo_descricao
+                else ""
+            ),
+        }
+        selected.append({"source": source["source"], "valor_id": value_id})
+    return components, result, None
+
+
+def _planning_key_history(
+    key: ChaveCatalogo,
+    action: str,
+    before=None,
+    after=None,
+    justification: str | None = None,
+    context_id: int | None = None,
+):
+    db.session.add(
+        ChaveCatalogoHistorico(
+            chave_catalogo_id=key.id,
+            chave_contexto_id=context_id,
+            acao=action,
+            dados_anteriores=json.dumps(before, ensure_ascii=False, default=str)
+            if before is not None
+            else None,
+            dados_novos=json.dumps(after, ensure_ascii=False, default=str)
+            if after is not None
+            else None,
+            justificativa=_planning_text(justification) or None,
+            usuario_id=_resolve_usuario_id(),
+            criado_em=_now_local(),
+        )
+    )
+
+
+@home_bp.route("/api/estrutura-planejamento/catalogo-chave", methods=["POST"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/catalogo-chave")
+def api_catalogo_chave_create():
+    payload = request.get_json(silent=True) or {}
+    try:
+        model_id = int(payload.get("modelo_chave_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione o modelo de chave."}), 400
+    model = db.session.get(ModeloChave, model_id)
+    exercise = _planning_exercicio(payload.get("exercicio"))
+    if not model or not model.ativo or model.excluido_em:
+        return jsonify({"error": "Modelo de chave não encontrado."}), 404
+    if not exercise:
+        return jsonify({"error": "Informe um exercício válido."}), 400
+    if exercise < model.exercicio_inicio or (
+        model.exercicio_fim and exercise > model.exercicio_fim
+    ):
+        return jsonify({"error": "O exercício está fora da vigência do modelo."}), 400
+    components, values, error = _planning_key_payload_values(model, payload)
+    if error:
+        return jsonify({"error": error}), 400
+    formatted = _planning_key_format(model, components, values)
+    key_hash = hashlib.sha256(formatted.casefold().encode("utf-8")).hexdigest()
+    duplicate = ChaveCatalogo.query.filter_by(
+        modelo_chave_id=model.id,
+        exercicio=exercise,
+        chave_hash=key_hash,
+    ).filter(ChaveCatalogo.excluido_em.is_(None)).first()
+    if duplicate:
+        return jsonify({"error": "Esta chave já existe no catálogo."}), 409
+    origin_id = payload.get("chave_origem_id")
+    try:
+        origin_id = int(origin_id) if origin_id else None
+    except (TypeError, ValueError):
+        origin_id = None
+    key = ChaveCatalogo(
+        modelo_chave_id=model.id,
+        exercicio=exercise,
+        chave_formatada=formatted,
+        chave_hash=key_hash,
+        chave_origem_id=origin_id,
+        observacao=_planning_text(payload.get("observacao")) or None,
+        ativo=bool(payload.get("ativo", True)),
+        usuario_id=_resolve_usuario_id(),
+        criado_em=_now_local(),
+    )
+    try:
+        db.session.add(key)
+        db.session.flush()
+        for component in components:
+            value = values.get(component.id)
+            if not value:
+                continue
+            db.session.add(
+                ChaveCatalogoValor(
+                    chave_catalogo_id=key.id,
+                    componente_id=component.id,
+                    valor_id=value["id"],
+                    valor_codigo=value["codigo"],
+                    valor_descricao=value["descricao"] or None,
+                    ordem=component.ordem,
+                    criado_em=_now_local(),
+                )
+            )
+        product_id = payload.get("produto_acao_id")
+        if product_id:
+            product = db.session.get(ProdutoAcaoPlanejamento, int(product_id))
+            if not product:
+                raise ValueError("Produto da ação não encontrado.")
+            context = ChaveContexto(
+                chave_catalogo_id=key.id,
+                produto_acao_id=product.id,
+                ativo=True,
+                usuario_id=_resolve_usuario_id(),
+                criado_em=_now_local(),
+            )
+            db.session.add(context)
+            db.session.flush()
+            context_id = context.id
+        else:
+            context_id = None
+        _planning_key_history(
+            key,
+            "COPIAR" if origin_id else "CRIAR",
+            after={"chave": formatted, "valores": values},
+            justification=payload.get("justificativa"),
+            context_id=context_id,
+        )
+        db.session.commit()
+    except (ValueError, TypeError) as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao cadastrar chave no catálogo")
+        return jsonify({"error": "Falha ao cadastrar a chave."}), 500
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Chave cadastrada com sucesso.",
+            "id": key.id,
+            "chave_formatada": formatted,
+        }
+    ), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/catalogo-chave/<int:key_id>/situacao",
+    methods=["PUT"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/catalogo-chave")
+def api_catalogo_chave_status(key_id: int):
+    key = db.session.get(ChaveCatalogo, key_id)
+    if not key or key.excluido_em:
+        return jsonify({"error": "Chave não encontrada."}), 404
+    payload = request.get_json(silent=True) or {}
+    before = {"ativo": bool(key.ativo)}
+    key.ativo = bool(payload.get("ativo"))
+    key.alterado_em = _now_local()
+    key.usuario_id = _resolve_usuario_id() or key.usuario_id
+    _planning_key_history(
+        key,
+        "ATIVAR" if key.ativo else "DESATIVAR",
+        before=before,
+        after={"ativo": bool(key.ativo)},
+        justification=payload.get("justificativa"),
+    )
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Falha ao atualizar a chave."}), 500
+    return jsonify({"ok": True, "message": "Situação da chave atualizada."})
+
+
 def _planning_text(value, max_length: int | None = None) -> str:
     result = re.sub(r"\s+", " ", str(value or "").strip())
     return result[:max_length] if max_length else result
@@ -3002,11 +3818,203 @@ def _planning_report_configs() -> dict:
         {"key": f"componente:{key}", "title": config["title"]}
         for key, config in PLANNING_COMPONENTS.items()
     )
+    cadastros.extend(
+        [
+            {"key": "chaves:modelos", "title": "Modelos de Chave"},
+            {
+                "key": "chaves:modelo-componentes",
+                "title": "Componentes dos Modelos de Chave",
+            },
+            {"key": "chaves:catalogo", "title": "Catálogo de Chaves"},
+            {"key": "chaves:contextos", "title": "Contextos das Chaves"},
+            {"key": "chaves:historico", "title": "Histórico do Catálogo"},
+        ]
+    )
     vinculos = [
         {"key": key, "title": config["title"]}
         for key, config in PLANNING_MAPPINGS.items()
     ]
     return {"cadastros": cadastros, "vinculos": vinculos}
+
+
+def _planning_report_key_data(dataset: str) -> tuple[str, list[dict], list[dict]]:
+    if dataset == "modelos":
+        columns = [
+            {"key": "nome", "label": "Modelo"},
+            {"key": "exercicio_inicio", "label": "Exercício inicial"},
+            {"key": "exercicio_fim", "label": "Exercício final"},
+            {"key": "formato", "label": "Formatação"},
+            {"key": "componentes", "label": "Qtd. componentes"},
+            {"key": "situacao", "label": "Situação"},
+        ]
+        rows = []
+        for row in ModeloChave.query.order_by(
+            ModeloChave.exercicio_inicio.desc(), ModeloChave.nome.asc()
+        ).all():
+            rows.append(
+                {
+                    "nome": row.nome or "",
+                    "exercicio_inicio": row.exercicio_inicio,
+                    "exercicio_fim": row.exercicio_fim or "",
+                    "formato": (
+                        f"{row.prefixo or ''}[componentes unidos por "
+                        f"{row.separador!r}]{row.sufixo or ''}"
+                    ),
+                    "componentes": ModeloChaveComponente.query.filter_by(
+                        modelo_chave_id=row.id, ativo=True
+                    ).count(),
+                    "situacao": "Ativo" if row.ativo else "Inativo",
+                }
+            )
+        return "Modelos de Chave", columns, rows
+    if dataset == "modelo-componentes":
+        columns = [
+            {"key": "modelo", "label": "Modelo"},
+            {"key": "ordem", "label": "Ordem"},
+            {"key": "codigo", "label": "Código"},
+            {"key": "nome", "label": "Componente"},
+            {"key": "origem", "label": "Tabela de origem"},
+            {"key": "campo_codigo", "label": "Campo do código"},
+            {"key": "campo_descricao", "label": "Campo da descrição"},
+            {"key": "obrigatorio", "label": "Obrigatório"},
+            {"key": "situacao", "label": "Situação"},
+        ]
+        model_names = {
+            row.id: row.nome
+            for row in ModeloChave.query.with_entities(
+                ModeloChave.id, ModeloChave.nome
+            ).all()
+        }
+        rows = [
+            {
+                "modelo": model_names.get(row.modelo_chave_id, ""),
+                "ordem": row.ordem,
+                "codigo": row.codigo or "",
+                "nome": row.nome or "",
+                "origem": row.tabela_origem or "",
+                "campo_codigo": row.campo_codigo or "",
+                "campo_descricao": row.campo_descricao or "",
+                "obrigatorio": "Sim" if row.obrigatorio else "Não",
+                "situacao": "Ativo" if row.ativo else "Inativo",
+            }
+            for row in ModeloChaveComponente.query.order_by(
+                ModeloChaveComponente.modelo_chave_id.asc(),
+                ModeloChaveComponente.ordem.asc(),
+            ).all()
+        ]
+        return "Componentes dos Modelos de Chave", columns, rows
+    if dataset == "catalogo":
+        columns = [
+            {"key": "exercicio", "label": "Exercício"},
+            {"key": "modelo", "label": "Modelo"},
+            {"key": "chave", "label": "Chave de planejamento"},
+            {"key": "origem", "label": "Chave de origem"},
+            {"key": "contextos", "label": "Qtd. contextos"},
+            {"key": "observacao", "label": "Observação"},
+            {"key": "situacao", "label": "Situação"},
+        ]
+        models = {
+            row.id: row.nome
+            for row in ModeloChave.query.with_entities(
+                ModeloChave.id, ModeloChave.nome
+            ).all()
+        }
+        keys = ChaveCatalogo.query.order_by(
+            ChaveCatalogo.exercicio.desc(), ChaveCatalogo.id.desc()
+        ).all()
+        key_names = {row.id: row.chave_formatada for row in keys}
+        rows = [
+            {
+                "exercicio": row.exercicio,
+                "modelo": models.get(row.modelo_chave_id, ""),
+                "chave": row.chave_formatada or "",
+                "origem": key_names.get(row.chave_origem_id, ""),
+                "contextos": ChaveContexto.query.filter_by(
+                    chave_catalogo_id=row.id, ativo=True
+                ).count(),
+                "observacao": row.observacao or "",
+                "situacao": "Ativo" if row.ativo else "Inativo",
+            }
+            for row in keys
+        ]
+        return "Catálogo de Chaves", columns, rows
+    if dataset == "contextos":
+        columns = [
+            {"key": "exercicio", "label": "Exercício"},
+            {"key": "chave", "label": "Chave de planejamento"},
+            {"key": "programa", "label": "Programa"},
+            {"key": "acao", "label": "Ação/PAOE"},
+            {"key": "produto", "label": "Produto da Ação"},
+            {"key": "situacao", "label": "Situação"},
+        ]
+        rows = []
+        contexts = ChaveContexto.query.order_by(ChaveContexto.id.desc()).all()
+        for context in contexts:
+            key = db.session.get(ChaveCatalogo, context.chave_catalogo_id)
+            product = db.session.get(
+                ProdutoAcaoPlanejamento, context.produto_acao_id
+            )
+            action = getattr(product, "acao", None)
+            program = getattr(action, "programa", None) if action else None
+            rows.append(
+                {
+                    "exercicio": getattr(key, "exercicio", ""),
+                    "chave": getattr(key, "chave_formatada", ""),
+                    "programa": _planning_source_label(
+                        "programa_planejamento", program
+                    )
+                    if program
+                    else "",
+                    "acao": _planning_source_label("acao_planejamento", action)
+                    if action
+                    else "",
+                    "produto": _planning_source_label(
+                        "produto_acao_planejamento", product
+                    )
+                    if product
+                    else "",
+                    "situacao": "Ativo" if context.ativo else "Inativo",
+                }
+            )
+        return "Contextos das Chaves", columns, rows
+    if dataset == "historico":
+        columns = [
+            {"key": "data", "label": "Data"},
+            {"key": "chave", "label": "Chave de planejamento"},
+            {"key": "acao", "label": "Ação realizada"},
+            {"key": "justificativa", "label": "Justificativa"},
+            {"key": "usuario", "label": "Usuário"},
+            {"key": "dados_anteriores", "label": "Dados anteriores"},
+            {"key": "dados_novos", "label": "Dados novos"},
+        ]
+        users = {
+            row.id: row.nome
+            for row in Usuario.query.with_entities(Usuario.id, Usuario.nome).all()
+        }
+        keys = {
+            row.id: row.chave_formatada
+            for row in ChaveCatalogo.query.with_entities(
+                ChaveCatalogo.id, ChaveCatalogo.chave_formatada
+            ).all()
+        }
+        rows = [
+            {
+                "data": row.criado_em.strftime("%d/%m/%Y %H:%M:%S")
+                if row.criado_em
+                else "",
+                "chave": keys.get(row.chave_catalogo_id, ""),
+                "acao": row.acao or "",
+                "justificativa": row.justificativa or "",
+                "usuario": users.get(row.usuario_id, ""),
+                "dados_anteriores": row.dados_anteriores or "",
+                "dados_novos": row.dados_novos or "",
+            }
+            for row in ChaveCatalogoHistorico.query.order_by(
+                ChaveCatalogoHistorico.id.desc()
+            ).all()
+        ]
+        return "Histórico do Catálogo", columns, rows
+    abort(404)
 
 
 def _planning_report_structure_data(dataset: str) -> tuple[list[dict], list[dict]]:
@@ -3103,6 +4111,8 @@ def _planning_report_cadastro_data(dataset: str) -> tuple[str, list[dict], list[
         if config:
             columns, rows = _planning_report_component_data(component)
             return config["title"], columns, rows
+    if dataset.startswith("chaves:"):
+        return _planning_report_key_data(dataset.split(":", 1)[1])
     abort(404)
 
 
