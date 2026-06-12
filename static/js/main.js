@@ -4096,6 +4096,1407 @@
     renderTablePage();
   }
 
+  function initEstruturaPlanejamento() {
+    const page = document.getElementById("estrutura-planejamento-page");
+    const form = document.getElementById("estrutura-planejamento-form");
+    if (!page || !form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const entity = String(page.dataset.entity || "").trim();
+    const singular = String(page.dataset.singular || "Registro").trim();
+    const idEl = document.getElementById("estrutura-planejamento-id");
+    const exercicioEl = document.getElementById("estrutura-planejamento-exercicio");
+    const programaEl = document.getElementById("estrutura-planejamento-programa");
+    const acaoEl = document.getElementById("estrutura-planejamento-acao");
+    const codigoEl = document.getElementById("estrutura-planejamento-codigo");
+    const nomeEl = document.getElementById("estrutura-planejamento-nome");
+    const responsavelEl = document.getElementById("estrutura-planejamento-responsavel");
+    const cpfEl = document.getElementById("estrutura-planejamento-cpf");
+    const emailEl = document.getElementById("estrutura-planejamento-email");
+    const ativoEl = document.getElementById("estrutura-planejamento-ativo");
+    const limparBtn = document.getElementById("estrutura-planejamento-limpar");
+    const atualizarBtn = document.getElementById("estrutura-planejamento-atualizar");
+    const msg = document.getElementById("estrutura-planejamento-msg");
+    const tableBody = document.getElementById("estrutura-planejamento-table-body");
+    const filtroExercicioEl = document.getElementById("estrutura-planejamento-filtro-exercicio");
+    const filtroStatusEl = document.getElementById("estrutura-planejamento-filtro-status");
+    const filtroTextoEl = document.getElementById("estrutura-planejamento-filtro-texto");
+    const pageSizeEl = document.getElementById("estrutura-planejamento-page-size");
+    const paginationEl = document.getElementById("estrutura-planejamento-pagination");
+
+    let rows = [];
+    let programas = [];
+    let acoes = [];
+    let currentPage = 1;
+    let pageSize = Number(pageSizeEl?.value || 10) || 10;
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const normalize = (value) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const setMsg = (text, isError = false) => {
+      if (!msg) return;
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", !!isError);
+    };
+
+    const optionLabel = (row) => {
+      const base = [row.codigo, row.nome].filter(Boolean).join(" - ");
+      return row.ativo ? base : `${base} (inativo)`;
+    };
+
+    const setOptions = (select, options, placeholder, selectedValue = "") => {
+      if (!select) return;
+      select.innerHTML = `<option value="">${esc(placeholder)}</option>`;
+      options.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.id);
+        option.textContent = optionLabel(item);
+        select.appendChild(option);
+      });
+      select.value = selectedValue ? String(selectedValue) : "";
+    };
+
+    const populatePrograms = (selectedValue = "") => {
+      if (!programaEl) return;
+      const exercicio = String(exercicioEl?.value || "").trim();
+      const options = programas.filter(
+        (row) => !exercicio || String(row.exercicio) === exercicio
+      );
+      setOptions(programaEl, options, "Selecione...", selectedValue);
+    };
+
+    const populateActions = (selectedValue = "") => {
+      if (!acaoEl) return;
+      const exercicio = String(exercicioEl?.value || "").trim();
+      const programaId = String(programaEl?.value || "").trim();
+      const options = acoes.filter(
+        (row) =>
+          (!exercicio || String(row.exercicio) === exercicio) &&
+          (!programaId || String(row.programa_id) === programaId)
+      );
+      const placeholder = !programaId
+        ? "Selecione primeiro um programa..."
+        : options.length
+          ? "Selecione..."
+          : "Nenhuma Ação/PAOE cadastrada para este programa";
+      setOptions(acaoEl, options, placeholder, selectedValue);
+      acaoEl.disabled = !programaId;
+    };
+
+    const resetForm = () => {
+      form.reset();
+      if (idEl) idEl.value = "";
+      if (ativoEl) ativoEl.checked = true;
+      populatePrograms();
+      populateActions();
+      setMsg("");
+      exercicioEl?.focus();
+    };
+
+    const formatCpf = (value) => {
+      const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+      if (digits.length <= 9) {
+        return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+      }
+      return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+    };
+
+    const fillForm = (row) => {
+      if (!row) return;
+      if (idEl) idEl.value = row.id || "";
+      if (exercicioEl) exercicioEl.value = row.exercicio || "";
+      populatePrograms(row.programa_id || "");
+      if (programaEl && row.programa_id) programaEl.value = String(row.programa_id);
+      populateActions(row.acao_id || "");
+      if (acaoEl && row.acao_id) acaoEl.value = String(row.acao_id);
+      if (codigoEl) codigoEl.value = row.codigo || "";
+      if (nomeEl) nomeEl.value = row.nome || "";
+      if (responsavelEl) responsavelEl.value = row.responsavel || "";
+      if (cpfEl) cpfEl.value = row.cpf || "";
+      if (emailEl) emailEl.value = row.email || "";
+      if (ativoEl) ativoEl.checked = !!row.ativo;
+      setMsg("");
+      page.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const getFilteredRows = () => {
+      const exercicio = String(filtroExercicioEl?.value || "");
+      const status = String(filtroStatusEl?.value || "");
+      const text = normalize(filtroTextoEl?.value || "");
+      return rows.filter((row) => {
+        if (exercicio && String(row.exercicio) !== exercicio) return false;
+        if (status && String(row.ativo ? 1 : 0) !== status) return false;
+        if (!text) return true;
+        const searchable = normalize(
+          [
+            row.codigo,
+            row.nome,
+            row.responsavel,
+            row.programa_codigo,
+            row.programa_nome,
+            row.acao_codigo,
+            row.acao_nome,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+        return searchable.includes(text);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addButton = (label, pageNumber, disabled = false, active = false) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.disabled = disabled;
+        button.classList.toggle("active", active);
+        button.addEventListener("click", () => {
+          if (disabled || pageNumber === currentPage) return;
+          currentPage = pageNumber;
+          renderTable();
+        });
+        paginationEl.appendChild(button);
+      };
+      addButton("<<", 1, currentPage === 1);
+      addButton("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const start = Math.max(1, currentPage - 2);
+      const end = Math.min(totalPages, start + 4);
+      for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+        addButton(String(pageNumber), pageNumber, false, pageNumber === currentPage);
+      }
+      addButton(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addButton(">>", totalPages, currentPage === totalPages);
+    };
+
+    const rowContextCells = (row) => {
+      if (entity === "acoes") {
+        return `<td>${esc([row.programa_codigo, row.programa_nome].filter(Boolean).join(" - "))}</td>`;
+      }
+      if (entity === "produtos") {
+        return `
+          <td>${esc([row.programa_codigo, row.programa_nome].filter(Boolean).join(" - "))}</td>
+          <td>${esc([row.acao_codigo, row.acao_nome].filter(Boolean).join(" - "))}</td>
+        `;
+      }
+      return "";
+    };
+
+    const renderTable = () => {
+      if (!tableBody) return;
+      const filtered = getFilteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const pageRows = filtered.slice(
+        (currentPage - 1) * pageSize,
+        currentPage * pageSize
+      );
+      if (!pageRows.length) {
+        const colspan = entity === "produtos" ? 9 : entity === "acoes" ? 8 : 7;
+        tableBody.innerHTML = `<tr><td colspan="${colspan}" class="muted">Nenhum registro encontrado.</td></tr>`;
+        renderPagination(0);
+        return;
+      }
+      tableBody.innerHTML = pageRows
+        .map(
+          (row) => `
+            <tr data-id="${esc(row.id)}">
+              <td>${esc(row.exercicio)}</td>
+              ${rowContextCells(row)}
+              <td>${esc(row.codigo || "")}</td>
+              <td>${esc(row.nome || "")}</td>
+              <td>${esc(row.responsavel || "")}</td>
+              <td><span class="planning-status ${row.ativo ? "is-active" : "is-inactive"}">${row.ativo ? "Ativo" : "Inativo"}</span></td>
+              <td class="planning-structure-row-actions">
+                <button class="icon-btn sm planning-edit" type="button" data-id="${esc(row.id)}" title="Editar" aria-label="Editar">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="icon-btn sm planning-disable" type="button" data-id="${esc(row.id)}" title="Desativar" aria-label="Desativar" ${row.ativo ? "" : "disabled"}>
+                  <i class="bi bi-slash-circle"></i>
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+      renderPagination(totalPages);
+    };
+
+    const populateFilterYears = () => {
+      if (!filtroExercicioEl) return;
+      const selected = filtroExercicioEl.value;
+      const years = [...new Set(rows.map((row) => String(row.exercicio)).filter(Boolean))]
+        .sort((a, b) => Number(b) - Number(a));
+      filtroExercicioEl.innerHTML = '<option value="">Todos</option>';
+      years.forEach((year) => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        filtroExercicioEl.appendChild(option);
+      });
+      filtroExercicioEl.value = years.includes(selected) ? selected : "";
+    };
+
+    const loadRows = async () => {
+      setMsg("Carregando registros...");
+      if (programaEl) {
+        programaEl.disabled = true;
+        programaEl.innerHTML = '<option value="">Carregando programas...</option>';
+      }
+      if (acaoEl) {
+        acaoEl.disabled = true;
+        acaoEl.innerHTML = '<option value="">Aguardando programas...</option>';
+      }
+      try {
+        const response = await fetch(`/api/estrutura-planejamento/${encodeURIComponent(entity)}`, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar os registros.");
+        rows = Array.isArray(data.rows) ? data.rows : [];
+        programas = Array.isArray(data.programas) ? data.programas : [];
+        acoes = Array.isArray(data.acoes) ? data.acoes : [];
+        if (programaEl) programaEl.disabled = false;
+        populatePrograms(programaEl?.value || "");
+        populateActions(acaoEl?.value || "");
+        populateFilterYears();
+        currentPage = 1;
+        renderTable();
+        setMsg("");
+      } catch (error) {
+        console.error(error);
+        setMsg(error.message || "Falha ao carregar os registros.", true);
+      }
+    };
+
+    exercicioEl?.addEventListener("input", () => {
+      exercicioEl.value = exercicioEl.value.replace(/\D/g, "").slice(0, 4);
+      populatePrograms();
+      populateActions();
+      setMsg("");
+    });
+    programaEl?.addEventListener("change", () => {
+      const selectedProgram = programas.find(
+        (row) => String(row.id) === String(programaEl.value || "")
+      );
+      if (selectedProgram && exercicioEl) {
+        exercicioEl.value = String(selectedProgram.exercicio || "");
+      }
+      populateActions();
+      setMsg("");
+    });
+    acaoEl?.addEventListener("change", () => setMsg(""));
+    cpfEl?.addEventListener("input", () => {
+      cpfEl.value = formatCpf(cpfEl.value);
+      setMsg("");
+    });
+    form.querySelectorAll("input, select").forEach((control) => {
+      control.addEventListener("change", () => setMsg(""));
+    });
+
+    limparBtn?.addEventListener("click", resetForm);
+    atualizarBtn?.addEventListener("click", loadRows);
+    [filtroExercicioEl, filtroStatusEl].forEach((control) => {
+      control?.addEventListener("change", () => {
+        currentPage = 1;
+        renderTable();
+      });
+    });
+    filtroTextoEl?.addEventListener("input", () => {
+      currentPage = 1;
+      renderTable();
+    });
+    pageSizeEl?.addEventListener("change", () => {
+      pageSize = Number(pageSizeEl.value || 10) || 10;
+      currentPage = 1;
+      renderTable();
+    });
+
+    tableBody?.addEventListener("click", async (event) => {
+      const editButton = event.target.closest(".planning-edit");
+      if (editButton) {
+        const row = rows.find((item) => String(item.id) === String(editButton.dataset.id));
+        fillForm(row);
+        return;
+      }
+      const disableButton = event.target.closest(".planning-disable");
+      if (!disableButton || disableButton.disabled) return;
+      const row = rows.find((item) => String(item.id) === String(disableButton.dataset.id));
+      if (!row || !window.confirm(`Desativar ${singular.toLowerCase()} "${row.nome}"?`)) return;
+      setMsg("Desativando registro...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/${encodeURIComponent(entity)}/${encodeURIComponent(row.id)}`,
+          {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao desativar o registro.");
+        showToast(data.message || "Registro desativado.", "success");
+        resetForm();
+        await loadRows();
+      } catch (error) {
+        console.error(error);
+        setMsg(error.message || "Falha ao desativar o registro.", true);
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      const id = String(idEl?.value || "").trim();
+      const payload = {
+        exercicio: exercicioEl?.value || "",
+        programa_id: programaEl?.value || null,
+        acao_id: acaoEl?.value || null,
+        codigo: codigoEl?.value || "",
+        nome: nomeEl?.value || "",
+        responsavel: responsavelEl?.value || "",
+        cpf: cpfEl?.value || "",
+        email: emailEl?.value || "",
+        ativo: !!ativoEl?.checked,
+      };
+      setMsg("Salvando registro...");
+      try {
+        const response = await fetch(
+          id
+            ? `/api/estrutura-planejamento/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`
+            : `/api/estrutura-planejamento/${encodeURIComponent(entity)}`,
+          {
+            method: id ? "PUT" : "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar o registro.");
+        showToast(data.message || "Registro salvo.", "success");
+        resetForm();
+        await loadRows();
+      } catch (error) {
+        console.error(error);
+        setMsg(error.message || "Falha ao salvar o registro.", true);
+      }
+    });
+
+    loadRows();
+  }
+
+  function initEstruturaComponentes() {
+    const page = document.getElementById("estrutura-componentes-page");
+    const form = document.getElementById("estrutura-componente-form");
+    if (!page || !form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const configs = JSON.parse(page.dataset.configs || "[]");
+    const tipoEl = document.getElementById("estrutura-componente-tipo");
+    const idEl = document.getElementById("estrutura-componente-id");
+    const fieldsEl = document.getElementById("estrutura-componente-fields");
+    const formTitle = document.getElementById("estrutura-componente-form-title");
+    const listTitle = document.getElementById("estrutura-componente-list-title");
+    const tableHead = document.getElementById("estrutura-componente-table-head");
+    const tableBody = document.getElementById("estrutura-componente-table-body");
+    const msg = document.getElementById("estrutura-componente-msg");
+    const limparBtn = document.getElementById("estrutura-componente-limpar");
+    const atualizarBtn = document.getElementById("estrutura-componente-atualizar");
+    const statusEl = document.getElementById("estrutura-componente-filtro-status");
+    const searchEl = document.getElementById("estrutura-componente-filtro-texto");
+    const pageSizeEl = document.getElementById("estrutura-componente-page-size");
+    const paginationEl = document.getElementById("estrutura-componente-pagination");
+    const linksCard = document.getElementById("estrutura-componente-links-card");
+    const linksTitle = document.getElementById("estrutura-componente-links-title");
+    const linksSelected = document.getElementById("estrutura-componente-links-selected");
+    const linksClose = document.getElementById("estrutura-componente-links-close");
+    const linksTipo = document.getElementById("estrutura-componente-links-tipo");
+    const linksDestino = document.getElementById("estrutura-componente-links-destino");
+    const linksDestinoLabel = document.getElementById("estrutura-componente-links-destino-label");
+    const linksAdd = document.getElementById("estrutura-componente-links-add");
+    const linksMsg = document.getElementById("estrutura-componente-links-msg");
+    const linksTableLabel = document.getElementById("estrutura-componente-links-table-label");
+    const linksBody = document.getElementById("estrutura-componente-links-body");
+
+    let currentConfig = configs[0] || null;
+    let rows = [];
+    let sources = {};
+    let currentPage = 1;
+    let pageSize = Number(pageSizeEl?.value || 10) || 10;
+    let requestToken = 0;
+    let selectedLinkRow = null;
+    let currentMapping = null;
+    let currentMappingRows = [];
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const normalize = (value) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const setMsg = (text, isError = false) => {
+      if (!msg) return;
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", !!isError);
+    };
+
+    const setLinksMsg = (text, isError = false) => {
+      if (!linksMsg) return;
+      linksMsg.textContent = text || "";
+      linksMsg.classList.toggle("text-error", !!isError);
+    };
+
+    const currentKey = () => String(tipoEl?.value || currentConfig?.key || "");
+
+    const fieldValue = (field, row) => {
+      if (field.type === "select") return row[`${field.name}_label`] || "";
+      return row[field.name] ?? "";
+    };
+
+    const renderFields = () => {
+      if (!fieldsEl || !currentConfig) return;
+      fieldsEl.innerHTML = currentConfig.fields
+        .map((field) => {
+          const required = field.required ? "required" : "";
+          const requiredLabel = field.required ? "*" : "";
+          if (field.type === "select") {
+            const options = Array.isArray(sources[field.source]) ? sources[field.source] : [];
+            return `
+              <label class="field">
+                <span>${requiredLabel}${esc(field.label)}</span>
+                <select data-component-field="${esc(field.name)}" ${required}>
+                  <option value="">Selecione...</option>
+                  ${options.map((option) => `<option value="${esc(option.id)}">${esc(option.label)}${option.ativo ? "" : " (inativo)"}</option>`).join("")}
+                </select>
+              </label>
+            `;
+          }
+          if (field.type === "textarea") {
+            return `
+              <label class="field planning-admin-field-wide">
+                <span>${requiredLabel}${esc(field.label)}</span>
+                <textarea data-component-field="${esc(field.name)}" ${required}></textarea>
+              </label>
+            `;
+          }
+          return `
+            <label class="field">
+              <span>${requiredLabel}${esc(field.label)}</span>
+              <input
+                type="${field.type === "integer" ? "number" : "text"}"
+                data-component-field="${esc(field.name)}"
+                ${field.max ? `maxlength="${esc(field.max)}"` : ""}
+                ${required}
+              />
+            </label>
+          `;
+        })
+        .join("");
+      if (currentConfig.has_active) {
+        fieldsEl.insertAdjacentHTML(
+          "beforeend",
+          '<label class="field inline planning-structure-active"><input type="checkbox" id="estrutura-componente-ativo" checked /><span>Ativo</span></label>'
+        );
+      }
+    };
+
+    const resetForm = () => {
+      form.reset();
+      if (idEl) idEl.value = "";
+      const active = document.getElementById("estrutura-componente-ativo");
+      if (active) active.checked = true;
+      setMsg("");
+    };
+
+    const fillForm = (row) => {
+      if (!row || !currentConfig) return;
+      if (idEl) idEl.value = row.id;
+      currentConfig.fields.forEach((field) => {
+        const input = fieldsEl.querySelector(`[data-component-field="${field.name}"]`);
+        if (input) input.value = row[field.name] ?? "";
+      });
+      const active = document.getElementById("estrutura-componente-ativo");
+      if (active) active.checked = !!row.ativo;
+      setMsg("");
+      page.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const filteredRows = () => {
+      const status = String(statusEl?.value || "");
+      const search = normalize(searchEl?.value || "");
+      return rows.filter((row) => {
+        if (currentConfig?.has_active && status && String(row.ativo ? 1 : 0) !== status) {
+          return false;
+        }
+        if (!search) return true;
+        return normalize(
+          currentConfig.fields.map((field) => fieldValue(field, row)).join(" ")
+        ).includes(search);
+      });
+    };
+
+    const renderPager = (totalPages) => {
+      if (!paginationEl) return;
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const button = (label, target, disabled = false, active = false) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.textContent = label;
+        el.disabled = disabled;
+        el.classList.toggle("active", active);
+        el.addEventListener("click", () => {
+          currentPage = target;
+          renderTable();
+        });
+        paginationEl.appendChild(el);
+      };
+      button("<", Math.max(1, currentPage - 1), currentPage === 1);
+      for (let number = Math.max(1, currentPage - 2); number <= Math.min(totalPages, currentPage + 2); number += 1) {
+        button(String(number), number, false, number === currentPage);
+      }
+      button(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+    };
+
+    const closeLinks = () => {
+      selectedLinkRow = null;
+      currentMapping = null;
+      currentMappingRows = [];
+      if (linksCard) linksCard.hidden = true;
+      if (linksTipo) linksTipo.innerHTML = "";
+      if (linksDestino) linksDestino.innerHTML = '<option value="">Selecione...</option>';
+      if (linksBody) linksBody.innerHTML = "";
+      setLinksMsg("");
+    };
+
+    const mappingDefinition = () =>
+      (currentConfig?.mappings || []).find(
+        (mapping) => mapping.key === String(linksTipo?.value || "")
+      ) || null;
+
+    const loadLinks = async () => {
+      const definition = mappingDefinition();
+      if (!selectedLinkRow || !definition || !linksDestino || !linksBody) return;
+      currentMapping = definition;
+      setLinksMsg("Carregando vínculos...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(definition.key)}`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar vínculos.");
+
+        const fixedId = String(selectedLinkRow.id);
+        const fixedField = definition.fixed_side === "left" ? "left_id" : "right_id";
+        const targetField = definition.fixed_side === "left" ? "right_id" : "left_id";
+        const targetLabelField =
+          definition.fixed_side === "left" ? "right_label" : "left_label";
+        const options =
+          definition.fixed_side === "left" ? data.right_options : data.left_options;
+
+        currentMappingRows = (data.rows || []).filter(
+          (row) => String(row[fixedField]) === fixedId
+        );
+        const linkedIds = new Set(
+          currentMappingRows.map((row) => String(row[targetField]))
+        );
+
+        if (linksDestinoLabel) {
+          linksDestinoLabel.textContent = `*${definition.target_label}`;
+        }
+        if (linksTableLabel) linksTableLabel.textContent = definition.target_label;
+        linksDestino.innerHTML = `
+          <option value="">Selecione...</option>
+          ${(options || [])
+            .filter((option) => !linkedIds.has(String(option.id)))
+            .map(
+              (option) =>
+                `<option value="${esc(option.id)}">${esc(option.label)}${
+                  option.ativo ? "" : " (inativo)"
+                }</option>`
+            )
+            .join("")}
+        `;
+        linksBody.innerHTML = currentMappingRows.length
+          ? currentMappingRows
+              .map(
+                (row) => `
+                  <tr>
+                    <td>${esc(row[targetLabelField])}</td>
+                    <td class="planning-structure-row-actions">
+                      <button
+                        class="icon-btn sm component-link-remove"
+                        type="button"
+                        data-left-id="${esc(row.left_id)}"
+                        data-right-id="${esc(row.right_id)}"
+                        title="Remover vínculo"
+                      ><i class="bi bi-link-45deg"></i></button>
+                    </td>
+                  </tr>
+                `
+              )
+              .join("")
+          : '<tr><td colspan="2" class="muted">Nenhum vínculo cadastrado.</td></tr>';
+        setLinksMsg("");
+      } catch (error) {
+        console.error(error);
+        setLinksMsg(error.message || "Falha ao carregar vínculos.", true);
+      }
+    };
+
+    const openLinks = async (row) => {
+      const mappings = currentConfig?.mappings || [];
+      if (!row || !mappings.length || !linksCard || !linksTipo) return;
+      selectedLinkRow = row;
+      linksCard.hidden = false;
+      if (linksTitle) linksTitle.textContent = `Vínculos de ${currentConfig.singular}`;
+      if (linksSelected) linksSelected.textContent = row.label;
+      linksTipo.innerHTML = mappings
+        .map(
+          (mapping) =>
+            `<option value="${esc(mapping.key)}">${esc(mapping.title)}</option>`
+        )
+        .join("");
+      await loadLinks();
+      linksCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const renderTable = () => {
+      if (!currentConfig || !tableHead || !tableBody) return;
+      tableHead.innerHTML = `
+        <tr>
+          ${currentConfig.fields.map((field) => `<th>${esc(field.label)}</th>`).join("")}
+          ${currentConfig.has_active ? "<th>Situação</th>" : ""}
+          <th class="planning-structure-actions-column">Ações</th>
+        </tr>
+      `;
+      const filtered = filteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+      if (!visible.length) {
+        tableBody.innerHTML = `<tr><td colspan="${currentConfig.fields.length + (currentConfig.has_active ? 2 : 1)}" class="muted">Nenhum registro encontrado.</td></tr>`;
+        renderPager(0);
+        return;
+      }
+      tableBody.innerHTML = visible
+        .map(
+          (row) => `
+            <tr>
+              ${currentConfig.fields.map((field) => `<td>${esc(fieldValue(field, row))}</td>`).join("")}
+              ${currentConfig.has_active ? `<td><span class="planning-status ${row.ativo ? "is-active" : "is-inactive"}">${row.ativo ? "Ativo" : "Inativo"}</span></td>` : ""}
+              <td class="planning-structure-row-actions">
+                <button class="icon-btn sm component-edit" type="button" data-id="${esc(row.id)}" title="Editar"><i class="bi bi-pencil"></i></button>
+                ${(currentConfig.mappings || []).length ? `<button class="icon-btn sm component-links" type="button" data-id="${esc(row.id)}" title="Gerenciar vínculos"><i class="bi bi-link-45deg"></i></button>` : ""}
+                ${currentConfig.has_active ? `<button class="icon-btn sm component-disable" type="button" data-id="${esc(row.id)}" title="Desativar" ${row.ativo ? "" : "disabled"}><i class="bi bi-slash-circle"></i></button>` : ""}
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+      renderPager(totalPages);
+    };
+
+    const load = async () => {
+      const token = ++requestToken;
+      const key = currentKey();
+      currentConfig = configs.find((config) => config.key === key) || configs[0];
+      if (!currentConfig) return;
+      let loadingOverlayVisible = false;
+      const loadingTimer = window.setTimeout(() => {
+        if (token !== requestToken) return;
+        loadingOverlayVisible = true;
+        showAppLoading(
+          `Carregando ${currentConfig.title}...`,
+          "Aguarde enquanto os campos e registros são atualizados."
+        );
+      }, 250);
+      if (formTitle) formTitle.textContent = currentConfig.singular;
+      if (listTitle) listTitle.textContent = currentConfig.title;
+      page.setAttribute("aria-busy", "true");
+      if (tipoEl) tipoEl.disabled = true;
+      rows = [];
+      sources = {};
+      currentPage = 1;
+      setMsg("Carregando registros...");
+      closeLinks();
+      fieldsEl.innerHTML = '<div class="muted">Carregando campos...</div>';
+      if (tableHead) tableHead.innerHTML = "";
+      if (tableBody) {
+        tableBody.innerHTML =
+          '<tr><td class="muted planning-component-loading-row"><i class="bi bi-arrow-repeat"></i> Carregando registros...</td></tr>';
+      }
+      if (paginationEl) paginationEl.innerHTML = "";
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes/${encodeURIComponent(currentConfig.key)}`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar componentes.");
+        if (token !== requestToken) return;
+        currentConfig = data.config;
+        rows = Array.isArray(data.rows) ? data.rows : [];
+        sources = data.sources || {};
+        if (statusEl) {
+          statusEl.disabled = !currentConfig.has_active;
+          statusEl.value = "";
+        }
+        renderFields();
+        currentPage = 1;
+        renderTable();
+        setMsg("");
+      } catch (error) {
+        console.error(error);
+        if (token !== requestToken) return;
+        if (tableBody) {
+          tableBody.innerHTML =
+            '<tr><td class="text-error">Não foi possível carregar os registros.</td></tr>';
+        }
+        setMsg(error.message || "Falha ao carregar componentes.", true);
+      } finally {
+        window.clearTimeout(loadingTimer);
+        if (loadingOverlayVisible) hideAppLoading();
+        if (token === requestToken) {
+          page.setAttribute("aria-busy", "false");
+          if (tipoEl) tipoEl.disabled = false;
+        }
+      }
+    };
+
+    tipoEl?.addEventListener("change", () => {
+      resetForm();
+      if (statusEl) statusEl.value = "";
+      if (searchEl) searchEl.value = "";
+      if (pageSizeEl) pageSizeEl.value = "10";
+      pageSize = 10;
+      currentPage = 1;
+      load();
+    });
+    limparBtn?.addEventListener("click", resetForm);
+    atualizarBtn?.addEventListener("click", load);
+    linksClose?.addEventListener("click", closeLinks);
+    linksTipo?.addEventListener("change", loadLinks);
+    linksAdd?.addEventListener("click", async () => {
+      const definition = currentMapping || mappingDefinition();
+      const targetId = Number(linksDestino?.value || 0);
+      if (!selectedLinkRow || !definition || !targetId) {
+        setLinksMsg("Selecione o registro que será vinculado.", true);
+        return;
+      }
+      const payload =
+        definition.fixed_side === "left"
+          ? { left_id: selectedLinkRow.id, right_id: targetId }
+          : { left_id: targetId, right_id: selectedLinkRow.id };
+      setLinksMsg("Salvando vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(definition.key)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar vínculo.");
+        showToast(data.message, "success");
+        await loadLinks();
+      } catch (error) {
+        setLinksMsg(error.message || "Falha ao salvar vínculo.", true);
+      }
+    });
+    linksBody?.addEventListener("click", async (event) => {
+      const button = event.target.closest(".component-link-remove");
+      if (!button || !currentMapping) return;
+      if (!window.confirm("Remover este vínculo?")) return;
+      setLinksMsg("Removendo vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(currentMapping.key)}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify({
+              left_id: Number(button.dataset.leftId),
+              right_id: Number(button.dataset.rightId),
+            }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao remover vínculo.");
+        showToast(data.message, "success");
+        await loadLinks();
+      } catch (error) {
+        setLinksMsg(error.message || "Falha ao remover vínculo.", true);
+      }
+    });
+    statusEl?.addEventListener("change", () => {
+      currentPage = 1;
+      renderTable();
+    });
+    searchEl?.addEventListener("input", () => {
+      currentPage = 1;
+      renderTable();
+    });
+    pageSizeEl?.addEventListener("change", () => {
+      pageSize = Number(pageSizeEl.value || 10) || 10;
+      currentPage = 1;
+      renderTable();
+    });
+
+    tableBody?.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".component-edit");
+      if (edit) {
+        fillForm(rows.find((row) => String(row.id) === String(edit.dataset.id)));
+        return;
+      }
+      const links = event.target.closest(".component-links");
+      if (links) {
+        await openLinks(
+          rows.find((row) => String(row.id) === String(links.dataset.id))
+        );
+        return;
+      }
+      const disable = event.target.closest(".component-disable");
+      if (!disable || disable.disabled) return;
+      const row = rows.find((item) => String(item.id) === String(disable.dataset.id));
+      if (!row || !window.confirm(`Desativar "${row.label}"?`)) return;
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes/${encodeURIComponent(currentConfig.key)}/${encodeURIComponent(row.id)}`,
+          { method: "DELETE", headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao desativar componente.");
+        showToast(data.message, "success");
+        resetForm();
+        await load();
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      const id = String(idEl?.value || "");
+      const payload = {};
+      currentConfig.fields.forEach((field) => {
+        payload[field.name] =
+          fieldsEl.querySelector(`[data-component-field="${field.name}"]`)?.value || "";
+      });
+      const active = document.getElementById("estrutura-componente-ativo");
+      if (active) payload.ativo = active.checked;
+      setMsg("Salvando componente...");
+      try {
+        const response = await fetch(
+          id
+            ? `/api/estrutura-planejamento/componentes/${encodeURIComponent(currentConfig.key)}/${encodeURIComponent(id)}`
+            : `/api/estrutura-planejamento/componentes/${encodeURIComponent(currentConfig.key)}`,
+          {
+            method: id ? "PUT" : "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar componente.");
+        showToast(data.message, "success");
+        resetForm();
+        await load();
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    });
+
+    load();
+  }
+
+  function initEstruturaMapeamentos() {
+    const page = document.getElementById("estrutura-mapeamentos-page");
+    const form = document.getElementById("estrutura-mapeamento-form");
+    if (!page || !form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    const configs = JSON.parse(page.dataset.configs || "[]");
+    const tipoEl = document.getElementById("estrutura-mapeamento-tipo");
+    const leftEl = document.getElementById("estrutura-mapeamento-left");
+    const rightEl = document.getElementById("estrutura-mapeamento-right");
+    const leftLabelEl = document.getElementById("estrutura-mapeamento-left-label");
+    const rightLabelEl = document.getElementById("estrutura-mapeamento-right-label");
+    const tableLeftEl = document.getElementById("estrutura-mapeamento-table-left");
+    const tableRightEl = document.getElementById("estrutura-mapeamento-table-right");
+    const listTitle = document.getElementById("estrutura-mapeamento-list-title");
+    const tableBody = document.getElementById("estrutura-mapeamento-table-body");
+    const msg = document.getElementById("estrutura-mapeamento-msg");
+    const limparBtn = document.getElementById("estrutura-mapeamento-limpar");
+    const atualizarBtn = document.getElementById("estrutura-mapeamento-atualizar");
+    const searchEl = document.getElementById("estrutura-mapeamento-filtro");
+    const pageSizeEl = document.getElementById("estrutura-mapeamento-page-size");
+    const paginationEl = document.getElementById("estrutura-mapeamento-pagination");
+
+    let currentConfig = configs[0] || null;
+    let rows = [];
+    let currentPage = 1;
+    let pageSize = Number(pageSizeEl?.value || 10) || 10;
+    let requestToken = 0;
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const normalize = (value) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    const setMsg = (text, isError = false) => {
+      msg.textContent = text || "";
+      msg.classList.toggle("text-error", !!isError);
+    };
+
+    const fillSelect = (select, options) => {
+      select.innerHTML = '<option value="">Selecione...</option>';
+      options.forEach((option) => {
+        const el = document.createElement("option");
+        el.value = String(option.id);
+        el.textContent = `${option.label}${option.ativo ? "" : " (inativo)"}`;
+        el.disabled = !option.ativo;
+        select.appendChild(el);
+      });
+      select.disabled = false;
+    };
+
+    const filteredRows = () => {
+      const search = normalize(searchEl?.value || "");
+      return search
+        ? rows.filter((row) => normalize(`${row.left_label} ${row.right_label}`).includes(search))
+        : rows;
+    };
+
+    const renderPager = (totalPages) => {
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const add = (label, target, disabled = false, active = false) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.disabled = disabled;
+        button.classList.toggle("active", active);
+        button.addEventListener("click", () => {
+          currentPage = target;
+          renderTable();
+        });
+        paginationEl.appendChild(button);
+      };
+      add("<", Math.max(1, currentPage - 1), currentPage === 1);
+      for (let number = Math.max(1, currentPage - 2); number <= Math.min(totalPages, currentPage + 2); number += 1) {
+        add(String(number), number, false, number === currentPage);
+      }
+      add(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+    };
+
+    const renderTable = () => {
+      const filtered = filteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+      if (!visible.length) {
+        tableBody.innerHTML = '<tr><td colspan="3" class="muted">Nenhum mapeamento encontrado.</td></tr>';
+        renderPager(0);
+        return;
+      }
+      tableBody.innerHTML = visible
+        .map(
+          (row) => `
+            <tr>
+              <td>${esc(row.left_label)}</td>
+              <td>${esc(row.right_label)}</td>
+              <td class="planning-structure-row-actions">
+                <button class="icon-btn sm mapping-delete" type="button" data-left="${esc(row.left_id)}" data-right="${esc(row.right_id)}" title="Remover vínculo">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+      renderPager(totalPages);
+    };
+
+    const load = async () => {
+      const token = ++requestToken;
+      const key = String(tipoEl?.value || configs[0]?.key || "");
+      currentConfig = configs.find((config) => config.key === key) || configs[0];
+      if (!currentConfig) return;
+      leftEl.disabled = true;
+      rightEl.disabled = true;
+      leftEl.innerHTML = '<option value="">Carregando...</option>';
+      rightEl.innerHTML = '<option value="">Carregando...</option>';
+      setMsg("Carregando mapeamentos...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(currentConfig.key)}`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar mapeamentos.");
+        if (token !== requestToken) return;
+        currentConfig = data.config;
+        rows = Array.isArray(data.rows) ? data.rows : [];
+        leftLabelEl.textContent = `*${currentConfig.left_label}`;
+        rightLabelEl.textContent = `*${currentConfig.right_label}`;
+        tableLeftEl.textContent = currentConfig.left_label;
+        tableRightEl.textContent = currentConfig.right_label;
+        listTitle.textContent = currentConfig.title;
+        fillSelect(leftEl, data.left_options || []);
+        fillSelect(rightEl, data.right_options || []);
+        currentPage = 1;
+        renderTable();
+        setMsg("");
+      } catch (error) {
+        console.error(error);
+        setMsg(error.message || "Falha ao carregar mapeamentos.", true);
+      }
+    };
+
+    tipoEl?.addEventListener("change", load);
+    limparBtn?.addEventListener("click", () => {
+      leftEl.value = "";
+      rightEl.value = "";
+      setMsg("");
+    });
+    atualizarBtn?.addEventListener("click", load);
+    searchEl?.addEventListener("input", () => {
+      currentPage = 1;
+      renderTable();
+    });
+    pageSizeEl?.addEventListener("change", () => {
+      pageSize = Number(pageSizeEl.value || 10) || 10;
+      currentPage = 1;
+      renderTable();
+    });
+
+    tableBody?.addEventListener("click", async (event) => {
+      const button = event.target.closest(".mapping-delete");
+      if (!button || !window.confirm("Remover este vínculo?")) return;
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(currentConfig.key)}`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify({ left_id: button.dataset.left, right_id: button.dataset.right }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao remover vínculo.");
+        showToast(data.message, "success");
+        await load();
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      setMsg("Salvando mapeamento...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/mapeamentos/${encodeURIComponent(currentConfig.key)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            body: JSON.stringify({ left_id: leftEl.value, right_id: rightEl.value }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar vínculo.");
+        showToast(data.message, "success");
+        leftEl.value = "";
+        rightEl.value = "";
+        await load();
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    });
+
+    load();
+  }
+
+  function initRelatorioEstruturaPlanejamento() {
+    const page = document.getElementById("relatorio-estrutura-planejamento");
+    const table = document.getElementById("planning-report-table");
+    if (!page || !table || page.dataset.bound === "1") return;
+    page.dataset.bound = "1";
+
+    const configs = JSON.parse(page.dataset.configs || "{}");
+    const typeEl = document.getElementById("planning-report-type");
+    const typeLabel = document.getElementById("planning-report-type-label");
+    const statusEl = document.getElementById("planning-report-status");
+    const searchEl = document.getElementById("planning-report-search");
+    const resetBtn = document.getElementById("planning-report-reset");
+    const downloadBtn = document.getElementById("planning-report-download");
+    const refreshBtn = document.getElementById("planning-report-refresh");
+    const titleEl = document.getElementById("planning-report-title");
+    const metaEl = document.getElementById("planning-report-meta");
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    const pageSizeEl = document.getElementById("planning-report-page-size");
+    const paginationEl = document.getElementById("planning-report-pagination");
+
+    let activeView = "cadastros";
+    let columns = [];
+    let rows = [];
+    let currentPage = 1;
+    let pageSize = Number(pageSizeEl?.value || 20) || 20;
+    let requestToken = 0;
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const normalize = (value) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const currentConfigs = () =>
+      Array.isArray(configs[activeView]) ? configs[activeView] : [];
+
+    const fillTypes = () => {
+      const items = currentConfigs();
+      typeEl.innerHTML = items
+        .map((item) => `<option value="${esc(item.key)}">${esc(item.title)}</option>`)
+        .join("");
+      typeLabel.textContent =
+        activeView === "cadastros" ? "*Tipo de cadastro" : "*Tipo de vínculo";
+      statusEl.disabled = activeView !== "cadastros";
+      statusEl.value = "";
+    };
+
+    const filteredRows = () => {
+      const status = String(statusEl?.value || "");
+      const search = normalize(searchEl?.value || "");
+      return rows.filter((row) => {
+        if (activeView === "cadastros" && status && row.situacao !== status) {
+          return false;
+        }
+        if (!search) return true;
+        return columns.some((column) =>
+          normalize(row[column.key]).includes(search)
+        );
+      });
+    };
+
+    const renderPager = (totalPages) => {
+      paginationEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const add = (label, target, disabled = false, active = false) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.disabled = disabled;
+        button.classList.toggle("active", active);
+        button.addEventListener("click", () => {
+          currentPage = target;
+          render();
+        });
+        paginationEl.appendChild(button);
+      };
+      add("<", Math.max(1, currentPage - 1), currentPage === 1);
+      for (
+        let number = Math.max(1, currentPage - 2);
+        number <= Math.min(totalPages, currentPage + 2);
+        number += 1
+      ) {
+        add(String(number), number, false, number === currentPage);
+      }
+      add(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+    };
+
+    const render = () => {
+      thead.innerHTML = `<tr>${columns
+        .map((column) => `<th>${esc(column.label)}</th>`)
+        .join("")}</tr>`;
+      const filtered = filteredRows();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const visible = filtered.slice(
+        (currentPage - 1) * pageSize,
+        currentPage * pageSize
+      );
+      tbody.innerHTML = visible.length
+        ? visible
+            .map(
+              (row) =>
+                `<tr>${columns
+                  .map((column) => `<td>${esc(row[column.key])}</td>`)
+                  .join("")}</tr>`
+            )
+            .join("")
+        : `<tr><td colspan="${Math.max(1, columns.length)}" class="muted">Nenhum registro encontrado.</td></tr>`;
+      metaEl.textContent = `${filtered.length} de ${rows.length} registros`;
+      renderPager(visible.length ? totalPages : 0);
+    };
+
+    const load = async () => {
+      const token = ++requestToken;
+      const key = String(typeEl.value || currentConfigs()[0]?.key || "");
+      if (!key) return;
+      showAppLoading(
+        "Carregando estrutura...",
+        "Aguarde enquanto a consulta é atualizada."
+      );
+      thead.innerHTML = "";
+      tbody.innerHTML =
+        '<tr><td class="muted planning-component-loading-row"><i class="bi bi-arrow-repeat"></i> Carregando registros...</td></tr>';
+      metaEl.textContent = "Carregando...";
+      try {
+        const response = await fetch(
+          `/api/relatorios/estrutura-planejamento/${activeView}/${encodeURIComponent(key)}`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar relatório.");
+        if (token !== requestToken) return;
+        columns = Array.isArray(data.columns) ? data.columns : [];
+        rows = Array.isArray(data.rows) ? data.rows : [];
+        titleEl.textContent = data.title || "Estrutura do Planejamento";
+        currentPage = 1;
+        render();
+      } catch (error) {
+        console.error(error);
+        if (token !== requestToken) return;
+        columns = [];
+        rows = [];
+        metaEl.textContent = error.message || "Falha ao carregar relatório.";
+        tbody.innerHTML =
+          '<tr><td class="text-error">Não foi possível carregar a consulta.</td></tr>';
+      } finally {
+        hideAppLoading();
+      }
+    };
+
+    page.querySelectorAll("[data-report-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeView = button.dataset.reportView;
+        page.dataset.activeView = activeView;
+        page.querySelectorAll("[data-report-view]").forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", String(active));
+        });
+        searchEl.value = "";
+        statusEl.value = "";
+        fillTypes();
+        load();
+      });
+    });
+
+    typeEl.addEventListener("change", () => {
+      searchEl.value = "";
+      statusEl.value = "";
+      currentPage = 1;
+      load();
+    });
+    statusEl.addEventListener("change", () => {
+      currentPage = 1;
+      render();
+    });
+    searchEl.addEventListener("input", () => {
+      currentPage = 1;
+      render();
+    });
+    pageSizeEl.addEventListener("change", () => {
+      pageSize = Number(pageSizeEl.value || 20) || 20;
+      currentPage = 1;
+      render();
+    });
+    resetBtn.addEventListener("click", () => {
+      searchEl.value = "";
+      statusEl.value = "";
+      currentPage = 1;
+      render();
+    });
+    refreshBtn.addEventListener("click", load);
+    downloadBtn.addEventListener("click", () => {
+      const key = String(typeEl.value || "");
+      if (!key) return;
+      window.open(
+        `/api/relatorios/estrutura-planejamento/download?view=${encodeURIComponent(
+          activeView
+        )}&key=${encodeURIComponent(key)}&status=${encodeURIComponent(
+          activeView === "cadastros" ? statusEl.value : ""
+        )}&search=${encodeURIComponent(searchEl.value)}`,
+        "_blank"
+      );
+    });
+
+    fillTypes();
+    load();
+  }
+
   function initRelatorioFip() {
     const table = document.getElementById("fip613-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
@@ -11674,6 +13075,12 @@
     if (route === "atualizar/chave_planejamento_regra") {
       initChavePlanejamentoRegra();
     }
+    if (route.startsWith("atualizar/estrutura-planejamento/")) {
+      initEstruturaPlanejamento();
+    }
+    if (route === "atualizar/estrutura-planejamento/componentes") {
+      initEstruturaComponentes();
+    }
     if (route === "cadastrar/dotacao" || route.startsWith("cadastrar/dotacao/")) {
       initDotacao();
     }
@@ -11715,6 +13122,9 @@
     }
     if (route === "relatorios/plan21-nger") {
       initRelatorioPlan21Nger();
+    }
+    if (route === "relatorios/estrutura-planejamento") {
+      initRelatorioEstruturaPlanejamento();
     }
     if (route === "paineis-dashboards/teto-orcamentario") {
       initTetoOrcamentarioDashboard();

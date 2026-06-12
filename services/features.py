@@ -38,6 +38,26 @@ FEATURES = [
             {"id": "atualizar/nob", "nome": "NOB"},
             {"id": "atualizar/plan20-seduc", "nome": "PLAN20 - SEDUC"},
             {"id": "atualizar/teto-seduc", "nome": "Teto - SEDUC"},
+            {
+                "id": "atualizar/estrutura-planejamento/programas",
+                "nome": "Estrutura do Planejamento - Programas",
+            },
+            {
+                "id": "atualizar/estrutura-planejamento/acoes",
+                "nome": "Estrutura do Planejamento - Ações/PAOE",
+            },
+            {
+                "id": "atualizar/estrutura-planejamento/produtos",
+                "nome": "Estrutura do Planejamento - Produtos da Ação",
+            },
+            {
+                "id": "atualizar/estrutura-planejamento/componentes",
+                "nome": "Estrutura do Planejamento - Componentes",
+            },
+            {
+                "id": "atualizar/estrutura-planejamento/vinculos",
+                "nome": "Estrutura do Planejamento - Gerenciar Vínculos",
+            },
             {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
             {
                 "id": "atualizar/chaves_planejamento_upload",
@@ -73,6 +93,10 @@ FEATURES = [
             {"id": "relatorios/fip613", "nome": "FIP 613 (Relatório)"},
             {"id": "relatorios/plan20-seduc", "nome": "Plan20 - SEDUC"},
             {"id": "relatorios/plan21-nger", "nome": "Plan21_NGER"},
+            {
+                "id": "relatorios/estrutura-planejamento",
+                "nome": "Estrutura do Planejamento",
+            },
             {"id": "relatorios/ped", "nome": "PED"},
             {"id": "relatorios/emp", "nome": "EMP"},
             {"id": "relatorios/est-emp", "nome": "Est Emp"},

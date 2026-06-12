@@ -35,12 +35,40 @@ from models import (
     NobRegistro,
     Plan21Nger,
     Adj,
+    Regiao,
+    Municipio,
+    Funcao,
+    Subfuncao,
+    Ug,
+    Macropolitica,
+    Pilar,
+    MetaPee,
+    IndicadorPee,
+    Eixo,
+    PoliticaDecreto,
+    PublicoTransversal,
+    UgSubfuncao,
+    MacropoliticaAdj,
+    PilarAdj,
+    EixoAdj,
+    PoliticaDecretoAdj,
+    SubfuncaoPolitica,
+    MacropoliticaPilar,
+    PoliticaDecretoEixo,
+    PilarMeta,
+    FuncaoPrograma,
+    SubfuncaoAcao,
+    MacropoliticaSubfuncao,
+    PoliticaDecretoProdutoAcao,
     Dotacao,
     CadastrarSubacao,
     CadastrarEtapa,
     AlterarMeta,
     AlterarMetaItem,
     ChavePlanejamentoRegra,
+    ProgramaPlanejamento,
+    AcaoPlanejamento,
+    ProdutoAcaoPlanejamento,
     Momp,
     PoliticaTeto,
     ApiClient,
@@ -1931,6 +1959,1540 @@ def partial_atualizar_teto_seduc():
     return render_template("partials/atualizar_teto_seduc.html")
 
 
+PLANNING_STRUCTURE_ENTITIES = {
+    "programas": {
+        "feature": "atualizar/estrutura-planejamento/programas",
+        "title": "Programas",
+        "singular": "Programa",
+    },
+    "acoes": {
+        "feature": "atualizar/estrutura-planejamento/acoes",
+        "title": "Ações/PAOE",
+        "singular": "Ação/PAOE",
+    },
+    "produtos": {
+        "feature": "atualizar/estrutura-planejamento/produtos",
+        "title": "Produtos da Ação",
+        "singular": "Produto da Ação",
+    },
+}
+
+PLANNING_COMPONENTS = {
+    "regiao": {
+        "title": "Regiões",
+        "singular": "Região",
+        "model": Regiao,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["codigo"],
+        "label_fields": ["codigo", "nome"],
+    },
+    "municipio": {
+        "title": "Municípios",
+        "singular": "Município",
+        "model": Municipio,
+        "fields": [
+            {"name": "codigo_ibge", "label": "Código IBGE", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+            {"name": "uf", "label": "UF", "required": True, "max": 2},
+            {
+                "name": "regiao_id",
+                "label": "Região",
+                "required": True,
+                "type": "select",
+                "source": "regiao",
+            },
+        ],
+        "unique": ["codigo_ibge"],
+        "label_fields": ["codigo_ibge", "nome"],
+    },
+    "funcao": {
+        "title": "Funções",
+        "singular": "Função",
+        "model": Funcao,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["codigo"],
+        "label_fields": ["codigo", "nome"],
+    },
+    "subfuncao": {
+        "title": "Subfunções",
+        "singular": "Subfunção",
+        "model": Subfuncao,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "type": "integer"},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+            {
+                "name": "funcao_id",
+                "label": "Função",
+                "required": True,
+                "type": "select",
+                "source": "funcao",
+            },
+        ],
+        "unique": ["codigo", "funcao_id"],
+        "label_fields": ["codigo", "nome"],
+    },
+    "ug": {
+        "title": "Unidades Gestoras",
+        "singular": "Unidade Gestora",
+        "model": Ug,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "max": 10},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["codigo"],
+        "label_fields": ["codigo", "nome"],
+    },
+    "adj": {
+        "title": "ADJs",
+        "singular": "ADJ",
+        "model": Adj,
+        "fields": [
+            {"name": "abreviacao", "label": "Abreviação", "required": True, "max": 100},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["abreviacao"],
+        "label_fields": ["abreviacao", "nome"],
+    },
+    "macropolitica": {
+        "title": "Macropolíticas",
+        "singular": "Macropolítica",
+        "model": Macropolitica,
+        "fields": [
+            {"name": "abreviacao", "label": "Abreviação", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["abreviacao"],
+        "label_fields": ["abreviacao", "nome"],
+    },
+    "pilar": {
+        "title": "Pilares",
+        "singular": "Pilar",
+        "model": Pilar,
+        "fields": [
+            {"name": "abreviacao", "label": "Abreviação", "required": True, "max": 255},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["abreviacao"],
+        "label_fields": ["abreviacao", "nome"],
+    },
+    "meta_pee": {
+        "title": "Metas PEE",
+        "singular": "Meta PEE",
+        "model": MetaPee,
+        "fields": [
+            {"name": "titulo", "label": "Título", "required": True, "max": 20},
+            {"name": "descricao", "label": "Descrição", "required": True, "type": "textarea"},
+        ],
+        "unique": ["titulo"],
+        "label_fields": ["titulo", "descricao"],
+        "has_active": False,
+    },
+    "indicador_pee": {
+        "title": "Indicadores PEE",
+        "singular": "Indicador PEE",
+        "model": IndicadorPee,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "max": 10},
+            {"name": "descricao", "label": "Descrição", "required": True, "type": "textarea"},
+            {
+                "name": "meta_id",
+                "label": "Meta PEE",
+                "required": True,
+                "type": "select",
+                "source": "meta_pee",
+            },
+        ],
+        "unique": ["codigo", "meta_id"],
+        "label_fields": ["codigo", "descricao"],
+        "has_active": False,
+    },
+    "eixo": {
+        "title": "Eixos",
+        "singular": "Eixo",
+        "model": Eixo,
+        "fields": [
+            {"name": "abreviacao", "label": "Abreviação", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+            {
+                "name": "pilar_id",
+                "label": "Pilar",
+                "required": True,
+                "type": "select",
+                "source": "pilar",
+            },
+        ],
+        "unique": ["abreviacao", "pilar_id"],
+        "label_fields": ["abreviacao", "nome"],
+    },
+    "politica_decreto": {
+        "title": "Políticas do Decreto",
+        "singular": "Política do Decreto",
+        "model": PoliticaDecreto,
+        "fields": [
+            {"name": "abreviacao", "label": "Abreviação", "required": True, "max": 50},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["abreviacao"],
+        "label_fields": ["abreviacao", "nome"],
+    },
+    "publico_transversal": {
+        "title": "Públicos Transversais",
+        "singular": "Público Transversal",
+        "model": PublicoTransversal,
+        "fields": [
+            {"name": "codigo", "label": "Código", "required": True, "max": 5},
+            {"name": "nome", "label": "Nome", "required": True, "max": 255},
+        ],
+        "unique": ["codigo"],
+        "label_fields": ["codigo", "nome"],
+    },
+}
+
+PLANNING_MAPPINGS = {
+    "funcao_programa": {
+        "title": "Função × Programa",
+        "model": FuncaoPrograma,
+        "left": ("funcao_id", "funcao", "Função"),
+        "right": ("programa_id", "programa_planejamento", "Programa"),
+    },
+    "subfuncao_acao": {
+        "title": "Subfunção × Ação/PAOE",
+        "model": SubfuncaoAcao,
+        "left": ("subfuncao_id", "subfuncao", "Subfunção"),
+        "right": ("acao_id", "acao_planejamento", "Ação/PAOE"),
+    },
+    "ug_subfuncao": {
+        "title": "UG × Subfunção",
+        "model": UgSubfuncao,
+        "left": ("ug_id", "ug", "Unidade Gestora"),
+        "right": ("subfuncao_id", "subfuncao", "Subfunção"),
+    },
+    "adj_macropolitica": {
+        "title": "ADJ × Macropolítica",
+        "model": MacropoliticaAdj,
+        "left": ("adj_id", "adj", "ADJ"),
+        "right": ("macropolitica_id", "macropolitica", "Macropolítica"),
+    },
+    "macropolitica_subfuncao": {
+        "title": "Macropolítica × Subfunção",
+        "model": MacropoliticaSubfuncao,
+        "left": ("macropolitica_id", "macropolitica", "Macropolítica"),
+        "right": ("subfuncao_id", "subfuncao", "Subfunção"),
+    },
+    "adj_pilar": {
+        "title": "ADJ × Pilar",
+        "model": PilarAdj,
+        "left": ("adj_id", "adj", "ADJ"),
+        "right": ("pilar_id", "pilar", "Pilar"),
+    },
+    "adj_eixo": {
+        "title": "ADJ × Eixo",
+        "model": EixoAdj,
+        "left": ("adj_id", "adj", "ADJ"),
+        "right": ("eixo_id", "eixo", "Eixo"),
+    },
+    "adj_politica": {
+        "title": "ADJ × Política do Decreto",
+        "model": PoliticaDecretoAdj,
+        "left": ("adj_id", "adj", "ADJ"),
+        "right": ("politica_decr_id", "politica_decreto", "Política do Decreto"),
+    },
+    "subfuncao_politica": {
+        "title": "Subfunção × Política do Decreto",
+        "model": SubfuncaoPolitica,
+        "left": ("subfuncao_id", "subfuncao", "Subfunção"),
+        "right": ("politica_decr_id", "politica_decreto", "Política do Decreto"),
+    },
+    "macropolitica_pilar": {
+        "title": "Macropolítica × Pilar",
+        "model": MacropoliticaPilar,
+        "left": ("macropolitica_id", "macropolitica", "Macropolítica"),
+        "right": ("pilar_id", "pilar", "Pilar"),
+    },
+    "pilar_meta": {
+        "title": "Pilar × Meta PEE",
+        "model": PilarMeta,
+        "left": ("pilar_id", "pilar", "Pilar"),
+        "right": ("meta_id", "meta_pee", "Meta PEE"),
+    },
+    "politica_eixo": {
+        "title": "Política do Decreto × Eixo",
+        "model": PoliticaDecretoEixo,
+        "left": ("politica_id", "politica_decreto", "Política do Decreto"),
+        "right": ("eixo_id", "eixo", "Eixo"),
+    },
+    "politica_produto_acao": {
+        "title": "Política do Decreto × Produto da Ação",
+        "model": PoliticaDecretoProdutoAcao,
+        "left": ("politica_decr_id", "politica_decreto", "Política do Decreto"),
+        "right": (
+            "produto_acao_id",
+            "produto_acao_planejamento",
+            "Produto da Ação",
+        ),
+    },
+}
+
+PLANNING_COMPONENT_MAPPING_KEYS = {
+    "funcao": ["funcao_programa"],
+    "subfuncao": ["subfuncao_acao"],
+    "ug": ["ug_subfuncao"],
+    "macropolitica": [
+        "adj_macropolitica",
+        "macropolitica_subfuncao",
+    ],
+    "pilar": [
+        "adj_pilar",
+        "macropolitica_pilar",
+    ],
+    "meta_pee": ["pilar_meta"],
+    "eixo": ["adj_eixo"],
+    "politica_decreto": [
+        "politica_eixo",
+        "adj_politica",
+        "subfuncao_politica",
+        "politica_produto_acao",
+    ],
+}
+
+PLANNING_REPORT_STRUCTURE_DATASETS = {
+    "programas": {
+        "title": "Programas",
+        "columns": [
+            ("exercicio", "Exercício"),
+            ("codigo", "Código"),
+            ("nome", "Nome"),
+            ("responsavel", "Responsável"),
+            ("cpf", "CPF"),
+            ("email", "E-mail"),
+            ("situacao", "Situação"),
+        ],
+    },
+    "acoes": {
+        "title": "Ações/PAOE",
+        "columns": [
+            ("exercicio", "Exercício"),
+            ("programa", "Programa"),
+            ("codigo", "Código"),
+            ("nome", "Nome"),
+            ("responsavel", "Responsável"),
+            ("cpf", "CPF"),
+            ("email", "E-mail"),
+            ("situacao", "Situação"),
+        ],
+    },
+    "produtos": {
+        "title": "Produtos da Ação",
+        "columns": [
+            ("exercicio", "Exercício"),
+            ("programa", "Programa"),
+            ("acao", "Ação/PAOE"),
+            ("codigo", "Código"),
+            ("nome", "Nome"),
+            ("responsavel", "Responsável"),
+            ("cpf", "CPF"),
+            ("email", "E-mail"),
+            ("situacao", "Situação"),
+        ],
+    },
+}
+
+
+def _planning_structure_feature(entity: str) -> str | None:
+    config = PLANNING_STRUCTURE_ENTITIES.get(entity)
+    return config["feature"] if config else None
+
+
+def _require_planning_structure_entity(view):
+    @wraps(view)
+    def wrapped(entity, *args, **kwargs):
+        feature = _planning_structure_feature(entity)
+        if not feature:
+            abort(404)
+        if getattr(g, "user_nivel", None) != 1 and not has_permission(feature):
+            abort(403)
+        return view(entity, *args, **kwargs)
+
+    return wrapped
+
+
+@home_bp.route("/partial/atualizar/estrutura-planejamento/<entity>")
+@login_required
+@_require_planning_structure_entity
+def partial_atualizar_estrutura_planejamento(entity: str):
+    config = PLANNING_STRUCTURE_ENTITIES[entity]
+    return render_template(
+        "partials/atualizar_estrutura_planejamento.html",
+        entity=entity,
+        title=config["title"],
+        singular=config["singular"],
+    )
+
+
+def _planning_component_public_config(component: str) -> dict:
+    config = PLANNING_COMPONENTS[component]
+    can_manage_links = (
+        getattr(g, "user_nivel", None) == 1
+        or has_permission("atualizar/estrutura-planejamento/vinculos")
+    )
+    return {
+        "key": component,
+        "title": config["title"],
+        "singular": config["singular"],
+        "fields": config["fields"],
+        "has_active": config.get("has_active", True),
+        "mappings": (
+            _planning_component_mapping_configs(component)
+            if can_manage_links
+            else []
+        ),
+    }
+
+
+@home_bp.route("/partial/atualizar/estrutura-planejamento/componentes")
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes")
+def partial_atualizar_estrutura_componentes():
+    configs = [
+        _planning_component_public_config(key)
+        for key in PLANNING_COMPONENTS
+    ]
+    return render_template(
+        "partials/atualizar_estrutura_componentes.html",
+        component_configs=configs,
+    )
+
+
+def _planning_component_label(component: str, row) -> str:
+    config = PLANNING_COMPONENTS[component]
+    values = [
+        _planning_text(getattr(row, field, ""))
+        for field in config["label_fields"]
+    ]
+    values = [value for value in values if value]
+    return " - ".join(values)
+
+
+def _planning_source_model(source: str):
+    if source in PLANNING_COMPONENTS:
+        return PLANNING_COMPONENTS[source]["model"]
+    return {
+        "programa_planejamento": ProgramaPlanejamento,
+        "acao_planejamento": AcaoPlanejamento,
+        "produto_acao_planejamento": ProdutoAcaoPlanejamento,
+    }.get(source)
+
+
+def _planning_source_label(source: str, row) -> str:
+    if source in PLANNING_COMPONENTS:
+        return _planning_component_label(source, row)
+    if source == "programa_planejamento":
+        return " - ".join(
+            value
+            for value in [
+                str(getattr(row, "exercicio", "") or ""),
+                _planning_text(getattr(row, "codigo", "")),
+                _planning_text(getattr(row, "nome", "")),
+            ]
+            if value
+        )
+    if source == "acao_planejamento":
+        programa = getattr(row, "programa", None)
+        programa_codigo = _planning_text(getattr(programa, "codigo", ""))
+        acao_label = " - ".join(
+            value
+            for value in [
+                _planning_text(getattr(row, "codigo", "")),
+                _planning_text(getattr(row, "nome", "")),
+            ]
+            if value
+        )
+        exercicio = str(getattr(row, "exercicio", "") or "")
+        contexto = " | ".join(
+            value for value in [exercicio, programa_codigo] if value
+        )
+        return f"{contexto} | {acao_label}" if contexto else acao_label
+    if source == "produto_acao_planejamento":
+        acao = getattr(row, "acao", None)
+        programa = getattr(acao, "programa", None)
+        programa_codigo = _planning_text(getattr(programa, "codigo", ""))
+        acao_codigo = _planning_text(getattr(acao, "codigo", ""))
+        produto_label = " - ".join(
+            value
+            for value in [
+                _planning_text(getattr(row, "codigo", "")),
+                _planning_text(getattr(row, "nome", "")),
+            ]
+            if value
+        )
+        exercicio = str(getattr(row, "exercicio", "") or "")
+        contexto = " | ".join(
+            value for value in [exercicio, programa_codigo, acao_codigo] if value
+        )
+        return f"{contexto} | {produto_label}" if contexto else produto_label
+    return ""
+
+
+def _planning_source_options(source: str) -> list[dict]:
+    model = _planning_source_model(source)
+    if not model:
+        return []
+    rows = model.query.order_by(model.id.asc()).all()
+    return [
+        {
+            "id": row.id,
+            "label": _planning_source_label(source, row),
+            "ativo": bool(getattr(row, "ativo", True)),
+        }
+        for row in rows
+    ]
+
+
+def _planning_component_options(component: str) -> list[dict]:
+    return _planning_source_options(component)
+
+
+def _planning_component_mapping_configs(component: str) -> list[dict]:
+    result = []
+    for mapping_key in PLANNING_COMPONENT_MAPPING_KEYS.get(component, []):
+        mapping = PLANNING_MAPPINGS[mapping_key]
+        left_field, left_source, left_label = mapping["left"]
+        right_field, right_source, right_label = mapping["right"]
+        if left_source == component:
+            fixed_side = "left"
+            target_label = right_label
+        elif right_source == component:
+            fixed_side = "right"
+            target_label = left_label
+        else:
+            continue
+        result.append(
+            {
+                "key": mapping_key,
+                "title": mapping["title"],
+                "fixed_side": fixed_side,
+                "target_label": target_label,
+                "left_field": left_field,
+                "right_field": right_field,
+            }
+        )
+    return result
+
+
+def _planning_component_serialize(
+    component: str,
+    row,
+    source_labels: dict[str, dict[int, str]] | None = None,
+) -> dict:
+    config = PLANNING_COMPONENTS[component]
+    source_labels = source_labels or {}
+    result = {
+        "id": row.id,
+        "ativo": bool(getattr(row, "ativo", True)),
+        "label": _planning_component_label(component, row),
+    }
+    for field in config["fields"]:
+        value = getattr(row, field["name"], None)
+        result[field["name"]] = value
+        if field.get("type") == "select" and value is not None:
+            source = field["source"]
+            result[f"{field['name']}_label"] = source_labels.get(source, {}).get(
+                value, ""
+            )
+    return result
+
+
+def _planning_component_values(component: str, payload: dict) -> tuple[dict | None, str | None]:
+    config = PLANNING_COMPONENTS[component]
+    values = {}
+    for field in config["fields"]:
+        name = field["name"]
+        raw = payload.get(name)
+        if field.get("type") in {"select", "integer"}:
+            if raw in (None, ""):
+                value = None
+            else:
+                try:
+                    value = int(raw)
+                except (TypeError, ValueError):
+                    return None, f"Informe um valor válido para {field['label']}."
+        else:
+            value = _planning_text(raw, field.get("max"))
+            if name == "uf":
+                value = value.upper()
+        if field.get("required") and value in (None, ""):
+            return None, f"Preencha o campo {field['label']}."
+        if field.get("type") == "select" and value is not None:
+            source = field["source"]
+            source_row = db.session.get(PLANNING_COMPONENTS[source]["model"], value)
+            if not source_row:
+                return None, f"{field['label']} não encontrado(a)."
+        values[name] = value
+    if config.get("has_active", True):
+        values["ativo"] = bool(payload.get("ativo", True))
+    return values, None
+
+
+def _planning_component_duplicate(component: str, values: dict, row_id: int | None = None):
+    config = PLANNING_COMPONENTS[component]
+    query = config["model"].query
+    for field in config["unique"]:
+        query = query.filter(getattr(config["model"], field) == values.get(field))
+    if row_id:
+        query = query.filter(config["model"].id != row_id)
+    return query.first()
+
+
+PLANNING_COMPONENT_DEPENDENCIES = {
+    "regiao": [(Municipio, "regiao_id", "municípios")],
+    "funcao": [
+        (Subfuncao, "funcao_id", "subfunções"),
+        (FuncaoPrograma, "funcao_id", "mapeamentos com programas"),
+    ],
+    "subfuncao": [
+        (UgSubfuncao, "subfuncao_id", "mapeamentos com UGs"),
+        (SubfuncaoPolitica, "subfuncao_id", "mapeamentos com políticas"),
+        (SubfuncaoAcao, "subfuncao_id", "mapeamentos com ações"),
+        (
+            MacropoliticaSubfuncao,
+            "subfuncao_id",
+            "mapeamentos com macropolíticas",
+        ),
+    ],
+    "ug": [(UgSubfuncao, "ug_id", "mapeamentos com subfunções")],
+    "adj": [
+        (MacropoliticaAdj, "adj_id", "mapeamentos com macropolíticas"),
+        (PilarAdj, "adj_id", "mapeamentos com pilares"),
+        (EixoAdj, "adj_id", "mapeamentos com eixos"),
+        (PoliticaDecretoAdj, "adj_id", "mapeamentos com políticas"),
+    ],
+    "macropolitica": [
+        (MacropoliticaAdj, "macropolitica_id", "mapeamentos com ADJs"),
+        (MacropoliticaPilar, "macropolitica_id", "mapeamentos com pilares"),
+        (
+            MacropoliticaSubfuncao,
+            "macropolitica_id",
+            "mapeamentos com subfunções",
+        ),
+    ],
+    "pilar": [
+        (Eixo, "pilar_id", "eixos"),
+        (PilarAdj, "pilar_id", "mapeamentos com ADJs"),
+        (MacropoliticaPilar, "pilar_id", "mapeamentos com macropolíticas"),
+        (PilarMeta, "pilar_id", "mapeamentos com metas PEE"),
+    ],
+    "meta_pee": [
+        (IndicadorPee, "meta_id", "indicadores PEE"),
+        (PilarMeta, "meta_id", "mapeamentos com pilares"),
+    ],
+    "eixo": [
+        (EixoAdj, "eixo_id", "mapeamentos com ADJs"),
+        (PoliticaDecretoEixo, "eixo_id", "mapeamentos com políticas"),
+    ],
+    "politica_decreto": [
+        (PoliticaDecretoAdj, "politica_decr_id", "mapeamentos com ADJs"),
+        (SubfuncaoPolitica, "politica_decr_id", "mapeamentos com subfunções"),
+        (PoliticaDecretoEixo, "politica_id", "mapeamentos com eixos"),
+        (
+            PoliticaDecretoProdutoAcao,
+            "politica_decr_id",
+            "mapeamentos com produtos da ação",
+        ),
+    ],
+}
+
+
+def _planning_component_dependency_error(component: str, row_id: int) -> str | None:
+    for model, field, label in PLANNING_COMPONENT_DEPENDENCIES.get(component, []):
+        if model.query.filter(getattr(model, field) == row_id).first():
+            return f"O registro possui {label} vinculados."
+    return None
+
+
+@home_bp.route("/api/estrutura-planejamento/componentes/<component>", methods=["GET"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes")
+def api_estrutura_componentes_list(component: str):
+    config = PLANNING_COMPONENTS.get(component)
+    if not config:
+        abort(404)
+    rows = config["model"].query.order_by(config["model"].id.asc()).all()
+    sources = {
+        field["source"]: _planning_component_options(field["source"])
+        for field in config["fields"]
+        if field.get("type") == "select"
+    }
+    source_labels = {
+        source: {option["id"]: option["label"] for option in options}
+        for source, options in sources.items()
+    }
+    return jsonify(
+        {
+            "ok": True,
+            "config": _planning_component_public_config(component),
+            "rows": [
+                _planning_component_serialize(component, row, source_labels)
+                for row in rows
+            ],
+            "sources": sources,
+        }
+    )
+
+
+@home_bp.route("/api/estrutura-planejamento/componentes/<component>", methods=["POST"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes")
+def api_estrutura_componentes_create(component: str):
+    config = PLANNING_COMPONENTS.get(component)
+    if not config:
+        abort(404)
+    values, error = _planning_component_values(
+        component, request.get_json(silent=True) or {}
+    )
+    if error:
+        return jsonify({"error": error}), 400
+    if _planning_component_duplicate(component, values):
+        return jsonify({"error": "Já existe um registro com essa identificação."}), 409
+    row = config["model"](**values)
+    now = _now_local()
+    for timestamp_field in ("created_at", "criado_em"):
+        if hasattr(row, timestamp_field):
+            setattr(row, timestamp_field, now)
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao cadastrar componente %s", component)
+        return jsonify({"error": "Falha ao cadastrar o componente."}), 500
+    return jsonify({"ok": True, "message": "Componente cadastrado com sucesso."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes/<component>/<int:row_id>",
+    methods=["PUT"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes")
+def api_estrutura_componentes_update(component: str, row_id: int):
+    config = PLANNING_COMPONENTS.get(component)
+    if not config:
+        abort(404)
+    row = db.session.get(config["model"], row_id)
+    if not row:
+        return jsonify({"error": "Componente não encontrado."}), 404
+    values, error = _planning_component_values(
+        component, request.get_json(silent=True) or {}
+    )
+    if error:
+        return jsonify({"error": error}), 400
+    if _planning_component_duplicate(component, values, row_id):
+        return jsonify({"error": "Já existe um registro com essa identificação."}), 409
+    if config.get("has_active", True) and not values.get("ativo", True):
+        dependency_error = _planning_component_dependency_error(component, row_id)
+        if dependency_error:
+            return jsonify({"error": dependency_error}), 409
+    for field, value in values.items():
+        setattr(row, field, value)
+    now = _now_local()
+    for timestamp_field in ("updated_at", "atualizado_em"):
+        if hasattr(row, timestamp_field):
+            setattr(row, timestamp_field, now)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao atualizar componente %s/%s", component, row_id)
+        return jsonify({"error": "Falha ao atualizar o componente."}), 500
+    return jsonify({"ok": True, "message": "Componente atualizado com sucesso."})
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes/<component>/<int:row_id>",
+    methods=["DELETE"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes")
+def api_estrutura_componentes_delete(component: str, row_id: int):
+    config = PLANNING_COMPONENTS.get(component)
+    if not config:
+        abort(404)
+    if not config.get("has_active", True):
+        return jsonify({"error": "Este cadastro não possui desativação lógica."}), 405
+    row = db.session.get(config["model"], row_id)
+    if not row:
+        return jsonify({"error": "Componente não encontrado."}), 404
+    dependency_error = _planning_component_dependency_error(component, row_id)
+    if dependency_error:
+        return jsonify({"error": dependency_error}), 409
+    row.ativo = False
+    now = _now_local()
+    for timestamp_field in ("updated_at", "atualizado_em"):
+        if hasattr(row, timestamp_field):
+            setattr(row, timestamp_field, now)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Falha ao desativar o componente."}), 500
+    return jsonify({"ok": True, "message": "Componente desativado com sucesso."})
+
+
+def _planning_mapping_payload(mapping: str) -> dict:
+    config = PLANNING_MAPPINGS[mapping]
+    left_field, left_source, left_label = config["left"]
+    right_field, right_source, right_label = config["right"]
+    left_options = _planning_source_options(left_source)
+    right_options = _planning_source_options(right_source)
+    left_labels = {option["id"]: option["label"] for option in left_options}
+    right_labels = {option["id"]: option["label"] for option in right_options}
+    rows = []
+    for row in config["model"].query.all():
+        left_id = getattr(row, left_field)
+        right_id = getattr(row, right_field)
+        rows.append(
+            {
+                "left_id": left_id,
+                "right_id": right_id,
+                "left_label": left_labels.get(left_id, ""),
+                "right_label": right_labels.get(right_id, ""),
+            }
+        )
+    left_counts = {}
+    for row in rows:
+        left_counts[row["left_id"]] = left_counts.get(row["left_id"], 0) + 1
+    for row in rows:
+        row["left_count"] = left_counts.get(row["left_id"], 0)
+    return {
+        "config": {
+            "key": mapping,
+            "title": config["title"],
+            "left_label": left_label,
+            "right_label": right_label,
+            "left_field": left_field,
+            "right_field": right_field,
+            "left_source": left_source,
+            "right_source": right_source,
+        },
+        "left_options": left_options,
+        "right_options": right_options,
+        "rows": rows,
+    }
+
+
+@home_bp.route("/api/estrutura-planejamento/mapeamentos/<mapping>", methods=["GET"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/vinculos")
+def api_estrutura_mapeamentos_list(mapping: str):
+    config = PLANNING_MAPPINGS.get(mapping)
+    if not config:
+        abort(404)
+    payload = _planning_mapping_payload(mapping)
+    return jsonify(
+        {
+            "ok": True,
+            **payload,
+        }
+    )
+
+
+@home_bp.route("/api/estrutura-planejamento/mapeamentos/<mapping>", methods=["POST"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/vinculos")
+def api_estrutura_mapeamentos_create(mapping: str):
+    config = PLANNING_MAPPINGS.get(mapping)
+    if not config:
+        abort(404)
+    payload = request.get_json(silent=True) or {}
+    try:
+        left_id = int(payload.get("left_id"))
+        right_id = int(payload.get("right_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione os dois registros do mapeamento."}), 400
+    left_field, left_source, _ = config["left"]
+    right_field, right_source, _ = config["right"]
+    left_model = _planning_source_model(left_source)
+    right_model = _planning_source_model(right_source)
+    if not left_model or not db.session.get(left_model, left_id):
+        return jsonify({"error": "Registro de origem não encontrado."}), 404
+    if not right_model or not db.session.get(right_model, right_id):
+        return jsonify({"error": "Registro de destino não encontrado."}), 404
+    filters = {left_field: left_id, right_field: right_id}
+    if config["model"].query.filter_by(**filters).first():
+        return jsonify({"error": "Este mapeamento já está cadastrado."}), 409
+    try:
+        db.session.add(config["model"](**filters))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Este mapeamento já está cadastrado."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao cadastrar mapeamento %s", mapping)
+        return jsonify({"error": "Falha ao cadastrar o mapeamento."}), 500
+    return jsonify({"ok": True, "message": "Mapeamento cadastrado com sucesso."}), 201
+
+
+@home_bp.route("/api/estrutura-planejamento/mapeamentos/<mapping>", methods=["DELETE"])
+@login_required
+@require_feature("atualizar/estrutura-planejamento/vinculos")
+def api_estrutura_mapeamentos_delete(mapping: str):
+    config = PLANNING_MAPPINGS.get(mapping)
+    if not config:
+        abort(404)
+    payload = request.get_json(silent=True) or {}
+    try:
+        left_id = int(payload.get("left_id"))
+        right_id = int(payload.get("right_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Mapeamento inválido."}), 400
+    left_field = config["left"][0]
+    right_field = config["right"][0]
+    row = config["model"].query.filter_by(
+        **{left_field: left_id, right_field: right_id}
+    ).first()
+    if not row:
+        return jsonify({"error": "Mapeamento não encontrado."}), 404
+    try:
+        db.session.delete(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao remover mapeamento %s", mapping)
+        return jsonify({"error": "Falha ao remover o mapeamento."}), 500
+    return jsonify({"ok": True, "message": "Mapeamento removido com sucesso."})
+
+
+def _planning_text(value, max_length: int | None = None) -> str:
+    result = re.sub(r"\s+", " ", str(value or "").strip())
+    return result[:max_length] if max_length else result
+
+
+def _planning_exercicio(value) -> int | None:
+    raw = str(value or "").strip()
+    if not re.fullmatch(r"\d{4}", raw):
+        return None
+    year = int(raw)
+    return year if 2000 <= year <= 9999 else None
+
+
+def _planning_cpf(value) -> tuple[str | None, str | None]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None, None
+    digits = re.sub(r"\D", "", raw)
+    if not _is_valid_cpf(digits):
+        return None, "Informe um CPF válido."
+    return (
+        f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}",
+        None,
+    )
+
+
+def _planning_email(value) -> tuple[str | None, str | None]:
+    email = _planning_text(value, 150)
+    if not email:
+        return None, None
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return None, "Informe um e-mail válido."
+    return email.lower(), None
+
+
+def _planning_nome_hash(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    normalized = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    )
+    normalized = re.sub(r"\s+", " ", normalized).strip().casefold()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _planning_common_payload(payload: dict) -> tuple[dict | None, str | None]:
+    exercicio = _planning_exercicio(payload.get("exercicio"))
+    codigo = _planning_text(payload.get("codigo"), 30)
+    nome = _planning_text(payload.get("nome"), 500)
+    responsavel = _planning_text(payload.get("responsavel"), 255) or None
+    cpf, cpf_error = _planning_cpf(payload.get("cpf"))
+    email, email_error = _planning_email(payload.get("email"))
+    if not exercicio:
+        return None, "Informe um exercício válido com quatro dígitos."
+    if not nome:
+        return None, "Informe o nome."
+    if cpf_error:
+        return None, cpf_error
+    if email_error:
+        return None, email_error
+    return (
+        {
+            "exercicio": exercicio,
+            "codigo": codigo,
+            "nome": nome,
+            "responsavel": responsavel,
+            "cpf": cpf,
+            "email": email,
+            "ativo": bool(payload.get("ativo", True)),
+        },
+        None,
+    )
+
+
+def _serialize_programa(row: ProgramaPlanejamento) -> dict:
+    return {
+        "id": row.id,
+        "exercicio": row.exercicio,
+        "codigo": row.codigo or "",
+        "nome": row.nome or "",
+        "responsavel": row.responsavel or "",
+        "cpf": row.cpf or "",
+        "email": row.email or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+def _serialize_acao(row: AcaoPlanejamento) -> dict:
+    programa = getattr(row, "programa", None)
+    return {
+        "id": row.id,
+        "programa_id": row.programa_id,
+        "programa_codigo": getattr(programa, "codigo", "") or "",
+        "programa_nome": getattr(programa, "nome", "") or "",
+        "exercicio": row.exercicio,
+        "codigo": row.codigo or "",
+        "nome": row.nome or "",
+        "responsavel": row.responsavel or "",
+        "cpf": row.cpf or "",
+        "email": row.email or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+def _serialize_produto(row: ProdutoAcaoPlanejamento) -> dict:
+    acao = getattr(row, "acao", None)
+    programa = getattr(acao, "programa", None) if acao else None
+    return {
+        "id": row.id,
+        "acao_id": row.acao_id,
+        "acao_codigo": getattr(acao, "codigo", "") or "",
+        "acao_nome": getattr(acao, "nome", "") or "",
+        "programa_id": getattr(acao, "programa_id", None),
+        "programa_codigo": getattr(programa, "codigo", "") or "",
+        "programa_nome": getattr(programa, "nome", "") or "",
+        "exercicio": row.exercicio,
+        "codigo": row.codigo or "",
+        "nome": row.nome or "",
+        "responsavel": row.responsavel or "",
+        "cpf": row.cpf or "",
+        "email": row.email or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+def _planning_report_configs() -> dict:
+    cadastros = [
+        {"key": key, "title": config["title"]}
+        for key, config in PLANNING_REPORT_STRUCTURE_DATASETS.items()
+    ]
+    cadastros.extend(
+        {"key": f"componente:{key}", "title": config["title"]}
+        for key, config in PLANNING_COMPONENTS.items()
+    )
+    vinculos = [
+        {"key": key, "title": config["title"]}
+        for key, config in PLANNING_MAPPINGS.items()
+    ]
+    return {"cadastros": cadastros, "vinculos": vinculos}
+
+
+def _planning_report_structure_data(dataset: str) -> tuple[list[dict], list[dict]]:
+    config = PLANNING_REPORT_STRUCTURE_DATASETS[dataset]
+    if dataset == "programas":
+        records = [
+            {
+                **_serialize_programa(row),
+                "situacao": "Ativo" if row.ativo else "Inativo",
+            }
+            for row in ProgramaPlanejamento.query.order_by(
+                ProgramaPlanejamento.exercicio.desc(),
+                ProgramaPlanejamento.codigo.asc(),
+            ).all()
+        ]
+    elif dataset == "acoes":
+        records = []
+        for row in AcaoPlanejamento.query.order_by(
+            AcaoPlanejamento.exercicio.desc(),
+            AcaoPlanejamento.codigo.asc(),
+        ).all():
+            item = _serialize_acao(row)
+            item["programa"] = " - ".join(
+                value
+                for value in [item["programa_codigo"], item["programa_nome"]]
+                if value
+            )
+            item["situacao"] = "Ativo" if row.ativo else "Inativo"
+            records.append(item)
+    else:
+        records = []
+        for row in ProdutoAcaoPlanejamento.query.order_by(
+            ProdutoAcaoPlanejamento.exercicio.desc(),
+            ProdutoAcaoPlanejamento.nome.asc(),
+        ).all():
+            item = _serialize_produto(row)
+            item["programa"] = " - ".join(
+                value
+                for value in [item["programa_codigo"], item["programa_nome"]]
+                if value
+            )
+            item["acao"] = " - ".join(
+                value
+                for value in [item["acao_codigo"], item["acao_nome"]]
+                if value
+            )
+            item["situacao"] = "Ativo" if row.ativo else "Inativo"
+            records.append(item)
+    columns = [{"key": key, "label": label} for key, label in config["columns"]]
+    return columns, records
+
+
+def _planning_report_component_data(component: str) -> tuple[list[dict], list[dict]]:
+    config = PLANNING_COMPONENTS[component]
+    source_options = {
+        field["source"]: _planning_component_options(field["source"])
+        for field in config["fields"]
+        if field.get("type") == "select"
+    }
+    source_labels = {
+        source: {option["id"]: option["label"] for option in options}
+        for source, options in source_options.items()
+    }
+    records = []
+    for row in config["model"].query.order_by(config["model"].id.asc()).all():
+        serialized = _planning_component_serialize(component, row, source_labels)
+        item = {}
+        for field in config["fields"]:
+            key = field["name"]
+            item[key] = (
+                serialized.get(f"{key}_label", "")
+                if field.get("type") == "select"
+                else serialized.get(key, "")
+            )
+        item["situacao"] = (
+            "Ativo" if serialized["ativo"] else "Inativo"
+        ) if config.get("has_active", True) else "Não se aplica"
+        records.append(item)
+    columns = [
+        {"key": field["name"], "label": field["label"]}
+        for field in config["fields"]
+    ]
+    columns.append({"key": "situacao", "label": "Situação"})
+    return columns, records
+
+
+def _planning_report_cadastro_data(dataset: str) -> tuple[str, list[dict], list[dict]]:
+    if dataset in PLANNING_REPORT_STRUCTURE_DATASETS:
+        columns, rows = _planning_report_structure_data(dataset)
+        return PLANNING_REPORT_STRUCTURE_DATASETS[dataset]["title"], columns, rows
+    if dataset.startswith("componente:"):
+        component = dataset.split(":", 1)[1]
+        config = PLANNING_COMPONENTS.get(component)
+        if config:
+            columns, rows = _planning_report_component_data(component)
+            return config["title"], columns, rows
+    abort(404)
+
+
+def _planning_report_mapping_data(mapping: str) -> tuple[str, list[dict], list[dict]]:
+    config = PLANNING_MAPPINGS.get(mapping)
+    if not config:
+        abort(404)
+    rows = _planning_mapping_payload(mapping)["rows"]
+    columns = [
+        {"key": "left_label", "label": config["left"][2]},
+        {"key": "right_label", "label": config["right"][2]},
+        {"key": "left_count", "label": "Qtd. vínculos da origem"},
+    ]
+    return config["title"], columns, rows
+
+
+def _planning_report_excel(title: str, columns: list[dict], rows: list[dict]):
+    output = BytesIO()
+    frame = pd.DataFrame(
+        [
+            {column["label"]: row.get(column["key"], "") for column in columns}
+            for row in rows
+        ],
+        columns=[column["label"] for column in columns],
+    )
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        frame.to_excel(writer, index=False, sheet_name="Consulta")
+        worksheet = writer.sheets["Consulta"]
+        workbook = writer.book
+        header_format = workbook.add_format(
+            {
+                "bold": True,
+                "font_color": "#FFFFFF",
+                "bg_color": "#16836F",
+                "border": 1,
+            }
+        )
+        for index, column in enumerate(columns):
+            worksheet.write(0, index, column["label"], header_format)
+            values = [str(row.get(column["key"], "") or "") for row in rows]
+            width = min(60, max([len(column["label"]), *(len(value) for value in values)]))
+            worksheet.set_column(index, index, max(12, width + 2))
+        worksheet.autofilter(0, 0, max(0, len(rows)), max(0, len(columns) - 1))
+        worksheet.freeze_panes(1, 0)
+    output.seek(0)
+    filename = secure_filename(f"estrutura_planejamento_{title}.xlsx")
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+    )
+
+
+def _planning_report_filter_rows(
+    columns: list[dict],
+    rows: list[dict],
+    status: str = "",
+    search: str = "",
+) -> list[dict]:
+    normalized_search = unicodedata.normalize("NFKD", search or "")
+    normalized_search = "".join(
+        char for char in normalized_search if not unicodedata.combining(char)
+    ).casefold().strip()
+    result = []
+    for row in rows:
+        if status and row.get("situacao") != status:
+            continue
+        if normalized_search:
+            haystack = " ".join(
+                str(row.get(column["key"], "") or "") for column in columns
+            )
+            haystack = unicodedata.normalize("NFKD", haystack)
+            haystack = "".join(
+                char for char in haystack if not unicodedata.combining(char)
+            ).casefold()
+            if normalized_search not in haystack:
+                continue
+        result.append(row)
+    return result
+
+
+def _planning_structure_dependencies() -> dict:
+    programas = ProgramaPlanejamento.query.order_by(
+        ProgramaPlanejamento.exercicio.desc(),
+        ProgramaPlanejamento.codigo.asc(),
+    ).all()
+    acoes = AcaoPlanejamento.query.order_by(
+        AcaoPlanejamento.exercicio.desc(),
+        AcaoPlanejamento.codigo.asc(),
+    ).all()
+    return {
+        "programas": [_serialize_programa(row) for row in programas],
+        "acoes": [_serialize_acao(row) for row in acoes],
+    }
+
+
+@home_bp.route("/api/estrutura-planejamento/<entity>", methods=["GET"])
+@login_required
+@_require_planning_structure_entity
+def api_estrutura_planejamento_list(entity: str):
+    if entity == "programas":
+        rows = ProgramaPlanejamento.query.order_by(
+            ProgramaPlanejamento.exercicio.desc(),
+            ProgramaPlanejamento.codigo.asc(),
+            ProgramaPlanejamento.nome.asc(),
+        ).all()
+        serialized = [_serialize_programa(row) for row in rows]
+    elif entity == "acoes":
+        rows = AcaoPlanejamento.query.order_by(
+            AcaoPlanejamento.exercicio.desc(),
+            AcaoPlanejamento.codigo.asc(),
+            AcaoPlanejamento.nome.asc(),
+        ).all()
+        serialized = [_serialize_acao(row) for row in rows]
+    else:
+        rows = ProdutoAcaoPlanejamento.query.order_by(
+            ProdutoAcaoPlanejamento.exercicio.desc(),
+            ProdutoAcaoPlanejamento.nome.asc(),
+        ).all()
+        serialized = [_serialize_produto(row) for row in rows]
+    return jsonify(
+        {
+            "ok": True,
+            "rows": serialized,
+            **_planning_structure_dependencies(),
+        }
+    )
+
+
+def _planning_validate_parent(
+    entity: str, payload: dict, values: dict
+) -> tuple[dict | None, str | None]:
+    if entity == "programas":
+        if not values["codigo"]:
+            return None, "Informe o código do programa."
+        values["codigo"] = values["codigo"][:20]
+        values["nome"] = values["nome"][:255]
+        return values, None
+
+    if entity == "acoes":
+        if not values["codigo"]:
+            return None, "Informe o código da Ação/PAOE."
+        values["codigo"] = values["codigo"][:20]
+        try:
+            programa_id = int(payload.get("programa_id"))
+        except (TypeError, ValueError):
+            return None, "Selecione um programa."
+        programa = db.session.get(ProgramaPlanejamento, programa_id)
+        if not programa:
+            return None, "Programa não encontrado."
+        if programa.exercicio != values["exercicio"]:
+            return None, "O programa selecionado não pertence ao exercício informado."
+        if values["ativo"] and not programa.ativo:
+            return None, "Não é possível ativar uma ação vinculada a um programa inativo."
+        values["programa_id"] = programa.id
+        return values, None
+
+    try:
+        acao_id = int(payload.get("acao_id"))
+    except (TypeError, ValueError):
+        return None, "Selecione uma Ação/PAOE."
+    acao = db.session.get(AcaoPlanejamento, acao_id)
+    if not acao:
+        return None, "Ação/PAOE não encontrada."
+    if acao.exercicio != values["exercicio"]:
+        return None, "A Ação/PAOE selecionada não pertence ao exercício informado."
+    if values["ativo"] and (
+        not acao.ativo or not acao.programa or not acao.programa.ativo
+    ):
+        return None, "Não é possível ativar um produto vinculado a uma estrutura inativa."
+    values["codigo"] = values["codigo"][:30] or None
+    values["acao_id"] = acao.id
+    values["nome_hash"] = _planning_nome_hash(values["nome"])
+    return values, None
+
+
+def _planning_apply_values(row, values: dict) -> None:
+    for field, value in values.items():
+        setattr(row, field, value)
+
+
+@home_bp.route("/api/estrutura-planejamento/<entity>", methods=["POST"])
+@login_required
+@_require_planning_structure_entity
+def api_estrutura_planejamento_create(entity: str):
+    payload = request.get_json(silent=True) or {}
+    values, error = _planning_common_payload(payload)
+    if error:
+        return jsonify({"error": error}), 400
+    values, error = _planning_validate_parent(entity, payload, values)
+    if error:
+        return jsonify({"error": error}), 400
+
+    model = {
+        "programas": ProgramaPlanejamento,
+        "acoes": AcaoPlanejamento,
+        "produtos": ProdutoAcaoPlanejamento,
+    }[entity]
+    now = _now_local()
+    values["usuario_id"] = _resolve_usuario_id()
+    values["criado_em"] = now
+    values["excluido_em"] = None if values["ativo"] else now
+    row = model(**values)
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Já existe um registro equivalente neste contexto."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao cadastrar estrutura de planejamento: %s", entity
+        )
+        return jsonify({"error": "Falha ao cadastrar o registro."}), 500
+    return jsonify({"ok": True, "message": "Registro cadastrado com sucesso."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/<entity>/<int:row_id>", methods=["PUT"]
+)
+@login_required
+@_require_planning_structure_entity
+def api_estrutura_planejamento_update(entity: str, row_id: int):
+    model = {
+        "programas": ProgramaPlanejamento,
+        "acoes": AcaoPlanejamento,
+        "produtos": ProdutoAcaoPlanejamento,
+    }[entity]
+    row = db.session.get(model, row_id)
+    if not row:
+        return jsonify({"error": "Registro não encontrado."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    values, error = _planning_common_payload(payload)
+    if error:
+        return jsonify({"error": error}), 400
+    values, error = _planning_validate_parent(entity, payload, values)
+    if error:
+        return jsonify({"error": error}), 400
+
+    if entity == "programas":
+        has_children = AcaoPlanejamento.query.filter_by(programa_id=row.id).first()
+        if has_children and values["exercicio"] != row.exercicio:
+            return jsonify(
+                {"error": "O exercício não pode ser alterado enquanto houver ações vinculadas."}
+            ), 409
+    elif entity == "acoes":
+        has_children = ProdutoAcaoPlanejamento.query.filter_by(acao_id=row.id).first()
+        if has_children and (
+            values["exercicio"] != row.exercicio
+            or values["programa_id"] != row.programa_id
+        ):
+            return jsonify(
+                {
+                    "error": (
+                        "Programa e exercício não podem ser alterados enquanto houver "
+                        "produtos vinculados."
+                    )
+                }
+            ), 409
+
+    if not values["ativo"]:
+        if entity == "programas":
+            if FuncaoPrograma.query.filter_by(programa_id=row.id).first():
+                return jsonify(
+                    {"error": "Remova primeiro os vínculos do programa com funções."}
+                ), 409
+            active_child = AcaoPlanejamento.query.filter_by(
+                programa_id=row.id, ativo=True
+            ).first()
+            if active_child:
+                return jsonify(
+                    {"error": "Desative primeiro as Ações/PAOE vinculadas ao programa."}
+                ), 409
+        elif entity == "acoes":
+            active_child = ProdutoAcaoPlanejamento.query.filter_by(
+                acao_id=row.id, ativo=True
+            ).first()
+            if active_child:
+                return jsonify(
+                    {"error": "Desative primeiro os produtos vinculados à Ação/PAOE."}
+                ), 409
+            if SubfuncaoAcao.query.filter_by(acao_id=row.id).first():
+                return jsonify(
+                    {"error": "Remova primeiro os vínculos da Ação/PAOE com subfunções."}
+                ), 409
+        elif entity == "produtos":
+            if PoliticaDecretoProdutoAcao.query.filter_by(
+                produto_acao_id=row.id
+            ).first():
+                return jsonify(
+                    {
+                        "error": (
+                            "Remova primeiro os vínculos do produto com políticas "
+                            "do decreto."
+                        )
+                    }
+                ), 409
+
+    now = _now_local()
+    values["usuario_id"] = _resolve_usuario_id() or row.usuario_id
+    values["alterado_em"] = now
+    values["excluido_em"] = None if values["ativo"] else now
+    _planning_apply_values(row, values)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Já existe um registro equivalente neste contexto."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao atualizar estrutura de planejamento: %s/%s", entity, row_id
+        )
+        return jsonify({"error": "Falha ao atualizar o registro."}), 500
+    return jsonify({"ok": True, "message": "Registro atualizado com sucesso."})
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/<entity>/<int:row_id>", methods=["DELETE"]
+)
+@login_required
+@_require_planning_structure_entity
+def api_estrutura_planejamento_delete(entity: str, row_id: int):
+    model = {
+        "programas": ProgramaPlanejamento,
+        "acoes": AcaoPlanejamento,
+        "produtos": ProdutoAcaoPlanejamento,
+    }[entity]
+    row = db.session.get(model, row_id)
+    if not row:
+        return jsonify({"error": "Registro não encontrado."}), 404
+    if not row.ativo:
+        return jsonify({"ok": True, "message": "O registro já está inativo."})
+
+    if entity == "programas" and AcaoPlanejamento.query.filter_by(
+        programa_id=row.id, ativo=True
+    ).first():
+        return jsonify(
+            {"error": "Desative primeiro as Ações/PAOE vinculadas ao programa."}
+        ), 409
+    if entity == "programas" and FuncaoPrograma.query.filter_by(
+        programa_id=row.id
+    ).first():
+        return jsonify(
+            {"error": "Remova primeiro os vínculos do programa com funções."}
+        ), 409
+    if entity == "acoes" and ProdutoAcaoPlanejamento.query.filter_by(
+        acao_id=row.id, ativo=True
+    ).first():
+        return jsonify(
+            {"error": "Desative primeiro os produtos vinculados à Ação/PAOE."}
+        ), 409
+    if entity == "acoes" and SubfuncaoAcao.query.filter_by(
+        acao_id=row.id
+    ).first():
+        return jsonify(
+            {"error": "Remova primeiro os vínculos da Ação/PAOE com subfunções."}
+        ), 409
+    if entity == "produtos" and PoliticaDecretoProdutoAcao.query.filter_by(
+        produto_acao_id=row.id
+    ).first():
+        return jsonify(
+            {
+                "error": (
+                    "Remova primeiro os vínculos do produto com políticas do decreto."
+                )
+            }
+        ), 409
+
+    now = _now_local()
+    row.ativo = False
+    row.alterado_em = now
+    row.excluido_em = now
+    row.usuario_id = _resolve_usuario_id() or row.usuario_id
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao desativar estrutura de planejamento: %s/%s", entity, row_id
+        )
+        return jsonify({"error": "Falha ao desativar o registro."}), 500
+    return jsonify({"ok": True, "message": "Registro desativado com sucesso."})
+
+
 TETO_SEDUC_UPLOAD_DIR = Path("upload/teto_seduc")
 
 
@@ -3294,6 +4856,73 @@ def partial_relatorios_plan20():
 @require_feature("relatorios/plan21-nger")
 def partial_relatorios_plan21_nger():
     return render_template("partials/relatorios_plan21_nger.html")
+
+
+@home_bp.route("/partial/relatorios/estrutura-planejamento")
+@login_required
+@require_feature("relatorios/estrutura-planejamento")
+def partial_relatorios_estrutura_planejamento():
+    return render_template(
+        "partials/relatorios_estrutura_planejamento.html",
+        report_configs=_planning_report_configs(),
+    )
+
+
+@home_bp.route(
+    "/api/relatorios/estrutura-planejamento/cadastros/<path:dataset>",
+    methods=["GET"],
+)
+@login_required
+@require_feature("relatorios/estrutura-planejamento")
+def api_relatorios_estrutura_planejamento_cadastros(dataset: str):
+    title, columns, rows = _planning_report_cadastro_data(dataset)
+    return jsonify(
+        {
+            "ok": True,
+            "title": title,
+            "columns": columns,
+            "rows": rows,
+            "total": len(rows),
+        }
+    )
+
+
+@home_bp.route(
+    "/api/relatorios/estrutura-planejamento/vinculos/<mapping>",
+    methods=["GET"],
+)
+@login_required
+@require_feature("relatorios/estrutura-planejamento")
+def api_relatorios_estrutura_planejamento_vinculos(mapping: str):
+    title, columns, rows = _planning_report_mapping_data(mapping)
+    return jsonify(
+        {
+            "ok": True,
+            "title": title,
+            "columns": columns,
+            "rows": rows,
+            "total": len(rows),
+        }
+    )
+
+
+@home_bp.route(
+    "/api/relatorios/estrutura-planejamento/download",
+    methods=["GET"],
+)
+@login_required
+@require_feature("relatorios/estrutura-planejamento")
+def api_relatorios_estrutura_planejamento_download():
+    view = request.args.get("view", "cadastros")
+    key = request.args.get("key", "")
+    status = request.args.get("status", "") if view == "cadastros" else ""
+    search = request.args.get("search", "")
+    if view == "vinculos":
+        title, columns, rows = _planning_report_mapping_data(key)
+    else:
+        title, columns, rows = _planning_report_cadastro_data(key)
+    rows = _planning_report_filter_rows(columns, rows, status, search)
+    return _planning_report_excel(title, columns, rows)
 
 
 @home_bp.route("/partial/paineis-dashboards/teto-orcamentario")

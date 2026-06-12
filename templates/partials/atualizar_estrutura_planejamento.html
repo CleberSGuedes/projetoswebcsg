@@ -1,0 +1,190 @@
+<section
+  id="estrutura-planejamento-page"
+  class="planning-structure-page"
+  data-entity="{{ entity }}"
+  data-singular="{{ singular }}"
+>
+  <div class="planning-structure-header">
+    <div>
+      <div class="card-title">{{ title }}</div>
+      <p class="muted">Cadastre e mantenha a estrutura utilizada no planejamento.</p>
+    </div>
+  </div>
+
+  <div class="planning-structure-layout">
+    <div class="card">
+      <div class="card-title">{{ singular }}</div>
+      <form id="estrutura-planejamento-form" class="form" novalidate>
+        <input type="hidden" id="estrutura-planejamento-id" />
+        <div class="form-grid planning-structure-form-grid">
+          <label class="field">
+            <span>*Exercício</span>
+            <input
+              type="text"
+              id="estrutura-planejamento-exercicio"
+              inputmode="numeric"
+              maxlength="4"
+              placeholder="Ex.: 2026"
+              required
+            />
+          </label>
+
+          {% if entity in ("acoes", "produtos") %}
+          <label class="field">
+            <span>*Programa</span>
+            <select id="estrutura-planejamento-programa" required disabled>
+              <option value="">Carregando programas...</option>
+            </select>
+          </label>
+          {% endif %}
+
+          {% if entity == "produtos" %}
+          <label class="field">
+            <span>*Ação/PAOE</span>
+            <select id="estrutura-planejamento-acao" required disabled>
+              <option value="">Aguardando programas...</option>
+            </select>
+          </label>
+          {% endif %}
+
+          <label class="field">
+            <span>{% if entity == "produtos" %}Código{% else %}*Código{% endif %}</span>
+            <input
+              type="text"
+              id="estrutura-planejamento-codigo"
+              maxlength="{{ 30 if entity == 'produtos' else 20 }}"
+              {% if entity != "produtos" %}required{% endif %}
+            />
+          </label>
+
+          <label class="field planning-structure-name">
+            <span>*Nome</span>
+            <input
+              type="text"
+              id="estrutura-planejamento-nome"
+              maxlength="{{ 255 if entity == 'programas' else 500 }}"
+              required
+            />
+          </label>
+
+          <label class="field">
+            <span>Responsável</span>
+            <input type="text" id="estrutura-planejamento-responsavel" maxlength="255" />
+          </label>
+
+          <label class="field">
+            <span>CPF</span>
+            <input
+              type="text"
+              id="estrutura-planejamento-cpf"
+              maxlength="14"
+              inputmode="numeric"
+              placeholder="000.000.000-00"
+            />
+          </label>
+
+          <label class="field">
+            <span>E-mail</span>
+            <input type="email" id="estrutura-planejamento-email" maxlength="150" />
+          </label>
+
+          <label class="field inline planning-structure-active">
+            <input type="checkbox" id="estrutura-planejamento-ativo" checked />
+            <span>Ativo</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary sm" type="submit">
+            <i class="bi bi-floppy"></i>Salvar
+          </button>
+          <button class="btn btn-secondary sm" type="button" id="estrutura-planejamento-limpar">
+            <i class="bi bi-eraser"></i>Limpar
+          </button>
+          <div id="estrutura-planejamento-msg" class="muted" role="status"></div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="planning-structure-list-header">
+        <div class="card-title">Registros cadastrados</div>
+        <button
+          class="icon-btn"
+          type="button"
+          id="estrutura-planejamento-atualizar"
+          title="Atualizar lista"
+          aria-label="Atualizar lista"
+        >
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+
+      <div class="form-grid planning-structure-filter-grid no-print">
+        <label class="field">
+          <span>Exercício</span>
+          <select id="estrutura-planejamento-filtro-exercicio">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Situação</span>
+          <select id="estrutura-planejamento-filtro-status">
+            <option value="">Todos</option>
+            <option value="1">Ativos</option>
+            <option value="0">Inativos</option>
+          </select>
+        </label>
+        <label class="field planning-structure-filter-search">
+          <span>Pesquisar</span>
+          <input
+            type="search"
+            id="estrutura-planejamento-filtro-texto"
+            placeholder="Código, nome ou responsável"
+          />
+        </label>
+      </div>
+
+      <div class="table-responsive planning-structure-table-wrap">
+        <table class="table" id="estrutura-planejamento-table">
+          <thead>
+            <tr>
+              <th>Exercício</th>
+              {% if entity == "acoes" %}
+              <th>Programa</th>
+              {% elif entity == "produtos" %}
+              <th>Programa</th>
+              <th>Ação/PAOE</th>
+              {% endif %}
+              <th>Código</th>
+              <th>Nome</th>
+              <th>Responsável</th>
+              <th>Situação</th>
+              <th class="planning-structure-actions-column">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="estrutura-planejamento-table-body">
+            <tr>
+              <td colspan="{{ 9 if entity == 'produtos' else 8 if entity == 'acoes' else 7 }}" class="muted">
+                Carregando registros...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-foot no-print">
+        <div class="page-size">
+          <label for="estrutura-planejamento-page-size">Itens por página</label>
+          <select id="estrutura-planejamento-page-size" class="input">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div id="estrutura-planejamento-pagination" class="pagination"></div>
+      </div>
+    </div>
+  </div>
+</section>

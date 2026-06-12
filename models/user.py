@@ -459,7 +459,262 @@ class Adj(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     abreviacao = db.Column(db.String(100))
+    nome = db.Column(db.String(255))
     ativo = db.Column(db.Boolean)
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class Regiao(db.Model):
+    __tablename__ = "regiao"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(255))
+    codigo = db.Column(db.String(50))
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
+
+
+class Municipio(db.Model):
+    __tablename__ = "municipio"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(255))
+    codigo_ibge = db.Column(db.String(50))
+    uf = db.Column(db.String(2))
+    regiao_id = db.Column(db.Integer, db.ForeignKey("regiao.id"), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
+
+
+class Funcao(db.Model):
+    __tablename__ = "funcao"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.String(50))
+    nome = db.Column(db.String(255))
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class Subfuncao(db.Model):
+    __tablename__ = "subfuncao"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.Integer, nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    funcao_id = db.Column(db.Integer, db.ForeignKey("funcao.id"), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class Ug(db.Model):
+    __tablename__ = "ug"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.String(10), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class Macropolitica(db.Model):
+    __tablename__ = "macropolitica"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    abreviacao = db.Column(db.String(50))
+    nome = db.Column(db.String(255))
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class Pilar(db.Model):
+    __tablename__ = "pilar"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    abreviacao = db.Column(db.String(255))
+    nome = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class MetaPee(db.Model):
+    __tablename__ = "metas_pee"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    titulo = db.Column(db.String(20), nullable=False)
+    descricao = db.Column(db.Text, nullable=False)
+
+
+class IndicadorPee(db.Model):
+    __tablename__ = "indicadores_pee"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.String(10), nullable=False)
+    descricao = db.Column(db.Text, nullable=False)
+    meta_id = db.Column(db.Integer, db.ForeignKey("metas_pee.id"), nullable=False)
+
+
+class Eixo(db.Model):
+    __tablename__ = "eixo"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    abreviacao = db.Column(db.String(50), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    pilar_id = db.Column(db.Integer, db.ForeignKey("pilar.id"), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class PoliticaDecreto(db.Model):
+    __tablename__ = "politica_decr"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    abreviacao = db.Column(db.String(50), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class PublicoTransversal(db.Model):
+    __tablename__ = "publico_transversal"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.String(5), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+
+class UgSubfuncao(db.Model):
+    __tablename__ = "ug_subfuncao"
+
+    ug_id = db.Column(db.Integer, db.ForeignKey("ug.id"), primary_key=True)
+    subfuncao_id = db.Column(
+        db.Integer, db.ForeignKey("subfuncao.id"), primary_key=True
+    )
+
+
+class MacropoliticaAdj(db.Model):
+    __tablename__ = "macropolitica_adj"
+
+    macropolitica_id = db.Column(
+        db.Integer, db.ForeignKey("macropolitica.id"), primary_key=True
+    )
+    adj_id = db.Column(db.BigInteger, db.ForeignKey("adj.id"), primary_key=True)
+
+
+class PilarAdj(db.Model):
+    __tablename__ = "pilar_adj"
+
+    pilar_id = db.Column(db.Integer, db.ForeignKey("pilar.id"), primary_key=True)
+    adj_id = db.Column(db.BigInteger, db.ForeignKey("adj.id"), primary_key=True)
+
+
+class EixoAdj(db.Model):
+    __tablename__ = "eixo_adj"
+
+    eixo_id = db.Column(db.Integer, db.ForeignKey("eixo.id"), primary_key=True)
+    adj_id = db.Column(db.BigInteger, db.ForeignKey("adj.id"), primary_key=True)
+
+
+class PoliticaDecretoAdj(db.Model):
+    __tablename__ = "politica_decr_adj"
+
+    politica_decr_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+    adj_id = db.Column(db.BigInteger, db.ForeignKey("adj.id"), primary_key=True)
+
+
+class SubfuncaoPolitica(db.Model):
+    __tablename__ = "subfuncao_politica"
+
+    subfuncao_id = db.Column(
+        db.Integer, db.ForeignKey("subfuncao.id"), primary_key=True
+    )
+    politica_decr_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+
+
+class MacropoliticaPilar(db.Model):
+    __tablename__ = "macropolitica_pilar"
+
+    macropolitica_id = db.Column(
+        db.Integer, db.ForeignKey("macropolitica.id"), primary_key=True
+    )
+    pilar_id = db.Column(db.Integer, db.ForeignKey("pilar.id"), primary_key=True)
+
+
+class PoliticaDecretoEixo(db.Model):
+    __tablename__ = "politica_decr_eixo"
+
+    politica_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+    eixo_id = db.Column(db.Integer, db.ForeignKey("eixo.id"), primary_key=True)
+
+
+class PilarMeta(db.Model):
+    __tablename__ = "pilar_meta"
+
+    pilar_id = db.Column(db.Integer, db.ForeignKey("pilar.id"), primary_key=True)
+    meta_id = db.Column(db.Integer, db.ForeignKey("metas_pee.id"), primary_key=True)
+
+
+class FuncaoPrograma(db.Model):
+    __tablename__ = "funcao_programa"
+
+    funcao_id = db.Column(db.Integer, db.ForeignKey("funcao.id"), primary_key=True)
+    programa_id = db.Column(
+        db.BigInteger, db.ForeignKey("programa_planejamento.id"), primary_key=True
+    )
+
+
+class SubfuncaoAcao(db.Model):
+    __tablename__ = "subfuncao_acao"
+
+    subfuncao_id = db.Column(
+        db.Integer, db.ForeignKey("subfuncao.id"), primary_key=True
+    )
+    acao_id = db.Column(
+        db.BigInteger, db.ForeignKey("acao_planejamento.id"), primary_key=True
+    )
+
+
+class MacropoliticaSubfuncao(db.Model):
+    __tablename__ = "macropolitica_subfuncao"
+
+    macropolitica_id = db.Column(
+        db.Integer, db.ForeignKey("macropolitica.id"), primary_key=True
+    )
+    subfuncao_id = db.Column(
+        db.Integer, db.ForeignKey("subfuncao.id"), primary_key=True
+    )
+
+
+class PoliticaDecretoProdutoAcao(db.Model):
+    __tablename__ = "politica_decr_produto_acao"
+
+    politica_decr_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+    produto_acao_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("produto_acao_planejamento.id"),
+        primary_key=True,
+    )
 
 
 class Dotacao(db.Model):
@@ -654,6 +909,180 @@ class ChavePlanejamentoRegra(db.Model):
     criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     alterado_em = db.Column(db.DateTime)
     excluido_em = db.Column(db.DateTime)
+
+
+class ModeloChave(db.Model):
+    __tablename__ = "modelo_chave"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(150), nullable=False)
+    exercicio_inicio = db.Column(db.SmallInteger, nullable=False)
+    exercicio_fim = db.Column(db.SmallInteger)
+    separador = db.Column(db.String(20), nullable=False, server_default=" * ")
+    prefixo = db.Column(db.String(20), nullable=False, server_default="* ")
+    sufixo = db.Column(db.String(20), nullable=False, server_default=" *")
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class ModeloChaveComponente(db.Model):
+    __tablename__ = "modelo_chave_componente"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    modelo_chave_id = db.Column(
+        db.BigInteger, db.ForeignKey("modelo_chave.id"), nullable=False
+    )
+    codigo = db.Column(db.String(50), nullable=False)
+    nome = db.Column(db.String(150), nullable=False)
+    ordem = db.Column(db.SmallInteger, nullable=False)
+    obrigatorio = db.Column(
+        db.Boolean, nullable=False, default=True, server_default=db.text("1")
+    )
+    tabela_origem = db.Column(db.String(64), nullable=False)
+    campo_id = db.Column(db.String(64), nullable=False, server_default="id")
+    campo_codigo = db.Column(db.String(64), nullable=False)
+    campo_descricao = db.Column(db.String(64))
+    agrupador = db.Column(db.String(50))
+    ordem_agrupador = db.Column(db.SmallInteger)
+    separador_agrupador = db.Column(db.String(10))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class ChaveCatalogo(db.Model):
+    __tablename__ = "chave_catalogo"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    modelo_chave_id = db.Column(
+        db.BigInteger, db.ForeignKey("modelo_chave.id"), nullable=False
+    )
+    exercicio = db.Column(db.SmallInteger, nullable=False)
+    chave_formatada = db.Column(db.String(1000), nullable=False)
+    chave_hash = db.Column(db.String(64), nullable=False)
+    chave_origem_id = db.Column(db.BigInteger, db.ForeignKey("chave_catalogo.id"))
+    observacao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class ChaveCatalogoValor(db.Model):
+    __tablename__ = "chave_catalogo_valor"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    chave_catalogo_id = db.Column(
+        db.BigInteger, db.ForeignKey("chave_catalogo.id"), nullable=False
+    )
+    componente_id = db.Column(
+        db.BigInteger, db.ForeignKey("modelo_chave_componente.id"), nullable=False
+    )
+    valor_id = db.Column(db.BigInteger)
+    valor_codigo = db.Column(db.String(255), nullable=False)
+    valor_descricao = db.Column(db.String(500))
+    ordem = db.Column(db.SmallInteger, nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class ProgramaPlanejamento(db.Model):
+    __tablename__ = "programa_planejamento"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    exercicio = db.Column(db.SmallInteger, nullable=False)
+    codigo = db.Column(db.String(20), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    responsavel = db.Column(db.String(255))
+    cpf = db.Column(db.String(14))
+    email = db.Column(db.String(150))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class AcaoPlanejamento(db.Model):
+    __tablename__ = "acao_planejamento"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    programa_id = db.Column(
+        db.BigInteger, db.ForeignKey("programa_planejamento.id"), nullable=False
+    )
+    exercicio = db.Column(db.SmallInteger, nullable=False)
+    codigo = db.Column(db.String(20), nullable=False)
+    nome = db.Column(db.String(500), nullable=False)
+    responsavel = db.Column(db.String(255))
+    cpf = db.Column(db.String(14))
+    email = db.Column(db.String(150))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+    programa = db.relationship("ProgramaPlanejamento", lazy="joined")
+
+
+class ProdutoAcaoPlanejamento(db.Model):
+    __tablename__ = "produto_acao_planejamento"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    acao_id = db.Column(
+        db.BigInteger, db.ForeignKey("acao_planejamento.id"), nullable=False
+    )
+    exercicio = db.Column(db.SmallInteger, nullable=False)
+    codigo = db.Column(db.String(30))
+    nome = db.Column(db.String(500), nullable=False)
+    responsavel = db.Column(db.String(255))
+    cpf = db.Column(db.String(14))
+    email = db.Column(db.String(150))
+    nome_hash = db.Column(db.String(64), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+    acao = db.relationship("AcaoPlanejamento", lazy="joined")
+
+
+class ChaveContexto(db.Model):
+    __tablename__ = "chave_contexto"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    chave_catalogo_id = db.Column(
+        db.BigInteger, db.ForeignKey("chave_catalogo.id"), nullable=False
+    )
+    produto_acao_id = db.Column(
+        db.BigInteger, db.ForeignKey("produto_acao_planejamento.id"), nullable=False
+    )
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class ChaveCatalogoHistorico(db.Model):
+    __tablename__ = "chave_catalogo_historico"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    chave_catalogo_id = db.Column(
+        db.BigInteger, db.ForeignKey("chave_catalogo.id"), nullable=False
+    )
+    chave_contexto_id = db.Column(db.BigInteger, db.ForeignKey("chave_contexto.id"))
+    acao = db.Column(db.String(50), nullable=False)
+    dados_anteriores = db.Column(db.Text)
+    dados_novos = db.Column(db.Text)
+    justificativa = db.Column(db.Text)
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
 class Momp(db.Model):

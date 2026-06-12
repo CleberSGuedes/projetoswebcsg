@@ -1,0 +1,81 @@
+<section
+  id="relatorio-estrutura-planejamento"
+  class="planning-report-page"
+  data-configs='{{ report_configs|tojson }}'
+  data-active-view="cadastros"
+>
+  <div class="planning-report-header">
+    <div>
+      <div class="card-title">Estrutura do Planejamento</div>
+      <p class="muted">Consulte os cadastros e vínculos utilizados na montagem das chaves de planejamento.</p>
+    </div>
+    <div class="teto-view-switch planning-report-switch" role="tablist" aria-label="Tipo de consulta">
+      <button class="teto-view-btn active" type="button" data-report-view="cadastros" role="tab" aria-selected="true">
+        <i class="bi bi-layers"></i>Cadastros
+      </button>
+      <button class="teto-view-btn" type="button" data-report-view="vinculos" role="tab" aria-selected="false">
+        <i class="bi bi-bezier2"></i>Vínculos
+      </button>
+    </div>
+  </div>
+
+  <div class="card planning-report-filters">
+    <div class="form-grid planning-report-filter-grid">
+      <label class="field">
+        <span id="planning-report-type-label">*Tipo de cadastro</span>
+        <select id="planning-report-type"></select>
+      </label>
+      <label class="field">
+        <span>Situação</span>
+        <select id="planning-report-status">
+          <option value="">Todas</option>
+          <option value="Ativo">Ativos</option>
+          <option value="Inativo">Inativos</option>
+          <option value="Não se aplica">Não se aplica</option>
+        </select>
+      </label>
+      <label class="field planning-report-search">
+        <span>Pesquisar</span>
+        <input id="planning-report-search" type="search" placeholder="Pesquisar em todas as colunas" />
+      </label>
+    </div>
+    <div class="actions planning-report-actions">
+      <button class="btn sm compact" id="planning-report-reset" type="button">
+        <i class="bi bi-eraser"></i>Limpar filtros
+      </button>
+      <button class="btn sm compact" id="planning-report-download" type="button">
+        <i class="bi bi-download"></i>Baixar Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="planning-structure-list-header">
+      <div>
+        <div class="card-title" id="planning-report-title">Cadastros</div>
+        <div class="muted" id="planning-report-meta">Carregando...</div>
+      </div>
+      <button class="icon-btn" type="button" id="planning-report-refresh" title="Atualizar consulta">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    <div class="table-responsive planning-report-table-wrap">
+      <table class="table" id="planning-report-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot no-print">
+      <div class="page-size">
+        <label for="planning-report-page-size">Itens por página</label>
+        <select id="planning-report-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="planning-report-pagination" class="pagination"></div>
+    </div>
+  </div>
+</section>
