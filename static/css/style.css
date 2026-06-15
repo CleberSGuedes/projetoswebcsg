@@ -2549,6 +2549,130 @@ body.app-loading-active {
   background: var(--bg);
 }
 
+.planning-replication-years {
+  grid-template-columns: repeat(2, minmax(220px, 380px));
+}
+
+.planning-replication-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 12px 0;
+}
+
+.planning-replication-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+}
+
+.planning-replication-group legend {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0 6px;
+  width: auto;
+}
+
+.planning-replication-options {
+  display: grid;
+  gap: 8px;
+}
+
+.planning-replication-option {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  margin: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+}
+
+.planning-replication-option:hover {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.planning-replication-option.required {
+  background: var(--color-50);
+  border-color: var(--color-200);
+}
+
+.theme-dark .planning-replication-option.required {
+  background: rgba(31, 155, 126, 0.12);
+  border-color: var(--color-700);
+}
+
+.planning-replication-option small {
+  color: var(--color-700);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.planning-replication-message {
+  color: var(--color-700);
+  min-height: 22px;
+}
+
+.planning-replication-global-note {
+  align-items: flex-start;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+}
+
+.planning-replication-global-note i {
+  color: var(--color-600);
+}
+
+.planning-replication-preview {
+  margin-top: 16px;
+}
+
+.planning-replication-summary {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.planning-replication-summary strong {
+  color: var(--color-700);
+  font-size: 1rem;
+}
+
+.planning-replication-warnings {
+  background: #fff8e1;
+  border: 1px solid #efd27a;
+  border-radius: 5px;
+  color: #725500;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+}
+
+.planning-replication-warnings:empty {
+  display: none;
+}
+
+.planning-replication-warnings ul {
+  margin: 5px 0 0;
+}
+
+.planning-replication-confirm {
+  margin-top: 12px;
+}
+
 @media (max-width: 1280px) {
   .planning-key-model-layout {
     grid-template-columns: 1fr;
@@ -2562,6 +2686,10 @@ body.app-loading-active {
   .planning-key-group-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .planning-replication-groups {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -2574,6 +2702,10 @@ body.app-loading-active {
   }
 
   .planning-key-group-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-replication-years {
     grid-template-columns: 1fr;
   }
 

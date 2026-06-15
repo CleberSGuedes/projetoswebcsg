@@ -66,6 +66,10 @@ FEATURES = [
                 "id": "atualizar/estrutura-planejamento/catalogo-chave",
                 "nome": "Estrutura do Planejamento - Catálogo de Chaves",
             },
+            {
+                "id": "atualizar/estrutura-planejamento/replicar-exercicio",
+                "nome": "Estrutura do Planejamento - Replicar Exercicio",
+            },
             {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
             {
                 "id": "atualizar/chaves_planejamento_upload",

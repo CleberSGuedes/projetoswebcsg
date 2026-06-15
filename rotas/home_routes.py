@@ -3685,6 +3685,823 @@ def api_catalogo_chave_status(key_id: int):
     return jsonify({"ok": True, "message": "Situação da chave atualizada."})
 
 
+PLANNING_REPLICATION_OPTIONS = {
+    "programas": {
+        "label": "Programas",
+        "group": "estrutura",
+        "requires": ["funcao_programa"],
+    },
+    "acoes": {
+        "label": "Ações/PAOE",
+        "group": "estrutura",
+        "requires": ["programas", "funcao_programa", "subfuncao_acao"],
+    },
+    "produtos": {
+        "label": "Produtos da Ação",
+        "group": "estrutura",
+        "requires": [
+            "acoes",
+            "programas",
+            "funcao_programa",
+            "subfuncao_acao",
+            "politica_produto",
+        ],
+    },
+    "modelos": {
+        "label": "Modelos e partes da chave",
+        "group": "chaves",
+        "requires": [],
+    },
+    "catalogo": {
+        "label": "Catálogo de chaves",
+        "group": "chaves",
+        "requires": ["modelos"],
+    },
+    "contextos": {
+        "label": "Contextos das chaves",
+        "group": "chaves",
+        "requires": [
+            "catalogo",
+            "modelos",
+            "produtos",
+            "acoes",
+            "programas",
+            "funcao_programa",
+            "subfuncao_acao",
+            "politica_produto",
+        ],
+    },
+    "funcao_programa": {
+        "label": "Função × Programa",
+        "group": "vinculos",
+        "requires": ["programas"],
+    },
+    "subfuncao_acao": {
+        "label": "Subfunção × Ação/PAOE",
+        "group": "vinculos",
+        "requires": ["acoes", "programas", "funcao_programa"],
+    },
+    "politica_produto": {
+        "label": "Política do Decreto × Produto da Ação",
+        "group": "vinculos",
+        "requires": [
+            "produtos",
+            "acoes",
+            "programas",
+            "funcao_programa",
+            "subfuncao_acao",
+        ],
+    },
+}
+
+
+def _planning_replication_public_options() -> list[dict]:
+    return [
+        {
+            "key": key,
+            "label": config["label"],
+            "group": config["group"],
+            "requires": config["requires"],
+        }
+        for key, config in PLANNING_REPLICATION_OPTIONS.items()
+    ]
+
+
+def _planning_replication_selection(payload: dict) -> tuple[set[str], list[str]]:
+    selected = {
+        str(key)
+        for key in payload.get("selecionados", [])
+        if str(key) in PLANNING_REPLICATION_OPTIONS
+    }
+    errors = []
+    if not selected:
+        return selected, ["Selecione ao menos uma estrutura para replicar."]
+    for key in sorted(selected):
+        missing = [
+            dependency
+            for dependency in PLANNING_REPLICATION_OPTIONS[key]["requires"]
+            if dependency not in selected
+        ]
+        if missing:
+            labels = ", ".join(
+                PLANNING_REPLICATION_OPTIONS[item]["label"] for item in missing
+            )
+            errors.append(
+                f"{PLANNING_REPLICATION_OPTIONS[key]['label']} exige: {labels}."
+            )
+    return selected, errors
+
+
+def _planning_replication_source_counts(exercise: int) -> dict[str, int]:
+    applicable_models = ModeloChave.query.filter(
+        ModeloChave.excluido_em.is_(None),
+        ModeloChave.exercicio_inicio <= exercise,
+        or_(
+            ModeloChave.exercicio_fim.is_(None),
+            ModeloChave.exercicio_fim >= exercise,
+        ),
+    )
+    return {
+        "programas": ProgramaPlanejamento.query.filter_by(
+            exercicio=exercise
+        ).filter(ProgramaPlanejamento.excluido_em.is_(None)).count(),
+        "acoes": AcaoPlanejamento.query.filter_by(exercicio=exercise).filter(
+            AcaoPlanejamento.excluido_em.is_(None)
+        ).count(),
+        "produtos": ProdutoAcaoPlanejamento.query.filter_by(
+            exercicio=exercise
+        ).filter(ProdutoAcaoPlanejamento.excluido_em.is_(None)).count(),
+        "modelos": applicable_models.count(),
+        "catalogo": ChaveCatalogo.query.filter_by(exercicio=exercise).filter(
+            ChaveCatalogo.excluido_em.is_(None)
+        ).count(),
+        "contextos": (
+            ChaveContexto.query.join(
+                ChaveCatalogo,
+                ChaveCatalogo.id == ChaveContexto.chave_catalogo_id,
+            )
+            .filter(
+                ChaveCatalogo.exercicio == exercise,
+                ChaveContexto.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "funcao_programa": (
+            FuncaoPrograma.query.join(
+                ProgramaPlanejamento,
+                ProgramaPlanejamento.id == FuncaoPrograma.programa_id,
+            )
+            .filter(
+                ProgramaPlanejamento.exercicio == exercise,
+                ProgramaPlanejamento.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "subfuncao_acao": (
+            SubfuncaoAcao.query.join(
+                AcaoPlanejamento,
+                AcaoPlanejamento.id == SubfuncaoAcao.acao_id,
+            )
+            .filter(
+                AcaoPlanejamento.exercicio == exercise,
+                AcaoPlanejamento.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "politica_produto": (
+            PoliticaDecretoProdutoAcao.query.join(
+                ProdutoAcaoPlanejamento,
+                ProdutoAcaoPlanejamento.id
+                == PoliticaDecretoProdutoAcao.produto_acao_id,
+            )
+            .filter(
+                ProdutoAcaoPlanejamento.exercicio == exercise,
+                ProdutoAcaoPlanejamento.excluido_em.is_(None),
+            )
+            .count()
+        ),
+    }
+
+
+def _planning_replication_destination_counts(exercise: int) -> dict[str, int]:
+    return _planning_replication_source_counts(exercise)
+
+
+@home_bp.route(
+    "/partial/atualizar/estrutura-planejamento/replicar-exercicio"
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/replicar-exercicio")
+def partial_atualizar_replicar_exercicio():
+    years = sorted(
+        {
+            int(year)
+            for model in (
+                ProgramaPlanejamento,
+                AcaoPlanejamento,
+                ProdutoAcaoPlanejamento,
+                ChaveCatalogo,
+            )
+            for (year,) in db.session.query(model.exercicio).distinct().all()
+            if year
+        },
+        reverse=True,
+    )
+    return render_template(
+        "partials/atualizar_replicar_exercicio.html",
+        replication_options=_planning_replication_public_options(),
+        source_years=years,
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/replicar-exercicio/analisar",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/replicar-exercicio")
+def api_replicar_exercicio_analisar():
+    payload = request.get_json(silent=True) or {}
+    source = _planning_exercicio(payload.get("exercicio_origem"))
+    target = _planning_exercicio(payload.get("exercicio_destino"))
+    selected, errors = _planning_replication_selection(payload)
+    if not source or not target:
+        errors.append("Informe exercícios de origem e destino válidos.")
+    elif source == target:
+        errors.append("O exercício de destino deve ser diferente da origem.")
+    if errors:
+        return jsonify({"error": " ".join(errors), "errors": errors}), 400
+    source_counts = _planning_replication_source_counts(source)
+    target_counts = _planning_replication_destination_counts(target)
+    items = []
+    warnings = []
+    for key in PLANNING_REPLICATION_OPTIONS:
+        if key not in selected:
+            continue
+        source_count = source_counts.get(key, 0)
+        target_count = target_counts.get(key, 0)
+        items.append(
+            {
+                "key": key,
+                "label": PLANNING_REPLICATION_OPTIONS[key]["label"],
+                "source": source_count,
+                "destination": target_count,
+            }
+        )
+        if not source_count:
+            warnings.append(
+                f"{PLANNING_REPLICATION_OPTIONS[key]['label']} não possui "
+                f"registros em {source}."
+            )
+    return jsonify(
+        {
+            "ok": True,
+            "source": source,
+            "target": target,
+            "selected": sorted(selected),
+            "items": items,
+            "warnings": warnings,
+        }
+    )
+
+
+def _planning_replication_copy_programs(
+    source: int, target: int, user_id: int | None, stats: dict
+) -> dict[int, int]:
+    source_rows = ProgramaPlanejamento.query.filter_by(exercicio=source).filter(
+        ProgramaPlanejamento.excluido_em.is_(None)
+    ).all()
+    destination = {
+        row.codigo: row
+        for row in ProgramaPlanejamento.query.filter_by(exercicio=target).filter(
+            ProgramaPlanejamento.excluido_em.is_(None)
+        ).all()
+    }
+    result = {}
+    for row in source_rows:
+        copy = destination.get(row.codigo)
+        if copy:
+            stats["programas"]["reutilizados"] += 1
+        else:
+            copy = ProgramaPlanejamento(
+                exercicio=target,
+                codigo=row.codigo,
+                nome=row.nome,
+                responsavel=row.responsavel,
+                cpf=row.cpf,
+                email=row.email,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(copy)
+            db.session.flush()
+            destination[row.codigo] = copy
+            stats["programas"]["criados"] += 1
+        result[row.id] = copy.id
+    return result
+
+
+def _planning_replication_copy_actions(
+    source: int,
+    target: int,
+    program_map: dict[int, int],
+    user_id: int | None,
+    stats: dict,
+) -> dict[int, int]:
+    source_rows = AcaoPlanejamento.query.filter_by(exercicio=source).filter(
+        AcaoPlanejamento.excluido_em.is_(None)
+    ).all()
+    destination = {
+        (row.programa_id, row.codigo): row
+        for row in AcaoPlanejamento.query.filter_by(exercicio=target).filter(
+            AcaoPlanejamento.excluido_em.is_(None)
+        ).all()
+    }
+    result = {}
+    for row in source_rows:
+        target_program_id = program_map.get(row.programa_id)
+        if not target_program_id:
+            raise ValueError(
+                f"O programa da Ação/PAOE {row.codigo} não foi replicado."
+            )
+        key = (target_program_id, row.codigo)
+        copy = destination.get(key)
+        if copy:
+            stats["acoes"]["reutilizados"] += 1
+        else:
+            copy = AcaoPlanejamento(
+                programa_id=target_program_id,
+                exercicio=target,
+                codigo=row.codigo,
+                nome=row.nome,
+                responsavel=row.responsavel,
+                cpf=row.cpf,
+                email=row.email,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(copy)
+            db.session.flush()
+            destination[key] = copy
+            stats["acoes"]["criados"] += 1
+        result[row.id] = copy.id
+    return result
+
+
+def _planning_replication_copy_products(
+    source: int,
+    target: int,
+    action_map: dict[int, int],
+    user_id: int | None,
+    stats: dict,
+) -> dict[int, int]:
+    source_rows = ProdutoAcaoPlanejamento.query.filter_by(
+        exercicio=source
+    ).filter(ProdutoAcaoPlanejamento.excluido_em.is_(None)).all()
+    destination = {
+        (row.acao_id, row.codigo or "", row.nome_hash): row
+        for row in ProdutoAcaoPlanejamento.query.filter_by(
+            exercicio=target
+        ).filter(ProdutoAcaoPlanejamento.excluido_em.is_(None)).all()
+    }
+    result = {}
+    for row in source_rows:
+        target_action_id = action_map.get(row.acao_id)
+        if not target_action_id:
+            raise ValueError(
+                f"A Ação/PAOE do produto {row.nome} não foi replicada."
+            )
+        key = (target_action_id, row.codigo or "", row.nome_hash)
+        copy = destination.get(key)
+        if copy:
+            stats["produtos"]["reutilizados"] += 1
+        else:
+            copy = ProdutoAcaoPlanejamento(
+                acao_id=target_action_id,
+                exercicio=target,
+                codigo=row.codigo,
+                nome=row.nome,
+                responsavel=row.responsavel,
+                cpf=row.cpf,
+                email=row.email,
+                nome_hash=row.nome_hash,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(copy)
+            db.session.flush()
+            destination[key] = copy
+            stats["produtos"]["criados"] += 1
+        result[row.id] = copy.id
+    return result
+
+
+def _planning_replication_copy_mapping(
+    model,
+    source_rows,
+    fixed_field: str,
+    mapped_field: str,
+    id_map: dict[int, int],
+    stats: dict,
+    stat_key: str,
+):
+    for row in source_rows:
+        target_id = id_map.get(getattr(row, mapped_field))
+        if not target_id:
+            raise ValueError(
+                f"Não foi possível replicar {PLANNING_REPLICATION_OPTIONS[stat_key]['label']}."
+            )
+        values = {
+            fixed_field: getattr(row, fixed_field),
+            mapped_field: target_id,
+        }
+        if model.query.filter_by(**values).first():
+            stats[stat_key]["reutilizados"] += 1
+        else:
+            db.session.add(model(**values))
+            stats[stat_key]["criados"] += 1
+
+
+def _planning_replication_copy_models(
+    source: int, target: int, user_id: int | None, stats: dict
+) -> tuple[dict[int, int], dict[int, int]]:
+    source_models = ModeloChave.query.filter(
+        ModeloChave.excluido_em.is_(None),
+        ModeloChave.exercicio_inicio <= source,
+        or_(
+            ModeloChave.exercicio_fim.is_(None),
+            ModeloChave.exercicio_fim >= source,
+        ),
+    ).all()
+    model_map = {}
+    component_map = {}
+    for row in source_models:
+        target_model = ModeloChave.query.filter(
+            ModeloChave.nome == row.nome,
+            ModeloChave.excluido_em.is_(None),
+            ModeloChave.exercicio_inicio <= target,
+            or_(
+                ModeloChave.exercicio_fim.is_(None),
+                ModeloChave.exercicio_fim >= target,
+            ),
+        ).first()
+        if target_model:
+            stats["modelos"]["reutilizados"] += 1
+        else:
+            target_model = ModeloChave(
+                nome=row.nome,
+                exercicio_inicio=target,
+                exercicio_fim=target,
+                separador=row.separador,
+                prefixo=row.prefixo,
+                sufixo=row.sufixo,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(target_model)
+            db.session.flush()
+            stats["modelos"]["criados"] += 1
+        model_map[row.id] = target_model.id
+        existing_components = {
+            component.codigo: component
+            for component in ModeloChaveComponente.query.filter_by(
+                modelo_chave_id=target_model.id
+            ).filter(ModeloChaveComponente.excluido_em.is_(None)).all()
+        }
+        source_components = ModeloChaveComponente.query.filter_by(
+            modelo_chave_id=row.id
+        ).filter(ModeloChaveComponente.excluido_em.is_(None)).all()
+        for component in source_components:
+            target_component = existing_components.get(component.codigo)
+            if not target_component:
+                target_component = ModeloChaveComponente(
+                    modelo_chave_id=target_model.id,
+                    codigo=component.codigo,
+                    nome=component.nome,
+                    ordem=component.ordem,
+                    obrigatorio=component.obrigatorio,
+                    tabela_origem=component.tabela_origem,
+                    campo_id=component.campo_id,
+                    campo_codigo=component.campo_codigo,
+                    campo_descricao=component.campo_descricao,
+                    agrupador=component.agrupador,
+                    ordem_agrupador=component.ordem_agrupador,
+                    separador_agrupador=component.separador_agrupador,
+                    ativo=component.ativo,
+                    criado_em=_now_local(),
+                )
+                db.session.add(target_component)
+                db.session.flush()
+            component_map[component.id] = target_component.id
+    return model_map, component_map
+
+
+def _planning_replication_copy_catalog(
+    source: int,
+    target: int,
+    model_map: dict[int, int],
+    component_map: dict[int, int],
+    annual_maps: dict[str, dict[int, int]],
+    user_id: int | None,
+    stats: dict,
+) -> dict[int, int]:
+    key_map = {}
+    registry = _planning_key_source_registry()
+    source_keys = ChaveCatalogo.query.filter_by(exercicio=source).filter(
+        ChaveCatalogo.excluido_em.is_(None)
+    ).all()
+    for source_key in source_keys:
+        target_model_id = model_map.get(source_key.modelo_chave_id)
+        if not target_model_id:
+            raise ValueError(
+                f"O modelo da chave {source_key.chave_formatada} não foi replicado."
+            )
+        target_model = db.session.get(ModeloChave, target_model_id)
+        target_components = (
+            ModeloChaveComponente.query.filter_by(
+                modelo_chave_id=target_model_id, ativo=True
+            )
+            .filter(ModeloChaveComponente.excluido_em.is_(None))
+            .order_by(ModeloChaveComponente.ordem.asc())
+            .all()
+        )
+        target_components_by_id = {
+            component.id: component for component in target_components
+        }
+        formatted_values = {}
+        value_rows = []
+        source_values = ChaveCatalogoValor.query.filter_by(
+            chave_catalogo_id=source_key.id
+        ).all()
+        for source_value in source_values:
+            target_component_id = component_map.get(source_value.componente_id)
+            target_component = target_components_by_id.get(target_component_id)
+            if not target_component:
+                raise ValueError("Uma parte do modelo da chave não foi replicada.")
+            value_id = source_value.valor_id
+            table_map = annual_maps.get(target_component.tabela_origem)
+            if table_map is not None and value_id is not None:
+                value_id = table_map.get(value_id)
+                if not value_id:
+                    raise ValueError(
+                        f"O valor anual de {target_component.nome} não foi replicado."
+                    )
+            source_config = registry.get(target_component.tabela_origem)
+            value_record = (
+                db.session.get(source_config["model"], value_id)
+                if source_config and value_id is not None
+                else None
+            )
+            value = {
+                "id": value_id,
+                "codigo": (
+                    str(
+                        getattr(
+                            value_record,
+                            target_component.campo_codigo,
+                            source_value.valor_codigo,
+                        )
+                        or ""
+                    )
+                ),
+                "descricao": (
+                    str(
+                        getattr(
+                            value_record,
+                            target_component.campo_descricao,
+                            source_value.valor_descricao,
+                        )
+                        or ""
+                    )
+                    if target_component.campo_descricao
+                    else ""
+                ),
+            }
+            formatted_values[target_component.id] = value
+            value_rows.append((target_component, value))
+        formatted = _planning_key_format(
+            target_model, target_components, formatted_values
+        )
+        key_hash = hashlib.sha256(
+            formatted.casefold().encode("utf-8")
+        ).hexdigest()
+        target_key = ChaveCatalogo.query.filter_by(
+            modelo_chave_id=target_model_id,
+            exercicio=target,
+            chave_hash=key_hash,
+        ).filter(ChaveCatalogo.excluido_em.is_(None)).first()
+        if target_key:
+            stats["catalogo"]["reutilizados"] += 1
+        else:
+            target_key = ChaveCatalogo(
+                modelo_chave_id=target_model_id,
+                exercicio=target,
+                chave_formatada=formatted,
+                chave_hash=key_hash,
+                chave_origem_id=source_key.id,
+                observacao=source_key.observacao,
+                ativo=source_key.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(target_key)
+            db.session.flush()
+            for target_component, value in value_rows:
+                db.session.add(
+                    ChaveCatalogoValor(
+                        chave_catalogo_id=target_key.id,
+                        componente_id=target_component.id,
+                        valor_id=value["id"],
+                        valor_codigo=value["codigo"],
+                        valor_descricao=value["descricao"] or None,
+                        ordem=target_component.ordem,
+                        criado_em=_now_local(),
+                    )
+                )
+            _planning_key_history(
+                target_key,
+                "REPLICAR_EXERCICIO",
+                after={"origem": source_key.id, "exercicio": target},
+                justification=f"Replicação do exercício {source} para {target}.",
+            )
+            stats["catalogo"]["criados"] += 1
+        key_map[source_key.id] = target_key.id
+    return key_map
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/replicar-exercicio/executar",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/replicar-exercicio")
+def api_replicar_exercicio_executar():
+    payload = request.get_json(silent=True) or {}
+    source = _planning_exercicio(payload.get("exercicio_origem"))
+    target = _planning_exercicio(payload.get("exercicio_destino"))
+    selected, errors = _planning_replication_selection(payload)
+    if not source or not target:
+        errors.append("Informe exercícios de origem e destino válidos.")
+    elif source == target:
+        errors.append("O exercício de destino deve ser diferente da origem.")
+    if errors:
+        return jsonify({"error": " ".join(errors), "errors": errors}), 400
+    stats = {
+        key: {"criados": 0, "reutilizados": 0}
+        for key in PLANNING_REPLICATION_OPTIONS
+        if key in selected
+    }
+    user_id = _resolve_usuario_id()
+    try:
+        program_map = (
+            _planning_replication_copy_programs(
+                source, target, user_id, stats
+            )
+            if "programas" in selected
+            else {}
+        )
+        action_map = (
+            _planning_replication_copy_actions(
+                source, target, program_map, user_id, stats
+            )
+            if "acoes" in selected
+            else {}
+        )
+        product_map = (
+            _planning_replication_copy_products(
+                source, target, action_map, user_id, stats
+            )
+            if "produtos" in selected
+            else {}
+        )
+        if "funcao_programa" in selected:
+            source_rows = (
+                FuncaoPrograma.query.join(
+                    ProgramaPlanejamento,
+                    ProgramaPlanejamento.id == FuncaoPrograma.programa_id,
+                )
+                .filter(ProgramaPlanejamento.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_mapping(
+                FuncaoPrograma,
+                source_rows,
+                "funcao_id",
+                "programa_id",
+                program_map,
+                stats,
+                "funcao_programa",
+            )
+        if "subfuncao_acao" in selected:
+            source_rows = (
+                SubfuncaoAcao.query.join(
+                    AcaoPlanejamento,
+                    AcaoPlanejamento.id == SubfuncaoAcao.acao_id,
+                )
+                .filter(AcaoPlanejamento.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_mapping(
+                SubfuncaoAcao,
+                source_rows,
+                "subfuncao_id",
+                "acao_id",
+                action_map,
+                stats,
+                "subfuncao_acao",
+            )
+        if "politica_produto" in selected:
+            source_rows = (
+                PoliticaDecretoProdutoAcao.query.join(
+                    ProdutoAcaoPlanejamento,
+                    ProdutoAcaoPlanejamento.id
+                    == PoliticaDecretoProdutoAcao.produto_acao_id,
+                )
+                .filter(ProdutoAcaoPlanejamento.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_mapping(
+                PoliticaDecretoProdutoAcao,
+                source_rows,
+                "politica_decr_id",
+                "produto_acao_id",
+                product_map,
+                stats,
+                "politica_produto",
+            )
+        if "modelos" in selected:
+            model_map, component_map = _planning_replication_copy_models(
+                source, target, user_id, stats
+            )
+        else:
+            model_map, component_map = {}, {}
+        annual_maps = {
+            ProgramaPlanejamento.__tablename__: program_map,
+            AcaoPlanejamento.__tablename__: action_map,
+            ProdutoAcaoPlanejamento.__tablename__: product_map,
+        }
+        key_map = (
+            _planning_replication_copy_catalog(
+                source,
+                target,
+                model_map,
+                component_map,
+                annual_maps,
+                user_id,
+                stats,
+            )
+            if "catalogo" in selected
+            else {}
+        )
+        if "contextos" in selected:
+            source_contexts = (
+                ChaveContexto.query.join(
+                    ChaveCatalogo,
+                    ChaveCatalogo.id == ChaveContexto.chave_catalogo_id,
+                )
+                .filter(
+                    ChaveCatalogo.exercicio == source,
+                    ChaveContexto.excluido_em.is_(None),
+                )
+                .all()
+            )
+            for context in source_contexts:
+                target_key_id = key_map.get(context.chave_catalogo_id)
+                target_product_id = product_map.get(context.produto_acao_id)
+                if not target_key_id or not target_product_id:
+                    raise ValueError(
+                        "Uma chave ou produto necessário ao contexto não foi replicado."
+                    )
+                existing = ChaveContexto.query.filter_by(
+                    chave_catalogo_id=target_key_id,
+                    produto_acao_id=target_product_id,
+                ).first()
+                if existing:
+                    stats["contextos"]["reutilizados"] += 1
+                else:
+                    db.session.add(
+                        ChaveContexto(
+                            chave_catalogo_id=target_key_id,
+                            produto_acao_id=target_product_id,
+                            ativo=context.ativo,
+                            usuario_id=user_id,
+                            criado_em=_now_local(),
+                        )
+                    )
+                    stats["contextos"]["criados"] += 1
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao replicar estrutura do exercício %s para %s",
+            source,
+            target,
+        )
+        return jsonify(
+            {
+                "error": (
+                    "Falha ao replicar o exercício. Nenhuma alteração foi mantida."
+                )
+            }
+        ), 500
+    return jsonify(
+        {
+            "ok": True,
+            "message": (
+                f"Estrutura de {source} replicada para {target} com sucesso."
+            ),
+            "stats": stats,
+        }
+    )
+
+
 def _planning_text(value, max_length: int | None = None) -> str:
     result = re.sub(r"\s+", " ", str(value or "").strip())
     return result[:max_length] if max_length else result

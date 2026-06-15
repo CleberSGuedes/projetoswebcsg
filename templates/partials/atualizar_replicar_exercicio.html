@@ -1,0 +1,116 @@
+<section
+  id="replicar-exercicio-page"
+  class="planning-admin-page"
+  data-options='{{ replication_options|tojson }}'
+>
+  <div class="planning-structure-header">
+    <div>
+      <div class="card-title">Replicar Estrutura entre Exercícios</div>
+      <p class="muted">
+        Copie a estrutura anual preservando os vínculos entre programas, ações,
+        produtos e chaves de planejamento.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="planning-key-step-heading">
+      <span>Etapa 1</span>
+      <div class="card-title">Exercícios</div>
+    </div>
+    <div class="form-grid planning-replication-years">
+      <label class="field">
+        <span>*Exercício de origem</span>
+        <select id="replication-source-year">
+          <option value="">Selecione...</option>
+          {% for year in source_years %}
+          <option value="{{ year }}">{{ year }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span>*Exercício de destino</span>
+        <input
+          id="replication-target-year"
+          inputmode="numeric"
+          maxlength="4"
+          placeholder="Ex.: 2027"
+        />
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="planning-key-step-heading">
+      <span>Etapa 2</span>
+      <div class="card-title">Itens que serão replicados</div>
+    </div>
+    <p class="muted">
+      Vínculos obrigatórios são selecionados automaticamente e não podem ser
+      removidos enquanto a estrutura que depende deles estiver marcada.
+    </p>
+
+    <div class="planning-replication-groups">
+      <fieldset class="planning-replication-group">
+        <legend>Estrutura anual</legend>
+        <div id="replication-options-estrutura" class="planning-replication-options"></div>
+      </fieldset>
+      <fieldset class="planning-replication-group">
+        <legend>Vínculos obrigatórios</legend>
+        <div id="replication-options-vinculos" class="planning-replication-options"></div>
+      </fieldset>
+      <fieldset class="planning-replication-group">
+        <legend>Chaves de planejamento</legend>
+        <div id="replication-options-chaves" class="planning-replication-options"></div>
+      </fieldset>
+    </div>
+
+    <div id="replication-dependency-message" class="planning-replication-message" role="status"></div>
+    <div class="planning-replication-global-note">
+      <i class="bi bi-info-circle"></i>
+      Regiões, municípios, funções, subfunções, UGs, ADJs, macropolíticas,
+      pilares, metas, indicadores, eixos, políticas do decreto e públicos
+      transversais são cadastros globais. Eles não são duplicados; seus IDs são
+      reutilizados nos vínculos do novo exercício.
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary sm" id="replication-analyze" type="button">
+        <i class="bi bi-search"></i>Analisar replicação
+      </button>
+      <button class="btn btn-secondary sm" id="replication-clear" type="button">
+        <i class="bi bi-eraser"></i>Limpar
+      </button>
+    </div>
+  </div>
+
+  <div class="card planning-replication-preview" id="replication-preview" hidden>
+    <div class="planning-key-step-heading">
+      <span>Etapa 3</span>
+      <div class="card-title">Conferência e confirmação</div>
+    </div>
+    <div id="replication-summary" class="planning-replication-summary"></div>
+    <div id="replication-warnings" class="planning-replication-warnings"></div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Registros na origem</th>
+            <th>Registros já existentes no destino</th>
+          </tr>
+        </thead>
+        <tbody id="replication-preview-body"></tbody>
+      </table>
+    </div>
+    <label class="checkbox-field planning-replication-confirm">
+      <input id="replication-confirm" type="checkbox" />
+      <span>Conferi os itens e desejo executar a replicação.</span>
+    </label>
+    <div class="actions">
+      <button class="btn btn-primary sm" id="replication-execute" type="button" disabled>
+        <i class="bi bi-copy"></i>Confirmar replicação
+      </button>
+      <div id="replication-result" class="muted" role="status"></div>
+    </div>
+  </div>
+</section>

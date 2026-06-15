@@ -5904,6 +5904,255 @@
     load();
   }
 
+  function initReplicarExercicio() {
+    const page = document.getElementById("replicar-exercicio-page");
+    if (!page || page.dataset.bound === "1") return;
+    page.dataset.bound = "1";
+
+    const options = JSON.parse(page.dataset.options || "[]");
+    const optionMap = Object.fromEntries(options.map((item) => [item.key, item]));
+    const sourceEl = document.getElementById("replication-source-year");
+    const targetEl = document.getElementById("replication-target-year");
+    const dependencyMessage = document.getElementById(
+      "replication-dependency-message"
+    );
+    const preview = document.getElementById("replication-preview");
+    const previewBody = document.getElementById("replication-preview-body");
+    const summaryEl = document.getElementById("replication-summary");
+    const warningsEl = document.getElementById("replication-warnings");
+    const confirmEl = document.getElementById("replication-confirm");
+    const executeBtn = document.getElementById("replication-execute");
+    const resultEl = document.getElementById("replication-result");
+    const explicitSelection = new Set();
+    let effectiveSelection = new Set();
+    let analyzedPayload = null;
+
+    const esc = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    const setMessage = (message = "", error = false) => {
+      dependencyMessage.textContent = message;
+      dependencyMessage.classList.toggle("text-error", error);
+    };
+    const request = async (url, payload) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch",
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Falha ao processar a solicitação.");
+      return data;
+    };
+    const invalidatePreview = () => {
+      analyzedPayload = null;
+      preview.hidden = true;
+      confirmEl.checked = false;
+      executeBtn.disabled = true;
+      resultEl.textContent = "";
+    };
+    const dependencyClosure = () => {
+      const result = new Set(explicitSelection);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        [...result].forEach((key) => {
+          (optionMap[key]?.requires || []).forEach((dependency) => {
+            if (!result.has(dependency)) {
+              result.add(dependency);
+              changed = true;
+            }
+          });
+        });
+      }
+      return result;
+    };
+    const requiredBy = (key) =>
+      [...effectiveSelection]
+        .filter((selected) => optionMap[selected]?.requires?.includes(key))
+        .map((selected) => optionMap[selected].label);
+    const syncOptions = (message = "") => {
+      effectiveSelection = dependencyClosure();
+      page.querySelectorAll("[data-replication-option]").forEach((input) => {
+        const key = input.dataset.replicationOption;
+        const automatic =
+          effectiveSelection.has(key) && !explicitSelection.has(key);
+        input.checked = effectiveSelection.has(key);
+        input.closest(".planning-replication-option")?.classList.toggle(
+          "required",
+          automatic
+        );
+        const badge = input
+          .closest(".planning-replication-option")
+          ?.querySelector("[data-dependency-badge]");
+        if (badge) {
+          badge.hidden = !automatic;
+          badge.title = automatic
+            ? `Obrigatório para: ${requiredBy(key).join(", ")}`
+            : "";
+        }
+      });
+      setMessage(message);
+      invalidatePreview();
+    };
+    const renderOptions = () => {
+      ["estrutura", "vinculos", "chaves"].forEach((group) => {
+        const container = document.getElementById(
+          `replication-options-${group}`
+        );
+        container.innerHTML = options
+          .filter((item) => item.group === group)
+          .map(
+            (item) => `
+              <label class="planning-replication-option">
+                <input type="checkbox" data-replication-option="${esc(item.key)}" />
+                <span>${esc(item.label)}</span>
+                <small data-dependency-badge hidden>Obrigatório</small>
+              </label>`
+          )
+          .join("");
+      });
+    };
+    const payload = () => ({
+      exercicio_origem: sourceEl.value,
+      exercicio_destino: targetEl.value,
+      selecionados: [...effectiveSelection],
+    });
+
+    renderOptions();
+    page.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-replication-option]");
+      if (!input) return;
+      const key = input.dataset.replicationOption;
+      if (input.checked) {
+        explicitSelection.add(key);
+        syncOptions();
+        return;
+      }
+      explicitSelection.delete(key);
+      const nextSelection = dependencyClosure();
+      const stillRequired = nextSelection.has(key);
+      if (stillRequired) {
+        effectiveSelection = nextSelection;
+        const parents = [...nextSelection]
+          .filter((selected) => optionMap[selected]?.requires?.includes(key))
+          .map((selected) => optionMap[selected].label);
+        syncOptions(
+          `${optionMap[key].label} é obrigatório para: ${parents.join(", ")}.`
+        );
+      } else {
+        syncOptions();
+      }
+    });
+    sourceEl.addEventListener("change", () => {
+      const source = Number(sourceEl.value || 0);
+      if (source && !targetEl.value) targetEl.value = String(source + 1);
+      invalidatePreview();
+    });
+    targetEl.addEventListener("input", invalidatePreview);
+    confirmEl.addEventListener("change", () => {
+      executeBtn.disabled = !confirmEl.checked;
+    });
+    document.getElementById("replication-clear").addEventListener("click", () => {
+      explicitSelection.clear();
+      sourceEl.value = "";
+      targetEl.value = "";
+      syncOptions();
+    });
+    document
+      .getElementById("replication-analyze")
+      .addEventListener("click", async () => {
+        if (!effectiveSelection.size) {
+          setMessage("Selecione ao menos uma estrutura para replicar.", true);
+          return;
+        }
+        showAppLoading(
+          "Analisando replicação...",
+          "Aguarde enquanto os registros e vínculos são conferidos."
+        );
+        try {
+          const data = await request(
+            "/api/estrutura-planejamento/replicar-exercicio/analisar",
+            payload()
+          );
+          analyzedPayload = payload();
+          summaryEl.innerHTML = `
+            <strong>${esc(data.source)} → ${esc(data.target)}</strong>
+            <span>${data.items.length} grupos selecionados</span>`;
+          previewBody.innerHTML = data.items
+            .map(
+              (item) => `
+                <tr>
+                  <td>${esc(item.label)}</td>
+                  <td>${item.source}</td>
+                  <td>${item.destination}</td>
+                </tr>`
+            )
+            .join("");
+          warningsEl.innerHTML = data.warnings.length
+            ? `<strong>Atenção:</strong><ul>${data.warnings
+                .map((warning) => `<li>${esc(warning)}</li>`)
+                .join("")}</ul>`
+            : "";
+          preview.hidden = false;
+          confirmEl.checked = false;
+          executeBtn.disabled = true;
+          resultEl.textContent = "";
+          setMessage();
+          preview.scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch (error) {
+          setMessage(error.message, true);
+        } finally {
+          hideAppLoading();
+        }
+      });
+    executeBtn.addEventListener("click", async () => {
+      if (!analyzedPayload || !confirmEl.checked) return;
+      const source = analyzedPayload.exercicio_origem;
+      const target = analyzedPayload.exercicio_destino;
+      if (
+        !window.confirm(
+          `Confirma a replicação da estrutura de ${source} para ${target}?`
+        )
+      ) {
+        return;
+      }
+      showAppLoading(
+        "Replicando exercício...",
+        "A operação é transacional. Aguarde a conclusão."
+      );
+      executeBtn.disabled = true;
+      try {
+        const data = await request(
+          "/api/estrutura-planejamento/replicar-exercicio/executar",
+          analyzedPayload
+        );
+        const details = Object.entries(data.stats)
+          .map(([key, stat]) => {
+            const label = optionMap[key]?.label || key;
+            return `${label}: ${stat.criados} criados, ${stat.reutilizados} reutilizados`;
+          })
+          .join(" | ");
+        resultEl.textContent = `${data.message} ${details}`;
+        resultEl.classList.remove("text-error");
+        confirmEl.checked = false;
+      } catch (error) {
+        resultEl.textContent = error.message;
+        resultEl.classList.add("text-error");
+        executeBtn.disabled = false;
+      } finally {
+        hideAppLoading();
+      }
+    });
+  }
+
   function initRelatorioEstruturaPlanejamento() {
     const page = document.getElementById("relatorio-estrutura-planejamento");
     const table = document.getElementById("planning-report-table");
@@ -13713,6 +13962,9 @@
     }
     if (route === "atualizar/estrutura-planejamento/catalogo-chave") {
       initCatalogoChave();
+    }
+    if (route === "atualizar/estrutura-planejamento/replicar-exercicio") {
+      initReplicarExercicio();
     }
     if (route === "cadastrar/dotacao" || route.startsWith("cadastrar/dotacao/")) {
       initDotacao();
