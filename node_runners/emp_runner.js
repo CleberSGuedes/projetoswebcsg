@@ -749,15 +749,19 @@ function getRowValueByAliases(row, aliases) {
 
 function buildFallbackChave8026(row, partesLinha) {
   const paoeRaw = getRowValueByAliases(row, ["PAOE", "Ação (P/A/OE)", "Acao (P/A/OE)", "Ação/PAOE", "Acao/PAOE"]);
-  const paoeMatch = String(paoeRaw || "").match(/\d+/);
-  const paoeKey = paoeMatch ? paoeMatch[0].replace(/^0+/, "") || "0" : "";
-  if (paoeKey !== "8026") return null;
-
   const dotacaoRaw = getRowValueByAliases(row, ["Dotação Orçamentária", "Dotacao Orcamentaria"]);
   const partesDotacao = String(dotacaoRaw || "")
     .split(".")
     .map((p) => p.trim())
     .filter(Boolean);
+
+  const paoeMatch = String(paoeRaw || "").match(/\d+/);
+  const paoeDotacao = partesDotacao[5] || "";
+  const paoeDotacaoMatch = String(paoeDotacao).match(/\d+/);
+  const paoeIdentificado = paoeMatch?.[0] || paoeDotacaoMatch?.[0] || "";
+  const paoeKey = paoeIdentificado.replace(/^0+/, "") || (paoeIdentificado ? "0" : "");
+  if (paoeKey !== "8026") return null;
+
   if (partesDotacao.length < 7) return null;
 
   let regiao = String(partesDotacao[6] || "").replace(/\D/g, "");

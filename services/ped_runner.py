@@ -330,13 +330,23 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
             row,
             {"PAOE", "ACAOPAOE"},
         )
+        dotacao_val = _get_row_value_by_aliases(row, {"DOTACAOORCAMENTARIA"})
+        partes_dotacao = [p.strip() for p in str(dotacao_val or "").split(".") if p.strip()]
+
         paoe_match = re.search(r"\d+", str(paoe_val or ""))
-        paoe_key = (paoe_match.group(0).lstrip("0") or "0") if paoe_match else ""
+        paoe_dotacao = partes_dotacao[5] if len(partes_dotacao) > 5 else ""
+        paoe_dotacao_match = re.search(r"\d+", str(paoe_dotacao))
+        paoe_identificado = (
+            paoe_match.group(0)
+            if paoe_match
+            else paoe_dotacao_match.group(0)
+            if paoe_dotacao_match
+            else ""
+        )
+        paoe_key = paoe_identificado.lstrip("0") or ("0" if paoe_identificado else "")
         if paoe_key != "8026":
             return None
 
-        dotacao_val = _get_row_value_by_aliases(row, {"DOTACAOORCAMENTARIA"})
-        partes_dotacao = [p.strip() for p in str(dotacao_val or "").split(".") if p.strip()]
         if len(partes_dotacao) < 7:
             return None
 
