@@ -39,12 +39,25 @@
           {% endif %}
 
           {% if entity == "produtos" %}
-          <label class="field">
+          <div class="field">
             <span>*Ação/PAOE</span>
             <select id="estrutura-planejamento-acao" required disabled>
               <option value="">Aguardando programas...</option>
             </select>
-          </label>
+            <div id="estrutura-planejamento-acao-checklist" class="planning-action-checklist" hidden>
+              <button
+                class="planning-action-checklist-toggle"
+                id="estrutura-planejamento-acao-checklist-toggle"
+                type="button"
+                disabled
+              >
+                Selecione...
+              </button>
+              <div class="planning-action-checklist-panel" id="estrutura-planejamento-acao-checklist-panel" hidden>
+                <div class="planning-action-checklist-options" id="estrutura-planejamento-acao-checklist-options"></div>
+              </div>
+            </div>
+          </div>
           {% endif %}
 
           <label class="field">

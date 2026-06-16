@@ -4108,6 +4108,10 @@
     const exercicioEl = document.getElementById("estrutura-planejamento-exercicio");
     const programaEl = document.getElementById("estrutura-planejamento-programa");
     const acaoEl = document.getElementById("estrutura-planejamento-acao");
+    const acaoChecklistEl = document.getElementById("estrutura-planejamento-acao-checklist");
+    const acaoChecklistToggle = document.getElementById("estrutura-planejamento-acao-checklist-toggle");
+    const acaoChecklistPanel = document.getElementById("estrutura-planejamento-acao-checklist-panel");
+    const acaoChecklistOptions = document.getElementById("estrutura-planejamento-acao-checklist-options");
     const codigoEl = document.getElementById("estrutura-planejamento-codigo");
     const nomeEl = document.getElementById("estrutura-planejamento-nome");
     const responsavelEl = document.getElementById("estrutura-planejamento-responsavel");
@@ -4127,8 +4131,10 @@
     let rows = [];
     let programas = [];
     let acoes = [];
+    let currentActionOptions = [];
     let currentPage = 1;
     let pageSize = Number(pageSizeEl?.value || 10) || 10;
+    const isProductEntity = entity === "produtos";
 
     const esc = (value) =>
       String(value ?? "")
@@ -4160,13 +4166,67 @@
     const setOptions = (select, options, placeholder, selectedValue = "") => {
       if (!select) return;
       select.innerHTML = `<option value="">${esc(placeholder)}</option>`;
+      const selectedValues = Array.isArray(selectedValue)
+        ? selectedValue.map((value) => String(value))
+        : [String(selectedValue || "")];
       options.forEach((item) => {
         const option = document.createElement("option");
         option.value = String(item.id);
         option.textContent = optionLabel(item);
+        option.selected = selectedValues.includes(String(item.id));
         select.appendChild(option);
       });
-      select.value = selectedValue ? String(selectedValue) : "";
+      if (!select.multiple) {
+        select.value = selectedValue ? String(selectedValue) : "";
+      }
+    };
+
+    const selectedChecklistActionIds = () => {
+      if (!acaoChecklistOptions) return [];
+      return Array.from(
+        acaoChecklistOptions.querySelectorAll("input[type='checkbox']:checked")
+      ).map((input) => input.value);
+    };
+
+    const updateActionChecklistLabel = () => {
+      if (!acaoChecklistToggle) return;
+      const selected = selectedChecklistActionIds();
+      if (!selected.length) {
+        acaoChecklistToggle.textContent = "Selecione...";
+      } else if (selected.length === 1) {
+        const option = currentActionOptions.find(
+          (item) => String(item.id) === String(selected[0])
+        );
+        acaoChecklistToggle.textContent = option ? optionLabel(option) : "1 Ação/PAOE selecionada";
+      } else {
+        acaoChecklistToggle.textContent = `${selected.length} Ações/PAOE selecionadas`;
+      }
+    };
+
+    const renderActionChecklist = (options = [], selectedValues = []) => {
+      if (!acaoChecklistOptions) return;
+      const selected = new Set((selectedValues || []).map((value) => String(value)));
+      acaoChecklistOptions.innerHTML = options.length
+        ? options
+            .map(
+              (option) => `
+                <label class="planning-action-checklist-option">
+                  <input type="checkbox" value="${esc(option.id)}" ${selected.has(String(option.id)) ? "checked" : ""} />
+                  <span>${esc(optionLabel(option))}</span>
+                </label>
+              `
+            )
+            .join("")
+        : '<div class="muted">Nenhuma Ação/PAOE cadastrada para este programa.</div>';
+      updateActionChecklistLabel();
+    };
+
+    const setProductActionMode = () => {
+      if (!acaoEl || !isProductEntity) return;
+      acaoEl.hidden = true;
+      acaoEl.disabled = true;
+      if (acaoChecklistEl) acaoChecklistEl.hidden = false;
+      if (acaoChecklistPanel) acaoChecklistPanel.hidden = true;
     };
 
     const populatePrograms = (selectedValue = "") => {
@@ -4187,19 +4247,32 @@
           (!exercicio || String(row.exercicio) === exercicio) &&
           (!programaId || String(row.programa_id) === programaId)
       );
+      currentActionOptions = options;
       const placeholder = !programaId
         ? "Selecione primeiro um programa..."
         : options.length
           ? "Selecione..."
           : "Nenhuma Ação/PAOE cadastrada para este programa";
       setOptions(acaoEl, options, placeholder, selectedValue);
-      acaoEl.disabled = !programaId;
+      acaoEl.disabled = !programaId || isProductEntity;
+      if (isProductEntity) {
+        const selectedValues = Array.isArray(selectedValue)
+          ? selectedValue
+          : selectedValue
+            ? [selectedValue]
+            : [];
+        renderActionChecklist(options, selectedValues);
+        if (acaoChecklistToggle) {
+          acaoChecklistToggle.disabled = !programaId || !options.length;
+        }
+      }
     };
 
     const resetForm = () => {
       form.reset();
       if (idEl) idEl.value = "";
       if (ativoEl) ativoEl.checked = true;
+      setProductActionMode(false);
       populatePrograms();
       populateActions();
       setMsg("");
@@ -4220,6 +4293,7 @@
       if (!row) return;
       if (idEl) idEl.value = row.id || "";
       if (exercicioEl) exercicioEl.value = row.exercicio || "";
+      setProductActionMode();
       populatePrograms(row.programa_id || "");
       if (programaEl && row.programa_id) programaEl.value = String(row.programa_id);
       populateActions(row.acao_id || "");
@@ -4404,6 +4478,24 @@
       setMsg("");
     });
     acaoEl?.addEventListener("change", () => setMsg(""));
+    acaoChecklistToggle?.addEventListener("click", () => {
+      if (acaoChecklistToggle.disabled || !acaoChecklistPanel) return;
+      acaoChecklistPanel.hidden = !acaoChecklistPanel.hidden;
+    });
+    acaoChecklistOptions?.addEventListener("change", () => {
+      updateActionChecklistLabel();
+      setMsg("");
+    });
+    document.addEventListener("click", (event) => {
+      if (
+        !acaoChecklistPanel ||
+        acaoChecklistPanel.hidden ||
+        acaoChecklistEl?.contains(event.target)
+      ) {
+        return;
+      }
+      acaoChecklistPanel.hidden = true;
+    });
     cpfEl?.addEventListener("input", () => {
       cpfEl.value = formatCpf(cpfEl.value);
       setMsg("");
@@ -4429,6 +4521,8 @@
       currentPage = 1;
       renderTable();
     });
+
+    setProductActionMode(false);
 
     tableBody?.addEventListener("click", async (event) => {
       const editButton = event.target.closest(".planning-edit");
@@ -4479,6 +4573,10 @@
         email: emailEl?.value || "",
         ativo: !!ativoEl?.checked,
       };
+      if (isProductEntity && acaoEl) {
+        payload.acao_ids = selectedChecklistActionIds();
+        payload.acao_id = payload.acao_ids[0] || null;
+      }
       setMsg("Salvando registro...");
       try {
         const response = await fetch(

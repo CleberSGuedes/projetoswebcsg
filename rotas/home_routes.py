@@ -5114,6 +5114,26 @@ def _planning_apply_values(row, values: dict) -> None:
         setattr(row, field, value)
 
 
+def _planning_product_action_ids(payload: dict) -> tuple[list[int] | None, str | None]:
+    raw_action_ids = payload.get("acao_ids")
+    if isinstance(raw_action_ids, list):
+        action_ids = []
+        seen_action_ids = set()
+        for raw_id in raw_action_ids:
+            try:
+                action_id = int(raw_id)
+            except (TypeError, ValueError):
+                return None, "Selecione apenas Ações/PAOE válidas."
+            if action_id not in seen_action_ids:
+                seen_action_ids.add(action_id)
+                action_ids.append(action_id)
+    else:
+        action_ids = [payload.get("acao_id")]
+    if not action_ids or not action_ids[0]:
+        return None, "Selecione uma ou mais Ações/PAOE."
+    return action_ids, None
+
+
 @home_bp.route("/api/estrutura-planejamento/<entity>", methods=["POST"])
 @login_required
 @_require_planning_structure_entity
@@ -5122,6 +5142,42 @@ def api_estrutura_planejamento_create(entity: str):
     values, error = _planning_common_payload(payload)
     if error:
         return jsonify({"error": error}), 400
+    if entity == "produtos":
+        action_ids, action_error = _planning_product_action_ids(payload)
+        if action_error:
+            return jsonify({"error": action_error}), 400
+        now = _now_local()
+        user_id = _resolve_usuario_id()
+        rows = []
+        for action_id in action_ids:
+            item_values, item_error = _planning_validate_parent(
+                entity, {"acao_id": action_id}, dict(values)
+            )
+            if item_error:
+                return jsonify({"error": item_error}), 400
+            item_values["usuario_id"] = user_id
+            item_values["criado_em"] = now
+            item_values["excluido_em"] = None if item_values["ativo"] else now
+            rows.append(ProdutoAcaoPlanejamento(**item_values))
+        try:
+            db.session.add_all(rows)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"error": "Já existe um registro equivalente neste contexto."}), 409
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao cadastrar estrutura de planejamento: %s", entity
+            )
+            return jsonify({"error": "Falha ao cadastrar o registro."}), 500
+        message = (
+            "Produto cadastrado com sucesso."
+            if len(rows) == 1
+            else f"{len(rows)} produtos cadastrados com sucesso."
+        )
+        return jsonify({"ok": True, "message": message, "created": len(rows)}), 201
+
     values, error = _planning_validate_parent(entity, payload, values)
     if error:
         return jsonify({"error": error}), 400
@@ -5170,6 +5226,19 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
     values, error = _planning_common_payload(payload)
     if error:
         return jsonify({"error": error}), 400
+    product_extra_rows = []
+    if entity == "produtos":
+        action_ids, action_error = _planning_product_action_ids(payload)
+        if action_error:
+            return jsonify({"error": action_error}), 400
+        primary_action_id = (
+            row.acao_id if row.acao_id in action_ids else action_ids[0]
+        )
+        selected_extra_action_ids = [
+            action_id for action_id in action_ids if action_id != primary_action_id
+        ]
+        payload = {**payload, "acao_id": primary_action_id}
+
     values, error = _planning_validate_parent(entity, payload, values)
     if error:
         return jsonify({"error": error}), 400
@@ -5237,8 +5306,23 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
     values["usuario_id"] = _resolve_usuario_id() or row.usuario_id
     values["alterado_em"] = now
     values["excluido_em"] = None if values["ativo"] else now
+    if entity == "produtos":
+        user_id = values["usuario_id"]
+        for action_id in selected_extra_action_ids:
+            item_values, item_error = _planning_validate_parent(
+                entity, {"acao_id": action_id}, dict(values)
+            )
+            if item_error:
+                return jsonify({"error": item_error}), 400
+            item_values["usuario_id"] = user_id
+            item_values["criado_em"] = now
+            item_values["alterado_em"] = None
+            item_values["excluido_em"] = None if item_values["ativo"] else now
+            product_extra_rows.append(ProdutoAcaoPlanejamento(**item_values))
     _planning_apply_values(row, values)
     try:
+        if product_extra_rows:
+            db.session.add_all(product_extra_rows)
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
@@ -5249,7 +5333,15 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
             "Falha ao atualizar estrutura de planejamento: %s/%s", entity, row_id
         )
         return jsonify({"error": "Falha ao atualizar o registro."}), 500
-    return jsonify({"ok": True, "message": "Registro atualizado com sucesso."})
+    message = (
+        "Registro atualizado com sucesso."
+        if not product_extra_rows
+        else (
+            "Registro atualizado e "
+            f"{len(product_extra_rows)} produto(s) adicional(is) cadastrado(s)."
+        )
+    )
+    return jsonify({"ok": True, "message": message, "created": len(product_extra_rows)})
 
 
 @home_bp.route(
