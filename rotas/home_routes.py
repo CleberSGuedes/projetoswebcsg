@@ -2445,11 +2445,14 @@ def _planning_source_label(source: str, row) -> str:
     return ""
 
 
-def _planning_source_options(source: str) -> list[dict]:
+def _planning_source_options(source: str, include_inactive: bool = False) -> list[dict]:
     model = _planning_source_model(source)
     if not model:
         return []
-    rows = model.query.order_by(model.id.asc()).all()
+    query = model.query
+    if not include_inactive and hasattr(model, "ativo"):
+        query = query.filter(model.ativo.is_(True))
+    rows = query.order_by(model.id.asc()).all()
     return [
         {
             "id": row.id,
@@ -2635,8 +2638,14 @@ def api_estrutura_componentes_list(component: str):
         if field.get("type") == "select"
     }
     source_labels = {
-        source: {option["id"]: option["label"] for option in options}
-        for source, options in sources.items()
+        field["source"]: {
+            option["id"]: option["label"]
+            for option in _planning_source_options(
+                field["source"], include_inactive=True
+            )
+        }
+        for field in config["fields"]
+        if field.get("type") == "select"
     }
     return jsonify(
         {
@@ -2756,8 +2765,14 @@ def _planning_mapping_payload(mapping: str) -> dict:
     right_field, right_source, right_label = config["right"]
     left_options = _planning_source_options(left_source)
     right_options = _planning_source_options(right_source)
-    left_labels = {option["id"]: option["label"] for option in left_options}
-    right_labels = {option["id"]: option["label"] for option in right_options}
+    left_labels = {
+        option["id"]: option["label"]
+        for option in _planning_source_options(left_source, include_inactive=True)
+    }
+    right_labels = {
+        option["id"]: option["label"]
+        for option in _planning_source_options(right_source, include_inactive=True)
+    }
     rows = []
     for row in config["model"].query.all():
         left_id = getattr(row, left_field)
@@ -2825,10 +2840,16 @@ def api_estrutura_mapeamentos_create(mapping: str):
     right_field, right_source, _ = config["right"]
     left_model = _planning_source_model(left_source)
     right_model = _planning_source_model(right_source)
-    if not left_model or not db.session.get(left_model, left_id):
+    left_row = db.session.get(left_model, left_id) if left_model else None
+    right_row = db.session.get(right_model, right_id) if right_model else None
+    if not left_row:
         return jsonify({"error": "Registro de origem não encontrado."}), 404
-    if not right_model or not db.session.get(right_model, right_id):
+    if not right_row:
         return jsonify({"error": "Registro de destino não encontrado."}), 404
+    if not bool(getattr(left_row, "ativo", True)):
+        return jsonify({"error": "O registro de origem está inativo."}), 409
+    if not bool(getattr(right_row, "ativo", True)):
+        return jsonify({"error": "O registro de destino está inativo."}), 409
     filters = {left_field: left_id, right_field: right_id}
     if config["model"].query.filter_by(**filters).first():
         return jsonify({"error": "Este mapeamento já está cadastrado."}), 409
@@ -3281,7 +3302,9 @@ def _planning_key_source_options_for_component(
     return [
         {
             "id": getattr(row, component.campo_id),
-            "codigo": str(getattr(row, component.campo_codigo, "") or ""),
+            "codigo": _planning_key_component_code(
+                component, getattr(row, component.campo_codigo, "")
+            ),
             "descricao": str(
                 getattr(row, component.campo_descricao, "") or ""
             )
@@ -3292,6 +3315,18 @@ def _planning_key_source_options_for_component(
         }
         for row in rows
     ]
+
+
+def _planning_key_component_code(
+    component: ModeloChaveComponente,
+    raw_code,
+) -> str:
+    code = str(raw_code or "").strip()
+    if not code:
+        return ""
+    if component.tabela_origem == Regiao.__tablename__:
+        return code if code.upper().startswith("R") else f"R{code}"
+    return code
 
 
 def _planning_key_format(
@@ -3511,7 +3546,9 @@ def _planning_key_payload_values(
             )
         result[component.id] = {
             "id": value_id,
-            "codigo": str(getattr(row, component.campo_codigo, "") or ""),
+            "codigo": _planning_key_component_code(
+                component, getattr(row, component.campo_codigo, "")
+            ),
             "descricao": (
                 str(getattr(row, component.campo_descricao, "") or "")
                 if component.campo_descricao
@@ -5018,11 +5055,11 @@ def _planning_structure_dependencies() -> dict:
     programas = ProgramaPlanejamento.query.order_by(
         ProgramaPlanejamento.exercicio.desc(),
         ProgramaPlanejamento.codigo.asc(),
-    ).all()
+    ).filter(ProgramaPlanejamento.ativo.is_(True)).all()
     acoes = AcaoPlanejamento.query.order_by(
         AcaoPlanejamento.exercicio.desc(),
         AcaoPlanejamento.codigo.asc(),
-    ).all()
+    ).filter(AcaoPlanejamento.ativo.is_(True)).all()
     return {
         "programas": [_serialize_programa(row) for row in programas],
         "acoes": [_serialize_acao(row) for row in acoes],
