@@ -666,6 +666,17 @@ class PoliticaDecretoEixo(db.Model):
     eixo_id = db.Column(db.Integer, db.ForeignKey("eixo.id"), primary_key=True)
 
 
+class PoliticaDecretoMacropolitica(db.Model):
+    __tablename__ = "politica_decr_macropolitica"
+
+    politica_decr_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+    macropolitica_id = db.Column(
+        db.Integer, db.ForeignKey("macropolitica.id"), primary_key=True
+    )
+
+
 class PilarMeta(db.Model):
     __tablename__ = "pilar_meta"
 
@@ -715,6 +726,20 @@ class PoliticaDecretoProdutoAcao(db.Model):
         db.ForeignKey("produto_acao_planejamento.id"),
         primary_key=True,
     )
+
+
+class ProdutoAcaoSubfuncaoUg(db.Model):
+    __tablename__ = "produto_acao_subfuncao_ug"
+
+    produto_acao_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("produto_acao_planejamento.id"),
+        primary_key=True,
+    )
+    subfuncao_id = db.Column(
+        db.Integer, db.ForeignKey("subfuncao.id"), primary_key=True
+    )
+    ug_id = db.Column(db.Integer, db.ForeignKey("ug.id"), primary_key=True)
 
 
 class Dotacao(db.Model):

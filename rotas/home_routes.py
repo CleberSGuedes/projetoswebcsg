@@ -60,6 +60,8 @@ from models import (
     SubfuncaoAcao,
     MacropoliticaSubfuncao,
     PoliticaDecretoProdutoAcao,
+    PoliticaDecretoMacropolitica,
+    ProdutoAcaoSubfuncaoUg,
     Dotacao,
     CadastrarSubacao,
     CadastrarEtapa,
@@ -2233,6 +2235,12 @@ PLANNING_MAPPINGS = {
         "left": ("politica_id", "politica_decreto", "Política do Decreto"),
         "right": ("eixo_id", "eixo", "Eixo"),
     },
+    "politica_macropolitica": {
+        "title": "Política do Decreto × Macropolítica",
+        "model": PoliticaDecretoMacropolitica,
+        "left": ("politica_decr_id", "politica_decreto", "Política do Decreto"),
+        "right": ("macropolitica_id", "macropolitica", "Macropolítica"),
+    },
     "politica_produto_acao": {
         "title": "Política do Decreto × Produto da Ação",
         "model": PoliticaDecretoProdutoAcao,
@@ -2252,6 +2260,7 @@ PLANNING_COMPONENT_MAPPING_KEYS = {
     "macropolitica": [
         "adj_macropolitica",
         "macropolitica_subfuncao",
+        "politica_macropolitica",
     ],
     "pilar": [
         "adj_pilar",
@@ -2261,6 +2270,7 @@ PLANNING_COMPONENT_MAPPING_KEYS = {
     "eixo": ["adj_eixo"],
     "politica_decreto": [
         "politica_eixo",
+        "politica_macropolitica",
         "adj_politica",
         "subfuncao_politica",
         "politica_produto_acao",
@@ -2566,6 +2576,11 @@ PLANNING_COMPONENT_DEPENDENCIES = {
     ],
     "subfuncao": [
         (UgSubfuncao, "subfuncao_id", "mapeamentos com UGs"),
+        (
+            ProdutoAcaoSubfuncaoUg,
+            "subfuncao_id",
+            "mapeamentos com produtos e UGs",
+        ),
         (SubfuncaoPolitica, "subfuncao_id", "mapeamentos com políticas"),
         (SubfuncaoAcao, "subfuncao_id", "mapeamentos com ações"),
         (
@@ -2574,7 +2589,10 @@ PLANNING_COMPONENT_DEPENDENCIES = {
             "mapeamentos com macropolíticas",
         ),
     ],
-    "ug": [(UgSubfuncao, "ug_id", "mapeamentos com subfunções")],
+    "ug": [
+        (UgSubfuncao, "ug_id", "mapeamentos com subfunções"),
+        (ProdutoAcaoSubfuncaoUg, "ug_id", "mapeamentos com produtos e subfunções"),
+    ],
     "adj": [
         (MacropoliticaAdj, "adj_id", "mapeamentos com macropolíticas"),
         (PilarAdj, "adj_id", "mapeamentos com pilares"),
@@ -2584,6 +2602,11 @@ PLANNING_COMPONENT_DEPENDENCIES = {
     "macropolitica": [
         (MacropoliticaAdj, "macropolitica_id", "mapeamentos com ADJs"),
         (MacropoliticaPilar, "macropolitica_id", "mapeamentos com pilares"),
+        (
+            PoliticaDecretoMacropolitica,
+            "macropolitica_id",
+            "mapeamentos com políticas",
+        ),
         (
             MacropoliticaSubfuncao,
             "macropolitica_id",
@@ -2608,6 +2631,11 @@ PLANNING_COMPONENT_DEPENDENCIES = {
         (PoliticaDecretoAdj, "politica_decr_id", "mapeamentos com ADJs"),
         (SubfuncaoPolitica, "politica_decr_id", "mapeamentos com subfunções"),
         (PoliticaDecretoEixo, "politica_id", "mapeamentos com eixos"),
+        (
+            PoliticaDecretoMacropolitica,
+            "politica_decr_id",
+            "mapeamentos com macropolíticas",
+        ),
         (
             PoliticaDecretoProdutoAcao,
             "politica_decr_id",
@@ -3302,6 +3330,7 @@ def _planning_key_source_options_for_component(
     return [
         {
             "id": getattr(row, component.campo_id),
+            "source_id": row.id,
             "codigo": _planning_key_component_code(
                 component, getattr(row, component.campo_codigo, "")
             ),
@@ -3326,7 +3355,259 @@ def _planning_key_component_code(
         return ""
     if component.tabela_origem == Regiao.__tablename__:
         return code if code.upper().startswith("R") else f"R{code}"
+    if component.tabela_origem == Ug.__tablename__:
+        return code.lstrip("0") or "0"
     return code
+
+
+def _planning_key_mapping_links() -> list[dict]:
+    links = []
+    for mapping in PLANNING_MAPPINGS.values():
+        left_field, left_source, _ = mapping["left"]
+        right_field, right_source, _ = mapping["right"]
+        for row in mapping["model"].query.all():
+            left_id = getattr(row, left_field, None)
+            right_id = getattr(row, right_field, None)
+            if left_id is None or right_id is None:
+                continue
+            links.append(
+                {
+                    "left_source": left_source,
+                    "left_id": left_id,
+                    "right_source": right_source,
+                    "right_id": right_id,
+                }
+            )
+    direct_links = [
+        (Municipio, "municipio", "id", "regiao", "regiao_id"),
+        (Subfuncao, "subfuncao", "id", "funcao", "funcao_id"),
+        (IndicadorPee, "indicador_pee", "id", "meta_pee", "meta_id"),
+        (Eixo, "eixo", "id", "pilar", "pilar_id"),
+        (
+            AcaoPlanejamento,
+            "acao_planejamento",
+            "id",
+            "programa_planejamento",
+            "programa_id",
+        ),
+        (
+            ProdutoAcaoPlanejamento,
+            "produto_acao_planejamento",
+            "id",
+            "acao_planejamento",
+            "acao_id",
+        ),
+    ]
+    for model, left_source, left_field, right_source, right_field in direct_links:
+        query = model.query
+        if hasattr(model, "ativo"):
+            query = query.filter(model.ativo.is_(True))
+        for row in query.all():
+            left_id = getattr(row, left_field, None)
+            right_id = getattr(row, right_field, None)
+            if left_id is None or right_id is None:
+                continue
+            links.append(
+                {
+                    "left_source": left_source,
+                    "left_id": left_id,
+                    "right_source": right_source,
+                    "right_id": right_id,
+                }
+            )
+    return links
+
+
+def _add_index_value(index: dict, key, value) -> None:
+    if key is None or value is None:
+        return
+    normalized_key = (
+        tuple(int(item) for item in key)
+        if isinstance(key, tuple)
+        else int(key)
+    )
+    index.setdefault(normalized_key, set()).add(int(value))
+
+
+def _combined_constraints(*sets: set[int]) -> set[int] | None:
+    active = [set(values) for values in sets if values]
+    if not active:
+        return None
+    result = active[0]
+    for values in active[1:]:
+        result &= values
+    return result
+
+
+def _planning_key_fact_rows() -> list[dict]:
+    actions = {
+        int(row.id): row
+        for row in AcaoPlanejamento.query.filter(
+            AcaoPlanejamento.ativo.is_(True),
+            AcaoPlanejamento.excluido_em.is_(None),
+        ).all()
+    }
+    products = ProdutoAcaoPlanejamento.query.filter(
+        ProdutoAcaoPlanejamento.ativo.is_(True),
+        ProdutoAcaoPlanejamento.excluido_em.is_(None),
+    ).all()
+
+    subfuncao_by_acao = {}
+    for row in SubfuncaoAcao.query.all():
+        _add_index_value(subfuncao_by_acao, row.acao_id, row.subfuncao_id)
+
+    ug_by_subfuncao = {}
+    for row in UgSubfuncao.query.all():
+        _add_index_value(ug_by_subfuncao, row.subfuncao_id, row.ug_id)
+
+    ug_by_product_subfuncao = {}
+    for row in ProdutoAcaoSubfuncaoUg.query.all():
+        _add_index_value(
+            ug_by_product_subfuncao,
+            (int(row.produto_acao_id), int(row.subfuncao_id)),
+            row.ug_id,
+        )
+
+    macro_by_subfuncao = {}
+    for row in MacropoliticaSubfuncao.query.all():
+        _add_index_value(macro_by_subfuncao, row.subfuncao_id, row.macropolitica_id)
+
+    politica_by_subfuncao = {}
+    for row in SubfuncaoPolitica.query.all():
+        _add_index_value(politica_by_subfuncao, row.subfuncao_id, row.politica_decr_id)
+
+    politica_by_product = {}
+    for row in PoliticaDecretoProdutoAcao.query.all():
+        _add_index_value(politica_by_product, row.produto_acao_id, row.politica_decr_id)
+
+    macro_by_politica = {}
+    for row in PoliticaDecretoMacropolitica.query.all():
+        _add_index_value(macro_by_politica, row.politica_decr_id, row.macropolitica_id)
+
+    adj_by_macro = {}
+    macro_by_adj = {}
+    for row in MacropoliticaAdj.query.all():
+        _add_index_value(adj_by_macro, row.macropolitica_id, row.adj_id)
+        _add_index_value(macro_by_adj, row.adj_id, row.macropolitica_id)
+
+    adj_by_pilar = {}
+    pilar_by_adj = {}
+    for row in PilarAdj.query.all():
+        _add_index_value(adj_by_pilar, row.pilar_id, row.adj_id)
+        _add_index_value(pilar_by_adj, row.adj_id, row.pilar_id)
+
+    adj_by_eixo = {}
+    eixo_by_adj = {}
+    for row in EixoAdj.query.all():
+        _add_index_value(adj_by_eixo, row.eixo_id, row.adj_id)
+        _add_index_value(eixo_by_adj, row.adj_id, row.eixo_id)
+
+    adj_by_politica = {}
+    politica_by_adj = {}
+    for row in PoliticaDecretoAdj.query.all():
+        _add_index_value(adj_by_politica, row.politica_decr_id, row.adj_id)
+        _add_index_value(politica_by_adj, row.adj_id, row.politica_decr_id)
+
+    pilar_by_macro = {}
+    macro_by_pilar = {}
+    for row in MacropoliticaPilar.query.all():
+        _add_index_value(pilar_by_macro, row.macropolitica_id, row.pilar_id)
+        _add_index_value(macro_by_pilar, row.pilar_id, row.macropolitica_id)
+
+    eixo_by_pilar = {}
+    pilar_by_eixo = {}
+    for row in Eixo.query.filter(Eixo.ativo.is_(True)).all():
+        _add_index_value(eixo_by_pilar, row.pilar_id, row.id)
+        _add_index_value(pilar_by_eixo, row.id, row.pilar_id)
+
+    eixo_by_politica = {}
+    politica_by_eixo = {}
+    for row in PoliticaDecretoEixo.query.all():
+        _add_index_value(eixo_by_politica, row.politica_id, row.eixo_id)
+        _add_index_value(politica_by_eixo, row.eixo_id, row.politica_id)
+
+    rows = []
+    seen = set()
+    for product in products:
+        action = actions.get(int(product.acao_id))
+        if not action:
+            continue
+        subfuncao_ids = subfuncao_by_acao.get(int(action.id), set())
+        if not subfuncao_ids:
+            continue
+        for subfuncao_id in sorted(subfuncao_ids):
+            ug_ids = ug_by_product_subfuncao.get(
+                (int(product.id), int(subfuncao_id))
+            )
+            if ug_ids is None:
+                ug_ids = ug_by_subfuncao.get(subfuncao_id, set())
+            if not ug_ids:
+                continue
+            politica_ids = _combined_constraints(
+                politica_by_subfuncao.get(subfuncao_id, set()),
+                politica_by_product.get(int(product.id), set()),
+            )
+            if politica_ids is None or not politica_ids:
+                continue
+            for politica_id in sorted(politica_ids):
+                adj_ids = adj_by_politica.get(politica_id, set())
+                if not adj_ids:
+                    continue
+                for adj_id in sorted(adj_ids):
+                    eixo_ids = _combined_constraints(
+                        eixo_by_politica.get(politica_id, set()),
+                        eixo_by_adj.get(adj_id, set()),
+                    )
+                    if eixo_ids is None or not eixo_ids:
+                        continue
+                    for eixo_id in sorted(eixo_ids):
+                        pilar_ids = _combined_constraints(
+                            pilar_by_eixo.get(eixo_id, set()),
+                            pilar_by_adj.get(adj_id, set()),
+                        )
+                        if pilar_ids is None or not pilar_ids:
+                            continue
+                        for pilar_id in sorted(pilar_ids):
+                            macro_ids = _combined_constraints(
+                                macro_by_politica.get(politica_id, set()),
+                                macro_by_pilar.get(pilar_id, set()),
+                                macro_by_adj.get(adj_id, set()),
+                                macro_by_subfuncao.get(subfuncao_id, set()),
+                            )
+                            if macro_ids is None or not macro_ids:
+                                continue
+                            for macro_id in sorted(macro_ids):
+                                for ug_id in sorted(ug_ids):
+                                    key = (
+                                        int(action.programa_id),
+                                        int(action.id),
+                                        int(product.id),
+                                        subfuncao_id,
+                                        ug_id,
+                                        adj_id,
+                                        macro_id,
+                                        pilar_id,
+                                        eixo_id,
+                                        politica_id,
+                                    )
+                                    if key in seen:
+                                        continue
+                                    seen.add(key)
+                                    rows.append(
+                                        {
+                                            "programa_planejamento": key[0],
+                                            "acao_planejamento": key[1],
+                                            "produto_acao_planejamento": key[2],
+                                            "subfuncao": key[3],
+                                            "ug": key[4],
+                                            "adj": key[5],
+                                            "macropolitica": key[6],
+                                            "pilar": key[7],
+                                            "eixo": key[8],
+                                            "politica_decreto": key[9],
+                                        }
+                                    )
+    return rows
 
 
 def _planning_key_format(
@@ -3335,14 +3616,17 @@ def _planning_key_format(
     values: dict[int, dict],
 ) -> str:
     tokens = []
-    index = 0
-    while index < len(components):
-        component = components[index]
+    used_groups = set()
+    for component in components:
         if component.agrupador:
-            group = []
             group_name = component.agrupador
-            while index < len(components) and components[index].agrupador == group_name:
-                current = components[index]
+            if group_name in used_groups:
+                continue
+            used_groups.add(group_name)
+            group = []
+            for current in components:
+                if current.agrupador != group_name:
+                    continue
                 value = values.get(current.id)
                 if value and value.get("codigo"):
                     group.append(
@@ -3351,7 +3635,6 @@ def _planning_key_format(
                             value["codigo"],
                         )
                     )
-                index += 1
             group.sort(key=lambda item: item[0])
             if group:
                 tokens.append(
@@ -3363,7 +3646,6 @@ def _planning_key_format(
         value = values.get(component.id)
         if value and value.get("codigo"):
             tokens.append(value["codigo"])
-        index += 1
     return f"{model.prefixo or ''}{(model.separador or '').join(tokens)}{model.sufixo or ''}"
 
 
@@ -3485,20 +3767,18 @@ def api_catalogo_chave_options():
             "components": [
                 {
                     **_serialize_key_model_component(component),
+                    "source": _planning_key_source_registry()[
+                        component.tabela_origem
+                    ]["source"],
                     "options": _planning_key_source_options_for_component(
                         component,
-                        [
-                            item
-                            for item in selected
-                            if item["source"]
-                            != _planning_key_source_registry()[
-                                component.tabela_origem
-                            ]["source"]
-                        ],
+                        [],
                     ),
                 }
                 for component in components
             ],
+            "mappings": _planning_key_mapping_links(),
+            "facts": _planning_key_fact_rows(),
         }
     )
 
@@ -3520,43 +3800,76 @@ def _planning_key_payload_values(
     selected = []
     for component in components:
         raw_id = raw_values.get(str(component.id), raw_values.get(component.id))
-        if raw_id in (None, ""):
+        raw_ids = raw_id if isinstance(raw_id, list) else [raw_id]
+        raw_ids = [item for item in raw_ids if item not in (None, "")]
+        if not raw_ids:
             if component.obrigatorio:
                 return None, None, f"Selecione {component.nome}."
             continue
-        try:
-            value_id = int(raw_id)
-        except (TypeError, ValueError):
-            return None, None, f"Valor inválido para {component.nome}."
-        source = registry.get(component.tabela_origem)
-        row = db.session.get(source["model"], value_id) if source else None
-        if not row:
-            return None, None, f"Registro de {component.nome} não encontrado."
-        allowed_options = _planning_key_source_options_for_component(
-            component, selected
-        )
-        if value_id not in {
-            int(option["id"]) for option in allowed_options
-        }:
+        if len(raw_ids) > 1 and component.tabela_origem != Regiao.__tablename__:
             return (
                 None,
                 None,
-                f"O valor selecionado para {component.nome} não é compatível "
-                "com os componentes anteriores.",
+                f"Selecione apenas um valor para {component.nome}.",
             )
-        result[component.id] = {
-            "id": value_id,
-            "codigo": _planning_key_component_code(
-                component, getattr(row, component.campo_codigo, "")
-            ),
-            "descricao": (
-                str(getattr(row, component.campo_descricao, "") or "")
-                if component.campo_descricao
-                else ""
-            ),
-        }
-        selected.append({"source": source["source"], "valor_id": value_id})
+        source = registry.get(component.tabela_origem)
+        component_values = []
+        allowed_options = _planning_key_source_options_for_component(
+            component, selected
+        )
+        allowed_ids = {int(option["id"]) for option in allowed_options}
+        for current_raw_id in raw_ids:
+            try:
+                value_id = int(current_raw_id)
+            except (TypeError, ValueError):
+                return None, None, f"Valor inválido para {component.nome}."
+            row = db.session.get(source["model"], value_id) if source else None
+            if not row:
+                return None, None, f"Registro de {component.nome} não encontrado."
+            if value_id not in allowed_ids:
+                return (
+                    None,
+                    None,
+                    f"O valor selecionado para {component.nome} não é compatível "
+                    "com os componentes anteriores.",
+                )
+            component_values.append(
+                {
+                    "id": value_id,
+                    "codigo": _planning_key_component_code(
+                        component, getattr(row, component.campo_codigo, "")
+                    ),
+                    "descricao": (
+                        str(getattr(row, component.campo_descricao, "") or "")
+                        if component.campo_descricao
+                        else ""
+                    ),
+                }
+            )
+            selected.append({"source": source["source"], "valor_id": value_id})
+        result[component.id] = (
+            component_values if len(component_values) > 1 else component_values[0]
+        )
     return components, result, None
+
+
+def _planning_key_value_variants(
+    components: list[ModeloChaveComponente], values: dict
+) -> list[dict]:
+    variants = [{}]
+    for component in components:
+        value = values.get(component.id)
+        if not value:
+            continue
+        options = value if isinstance(value, list) else [value]
+        expanded = []
+        for variant in variants:
+            for option in options:
+                current = dict(variant)
+                current[component.id] = option
+                expanded.append(current)
+        variants = expanded
+    return variants
 
 
 def _planning_key_history(
@@ -3607,73 +3920,94 @@ def api_catalogo_chave_create():
     components, values, error = _planning_key_payload_values(model, payload)
     if error:
         return jsonify({"error": error}), 400
-    formatted = _planning_key_format(model, components, values)
-    key_hash = hashlib.sha256(formatted.casefold().encode("utf-8")).hexdigest()
-    duplicate = ChaveCatalogo.query.filter_by(
-        modelo_chave_id=model.id,
-        exercicio=exercise,
-        chave_hash=key_hash,
-    ).filter(ChaveCatalogo.excluido_em.is_(None)).first()
-    if duplicate:
-        return jsonify({"error": "Esta chave já existe no catálogo."}), 409
+    value_variants = _planning_key_value_variants(components, values)
+    formatted_variants = [
+        _planning_key_format(model, components, variant) for variant in value_variants
+    ]
+    duplicate_labels = []
+    seen_hashes = set()
+    for formatted in formatted_variants:
+        key_hash = hashlib.sha256(formatted.casefold().encode("utf-8")).hexdigest()
+        if key_hash in seen_hashes:
+            duplicate_labels.append(formatted)
+            continue
+        seen_hashes.add(key_hash)
+        duplicate = ChaveCatalogo.query.filter_by(
+            modelo_chave_id=model.id,
+            exercicio=exercise,
+            chave_hash=key_hash,
+        ).filter(ChaveCatalogo.excluido_em.is_(None)).first()
+        if duplicate:
+            duplicate_labels.append(formatted)
+    if duplicate_labels:
+        return jsonify(
+            {
+                "error": "Uma ou mais chaves já existem no catálogo: "
+                + "; ".join(duplicate_labels[:5])
+            }
+        ), 409
     origin_id = payload.get("chave_origem_id")
     try:
         origin_id = int(origin_id) if origin_id else None
     except (TypeError, ValueError):
         origin_id = None
-    key = ChaveCatalogo(
-        modelo_chave_id=model.id,
-        exercicio=exercise,
-        chave_formatada=formatted,
-        chave_hash=key_hash,
-        chave_origem_id=origin_id,
-        observacao=_planning_text(payload.get("observacao")) or None,
-        ativo=bool(payload.get("ativo", True)),
-        usuario_id=_resolve_usuario_id(),
-        criado_em=_now_local(),
-    )
+    created_keys = []
     try:
-        db.session.add(key)
-        db.session.flush()
-        for component in components:
-            value = values.get(component.id)
-            if not value:
-                continue
-            db.session.add(
-                ChaveCatalogoValor(
-                    chave_catalogo_id=key.id,
-                    componente_id=component.id,
-                    valor_id=value["id"],
-                    valor_codigo=value["codigo"],
-                    valor_descricao=value["descricao"] or None,
-                    ordem=component.ordem,
-                    criado_em=_now_local(),
-                )
-            )
-        product_id = payload.get("produto_acao_id")
-        if product_id:
-            product = db.session.get(ProdutoAcaoPlanejamento, int(product_id))
-            if not product:
-                raise ValueError("Produto da ação não encontrado.")
-            context = ChaveContexto(
-                chave_catalogo_id=key.id,
-                produto_acao_id=product.id,
-                ativo=True,
+        for variant, formatted in zip(value_variants, formatted_variants):
+            key_hash = hashlib.sha256(formatted.casefold().encode("utf-8")).hexdigest()
+            key = ChaveCatalogo(
+                modelo_chave_id=model.id,
+                exercicio=exercise,
+                chave_formatada=formatted,
+                chave_hash=key_hash,
+                chave_origem_id=origin_id,
+                observacao=_planning_text(payload.get("observacao")) or None,
+                ativo=bool(payload.get("ativo", True)),
                 usuario_id=_resolve_usuario_id(),
                 criado_em=_now_local(),
             )
-            db.session.add(context)
+            db.session.add(key)
             db.session.flush()
-            context_id = context.id
-        else:
-            context_id = None
-        _planning_key_history(
-            key,
-            "COPIAR" if origin_id else "CRIAR",
-            after={"chave": formatted, "valores": values},
-            justification=payload.get("justificativa"),
-            context_id=context_id,
-        )
+            for component in components:
+                value = variant.get(component.id)
+                if not value:
+                    continue
+                db.session.add(
+                    ChaveCatalogoValor(
+                        chave_catalogo_id=key.id,
+                        componente_id=component.id,
+                        valor_id=value["id"],
+                        valor_codigo=value["codigo"],
+                        valor_descricao=value["descricao"] or None,
+                        ordem=component.ordem,
+                        criado_em=_now_local(),
+                    )
+                )
+            product_id = payload.get("produto_acao_id")
+            if product_id:
+                product = db.session.get(ProdutoAcaoPlanejamento, int(product_id))
+                if not product:
+                    raise ValueError("Produto da ação não encontrado.")
+                context = ChaveContexto(
+                    chave_catalogo_id=key.id,
+                    produto_acao_id=product.id,
+                    ativo=True,
+                    usuario_id=_resolve_usuario_id(),
+                    criado_em=_now_local(),
+                )
+                db.session.add(context)
+                db.session.flush()
+                context_id = context.id
+            else:
+                context_id = None
+            _planning_key_history(
+                key,
+                "COPIAR" if origin_id else "CRIAR",
+                after={"chave": formatted, "valores": variant},
+                justification=payload.get("justificativa"),
+                context_id=context_id,
+            )
+            created_keys.append({"id": key.id, "chave_formatada": formatted})
         db.session.commit()
     except (ValueError, TypeError) as exc:
         db.session.rollback()
@@ -3685,9 +4019,16 @@ def api_catalogo_chave_create():
     return jsonify(
         {
             "ok": True,
-            "message": "Chave cadastrada com sucesso.",
-            "id": key.id,
-            "chave_formatada": formatted,
+            "message": (
+                "Chave cadastrada com sucesso."
+                if len(created_keys) == 1
+                else f"{len(created_keys)} chaves cadastradas com sucesso."
+            ),
+            "id": created_keys[0]["id"] if created_keys else None,
+            "chave_formatada": (
+                created_keys[0]["chave_formatada"] if created_keys else ""
+            ),
+            "chaves": created_keys,
         }
     ), 201
 
@@ -5338,6 +5679,17 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
                         )
                     }
                 ), 409
+            if ProdutoAcaoSubfuncaoUg.query.filter_by(
+                produto_acao_id=row.id
+            ).first():
+                return jsonify(
+                    {
+                        "error": (
+                            "Remova primeiro os vínculos do produto com "
+                            "subfunções e UGs."
+                        )
+                    }
+                ), 409
 
     now = _now_local()
     values["usuario_id"] = _resolve_usuario_id() or row.usuario_id
@@ -5432,6 +5784,16 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
                 )
             }
         ), 409
+    if entity == "produtos" and ProdutoAcaoSubfuncaoUg.query.filter_by(
+        produto_acao_id=row.id
+    ).first():
+        return jsonify(
+            {
+                "error": (
+                    "Remova primeiro os vínculos do produto com subfunções e UGs."
+                )
+            }
+        ), 409
 
     now = _now_local()
     row.ativo = False
@@ -5447,6 +5809,190 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
         )
         return jsonify({"error": "Falha ao desativar o registro."}), 500
     return jsonify({"ok": True, "message": "Registro desativado com sucesso."})
+
+
+def _serialize_produto_subfuncao_ug(row: ProdutoAcaoSubfuncaoUg) -> dict:
+    subfuncao = db.session.get(Subfuncao, row.subfuncao_id)
+    ug = db.session.get(Ug, row.ug_id)
+    return {
+        "produto_acao_id": row.produto_acao_id,
+        "subfuncao_id": row.subfuncao_id,
+        "ug_id": row.ug_id,
+        "subfuncao": _planning_source_label("subfuncao", subfuncao)
+        if subfuncao
+        else "",
+        "ug": _planning_source_label("ug", ug) if ug else "",
+    }
+
+
+def _active_component_query(model):
+    query = model.query
+    if hasattr(model, "ativo"):
+        query = query.filter(model.ativo.is_(True))
+    if hasattr(model, "excluido_em"):
+        query = query.filter(model.excluido_em.is_(None))
+    return query
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/produtos/<int:produto_id>/subfuncao-ug",
+    methods=["GET"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/produtos")
+def api_produto_subfuncao_ug_list(produto_id: int):
+    product = db.session.get(ProdutoAcaoPlanejamento, produto_id)
+    if not product or product.excluido_em:
+        return jsonify({"error": "Produto da Ação não encontrado."}), 404
+
+    allowed_subfuncao_ids = {
+        int(row.subfuncao_id)
+        for row in SubfuncaoAcao.query.filter_by(acao_id=product.acao_id).all()
+    }
+    subfuncao_query = _active_component_query(Subfuncao).order_by(
+        Subfuncao.codigo.asc(), Subfuncao.nome.asc()
+    )
+    if allowed_subfuncao_ids:
+        subfuncao_query = subfuncao_query.filter(Subfuncao.id.in_(allowed_subfuncao_ids))
+    subfuncoes = subfuncao_query.all()
+
+    allowed_ug_ids = {
+        int(row.ug_id)
+        for row in UgSubfuncao.query.filter(
+            UgSubfuncao.subfuncao_id.in_(allowed_subfuncao_ids)
+        ).all()
+    } if allowed_subfuncao_ids else set()
+    ug_query = _active_component_query(Ug).order_by(Ug.codigo.asc(), Ug.nome.asc())
+    if allowed_ug_ids:
+        ug_query = ug_query.filter(Ug.id.in_(allowed_ug_ids))
+    ugs = ug_query.all()
+
+    ug_by_subfuncao: dict[str, list[int]] = {}
+    subfuncao_ids = {int(row.id) for row in subfuncoes}
+    for row in UgSubfuncao.query.filter(UgSubfuncao.subfuncao_id.in_(subfuncao_ids)).all():
+        ug_by_subfuncao.setdefault(str(row.subfuncao_id), []).append(int(row.ug_id))
+
+    rows = (
+        ProdutoAcaoSubfuncaoUg.query.filter_by(produto_acao_id=product.id)
+        .order_by(
+            ProdutoAcaoSubfuncaoUg.subfuncao_id.asc(),
+            ProdutoAcaoSubfuncaoUg.ug_id.asc(),
+        )
+        .all()
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "product": _serialize_produto(product),
+            "subfuncoes": [
+                {
+                    "id": row.id,
+                    "label": _planning_source_label("subfuncao", row),
+                    "ativo": bool(getattr(row, "ativo", True)),
+                }
+                for row in subfuncoes
+            ],
+            "ugs": [
+                {
+                    "id": row.id,
+                    "label": _planning_source_label("ug", row),
+                    "ativo": bool(getattr(row, "ativo", True)),
+                }
+                for row in ugs
+            ],
+            "ug_by_subfuncao": ug_by_subfuncao,
+            "rows": [_serialize_produto_subfuncao_ug(row) for row in rows],
+        }
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/produtos/<int:produto_id>/subfuncao-ug",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/produtos")
+def api_produto_subfuncao_ug_create(produto_id: int):
+    product = db.session.get(ProdutoAcaoPlanejamento, produto_id)
+    if not product or product.excluido_em:
+        return jsonify({"error": "Produto da Ação não encontrado."}), 404
+    payload = request.get_json(silent=True) or {}
+    try:
+        subfuncao_id = int(payload.get("subfuncao_id"))
+        ug_id = int(payload.get("ug_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione subfunção e unidade gestora."}), 400
+
+    subfuncao = db.session.get(Subfuncao, subfuncao_id)
+    ug = db.session.get(Ug, ug_id)
+    if not subfuncao or not getattr(subfuncao, "ativo", True):
+        return jsonify({"error": "Subfunção não encontrada ou inativa."}), 404
+    if not ug or not getattr(ug, "ativo", True):
+        return jsonify({"error": "Unidade Gestora não encontrada ou inativa."}), 404
+
+    if not SubfuncaoAcao.query.filter_by(
+        subfuncao_id=subfuncao_id, acao_id=product.acao_id
+    ).first():
+        return jsonify(
+            {"error": "A subfunção selecionada não está vinculada à Ação/PAOE do produto."}
+        ), 409
+    if not UgSubfuncao.query.filter_by(
+        subfuncao_id=subfuncao_id, ug_id=ug_id
+    ).first():
+        return jsonify(
+            {"error": "A Unidade Gestora selecionada não está vinculada à subfunção."}
+        ), 409
+
+    link = ProdutoAcaoSubfuncaoUg(
+        produto_acao_id=product.id,
+        subfuncao_id=subfuncao_id,
+        ug_id=ug_id,
+    )
+    try:
+        db.session.add(link)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Este vínculo já está cadastrado."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao vincular produto/subfunção/UG: %s", produto_id
+        )
+        return jsonify({"error": "Falha ao cadastrar o vínculo."}), 500
+    return jsonify({"ok": True, "message": "Vínculo cadastrado com sucesso."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/produtos/<int:produto_id>/subfuncao-ug",
+    methods=["DELETE"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/produtos")
+def api_produto_subfuncao_ug_delete(produto_id: int):
+    payload = request.get_json(silent=True) or {}
+    try:
+        subfuncao_id = int(payload.get("subfuncao_id"))
+        ug_id = int(payload.get("ug_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Informe o vínculo que será removido."}), 400
+    link = ProdutoAcaoSubfuncaoUg.query.filter_by(
+        produto_acao_id=produto_id,
+        subfuncao_id=subfuncao_id,
+        ug_id=ug_id,
+    ).first()
+    if not link:
+        return jsonify({"error": "Vínculo não encontrado."}), 404
+    try:
+        db.session.delete(link)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao remover produto/subfunção/UG: %s", produto_id
+        )
+        return jsonify({"error": "Falha ao remover o vínculo."}), 500
+    return jsonify({"ok": True, "message": "Vínculo removido com sucesso."})
 
 
 TETO_SEDUC_UPLOAD_DIR = Path("upload/teto_seduc")

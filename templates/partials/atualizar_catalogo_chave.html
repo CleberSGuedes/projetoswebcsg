@@ -1,8 +1,8 @@
 <section id="catalogo-chave-page" class="planning-admin-page">
   <div class="planning-structure-header">
     <div>
-      <div class="card-title">Catálogo de Chaves de Planejamento</div>
-      <p class="muted">Monte chaves válidas a partir dos modelos e vínculos cadastrados na estrutura do planejamento.</p>
+      <div class="card-title">Cat&aacute;logo de Chaves de Planejamento</div>
+      <p class="muted">Monte chaves v&aacute;lidas a partir dos modelos e v&iacute;nculos cadastrados na estrutura do planejamento.</p>
     </div>
   </div>
 
@@ -10,9 +10,28 @@
     <div class="card-title" id="key-catalog-form-title">Nova chave</div>
     <form id="key-catalog-form" class="form" novalidate>
       <input type="hidden" id="key-catalog-origin" />
+
+      <fieldset class="planning-key-context">
+        <legend>Contexto de utiliza&ccedil;&atilde;o</legend>
+        <div class="form-grid planning-key-context-grid">
+          <label class="field">
+            <span>Programa</span>
+            <select id="key-catalog-program"><option value="">Selecione...</option></select>
+          </label>
+          <label class="field">
+            <span>A&ccedil;&atilde;o/PAOE</span>
+            <select id="key-catalog-action" disabled><option value="">Selecione primeiro um programa...</option></select>
+          </label>
+          <label class="field">
+            <span>Produto da A&ccedil;&atilde;o</span>
+            <select id="key-catalog-product" disabled><option value="">Selecione primeiro uma a&ccedil;&atilde;o...</option></select>
+          </label>
+        </div>
+      </fieldset>
+
       <div class="form-grid planning-key-catalog-base-grid">
         <label class="field">
-          <span>*Exercício</span>
+          <span>*Exerc&iacute;cio</span>
           <input id="key-catalog-exercise" inputmode="numeric" maxlength="4" placeholder="Ex.: 2026" required />
         </label>
         <label class="field planning-key-wide">
@@ -22,33 +41,15 @@
           </select>
         </label>
         <label class="field planning-key-wide">
-          <span>Observação</span>
+          <span>Observa&ccedil;&atilde;o</span>
           <input id="key-catalog-note" maxlength="1000" />
         </label>
       </div>
 
       <div id="key-catalog-components" class="form-grid planning-key-catalog-components"></div>
 
-      <fieldset class="planning-key-context">
-        <legend>Contexto de utilização</legend>
-        <div class="form-grid planning-key-context-grid">
-          <label class="field">
-            <span>Programa</span>
-            <select id="key-catalog-program"><option value="">Selecione...</option></select>
-          </label>
-          <label class="field">
-            <span>Ação/PAOE</span>
-            <select id="key-catalog-action" disabled><option value="">Selecione primeiro um programa...</option></select>
-          </label>
-          <label class="field">
-            <span>Produto da Ação</span>
-            <select id="key-catalog-product" disabled><option value="">Selecione primeiro uma ação...</option></select>
-          </label>
-        </div>
-      </fieldset>
-
       <div class="planning-key-preview">
-        <span>Prévia da chave</span>
+        <span>Pr&eacute;via da chave</span>
         <strong id="key-catalog-preview">Selecione um modelo e seus componentes.</strong>
       </div>
 
@@ -69,7 +70,7 @@
     </div>
     <div class="form-grid planning-structure-filter-grid no-print">
       <label class="field">
-        <span>Situação</span>
+        <span>Situa&ccedil;&atilde;o</span>
         <select id="key-catalog-status">
           <option value="">Todas</option>
           <option value="1">Ativas</option>
@@ -78,19 +79,19 @@
       </label>
       <label class="field planning-structure-filter-search">
         <span>Pesquisar</span>
-        <input id="key-catalog-search" type="search" placeholder="Exercício, modelo ou chave" />
+        <input id="key-catalog-search" type="search" placeholder="Exerc&iacute;cio, modelo ou chave" />
       </label>
     </div>
     <div class="table-responsive planning-structure-table-wrap">
       <table class="table">
         <thead>
           <tr>
-            <th>Exercício</th>
+            <th>Exerc&iacute;cio</th>
             <th>Modelo</th>
             <th>Chave de planejamento</th>
             <th>Contextos</th>
-            <th>Situação</th>
-            <th class="planning-structure-actions-column">Ações</th>
+            <th>Situa&ccedil;&atilde;o</th>
+            <th class="planning-structure-actions-column">A&ccedil;&otilde;es</th>
           </tr>
         </thead>
         <tbody id="key-catalog-list"></tbody>

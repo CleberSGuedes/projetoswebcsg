@@ -4127,6 +4127,14 @@
     const filtroTextoEl = document.getElementById("estrutura-planejamento-filtro-texto");
     const pageSizeEl = document.getElementById("estrutura-planejamento-page-size");
     const paginationEl = document.getElementById("estrutura-planejamento-pagination");
+    const productLinksCard = document.getElementById("estrutura-planejamento-produto-links-card");
+    const productLinksTitle = document.getElementById("estrutura-planejamento-produto-links-title");
+    const productLinksClose = document.getElementById("estrutura-planejamento-produto-links-close");
+    const productLinkSubfuncaoEl = document.getElementById("estrutura-planejamento-produto-link-subfuncao");
+    const productLinkUgEl = document.getElementById("estrutura-planejamento-produto-link-ug");
+    const productLinkSaveBtn = document.getElementById("estrutura-planejamento-produto-link-save");
+    const productLinksMsg = document.getElementById("estrutura-planejamento-produto-links-msg");
+    const productLinksBody = document.getElementById("estrutura-planejamento-produto-links-body");
 
     let rows = [];
     let programas = [];
@@ -4135,6 +4143,13 @@
     let currentPage = 1;
     let pageSize = Number(pageSizeEl?.value || 10) || 10;
     const isProductEntity = entity === "produtos";
+    const productLinkState = {
+      productId: "",
+      subfuncoes: [],
+      ugs: [],
+      ugBySubfuncao: {},
+      rows: [],
+    };
 
     const esc = (value) =>
       String(value ?? "")
@@ -4158,6 +4173,12 @@
       msg.classList.toggle("text-error", !!isError);
     };
 
+    const setProductLinksMsg = (text, isError = false) => {
+      if (!productLinksMsg) return;
+      productLinksMsg.textContent = text || "";
+      productLinksMsg.classList.toggle("text-error", !!isError);
+    };
+
     const optionLabel = (row) => {
       const base = [row.codigo, row.nome].filter(Boolean).join(" - ");
       return row.ativo ? base : `${base} (inativo)`;
@@ -4179,6 +4200,42 @@
       if (!select.multiple) {
         select.value = selectedValue ? String(selectedValue) : "";
       }
+    };
+
+    const setLabeledOptions = (select, options, placeholder, selectedValue = "") => {
+      if (!select) return;
+      select.innerHTML = `<option value="">${esc(placeholder)}</option>`;
+      options.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.id);
+        option.textContent = item.label || "";
+        option.selected = String(item.id) === String(selectedValue || "");
+        select.appendChild(option);
+      });
+      select.value = selectedValue ? String(selectedValue) : "";
+    };
+
+    const populateProductLinkUgs = (selectedValue = "") => {
+      if (!productLinkUgEl) return;
+      const subfuncaoId = String(productLinkSubfuncaoEl?.value || "");
+      if (!subfuncaoId) {
+        setLabeledOptions(productLinkUgEl, [], "Selecione primeiro uma subfunção...");
+        productLinkUgEl.disabled = true;
+        return;
+      }
+      const allowedIds = new Set(
+        (productLinkState.ugBySubfuncao[subfuncaoId] || []).map((value) => String(value))
+      );
+      const options = productLinkState.ugs.filter(
+        (item) => !allowedIds.size || allowedIds.has(String(item.id))
+      );
+      setLabeledOptions(
+        productLinkUgEl,
+        options,
+        options.length ? "Selecione..." : "Nenhuma UG vinculada à subfunção",
+        selectedValue
+      );
+      productLinkUgEl.disabled = !options.length;
     };
 
     const selectedChecklistActionIds = () => {
@@ -4400,6 +4457,11 @@
               <td>${esc(row.responsavel || "")}</td>
               <td><span class="planning-status ${row.ativo ? "is-active" : "is-inactive"}">${row.ativo ? "Ativo" : "Inativo"}</span></td>
               <td class="planning-structure-row-actions">
+                ${isProductEntity ? `
+                  <button class="icon-btn sm planning-product-links" type="button" data-id="${esc(row.id)}" title="Vínculos com Subfunção e UG" aria-label="Vínculos com Subfunção e UG">
+                    <i class="bi bi-link-45deg"></i>
+                  </button>
+                ` : ""}
                 <button class="icon-btn sm planning-edit" type="button" data-id="${esc(row.id)}" title="Editar" aria-label="Editar">
                   <i class="bi bi-pencil"></i>
                 </button>
@@ -4412,6 +4474,103 @@
         )
         .join("");
       renderPagination(totalPages);
+    };
+
+    const renderProductLinks = () => {
+      if (!productLinksBody) return;
+      if (!productLinkState.productId) {
+        productLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Selecione um produto para visualizar os vínculos.</td></tr>';
+        return;
+      }
+      if (!productLinkState.rows.length) {
+        productLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Nenhum vínculo cadastrado.</td></tr>';
+        return;
+      }
+      productLinksBody.innerHTML = productLinkState.rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${esc(row.subfuncao || "")}</td>
+              <td>${esc(row.ug || "")}</td>
+              <td class="planning-structure-row-actions">
+                <button
+                  class="icon-btn sm planning-product-link-delete"
+                  type="button"
+                  data-subfuncao-id="${esc(row.subfuncao_id)}"
+                  data-ug-id="${esc(row.ug_id)}"
+                  title="Remover vínculo"
+                  aria-label="Remover vínculo"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+    };
+
+    const closeProductLinks = () => {
+      if (productLinksCard) productLinksCard.hidden = true;
+      productLinkState.productId = "";
+      productLinkState.subfuncoes = [];
+      productLinkState.ugs = [];
+      productLinkState.ugBySubfuncao = {};
+      productLinkState.rows = [];
+      if (productLinkSubfuncaoEl) productLinkSubfuncaoEl.value = "";
+      populateProductLinkUgs();
+      setProductLinksMsg("");
+      renderProductLinks();
+    };
+
+    const loadProductLinks = async (productId) => {
+      if (!isProductEntity || !productLinksCard) return;
+      productLinksCard.hidden = false;
+      productLinkState.productId = String(productId || "");
+      if (productLinksTitle) productLinksTitle.textContent = "Carregando produto...";
+      if (productLinksBody) {
+        productLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Carregando vínculos...</td></tr>';
+      }
+      setProductLinksMsg("");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/produtos/${encodeURIComponent(productId)}/subfuncao-ug`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar vínculos.");
+        productLinkState.subfuncoes = Array.isArray(data.subfuncoes) ? data.subfuncoes : [];
+        productLinkState.ugs = Array.isArray(data.ugs) ? data.ugs : [];
+        productLinkState.ugBySubfuncao = data.ug_by_subfuncao || {};
+        productLinkState.rows = Array.isArray(data.rows) ? data.rows : [];
+        const product = data.product || {};
+        if (productLinksTitle) {
+          productLinksTitle.textContent = [
+            product.exercicio,
+            product.programa_codigo,
+            product.acao_codigo,
+            product.codigo,
+            product.nome,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+        }
+        setLabeledOptions(
+          productLinkSubfuncaoEl,
+          productLinkState.subfuncoes,
+          productLinkState.subfuncoes.length ? "Selecione..." : "Nenhuma subfunção vinculada à Ação/PAOE"
+        );
+        populateProductLinkUgs();
+        renderProductLinks();
+        productLinksCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        console.error(error);
+        setProductLinksMsg(error.message || "Falha ao carregar vínculos.", true);
+        renderProductLinks();
+      }
     };
 
     const populateFilterYears = () => {
@@ -4454,6 +4613,9 @@
         populateFilterYears();
         currentPage = 1;
         renderTable();
+        if (productLinkState.productId) {
+          await loadProductLinks(productLinkState.productId);
+        }
         setMsg("");
       } catch (error) {
         console.error(error);
@@ -4521,10 +4683,84 @@
       currentPage = 1;
       renderTable();
     });
+    productLinksClose?.addEventListener("click", closeProductLinks);
+    productLinkSubfuncaoEl?.addEventListener("change", () => {
+      populateProductLinkUgs();
+      setProductLinksMsg("");
+    });
+    productLinkUgEl?.addEventListener("change", () => setProductLinksMsg(""));
+    productLinkSaveBtn?.addEventListener("click", async () => {
+      if (!productLinkState.productId) return;
+      const payload = {
+        subfuncao_id: productLinkSubfuncaoEl?.value || "",
+        ug_id: productLinkUgEl?.value || "",
+      };
+      if (!payload.subfuncao_id || !payload.ug_id) {
+        setProductLinksMsg("Selecione subfunção e unidade gestora.", true);
+        return;
+      }
+      setProductLinksMsg("Salvando vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/produtos/${encodeURIComponent(productLinkState.productId)}/subfuncao-ug`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar vínculo.");
+        showToast(data.message || "Vínculo cadastrado.", "success");
+        if (productLinkSubfuncaoEl) productLinkSubfuncaoEl.value = "";
+        populateProductLinkUgs();
+        await loadProductLinks(productLinkState.productId);
+      } catch (error) {
+        console.error(error);
+        setProductLinksMsg(error.message || "Falha ao salvar vínculo.", true);
+      }
+    });
+    productLinksBody?.addEventListener("click", async (event) => {
+      const deleteButton = event.target.closest(".planning-product-link-delete");
+      if (!deleteButton || !productLinkState.productId) return;
+      if (!window.confirm("Remover este vínculo?")) return;
+      setProductLinksMsg("Removendo vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/produtos/${encodeURIComponent(productLinkState.productId)}/subfuncao-ug`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify({
+              subfuncao_id: deleteButton.dataset.subfuncaoId || "",
+              ug_id: deleteButton.dataset.ugId || "",
+            }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao remover vínculo.");
+        showToast(data.message || "Vínculo removido.", "success");
+        await loadProductLinks(productLinkState.productId);
+      } catch (error) {
+        console.error(error);
+        setProductLinksMsg(error.message || "Falha ao remover vínculo.", true);
+      }
+    });
 
     setProductActionMode(false);
 
     tableBody?.addEventListener("click", async (event) => {
+      const linkButton = event.target.closest(".planning-product-links");
+      if (linkButton) {
+        await loadProductLinks(linkButton.dataset.id);
+        return;
+      }
       const editButton = event.target.closest(".planning-edit");
       if (editButton) {
         const row = rows.find((item) => String(item.id) === String(editButton.dataset.id));
@@ -5705,7 +5941,8 @@
     const messageEl = document.getElementById("key-catalog-message");
 
     let data = { models: [], rows: [], programs: [], actions: [], products: [] };
-    let builder = { model: null, components: [] };
+    let builder = { model: null, components: [], mappings: [], facts: [] };
+    let builderLoadSeq = 0;
 
     const esc = (value) =>
       String(value ?? "")
@@ -5733,13 +5970,21 @@
       if (!response.ok) throw new Error(payload.error || "Falha ao processar a solicitação.");
       return payload;
     };
-    const selectedValues = () =>
-      Object.fromEntries(
-        [...componentsEl.querySelectorAll("[data-key-component]")].map((select) => [
+    const selectedValues = () => {
+      const values = Object.fromEntries(
+        [...componentsEl.querySelectorAll("select[data-key-component]")].map((select) => [
           select.dataset.keyComponent,
           select.value,
         ])
       );
+      componentsEl.querySelectorAll("[data-key-component-multi]").forEach((wrap) => {
+        const componentId = wrap.dataset.keyComponentMulti;
+        values[componentId] = [
+          ...wrap.querySelectorAll("input[data-key-component-option]:checked"),
+        ].map((input) => input.value);
+      });
+      return values;
+    };
     const fillSelect = (element, rows, placeholder) => {
       element.innerHTML = [
         `<option value="">${esc(placeholder)}</option>`,
@@ -5751,11 +5996,41 @@
         ),
       ].join("");
     };
+    const contextSelections = () =>
+      [
+        { source: "programa_planejamento", id: programEl.value },
+        { source: "acao_planejamento", id: actionEl.value },
+        { source: "produto_acao_planejamento", id: productEl.value },
+      ].filter((item) => item.id);
+    const factSources = () => {
+      const sources = new Set();
+      builder.facts.forEach((row) =>
+        Object.keys(row || {}).forEach((source) => sources.add(source))
+      );
+      return sources;
+    };
+    const factRowsFor = (selected) => {
+      const sources = factSources();
+      const active = selected.filter((item) => sources.has(item.source));
+      if (!builder.facts.length || !active.length) return builder.facts || [];
+      return builder.facts.filter((row) =>
+        active.every((item) => String(row[item.source]) === String(item.id))
+      );
+    };
+    const isCompatibleWithSelections = (source, id, selected) => {
+      const sources = factSources();
+      if (!builder.facts.length || !sources.has(source)) return true;
+      const rows = factRowsFor(selected);
+      if (!rows.length) return false;
+      return rows.some((row) => String(row[source]) === String(id));
+    };
     const updateContext = () => {
       const programId = Number(programEl.value || 0);
-      const actionId = Number(actionEl.value || 0);
+      const selected = componentSelections();
       const actions = data.actions.filter(
-        (item) => !programId || Number(item.programa_id) === programId
+        (item) =>
+          (!programId || Number(item.programa_id) === programId) &&
+          isCompatibleWithSelections("acao_planejamento", item.id, selected)
       );
       const currentAction = actionEl.value;
       fillSelect(
@@ -5767,18 +6042,35 @@
       if (actions.some((item) => String(item.id) === currentAction)) {
         actionEl.value = currentAction;
       }
+      const selectedActionId = Number(actionEl.value || 0);
       const products = data.products.filter(
-        (item) => actionId && Number(item.acao_id) === actionId
+        (item) =>
+          selectedActionId &&
+          Number(item.acao_id) === selectedActionId &&
+          isCompatibleWithSelections("produto_acao_planejamento", item.id, selected)
       );
       const currentProduct = productEl.value;
       fillSelect(
         productEl,
         products,
-        actionId ? "Selecione..." : "Selecione primeiro uma ação..."
+        selectedActionId ? "Selecione..." : "Selecione primeiro uma ação..."
       );
-      productEl.disabled = !actionId;
+      productEl.disabled = !selectedActionId;
       if (products.some((item) => String(item.id) === currentProduct)) {
         productEl.value = currentProduct;
+      }
+    };
+    const isRegionComponent = (component) => component.tabela_origem === "regiao";
+    const updateMultiToggleLabel = (wrap) => {
+      const toggle = wrap?.querySelector("[data-key-multi-toggle]");
+      if (!toggle) return;
+      const checked = [...wrap.querySelectorAll("input[data-key-component-option]:checked")];
+      if (!checked.length) {
+        toggle.textContent = "Selecione...";
+      } else if (checked.length === 1) {
+        toggle.textContent = checked[0].dataset.label || "1 região selecionada";
+      } else {
+        toggle.textContent = `${checked.length} regiões selecionadas`;
       }
     };
     const updatePreview = () => {
@@ -5786,30 +6078,175 @@
         previewEl.textContent = "Selecione um modelo e seus componentes.";
         return;
       }
-      const tokens = builder.components
-        .map((component) => {
-          const select = componentsEl.querySelector(
-            `[data-key-component="${component.id}"]`
-          );
-          return select?.selectedOptions[0]?.dataset.code || "";
-        })
-        .filter(Boolean);
-      previewEl.textContent = `${builder.model.prefixo || ""}${tokens.join(
-        builder.model.separador || ""
-      )}${builder.model.sufixo || ""}`;
+      const codesFor = (component) => {
+        if (isRegionComponent(component)) {
+          return [
+            ...componentsEl.querySelectorAll(
+              `[data-key-component-multi="${component.id}"] input[data-key-component-option]:checked`
+            ),
+          ]
+            .map((input) => input.dataset.code || "")
+            .filter(Boolean);
+        }
+        const select = componentsEl.querySelector(
+          `[data-key-component="${component.id}"]`
+        );
+        const code = select?.selectedOptions[0]?.dataset.code || "";
+        if (component.tabela_origem === "ug") {
+          return code ? [code.replace(/^0+/, "") || "0"] : [];
+        }
+        return code ? [code] : [];
+      };
+      const tokenSlots = [];
+      builder.components.forEach((component) => {
+        if (component.agrupador) {
+          if (tokenSlots.some((slot) => slot.group === component.agrupador)) return;
+          const group = builder.components
+            .filter((item) => item.agrupador === component.agrupador)
+            .map((item) => ({
+              order: Number(item.ordem_agrupador || item.ordem || 0),
+              codes: codesFor(item),
+            }))
+            .filter((item) => item.codes.length)
+            .sort((a, b) => a.order - b.order);
+          if (group.length) {
+            tokenSlots.push({
+              group: component.agrupador,
+              values: [
+                group
+                  .map((item) => item.codes[0])
+                  .join(component.separador_agrupador || " + "),
+              ],
+            });
+          }
+          return;
+        }
+        const codes = codesFor(component);
+        if (codes.length) tokenSlots.push({ values: codes });
+      });
+      const multiSlot = tokenSlots.find((slot) => slot.values.length > 1);
+      if (!multiSlot) {
+        const tokens = tokenSlots.map((slot) => slot.values[0]);
+        previewEl.textContent = `${builder.model.prefixo || ""}${tokens.join(
+          builder.model.separador || ""
+        )}${builder.model.sufixo || ""}`;
+        return;
+      }
+      const previews = multiSlot.values.map((value) => {
+        const tokens = tokenSlots.map((slot) =>
+          slot === multiSlot ? value : slot.values[0]
+        );
+        return `${builder.model.prefixo || ""}${tokens.join(
+          builder.model.separador || ""
+        )}${builder.model.sufixo || ""}`;
+      });
+      previewEl.textContent = previews.join("\n");
+    };
+    const selectedSourceId = (component, value) => {
+      const option = (component.options || []).find(
+        (item) => String(item.id) === String(value)
+      );
+      return option?.source_id || value;
+    };
+    const selectedSourceIds = (component, value) => {
+      if (Array.isArray(value)) {
+        return value.map((item) => selectedSourceId(component, item)).filter(Boolean);
+      }
+      const id = selectedSourceId(component, value);
+      return id ? [id] : [];
+    };
+    const sourceOf = (component) => {
+      const byTable = {
+        regiao: "regiao",
+        municipio: "municipio",
+        funcao: "funcao",
+        subfuncao: "subfuncao",
+        ug: "ug",
+        adj: "adj",
+        macropolitica: "macropolitica",
+        pilar: "pilar",
+        metas_pee: "meta_pee",
+        indicadores_pee: "indicador_pee",
+        eixo: "eixo",
+        politica_decr: "politica_decreto",
+        publico_transversal: "publico_transversal",
+        programa_planejamento: "programa_planejamento",
+        acao_planejamento: "acao_planejamento",
+        produto_acao_planejamento: "produto_acao_planejamento",
+      };
+      return byTable[component.tabela_origem] || component.source || component.tabela_origem;
+    };
+    const componentSelections = (values = selectedValues(), excludedComponentId = "") =>
+      builder.components
+        .filter((item) => String(item.id) !== String(excludedComponentId))
+        .flatMap((item) =>
+          selectedSourceIds(item, values[item.id]).map((id) => ({
+            source: sourceOf(item),
+            id,
+          }))
+        )
+        .filter((item) => item.id);
+    const filteredOptions = (component, values) => {
+      const selected = [...contextSelections(), ...componentSelections(values, component.id)];
+      const componentSource = sourceOf(component);
+      return (component.options || []).filter((option) =>
+        isCompatibleWithSelections(
+          componentSource,
+          option.source_id || option.id,
+          selected
+        )
+      );
     };
     const renderBuilder = (values = {}) => {
       componentsEl.innerHTML = builder.components
         .map(
-          (component) => `
+          (component) => {
+            const options = filteredOptions(component, values);
+            if (isRegionComponent(component)) {
+              const selected = new Set(
+                (Array.isArray(values[component.id])
+                  ? values[component.id]
+                  : [values[component.id]].filter(Boolean)
+                ).map((value) => String(value))
+              );
+              return `
+            <label class="field">
+              <span>${component.obrigatorio ? "*" : ""}${esc(component.nome)}</span>
+              <div class="planning-action-checklist planning-key-multi" data-key-component-multi="${component.id}">
+                <button class="planning-action-checklist-toggle" data-key-multi-toggle type="button">Selecione...</button>
+                <div class="planning-action-checklist-panel" data-key-multi-panel hidden>
+                  <div class="planning-action-checklist-options">
+                    ${options
+                      .map(
+                        (option) => {
+                          const label = option.label || [option.codigo, option.descricao].filter(Boolean).join(" - ");
+                          return `<label class="planning-action-checklist-option">
+                            <input type="checkbox" data-key-component-option value="${esc(option.id)}" data-source-id="${esc(
+                              option.source_id || option.id
+                            )}" data-code="${esc(option.codigo)}" data-label="${esc(label)}" ${
+                              selected.has(String(option.id)) ? "checked" : ""
+                            } />
+                            <span>${esc(label)}</span>
+                          </label>`;
+                        }
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              </div>
+            </label>`;
+            }
+            return `
             <label class="field">
               <span>${component.obrigatorio ? "*" : ""}${esc(component.nome)}</span>
               <select data-key-component="${component.id}" ${component.obrigatorio ? "required" : ""}>
                 <option value="">Selecione...</option>
-                ${component.options
+                ${options
                   .map(
                     (option) =>
-                      `<option value="${option.id}" data-code="${esc(option.codigo)}" ${
+                      `<option value="${option.id}" data-source-id="${esc(
+                        option.source_id || option.id
+                      )}" data-code="${esc(option.codigo)}" ${
                         String(values[component.id] || "") === String(option.id)
                           ? "selected"
                           : ""
@@ -5817,14 +6254,17 @@
                   )
                   .join("")}
               </select>
-            </label>`
+            </label>`;
+          }
         )
         .join("");
+      componentsEl.querySelectorAll("[data-key-component-multi]").forEach(updateMultiToggleLabel);
       updatePreview();
     };
     const loadBuilder = async (values = selectedValues()) => {
+      const sequence = ++builderLoadSeq;
       if (!modelEl.value) {
-        builder = { model: null, components: [] };
+        builder = { model: null, components: [], mappings: [], facts: [] };
         renderBuilder({});
         return;
       }
@@ -5838,7 +6278,13 @@
           }),
         }
       );
-      builder = { model: result.model, components: result.components || [] };
+      if (sequence !== builderLoadSeq) return;
+      builder = {
+        model: result.model,
+        components: result.components || [],
+        mappings: result.mappings || [],
+        facts: result.facts || [],
+      };
       renderBuilder(values);
     };
     const renderList = () => {
@@ -5862,7 +6308,6 @@
                   <td>${row.contextos.length}</td>
                   <td><span class="status-badge ${row.ativo ? "active" : "inactive"}">${row.ativo ? "Ativa" : "Inativa"}</span></td>
                   <td class="planning-structure-actions">
-                    <button class="icon-btn" type="button" data-key-copy="${row.id}" title="Copiar e ajustar"><i class="bi bi-copy"></i></button>
                     <button class="icon-btn" type="button" data-key-status="${row.id}" title="${row.ativo ? "Desativar" : "Ativar"}"><i class="bi ${row.ativo ? "bi-slash-circle" : "bi-check-circle"}"></i></button>
                   </td>
                 </tr>`
@@ -5875,7 +6320,7 @@
       document.getElementById("key-catalog-origin").value = "";
       document.getElementById("key-catalog-form-title").textContent = "Nova chave";
       modelEl.value = "";
-      builder = { model: null, components: [] };
+      builder = { model: null, components: [], mappings: [], facts: [] };
       componentsEl.innerHTML = "";
       previewEl.textContent = "Selecione um modelo e seus componentes.";
       fillSelect(programEl, data.programs, "Selecione...");
@@ -5907,29 +6352,49 @@
 
     modelEl.addEventListener("change", () => loadBuilder({}));
     componentsEl.addEventListener("change", async (event) => {
-      const select = event.target.closest("[data-key-component]");
-      if (!select) return;
-      const values = selectedValues();
-      const index = builder.components.findIndex(
-        (item) => String(item.id) === select.dataset.keyComponent
-      );
-      builder.components.slice(index + 1).forEach((item) => {
-        values[item.id] = "";
-      });
-      try {
-        await loadBuilder(values);
-      } catch (error) {
-        setMessage(error.message, true);
+      const field = event.target.closest("[data-key-component], [data-key-component-option]");
+      if (!field) return;
+      if (field.matches("[data-key-component-option]")) {
+        updateMultiToggleLabel(field.closest("[data-key-component-multi]"));
+        updatePreview();
+        updateContext();
+        return;
       }
+      const values = selectedValues();
+      renderBuilder(values);
+      updateContext();
+    });
+    componentsEl.addEventListener("click", (event) => {
+      const toggle = event.target.closest("[data-key-multi-toggle]");
+      if (!toggle) return;
+      const wrap = toggle.closest("[data-key-component-multi]");
+      const panel = wrap?.querySelector("[data-key-multi-panel]");
+      if (!panel) return;
+      componentsEl.querySelectorAll("[data-key-multi-panel]").forEach((current) => {
+        if (current !== panel) current.hidden = true;
+      });
+      panel.hidden = !panel.hidden;
+    });
+    document.addEventListener("click", (event) => {
+      if (!page.contains(event.target)) return;
+      if (event.target.closest("[data-key-component-multi]")) return;
+      componentsEl.querySelectorAll("[data-key-multi-panel]").forEach((panel) => {
+        panel.hidden = true;
+      });
     });
     programEl.addEventListener("change", () => {
       actionEl.value = "";
       productEl.value = "";
       updateContext();
+      renderBuilder(selectedValues());
     });
     actionEl.addEventListener("change", () => {
       productEl.value = "";
       updateContext();
+      renderBuilder(selectedValues());
+    });
+    productEl.addEventListener("change", () => {
+      renderBuilder(selectedValues());
     });
     statusEl.addEventListener("change", renderList);
     searchEl.addEventListener("input", renderList);
@@ -5953,7 +6418,10 @@
           method: "POST",
           body: JSON.stringify(payload),
         });
-        setMessage(`${result.message} ${result.chave_formatada}`);
+        const details = result.chaves?.length
+          ? result.chaves.map((item) => item.chave_formatada).join("; ")
+          : result.chave_formatada;
+        setMessage(`${result.message} ${details || ""}`.trim());
         clear();
         await load();
       } catch (error) {
@@ -5962,38 +6430,20 @@
     });
 
     listEl.addEventListener("click", async (event) => {
-      const copyButton = event.target.closest("[data-key-copy]");
       const statusButton = event.target.closest("[data-key-status]");
-      const id = Number(copyButton?.dataset.keyCopy || statusButton?.dataset.keyStatus);
+      if (!statusButton) return;
+      const id = Number(statusButton.dataset.keyStatus);
       const row = data.rows.find((item) => Number(item.id) === id);
       if (!row) return;
-      if (statusButton) {
-        try {
-          await request(
-            `/api/estrutura-planejamento/catalogo-chave/${id}/situacao`,
-            {
-              method: "PUT",
-              body: JSON.stringify({ ativo: !row.ativo }),
-            }
-          );
-          await load();
-        } catch (error) {
-          setMessage(error.message, true);
-        }
-        return;
-      }
-      clear();
-      document.getElementById("key-catalog-form-title").textContent = "Copiar e ajustar chave";
-      document.getElementById("key-catalog-origin").value = row.id;
-      document.getElementById("key-catalog-exercise").value = row.exercicio;
-      document.getElementById("key-catalog-note").value = `Cópia da chave ${row.id}`;
-      modelEl.value = row.modelo_chave_id;
-      const values = Object.fromEntries(
-        row.valores.map((value) => [value.componente_id, value.valor_id])
-      );
       try {
-        await loadBuilder(values);
-        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        await request(
+          `/api/estrutura-planejamento/catalogo-chave/${id}/situacao`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ ativo: !row.ativo }),
+          }
+        );
+        await load();
       } catch (error) {
         setMessage(error.message, true);
       }

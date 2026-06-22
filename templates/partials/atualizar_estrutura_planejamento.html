@@ -199,5 +199,72 @@
         <div id="estrutura-planejamento-pagination" class="pagination"></div>
       </div>
     </div>
+
+    {% if entity == "produtos" %}
+    <div
+      class="card planning-component-links-card"
+      id="estrutura-planejamento-produto-links-card"
+      hidden
+    >
+      <div class="planning-structure-list-header">
+        <div>
+          <div class="card-title">Vínculos do Produto da Ação</div>
+          <p class="muted" id="estrutura-planejamento-produto-links-title"></p>
+        </div>
+        <button
+          class="icon-btn"
+          type="button"
+          id="estrutura-planejamento-produto-links-close"
+          title="Fechar vínculos"
+          aria-label="Fechar vínculos"
+        >
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <div class="form-grid planning-component-links-grid">
+        <label class="field">
+          <span>*Subfunção</span>
+          <select id="estrutura-planejamento-produto-link-subfuncao">
+            <option value="">Selecione...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>*Unidade Gestora</span>
+          <select id="estrutura-planejamento-produto-link-ug" disabled>
+            <option value="">Selecione primeiro uma subfunção...</option>
+          </select>
+        </label>
+        <div class="actions planning-component-links-actions">
+          <button
+            class="btn btn-primary sm"
+            type="button"
+            id="estrutura-planejamento-produto-link-save"
+          >
+            <i class="bi bi-link-45deg"></i>Vincular
+          </button>
+        </div>
+      </div>
+
+      <div id="estrutura-planejamento-produto-links-msg" class="muted" role="status"></div>
+
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Subfunção</th>
+              <th>Unidade Gestora</th>
+              <th class="planning-structure-actions-column">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="estrutura-planejamento-produto-links-body">
+            <tr>
+              <td colspan="3" class="muted">Selecione um produto para visualizar os vínculos.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </section>

@@ -2289,7 +2289,7 @@ body.app-loading-active {
 }
 .planning-structure-actions-column,
 .planning-structure-row-actions {
-  width: 126px;
+  width: 152px;
   white-space: nowrap;
 }
 .planning-structure-row-actions {
@@ -2328,6 +2328,9 @@ body.app-loading-active {
 .planning-admin-page {
   container-type: inline-size;
   min-width: 0;
+}
+#catalogo-chave-page > .card + .card {
+  margin-top: 14px;
 }
 .planning-admin-selector {
   margin-bottom: 14px;
@@ -2612,6 +2615,10 @@ body.app-loading-active {
 .planning-key-preview strong,
 .planning-key-value {
   overflow-wrap: anywhere;
+}
+
+.planning-key-preview strong {
+  white-space: pre-line;
 }
 
 .selected-row {
