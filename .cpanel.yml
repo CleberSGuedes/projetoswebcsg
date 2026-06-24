@@ -1,5 +1,6 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/proj5954/projetoswebcsg_app/
-    - /bin/cp -R * $DEPLOYPATH
+    - export DEPLOYPATH=/home/proj5954/projetoswebcsg_homolog/
+    - /bin/rsync -a --delete --exclude='.git' --exclude='.env' --exclude='passenger_wsgi.py' --exclude='tmp' --exclude='logs' --exclude='public' ./ $DEPLOYPATH
+    - /bin/touch /home/proj5954/projetoswebcsg_homolog/tmp/restart.txt
