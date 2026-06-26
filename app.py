@@ -246,17 +246,6 @@ def create_app():
 
     db.init_app(app)
     mail.init_app(app)
-
-    app.config["ENVIRONMENT_LABEL"] = os.getenv("APP_ENV_LABEL", "").strip()
-    app.config["ENVIRONMENT_BADGE_CLASS"] = os.getenv("APP_ENV_CLASS", "homolog").strip() or "homolog"
-
-    @app.context_processor
-    def inject_environment_label():
-        return {
-            "environment_label": app.config.get("ENVIRONMENT_LABEL", ""),
-            "environment_badge_class": app.config.get("ENVIRONMENT_BADGE_CLASS", "homolog"),
-        }
-
     # Garante que as tabelas existam quando subir sem migrações
     with app.app_context():
         db.create_all()
