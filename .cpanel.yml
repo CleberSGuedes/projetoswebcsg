@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/bash scripts/deploy_homolog.sh
+    - /bin/bash scripts/deploy_cpanel.sh
