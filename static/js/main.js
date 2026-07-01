@@ -12,6 +12,11 @@
   const themeAutoBtn = document.getElementById("theme-auto");
   const themeDarkBtn = document.getElementById("theme-dark");
   const systemThemeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const SPO_RESPONSIVE_CONTRACT = Object.freeze({
+    mobileMaxViewport: 420,
+    splitPressureMaxViewport: 480,
+    splitPressureMinOuterGap: 180,
+  });
   const ACCENT_COLORS = {
     blue: {
       label: "Azul",
@@ -660,7 +665,9 @@
       window.innerWidth || 0
     );
     const outerWidth = window.outerWidth || viewportWidth;
-    const isSplitPressure = viewportWidth <= 480 && outerWidth - viewportWidth >= 180;
+    const isSplitPressure =
+      viewportWidth <= SPO_RESPONSIVE_CONTRACT.splitPressureMaxViewport &&
+      outerWidth - viewportWidth >= SPO_RESPONSIVE_CONTRACT.splitPressureMinOuterGap;
     document.documentElement.classList.toggle("spo-split-pressure", isSplitPressure);
     document.body.classList.toggle("spo-split-pressure", isSplitPressure);
   }

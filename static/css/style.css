@@ -1,3 +1,15 @@
+/* ==========================================================================
+   Contrato Visual SPO
+
+   - .spo-shell: casca global do sistema.
+   - .spo-env-dev / .spo-env-lab / .lab-spo: marcadores de ambiente.
+   - @media (max-width: 420px): modo movel real, fluido e sem largura minima.
+   - .spo-split-pressure: painel estreito dentro de janela ampla do Chrome.
+   - .scrollbar-visible: barras padronizadas pelo tema e cor de destaque.
+
+   Ao ajustar responsividade, mantenha modo movel e split sob pressao separados.
+   ========================================================================== */
+
 :root {
   --spo-topbar-height: 82px;
   --spo-topbar-neutral-width: 88px;
@@ -63,6 +75,7 @@ html {
   overflow-x: clip;
 }
 
+/* Barras de rolagem padrao: discretas em repouso, coloridas ao interagir. */
 html,
 .sidebar,
 #content-area,
@@ -3792,6 +3805,7 @@ input[type="file"] {
   }
 }
 
+/* Modo movel real: a janela e estreita, entao o layout deve reflow sem largura minima. */
 @media (max-width: 420px) {
   .subtitle {
     font-size: 15px;
@@ -3848,6 +3862,7 @@ input[type="file"] {
   }
 }
 
+/* Split sob pressao: Chrome divide a janela e entrega uma area util muito estreita. */
 html.spo-split-pressure {
   min-width: var(--spo-operational-min-width);
   overflow-x: auto;
