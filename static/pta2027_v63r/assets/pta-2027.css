@@ -139,6 +139,8 @@ body.dark .admin-form>label:first-child{background:linear-gradient(180deg,#38272
 
 /* Integração com o SPO: o tema, a cor de destaque e a rolagem principal passam a ser do ambiente host. */
 body.embedded-mode{
+ --spo-pta-operational-min-width:496px;
+ min-width:var(--spo-pta-operational-min-width);
  background:transparent;
  overflow:hidden;
 }
@@ -1932,6 +1934,10 @@ body.embedded-mode .subaction-row,
 body.embedded-mode .stage-row{
  min-width:0;
  max-width:100%;
+}
+body.embedded-mode .value-view,
+body.embedded-mode .wizard-view{
+ min-width:var(--spo-pta-operational-min-width);
 }
 body.embedded-mode .eap-table-wrap,
 body.embedded-mode .eap-map-flow,
