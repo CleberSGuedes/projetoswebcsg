@@ -3847,3 +3847,25 @@ input[type="file"] {
     justify-content: flex-start;
   }
 }
+
+html.spo-split-pressure {
+  min-width: var(--spo-operational-min-width);
+  overflow-x: auto;
+}
+
+html.spo-split-pressure body,
+html.spo-split-pressure .app-body,
+html.spo-split-pressure .layout {
+  min-width: var(--spo-operational-min-width);
+}
+
+html.spo-split-pressure .main {
+  overflow-x: visible;
+}
+
+html.spo-split-pressure .grid,
+html.spo-split-pressure .form-grid,
+html.spo-split-pressure .personalizar-grid,
+html.spo-split-pressure .governanca-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}

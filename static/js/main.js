@@ -654,6 +654,17 @@
     document.documentElement.style.setProperty("--spo-contextbar-height", `${height}px`);
   }
 
+  function syncSplitPressureMode() {
+    const viewportWidth = Math.max(
+      document.documentElement.clientWidth || 0,
+      window.innerWidth || 0
+    );
+    const outerWidth = window.outerWidth || viewportWidth;
+    const isSplitPressure = viewportWidth <= 480 && outerWidth - viewportWidth >= 180;
+    document.documentElement.classList.toggle("spo-split-pressure", isSplitPressure);
+    document.body.classList.toggle("spo-split-pressure", isSplitPressure);
+  }
+
   function readHostUserMeta() {
     if (!userMeta) return { text: "", name: "", initials: "" };
     const name = userMeta.dataset.name || "";
@@ -717,7 +728,16 @@
   } else if (sidebarNarrowQuery.addListener) {
     sidebarNarrowQuery.addListener(syncSidebarForViewport);
   }
-  window.addEventListener("resize", syncTopbarHeight, { passive: true });
+  const syncViewportPressure = () => {
+    syncSplitPressureMode();
+    syncTopbarHeight();
+  };
+
+  syncSplitPressureMode();
+  window.addEventListener("resize", syncViewportPressure, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncViewportPressure, { passive: true });
+  }
   if (topbar && "ResizeObserver" in window) {
     new ResizeObserver(syncTopbarHeight).observe(topbar);
   }
