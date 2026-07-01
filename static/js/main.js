@@ -2,13 +2,144 @@
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
+  const topbar = document.querySelector(".topbar");
   const logoutBtn = document.getElementById("logout-btn");
   const menu = document.getElementById("menu");
   const userMeta = document.getElementById("user-meta");
   const userPerfilId = userMeta ? userMeta.dataset.perfilId : "";
   const userNivel = userMeta ? userMeta.dataset.nivel : "";
   const themeLightBtn = document.getElementById("theme-light");
+  const themeAutoBtn = document.getElementById("theme-auto");
   const themeDarkBtn = document.getElementById("theme-dark");
+  const systemThemeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const ACCENT_COLORS = {
+    blue: {
+      label: "Azul",
+      vars: {
+        "--color-50": "#f0f7ff",
+        "--color-100": "#d9ecff",
+        "--color-200": "#99c1f1",
+        "--color-300": "#62a0ea",
+        "--color-400": "#3584e4",
+        "--color-500": "#1c71d8",
+        "--color-600": "#1a5fb4",
+        "--color-700": "#1a4f91",
+        "--color-800": "#173f73",
+        "--color-900": "#12345c",
+        "--accent-rgb": "53, 132, 228",
+        "--accent-soft-rgb": "153, 193, 241",
+      },
+      dark: { "--accent": "#78aeed", "--accent-strong": "#99c1f1", "--lab-accent": "#78aeed", "--accent-rgb": "120, 174, 237" },
+    },
+    teal: {
+      label: "Turquesa",
+      vars: {
+        "--color-50": "#edfafa",
+        "--color-100": "#d2f4f4",
+        "--color-200": "#93dddf",
+        "--color-300": "#47c2c8",
+        "--color-400": "#2190a4",
+        "--color-500": "#15828e",
+        "--color-600": "#0e6f7d",
+        "--color-700": "#0b5964",
+        "--color-800": "#08444d",
+        "--color-900": "#06343c",
+        "--accent-rgb": "33, 144, 164",
+        "--accent-soft-rgb": "147, 221, 223",
+      },
+      dark: { "--accent": "#6ed4de", "--accent-strong": "#93dddf", "--lab-accent": "#6ed4de", "--accent-rgb": "110, 212, 222" },
+    },
+    green: {
+      label: "Verde padrão SPO",
+      vars: {
+        "--color-50": "#e9f8f4",
+        "--color-100": "#ccefe6",
+        "--color-200": "#96ddcb",
+        "--color-300": "#50c1a7",
+        "--color-400": "#25a98e",
+        "--color-500": "#009879",
+        "--color-600": "#007f68",
+        "--color-700": "#006756",
+        "--color-800": "#075246",
+        "--color-900": "#063f38",
+        "--accent-rgb": "0, 152, 121",
+        "--accent-soft-rgb": "150, 221, 203",
+      },
+      dark: { "--accent": "#42dfc0", "--accent-strong": "#6ee7cf", "--lab-accent": "#42dfc0", "--accent-rgb": "66, 223, 192" },
+    },
+    yellow: {
+      label: "Amarelo",
+      vars: {
+        "--color-50": "#fff9e6",
+        "--color-100": "#fff0bf",
+        "--color-200": "#f9f06b",
+        "--color-300": "#f8e45c",
+        "--color-400": "#f6d32d",
+        "--color-500": "#e5a50a",
+        "--color-600": "#c88800",
+        "--color-700": "#9c6a00",
+        "--color-800": "#704d00",
+        "--color-900": "#523800",
+        "--accent-rgb": "229, 165, 10",
+        "--accent-soft-rgb": "249, 240, 107",
+      },
+      dark: { "--accent": "#f8e45c", "--accent-strong": "#f9f06b", "--lab-accent": "#f8e45c", "--accent-rgb": "248, 228, 92" },
+    },
+    orange: {
+      label: "Laranja",
+      vars: {
+        "--color-50": "#fff3e8",
+        "--color-100": "#ffe1c8",
+        "--color-200": "#ffbe6f",
+        "--color-300": "#ffa348",
+        "--color-400": "#ff7800",
+        "--color-500": "#e66100",
+        "--color-600": "#c64600",
+        "--color-700": "#a33400",
+        "--color-800": "#772600",
+        "--color-900": "#571c00",
+        "--accent-rgb": "230, 97, 0",
+        "--accent-soft-rgb": "255, 190, 111",
+      },
+      dark: { "--accent": "#ffa348", "--accent-strong": "#ffbe6f", "--lab-accent": "#ffa348", "--accent-rgb": "255, 163, 72" },
+    },
+    red: {
+      label: "Vermelho",
+      vars: {
+        "--color-50": "#fff0f0",
+        "--color-100": "#ffd7d7",
+        "--color-200": "#ff7b7b",
+        "--color-300": "#f66151",
+        "--color-400": "#ed333b",
+        "--color-500": "#e01b24",
+        "--color-600": "#c01c28",
+        "--color-700": "#a51d2d",
+        "--color-800": "#7d1824",
+        "--color-900": "#5d121b",
+        "--accent-rgb": "224, 27, 36",
+        "--accent-soft-rgb": "255, 123, 123",
+      },
+      dark: { "--accent": "#ff7b7b", "--accent-strong": "#f66151", "--lab-accent": "#ff7b7b", "--accent-rgb": "255, 123, 123" },
+    },
+    purple: {
+      label: "Roxo",
+      vars: {
+        "--color-50": "#f7f0ff",
+        "--color-100": "#eadcff",
+        "--color-200": "#dc8add",
+        "--color-300": "#c061cb",
+        "--color-400": "#9141ac",
+        "--color-500": "#813d9c",
+        "--color-600": "#613583",
+        "--color-700": "#4e2a68",
+        "--color-800": "#3d2052",
+        "--color-900": "#2e183e",
+        "--accent-rgb": "129, 61, 156",
+        "--accent-soft-rgb": "220, 138, 221",
+      },
+      dark: { "--accent": "#c061cb", "--accent-strong": "#dc8add", "--lab-accent": "#c061cb", "--accent-rgb": "192, 97, 203" },
+    },
+  };
   let multiFilterClickBound = false;
   const appLoadingOverlay = document.getElementById("app-loading-overlay");
   const appLoadingTitle = document.getElementById("app-loading-title");
@@ -41,25 +172,123 @@
   window.showAppLoading = showAppLoading;
   window.hideAppLoading = hideAppLoading;
 
-  function applyTheme(theme) {
-    const body = document.body;
-    const isDark = theme === "dark";
-    body.classList.toggle("theme-dark", isDark);
-    if (themeLightBtn && themeDarkBtn) {
-      themeLightBtn.classList.toggle("active", !isDark);
-      themeDarkBtn.classList.toggle("active", isDark);
+  function getResolvedTheme(theme) {
+    if (theme === "auto") {
+      return systemThemeQuery && systemThemeQuery.matches ? "dark" : "light";
     }
-    localStorage.setItem("app-theme", isDark ? "dark" : "light");
+    return theme === "dark" ? "dark" : "light";
+  }
+
+  function getStoredAccent() {
+    const saved = localStorage.getItem("app-accent") || "blue";
+    if (saved === "spo") return "green";
+    return ACCENT_COLORS[saved] ? saved : "blue";
+  }
+
+  function applyAccentColor(accent, persist = true) {
+    const key = ACCENT_COLORS[accent] ? accent : "blue";
+    const palette = ACCENT_COLORS[key];
+    const root = document.documentElement;
+    const targets = [root, document.body].filter(Boolean);
+    const setVar = (name, value) => targets.forEach((target) => target.style.setProperty(name, value));
+    Object.entries(palette.vars).forEach(([name, value]) => setVar(name, value));
+    setVar("--accent", "var(--color-500)");
+    setVar("--accent-strong", "var(--color-400)");
+    setVar("--lab-accent", "var(--color-400)");
+    if (document.body.classList.contains("theme-dark")) {
+      Object.entries(palette.dark).forEach(([name, value]) => setVar(name, value));
+    }
+    document.body.dataset.accentPreference = key;
+    document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.accentChoice === key);
+      btn.setAttribute("aria-pressed", String(btn.dataset.accentChoice === key));
+    });
+    if (persist) localStorage.setItem("app-accent", key);
+  }
+
+  function applyTheme(theme, persist = true) {
+    const body = document.body;
+    const selectedTheme = theme === "auto" ? "auto" : getResolvedTheme(theme);
+    const resolvedTheme = getResolvedTheme(selectedTheme);
+    const isDark = resolvedTheme === "dark";
+    body.classList.toggle("theme-dark", isDark);
+    body.dataset.themePreference = selectedTheme;
+    if (themeLightBtn && themeDarkBtn) {
+      themeLightBtn.classList.toggle("active", selectedTheme === "light");
+      if (themeAutoBtn) themeAutoBtn.classList.toggle("active", selectedTheme === "auto");
+      themeDarkBtn.classList.toggle("active", selectedTheme === "dark");
+    }
+    applyAccentColor(getStoredAccent(), false);
+    if (persist) localStorage.setItem("app-theme", selectedTheme);
   }
 
   function initTheme() {
-    const saved = localStorage.getItem("app-theme") || "light";
+    applyAccentColor(getStoredAccent(), false);
+    const saved = localStorage.getItem("app-theme") || "auto";
     applyTheme(saved);
     if (themeLightBtn) {
       themeLightBtn.addEventListener("click", () => applyTheme("light"));
     }
+    if (themeAutoBtn) {
+      themeAutoBtn.addEventListener("click", () => applyTheme("auto"));
+    }
     if (themeDarkBtn) {
       themeDarkBtn.addEventListener("click", () => applyTheme("dark"));
+    }
+    if (systemThemeQuery) {
+      const refreshAutoTheme = () => {
+        if ((localStorage.getItem("app-theme") || "auto") === "auto") {
+          applyTheme("auto", false);
+        }
+      };
+      if (typeof systemThemeQuery.addEventListener === "function") {
+        systemThemeQuery.addEventListener("change", refreshAutoTheme);
+      } else if (typeof systemThemeQuery.addListener === "function") {
+        systemThemeQuery.addListener(refreshAutoTheme);
+      }
+    }
+  }
+
+  function syncThemeControls(scope = document) {
+    const currentTheme = localStorage.getItem("app-theme") || "auto";
+    const currentAccent = getStoredAccent();
+    scope.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+      const active = btn.dataset.themeChoice === currentTheme;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    scope.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      const active = btn.dataset.accentChoice === currentAccent;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function initPersonalizarSpo() {
+    const panel = document.getElementById("personalizar-spo-panel");
+    if (!panel || panel.dataset.bound === "1") return;
+    panel.dataset.bound = "1";
+    syncThemeControls(panel);
+    panel.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyTheme(btn.dataset.themeChoice || "auto");
+        syncThemeControls(panel);
+      });
+    });
+    panel.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyAccentColor(btn.dataset.accentChoice || "blue");
+        syncThemeControls(panel);
+      });
+    });
+    const reset = document.getElementById("spo-theme-reset");
+    if (reset) {
+      reset.addEventListener("click", () => {
+        applyAccentColor("blue");
+        applyTheme("auto");
+        syncThemeControls(panel);
+        showToast("Personalização restaurada para o padrão do ambiente.");
+      });
     }
   }
 
@@ -76,11 +305,208 @@
     });
   }
 
+  const SCROLLBAR_EDGE_PX = 28;
+  const SCROLLBAR_TARGET_SELECTOR = [
+    ".sidebar",
+    "#content-area",
+    ".modal-body",
+    ".table-responsive",
+    ".planning-structure-layout",
+    ".planning-key-model-layout",
+    ".teto-table-wrap",
+    ".teto-table-scroll",
+    ".import-preview",
+  ].join(",");
+
+  function isScrollableTarget(el) {
+    if (!el) return false;
+    if (el === document.documentElement) {
+      return document.documentElement.scrollHeight > window.innerHeight + 1;
+    }
+    return el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+  }
+
+  function setScrollbarVisible(el, visible) {
+    if (!el) return;
+    el.classList.toggle("scrollbar-visible", !!visible);
+  }
+
+  function bindAccentScrollbar(el) {
+    if (!el || el.dataset?.scrollbarBound === "1") return;
+    if (el.dataset) el.dataset.scrollbarBound = "1";
+    let hideTimer = null;
+
+    const showBriefly = () => {
+      if (!isScrollableTarget(el)) return;
+      setScrollbarVisible(el, true);
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setScrollbarVisible(el, false), 900);
+    };
+
+    const updateFromPointer = (ev) => {
+      if (!isScrollableTarget(el)) return;
+      const rect = el === document.documentElement
+        ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+        : el.getBoundingClientRect();
+      const nearRight = ev.clientX >= rect.right - SCROLLBAR_EDGE_PX && ev.clientX <= rect.right + 2;
+      const nearBottom = ev.clientY >= rect.bottom - SCROLLBAR_EDGE_PX && ev.clientY <= rect.bottom + 2;
+      setScrollbarVisible(el, nearRight || nearBottom);
+    };
+
+    const hide = () => {
+      window.clearTimeout(hideTimer);
+      setScrollbarVisible(el, false);
+    };
+
+    const scrollTarget = el === document.documentElement ? window : el;
+    scrollTarget.addEventListener("scroll", showBriefly, { passive: true });
+    el.addEventListener("mousemove", updateFromPointer, { passive: true });
+    el.addEventListener("mouseleave", hide, { passive: true });
+  }
+
+  function refreshAccentScrollbars(scope = document) {
+    bindAccentScrollbar(document.documentElement);
+    if (sidebar) bindAccentScrollbar(sidebar);
+    if (content) bindAccentScrollbar(content);
+    scope.querySelectorAll?.(SCROLLBAR_TARGET_SELECTOR).forEach(bindAccentScrollbar);
+  }
+
+  let pta2027IntegrationCleanup = null;
+
+  function initPta2027Integration() {
+    const frame = document.getElementById("pta2027-frame");
+    const wrap = document.querySelector(".pta2027-frame-wrap");
+    if (!frame) return;
+    if (typeof pta2027IntegrationCleanup === "function") {
+      pta2027IntegrationCleanup();
+      pta2027IntegrationCleanup = null;
+    }
+
+    const readThemePayload = () => {
+      const rootStyles = getComputedStyle(document.documentElement);
+      const hostUser = readHostUserMeta();
+      return {
+        type: "spo-theme",
+        theme: document.body.classList.contains("theme-dark") ? "dark" : "light",
+        accent: rootStyles.getPropertyValue("--accent").trim(),
+        accentStrong: rootStyles.getPropertyValue("--accent-strong").trim(),
+        accentRgb: rootStyles.getPropertyValue("--accent-rgb").trim(),
+        surface: rootStyles.getPropertyValue("--surface").trim(),
+        card: rootStyles.getPropertyValue("--card-bg").trim(),
+        bg: rootStyles.getPropertyValue("--bg").trim(),
+        text: rootStyles.getPropertyValue("--text").trim(),
+        muted: rootStyles.getPropertyValue("--muted").trim(),
+        border: rootStyles.getPropertyValue("--border").trim(),
+        layoutSidebarCollapsed: rootStyles.getPropertyValue("--spo-layout-sidebar-collapsed-width").trim(),
+        layoutPageGutter: rootStyles.getPropertyValue("--spo-layout-page-gutter").trim(),
+        layoutPanelGap: rootStyles.getPropertyValue("--spo-layout-panel-gap").trim(),
+        userMeta: hostUser.text,
+        userName: hostUser.name,
+        userInitials: hostUser.initials,
+      };
+    };
+
+    const syncFrameHeight = (height) => {
+      const safeHeight = Math.max(720, Math.ceil(Number(height) || 0));
+      frame.style.height = `${safeHeight}px`;
+      if (wrap) wrap.style.minHeight = `${safeHeight}px`;
+    };
+
+    const postTheme = () => {
+      try {
+        frame.contentWindow?.postMessage(readThemePayload(), window.location.origin);
+      } catch (err) {
+        console.debug("Falha ao sincronizar tema do PTA 2027", err);
+      }
+    };
+
+    const resizeFromDocument = () => {
+      try {
+        const doc = frame.contentDocument?.documentElement;
+        const body = frame.contentDocument?.body;
+        if (!doc || !body) return;
+        syncFrameHeight(Math.max(doc.scrollHeight, body.scrollHeight, doc.offsetHeight, body.offsetHeight));
+      } catch (_) {
+        // A leitura direta é apenas um reforço para iframe de mesma origem.
+      }
+    };
+
+    const setImmersiveMode = (enabled) => {
+      document.body.classList.toggle("pta2027-immersive", Boolean(enabled));
+      if (sidebar) {
+        if (enabled) {
+          sidebar.classList.remove("open");
+          sidebar.classList.add("collapsed");
+        } else {
+          sidebar.classList.remove("open");
+          if (!isSidebarNarrow()) sidebar.classList.remove("collapsed");
+        }
+      }
+      updateToggleIcon();
+      syncTopbarHeight();
+      window.setTimeout(() => {
+        postTheme();
+        resizeFromDocument();
+      }, 80);
+    };
+
+    const onMessage = (event) => {
+      if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
+      if (event.data?.type === "pta2027-height") syncFrameHeight(event.data.height);
+      if (event.data?.type === "pta2027-immersive") setImmersiveMode(Boolean(event.data.enabled));
+      if (event.data?.type === "pta2027-context-focus") {
+        document.body.classList.toggle("special-context-focus", Boolean(event.data.enabled));
+        document.body.classList.toggle("pta2027-context-focus", Boolean(event.data.enabled));
+        syncPtaContextMeta();
+        syncTopbarHeight();
+        window.setTimeout(() => {
+          syncTopbarHeight();
+          postTheme();
+          resizeFromDocument();
+        }, 80);
+      }
+      if (event.data?.type === "pta2027-scroll-top") {
+        document.querySelector(".pta2027-integration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+
+    const observer = new MutationObserver(() => {
+      postTheme();
+      window.setTimeout(resizeFromDocument, 80);
+    });
+
+    window.addEventListener("message", onMessage);
+    frame.addEventListener("load", () => {
+      syncTopbarHeight();
+      postTheme();
+      resizeFromDocument();
+      window.setTimeout(resizeFromDocument, 180);
+      window.setTimeout(resizeFromDocument, 700);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class", "style"] });
+
+    postTheme();
+    window.setTimeout(resizeFromDocument, 120);
+
+    pta2027IntegrationCleanup = () => {
+      window.removeEventListener("message", onMessage);
+      observer.disconnect();
+      document.body.classList.remove("special-context-focus", "pta2027-context-focus");
+      syncTopbarHeight();
+      setImmersiveMode(false);
+    };
+  }
+
   async function loadPage(route) {
     let url = "/partial/" + route;
     if (route === "logout") {
       await logout();
       return;
+    }
+    if (route !== "atualizar/governanca-resultados/programacao-pta2027" && typeof pta2027IntegrationCleanup === "function") {
+      pta2027IntegrationCleanup();
+      pta2027IntegrationCleanup = null;
     }
     showAppLoading("Carregando página...", "Aguarde enquanto a página é carregada.");
     try {
@@ -95,7 +521,10 @@
       }
       const html = await res.text();
       content.innerHTML = html;
+      syncPtaContextMeta();
+      syncTopbarHeight();
       initRoute(route);
+      refreshAccentScrollbars(content);
     } catch (err) {
       content.innerHTML = '<div class="card"><div class="card-title">Erro</div><p>Falha ao carregar.</p></div>';
       console.error(err);
@@ -130,6 +559,11 @@
     }
   }
 
+  function clearMenuRouteActiveState() {
+    document.querySelectorAll(".menu-item.active").forEach((el) => el.classList.remove("active"));
+    document.querySelectorAll(".menu-group.active-ancestor").forEach((group) => group.classList.remove("active-ancestor"));
+  }
+
   async function logout() {
     try {
       await fetch("/logout", { method: "POST" });
@@ -138,15 +572,48 @@
     }
   }
 
+  const sidebarNarrowQuery = window.matchMedia("(max-width: 1200px)");
+
+  function isSidebarNarrow() {
+    return sidebarNarrowQuery.matches;
+  }
+
+  function isPta2027Immersive() {
+    return document.body.classList.contains("pta2027-immersive");
+  }
+
+  function shouldUseSidebarOverlay() {
+    return isSidebarNarrow() || isPta2027Immersive();
+  }
+
   function updateToggleIcon() {
     if (!toggle || !sidebar) return;
     const icon = toggle.querySelector("i");
     if (!icon) return;
-    const collapsed = sidebar.classList.contains("collapsed");
-    icon.classList.toggle("bi-chevron-right", collapsed);
-    icon.classList.toggle("bi-chevron-left", !collapsed);
-    toggle.setAttribute("aria-label", collapsed ? "Expandir menu" : "Recolher menu");
-    toggle.setAttribute("aria-expanded", String(!collapsed));
+    const expanded = shouldUseSidebarOverlay()
+      ? sidebar.classList.contains("open")
+      : !sidebar.classList.contains("collapsed");
+    icon.classList.toggle("bi-chevron-right", !expanded);
+    icon.classList.toggle("bi-chevron-left", expanded);
+    toggle.setAttribute("aria-label", expanded ? "Recolher menu" : "Expandir menu");
+    toggle.setAttribute("aria-expanded", String(expanded));
+  }
+
+  function syncSidebarForViewport() {
+    if (!sidebar) return;
+    if (shouldUseSidebarOverlay()) {
+      sidebar.classList.toggle("collapsed", !sidebar.classList.contains("open"));
+    } else {
+      sidebar.classList.remove("open");
+    }
+    updateToggleIcon();
+  }
+
+  function closeNarrowSidebar() {
+    if (!sidebar || !shouldUseSidebarOverlay()) return;
+    sidebar.classList.remove("open");
+    sidebar.classList.add("collapsed");
+    updateToggleIcon();
   }
 
   function resizeTetoDashboardCharts() {
@@ -175,6 +642,38 @@
     sidebar.style.setProperty("--sidebar-expanded-width", `${Math.max(160, measuredWidth)}px`);
   }
 
+  function syncTopbarHeight() {
+    const contextHeader = document.querySelector(".pta2027-integration-header");
+    const useContextHeader = document.body.classList.contains("special-context-focus") && contextHeader;
+    const height = useContextHeader
+      ? Math.ceil(contextHeader.getBoundingClientRect().height)
+      : topbar && getComputedStyle(topbar).display !== "none"
+        ? Math.ceil(topbar.getBoundingClientRect().height)
+        : 0;
+    document.documentElement.style.setProperty("--spo-topbar-height", `${height}px`);
+    document.documentElement.style.setProperty("--spo-contextbar-height", `${height}px`);
+  }
+
+  function readHostUserMeta() {
+    if (!userMeta) return { text: "", name: "", initials: "" };
+    const name = userMeta.dataset.name || "";
+    const text = userMeta.textContent.trim() || name;
+    const initials = name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+    return { text, name, initials };
+  }
+
+  function syncPtaContextMeta() {
+    const meta = document.getElementById("pta2027-context-meta");
+    if (!meta) return;
+    meta.textContent = readHostUserMeta().text;
+  }
+
   function setUserMeta() {
     if (!userMeta) return;
     const name = userMeta.dataset.name || "";
@@ -191,27 +690,50 @@
     });
     const countLabel = activeCount ? ` | Logados: ${activeCount}` : "";
     userMeta.textContent = `${name} - ${formatted}${countLabel}`;
+    syncPtaContextMeta();
   }
 
-  if (sidebar && window.matchMedia("(max-width: 860px)").matches) {
+  if (sidebar && isSidebarNarrow()) {
     sidebar.classList.add("collapsed");
   }
 
   if (toggle) {
     toggle.addEventListener("click", () => {
-      sidebar.classList.toggle("collapsed");
-      sidebar.classList.toggle("open");
+      if (shouldUseSidebarOverlay()) {
+        const open = !sidebar.classList.contains("open");
+        sidebar.classList.toggle("open", open);
+        sidebar.classList.toggle("collapsed", !open);
+      } else {
+        sidebar.classList.toggle("collapsed");
+        sidebar.classList.remove("open");
+      }
       updateToggleIcon();
       resizeTetoDashboardCharts();
     });
     updateToggleIcon();
   }
+  if (sidebarNarrowQuery.addEventListener) {
+    sidebarNarrowQuery.addEventListener("change", syncSidebarForViewport);
+  } else if (sidebarNarrowQuery.addListener) {
+    sidebarNarrowQuery.addListener(syncSidebarForViewport);
+  }
+  window.addEventListener("resize", syncTopbarHeight, { passive: true });
+  if (topbar && "ResizeObserver" in window) {
+    new ResizeObserver(syncTopbarHeight).observe(topbar);
+  }
+
+  document.addEventListener("click", (ev) => {
+    if (!sidebar || !shouldUseSidebarOverlay() || !sidebar.classList.contains("open")) return;
+    if (sidebar.contains(ev.target) || toggle?.contains(ev.target)) return;
+    closeNarrowSidebar();
+  });
 
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => logout());
   }
 
   initTheme();
+  refreshAccentScrollbars();
   function initUsuariosForm() {
     const form = document.getElementById("form-criar-usuario");
     const msg = document.getElementById("criar-usuario-msg");
@@ -689,7 +1211,7 @@
 
   function applyMenuPermissions(features = []) {
     if (!menu) return;
-    const allowed = new Set(["dashboard", "logout", ...features]);
+    const allowed = new Set(["dashboard", "logout", "atualizar/personalizar-spo", ...features]);
     const isAllowedRoute = (route) => {
       if (!route) return false;
       if (allowed.has(route)) return true;
@@ -14457,6 +14979,12 @@
     if (route === "dashboard") {
       initDashboard();
     }
+    if (route === "atualizar/personalizar-spo") {
+      initPersonalizarSpo();
+    }
+    if (route === "atualizar/governanca-resultados/programacao-pta2027") {
+      initPta2027Integration();
+    }
     if (route === "usuarios" || route === "usuarios/cadastrar") {
       initUsuariosForm();
     }
@@ -21430,6 +21958,12 @@
       if (parentToggle) {
         const targetId = parentToggle.getAttribute("data-submenu");
         const group = parentToggle.closest(".menu-group");
+        const activeRouteItem = menu.querySelector(".menu-item.active[data-route]");
+        if (activeRouteItem?.getAttribute("data-route") === "dashboard") {
+          activeRouteItem.classList.remove("active");
+        } else if (group && activeRouteItem && !group.contains(activeRouteItem)) {
+          clearMenuRouteActiveState();
+        }
         if (sidebar?.classList.contains("collapsed")) {
           sidebar.classList.remove("collapsed");
           sidebar.classList.add("open");
@@ -21457,6 +21991,7 @@
       ev.preventDefault();
       const route = link.getAttribute("data-route");
       setActive(route);
+      closeNarrowSidebar();
       loadPage(route).then(() => {
         if (route === "dashboard") {
           initDashboard({ forceShow: true });
@@ -21466,6 +22001,11 @@
   }
 
   setUserMeta();
+  syncTopbarHeight();
+  window.setInterval(() => {
+    setUserMeta();
+    syncTopbarHeight();
+  }, 30000);
   fetchCurrentPermissions();
 
   if (content) {

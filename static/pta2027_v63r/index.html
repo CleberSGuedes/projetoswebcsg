@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPO — PTA 2027 pela Cadeia Estratégica de Programação</title>
+  <link rel="stylesheet" href="assets/pta-2027.css?v=20260701.lab-visual-6">
+</head>
+<body>
+  <script>
+    if (new URLSearchParams(window.location.search).get("embedded") === "1") {
+      document.body.classList.add("embedded-mode");
+    }
+  </script>
+  <header class="appbar">
+    <div class="brand">
+      <a class="round-button" href="index.html" aria-label="Voltar ao SPO">←</a>
+      <div class="brand-mark">SPO</div>
+      <div><strong>Plano de Trabalho Anual</strong><span>Programação estratégica 2027</span></div>
+    </div>
+    <div class="appbar-actions">
+      <span class="draft-state"><i></i> Rascunho local</span>
+      <span class="version-state">v63</span>
+      <span id="pta-standalone-clock" class="appbar-clock" aria-label="Data e hora local"></span>
+      <button class="round-button" id="theme-button" type="button" title="Alternar tema">◐</button>
+      <button class="avatar" type="button" title="Perfil">JF</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="value-view" class="value-view">
+      <div class="hero">
+        <div>
+          <span class="eyebrow">PTA 2027 · NOVA JORNADA DE PROGRAMAÇÃO</span>
+          <h1>Da estratégia à entrega pública</h1>
+          <p>Comece pelo valor que a SEDUC pretende gerar. A estrutura programática, a chave de planejamento e o orçamento serão construídos ao longo da jornada.</p>
+        </div>
+        <div class="hero-actions">
+          <label><span>Exercício</span><select><option>2027</option></select></label>
+          <button class="secondary-button" id="resume-button" type="button">Continuar rascunho</button>
+        </div>
+      </div>
+
+      <section class="identity-grid" aria-label="Identidade organizacional">
+        <article class="identity-card mission"><span class="card-icon">◎</span><div><small>MISSÃO</small><p id="identity-mission">Garantir acesso, permanência e aprendizagem com qualidade e equidade.</p></div></article>
+        <article class="identity-card vision"><span class="card-icon">◉</span><div><small>VISÃO 2032</small><p id="identity-vision">Estar entre as cinco melhores redes públicas, com evidências e o estudante no centro.</p></div></article>
+        <article class="identity-card business"><span class="card-icon">◇</span><div><small>NEGÓCIO</small><p id="identity-business">Aprendizagem e formação de cidadãos proativos para uma sociedade mais justa.</p></div></article>
+        <article class="identity-card values"><span class="card-icon">✦</span><div><small>VALORES</small><p id="identity-values">Democracia · Resultado · Diversidade · Equidade · Ética · Inovação</p></div></article>
+      </section>
+
+      <section class="strategy-bridge">
+        <div class="bridge-title">
+          <div><span class="eyebrow">BASE ESTRATÉGICA</span><h2>Seis pilares conectam a identidade às políticas educacionais</h2></div>
+          <span class="flow-label">Identidade <b>→</b> Pilares e PEE <b>→</b> Macropolíticas <b>→</b> Entregas</span>
+        </div>
+        <div id="pillar-list" class="pillar-list"></div>
+        <div id="pillar-goals" class="pillar-goals hidden" aria-live="polite"></div>
+      </section>
+
+      <section class="risk-bridge">
+        <div class="risk-title">
+          <div><span class="eyebrow">GOVERNANÇA E RISCOS</span><h2>A programação também deve proteger o alcance dos objetivos</h2></div>
+          <p id="risk-intro">A Política de Gestão de Riscos reforça que objetivos, processos, projetos, produtos e controles precisam caminhar juntos.</p>
+        </div>
+        <div class="risk-grid">
+          <article><strong>Objetivos estratégicos</strong><span id="risk-objectives">Riscos devem ser avaliados pelo impacto sobre missão, continuidade e resultados institucionais.</span></article>
+          <article><strong>Processos críticos</strong><span id="risk-processes">A implementação considera macroprocessos, processos, projetos e produtos gerenciados pela SEDUC.</span></article>
+          <article><strong>Controles proporcionais</strong><span id="risk-controls">As respostas aos riscos devem equilibrar custo-benefício, prevenção, correção e contingência.</span></article>
+          <article><strong>Monitoramento</strong><span id="risk-monitoring">Indicadores, desvios e análise crítica alimentam a melhoria contínua da gestão.</span></article>
+        </div>
+      </section>
+
+      <section class="macro-section">
+        <div class="section-heading">
+          <div><span class="eyebrow">ESCOLHA O PONTO DE PARTIDA</span><h2>Cadeia estratégica de programação PTA</h2><p>Selecione a macropolítica dentro da classificação estratégica. A programação nasce da estratégia, é viabilizada pelos processos organizacionais e só depois chega à codificação orçamentária.</p></div>
+          <div class="legend"><span></span> Macropolíticas de suporte · gerenciais · finalísticas</div>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="Visões da estrutura">
+          <button id="chain-tab" class="view-tab active" type="button">Cadeia estratégica</button>
+          <button id="eap-tab" class="view-tab" type="button">EAP</button>
+        </div>
+        <div id="chain-tools" class="concept-tools" aria-label="Visões da cadeia estratégica">
+          <button id="chain-map" class="concept-button active" type="button">Mapa da cadeia</button>
+          <button id="concept-strategy" class="concept-button" type="button">Visão estratégica</button>
+          <button id="concept-process" class="concept-button" type="button">Visão processual</button>
+        </div>
+        <div id="eap-tools" class="concept-tools hidden" aria-label="Visões da EAP">
+          <button id="eap-map-tab" class="concept-button active" type="button">Mapa EAP</button>
+          <button id="eap-table-tab" class="concept-button" type="button">Tabela EAP</button>
+        </div>
+        <div id="concept-panel" class="concept-panel hidden" aria-live="polite"></div>
+        <div id="chain-panel">
+          <div id="macro-grid" class="macro-grid"></div>
+        </div>
+        <div id="eap-map-panel" class="eap-map-panel hidden" aria-live="polite"></div>
+        <div id="eap-panel" class="eap-panel hidden">
+          <div class="eap-toolbar">
+            <label><span>Pesquisar na EAP</span><input id="eap-search" placeholder="Macro, eixo, política, componente ou código"></label>
+            <label><span>Classificação estratégica</span><select id="eap-process"><option value="">Todas</option><option>A. Suporte</option><option>B. Gerencial</option><option>C. Finalístico</option><option>Histórico</option></select></label>
+            <label><span>Macropolítica</span><select id="eap-macro"><option value="">Todas</option></select></label>
+            <label><span>Política</span><select id="eap-policy"><option value="">Todas</option></select></label>
+            <div class="admin-toolbar admin-only">
+              <span>Acesso administrador</span>
+              <button id="eap-admin-edit" class="danger-button" type="button">Editar EAP e textos</button>
+            </div>
+          </div>
+          <div id="eap-admin-panel" class="admin-panel hidden">
+            <div>
+              <span class="eyebrow">EDITOR ADMINISTRATIVO · PROTÓTIPO LOCAL</span>
+              <h3>Editar estrutura, textos e visões administrativas</h3>
+              <p>Selecione o tipo de operação. O sistema organiza as propostas por camada, exige justificativa e registra alterações relevantes como pendentes de revisão por outro administrador.</p>
+            </div>
+            <div class="admin-form">
+              <label class="admin-wide"><span>Tipo de operação</span><select id="admin-operation"><option value="include">Incluir nova macropolítica/política</option><option value="change">Alterar vínculo existente</option><option value="disable">Solicitar desativação de macropolítica/política/componente</option><option value="strategy">Alterar elementos estratégicos</option><option value="supportTexts">Alterar textos de apoio e visão gerencial</option></select></label>
+              <label class="admin-wide hidden" id="admin-deactivation-scope-wrap"><span>Escopo da desativação</span><select id="admin-deactivation-scope"><option value="component">Componente selecionado</option><option value="policy">Política selecionada</option><option value="macro">Macropolítica selecionada</option></select></label>
+              <fieldset class="admin-wide admin-selector">
+                <legend>Vínculo atual</legend>
+                <label><span>Classificação estratégica</span><select id="admin-source-process"></select></label>
+                <label><span>Macropolítica</span><select id="admin-source-macro"></select></label>
+                <label><span>Política</span><select id="admin-source-policy"></select></label>
+                <label class="admin-wide"><span>Linha / componente</span><select id="admin-source-row"></select></label>
+              </fieldset>
+              <div class="admin-wide admin-compare">
+                <div>
+                  <h4>Dados atuais</h4>
+                  <dl id="admin-current-values"></dl>
+                </div>
+                <div>
+                  <h4>Nova proposta</h4>
+                  <div class="admin-proposal-grid">
+                    <label><span>Classificação estratégica</span><select id="admin-process"><option>A. Suporte</option><option>B. Gerencial</option><option>C. Finalístico</option><option>Histórico</option></select></label>
+                    <label><span>Macropolítica</span><input id="admin-macro" placeholder="Ex.: Gestão e Inovação"></label>
+                    <label><span>Código da macropolítica</span><input id="admin-macro-code" placeholder="Ex.: GESTÃO_INOVAÇÃO"></label>
+                    <label><span>Eixo de execução</span><input id="admin-axis" placeholder="Ex.: Aquisições"></label>
+                    <label><span>Código do eixo</span><input id="admin-axis-code" placeholder="Ex.: E_AQUISIÇÕES"></label>
+                    <label><span>Política</span><input id="admin-policy" placeholder="Ex.: Aquisições"></label>
+                    <label><span>Código da política</span><input id="admin-policy-code" placeholder="Ex.: _AQUISIÇÕES"></label>
+                    <label><span>Pilar</span><input id="admin-pillar" placeholder="Ex.: 5 - Gestão para Resultado"></label>
+                    <label><span>Código do pilar</span><input id="admin-pillar-code" placeholder="Ex.: P_GESTÃO_"></label>
+                    <label><span>Metas PEE</span><input id="admin-pee" placeholder="Ex.: 7, 15, 19, 20"></label>
+                    <div class="admin-wide admin-components">
+                      <div class="admin-components-head">
+                        <span>Novo componente</span>
+                        <button id="admin-add-component" class="secondary-button" type="button">＋ Adicionar linha</button>
+                      </div>
+                      <div id="admin-components-list" class="admin-components-list">
+                        <label><span>Novo componente 1</span><input class="admin-component-input" placeholder="Ex.: Aquisições estratégicas"></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <label class="admin-wide" id="admin-justification-wrap"><span>Justificativa administrativa</span><input id="admin-justification" placeholder="Explique o motivo da alteração proposta"></label>
+              <div class="admin-actions eap-admin-actions"><button class="secondary-button" id="eap-admin-cancel" type="button">Cancelar</button><button class="danger-button" id="eap-admin-save" type="button">Confirmar inclusão local</button></div>
+              <div class="admin-wide admin-safety-note">
+                <strong>Fluxo de segurança:</strong> exclusões são registradas como pendentes após dupla confirmação e exigem revisão por outro administrador. Componentes, políticas e macropolíticas não são removidos diretamente.
+              </div>
+            </div>
+            <div class="admin-wide strategy-admin hidden">
+              <div class="strategy-admin-head">
+                <div>
+                  <span class="eyebrow">ELEMENTOS ESTRATÉGICOS</span>
+                  <h4>Identidade organizacional, governança e riscos</h4>
+                  <p>Esses campos alimentam os cards da base estratégica da página e ficam salvos apenas nesta cópia local.</p>
+                </div>
+                <button class="secondary-button" id="strategy-reset" type="button">Restaurar padrão</button>
+              </div>
+              <div class="strategy-admin-grid">
+                <label><span>Missão</span><textarea id="strategy-mission"></textarea></label>
+                <label><span>Visão</span><textarea id="strategy-vision"></textarea></label>
+                <label><span>Negócio</span><textarea id="strategy-business"></textarea></label>
+                <label><span>Valores</span><textarea id="strategy-values"></textarea></label>
+                <label class="admin-wide"><span>Texto de governança e riscos</span><textarea id="strategy-risk-intro"></textarea></label>
+                <label><span>Objetivos estratégicos</span><textarea id="strategy-risk-objectives"></textarea></label>
+                <label><span>Processos críticos</span><textarea id="strategy-risk-processes"></textarea></label>
+                <label><span>Controles proporcionais</span><textarea id="strategy-risk-controls"></textarea></label>
+                <label><span>Monitoramento</span><textarea id="strategy-risk-monitoring"></textarea></label>
+              </div>
+              <div class="admin-actions"><button class="primary-button" id="strategy-save" type="button">Salvar elementos estratégicos</button></div>
+            </div>
+            <div class="admin-wide support-text-admin hidden">
+              <div class="strategy-admin-head">
+                <div>
+                  <span class="eyebrow">TEXTOS DE APOIO E VISÃO GERENCIAL</span>
+                  <h4>Mapa EAP, visões estratégica/processual e orientações de uso</h4>
+                  <p>Os textos ficam organizados por grupos e chaves estáveis, para permitir versionamento, revisão e integração futura ao banco de dados real.</p>
+                </div>
+                <button class="secondary-button" id="support-text-reset" type="button">Restaurar padrão</button>
+              </div>
+              <div id="support-text-editor" class="support-text-editor"></div>
+              <label class="admin-wide"><span>Justificativa administrativa</span><input id="support-text-justification" placeholder="Explique o motivo da alteração proposta"></label>
+              <div class="admin-actions"><button class="primary-button" id="support-text-save" type="button">Salvar textos de apoio e visão gerencial</button></div>
+            </div>
+          </div>
+          <div id="eap-pending-panel" class="pending-panel admin-only hidden"></div>
+          <div class="eap-summary" id="eap-summary"></div>
+          <div class="eap-table-wrap">
+            <table class="eap-table">
+              <thead><tr><th>Classificação</th><th>Macropolítica</th><th>Eixo 2024</th><th>Pilar / PEE</th><th>Política</th><th>Códigos</th><th>Comp. 2022</th><th>Comp. 2023</th><th>Comp. 2024</th></tr></thead>
+              <tbody id="eap-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="policy-expansion" class="policy-expansion hidden" aria-live="polite"></div>
+      </section>
+    </section>
+
+    <section id="wizard-view" class="wizard-view hidden">
+      <aside class="journey-panel">
+        <button id="back-to-map" class="text-button" type="button">← Voltar à cadeia estratégica</button>
+        <div class="journey-heading"><span>PROGRAMAÇÃO PTA 2027</span><strong id="journey-title">Nova programação</strong></div>
+        <nav id="journey-tree" class="journey-tree" aria-label="Etapas da programação"></nav>
+        <div class="journey-help"><strong>A lógica foi invertida.</strong><p>Você descreve a entrega pública. O SPO organiza a estrutura técnica necessária.</p></div>
+      </aside>
+
+      <section class="workspace">
+        <div class="workspace-top">
+          <div><span id="step-kicker" class="eyebrow">ETAPA 1 DE 6</span><h1 id="step-title">Direcionamento estratégico</h1><p id="step-description">Confirme a política que orientará esta programação.</p></div>
+          <div class="progress-ring"><strong id="progress-value">17%</strong><span>concluído</span></div>
+        </div>
+        <div id="step-content" class="step-content"></div>
+        <div class="wizard-actions">
+          <button id="previous-step" class="secondary-button" type="button">Anterior</button>
+          <div><button id="save-draft" class="secondary-button" type="button">Salvar rascunho</button><button id="next-step" class="primary-button" type="button">Continuar →</button></div>
+        </div>
+      </section>
+
+      <aside class="context-panel">
+        <section><span class="eyebrow">CONTEXTO ATIVO</span><div id="context-cards"></div></section>
+        <section class="key-card">
+          <div class="key-heading"><span>Chave de planejamento</span><span class="live-dot">ao vivo</span></div>
+          <code id="planning-key">* R___ * ___._ * ____ * __________ * __________ * __________ * __________ * _ *</code>
+          <p>O sistema constrói e valida a chave conforme as decisões da programação.</p>
+        </section>
+        <section class="quality-card">
+          <strong>Qualidade da programação</strong>
+          <div><span>Coerência estratégica</span><b>✓</b></div>
+          <div><span>Regionalização</span><b id="quality-region">—</b></div>
+          <div><span>Entrega definida</span><b id="quality-delivery">—</b></div>
+          <div><span>Orçamento vinculado</span><b id="quality-budget">—</b></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="assets/eap-data.js"></script>
+  <script src="assets/pta-2027.js?v=20260701.lab-visual-4"></script>
+</body>
+</html>

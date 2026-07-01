@@ -1,0 +1,74 @@
+<section class="personalizar-spo" id="personalizar-spo-panel">
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Ambiente administrativo</div>
+      <h1>Personalizar SPO</h1>
+      <p class="muted">Ajuste o modo visual e a cor de destaque deste ambiente de laboratório.</p>
+    </div>
+  </div>
+
+  <div class="personalizar-grid">
+    <article class="card personalizar-card">
+      <div class="card-title">Modo de aparência</div>
+      <div class="preference-row-group" role="group" aria-label="Modo de aparência">
+        <button class="preference-row" type="button" data-theme-choice="light">
+          <i class="bi bi-sun"></i>
+          <span>
+            <strong>Claro</strong>
+            <small>Usar sempre o modo claro.</small>
+          </span>
+        </button>
+        <button class="preference-row" type="button" data-theme-choice="auto">
+          <i class="bi bi-circle-half"></i>
+          <span>
+            <strong>Automático</strong>
+            <small>Acompanhar o tema do sistema.</small>
+          </span>
+        </button>
+        <button class="preference-row" type="button" data-theme-choice="dark">
+          <i class="bi bi-moon"></i>
+          <span>
+            <strong>Escuro</strong>
+            <small>Usar sempre o modo escuro.</small>
+          </span>
+        </button>
+      </div>
+    </article>
+
+    <article class="card personalizar-card">
+      <div class="card-title">Cor de destaque</div>
+      <p class="muted">E possivel definir as cores de destaque do ambiente.</p>
+      <div class="accent-palette" role="group" aria-label="Cor de destaque">
+        <button class="accent-swatch" type="button" title="Azul" aria-label="Azul" data-accent-choice="blue" style="--swatch: #3584e4;"><span>Azul</span></button>
+        <button class="accent-swatch" type="button" title="Turquesa" aria-label="Turquesa" data-accent-choice="teal" style="--swatch: #2190a4;"><span>Turquesa</span></button>
+        <button class="accent-swatch" type="button" title="Verde padrão SPO" aria-label="Verde padrão SPO" data-accent-choice="green" style="--swatch: #009879;"><span>Verde padrão SPO</span></button>
+        <button class="accent-swatch" type="button" title="Amarelo" aria-label="Amarelo" data-accent-choice="yellow" style="--swatch: #f6d32d;"><span>Amarelo</span></button>
+        <button class="accent-swatch" type="button" title="Laranja" aria-label="Laranja" data-accent-choice="orange" style="--swatch: #ff7800;"><span>Laranja</span></button>
+        <button class="accent-swatch" type="button" title="Vermelho" aria-label="Vermelho" data-accent-choice="red" style="--swatch: #e01b24;"><span>Vermelho</span></button>
+        <button class="accent-swatch" type="button" title="Roxo" aria-label="Roxo" data-accent-choice="purple" style="--swatch: #9141ac;"><span>Roxo</span></button>
+      </div>
+    </article>
+
+    <article class="card personalizar-card personalizar-preview">
+      <div class="card-title">Prévia</div>
+      <div class="preview-surface">
+        <div class="preview-sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="preview-content">
+          <div class="preview-title"></div>
+          <div class="preview-line"></div>
+          <div class="preview-actions">
+            <button type="button">Ação principal</button>
+            <button type="button">Secundária</button>
+          </div>
+        </div>
+      </div>
+      <div class="personalizar-actions">
+        <button class="secondary-button" type="button" id="spo-theme-reset">Restaurar padrão do laboratório</button>
+      </div>
+    </article>
+  </div>
+</section>
