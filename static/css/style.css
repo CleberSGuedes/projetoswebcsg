@@ -3805,3 +3805,45 @@ input[type="file"] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+@media (max-width: 420px) {
+  .topbar {
+    gap: 6px;
+    padding: 12px 10px 10px calc(var(--spo-topbar-neutral-width) + 10px);
+  }
+  .brand-wrap {
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .brand-logo {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+  }
+  .brand-wrap > div,
+  .user-info,
+  .user-meta {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .subtitle,
+  .brand-wrap .muted,
+  .lab-badge,
+  .user-meta {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .lab-badge {
+    width: fit-content;
+    max-width: 100%;
+    font-size: 11px;
+  }
+  .user-info {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
