@@ -1077,6 +1077,63 @@ class ProdutoAcaoPlanejamento(db.Model):
     acao = db.relationship("AcaoPlanejamento", lazy="joined")
 
 
+class ComponenteRev(db.Model):
+    __tablename__ = "componentes_rev"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    exercicio = db.Column(db.SmallInteger, nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    criado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    alterado_em = db.Column(db.DateTime)
+    excluido_em = db.Column(db.DateTime)
+
+
+class ComponenteRevMacropolitica(db.Model):
+    __tablename__ = "componentes_rev_macropolitica"
+
+    componente_rev_id = db.Column(
+        db.BigInteger, db.ForeignKey("componentes_rev.id"), primary_key=True
+    )
+    macropolitica_id = db.Column(
+        db.Integer, db.ForeignKey("macropolitica.id"), primary_key=True
+    )
+
+
+class ComponenteRevEixo(db.Model):
+    __tablename__ = "componentes_rev_eixo"
+
+    componente_rev_id = db.Column(
+        db.BigInteger, db.ForeignKey("componentes_rev.id"), primary_key=True
+    )
+    eixo_id = db.Column(db.Integer, db.ForeignKey("eixo.id"), primary_key=True)
+
+
+class ComponenteRevProdutoAcao(db.Model):
+    __tablename__ = "componentes_rev_produto_acao"
+
+    componente_rev_id = db.Column(
+        db.BigInteger, db.ForeignKey("componentes_rev.id"), primary_key=True
+    )
+    produto_acao_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("produto_acao_planejamento.id"),
+        primary_key=True,
+    )
+
+
+class ComponenteRevPoliticaDecreto(db.Model):
+    __tablename__ = "componentes_rev_politica_decr"
+
+    componente_rev_id = db.Column(
+        db.BigInteger, db.ForeignKey("componentes_rev.id"), primary_key=True
+    )
+    politica_decr_id = db.Column(
+        db.Integer, db.ForeignKey("politica_decr.id"), primary_key=True
+    )
+
+
 class ChaveContexto(db.Model):
     __tablename__ = "chave_contexto"
 
