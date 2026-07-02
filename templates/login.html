@@ -9,6 +9,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="login-body">
+  {% if environment_label %}
+  <div class="environment-banner environment-banner-{{ environment_badge_class|default('homolog')|e }}" role="status" aria-label="Ambiente atual">
+    <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+    <span>{{ environment_label }}</span>
+  </div>
+  {% endif %}
   <div class="login-card">
     <div class="login-header">
       <div class="logo-hero">

@@ -10,6 +10,12 @@
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
 <body class="app-body">
+  {% if environment_label %}
+  <div class="environment-banner environment-banner-{{ environment_badge_class|default('homolog')|e }}" role="status" aria-label="Ambiente atual">
+    <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+    <span>{{ environment_label }}</span>
+  </div>
+  {% endif %}
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
@@ -35,6 +41,7 @@
                     <a href="#" data-route="atualizar/estrutura-planejamento/programas" class="menu-item" title="Programas"><i class="bi bi-folder2-open"></i> <span>Programas</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/acoes" class="menu-item" title="Ações/PAOE"><i class="bi bi-list-task"></i> <span>Ações/PAOE</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/produtos" class="menu-item" title="Produtos da Ação"><i class="bi bi-box-seam"></i> <span>Produtos da Ação</span></a>
+                    <a href="#" data-route="atualizar/estrutura-planejamento/componentes-rev" class="menu-item" title="Componentes da Revista"><i class="bi bi-journal-text"></i> <span>Componentes da Revista</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/componentes" class="menu-item" title="Componentes"><i class="bi bi-layers"></i> <span>Componentes</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/modelos-chave" class="menu-item" title="Modelos de Chave"><i class="bi bi-ui-checks-grid"></i> <span>Modelos de Chave</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/catalogo-chave" class="menu-item" title="Catálogo de Chaves"><i class="bi bi-key"></i> <span>Catálogo de Chaves</span></a>

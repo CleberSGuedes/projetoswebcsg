@@ -51,6 +51,10 @@ FEATURES = [
                 "nome": "Estrutura do Planejamento - Produtos da Ação",
             },
             {
+                "id": "atualizar/estrutura-planejamento/componentes-rev",
+                "nome": "Estrutura do Planejamento - Componentes da Revista",
+            },
+            {
                 "id": "atualizar/estrutura-planejamento/componentes",
                 "nome": "Estrutura do Planejamento - Componentes",
             },
