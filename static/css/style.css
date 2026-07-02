@@ -286,6 +286,40 @@ a { color: inherit; text-decoration: none; }
 .brand-wrap { display: flex; align-items: center; gap: 10px; }
 .brand-logo { width: 42px; height: 42px; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 12px rgba(8,59,54,0.18); }
 .subtitle { font-weight: 700; letter-spacing: 0.02em; color: var(--accent); font-size: 18px; }
+.environment-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border: 1px solid rgba(180, 83, 9, 0.34);
+  border-radius: 999px;
+  background: rgba(251, 146, 60, 0.10);
+  color: #9a3412;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.environment-inline-badge i { font-size: 12px; }
+.environment-inline-badge-dev {
+  border-color: rgba(2, 132, 199, 0.34);
+  background: rgba(14, 165, 233, 0.10);
+  color: #075985;
+}
+.theme-dark .environment-inline-badge {
+  border-color: rgba(251, 146, 60, 0.48);
+  background: rgba(124, 45, 18, 0.45);
+  color: #fed7aa;
+}
+.theme-dark .environment-inline-badge-dev {
+  border-color: rgba(56, 189, 248, 0.48);
+  background: rgba(8, 47, 73, 0.70);
+  color: #bae6fd;
+}
 .muted { color: var(--muted); font-size: 13px; }
 .user-info { display: flex; align-items: center; gap: 8px; }
 .user-meta { font-weight: 600; font-size: 9px; color: var(--text); white-space: nowrap; }
