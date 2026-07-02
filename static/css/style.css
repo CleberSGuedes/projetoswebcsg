@@ -2665,6 +2665,19 @@ body.special-context-focus .pta2027-frame-wrap {
   background: transparent;
   overflow: hidden;
 }
+
+@media (max-width: 720px) {
+  html:not(.spo-split-pressure) .pta2027-frame-wrap {
+    overflow-x: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  html:not(.spo-split-pressure) .pta2027-frame {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 .theme-dark .pta2027-frame-wrap {
   box-shadow: none;
 }

@@ -13,6 +13,7 @@ Este documento registra o contrato atual de layout, temas e responsividade do SP
 
 - Modo movel real: controlado por CSS em `@media (max-width: 420px)`. Deve permanecer fluido, sem largura minima operacional e sem barra horizontal geral.
 - Split sob pressao: controlado por JavaScript com a classe `spo-split-pressure`. Este modo e ativado quando a area util da pagina fica estreita, mas a janela externa do Chrome continua ampla. Ele restaura a largura minima operacional interna para preservar a leitura em visualizacao dividida.
+- PTA 2027 embutido: dentro do iframe, o modo movel real deve remover a largura minima do mockup e deixar `value-view`, `wizard-view`, arvore de jornada e contexto ativo fluidos. O host so libera a largura do iframe quando `spo-split-pressure` nao esta ativo, para nao misturar o modo celular com o split do Chrome.
 
 ## Barras de rolagem
 

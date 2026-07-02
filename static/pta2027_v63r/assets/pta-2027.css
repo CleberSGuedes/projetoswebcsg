@@ -2062,3 +2062,67 @@ body.embedded-mode textarea{
   flex:1 1 min(100%,140px);
  }
 }
+
+/* Contrato Responsivo SPO/PTA v2: modo celular real sem largura minima interna.
+   O split do Chrome continua sendo tratado pelo host via .spo-split-pressure. */
+@media(max-width:640px){
+ body.embedded-mode{
+  min-width:0;
+ }
+ body.embedded-mode .value-view,
+ body.embedded-mode .wizard-view{
+  min-width:0;
+  max-width:100%;
+ }
+ body.embedded-mode .hero{
+  margin-bottom:18px;
+  gap:16px;
+ }
+ body.embedded-mode .hero h1{
+  font-size:clamp(28px,9vw,40px);
+  line-height:1.12;
+ }
+ body.embedded-mode .hero-actions{
+  width:100%;
+  min-width:0;
+ }
+ body.embedded-mode .hero-actions label,
+ body.embedded-mode .hero-actions select,
+ body.embedded-mode .hero-actions .primary-button{
+  min-width:0;
+  width:100%;
+ }
+ body.embedded-mode .hero-actions .primary-button{
+  overflow-wrap:anywhere;
+  text-align:center;
+ }
+ body.embedded-mode.programming-focus .journey-tree{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  overflow-x:visible!important;
+  scrollbar-gutter:auto!important;
+ }
+ body.embedded-mode.programming-focus .tree-step{
+  grid-template-columns:32px minmax(0,1fr)!important;
+  min-width:0!important;
+ }
+ body.embedded-mode.programming-focus #context-cards{
+  grid-template-columns:minmax(0,1fr)!important;
+ }
+ body.embedded-mode.programming-focus .context-item,
+ body.embedded-mode.programming-focus .key-card,
+ body.embedded-mode.programming-focus .quality-card{
+  min-width:0!important;
+ }
+}
+
+@media(max-width:440px){
+ body.embedded-mode .value-view{
+  padding-inline:10px!important;
+ }
+ body.embedded-mode .hero h1{
+  font-size:clamp(28px,12vw,36px);
+ }
+ body.embedded-mode.programming-focus .journey-tree{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ }
+}
