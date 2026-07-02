@@ -47,6 +47,13 @@
   --sidebar-bg: rgba(255,255,255,0.88);
   --topbar-bg: rgba(255,255,255,0.92);
   --footer-bg: #f6f5f4;
+  --status-active-bg: var(--color-50);
+  --status-active-border: var(--color-300);
+  --status-active-text: var(--color-800);
+  --status-active-rail: rgba(var(--accent-rgb), 0.58);
+  --status-inactive-bg: #fff1f1;
+  --status-inactive-border: #efb0b0;
+  --status-inactive-text: #7a3030;
 }
 
 .theme-dark {
@@ -66,6 +73,13 @@
   --sidebar-bg: rgba(36,36,36,0.92);
   --topbar-bg: rgba(36,36,36,0.9);
   --footer-bg: #1e1e1e;
+  --status-active-bg: rgba(var(--accent-rgb), 0.18);
+  --status-active-border: rgba(var(--accent-rgb), 0.62);
+  --status-active-text: #f8fafc;
+  --status-active-rail: rgba(var(--accent-rgb), 0.82);
+  --status-inactive-bg: rgba(127, 29, 29, 0.30);
+  --status-inactive-border: rgba(248, 113, 113, 0.52);
+  --status-inactive-text: #fecaca;
 }
 
 * { box-sizing: border-box; }
@@ -3116,7 +3130,8 @@ body.special-context-focus .pta2027-frame-wrap {
   cursor: not-allowed;
   opacity: 0.35;
 }
-.planning-status {
+.planning-status,
+.status-badge {
   display: inline-flex;
   align-items: center;
   min-width: 52px;
@@ -3125,21 +3140,22 @@ body.special-context-focus .pta2027-frame-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
 }
-.planning-status.is-active {
-  color: var(--accent-strong);
-  background: var(--color-100);
-  border-color: var(--color-300);
+.planning-status.is-active,
+.status-badge.active {
+  color: var(--status-active-text);
+  background: var(--status-active-bg);
+  border-color: var(--status-active-border);
+  box-shadow: inset 2px 0 0 var(--status-active-rail);
 }
-.planning-status.is-inactive {
-  color: #7a3030;
-  background: #fff1f1;
-  border-color: #efb0b0;
-}
-.theme-dark .planning-status.is-inactive {
-  color: #fecaca;
-  background: rgba(127, 29, 29, 0.28);
-  border-color: rgba(248, 113, 113, 0.45);
+.planning-status.is-inactive,
+.status-badge.inactive {
+  color: var(--status-inactive-text);
+  background: var(--status-inactive-bg);
+  border-color: var(--status-inactive-border);
 }
 .planning-admin-page {
   container-type: inline-size;
