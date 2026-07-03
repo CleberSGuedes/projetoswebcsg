@@ -961,6 +961,7 @@ function renderConceptPanel(type){
  panel.classList.remove("hidden");
  $(`#concept-${type}`).classList.add("active");
  panel.innerHTML=type==="strategy"?strategicConceptMarkup():processConceptMarkup();
+ syncThemedSvgs(panel);
  panel.querySelector(".close-expansion").onclick=()=>showChainSubView("map");
  panel.querySelector("#export-process-diagram")?.addEventListener("click",exportProcessDiagramPng);
  panel.querySelector("#export-strategy-diagram")?.addEventListener("click",exportStrategyDiagramPng);
@@ -968,6 +969,15 @@ function renderConceptPanel(type){
  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function activeEapRows(){return (eapRows||[]).filter(r=>r.process!=="Histórico"&&!isPendingDelete(r))}
+function themedSvgSrc(src){return document.body.classList.contains("dark")?src.replace(/\.svg$/,".dark.svg"):src}
+function diagramImg(id,src,alt){return `<img id="${id}" class="integration-svg" src="${themedSvgSrc(src)}" data-light-src="${src}" data-dark-src="${src.replace(/\.svg$/,".dark.svg")}" alt="${alt}">`}
+function syncThemedSvgs(root=document){
+ const dark=document.body.classList.contains("dark");
+ root.querySelectorAll?.(".integration-svg[data-light-src][data-dark-src]").forEach(img=>{
+  const target=dark?img.dataset.darkSrc:img.dataset.lightSrc;
+  if(target&&img.getAttribute("src")!==target)img.setAttribute("src",target);
+ });
+}
 function renderEapMap(){
  const rows=activeEapRows();
  const macroCount=new Set(rows.map(r=>r.macro).filter(Boolean)).size;
@@ -977,7 +987,8 @@ function renderEapMap(){
  const panel=$("#eap-map-panel");
  if(!panel)return;
  const nodes=[1,2,3,4,5,6].map(n=>eapMapNode(n,textParam(`eap.flow.${n}.title`),textParam(`eap.flow.${n}.summary`),textParam(`eap.flow.${n}.detail`))).join("<i>→</i>");
- panel.innerHTML=`<div class="eap-map-card"><div class="concept-head compact-head"><div><span class="eyebrow">${textParam("eap.map.eyebrow")}</span><h3>${textParam("eap.map.title")}</h3><p>${textParam("eap.map.description")}</p></div></div><div class="eap-map-stats"><span><strong>${macroCount}</strong> macropolíticas ativas</span><span><strong>${policyCount}</strong> políticas ativas</span><span><strong>${componentCount}</strong> componentes ativos</span><span><strong>${pillarCount}</strong> pilares vinculados</span></div><div class="eap-map-flow" aria-label="Fluxo conceitual da EAP">${nodes}</div><div class="vector-diagram-card eap-integration-card"><div class="vector-head"><span>EAP, PTA, Entregas MT e processos</span><button id="export-eap-integration-diagram" class="secondary-button" type="button">Exportar diagrama PNG</button></div><button id="toggle-eap-diagram-size" class="diagram-float-toggle" type="button">↕ Ampliar mapa</button><img id="eap-integration-svg" class="integration-svg" src="assets/diagrama-eap-integracao-pta-entregas-processos.svg" alt="Diagrama conceitual da EAP integrada ao PTA, Sistema Entregas MT, processos, orçamento e execução"></div><div class="eap-map-branch"><section><strong>${textParam("eap.layer.orientation.title")}</strong><p>${textParam("eap.layer.orientation.text")}</p></section><section><strong>${textParam("eap.layer.governance.title")}</strong><p>${textParam("eap.layer.governance.text")}</p></section><section><strong>${textParam("eap.layer.integration.title")}</strong><p>${textParam("eap.layer.integration.text")}</p></section></div></div>`;
+ panel.innerHTML=`<div class="eap-map-card"><div class="concept-head compact-head"><div><span class="eyebrow">${textParam("eap.map.eyebrow")}</span><h3>${textParam("eap.map.title")}</h3><p>${textParam("eap.map.description")}</p></div></div><div class="eap-map-stats"><span><strong>${macroCount}</strong> macropolíticas ativas</span><span><strong>${policyCount}</strong> políticas ativas</span><span><strong>${componentCount}</strong> componentes ativos</span><span><strong>${pillarCount}</strong> pilares vinculados</span></div><div class="eap-map-flow" aria-label="Fluxo conceitual da EAP">${nodes}</div><div class="vector-diagram-card eap-integration-card"><div class="vector-head"><span>EAP, PTA, Entregas MT e processos</span><button id="export-eap-integration-diagram" class="secondary-button" type="button">Exportar diagrama PNG</button></div><button id="toggle-eap-diagram-size" class="diagram-float-toggle" type="button">↕ Ampliar mapa</button>${diagramImg("eap-integration-svg","assets/diagrama-eap-integracao-pta-entregas-processos.svg","Diagrama conceitual da EAP integrada ao PTA, Sistema Entregas MT, processos, orçamento e execução")}</div><div class="eap-map-branch"><section><strong>${textParam("eap.layer.orientation.title")}</strong><p>${textParam("eap.layer.orientation.text")}</p></section><section><strong>${textParam("eap.layer.governance.title")}</strong><p>${textParam("eap.layer.governance.text")}</p></section><section><strong>${textParam("eap.layer.integration.title")}</strong><p>${textParam("eap.layer.integration.text")}</p></section></div></div>`;
+ syncThemedSvgs(panel);
  panel.querySelectorAll(".eap-map-node").forEach(btn=>btn.onclick=()=>btn.classList.toggle("open"));
  panel.querySelector("#export-eap-integration-diagram")?.addEventListener("click",exportEapIntegrationDiagramPng);
  panel.querySelector("#toggle-eap-diagram-size")?.addEventListener("click",toggleEapDiagramSize);
@@ -986,7 +997,7 @@ function eapMapNode(num,title,summary,detail){return `<button class="eap-map-nod
 function eapLayer(kind,num,title,summary,detail){return `<button class="eap-layer-node ${kind}" type="button"><span>${num}</span><strong>${title}</strong><p>${summary}</p><em>${detail}</em></button>`}
 function eapConnector(text){return `<div class="eap-layer-connector">${text}</div>`}
 function strategicConceptMarkup(){
- return `<div class="concept-head"><div><span class="eyebrow">${textParam("strategy.view.eyebrow")}</span><h3>${textParam("strategy.view.title")}</h3><p>${textParam("strategy.view.description")}</p></div><div class="concept-actions"><button id="export-strategy-diagram" class="secondary-button" type="button">Exportar diagrama PNG</button><button class="close-expansion" type="button">×</button></div></div><div class="vector-diagram-card strategic-svg-card"><div class="vector-head"><span>${textParam("strategy.view.diagramTitle")}</span></div><img id="strategy-diagram-svg" class="integration-svg" src="assets/diagrama-cadeia-estrategica.svg" alt="Diagrama da cadeia estratégica de programação PTA"></div>`;
+ return `<div class="concept-head"><div><span class="eyebrow">${textParam("strategy.view.eyebrow")}</span><h3>${textParam("strategy.view.title")}</h3><p>${textParam("strategy.view.description")}</p></div><div class="concept-actions"><button id="export-strategy-diagram" class="secondary-button" type="button">Exportar diagrama PNG</button><button class="close-expansion" type="button">×</button></div></div><div class="vector-diagram-card strategic-svg-card"><div class="vector-head"><span>${textParam("strategy.view.diagramTitle")}</span></div>${diagramImg("strategy-diagram-svg","assets/diagrama-cadeia-estrategica.svg","Diagrama da cadeia estratégica de programação PTA")}</div>`;
 }
 function processConceptMarkup(){
  const info=processInfo();
@@ -1019,7 +1030,7 @@ function selectProcessDetail(key){
  panel.innerHTML=processDetailMarkup(key);
 }
 function processIntegrationSvg(){
- return `<img id="process-integration-svg" class="integration-svg" src="assets/diagrama-integracao-cadeias.svg" alt="Diagrama de integração entre cadeia estratégica de programação PTA e cadeia de valor organizacional/processual">`;
+ return diagramImg("process-integration-svg","assets/diagrama-integracao-cadeias.svg","Diagrama de integração entre cadeia estratégica de programação PTA e cadeia de valor organizacional/processual");
 }
 function exportProcessDiagramPng(){
  const diagram=$("#process-integration-svg");
@@ -1049,7 +1060,7 @@ function exportDiagramImage(diagram,filename){
   const canvas=document.createElement("canvas");
   canvas.width=(img.naturalWidth||1194)*2;canvas.height=(img.naturalHeight||405)*2;
   const ctx=canvas.getContext("2d");
-  ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=url.includes(".dark.svg")?"#10191b":"#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
   const a=document.createElement("a");
   a.download=filename;
@@ -1257,14 +1268,14 @@ function requestEmbeddedLayout(){if(!isEmbeddedMode)return;requestAnimationFrame
 function requestImmersiveMode(enabled){if(!isEmbeddedMode||!window.parent||window.parent===window)return;window.parent.postMessage({type:"pta2027-immersive",enabled:!!enabled},window.location.origin)}
 function requestContextFocus(enabled){document.body.classList.toggle("programming-focus",!!enabled);if(!isEmbeddedMode||!window.parent||window.parent===window)return;window.parent.postMessage({type:"pta2027-context-focus",enabled:!!enabled},window.location.origin);requestEmbeddedLayout()}
 function applySpoHostUser(payload={}){if(!isEmbeddedMode)return;const meta=$("#pta-standalone-clock");const avatar=document.querySelector(".avatar");if(meta&&payload.userMeta)meta.textContent=payload.userMeta;if(avatar&&payload.userInitials)avatar.textContent=payload.userInitials}
-function applySpoHostTheme(payload={}){if(!isEmbeddedMode)return;document.body.classList.toggle("dark",payload.theme==="dark");const root=document.documentElement;if(payload.accent)root.style.setProperty("--teal",payload.accent);if(payload.accentStrong)root.style.setProperty("--teal-dark",payload.accentStrong);if(payload.accentRgb)root.style.setProperty("--spo-accent-rgb",payload.accentRgb);if(payload.layoutPageGutter)root.style.setProperty("--spo-host-page-gutter",payload.layoutPageGutter);if(payload.layoutPanelGap)root.style.setProperty("--spo-host-panel-gap",payload.layoutPanelGap);if(payload.layoutSidebarCollapsed)root.style.setProperty("--spo-host-sidebar-collapsed",payload.layoutSidebarCollapsed);applySpoHostUser(payload);requestEmbeddedLayout()}
+function applySpoHostTheme(payload={}){if(!isEmbeddedMode)return;document.body.classList.toggle("dark",payload.theme==="dark");const root=document.documentElement;if(payload.accent)root.style.setProperty("--teal",payload.accent);if(payload.accentStrong)root.style.setProperty("--teal-dark",payload.accentStrong);if(payload.accentRgb)root.style.setProperty("--spo-accent-rgb",payload.accentRgb);if(payload.layoutPageGutter)root.style.setProperty("--spo-host-page-gutter",payload.layoutPageGutter);if(payload.layoutPanelGap)root.style.setProperty("--spo-host-panel-gap",payload.layoutPanelGap);if(payload.layoutSidebarCollapsed)root.style.setProperty("--spo-host-sidebar-collapsed",payload.layoutSidebarCollapsed);applySpoHostUser(payload);syncThemedSvgs(document);requestEmbeddedLayout()}
 window.addEventListener("message",event=>{if(event.origin!==window.location.origin)return;if(event.data?.type==="spo-theme")applySpoHostTheme(event.data)});
 if(isEmbeddedMode){refreshSpoScrollbars();window.addEventListener("load",requestEmbeddedLayout);window.addEventListener("resize",requestEmbeddedLayout);if("ResizeObserver"in window)new ResizeObserver(requestEmbeddedLayout).observe(document.body);document.addEventListener("click",()=>setTimeout(requestEmbeddedLayout,80),true);document.addEventListener("input",()=>setTimeout(requestEmbeddedLayout,80),true);document.addEventListener("change",()=>setTimeout(requestEmbeddedLayout,80),true)}
 $("#next-step").onclick=()=>{saveCurrentStepInputs();if(state.step<5){state.step++;renderWizard();if(isEmbeddedMode)window.parent?.postMessage({type:"pta2027-scroll-top"},window.location.origin);else scrollTo({top:0,behavior:"smooth"});requestEmbeddedLayout()}else toast("Programação validada. Gabarito pronto para geração.")};
 $("#previous-step").onclick=()=>{saveCurrentStepInputs();if(state.step>0){state.step--;renderWizard();requestEmbeddedLayout()}};
 $("#save-draft").onclick=()=>{saveCurrentStepInputs();localStorage.setItem("spo-pta-2027-draft",JSON.stringify(state));toast("Rascunho salvo neste navegador.");requestEmbeddedLayout()};
 $("#back-to-map").onclick=()=>{$("#wizard-view").classList.add("hidden");$("#value-view").classList.remove("hidden");requestImmersiveMode(true);requestContextFocus(false);requestEmbeddedLayout()};
-$("#theme-button").onclick=()=>{document.body.classList.toggle("dark");requestEmbeddedLayout()};
+$("#theme-button").onclick=()=>{document.body.classList.toggle("dark");syncThemedSvgs(document);requestEmbeddedLayout()};
 $("#resume-button").onclick=()=>{const raw=localStorage.getItem("spo-pta-2027-draft");if(!raw)return toast("Ainda não há rascunho salvo.");const saved=JSON.parse(raw);Object.assign(state,saved);state.subactions=normalizeSubactions(state.subactions);state.macro=macros.find(m=>m.code===saved.macro.code);$("#value-view").classList.add("hidden");$("#wizard-view").classList.remove("hidden");$("#journey-title").textContent=state.macro.name;requestImmersiveMode(true);requestContextFocus(true);renderWizard();requestEmbeddedLayout()};
 function updateStandaloneClock(){const clock=$("#pta-standalone-clock");if(clock)clock.textContent=new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"medium"}).format(new Date())}
 updateStandaloneClock();

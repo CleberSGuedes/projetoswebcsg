@@ -23,6 +23,12 @@ As barras usam o padrao global `scrollbar-visible`: ficam discretas em repouso e
 
 As cores ficam centralizadas em variaveis CSS e no mapa `ACCENT_COLORS` em `static/js/main.js`. Evite cores fixas em novos componentes; prefira `--accent`, `--accent-strong`, `--accent-rgb` e `--accent-soft-rgb`.
 
+## SVGs e diagramas tematicos
+
+Diagramas conceituais em SVG devem ter par claro/escuro no mesmo diretorio: `arquivo.svg` e `arquivo.dark.svg`. A troca deve ser feita por `data-light-src` e `data-dark-src`, usando a rotina de sincronizacao do tema apos renderizacao dinamica e apos mudanca de tema.
+
+No modo escuro, o SVG deve declarar seu proprio fundo, texto, bordas, preenchimentos e setas. Evite depender de filtros CSS globais para inverter cores, porque isso reduz contraste, prejudica exportacao para PNG e torna alguns blocos invisiveis.
+
 ## Regra de manutencao
 
 Antes de alterar responsividade, verifique se a mudanca afeta:
