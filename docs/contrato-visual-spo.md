@@ -57,11 +57,37 @@ Quando `data-visual-diagrams` muda, a aplicação emite o evento local `spo-comm
 
 Decisão LAB em 04/07/2026 para diagramas:
 
-- `automático`: acompanha o modo de aparência atual. No tema claro, usa preenchimento azul suave com bordas um pouco mais presentes para evitar cards lavados; no tema escuro, aproxima-se do modo escuro.
+- `automático`: acompanha o modo de aparência atual. No tema claro, usa preenchimento azul suave com bordas um pouco mais presentes para evitar cards lavados; no tema escuro, aproxima-se do modo escuro. Se o sistema operacional/navegador indicar `prefers-contrast: more`, o modo automático resolve para a variante contextual de alto contraste (`highLight` ou `highDark`) sem alterar a preferência salva.
 - `claro`: força cards claros e deve manter bordas legíveis no tema claro. Quando usado sobre tema escuro, cada card precisa carregar contraste próprio, sem depender do fundo da página.
 - `escuro`: força cards escuros e deve manter texto, ícones e setas legíveis mesmo quando aplicado sobre tema claro.
 - `alto contraste`: é um modo de legibilidade contextual, não uma paleta fixa decorativa. A implementação deve resolver a variante real pelo contexto (`highLight` ou `highDark`) em `data-visual-diagram-theme`, preservando texto, bordas, ícones e setas fortes sem quebrar o tema geral.
 - fluxos conceituais, como o `Mapa Conceitual`, não devem receber moldura externa em `.governanca-flow`. O contrato visual atua nos cards e nos elementos funcionais do diagrama. Painéis de gráfico, como `.teto-chart`, podem manter fundo e borda próprios quando isso ajuda a leitura.
+
+Compatibilidade com cores forçadas:
+
+- se o sistema operacional/navegador indicar `forced-colors: active`, a aplicação deve respeitar as cores semânticas do sistema (`Canvas`, `CanvasText`, `Highlight`, `HighlightText` e `LinkText`);
+- nesse cenário, o modo resolvido dos diagramas passa para `system` em `data-visual-diagram-theme`, sem alterar a preferência salva em `localStorage`;
+- a camada de cores forçadas tem prioridade visual sobre `claro`, `escuro`, `automático` e `alto contraste`, porque o usuário está pedindo ao sistema operacional para controlar a legibilidade;
+- sombras, fundos decorativos e gradientes devem ser removidos ou neutralizados, mantendo bordas, foco, menus, prévia, fluxos conceituais e gráficos legíveis;
+- gráficos Plotly devem receber cores resolvidas a partir das cores reais do sistema no navegador, para evitar paletas fixas que possam brigar com temas de alto contraste do Windows.
+
+Tokens semânticos de diagramas:
+
+- diagramas devem usar nomes funcionais de cor, não apenas cores decorativas;
+- tokens atuais: `connector`, `focus`, `selection`, `warning` e `critical`, além de texto, fundo, borda, eixo e grade;
+- `connector` deve orientar setas, conectores e linhas de vínculo;
+- `focus` e `selection` devem marcar navegação, foco de teclado, item selecionado ou estado ativo;
+- `warning` e `critical` devem ser reservados para atenção operacional, limite, risco ou linha de referência crítica;
+- em `forced-colors: active`, esses tokens devem ser mapeados para as cores semânticas do sistema;
+- a verificação local `window.spoGetDiagramSemanticTokens()` expõe o modo resolvido e os tokens ativos para teste no navegador.
+
+Validação automática local:
+
+- os temas de diagramas devem ser validados por `window.spoValidateDiagramContrast()`;
+- a validação calcula contraste para texto, texto secundário, eixos e séries críticas dos gráficos;
+- em LAB/DEV, pares abaixo do contrato visual aparecem como aviso no console, sem bloquear a interface do usuário;
+- mínimos iniciais: texto principal e secundário `>= 4.5:1`; eixos, linhas e séries críticas `>= 3:1`.
+- linhas de grade dos gráficos são referência auxiliar e devem permanecer discretas; elas não entram no mínimo de contraste crítico quando não carregam informação semântica própria. Se a necessidade permanecer, uma próxima preferência pode controlar grade `discreta`/`oculta`, sem misturar isso com o modo de alto contraste.
 
 Regras de aplicação:
 
@@ -69,6 +95,7 @@ Regras de aplicação:
 - as mudanças devem ser visíveis imediatamente na tela, especialmente na prévia local;
 - as preferências comuns podem alterar conforto visual, leitura e componentes, mas não podem redefinir regras protegidas do contrato visual;
 - os modos de diagramas devem ter efeito visual real e testável nos fluxos conceituais e nos gráficos, sem criar molduras decorativas que conectem blocos independentes;
+- preferências explícitas de diagramas (`claro`, `escuro` e `alto contraste`) têm prioridade sobre `prefers-contrast`; a preferência do sistema só ajusta o modo `automático`;
 - qualquer nova preferência deve ter valor padrão, efeito visual verificável, resumo textual e registro neste documento;
 - enquanto estiver no laboratório, a persistência permanece restrita a JavaScript/localStorage.
 

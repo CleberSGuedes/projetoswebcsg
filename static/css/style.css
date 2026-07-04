@@ -2825,6 +2825,11 @@ body[data-visual-diagrams] {
   --spo-diagram-text: var(--text);
   --spo-diagram-muted: var(--muted);
   --spo-diagram-accent: var(--accent);
+  --spo-diagram-connector: var(--accent);
+  --spo-diagram-focus: var(--accent-strong);
+  --spo-diagram-selection: var(--accent);
+  --spo-diagram-warning: #b45309;
+  --spo-diagram-critical: #b91c1c;
 }
 
 body.theme-dark[data-visual-diagrams="auto"],
@@ -2835,6 +2840,11 @@ body[data-visual-diagrams="dark"] {
   --spo-diagram-text: #f8fafc;
   --spo-diagram-muted: #cbd5e1;
   --spo-diagram-accent: #93c5fd;
+  --spo-diagram-connector: #93c5fd;
+  --spo-diagram-focus: #bfdbfe;
+  --spo-diagram-selection: #7ab7ff;
+  --spo-diagram-warning: #facc15;
+  --spo-diagram-critical: #ff9f8f;
 }
 
 body[data-visual-diagrams="light"] {
@@ -2844,6 +2854,11 @@ body[data-visual-diagrams="light"] {
   --spo-diagram-text: #24323d;
   --spo-diagram-muted: #5f6f7e;
   --spo-diagram-accent: #2563eb;
+  --spo-diagram-connector: #2563eb;
+  --spo-diagram-focus: #1d4ed8;
+  --spo-diagram-selection: #0074d9;
+  --spo-diagram-warning: #92400e;
+  --spo-diagram-critical: #b91c1c;
 }
 
 body.theme-dark[data-visual-diagrams="light"] {
@@ -2851,6 +2866,11 @@ body.theme-dark[data-visual-diagrams="light"] {
   --spo-diagram-text: #0f172a;
   --spo-diagram-muted: #334155;
   --spo-diagram-accent: #60a5fa;
+  --spo-diagram-connector: #60a5fa;
+  --spo-diagram-focus: #93c5fd;
+  --spo-diagram-selection: #60a5fa;
+  --spo-diagram-warning: #facc15;
+  --spo-diagram-critical: #fb7185;
 }
 
 body[data-visual-diagrams="high"] {
@@ -2860,6 +2880,11 @@ body[data-visual-diagrams="high"] {
   --spo-diagram-text: #ffffff;
   --spo-diagram-muted: #ffffff;
   --spo-diagram-accent: #ffea00;
+  --spo-diagram-connector: #ffffff;
+  --spo-diagram-focus: #ffea00;
+  --spo-diagram-selection: #00e5ff;
+  --spo-diagram-warning: #ffea00;
+  --spo-diagram-critical: #ff4d6d;
 }
 
 body[data-visual-diagram-theme="highLight"] {
@@ -2869,6 +2894,11 @@ body[data-visual-diagram-theme="highLight"] {
   --spo-diagram-text: #0f172a;
   --spo-diagram-muted: #334155;
   --spo-diagram-accent: #1d4ed8;
+  --spo-diagram-connector: #1d4ed8;
+  --spo-diagram-focus: #1d4ed8;
+  --spo-diagram-selection: #1d4ed8;
+  --spo-diagram-warning: #92400e;
+  --spo-diagram-critical: #b91c1c;
 }
 
 body[data-visual-diagram-theme="highDark"] {
@@ -2878,6 +2908,11 @@ body[data-visual-diagram-theme="highDark"] {
   --spo-diagram-text: #f8fafc;
   --spo-diagram-muted: #e2e8f0;
   --spo-diagram-accent: #93c5fd;
+  --spo-diagram-connector: #93c5fd;
+  --spo-diagram-focus: #facc15;
+  --spo-diagram-selection: #60a5fa;
+  --spo-diagram-warning: #facc15;
+  --spo-diagram-critical: #fb7185;
 }
 
 body[data-visual-diagrams] .teto-chart {
@@ -2896,9 +2931,37 @@ body[data-visual-diagrams] .flow-node small {
   color: var(--spo-diagram-muted);
 }
 
-body[data-visual-diagrams] .flow-arrow,
+body[data-visual-diagrams] .flow-arrow {
+  color: var(--spo-diagram-connector);
+}
+
+body[data-visual-diagrams] .flow-node i,
 body[data-visual-diagrams] .governanca-icon {
-  color: var(--spo-diagram-accent);
+  color: var(--spo-diagram-selection);
+}
+
+body[data-visual-diagrams] .flow-node:focus-within,
+body[data-visual-diagrams] .flow-node.is-selected,
+body[data-visual-diagrams] .flow-node[data-diagram-state="selected"] {
+  border-color: var(--spo-diagram-selection);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--spo-diagram-selection) 20%, transparent);
+}
+
+body[data-visual-diagrams] .flow-node.is-focused,
+body[data-visual-diagrams] .flow-node[data-diagram-state="focus"] {
+  border-color: var(--spo-diagram-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--spo-diagram-focus) 24%, transparent);
+}
+
+body[data-visual-diagrams] .flow-node.is-warning,
+body[data-visual-diagrams] .flow-node[data-diagram-state="warning"] {
+  border-color: var(--spo-diagram-warning);
+}
+
+body[data-visual-diagrams] .flow-node.is-critical,
+body[data-visual-diagrams] .flow-node[data-diagram-state="critical"] {
+  border-color: var(--spo-diagram-critical);
+  box-shadow: inset 3px 0 0 var(--spo-diagram-critical);
 }
 
 body[data-visual-diagrams="high"] .flow-node,
@@ -4490,6 +4553,201 @@ body[data-visual-diagram-theme="highDark"] .personalizar-preview {
 
 body[data-visual-diagrams="high"] .preview-line {
   box-shadow: 0 0 0 2px var(--spo-preview-diagram-border);
+}
+
+@media (forced-colors: active) {
+  :root,
+  .theme-dark {
+    --bg: Canvas;
+    --surface: Canvas;
+    --border: CanvasText;
+    --text: CanvasText;
+    --muted: CanvasText;
+    --card: Canvas;
+    --accent: Highlight;
+    --accent-strong: Highlight;
+    --lab-accent: Highlight;
+    --shadow: none;
+    --body-bg: Canvas;
+    --sidebar-bg: Canvas;
+    --topbar-bg: Canvas;
+    --footer-bg: Canvas;
+    --status-active-bg: Highlight;
+    --status-active-border: Highlight;
+    --status-active-text: HighlightText;
+    --status-active-rail: Highlight;
+    --spo-diagram-connector: LinkText;
+    --spo-diagram-focus: Highlight;
+    --spo-diagram-selection: Highlight;
+    --spo-diagram-warning: CanvasText;
+    --spo-diagram-critical: CanvasText;
+  }
+
+  body {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  body[data-visual-diagrams] {
+    --spo-diagram-bg: Canvas;
+    --spo-diagram-node-bg: Canvas;
+    --spo-diagram-border: CanvasText;
+    --spo-diagram-text: CanvasText;
+    --spo-diagram-muted: CanvasText;
+    --spo-diagram-accent: LinkText;
+    --spo-diagram-connector: LinkText;
+    --spo-diagram-focus: Highlight;
+    --spo-diagram-selection: Highlight;
+    --spo-diagram-warning: CanvasText;
+    --spo-diagram-critical: CanvasText;
+  }
+
+  body,
+  .topbar,
+  .sidebar,
+  .card,
+  .noticia-box,
+  .form-section,
+  .table-responsive,
+  .teto-panel,
+  .teto-chart,
+  .governanca-card,
+  .personalizar-card,
+  .visual-pref-group,
+  .visual-pref-toggle,
+  .visual-pref-option,
+  .preference-row,
+  .contract-preview,
+  .contract-rule-card,
+  .contract-editor,
+  .contract-package-field textarea,
+  .contract-audit-item,
+  .preview-surface,
+  .preview-sidebar,
+  .preview-content {
+    background: Canvas;
+    background-image: none;
+    border-color: CanvasText;
+    box-shadow: none;
+    color: CanvasText;
+    text-shadow: none;
+  }
+
+  .muted,
+  .visual-pref-toggle small,
+  .visual-pref-option small,
+  .governanca-card p,
+  .flow-node small,
+  .contract-preview-meta em,
+  .contract-rule-row dd,
+  .contract-editor-status,
+  .contract-audit-state {
+    color: CanvasText;
+  }
+
+  a,
+  .eyebrow,
+  .subtitle,
+  .menu-item i,
+  .visual-pref-toggle > i:first-child,
+  .visual-pref-option i,
+  .governanca-icon,
+  .flow-arrow,
+  .contract-rule-badge-preview,
+  .contract-rule-badge-active {
+    color: LinkText;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus,
+  select:focus,
+  textarea:focus,
+  .menu-item:focus-visible,
+  .visual-pref-toggle:focus-visible,
+  .visual-pref-option:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .menu-item.active,
+  .submenu .menu-item.active,
+  .preference-row.active,
+  .visual-pref-option.active,
+  .visual-pref-group.is-open .visual-pref-toggle,
+  .contract-view-tab.active,
+  .contract-preset.active,
+  .teto-view-btn.active {
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+
+  .menu-item.active i,
+  .submenu .menu-item.active i,
+  .preference-row.active i,
+  .visual-pref-option.active i,
+  .visual-pref-group.is-open .visual-pref-toggle i,
+  .contract-view-tab.active i,
+  .teto-view-btn.active i {
+    color: HighlightText;
+  }
+
+  body[data-visual-diagrams] .teto-chart,
+  body[data-visual-diagrams] .flow-node,
+  body[data-visual-diagram-theme="system"] .teto-chart,
+  body[data-visual-diagram-theme="system"] .flow-node {
+    background: Canvas;
+    border: 2px solid CanvasText;
+    color: CanvasText;
+  }
+
+  body[data-visual-diagram-theme="system"] .flow-node small {
+    color: CanvasText;
+  }
+
+  body[data-visual-diagram-theme="system"] .flow-arrow,
+  body[data-visual-diagram-theme="system"] .flow-node i,
+  body[data-visual-diagram-theme="system"] .governanca-icon {
+    color: LinkText;
+    opacity: 1;
+  }
+
+  .personalizar-preview {
+    --spo-preview-border: CanvasText;
+    --spo-preview-shadow: none;
+    --spo-preview-diagram-bg: Canvas;
+    --spo-preview-diagram-border: CanvasText;
+    --spo-preview-diagram-line: LinkText;
+    --spo-preview-diagram-node: CanvasText;
+    --spo-preview-diagram-node-active: Highlight;
+  }
+
+  .preview-sidebar span,
+  .preview-line,
+  .preview-actions button,
+  .personalizar-actions button {
+    background: Canvas;
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+
+  .preview-title,
+  .preview-actions button:first-child {
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+
+  .preview-line {
+    background:
+      linear-gradient(90deg, transparent 0 17%, var(--spo-preview-diagram-line) 17% 19%, transparent 19% 42%, var(--spo-preview-diagram-line) 42% 44%, transparent 44% 68%, var(--spo-preview-diagram-line) 68% 70%, transparent 70%),
+      var(--spo-preview-diagram-bg);
+  }
+
+  .preview-line::after {
+    border-color: CanvasText;
+  }
 }
 
 .personalizar-actions {

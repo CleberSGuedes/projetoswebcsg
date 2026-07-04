@@ -12,6 +12,8 @@
   const themeAutoBtn = document.getElementById("theme-auto");
   const themeDarkBtn = document.getElementById("theme-dark");
   const systemThemeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const systemContrastQuery = window.matchMedia ? window.matchMedia("(prefers-contrast: more)") : null;
+  const systemForcedColorsQuery = window.matchMedia ? window.matchMedia("(forced-colors: active)") : null;
   const SPO_RESPONSIVE_CONTRACT = Object.freeze({
     mobileMaxViewport: 420,
     splitPressureMaxViewport: 480,
@@ -68,8 +70,8 @@
     light: {
       text: "#24323d",
       muted: "#64748b",
-      grid: "rgba(100, 116, 139, 0.28)",
-      axis: "rgba(71, 85, 105, 0.58)",
+      grid: "rgba(100, 116, 139, 0.08)",
+      axis: "rgba(71, 85, 105, 0.68)",
       panel: "rgba(255,255,255,0)",
       plot: "rgba(255,255,255,0)",
       border: "rgba(71, 85, 105, 0.28)",
@@ -78,12 +80,17 @@
       positive: "#2E7D5B",
       negative: "#D43F3A",
       cumulative: "#EF553B",
+      connector: "#2563eb",
+      focus: "#1d4ed8",
+      selection: "#0074D9",
+      warning: "#b45309",
+      critical: "#c23b3b",
       palette: ["#345feb", "#048075", "#f8cb2e", "#f58220", "#ea1d2c", "#6a1b9a", "#008FFB", "#9C27B0"],
     },
     dark: {
       text: "#f8fafc",
       muted: "#cbd5e1",
-      grid: "rgba(226, 232, 240, 0.22)",
+      grid: "rgba(226, 232, 240, 0.10)",
       axis: "rgba(226, 232, 240, 0.48)",
       panel: "rgba(15,23,42,0.12)",
       plot: "rgba(15,23,42,0.20)",
@@ -93,12 +100,17 @@
       positive: "#8bd8b0",
       negative: "#ff8b8b",
       cumulative: "#ffb26b",
+      connector: "#93c5fd",
+      focus: "#bfdbfe",
+      selection: "#7ab7ff",
+      warning: "#facc15",
+      critical: "#ff9f8f",
       palette: ["#7ab7ff", "#5fd0c2", "#ffe066", "#ffad66", "#ff7b86", "#d8a2ff", "#73e2a7", "#f8a5c2"],
     },
     high: {
       text: "#ffffff",
       muted: "#ffffff",
-      grid: "rgba(255,255,255,0.52)",
+      grid: "rgba(255,255,255,0.22)",
       axis: "rgba(255,255,255,0.88)",
       panel: "#050816",
       plot: "#050816",
@@ -108,12 +120,17 @@
       positive: "#00ff85",
       negative: "#ff4d6d",
       cumulative: "#ffea00",
+      connector: "#ffffff",
+      focus: "#ffea00",
+      selection: "#00e5ff",
+      warning: "#ffea00",
+      critical: "#ff4d6d",
       palette: ["#00e5ff", "#ffea00", "#00ff85", "#ff4d6d", "#b967ff", "#ff9f1c", "#ffffff", "#7df9ff"],
     },
     highLight: {
       text: "#0f172a",
       muted: "#334155",
-      grid: "rgba(51,65,85,0.20)",
+      grid: "rgba(51,65,85,0.08)",
       axis: "rgba(15,23,42,0.78)",
       panel: "#ffffff",
       plot: "#ffffff",
@@ -123,12 +140,17 @@
       positive: "#047857",
       negative: "#b91c1c",
       cumulative: "#b45309",
+      connector: "#1d4ed8",
+      focus: "#1d4ed8",
+      selection: "#1d4ed8",
+      warning: "#92400e",
+      critical: "#b91c1c",
       palette: ["#1d4ed8", "#047857", "#b91c1c", "#b45309", "#6d28d9", "#0f766e", "#334155", "#0369a1"],
     },
     highDark: {
       text: "#f8fafc",
       muted: "#e2e8f0",
-      grid: "rgba(226,232,240,0.28)",
+      grid: "rgba(226,232,240,0.12)",
       axis: "rgba(248,250,252,0.82)",
       panel: "#111827",
       plot: "#0f172a",
@@ -138,8 +160,36 @@
       positive: "#34d399",
       negative: "#fb7185",
       cumulative: "#facc15",
+      connector: "#93c5fd",
+      focus: "#facc15",
+      selection: "#60a5fa",
+      warning: "#facc15",
+      critical: "#fb7185",
       palette: ["#93c5fd", "#34d399", "#fb7185", "#facc15", "#c4b5fd", "#67e8f9", "#e2e8f0", "#f9a8d4"],
     },
+  });
+  const COMMON_DIAGRAM_CONTRAST_CHECKS = Object.freeze([
+    { name: "texto no painel", foreground: "text", background: "panel", minimum: 4.5 },
+    { name: "texto no gráfico", foreground: "text", background: "plot", minimum: 4.5 },
+    { name: "texto secundário no painel", foreground: "muted", background: "panel", minimum: 4.5 },
+    { name: "eixo no gráfico", foreground: "axis", background: "plot", minimum: 3 },
+    { name: "linha principal no gráfico", foreground: "line", background: "plot", minimum: 3 },
+    { name: "total no gráfico", foreground: "total", background: "plot", minimum: 3 },
+    { name: "positivo no gráfico", foreground: "positive", background: "plot", minimum: 3 },
+    { name: "negativo no gráfico", foreground: "negative", background: "plot", minimum: 3 },
+    { name: "acumulado no gráfico", foreground: "cumulative", background: "plot", minimum: 3 },
+    { name: "conector do diagrama", foreground: "connector", background: "panel", minimum: 3 },
+    { name: "foco do diagrama", foreground: "focus", background: "panel", minimum: 3 },
+    { name: "seleção do diagrama", foreground: "selection", background: "panel", minimum: 3 },
+    { name: "alerta do diagrama", foreground: "warning", background: "plot", minimum: 3 },
+    { name: "estado crítico do diagrama", foreground: "critical", background: "plot", minimum: 3 },
+  ]);
+  const COMMON_DIAGRAM_CONTRAST_BACKDROPS = Object.freeze({
+    light: "#ffffff",
+    dark: "#111827",
+    high: "#050816",
+    highLight: "#ffffff",
+    highDark: "#0f172a",
   });
   const PROTECTED_CONTRACT_PRESETS = Object.freeze({
     default: {
@@ -378,11 +428,190 @@
     return theme === "dark" ? "dark" : "light";
   }
 
+  function getSystemPrefersMoreContrast() {
+    return Boolean(systemContrastQuery && systemContrastQuery.matches);
+  }
+
+  function getSystemForcedColorsActive() {
+    return Boolean(systemForcedColorsQuery && systemForcedColorsQuery.matches);
+  }
+
+  function resolveCssSystemColor(name, fallback) {
+    const host = document.body || document.documentElement;
+    if (!host) return fallback;
+    const probe = document.createElement("span");
+    probe.style.color = name;
+    probe.style.backgroundColor = name;
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.width = "1px";
+    probe.style.height = "1px";
+    probe.style.pointerEvents = "none";
+    host.appendChild(probe);
+    const computed = window.getComputedStyle(probe);
+    const resolved = computed.color || computed.backgroundColor || "";
+    probe.remove();
+    return /^rgba?\(/i.test(resolved) ? resolved : fallback;
+  }
+
+  function withColorAlpha(color, alpha) {
+    const match = String(color || "").match(/^rgba?\(([^)]+)\)$/i);
+    if (!match) return color;
+    const channels = match[1]
+      .replace(/\//g, " ")
+      .split(/[,\s]+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => clampColorChannel(part));
+    if (channels.length < 3) return color;
+    return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${Math.max(0, Math.min(1, alpha))})`;
+  }
+
+  function getForcedColorsDiagramTheme() {
+    const canvas = resolveCssSystemColor("Canvas", "#000000");
+    const canvasText = resolveCssSystemColor("CanvasText", "#ffffff");
+    const highlight = resolveCssSystemColor("Highlight", "#ffff00");
+    const highlightText = resolveCssSystemColor("HighlightText", "#000000");
+    const linkText = resolveCssSystemColor("LinkText", highlight);
+    const grayText = resolveCssSystemColor("GrayText", canvasText);
+    const buttonText = resolveCssSystemColor("ButtonText", canvasText);
+    return {
+      text: canvasText,
+      muted: canvasText,
+      grid: withColorAlpha(canvasText, 0.16),
+      axis: canvasText,
+      panel: canvas,
+      plot: canvas,
+      border: canvasText,
+      line: highlight,
+      total: highlight,
+      positive: linkText,
+      negative: buttonText,
+      cumulative: highlight,
+      connector: linkText,
+      focus: highlight,
+      selection: highlight,
+      warning: canvasText,
+      critical: canvasText,
+      palette: [highlight, linkText, canvasText, grayText, buttonText, highlightText, highlight, linkText],
+    };
+  }
+
+  function getDiagramSemanticTokens(theme = getCommonDiagramTheme()) {
+    return {
+      connector: theme.connector || theme.axis || theme.text,
+      focus: theme.focus || theme.total || theme.text,
+      selection: theme.selection || theme.total || theme.text,
+      warning: theme.warning || theme.cumulative || theme.text,
+      critical: theme.critical || theme.line || theme.text,
+    };
+  }
+
+  function getDiagramToken(theme, key) {
+    return theme[key] || getDiagramSemanticTokens(theme)[key] || theme.text || "#000000";
+  }
+
   function getStoredAccent() {
     const saved = localStorage.getItem("app-accent") || "blue";
     if (saved === "spo") return "green";
     return ACCENT_COLORS[saved] ? saved : "blue";
   }
+
+  function clampColorChannel(value) {
+    return Math.max(0, Math.min(255, Number(value) || 0));
+  }
+
+  function parseOpaqueDiagramColor(value) {
+    const text = String(value || "").trim();
+    const hex = text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const raw = hex[1].length === 3
+        ? hex[1].split("").map((part) => part + part).join("")
+        : hex[1];
+      return {
+        r: parseInt(raw.slice(0, 2), 16),
+        g: parseInt(raw.slice(2, 4), 16),
+        b: parseInt(raw.slice(4, 6), 16),
+      };
+    }
+    const rgb = text.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim());
+      return {
+        r: clampColorChannel(parts[0]),
+        g: clampColorChannel(parts[1]),
+        b: clampColorChannel(parts[2]),
+      };
+    }
+    return null;
+  }
+
+  function parseDiagramColor(value, backdrop = "#ffffff") {
+    const text = String(value || "").trim();
+    const fallback = parseOpaqueDiagramColor(backdrop) || { r: 255, g: 255, b: 255 };
+    const opaque = parseOpaqueDiagramColor(text);
+    const rgb = text.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim());
+      const alpha = parts.length > 3 ? Math.max(0, Math.min(1, Number(parts[3]))) : 1;
+      const source = opaque || fallback;
+      return {
+        r: Math.round(source.r * alpha + fallback.r * (1 - alpha)),
+        g: Math.round(source.g * alpha + fallback.g * (1 - alpha)),
+        b: Math.round(source.b * alpha + fallback.b * (1 - alpha)),
+      };
+    }
+    return opaque || fallback;
+  }
+
+  function getRelativeLuminance(color) {
+    const toLinear = (channel) => {
+      const value = channel / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * toLinear(color.r) + 0.7152 * toLinear(color.g) + 0.0722 * toLinear(color.b);
+  }
+
+  function getContrastRatio(foreground, background, backdrop) {
+    const fg = parseDiagramColor(foreground, backdrop);
+    const bg = parseDiagramColor(background, backdrop);
+    const lighter = Math.max(getRelativeLuminance(fg), getRelativeLuminance(bg));
+    const darker = Math.min(getRelativeLuminance(fg), getRelativeLuminance(bg));
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function validateCommonDiagramContrast() {
+    return Object.entries(COMMON_DIAGRAM_THEMES).flatMap(([themeKey, theme]) => {
+      const backdrop = COMMON_DIAGRAM_CONTRAST_BACKDROPS[themeKey] || "#ffffff";
+      return COMMON_DIAGRAM_CONTRAST_CHECKS.map((check) => {
+        const ratio = getContrastRatio(getDiagramToken(theme, check.foreground), getDiagramToken(theme, check.background), backdrop);
+        return {
+          theme: themeKey,
+          name: check.name,
+          foreground: check.foreground,
+          background: check.background,
+          ratio: Number(ratio.toFixed(2)),
+          minimum: check.minimum,
+          passed: ratio >= check.minimum,
+        };
+      });
+    });
+  }
+
+  function reportCommonDiagramContrast() {
+    const results = validateCommonDiagramContrast();
+    const failures = results.filter((item) => !item.passed);
+    if (failures.length && document.body.matches(".spo-env-lab, .spo-env-dev")) {
+      console.warn("SPO: pares de contraste de diagramas abaixo do contrato visual.", failures);
+    }
+    return { results, failures };
+  }
+
+  window.spoValidateDiagramContrast = reportCommonDiagramContrast;
+  window.spoGetDiagramSemanticTokens = () => ({
+    mode: getResolvedCommonDiagramMode(),
+    tokens: getDiagramSemanticTokens(),
+  });
 
   function applyAccentColor(accent, persist = true) {
     const key = ACCENT_COLORS[accent] ? accent : "blue";
@@ -430,6 +659,7 @@
     if (canManageProtectedContract()) {
       applyProtectedContractPreset(getStoredProtectedContractPreset(), false);
     }
+    reportCommonDiagramContrast();
     if (themeLightBtn) {
       themeLightBtn.addEventListener("click", () => applyTheme("light"));
     }
@@ -449,6 +679,29 @@
         systemThemeQuery.addEventListener("change", refreshAutoTheme);
       } else if (typeof systemThemeQuery.addListener === "function") {
         systemThemeQuery.addListener(refreshAutoTheme);
+      }
+    }
+    if (systemContrastQuery) {
+      const refreshAutoDiagramContrast = () => {
+        const preferences = readCommonVisualPreferences();
+        if (preferences.diagrams === "auto") {
+          applyCommonVisualPreferences(preferences, false);
+        }
+      };
+      if (typeof systemContrastQuery.addEventListener === "function") {
+        systemContrastQuery.addEventListener("change", refreshAutoDiagramContrast);
+      } else if (typeof systemContrastQuery.addListener === "function") {
+        systemContrastQuery.addListener(refreshAutoDiagramContrast);
+      }
+    }
+    if (systemForcedColorsQuery) {
+      const refreshForcedColors = () => {
+        applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+      };
+      if (typeof systemForcedColorsQuery.addEventListener === "function") {
+        systemForcedColorsQuery.addEventListener("change", refreshForcedColors);
+      } else if (typeof systemForcedColorsQuery.addListener === "function") {
+        systemForcedColorsQuery.addListener(refreshForcedColors);
       }
     }
   }
@@ -497,17 +750,22 @@
 
   function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {
     const current = normalizeCommonVisualPreferences(preferences);
+    const isDark = document.body.classList.contains("theme-dark");
+    if (getSystemForcedColorsActive()) return "system";
     if (current.diagrams === "auto") {
-      return document.body.classList.contains("theme-dark") ? "dark" : "light";
+      if (getSystemPrefersMoreContrast()) return isDark ? "highDark" : "highLight";
+      return isDark ? "dark" : "light";
     }
     if (current.diagrams === "high") {
-      return document.body.classList.contains("theme-dark") ? "highDark" : "highLight";
+      return isDark ? "highDark" : "highLight";
     }
     return COMMON_DIAGRAM_THEMES[current.diagrams] ? current.diagrams : "light";
   }
 
   function getCommonDiagramTheme(preferences = readCommonVisualPreferences()) {
-    return COMMON_DIAGRAM_THEMES[getResolvedCommonDiagramMode(preferences)] || COMMON_DIAGRAM_THEMES.light;
+    const resolvedMode = getResolvedCommonDiagramMode(preferences);
+    if (resolvedMode === "system") return getForcedColorsDiagramTheme();
+    return COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
   }
 
   function emitCommonVisualChange(preferences) {
@@ -523,6 +781,7 @@
     document.body.dataset.visualCards = current.cards;
     document.body.dataset.visualDiagrams = current.diagrams;
     document.body.dataset.visualDiagramTheme = getResolvedCommonDiagramMode(current);
+    document.body.dataset.forcedColors = getSystemForcedColorsActive() ? "active" : "none";
     if (persist) writeCommonVisualPreferences(current);
     emitCommonVisualChange(current);
     return current;
@@ -15989,8 +16248,10 @@
     const getTetoChartColors = () => {
       const theme = getCommonDiagramTheme();
       const palette = theme.palette || oldChartPalette;
+      const semantic = getDiagramSemanticTokens(theme);
       return {
         theme,
+        semantic,
         palette,
         groupColors: {
           "1": palette[0] || groupColors["1"],
@@ -16235,6 +16496,7 @@
           labels: byGroup.map((row) => row.label),
           values: byGroup.map((row) => row.valor),
           customdata: byGroup.map((row) => row.label),
+          hovertext: byGroup.map((row) => money.format(row.valor)),
           textinfo: "percent",
           textposition: "outside",
           marker: {
@@ -16243,7 +16505,7 @@
             ),
             line: { color: diagramTheme.border, width: 1 },
           },
-          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<br>%{percent}<extra></extra>",
+          hovertemplate: "<b>%{label}</b><br>%{hovertext}<br>%{percent}<extra></extra>",
         }], plotLayout({ margin: { t: 8, r: 20, b: 80, l: 20 }, legend: { orientation: "h", y: -0.18 } }), plotConfig);
         bindPlotFilter("teto-chart-grupo", "grupo", (point) => point?.customdata);
       }
@@ -16259,16 +16521,16 @@
           labels: byAdj.map((row) => row.label),
           parents: byAdj.map(() => ""),
           values: byAdj.map((row) => row.valor),
-          customdata: byAdj.map((row) => row.label),
+          customdata: byAdj.map((row) => [row.label, money.format(row.valor)]),
           marker: {
             colors: byAdj.map((row, index) =>
               chartColors.adjColors[codeOf(row.label)] || chartColors.palette[index % chartColors.palette.length]
             ),
           },
           textinfo: "label",
-          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<extra></extra>",
+          hovertemplate: "<b>%{label}</b><br>%{customdata[1]}<extra></extra>",
         }], plotLayout({ margin: { t: 8, r: 8, b: 8, l: 8 } }), plotConfig);
-        bindPlotFilter("teto-chart-adj", "adj", (point) => point?.customdata);
+        bindPlotFilter("teto-chart-adj", "adj", (point) => point?.customdata?.[0]);
       }
 
       const byMacro = groupSum(data.politicas, "macropolitica");
@@ -16297,7 +16559,7 @@
           yaxis: { title: "Teto (R$)", rangemode: "tozero" },
           yaxis2: { title: "Acumulado", overlaying: "y", side: "right", range: [0, 1], tickformat: ".0%" },
           legend: { orientation: "h", y: -0.38 },
-          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: diagramTheme.line, dash: "dash" } }],
+          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: chartColors.semantic.critical, dash: "dash" } }],
         }), plotConfig);
         bindPlotFilter("teto-chart-macro", "macropolitica", (point) => point?.customdata || point?.x);
       }
@@ -16322,7 +16584,7 @@
           increasing: { marker: { color: diagramTheme.positive } },
           decreasing: { marker: { color: diagramTheme.negative } },
           totals: { marker: { color: diagramTheme.total } },
-          connector: { line: { color: diagramTheme.axis, width: 1 } },
+          connector: { line: { color: chartColors.semantic.connector, width: 1 } },
           hovertemplate: "<b>%{x}</b><br>%{customdata[1]}<extra></extra>",
         }], plotLayout({
           margin: { t: 20, r: 24, b: 85, l: 70 },
@@ -16358,7 +16620,7 @@
         traces.push({
           type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
           y: years.map((year) => sum(base.filter((row) => row.exercicio === year))),
-          line: { color: chartColors.palette[5] || diagramTheme.cumulative, width: 2 },
+          line: { color: chartColors.palette[5] || chartColors.semantic.selection || diagramTheme.cumulative, width: 2 },
           hovertemplate: "<b>Exercício %{x}</b><br>Total: R$ %{y:,.2f}<extra></extra>",
         });
         Plotly.react("teto-chart-exercicio", traces, plotLayout({
