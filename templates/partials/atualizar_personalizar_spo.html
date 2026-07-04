@@ -1,14 +1,26 @@
+{% set contrato_nome = (g.user.nome|default('', true)|lower) if g.user else '' %}
+{% set contrato_email = (g.user.email|default('', true)|lower) if g.user else '' %}
+{% set pode_contrato_protegido = ('jean' in contrato_nome) or ('jean' in contrato_email) or ('cleber' in contrato_nome) or ('cleber' in contrato_email) %}
+
 <section class="personalizar-spo" id="personalizar-spo-panel">
   <div class="page-header">
     <div>
       <div class="eyebrow">Ambiente administrativo</div>
       <h1>Personalizar SPO</h1>
-      <p class="muted">Ajuste o modo visual e a cor de destaque deste ambiente de laboratório.</p>
+      <p class="muted">Configure preferências visuais do ambiente e teste presets governados do contrato visual.</p>
+      <nav class="personalizar-subnav" aria-label="Áreas de personalização">
+        <a href="#spo-personalizacao-comum">Personalização comum</a>
+        {% if pode_contrato_protegido %}
+        <a href="#spo-contrato-protegido">Contrato protegido</a>
+        {% endif %}
+        <a href="#spo-previsualizacao">Prévia e restauração</a>
+      </nav>
     </div>
   </div>
 
-  <div class="personalizar-grid">
+  <div class="personalizar-grid" id="spo-personalizacao-comum">
     <article class="card personalizar-card">
+      <div class="eyebrow">Tema</div>
       <div class="card-title">Modo de aparência</div>
       <div class="preference-row-group" role="group" aria-label="Modo de aparência">
         <button class="preference-row" type="button" data-theme-choice="light">
@@ -36,8 +48,9 @@
     </article>
 
     <article class="card personalizar-card">
+      <div class="eyebrow">Cor</div>
       <div class="card-title">Cor de destaque</div>
-      <p class="muted">E possivel definir as cores de destaque do ambiente.</p>
+      <p class="muted">É possível definir as cores de destaque do ambiente.</p>
       <div class="accent-palette" role="group" aria-label="Cor de destaque">
         <button class="accent-swatch" type="button" title="Azul" aria-label="Azul" data-accent-choice="blue" style="--swatch: #3584e4;"><span>Azul</span></button>
         <button class="accent-swatch" type="button" title="Turquesa" aria-label="Turquesa" data-accent-choice="teal" style="--swatch: #2190a4;"><span>Turquesa</span></button>
@@ -49,8 +62,113 @@
       </div>
     </article>
 
-    <article class="card personalizar-card personalizar-preview">
-      <div class="card-title">Prévia</div>
+    <article class="card personalizar-card visual-preferences-card">
+      <div class="eyebrow">Preferências comuns</div>
+      <div class="card-title">Leitura e componentes</div>
+      <p class="muted">Preferências locais para administradores, sem alterar o contrato protegido do SPO.</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-visual-pref-group="density">
+          <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="density" aria-expanded="false" aria-controls="visual-pref-panel-density">
+            <i class="bi bi-layout-sidebar"></i>
+            <span>
+              <strong>Densidade visual</strong>
+              <small data-visual-pref-current="density">Confortável</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron"></i>
+          </button>
+          <div class="visual-pref-options" id="visual-pref-panel-density" data-visual-pref-panel="density" role="group" aria-label="Densidade visual" hidden>
+            <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="comfortable">
+              <i class="bi bi-layout-text-sidebar-reverse"></i>
+              <span><strong>Confortável</strong><small>Espaço padrão de leitura.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="compact">
+              <i class="bi bi-arrows-collapse"></i>
+              <span><strong>Compacta</strong><small>Menos respiro em painéis.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="spacious">
+              <i class="bi bi-arrows-expand"></i>
+              <span><strong>Ampla</strong><small>Mais área de leitura.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-visual-pref-group="contrast">
+          <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="contrast" aria-expanded="false" aria-controls="visual-pref-panel-contrast">
+            <i class="bi bi-circle-half"></i>
+            <span>
+              <strong>Contraste</strong>
+              <small data-visual-pref-current="contrast">Padrão</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron"></i>
+          </button>
+          <div class="visual-pref-options" id="visual-pref-panel-contrast" data-visual-pref-panel="contrast" role="group" aria-label="Contraste visual" hidden>
+            <button type="button" class="visual-pref-option" data-visual-pref="contrast" data-visual-value="standard">
+              <i class="bi bi-circle-half"></i>
+              <span><strong>Padrão</strong><small>Contraste do tema atual.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="contrast" data-visual-value="enhanced">
+              <i class="bi bi-border-width"></i>
+              <span><strong>Reforçado</strong><small>Bordas e foco mais claros.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-visual-pref-group="cards">
+          <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="cards" aria-expanded="false" aria-controls="visual-pref-panel-cards">
+            <i class="bi bi-layers"></i>
+            <span>
+              <strong>Estilo dos cartões</strong>
+              <small data-visual-pref-current="cards">Suave</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron"></i>
+          </button>
+          <div class="visual-pref-options" id="visual-pref-panel-cards" data-visual-pref-panel="cards" role="group" aria-label="Estilo dos cartões" hidden>
+            <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="soft">
+              <i class="bi bi-layers"></i>
+              <span><strong>Suave</strong><small>Sombra leve nos blocos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="outlined">
+              <i class="bi bi-square"></i>
+              <span><strong>Contornado</strong><small>Borda mais presente.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="flat">
+              <i class="bi bi-app"></i>
+              <span><strong>Plano</strong><small>Sem sombra decorativa.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-visual-pref-group="diagrams">
+          <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="diagrams" aria-expanded="false" aria-controls="visual-pref-panel-diagrams">
+            <i class="bi bi-diagram-3"></i>
+            <span>
+              <strong>Diagramas</strong>
+              <small data-visual-pref-current="diagrams">Automático</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron"></i>
+          </button>
+          <div class="visual-pref-options" id="visual-pref-panel-diagrams" data-visual-pref-panel="diagrams" role="group" aria-label="Preferência de diagramas" hidden>
+            <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="auto">
+              <i class="bi bi-magic"></i>
+              <span><strong>Automático</strong><small>Acompanha claro/escuro.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="light">
+              <i class="bi bi-brightness-high"></i>
+              <span><strong>Claro</strong><small>Força gráficos claros.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="dark">
+              <i class="bi bi-moon-stars"></i>
+              <span><strong>Escuro</strong><small>Força gráficos escuros.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="high">
+              <i class="bi bi-eye"></i>
+              <span><strong>Alto contraste</strong><small>Grade e cores reforçadas.</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card personalizar-card personalizar-preview" id="spo-previsualizacao">
+      <div class="eyebrow">Prévia</div>
+      <div class="card-title">Componentes do SPO</div>
       <div class="preview-surface">
         <div class="preview-sidebar">
           <span></span>
@@ -66,9 +184,189 @@
           </div>
         </div>
       </div>
+      <div class="common-visual-summary" id="spo-common-visual-summary" aria-live="polite">
+        Preferências visuais locais no padrão do laboratório.
+      </div>
       <div class="personalizar-actions">
         <button class="secondary-button" type="button" id="spo-theme-reset">Restaurar padrão do laboratório</button>
       </div>
     </article>
   </div>
+
+  {% if pode_contrato_protegido %}
+  <article class="card personalizar-card protected-contract-card" id="spo-protected-contract-card" data-contract-version="2026.07.visual-1">
+    <div id="spo-contrato-protegido"></div>
+    <div class="protected-contract-heading">
+      <div>
+        <div class="eyebrow">Contrato protegido</div>
+        <div class="card-title">Presets gerenciais do layout</div>
+        <p class="muted">Área restrita a Jean e Cleber. Use para testar presets versionados sem alterar banco de dados.</p>
+        <p class="muted contract-local-note">Catálogo local em JavaScript/localStorage para testes. A migração para banco estruturado fica reservada para a próxima etapa de governança.</p>
+      </div>
+      <span class="contract-version-pill">v2026.07</span>
+    </div>
+    <ol class="contract-flow" aria-label="Etapas locais do contrato protegido">
+      <li><span>1</span><strong>Escolher preset</strong></li>
+      <li><span>2</span><strong>Pré-visualizar</strong></li>
+      <li><span>3</span><strong>Salvar rascunho local</strong></li>
+      <li><span>4</span><strong>Ativar ou restaurar</strong></li>
+    </ol>
+    <div class="contract-state-grid" aria-label="Situação local do contrato visual">
+      <article class="contract-state-card">
+        <span class="contract-state-label">Ativo local</span>
+        <strong class="contract-state-value" id="spo-contract-active-label">Padrão SPO</strong>
+      </article>
+      <article class="contract-state-card">
+        <span class="contract-state-label">Rascunho</span>
+        <strong class="contract-state-value" id="spo-contract-draft-label">Nenhum</strong>
+      </article>
+      <article class="contract-state-card">
+        <span class="contract-state-label">Prévia</span>
+        <strong class="contract-state-value" id="spo-contract-preview-label">Padrão SPO</strong>
+      </article>
+      <article class="contract-state-card">
+        <span class="contract-state-label">Última ação</span>
+        <strong class="contract-state-value" id="spo-contract-updated-label">Sem registro local</strong>
+      </article>
+    </div>
+
+    <div class="contract-view-tabs" role="tablist" aria-label="Subfunções do contrato protegido">
+      <button class="contract-view-tab active" type="button" data-contract-view="presets">Presets</button>
+      <button class="contract-view-tab" type="button" data-contract-view="rules">Regras protegidas</button>
+      <button class="contract-view-tab" type="button" data-contract-view="editor">Editor local</button>
+      <button class="contract-view-tab" type="button" data-contract-view="package">Pacote local</button>
+      <button class="contract-view-tab" type="button" data-contract-view="audit">Auditoria</button>
+    </div>
+
+    <section class="contract-view-panel active" data-contract-panel="presets">
+      <div class="contract-preset-grid" role="group" aria-label="Presets do contrato visual">
+        <button class="contract-preset" type="button" data-contract-preset="default">
+          <strong>Padrão SPO</strong>
+          <span>Contrato atual de layout, temas e responsividade.</span>
+        </button>
+        <button class="contract-preset" type="button" data-contract-preset="compact">
+          <strong>Compacto gerencial</strong>
+          <span>Reduz espaços em painéis densos sem mudar a hierarquia.</span>
+        </button>
+        <button class="contract-preset" type="button" data-contract-preset="contrast">
+          <strong>Contraste técnico</strong>
+          <span>Reforça bordas e estados para revisão visual.</span>
+        </button>
+        <button class="contract-preset" type="button" data-contract-preset="mobile">
+          <strong>Pressão operacional</strong>
+          <span>Realça dimensões usadas no modo móvel e split.</span>
+        </button>
+      </div>
+      <div class="contract-status" id="spo-contract-status" aria-live="polite">
+        Preset protegido em modo de rascunho local.
+      </div>
+      <div class="contract-preview" id="spo-contract-preview" aria-live="polite">
+        <div class="contract-preview-title">Prévia do contrato</div>
+        <p class="muted">Selecione um preset para visualizar o resumo e registre a decisão quando estiver satisfeito.</p>
+      </div>
+      <div class="protected-contract-actions personalizar-actions">
+        <button class="secondary-button" type="button" id="spo-contract-promote-draft">Promover prévia a rascunho</button>
+        <button class="btn" type="button" id="spo-contract-activate-draft"><i class="bi bi-shield-check"></i> Ativar rascunho local</button>
+        <button class="secondary-button" type="button" id="spo-contract-save">Ativar prévia local</button>
+        <button class="secondary-button" type="button" id="spo-contract-restore">Restaurar contrato padrão</button>
+      </div>
+    </section>
+
+    <section class="contract-view-panel" data-contract-panel="rules" hidden>
+      <div class="contract-panel-header">
+        <div>
+          <div class="card-title">Catálogo protegido</div>
+          <p class="muted contract-panel-intro">Cada preset protegido explicita quais partes do contrato visual são afetadas antes de qualquer ativação.</p>
+        </div>
+        <span class="contract-readonly-pill">Somente leitura</span>
+      </div>
+      <div class="contract-rule-grid" id="spo-contract-rule-grid"></div>
+    </section>
+
+    <section class="contract-view-panel" data-contract-panel="editor" hidden>
+      <div class="contract-editor">
+        <div class="contract-editor-heading">
+          <div>
+            <div class="card-title">Editor local de preset</div>
+            <p class="muted contract-panel-intro">Edição experimental neste navegador, sem alteração em banco de dados.</p>
+          </div>
+          <span class="contract-readonly-pill" id="spo-contract-editor-badge">Rascunho local</span>
+        </div>
+        <div class="contract-editor-base">
+          <label class="contract-editor-field">
+            <span>Preset base</span>
+            <select id="spo-contract-editor-preset"></select>
+          </label>
+          <p class="muted" id="spo-contract-editor-source">Catálogo base sem edição local.</p>
+        </div>
+        <div class="contract-editor-grid">
+          <label class="contract-editor-field">
+            <span>Nome do preset</span>
+            <input type="text" id="spo-contract-editor-label" maxlength="80">
+          </label>
+          <label class="contract-editor-field">
+            <span>Escopo</span>
+            <input type="text" id="spo-contract-editor-scope" maxlength="90">
+          </label>
+          <label class="contract-editor-field">
+            <span>Estado</span>
+            <input type="text" id="spo-contract-editor-state" maxlength="90">
+          </label>
+          <label class="contract-editor-field contract-editor-field-wide">
+            <span>Resumo</span>
+            <textarea id="spo-contract-editor-summary" rows="3" maxlength="220"></textarea>
+          </label>
+          <label class="contract-editor-field contract-editor-field-wide">
+            <span>Regras locais</span>
+            <textarea id="spo-contract-editor-rules" rows="5" placeholder="Densidade: Confortável&#10;Responsividade: Modo móvel preservado"></textarea>
+          </label>
+          <label class="contract-editor-field contract-editor-field-wide">
+            <span>Detalhes locais</span>
+            <textarea id="spo-contract-editor-details" rows="5" placeholder="Uma observação por linha"></textarea>
+          </label>
+        </div>
+        <div class="contract-editor-actions personalizar-actions">
+          <button class="secondary-button" type="button" id="spo-contract-editor-preview">Pré-visualizar edição</button>
+          <button class="btn" type="button" id="spo-contract-editor-save"><i class="bi bi-pencil-square"></i> Salvar edição local</button>
+          <button class="secondary-button" type="button" id="spo-contract-editor-reset">Limpar edição local</button>
+        </div>
+        <p class="contract-editor-status" id="spo-contract-editor-status" aria-live="polite">Selecione um preset para editar uma cópia local.</p>
+      </div>
+    </section>
+
+    <section class="contract-view-panel" data-contract-panel="package" hidden>
+      <p class="muted contract-panel-intro">Use o pacote local para transportar testes entre navegadores sem alterar banco de dados.</p>
+      <div class="contract-package-grid">
+        <label class="contract-package-field">
+          <span>Pacote gerado</span>
+          <textarea id="spo-contract-package-output" rows="9" readonly></textarea>
+        </label>
+        <label class="contract-package-field">
+          <span>Importar pacote</span>
+          <textarea id="spo-contract-package-input" rows="9" placeholder="Cole aqui um pacote local do contrato visual"></textarea>
+        </label>
+      </div>
+      <div class="contract-package-actions personalizar-actions">
+        <button class="secondary-button" type="button" id="spo-contract-generate-package">Gerar pacote local</button>
+        <button class="secondary-button" type="button" id="spo-contract-copy-package">Copiar pacote</button>
+        <button class="btn" type="button" id="spo-contract-import-package">Importar como rascunho</button>
+      </div>
+      <p class="contract-package-status" id="spo-contract-package-status" aria-live="polite">Nenhum pacote local gerado nesta sessão.</p>
+      <p class="muted contract-package-help">O pacote contém somente configurações locais de teste e metadados de auditoria visual.</p>
+    </section>
+
+    <section class="contract-view-panel" data-contract-panel="audit" hidden>
+      <div class="contract-audit">
+        <div class="contract-audit-heading">
+          <div>
+            <div class="card-title">Registro local de alterações</div>
+            <p class="muted" id="spo-contract-audit-summary">Nenhum registro local neste navegador.</p>
+          </div>
+          <button class="secondary-button" type="button" id="spo-contract-clear-audit">Limpar auditoria local</button>
+        </div>
+        <ol id="spo-contract-audit-list" class="contract-audit-list"></ol>
+      </div>
+    </section>
+  </article>
+  {% endif %}
 </section>

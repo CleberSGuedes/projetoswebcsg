@@ -17,6 +17,170 @@
     splitPressureMaxViewport: 480,
     splitPressureMinOuterGap: 180,
   });
+  const PROTECTED_CONTRACT_VERSION = "2026.07.visual-1";
+  const COMMON_VISUAL_STORAGE_KEY = "spo-common-visual-preferences";
+  const PROTECTED_CONTRACT_STORAGE_KEY = "spo-protected-contract-preset";
+  const PROTECTED_CONTRACT_STATE_KEY = "spo-protected-contract-state";
+  const PROTECTED_CONTRACT_AUDIT_KEY = "spo-protected-contract-audit";
+  const PROTECTED_CONTRACT_CUSTOM_KEY = "spo-protected-contract-custom-presets";
+  const PROTECTED_CONTRACT_PACKAGE_SCHEMA = "spo.protected-contract.local-package";
+  const PROTECTED_CONTRACT_AUDIT_LIMIT = 12;
+  const PROTECTED_CONTRACT_AUDIT_ACTIONS = Object.freeze({
+    active: "ativou o rascunho local",
+    draft: "promoveu para rascunho",
+    edit: "editou preset local",
+    editPreview: "pré-visualizou edição local",
+    editReset: "limpou edição local",
+    import: "importou como rascunho local",
+    restore: "restaurou",
+    save: "ativou a prévia local",
+    preview: "pré-visualizou",
+  });
+  const COMMON_VISUAL_DEFAULTS = Object.freeze({
+    density: "comfortable",
+    contrast: "standard",
+    cards: "soft",
+    diagrams: "auto",
+  });
+  const COMMON_VISUAL_OPTIONS = Object.freeze({
+    density: {
+      comfortable: "confortável",
+      compact: "compacta",
+      spacious: "ampla",
+    },
+    contrast: {
+      standard: "padrão",
+      enhanced: "reforçado",
+    },
+    cards: {
+      soft: "suave",
+      outlined: "contornado",
+      flat: "plano",
+    },
+    diagrams: {
+      auto: "automático",
+      light: "claro",
+      dark: "escuro",
+      high: "alto contraste",
+    },
+  });
+  const COMMON_DIAGRAM_THEMES = Object.freeze({
+    light: {
+      text: "#24323d",
+      muted: "#64748b",
+      grid: "rgba(100, 116, 139, 0.28)",
+      axis: "rgba(71, 85, 105, 0.58)",
+      panel: "rgba(255,255,255,0)",
+      plot: "rgba(255,255,255,0)",
+      border: "rgba(71, 85, 105, 0.28)",
+      line: "#c23b3b",
+      total: "#0074D9",
+      positive: "#2E7D5B",
+      negative: "#D43F3A",
+      cumulative: "#EF553B",
+      palette: ["#345feb", "#048075", "#f8cb2e", "#f58220", "#ea1d2c", "#6a1b9a", "#008FFB", "#9C27B0"],
+    },
+    dark: {
+      text: "#f8fafc",
+      muted: "#cbd5e1",
+      grid: "rgba(226, 232, 240, 0.22)",
+      axis: "rgba(226, 232, 240, 0.48)",
+      panel: "rgba(15,23,42,0.12)",
+      plot: "rgba(15,23,42,0.20)",
+      border: "rgba(226, 232, 240, 0.24)",
+      line: "#ff9f8f",
+      total: "#7ab7ff",
+      positive: "#8bd8b0",
+      negative: "#ff8b8b",
+      cumulative: "#ffb26b",
+      palette: ["#7ab7ff", "#5fd0c2", "#ffe066", "#ffad66", "#ff7b86", "#d8a2ff", "#73e2a7", "#f8a5c2"],
+    },
+    high: {
+      text: "#ffffff",
+      muted: "#ffffff",
+      grid: "rgba(255,255,255,0.52)",
+      axis: "rgba(255,255,255,0.88)",
+      panel: "#050816",
+      plot: "#050816",
+      border: "#ffffff",
+      line: "#ffea00",
+      total: "#00e5ff",
+      positive: "#00ff85",
+      negative: "#ff4d6d",
+      cumulative: "#ffea00",
+      palette: ["#00e5ff", "#ffea00", "#00ff85", "#ff4d6d", "#b967ff", "#ff9f1c", "#ffffff", "#7df9ff"],
+    },
+  });
+  const PROTECTED_CONTRACT_PRESETS = Object.freeze({
+    default: {
+      label: "Padrão SPO",
+      summary: "Mantém o contrato visual validado para layout, temas e responsividade.",
+      scope: "Contrato base",
+      state: "Ativo local",
+      rules: {
+        Densidade: "Confortável",
+        Responsividade: "Modo móvel e split separados",
+        Menu: "Overlay global preservado",
+        Diagramas: "Claro/escuro automático",
+      },
+      details: [
+        "Tema e destaque seguem as escolhas atuais.",
+        "Modo móvel e split permanecem separados.",
+        "Sem reforços adicionais de borda ou compactação.",
+      ],
+    },
+    compact: {
+      label: "Compacto gerencial",
+      summary: "Reduz discretamente espaços em telas densas, preservando a hierarquia.",
+      scope: "Painéis densos",
+      state: "Rascunho testável",
+      rules: {
+        Densidade: "Compacta",
+        Responsividade: "Mesmo contrato móvel",
+        Menu: "Hierarquia preservada",
+        Diagramas: "Sem alteração",
+      },
+      details: [
+        "Painéis usam respiro menor.",
+        "Botões preservam área de toque.",
+        "Indicado para revisão em telas menores.",
+      ],
+    },
+    contrast: {
+      label: "Contraste técnico",
+      summary: "Reforça bordas e estados para leitura técnica e revisão visual.",
+      scope: "Revisão visual",
+      state: "Rascunho testável",
+      rules: {
+        Contraste: "Reforçado",
+        Estados: "Bordas e foco mais presentes",
+        Menu: "Ativos mais visíveis",
+        Diagramas: "Tema alto contraste",
+      },
+      details: [
+        "Cards ganham contorno mais presente.",
+        "Estados ativos ficam mais perceptíveis.",
+        "Não altera conteúdo nem menu.",
+      ],
+    },
+    mobile: {
+      label: "Pressão operacional",
+      summary: "Destaca parâmetros usados no modo móvel e no split do Chrome.",
+      scope: "Responsividade crítica",
+      state: "Rascunho testável",
+      rules: {
+        Responsividade: "Pressão operacional",
+        "Mínimo útil": "Modo celular preservado",
+        Split: "Overlay geral permitido",
+        Diagramas: "Redimensionamento protegido",
+      },
+      details: [
+        "Área de toque fica levemente maior.",
+        "Componentes priorizam leitura vertical.",
+        "Serve para testar limite operacional.",
+      ],
+    },
+  });
   const ACCENT_COLORS = {
     blue: {
       label: "Azul",
@@ -224,6 +388,7 @@
       themeDarkBtn.classList.toggle("active", selectedTheme === "dark");
     }
     applyAccentColor(getStoredAccent(), false);
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
     if (persist) localStorage.setItem("app-theme", selectedTheme);
   }
 
@@ -231,6 +396,10 @@
     applyAccentColor(getStoredAccent(), false);
     const saved = localStorage.getItem("app-theme") || "auto";
     applyTheme(saved);
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+    if (canManageProtectedContract()) {
+      applyProtectedContractPreset(getStoredProtectedContractPreset(), false);
+    }
     if (themeLightBtn) {
       themeLightBtn.addEventListener("click", () => applyTheme("light"));
     }
@@ -269,15 +438,1273 @@
     });
   }
 
+  function normalizeCommonVisualPreferences(raw = {}) {
+    const normalized = { ...COMMON_VISUAL_DEFAULTS };
+    Object.keys(COMMON_VISUAL_DEFAULTS).forEach((key) => {
+      const value = raw && raw[key];
+      if (COMMON_VISUAL_OPTIONS[key] && COMMON_VISUAL_OPTIONS[key][value]) {
+        normalized[key] = value;
+      }
+    });
+    return normalized;
+  }
+
+  function readCommonVisualPreferences() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(COMMON_VISUAL_STORAGE_KEY) || "{}");
+      return normalizeCommonVisualPreferences(parsed);
+    } catch (_) {
+      return { ...COMMON_VISUAL_DEFAULTS };
+    }
+  }
+
+  function writeCommonVisualPreferences(preferences) {
+    localStorage.setItem(
+      COMMON_VISUAL_STORAGE_KEY,
+      JSON.stringify(normalizeCommonVisualPreferences(preferences))
+    );
+  }
+
+  function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {
+    const current = normalizeCommonVisualPreferences(preferences);
+    if (current.diagrams === "auto") {
+      return document.body.classList.contains("theme-dark") ? "dark" : "light";
+    }
+    return COMMON_DIAGRAM_THEMES[current.diagrams] ? current.diagrams : "light";
+  }
+
+  function getCommonDiagramTheme(preferences = readCommonVisualPreferences()) {
+    return COMMON_DIAGRAM_THEMES[getResolvedCommonDiagramMode(preferences)] || COMMON_DIAGRAM_THEMES.light;
+  }
+
+  function emitCommonVisualChange(preferences) {
+    document.dispatchEvent(new CustomEvent("spo-common-visual-change", {
+      detail: normalizeCommonVisualPreferences(preferences),
+    }));
+  }
+
+  function applyCommonVisualPreferences(preferences, persist = false) {
+    const current = normalizeCommonVisualPreferences(preferences);
+    document.body.dataset.visualDensity = current.density;
+    document.body.dataset.visualContrast = current.contrast;
+    document.body.dataset.visualCards = current.cards;
+    document.body.dataset.visualDiagrams = current.diagrams;
+    if (persist) writeCommonVisualPreferences(current);
+    emitCommonVisualChange(current);
+    return current;
+  }
+
+  function renderCommonVisualSummary(scope, preferences) {
+    const summary = scope.querySelector("#spo-common-visual-summary");
+    if (!summary) return;
+    summary.textContent = [
+      `Preferências locais: densidade ${getCommonVisualOptionLabel("density", preferences.density)}`,
+      `contraste ${getCommonVisualOptionLabel("contrast", preferences.contrast)}`,
+      `cartões ${getCommonVisualOptionLabel("cards", preferences.cards)}`,
+      `diagramas ${getCommonVisualOptionLabel("diagrams", preferences.diagrams)}.`,
+    ].join(", ");
+  }
+
+  function getCommonVisualOptionLabel(group, value) {
+    return COMMON_VISUAL_OPTIONS[group]?.[value] || value || "";
+  }
+
+  function setCommonVisualGroupOpen(scope, groupKey = "") {
+    const key = String(groupKey || "");
+    scope.querySelectorAll("[data-visual-pref-group]").forEach((group) => {
+      const current = group.dataset.visualPrefGroup || "";
+      const open = Boolean(key) && current === key;
+      group.classList.toggle("is-open", open);
+      const toggle = group.querySelector("[data-visual-pref-toggle]");
+      const panel = group.querySelector("[data-visual-pref-panel]");
+      if (toggle) toggle.setAttribute("aria-expanded", String(open));
+      if (panel) panel.hidden = !open;
+    });
+  }
+
+  function syncCommonVisualControls(scope = document) {
+    const preferences = readCommonVisualPreferences();
+    scope.querySelectorAll("[data-visual-pref]").forEach((btn) => {
+      const key = btn.dataset.visualPref;
+      const active = preferences[key] === btn.dataset.visualValue;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    scope.querySelectorAll("[data-visual-pref-current]").forEach((target) => {
+      const key = target.dataset.visualPrefCurrent;
+      target.textContent = getCommonVisualOptionLabel(key, preferences[key]);
+    });
+    renderCommonVisualSummary(scope, preferences);
+  }
+
+  function initCommonVisualControls(panel) {
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+    syncCommonVisualControls(panel);
+    setCommonVisualGroupOpen(panel, "");
+    panel.querySelectorAll("[data-visual-pref-toggle]").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const key = toggle.dataset.visualPrefToggle || "";
+        const group = panel.querySelector(`[data-visual-pref-group="${key}"]`);
+        const isOpen = group?.classList.contains("is-open");
+        setCommonVisualGroupOpen(panel, isOpen ? "" : key);
+      });
+    });
+    panel.querySelectorAll("[data-visual-pref]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.visualPref;
+        const value = btn.dataset.visualValue;
+        if (!COMMON_VISUAL_OPTIONS[key] || !COMMON_VISUAL_OPTIONS[key][value]) return;
+        const preferences = applyCommonVisualPreferences(
+          { ...readCommonVisualPreferences(), [key]: value },
+          true
+        );
+        syncCommonVisualControls(panel);
+        showToast(`Preferência visual "${COMMON_VISUAL_OPTIONS[key][value]}" aplicada localmente.`);
+        renderCommonVisualSummary(panel, preferences);
+        setCommonVisualGroupOpen(panel, "");
+      });
+    });
+  }
+
+  function normalizeContractUser(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function getProtectedContractUser() {
+    return {
+      name: userMeta ? userMeta.dataset.name || "" : "",
+      email: userMeta ? userMeta.dataset.email || "" : "",
+      nivel: userNivel || "",
+      perfilId: userPerfilId || "",
+    };
+  }
+
+  function canManageProtectedContract() {
+    const user = getProtectedContractUser();
+    const token = normalizeContractUser(`${user.name} ${user.email}`);
+    return token.includes("jean") || token.includes("cleber");
+  }
+
+  function getProtectedContractPresetKey(key) {
+    return PROTECTED_CONTRACT_PRESETS[key] ? key : "default";
+  }
+
+  function getOptionalProtectedContractPresetKey(key) {
+    return PROTECTED_CONTRACT_PRESETS[key] ? key : "";
+  }
+
+  function cloneProtectedContractPreset(preset) {
+    return {
+      ...preset,
+      rules: { ...(preset.rules || {}) },
+      details: Array.isArray(preset.details) ? [...preset.details] : [],
+    };
+  }
+
+  function sanitizeProtectedContractText(value, fallback = "", maxLength = 180) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    const safe = text || fallback;
+    return safe.length > maxLength ? safe.slice(0, maxLength).trim() : safe;
+  }
+
+  function normalizeProtectedContractRules(value, fallback = {}) {
+    const entries = [];
+    const addRule = (label, ruleValue) => {
+      const safeLabel = sanitizeProtectedContractText(label, "", 48);
+      const safeValue = sanitizeProtectedContractText(ruleValue, "", 120);
+      if (safeLabel && safeValue) entries.push([safeLabel, safeValue]);
+    };
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (Array.isArray(item)) {
+          addRule(item[0], item[1]);
+        } else if (item && typeof item === "object") {
+          addRule(item.label || item.key || item.name, item.value || item.text);
+        }
+      });
+    } else if (value && typeof value === "object") {
+      Object.entries(value).forEach(([label, ruleValue]) => addRule(label, ruleValue));
+    }
+
+    if (!entries.length) {
+      Object.entries(fallback || {}).forEach(([label, ruleValue]) => addRule(label, ruleValue));
+    }
+
+    return entries.slice(0, 8).reduce((rules, [label, ruleValue]) => {
+      rules[label] = ruleValue;
+      return rules;
+    }, {});
+  }
+
+  function normalizeProtectedContractDetails(value, fallback = []) {
+    const source = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+    const details = source
+      .map((item) => sanitizeProtectedContractText(item, "", 180))
+      .filter(Boolean)
+      .slice(0, 8);
+    if (details.length) return details;
+    return (Array.isArray(fallback) ? fallback : [])
+      .map((item) => sanitizeProtectedContractText(item, "", 180))
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function normalizeProtectedContractPresetOverride(key, raw) {
+    const presetKey = getOptionalProtectedContractPresetKey(key);
+    const base = presetKey ? PROTECTED_CONTRACT_PRESETS[presetKey] : null;
+    if (!base || !raw || typeof raw !== "object") return null;
+    return {
+      label: sanitizeProtectedContractText(raw.label, base.label, 80),
+      summary: sanitizeProtectedContractText(raw.summary, base.summary, 220),
+      scope: sanitizeProtectedContractText(raw.scope, base.scope, 90),
+      state: sanitizeProtectedContractText(raw.state, base.state, 90),
+      rules: normalizeProtectedContractRules(raw.rules, base.rules),
+      details: normalizeProtectedContractDetails(raw.details, base.details),
+      updatedAt: raw.updatedAt || "",
+      updatedBy: sanitizeProtectedContractText(raw.updatedBy, "", 120),
+    };
+  }
+
+  function normalizeProtectedContractCustomPresets(raw) {
+    const custom = {};
+    if (!raw || typeof raw !== "object") return custom;
+    Object.keys(PROTECTED_CONTRACT_PRESETS).forEach((key) => {
+      const normalized = normalizeProtectedContractPresetOverride(key, raw[key]);
+      if (normalized) custom[key] = normalized;
+    });
+    return custom;
+  }
+
+  function readProtectedContractCustomPresets() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_CUSTOM_KEY) || "{}");
+      return normalizeProtectedContractCustomPresets(parsed);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeProtectedContractCustomPresets(customPresets) {
+    const normalized = normalizeProtectedContractCustomPresets(customPresets);
+    if (Object.keys(normalized).length) {
+      localStorage.setItem(PROTECTED_CONTRACT_CUSTOM_KEY, JSON.stringify(normalized));
+    } else {
+      localStorage.removeItem(PROTECTED_CONTRACT_CUSTOM_KEY);
+    }
+    return normalized;
+  }
+
+  function mergeProtectedContractPreset(key, customPresets = readProtectedContractCustomPresets()) {
+    const presetKey = getProtectedContractPresetKey(key);
+    const base = PROTECTED_CONTRACT_PRESETS[presetKey] || PROTECTED_CONTRACT_PRESETS.default;
+    const custom = normalizeProtectedContractPresetOverride(presetKey, customPresets[presetKey]);
+    if (!custom) return cloneProtectedContractPreset(base);
+    return {
+      ...cloneProtectedContractPreset(base),
+      ...custom,
+      localEdited: true,
+    };
+  }
+
+  function getProtectedContractPreset(key) {
+    return mergeProtectedContractPreset(key);
+  }
+
+  function getProtectedContractPresetCatalog() {
+    const customPresets = readProtectedContractCustomPresets();
+    return Object.keys(PROTECTED_CONTRACT_PRESETS).reduce((catalog, key) => {
+      catalog[key] = mergeProtectedContractPreset(key, customPresets);
+      return catalog;
+    }, {});
+  }
+
+  function hasProtectedContractCustomPreset(key) {
+    const presetKey = getOptionalProtectedContractPresetKey(key);
+    return Boolean(presetKey && readProtectedContractCustomPresets()[presetKey]);
+  }
+
+  function formatProtectedContractRulesText(rules) {
+    return Object.entries(rules || {}).map(([label, value]) => `${label}: ${value}`).join("\n");
+  }
+
+  function parseProtectedContractRulesText(text, fallback = {}) {
+    const rules = {};
+    String(text || "").split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      const separator = trimmed.indexOf(":");
+      const label = separator >= 0 ? trimmed.slice(0, separator) : trimmed;
+      const value = separator >= 0 ? trimmed.slice(separator + 1) : "";
+      const safeLabel = sanitizeProtectedContractText(label, "", 48);
+      const safeValue = sanitizeProtectedContractText(value, "", 120);
+      if (safeLabel && safeValue) rules[safeLabel] = safeValue;
+    });
+    return Object.keys(rules).length ? rules : normalizeProtectedContractRules(fallback);
+  }
+
+  function setProtectedContractVisualPreset(key) {
+    const presetKey = getProtectedContractPresetKey(key);
+    document.documentElement.dataset.visualContractPreset = presetKey;
+    document.body.dataset.visualContractPreset = presetKey;
+    return presetKey;
+  }
+
+  function buildProtectedContractDefaultState() {
+    const legacy = getProtectedContractPresetKey(localStorage.getItem(PROTECTED_CONTRACT_STORAGE_KEY) || "default");
+    return {
+      active: legacy,
+      draft: "",
+      preview: legacy,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local",
+      updatedAt: "",
+      updatedBy: "",
+    };
+  }
+
+  function normalizeProtectedContractState(raw) {
+    const base = buildProtectedContractDefaultState();
+    if (!raw || typeof raw !== "object") return base;
+    const active = getProtectedContractPresetKey(raw.active || base.active);
+    const draft = getOptionalProtectedContractPresetKey(raw.draft);
+    const preview = getProtectedContractPresetKey(raw.preview || draft || active);
+    return {
+      active,
+      draft,
+      preview,
+      version: raw.version || PROTECTED_CONTRACT_VERSION,
+      source: raw.source || "js-local",
+      updatedAt: raw.updatedAt || "",
+      updatedBy: raw.updatedBy || "",
+    };
+  }
+
+  function readProtectedContractState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_STATE_KEY) || "null");
+      return normalizeProtectedContractState(parsed);
+    } catch (_) {
+      return buildProtectedContractDefaultState();
+    }
+  }
+
+  function writeProtectedContractState(state) {
+    const normalized = normalizeProtectedContractState(state);
+    localStorage.setItem(PROTECTED_CONTRACT_STATE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(PROTECTED_CONTRACT_STORAGE_KEY, normalized.active);
+    return normalized;
+  }
+
+  function getStoredProtectedContractPreset() {
+    const state = readProtectedContractState();
+    return getProtectedContractPresetKey(state.preview || state.draft || state.active);
+  }
+
+  function applyProtectedContractPreset(key, persist = false, mode = "preview") {
+    const presetKey = getProtectedContractPresetKey(key);
+    setProtectedContractVisualPreset(presetKey);
+    if (!persist) return presetKey;
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    let next = { ...current, preview: presetKey };
+    if (mode === "draft") {
+      next = { ...current, draft: presetKey, preview: presetKey };
+    } else if (mode === "active") {
+      const draftKey = getOptionalProtectedContractPresetKey(current.draft);
+      const activeKey = draftKey || presetKey;
+      next = { ...current, active: activeKey, draft: activeKey, preview: activeKey };
+    } else if (mode === "save") {
+      next = { ...current, active: presetKey, draft: presetKey, preview: presetKey };
+    } else if (mode === "restore") {
+      next = { ...current, active: "default", draft: "", preview: "default" };
+    }
+    next.version = PROTECTED_CONTRACT_VERSION;
+    next.source = "js-local";
+    next.updatedAt = new Date().toISOString();
+    next.updatedBy = user.name || user.email || "Usuário autorizado";
+    const saved = writeProtectedContractState(next);
+    const applied = getProtectedContractPresetKey(saved.preview || saved.draft || saved.active);
+    return setProtectedContractVisualPreset(applied);
+  }
+
+  function getProtectedContractAuditActionLabel(action) {
+    return PROTECTED_CONTRACT_AUDIT_ACTIONS[action] || "registrou";
+  }
+
+  function formatProtectedContractAuditDate(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("pt-BR");
+  }
+
+  function normalizeProtectedContractAuditEntry(entry = {}, index = 0) {
+    const action = String(entry.action || "record");
+    const key = getProtectedContractPresetKey(entry.key || "default");
+    const preset = getProtectedContractPreset(key);
+    const atIso = entry.atIso || entry.isoAt || "";
+    const at = entry.at || formatProtectedContractAuditDate(atIso) || "Sem data local";
+    const state = entry.state && typeof entry.state === "object" ? normalizeProtectedContractState(entry.state) : null;
+    return {
+      id: entry.id || `${action}-${key}-${atIso || at}-${index}`,
+      action,
+      actionLabel: getProtectedContractAuditActionLabel(action),
+      key,
+      preset: entry.preset || preset.label,
+      version: entry.version || PROTECTED_CONTRACT_VERSION,
+      source: entry.source || "js-local",
+      user: entry.user || "Usuário autorizado",
+      at,
+      atIso,
+      state,
+    };
+  }
+
+  function normalizeProtectedContractAudit(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((entry, index) => normalizeProtectedContractAuditEntry(entry, index))
+      .slice(0, PROTECTED_CONTRACT_AUDIT_LIMIT);
+  }
+
+  function readProtectedContractAudit() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_AUDIT_KEY) || "[]");
+      return normalizeProtectedContractAudit(parsed);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeProtectedContractAudit(items) {
+    localStorage.setItem(
+      PROTECTED_CONTRACT_AUDIT_KEY,
+      JSON.stringify(normalizeProtectedContractAudit(items))
+    );
+  }
+
+  function addProtectedContractAudit(action, presetKey, meta = {}) {
+    const user = getProtectedContractUser();
+    const preset = getProtectedContractPreset(presetKey);
+    const atIso = new Date().toISOString();
+    const entry = {
+      id: `${action}-${presetKey}-${Date.now()}`,
+      action,
+      key: presetKey,
+      preset: preset.label,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: meta.source || "js-local",
+      user: user.name || user.email || "Usuário autorizado",
+      at: formatProtectedContractAuditDate(atIso),
+      atIso,
+      state: normalizeProtectedContractState(meta.state || readProtectedContractState()),
+    };
+    writeProtectedContractAudit([entry, ...readProtectedContractAudit()]);
+  }
+
+  function buildProtectedContractPackage() {
+    const user = getProtectedContractUser();
+    const state = normalizeProtectedContractState(readProtectedContractState());
+    const customPresets = readProtectedContractCustomPresets();
+    const presets = Object.entries(getProtectedContractPresetCatalog()).map(([key, preset]) => ({
+      key,
+      label: preset.label,
+      scope: preset.scope,
+      state: preset.state,
+      summary: preset.summary,
+      rules: preset.rules,
+      details: preset.details,
+      localEdited: Boolean(preset.localEdited),
+    }));
+    return {
+      schema: PROTECTED_CONTRACT_PACKAGE_SCHEMA,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local",
+      exportedAt: new Date().toISOString(),
+      exportedBy: user.name || user.email || "Usuário autorizado",
+      state,
+      customPresets,
+      audit: readProtectedContractAudit(),
+      presets,
+    };
+  }
+
+  function stringifyProtectedContractPackage() {
+    return JSON.stringify(buildProtectedContractPackage(), null, 2);
+  }
+
+  function setProtectedContractPackageStatus(panel, message, isError = false) {
+    const status = panel.querySelector("#spo-contract-package-status");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function getProtectedContractPackageState(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    if (payload.state && typeof payload.state === "object") return payload.state;
+    if (payload.contract && typeof payload.contract === "object") return payload.contract;
+    return payload;
+  }
+
+  function getProtectedContractPackagePresetKey(payload) {
+    if (typeof payload === "string") return getOptionalProtectedContractPresetKey(payload);
+    const state = getProtectedContractPackageState(payload);
+    if (!state) return "";
+    return (
+      getOptionalProtectedContractPresetKey(state.draft) ||
+      getOptionalProtectedContractPresetKey(state.preview) ||
+      getOptionalProtectedContractPresetKey(state.active)
+    );
+  }
+
+  function getProtectedContractPackageCustomPresets(payload) {
+    if (!payload || typeof payload !== "object") return {};
+    const direct = normalizeProtectedContractCustomPresets(payload.customPresets);
+    if (Object.keys(direct).length) return direct;
+    if (!Array.isArray(payload.presets)) return {};
+    const fromPresetList = {};
+    payload.presets.forEach((preset) => {
+      const key = getOptionalProtectedContractPresetKey(preset && preset.key);
+      if (key && preset.localEdited) fromPresetList[key] = preset;
+    });
+    return normalizeProtectedContractCustomPresets(fromPresetList);
+  }
+
+  function generateProtectedContractPackage(panel) {
+    const output = panel.querySelector("#spo-contract-package-output");
+    if (!output) return "";
+    const packageText = stringifyProtectedContractPackage();
+    output.value = packageText;
+    setProtectedContractPackageStatus(panel, "Pacote local gerado a partir do estado deste navegador.");
+    return packageText;
+  }
+
+  async function copyProtectedContractPackage(panel) {
+    const output = panel.querySelector("#spo-contract-package-output");
+    const packageText = output && output.value.trim() ? output.value : generateProtectedContractPackage(panel);
+    if (!packageText) return;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(packageText);
+      } else if (output) {
+        output.focus();
+        output.select();
+        document.execCommand("copy");
+      }
+      setProtectedContractPackageStatus(panel, "Pacote local copiado.");
+      showToast("Pacote local copiado.");
+    } catch (_) {
+      setProtectedContractPackageStatus(panel, "Não foi possível copiar automaticamente. Selecione o pacote gerado e copie manualmente.", true);
+    }
+  }
+
+  function importProtectedContractPackage(panel) {
+    const input = panel.querySelector("#spo-contract-package-input");
+    if (!input) return;
+    const raw = input.value.trim();
+    if (!raw) {
+      setProtectedContractPackageStatus(panel, "Cole um pacote local antes de importar.", true);
+      return;
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(raw);
+    } catch (_) {
+      setProtectedContractPackageStatus(panel, "Pacote inválido: o conteúdo precisa ser um JSON válido.", true);
+      return;
+    }
+    const presetKey = getProtectedContractPackagePresetKey(payload);
+    if (!presetKey) {
+      setProtectedContractPackageStatus(panel, "Pacote inválido: nenhum preset conhecido foi encontrado.", true);
+      return;
+    }
+
+    const importedCustomPresets = getProtectedContractPackageCustomPresets(payload);
+    const importedCustomCount = Object.keys(importedCustomPresets).length;
+    if (importedCustomCount) {
+      writeProtectedContractCustomPresets({
+        ...readProtectedContractCustomPresets(),
+        ...importedCustomPresets,
+      });
+    }
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    const imported = writeProtectedContractState({
+      ...current,
+      draft: presetKey,
+      preview: presetKey,
+      version: payload.version || PROTECTED_CONTRACT_VERSION,
+      source: "js-local-package",
+      updatedAt: new Date().toISOString(),
+      updatedBy: user.name || user.email || "Usuário autorizado",
+    });
+    setProtectedContractVisualPreset(imported.preview);
+    addProtectedContractAudit("import", presetKey, { source: "js-local-package" });
+    input.value = "";
+    generateProtectedContractPackage(panel);
+    syncProtectedContractPanel(panel);
+    setProtectedContractPackageStatus(
+      panel,
+      `Pacote importado como rascunho local: ${getProtectedContractLabel(presetKey)}. O ativo local não foi alterado.${importedCustomCount ? ` ${importedCustomCount} edição(ões) local(is) importada(s).` : ""}`
+    );
+    showToast(`Pacote importado como rascunho: ${getProtectedContractLabel(presetKey)}.`);
+  }
+
+  function renderProtectedContractAudit(panel) {
+    const list = panel.querySelector("#spo-contract-audit-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = readProtectedContractAudit();
+    const summary = panel.querySelector("#spo-contract-audit-summary");
+    const clearButton = panel.querySelector("#spo-contract-clear-audit");
+    if (summary) {
+      summary.textContent = entries.length
+        ? `${entries.length} registro(s) local(is) neste navegador.`
+        : "Nenhum registro local neste navegador.";
+    }
+    if (clearButton) clearButton.disabled = !entries.length;
+    if (!entries.length) {
+      return;
+    }
+    entries.forEach((entry) => {
+      const item = document.createElement("li");
+      item.className = "contract-audit-item";
+
+      const header = document.createElement("div");
+      header.className = "contract-audit-item-header";
+      const action = document.createElement("strong");
+      action.textContent = `${entry.actionLabel} ${entry.preset}`;
+      const time = document.createElement("time");
+      if (entry.atIso) time.dateTime = entry.atIso;
+      time.textContent = entry.at;
+      header.appendChild(action);
+      header.appendChild(time);
+
+      const meta = document.createElement("div");
+      meta.className = "contract-audit-meta";
+      [entry.user, entry.source, entry.version].forEach((value) => {
+        if (!value) return;
+        const itemMeta = document.createElement("span");
+        itemMeta.textContent = value;
+        meta.appendChild(itemMeta);
+      });
+
+      item.appendChild(header);
+      item.appendChild(meta);
+      if (entry.state) {
+        const state = document.createElement("div");
+        state.className = "contract-audit-state";
+        const active = getProtectedContractPresetKey(entry.state.active);
+        const draft = getOptionalProtectedContractPresetKey(entry.state.draft);
+        const preview = getProtectedContractPresetKey(entry.state.preview || entry.state.draft || entry.state.active);
+        state.textContent = `Ativo ${getProtectedContractLabel(active)}; rascunho ${getProtectedContractLabel(draft)}; prévia ${getProtectedContractLabel(preview)}.`;
+        item.appendChild(state);
+      }
+      list.appendChild(item);
+    });
+  }
+
+  function clearProtectedContractAudit(panel) {
+    localStorage.removeItem(PROTECTED_CONTRACT_AUDIT_KEY);
+    renderProtectedContractAudit(panel);
+    showToast("Auditoria local limpa neste navegador.");
+  }
+
+  function getProtectedContractLabel(key, fallback = "Nenhum") {
+    if (!key) return fallback;
+    const preset = getProtectedContractPreset(key);
+    return preset ? preset.label : fallback;
+  }
+
+  function formatProtectedContractUpdatedAt(value) {
+    if (!value) return "Sem registro local";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Registro local";
+    return date.toLocaleString("pt-BR");
+  }
+
+  function setProtectedContractStateText(panel, selector, text) {
+    const target = panel.querySelector(selector);
+    if (target) target.textContent = text;
+  }
+
+  function renderProtectedContractState(panel, state) {
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    setProtectedContractStateText(panel, "#spo-contract-active-label", getProtectedContractLabel(active));
+    setProtectedContractStateText(panel, "#spo-contract-draft-label", getProtectedContractLabel(draft));
+    setProtectedContractStateText(panel, "#spo-contract-preview-label", getProtectedContractLabel(preview));
+    setProtectedContractStateText(panel, "#spo-contract-updated-label", formatProtectedContractUpdatedAt(state.updatedAt));
+  }
+
+  function syncProtectedContractActions(panel, state) {
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    const promoteDraft = panel.querySelector("#spo-contract-promote-draft");
+    const activateDraft = panel.querySelector("#spo-contract-activate-draft");
+    const activatePreview = panel.querySelector("#spo-contract-save");
+    const restore = panel.querySelector("#spo-contract-restore");
+    if (promoteDraft) {
+      promoteDraft.disabled = draft === preview;
+      promoteDraft.title = promoteDraft.disabled ? "A prévia já está salva como rascunho local." : "";
+    }
+    if (activateDraft) {
+      activateDraft.disabled = !draft || draft === active;
+      activateDraft.title = !draft
+        ? "Promova uma prévia a rascunho antes de ativar."
+        : activateDraft.disabled
+          ? "O rascunho já está ativo localmente."
+          : "";
+    }
+    if (activatePreview) {
+      activatePreview.disabled = preview === active && (!draft || draft === active);
+      activatePreview.title = activatePreview.disabled ? "A prévia já está ativa localmente." : "";
+    }
+    if (restore) {
+      restore.disabled = active === "default" && !draft && preview === "default";
+      restore.title = restore.disabled ? "O contrato local já está no Padrão SPO." : "";
+    }
+  }
+
+  function renderProtectedContractPreview(panel, presetKey) {
+    const preview = panel.querySelector("#spo-contract-preview");
+    const preset = getProtectedContractPreset(presetKey);
+    if (!preview) return;
+    preview.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "contract-preview-title";
+    title.textContent = preset.label;
+    const summary = document.createElement("p");
+    summary.className = "muted";
+    summary.textContent = preset.summary;
+    const metaIntro = document.createElement("p");
+    metaIntro.className = "muted";
+    metaIntro.textContent = `${preset.scope} · ${preset.state}`;
+    const meta = document.createElement("div");
+    meta.className = "contract-preview-meta";
+    Object.entries(preset.rules || {}).forEach(([label, value]) => {
+      const item = document.createElement("span");
+      const itemLabel = document.createElement("strong");
+      const itemValue = document.createElement("em");
+      itemLabel.textContent = label;
+      itemValue.textContent = value;
+      item.appendChild(itemLabel);
+      item.appendChild(itemValue);
+      meta.appendChild(item);
+    });
+    const list = document.createElement("ul");
+    preset.details.forEach((detail) => {
+      const item = document.createElement("li");
+      item.textContent = detail;
+      list.appendChild(item);
+    });
+    preview.appendChild(title);
+    preview.appendChild(summary);
+    preview.appendChild(metaIntro);
+    preview.appendChild(meta);
+    preview.appendChild(list);
+  }
+
+  function appendProtectedContractRuleBadge(target, text, variant) {
+    const badge = document.createElement("span");
+    badge.className = `contract-rule-badge contract-rule-badge-${variant}`;
+    badge.textContent = text;
+    target.appendChild(badge);
+  }
+
+  function renderProtectedContractRules(panel, state) {
+    const grid = panel.querySelector("#spo-contract-rule-grid");
+    if (!grid) return;
+    const catalog = getProtectedContractPresetCatalog();
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    grid.innerHTML = "";
+
+    Object.entries(catalog).forEach(([presetKey, preset]) => {
+      const card = document.createElement("article");
+      card.className = "contract-rule-card";
+      card.classList.toggle("is-preview", presetKey === preview);
+      card.classList.toggle("is-active-local", presetKey === active);
+      card.classList.toggle("is-draft-local", Boolean(draft) && presetKey === draft);
+
+      const header = document.createElement("div");
+      header.className = "contract-rule-header";
+      const titleBlock = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = preset.label;
+      const summary = document.createElement("p");
+      summary.className = "muted";
+      summary.textContent = preset.summary;
+      titleBlock.appendChild(title);
+      titleBlock.appendChild(summary);
+
+      const badges = document.createElement("div");
+      badges.className = "contract-rule-badges";
+      if (presetKey === preview) appendProtectedContractRuleBadge(badges, "Prévia", "preview");
+      if (presetKey === active) appendProtectedContractRuleBadge(badges, "Ativo local", "active");
+      if (draft && presetKey === draft) appendProtectedContractRuleBadge(badges, "Rascunho", "draft");
+      if (preset.localEdited) appendProtectedContractRuleBadge(badges, "Editado local", "draft");
+      if (!badges.children.length) appendProtectedContractRuleBadge(badges, "Catálogo", "catalog");
+      header.appendChild(titleBlock);
+      header.appendChild(badges);
+
+      const meta = document.createElement("div");
+      meta.className = "contract-rule-meta";
+      const scope = document.createElement("span");
+      scope.textContent = `Escopo: ${preset.scope}`;
+      const stateLabel = document.createElement("span");
+      stateLabel.textContent = `Estado: ${preset.state}`;
+      meta.appendChild(scope);
+      meta.appendChild(stateLabel);
+
+      const rules = document.createElement("dl");
+      rules.className = "contract-rule-list";
+      Object.entries(preset.rules || {}).forEach(([label, value]) => {
+        const row = document.createElement("div");
+        row.className = "contract-rule-row";
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const description = document.createElement("dd");
+        description.textContent = value;
+        row.appendChild(term);
+        row.appendChild(description);
+        rules.appendChild(row);
+      });
+
+      const details = document.createElement("ul");
+      details.className = "contract-rule-details";
+      (preset.details || []).forEach((detail) => {
+        const item = document.createElement("li");
+        item.textContent = detail;
+        details.appendChild(item);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "contract-rule-actions";
+      const previewButton = document.createElement("button");
+      previewButton.className = "secondary-button";
+      previewButton.type = "button";
+      previewButton.textContent = presetKey === preview ? "Em prévia" : "Pré-visualizar este preset";
+      previewButton.disabled = presetKey === preview;
+      previewButton.setAttribute("aria-label", `Pré-visualizar ${preset.label}`);
+      previewButton.addEventListener("click", () => {
+        const appliedKey = applyProtectedContractPreset(presetKey, true, "preview");
+        addProtectedContractAudit("preview", appliedKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Preset "${getProtectedContractLabel(appliedKey)}" pré-visualizado localmente.`);
+      });
+      actions.appendChild(previewButton);
+
+      card.appendChild(header);
+      card.appendChild(meta);
+      card.appendChild(rules);
+      card.appendChild(details);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+  }
+
+  function setProtectedContractEditorStatus(panel, message, isError = false) {
+    const status = panel.querySelector("#spo-contract-editor-status");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function getProtectedContractEditorKey(panel, state = readProtectedContractState()) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    return getProtectedContractPresetKey(select?.value || state.preview || state.draft || state.active);
+  }
+
+  function populateProtectedContractEditorOptions(panel, selectedKey) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    const catalog = getProtectedContractPresetCatalog();
+    select.innerHTML = "";
+    Object.entries(catalog).forEach(([key, preset]) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = preset.localEdited ? `${preset.label} · editado local` : preset.label;
+      select.appendChild(option);
+    });
+    select.value = getProtectedContractPresetKey(selectedKey);
+  }
+
+  function fillProtectedContractEditor(panel, presetKey, force = false) {
+    const key = getProtectedContractPresetKey(presetKey);
+    if (!force && panel.dataset.contractEditorDirty === "1" && panel.dataset.contractEditorKey === key) {
+      return;
+    }
+
+    const preset = getProtectedContractPreset(key);
+    const label = panel.querySelector("#spo-contract-editor-label");
+    const scope = panel.querySelector("#spo-contract-editor-scope");
+    const state = panel.querySelector("#spo-contract-editor-state");
+    const summary = panel.querySelector("#spo-contract-editor-summary");
+    const rules = panel.querySelector("#spo-contract-editor-rules");
+    const details = panel.querySelector("#spo-contract-editor-details");
+    const source = panel.querySelector("#spo-contract-editor-source");
+    const badge = panel.querySelector("#spo-contract-editor-badge");
+    const reset = panel.querySelector("#spo-contract-editor-reset");
+
+    if (label) label.value = preset.label;
+    if (scope) scope.value = preset.scope;
+    if (state) state.value = preset.state;
+    if (summary) summary.value = preset.summary;
+    if (rules) rules.value = formatProtectedContractRulesText(preset.rules);
+    if (details) details.value = (preset.details || []).join("\n");
+    if (source) {
+      source.textContent = preset.localEdited
+        ? `Edição local salva neste navegador${preset.updatedAt ? ` em ${formatProtectedContractUpdatedAt(preset.updatedAt)}` : ""}.`
+        : "Catálogo base sem edição local.";
+    }
+    if (badge) badge.textContent = preset.localEdited ? "Editado localmente" : "Catálogo base";
+    if (reset) reset.disabled = !preset.localEdited;
+
+    panel.dataset.contractEditorKey = key;
+    panel.dataset.contractEditorDirty = "0";
+  }
+
+  function renderProtectedContractEditor(panel, state) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    const selectedKey = getProtectedContractEditorKey(panel, state);
+    populateProtectedContractEditorOptions(panel, selectedKey);
+    fillProtectedContractEditor(panel, selectedKey);
+  }
+
+  function readProtectedContractEditorPreset(panel) {
+    const key = getProtectedContractEditorKey(panel);
+    const base = PROTECTED_CONTRACT_PRESETS[key] || PROTECTED_CONTRACT_PRESETS.default;
+    const user = getProtectedContractUser();
+    const label = panel.querySelector("#spo-contract-editor-label");
+    const scope = panel.querySelector("#spo-contract-editor-scope");
+    const state = panel.querySelector("#spo-contract-editor-state");
+    const summary = panel.querySelector("#spo-contract-editor-summary");
+    const rules = panel.querySelector("#spo-contract-editor-rules");
+    const details = panel.querySelector("#spo-contract-editor-details");
+    return {
+      key,
+      preset: normalizeProtectedContractPresetOverride(key, {
+        label: label?.value || base.label,
+        scope: scope?.value || base.scope,
+        state: state?.value || base.state,
+        summary: summary?.value || base.summary,
+        rules: parseProtectedContractRulesText(rules?.value || "", base.rules),
+        details: normalizeProtectedContractDetails(details?.value || "", base.details),
+        updatedAt: new Date().toISOString(),
+        updatedBy: user.name || user.email || "Usuário autorizado",
+      }),
+    };
+  }
+
+  function saveProtectedContractEditorPreset(panel, mode = "draft") {
+    const editor = readProtectedContractEditorPreset(panel);
+    if (!editor.preset) {
+      setProtectedContractEditorStatus(panel, "Não foi possível ler a edição local deste preset.", true);
+      return;
+    }
+    writeProtectedContractCustomPresets({
+      ...readProtectedContractCustomPresets(),
+      [editor.key]: editor.preset,
+    });
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    const next = {
+      ...current,
+      preview: editor.key,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local-editor",
+      updatedAt: new Date().toISOString(),
+      updatedBy: user.name || user.email || "Usuário autorizado",
+    };
+    if (mode === "draft") next.draft = editor.key;
+    writeProtectedContractState(next);
+    setProtectedContractVisualPreset(editor.key);
+    addProtectedContractAudit(mode === "draft" ? "edit" : "editPreview", editor.key, { source: "js-local-editor" });
+    panel.dataset.contractEditorDirty = "0";
+    syncProtectedContractPanel(panel);
+    setProtectedContractEditorStatus(
+      panel,
+      mode === "draft"
+        ? `Edição local salva como rascunho: ${getProtectedContractLabel(editor.key)}.`
+        : `Edição local em prévia: ${getProtectedContractLabel(editor.key)}.`
+    );
+    showToast(
+      mode === "draft"
+        ? `Edição local salva: ${getProtectedContractLabel(editor.key)}.`
+        : `Edição local em prévia: ${getProtectedContractLabel(editor.key)}.`
+    );
+  }
+
+  function resetProtectedContractEditorPreset(panel) {
+    const key = getProtectedContractEditorKey(panel);
+    const customPresets = readProtectedContractCustomPresets();
+    if (!customPresets[key]) {
+      setProtectedContractEditorStatus(panel, "Este preset já está usando o catálogo base.");
+      return;
+    }
+    delete customPresets[key];
+    writeProtectedContractCustomPresets(customPresets);
+    addProtectedContractAudit("editReset", key, { source: "js-local-editor" });
+    panel.dataset.contractEditorDirty = "0";
+    syncProtectedContractPanel(panel);
+    setProtectedContractEditorStatus(panel, `Edição local removida: ${getProtectedContractLabel(key)}.`);
+    showToast("Edição local removida.");
+  }
+
+  function initProtectedContractEditor(panel) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    select.addEventListener("change", () => {
+      fillProtectedContractEditor(panel, select.value, true);
+      setProtectedContractEditorStatus(panel, "Preset carregado para edição local.");
+    });
+    [
+      "#spo-contract-editor-label",
+      "#spo-contract-editor-scope",
+      "#spo-contract-editor-state",
+      "#spo-contract-editor-summary",
+      "#spo-contract-editor-rules",
+      "#spo-contract-editor-details",
+    ].forEach((selector) => {
+      const field = panel.querySelector(selector);
+      if (!field) return;
+      field.addEventListener("input", () => {
+        panel.dataset.contractEditorDirty = "1";
+        setProtectedContractEditorStatus(panel, "Edição local ainda não salva.");
+      });
+    });
+
+    const preview = panel.querySelector("#spo-contract-editor-preview");
+    if (preview) {
+      preview.addEventListener("click", () => {
+        saveProtectedContractEditorPreset(panel, "preview");
+      });
+    }
+    const save = panel.querySelector("#spo-contract-editor-save");
+    if (save) {
+      save.addEventListener("click", () => {
+        saveProtectedContractEditorPreset(panel, "draft");
+      });
+    }
+    const reset = panel.querySelector("#spo-contract-editor-reset");
+    if (reset) {
+      reset.addEventListener("click", () => {
+        resetProtectedContractEditorPreset(panel);
+      });
+    }
+  }
+
+  function getProtectedContractViewKey(key) {
+    const value = String(key || "").trim();
+    return ["presets", "rules", "editor", "package", "audit"].includes(value) ? value : "presets";
+  }
+
+  function activateProtectedContractView(panel, viewKey, shouldFocus = false) {
+    const current = getProtectedContractViewKey(viewKey);
+    const selectedTab = panel.querySelector(`[data-contract-view="${current}"]`);
+    panel.querySelectorAll("[data-contract-view]").forEach((tab) => {
+      const selected = tab.dataset.contractView === current;
+      tab.classList.toggle("active", selected);
+      tab.setAttribute("aria-selected", String(selected));
+      tab.setAttribute("tabindex", selected ? "0" : "-1");
+    });
+    panel.querySelectorAll("[data-contract-panel]").forEach((viewPanel) => {
+      const selected = viewPanel.dataset.contractPanel === current;
+      viewPanel.hidden = !selected;
+      viewPanel.classList.toggle("active", selected);
+    });
+    const card = panel.querySelector("#spo-protected-contract-card");
+    if (card) card.dataset.contractActiveView = current;
+    if (shouldFocus && selectedTab) selectedTab.focus();
+  }
+
+  function initProtectedContractTabs(panel) {
+    const tabs = Array.from(panel.querySelectorAll("[data-contract-view]"));
+    if (!tabs.length) return;
+    const viewKeys = tabs.map((tab) => getProtectedContractViewKey(tab.dataset.contractView));
+    tabs.forEach((tab) => {
+      const view = getProtectedContractViewKey(tab.dataset.contractView);
+      const tabId = tab.id || `spo-contract-tab-${view}`;
+      const panelId = `spo-contract-panel-${view}`;
+      const viewPanel = panel.querySelector(`[data-contract-panel="${view}"]`);
+      tab.id = tabId;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panelId);
+      if (viewPanel) {
+        viewPanel.id = viewPanel.id || panelId;
+        viewPanel.setAttribute("role", "tabpanel");
+        viewPanel.setAttribute("aria-labelledby", tabId);
+        viewPanel.setAttribute("tabindex", "0");
+      }
+      tab.addEventListener("click", () => {
+        activateProtectedContractView(panel, view);
+        syncProtectedContractPanel(panel);
+      });
+      tab.addEventListener("keydown", (ev) => {
+        const currentIndex = viewKeys.indexOf(view);
+        let nextIndex = currentIndex;
+        if (ev.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+        if (ev.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        if (ev.key === "Home") nextIndex = 0;
+        if (ev.key === "End") nextIndex = tabs.length - 1;
+        if (nextIndex === currentIndex) return;
+        ev.preventDefault();
+        activateProtectedContractView(panel, viewKeys[nextIndex], true);
+        syncProtectedContractPanel(panel);
+      });
+    });
+    const initial = tabs.find((tab) => tab.classList.contains("active"))?.dataset.contractView || tabs[0].dataset.contractView;
+    activateProtectedContractView(panel, initial);
+  }
+
+  function syncProtectedContractPanel(panel) {
+    const state = readProtectedContractState();
+    const current = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const activePreset = getProtectedContractPreset(active);
+    const draftPreset = draft ? getProtectedContractPreset(draft) : null;
+    const preset = getProtectedContractPreset(current);
+    const status = panel.querySelector("#spo-contract-status");
+    panel.querySelectorAll("[data-contract-preset]").forEach((btn) => {
+      const presetKey = btn.dataset.contractPreset;
+      const selected = presetKey === current;
+      btn.classList.toggle("active", selected);
+      btn.classList.toggle("contract-preset-active-local", presetKey === active);
+      btn.classList.toggle("contract-preset-draft-local", Boolean(draft) && presetKey === draft);
+      btn.setAttribute("aria-pressed", String(selected));
+    });
+    if (status) {
+      const draftLabel = draftPreset ? draftPreset.label : "nenhum";
+      const stage =
+        draft && current !== draft
+          ? "Prévia diferente do rascunho salvo."
+          : draft && draft !== active
+          ? "Rascunho pronto para ativação."
+          : current !== active
+            ? "Prévia ainda não ativada."
+            : "Prévia alinhada ao ativo local.";
+      status.textContent = `Catálogo local em JavaScript: ativo ${activePreset.label}; rascunho ${draftLabel}; prévia ${preset.label}. ${stage} Nenhuma alteração em banco de dados.`;
+    }
+    renderProtectedContractState(panel, state);
+    syncProtectedContractActions(panel, state);
+    renderProtectedContractPreview(panel, current);
+    renderProtectedContractRules(panel, state);
+    renderProtectedContractEditor(panel, state);
+    renderProtectedContractAudit(panel);
+  }
+
+  function initProtectedContractControls(panel) {
+    const card = panel.querySelector("#spo-protected-contract-card");
+    if (!card) return;
+    if (!canManageProtectedContract()) {
+      card.remove();
+      return;
+    }
+    initProtectedContractTabs(panel);
+    initProtectedContractEditor(panel);
+    applyProtectedContractPreset(getStoredProtectedContractPreset(), false);
+    panel.querySelectorAll("[data-contract-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset(btn.dataset.contractPreset || "default", true, "preview");
+        addProtectedContractAudit("preview", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Preset "${getProtectedContractLabel(presetKey)}" pré-visualizado localmente.`);
+      });
+    });
+    const promoteDraft = panel.querySelector("#spo-contract-promote-draft");
+    if (promoteDraft) {
+      promoteDraft.addEventListener("click", () => {
+        const state = readProtectedContractState();
+        const previewKey = getProtectedContractPresetKey(state.preview || state.active);
+        const presetKey = applyProtectedContractPreset(previewKey, true, "draft");
+        addProtectedContractAudit("draft", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Prévia "${getProtectedContractLabel(presetKey)}" salva como rascunho local.`);
+      });
+    }
+    const activateDraft = panel.querySelector("#spo-contract-activate-draft");
+    if (activateDraft) {
+      activateDraft.addEventListener("click", () => {
+        const state = readProtectedContractState();
+        const draftKey = getOptionalProtectedContractPresetKey(state.draft);
+        if (!draftKey) {
+          showToast("Promova uma prévia a rascunho antes de ativar.");
+          syncProtectedContractPanel(panel);
+          return;
+        }
+        const presetKey = applyProtectedContractPreset(draftKey, true, "active");
+        addProtectedContractAudit("active", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Rascunho "${getProtectedContractLabel(presetKey)}" ativado localmente.`);
+      });
+    }
+    const save = panel.querySelector("#spo-contract-save");
+    if (save) {
+      save.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset(getStoredProtectedContractPreset(), true, "save");
+        addProtectedContractAudit("save", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast("Prévia protegida ativada localmente.");
+      });
+    }
+    const restore = panel.querySelector("#spo-contract-restore");
+    if (restore) {
+      restore.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset("default", true, "restore");
+        addProtectedContractAudit("restore", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast("Contrato visual restaurado para o padrão SPO.");
+      });
+    }
+    const generatePackage = panel.querySelector("#spo-contract-generate-package");
+    if (generatePackage) {
+      generatePackage.addEventListener("click", () => {
+        generateProtectedContractPackage(panel);
+        showToast("Pacote local gerado.");
+      });
+    }
+    const copyPackage = panel.querySelector("#spo-contract-copy-package");
+    if (copyPackage) {
+      copyPackage.addEventListener("click", () => {
+        copyProtectedContractPackage(panel);
+      });
+    }
+    const importPackage = panel.querySelector("#spo-contract-import-package");
+    if (importPackage) {
+      importPackage.addEventListener("click", () => {
+        importProtectedContractPackage(panel);
+      });
+    }
+    const clearAudit = panel.querySelector("#spo-contract-clear-audit");
+    if (clearAudit) {
+      clearAudit.addEventListener("click", () => {
+        clearProtectedContractAudit(panel);
+      });
+    }
+    syncProtectedContractPanel(panel);
+  }
+
   function initPersonalizarSpo() {
     const panel = document.getElementById("personalizar-spo-panel");
     if (!panel || panel.dataset.bound === "1") return;
     panel.dataset.bound = "1";
     syncThemeControls(panel);
+    initCommonVisualControls(panel);
     panel.querySelectorAll("[data-theme-choice]").forEach((btn) => {
       btn.addEventListener("click", () => {
         applyTheme(btn.dataset.themeChoice || "auto");
         syncThemeControls(panel);
+        syncCommonVisualControls(panel);
       });
     });
     panel.querySelectorAll("[data-accent-choice]").forEach((btn) => {
@@ -291,10 +1718,14 @@
       reset.addEventListener("click", () => {
         applyAccentColor("blue");
         applyTheme("auto");
+        localStorage.removeItem(COMMON_VISUAL_STORAGE_KEY);
+        applyCommonVisualPreferences(COMMON_VISUAL_DEFAULTS, false);
         syncThemeControls(panel);
-        showToast("Personalização restaurada para o padrão do ambiente.");
+        syncCommonVisualControls(panel);
+        showToast("Personalização restaurada para o padrão do laboratório.");
       });
     }
+    initProtectedContractControls(panel);
   }
 
   function bindToggleVisibility(scope) {
@@ -4273,7 +5704,7 @@
         if (origemWrapEl) origemWrapEl.style.display = "";
         if (destinoWrapEl) destinoWrapEl.style.display = "";
         if (msg) {
-          msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+          msg.textContent = "Usuário sem permissão para upload anual de chaves_planejamento.";
           msg.classList.add("text-error");
         }
       }
@@ -4515,7 +5946,7 @@
           if (row) {
             const rowTipo = String(row.dataset.tipo || "");
             if (rowTipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
-              msg.textContent = "Usuario sem permissao para editar chaves_planejamento.";
+              msg.textContent = "Usuário sem permissão para editar chaves_planejamento.";
               msg.classList.add("text-error");
               return;
             }
@@ -4567,7 +5998,7 @@
       const id = String(idEl?.value || "").trim();
       const tipo = String(tipoEl?.value || "").trim();
       if (tipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
-        msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+        msg.textContent = "Usuário sem permissão para upload anual de chaves_planejamento.";
         msg.classList.add("text-error");
         return;
       }
@@ -14521,6 +15952,29 @@
       SAEX: "#345feb",
     };
     const politicalKeys = ["regiao", "subfuncao", "paoe", "adj", "macropolitica", "pilar", "eixo", "politica"];
+    const getTetoChartColors = () => {
+      const theme = getCommonDiagramTheme();
+      const palette = theme.palette || oldChartPalette;
+      return {
+        theme,
+        palette,
+        groupColors: {
+          "1": palette[0] || groupColors["1"],
+          "3": palette[1] || groupColors["3"],
+          "4": palette[2] || groupColors["4"],
+        },
+        adjColors: {
+          SAGP: palette[4] || adjColors.SAGP,
+          SAAS: palette[1] || adjColors.SAAS,
+          SAGE: palette[3] || adjColors.SAGE,
+          SAIP: palette[0] || adjColors.SAIP,
+          SAGR: palette[5] || adjColors.SAGR,
+          GAB: palette[2] || adjColors.GAB,
+          SARC: palette[7] || adjColors.SARC,
+          SAEX: palette[6] || adjColors.SAEX,
+        },
+      };
+    };
 
     const clean = (value) => String(value ?? "").trim();
     const codeOf = (value) => {
@@ -14551,14 +16005,34 @@
         .replaceAll("'", "&#039;");
     const percent = (value, total) => (total ? `${((value / total) * 100).toFixed(2).replace(".", ",")}%` : "-");
     const plotConfig = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d"] };
-    const plotLayout = (extra = {}) => ({
-      margin: { t: 20, r: 24, b: 70, l: 70 },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      font: { family: "Arial, sans-serif", size: 11, color: getComputedStyle(document.body).getPropertyValue("--text").trim() || "#24323d" },
-      separators: ",.",
-      ...extra,
-    });
+    const plotLayout = (extra = {}) => {
+      const diagramTheme = getCommonDiagramTheme();
+      const mergeAxis = (axis = {}) => ({
+        ...axis,
+        gridcolor: diagramTheme.grid,
+        zerolinecolor: diagramTheme.grid,
+        linecolor: diagramTheme.axis,
+        tickfont: { color: diagramTheme.text, ...(axis.tickfont || {}) },
+        titlefont: { color: diagramTheme.text, ...(axis.titlefont || {}) },
+      });
+      const mergeAnnotation = (annotation = {}) => ({
+        ...annotation,
+        font: { color: diagramTheme.text, ...(annotation.font || {}) },
+      });
+      return {
+        margin: { t: 20, r: 24, b: 70, l: 70 },
+        paper_bgcolor: diagramTheme.panel,
+        plot_bgcolor: diagramTheme.plot,
+        font: { family: "Arial, sans-serif", size: 11, color: diagramTheme.text },
+        separators: ",.",
+        ...extra,
+        xaxis: mergeAxis(extra.xaxis),
+        yaxis: mergeAxis(extra.yaxis),
+        ...(extra.yaxis2 ? { yaxis2: mergeAxis(extra.yaxis2) } : {}),
+        legend: { font: { color: diagramTheme.text }, ...(extra.legend || {}) },
+        annotations: Array.isArray(extra.annotations) ? extra.annotations.map(mergeAnnotation) : extra.annotations,
+      };
+    };
 
     const setStatus = (message, isError = false) => {
       if (!statusEl) return;
@@ -14713,6 +16187,9 @@
         setStatus("Não foi possível carregar a biblioteca de gráficos.", true);
         return;
       }
+      const chartColors = getTetoChartColors();
+      const diagramTheme = chartColors.theme;
+      root.dataset.diagramMode = getResolvedCommonDiagramMode();
       const base = data.policyMode ? data.joined : data.momp;
       const byGroup = groupSum(base, "grupo");
       const groupEl = document.getElementById("teto-chart-grupo");
@@ -14728,9 +16205,9 @@
           textposition: "outside",
           marker: {
             colors: byGroup.map((row, index) =>
-              groupColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+              chartColors.groupColors[codeOf(row.label)] || chartColors.palette[index % chartColors.palette.length]
             ),
-            line: { color: "#ffffff", width: 1 },
+            line: { color: diagramTheme.border, width: 1 },
           },
           hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<br>%{percent}<extra></extra>",
         }], plotLayout({ margin: { t: 8, r: 20, b: 80, l: 20 }, legend: { orientation: "h", y: -0.18 } }), plotConfig);
@@ -14751,7 +16228,7 @@
           customdata: byAdj.map((row) => row.label),
           marker: {
             colors: byAdj.map((row, index) =>
-              adjColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+              chartColors.adjColors[codeOf(row.label)] || chartColors.palette[index % chartColors.palette.length]
             ),
           },
           textinfo: "label",
@@ -14774,11 +16251,11 @@
           {
             type: "bar", name: "Teto (R$)", x: byMacro.map((row) => row.label),
             y: byMacro.map((row) => row.valor), customdata: byMacro.map((row) => row.label),
-            marker: { color: "#636EFA" }, hovertemplate: "<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>",
+            marker: { color: chartColors.palette[0] }, hovertemplate: "<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>",
           },
           {
             type: "scatter", name: "Acumulado (%)", x: byMacro.map((row) => row.label),
-            y: accumulated, mode: "lines+markers", yaxis: "y2", line: { color: "#EF553B" },
+            y: accumulated, mode: "lines+markers", yaxis: "y2", line: { color: diagramTheme.cumulative },
             hovertemplate: "<b>%{x}</b><br>%{y:.1%}<extra></extra>",
           },
         ], plotLayout({
@@ -14786,7 +16263,7 @@
           yaxis: { title: "Teto (R$)", rangemode: "tozero" },
           yaxis2: { title: "Acumulado", overlaying: "y", side: "right", range: [0, 1], tickformat: ".0%" },
           legend: { orientation: "h", y: -0.38 },
-          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: "#c23b3b", dash: "dash" } }],
+          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: diagramTheme.line, dash: "dash" } }],
         }), plotConfig);
         bindPlotFilter("teto-chart-macro", "macropolitica", (point) => point?.customdata || point?.x);
       }
@@ -14808,10 +16285,10 @@
             ["", money.format(sum(byPaoe))],
           ],
           textposition: "outside",
-          increasing: { marker: { color: "#3D9970" } },
-          decreasing: { marker: { color: "#FF4136" } },
-          totals: { marker: { color: "#0074D9" } },
-          connector: { line: { color: "#7b8790", width: 1 } },
+          increasing: { marker: { color: diagramTheme.positive } },
+          decreasing: { marker: { color: diagramTheme.negative } },
+          totals: { marker: { color: diagramTheme.total } },
+          connector: { line: { color: diagramTheme.axis, width: 1 } },
           hovertemplate: "<b>%{x}</b><br>%{customdata[1]}<extra></extra>",
         }], plotLayout({
           margin: { t: 20, r: 24, b: 85, l: 70 },
@@ -14840,14 +16317,14 @@
           y: years.map((year) => sum(base.filter((row) => row.exercicio === year && row.grupo === group))),
           customdata: years.map(() => group),
           marker: {
-            color: groupColors[codeOf(group)] || oldChartPalette[index % oldChartPalette.length],
+            color: chartColors.groupColors[codeOf(group)] || chartColors.palette[index % chartColors.palette.length],
           },
           hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(group)}<br>R$ %{y:,.2f}<extra></extra>`,
         }));
         traces.push({
           type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
           y: years.map((year) => sum(base.filter((row) => row.exercicio === year))),
-          line: { color: "#B620E0", width: 2 },
+          line: { color: chartColors.palette[5] || diagramTheme.cumulative, width: 2 },
           hovertemplate: "<b>Exercício %{x}</b><br>Total: R$ %{y:,.2f}<extra></extra>",
         });
         Plotly.react("teto-chart-exercicio", traces, plotLayout({
@@ -14956,6 +16433,11 @@
       const valueRows = data.policyMode ? data.joined.length : data.momp.length;
       setStatus(`${number.format(valueRows)} registros considerados. Base monetária: ${data.policyMode ? "políticas orçamentárias" : "MOMP"}.`);
     };
+
+    document.addEventListener("spo-common-visual-change", () => {
+      if (!root.isConnected) return;
+      render();
+    });
 
     const load = async () => {
       setStatus("Carregando dados...");
@@ -18032,7 +19514,7 @@
       if (!selectedRow) return setFilterMsg("Selecione um registro para aprovar.", true);
       const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser aprovados.", true);
-      if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuario sem permissao para aprovar.", true);
+      if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuário sem permissão para aprovar.", true);
       if (etapaIsConsultaView) {
         sessionStorage.setItem(
           etapaPendingActionKey,
@@ -18050,7 +19532,7 @@
       const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser editados.", true);
       if (selectedRow.dataset.criadorPerfilId && selectedRow.dataset.criadorPerfilId !== currentUserPerfilId) {
-        return setFilterMsg("Usuario sem permissao para editar este registro.", true);
+        return setFilterMsg("Usuário sem permissão para editar este registro.", true);
       }
       if (etapaIsConsultaView) {
         sessionStorage.setItem(
