@@ -110,6 +110,36 @@
       cumulative: "#ffea00",
       palette: ["#00e5ff", "#ffea00", "#00ff85", "#ff4d6d", "#b967ff", "#ff9f1c", "#ffffff", "#7df9ff"],
     },
+    highLight: {
+      text: "#0f172a",
+      muted: "#334155",
+      grid: "rgba(51,65,85,0.20)",
+      axis: "rgba(15,23,42,0.78)",
+      panel: "#ffffff",
+      plot: "#ffffff",
+      border: "#334155",
+      line: "#1d4ed8",
+      total: "#1d4ed8",
+      positive: "#047857",
+      negative: "#b91c1c",
+      cumulative: "#b45309",
+      palette: ["#1d4ed8", "#047857", "#b91c1c", "#b45309", "#6d28d9", "#0f766e", "#334155", "#0369a1"],
+    },
+    highDark: {
+      text: "#f8fafc",
+      muted: "#e2e8f0",
+      grid: "rgba(226,232,240,0.28)",
+      axis: "rgba(248,250,252,0.82)",
+      panel: "#111827",
+      plot: "#0f172a",
+      border: "rgba(226,232,240,0.72)",
+      line: "#93c5fd",
+      total: "#60a5fa",
+      positive: "#34d399",
+      negative: "#fb7185",
+      cumulative: "#facc15",
+      palette: ["#93c5fd", "#34d399", "#fb7185", "#facc15", "#c4b5fd", "#67e8f9", "#e2e8f0", "#f9a8d4"],
+    },
   });
   const PROTECTED_CONTRACT_PRESETS = Object.freeze({
     default: {
@@ -470,6 +500,9 @@
     if (current.diagrams === "auto") {
       return document.body.classList.contains("theme-dark") ? "dark" : "light";
     }
+    if (current.diagrams === "high") {
+      return document.body.classList.contains("theme-dark") ? "highDark" : "highLight";
+    }
     return COMMON_DIAGRAM_THEMES[current.diagrams] ? current.diagrams : "light";
   }
 
@@ -489,6 +522,7 @@
     document.body.dataset.visualContrast = current.contrast;
     document.body.dataset.visualCards = current.cards;
     document.body.dataset.visualDiagrams = current.diagrams;
+    document.body.dataset.visualDiagramTheme = getResolvedCommonDiagramMode(current);
     if (persist) writeCommonVisualPreferences(current);
     emitCommonVisualChange(current);
     return current;

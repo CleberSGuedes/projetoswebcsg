@@ -55,11 +55,20 @@ O bloco `Prévia` da tela `Personalizar SPO` deve responder automaticamente a es
 
 Quando `data-visual-diagrams` muda, a aplicação emite o evento local `spo-common-visual-change`. Painéis já carregados devem escutar esse evento quando precisarem redesenhar gráficos ou diagramas em tempo real.
 
+Decisão LAB em 04/07/2026 para diagramas:
+
+- `automático`: acompanha o modo de aparência atual. No tema claro, usa preenchimento azul suave com bordas um pouco mais presentes para evitar cards lavados; no tema escuro, aproxima-se do modo escuro.
+- `claro`: força cards claros e deve manter bordas legíveis no tema claro. Quando usado sobre tema escuro, cada card precisa carregar contraste próprio, sem depender do fundo da página.
+- `escuro`: força cards escuros e deve manter texto, ícones e setas legíveis mesmo quando aplicado sobre tema claro.
+- `alto contraste`: é um modo de legibilidade contextual, não uma paleta fixa decorativa. A implementação deve resolver a variante real pelo contexto (`highLight` ou `highDark`) em `data-visual-diagram-theme`, preservando texto, bordas, ícones e setas fortes sem quebrar o tema geral.
+- fluxos conceituais, como o `Mapa Conceitual`, não devem receber moldura externa em `.governanca-flow`. O contrato visual atua nos cards e nos elementos funcionais do diagrama. Painéis de gráfico, como `.teto-chart`, podem manter fundo e borda próprios quando isso ajuda a leitura.
+
 Regras de aplicação:
 
 - a personalização comum deve ser reversível pelo botão de restauração do laboratório;
 - as mudanças devem ser visíveis imediatamente na tela, especialmente na prévia local;
 - as preferências comuns podem alterar conforto visual, leitura e componentes, mas não podem redefinir regras protegidas do contrato visual;
+- os modos de diagramas devem ter efeito visual real e testável nos fluxos conceituais e nos gráficos, sem criar molduras decorativas que conectem blocos independentes;
 - qualquer nova preferência deve ter valor padrão, efeito visual verificável, resumo textual e registro neste documento;
 - enquanto estiver no laboratório, a persistência permanece restrita a JavaScript/localStorage.
 

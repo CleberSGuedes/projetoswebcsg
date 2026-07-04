@@ -2820,8 +2820,8 @@ body[data-visual-contrast="enhanced"] .governanca-card p {
 
 body[data-visual-diagrams] {
   --spo-diagram-bg: rgba(var(--accent-rgb),0.04);
-  --spo-diagram-node-bg: rgba(var(--accent-rgb),0.06);
-  --spo-diagram-border: rgba(var(--accent-rgb),0.20);
+  --spo-diagram-node-bg: rgba(var(--accent-rgb),0.08);
+  --spo-diagram-border: rgba(var(--accent-rgb),0.24);
   --spo-diagram-text: var(--text);
   --spo-diagram-muted: var(--muted);
   --spo-diagram-accent: var(--accent);
@@ -2830,8 +2830,8 @@ body[data-visual-diagrams] {
 body.theme-dark[data-visual-diagrams="auto"],
 body[data-visual-diagrams="dark"] {
   --spo-diagram-bg: rgba(15,23,42,0.34);
-  --spo-diagram-node-bg: rgba(255,255,255,0.05);
-  --spo-diagram-border: rgba(226,232,240,0.24);
+  --spo-diagram-node-bg: #252b36;
+  --spo-diagram-border: rgba(147,197,253,0.34);
   --spo-diagram-text: #f8fafc;
   --spo-diagram-muted: #cbd5e1;
   --spo-diagram-accent: #93c5fd;
@@ -2840,10 +2840,17 @@ body[data-visual-diagrams="dark"] {
 body[data-visual-diagrams="light"] {
   --spo-diagram-bg: #f8fbff;
   --spo-diagram-node-bg: #ffffff;
-  --spo-diagram-border: rgba(37,99,235,0.22);
+  --spo-diagram-border: rgba(37,99,235,0.34);
   --spo-diagram-text: #24323d;
   --spo-diagram-muted: #5f6f7e;
   --spo-diagram-accent: #2563eb;
+}
+
+body.theme-dark[data-visual-diagrams="light"] {
+  --spo-diagram-border: rgba(147,197,253,0.50);
+  --spo-diagram-text: #0f172a;
+  --spo-diagram-muted: #334155;
+  --spo-diagram-accent: #60a5fa;
 }
 
 body[data-visual-diagrams="high"] {
@@ -2855,7 +2862,24 @@ body[data-visual-diagrams="high"] {
   --spo-diagram-accent: #ffea00;
 }
 
-body[data-visual-diagrams] .governanca-flow,
+body[data-visual-diagram-theme="highLight"] {
+  --spo-diagram-bg: #ffffff;
+  --spo-diagram-node-bg: #ffffff;
+  --spo-diagram-border: #334155;
+  --spo-diagram-text: #0f172a;
+  --spo-diagram-muted: #334155;
+  --spo-diagram-accent: #1d4ed8;
+}
+
+body[data-visual-diagram-theme="highDark"] {
+  --spo-diagram-bg: #111827;
+  --spo-diagram-node-bg: #0f172a;
+  --spo-diagram-border: rgba(226,232,240,0.72);
+  --spo-diagram-text: #f8fafc;
+  --spo-diagram-muted: #e2e8f0;
+  --spo-diagram-accent: #93c5fd;
+}
+
 body[data-visual-diagrams] .teto-chart {
   background: var(--spo-diagram-bg);
   border: 1px solid var(--spo-diagram-border);
@@ -2877,10 +2901,19 @@ body[data-visual-diagrams] .governanca-icon {
   color: var(--spo-diagram-accent);
 }
 
-body[data-visual-diagrams="high"] .governanca-flow,
 body[data-visual-diagrams="high"] .flow-node,
 body[data-visual-diagrams="high"] .teto-chart {
-  box-shadow: 0 0 0 1px #ffffff;
+  box-shadow: 0 0 0 1px var(--spo-diagram-border);
+}
+
+body[data-visual-diagram-theme="highLight"] .flow-node,
+body[data-visual-diagram-theme="highDark"] .flow-node {
+  border-width: 2px;
+}
+
+body[data-visual-diagram-theme="highLight"] .flow-arrow,
+body[data-visual-diagram-theme="highDark"] .flow-arrow {
+  opacity: 1;
 }
 
 .contract-flow {
@@ -4439,8 +4472,24 @@ body[data-visual-diagrams="high"] .personalizar-preview {
   --spo-preview-diagram-node-active: #ffea00;
 }
 
+body[data-visual-diagram-theme="highLight"] .personalizar-preview {
+  --spo-preview-diagram-bg: #ffffff;
+  --spo-preview-diagram-border: #334155;
+  --spo-preview-diagram-line: #1e293b;
+  --spo-preview-diagram-node: rgba(51,65,85,0.22);
+  --spo-preview-diagram-node-active: #1d4ed8;
+}
+
+body[data-visual-diagram-theme="highDark"] .personalizar-preview {
+  --spo-preview-diagram-bg: #111827;
+  --spo-preview-diagram-border: rgba(226,232,240,0.72);
+  --spo-preview-diagram-line: rgba(226,232,240,0.82);
+  --spo-preview-diagram-node: rgba(226,232,240,0.34);
+  --spo-preview-diagram-node-active: #93c5fd;
+}
+
 body[data-visual-diagrams="high"] .preview-line {
-  box-shadow: 0 0 0 2px #ffffff;
+  box-shadow: 0 0 0 2px var(--spo-preview-diagram-border);
 }
 
 .personalizar-actions {
