@@ -253,18 +253,38 @@ def create_app():
 
     @app.context_processor
     def inject_spo_environment():
-        base_label = (os.getenv("SPO_ENV_LABEL") or "Integração DEV Jean").strip()
+        base_label = (os.getenv("SPO_ENV_LABEL") or "Integracao DEV Jean").strip()
         detail = (os.getenv("SPO_ENV_DETAIL") or "").strip()
         port = (os.getenv("SPO_INSTANCE_PORT") or "").strip()
+        commit = (os.getenv("SPO_ENV_GIT_COMMIT") or "").strip()
+        dirty = (os.getenv("SPO_ENV_GIT_DIRTY") or "").strip() in {"1", "true", "sim", "yes"}
+        upstream = (os.getenv("SPO_ENV_GIT_UPSTREAM") or "").strip()
+        checkpoint = (os.getenv("SPO_ENV_GIT_CHECKPOINT") or "").strip()
+        delta_summary = (os.getenv("SPO_ENV_GIT_DELTA_SUMMARY") or "").strip()
+        git_title = (os.getenv("SPO_ENV_GIT_TITLE") or "").strip()
         parts = [base_label]
         if detail:
-            parts.append(detail)
+            parts.append(f"{detail}{'*' if dirty else ''}")
         if port:
             parts.append(f":{port}")
+        if commit:
+            parts.append(commit)
+        if delta_summary:
+            parts.append(delta_summary)
         badge = " · ".join(parts)
+        title_parts = [f"Ambiente ativo: {badge}"]
+        if git_title:
+            title_parts.append(git_title)
+        else:
+            if upstream:
+                title_parts.append(f"Remoto: {upstream}")
+            if checkpoint:
+                title_parts.append(f"Checkpoint: {checkpoint}")
+            if dirty:
+                title_parts.append("Worktree com alteracoes locais")
         return {
             "spo_environment_badge": badge,
-            "spo_environment_title": f"Ambiente ativo: {badge}",
+            "spo_environment_title": " | ".join(title_parts),
         }
 
 
