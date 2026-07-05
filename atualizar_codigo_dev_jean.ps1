@@ -28,22 +28,53 @@ if (-not $git) {
     exit 1
 }
 
-Write-Host "Atualizando codigo do ambiente intermediario dev/jean."
+Write-Host "Atualizacao protegida da base dev/jean."
 Write-Host "Git: $git"
 Write-Host ""
 
+$branch = (& $git branch --show-current).Trim()
+if (-not $branch) {
+    Write-Host "Nao foi possivel identificar a branch atual."
+    exit 1
+}
+
+Write-Host "Branch atual: $branch"
+Write-Host ""
 & $git status --short --branch
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$dirty = (& $git status --porcelain)
+if ($dirty) {
+    Write-Host ""
+    Write-Host "Atualizacao bloqueada: existem alteracoes locais no worktree."
+    Write-Host "Commit, reverta ou preserve essas alteracoes antes de atualizar dev/jean."
+    Write-Host "Nenhuma branch foi trocada e nenhuma alteracao local foi descartada."
+    exit 2
+}
+
+if ($branch -ne "dev/jean") {
+    Write-Host ""
+    Write-Host "A branch atual nao e dev/jean."
+    Write-Host "Fluxo recomendado: task/* -> front/* -> dev/jean."
+    Write-Host "Para sincronizar dev/jean, o script precisa trocar de branch."
+    $confirm = Read-Host "Digite DEV-JEAN para trocar para dev/jean e atualizar"
+    if ($confirm -ne "DEV-JEAN") {
+        Write-Host "Atualizacao cancelada pelo usuario. Nenhuma alteracao foi feita."
+        exit 3
+    }
+}
 
 Write-Host ""
 Write-Host "Buscando atualizacoes do repositorio remoto..."
 & $git fetch origin
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host ""
-Write-Host "Garantindo branch dev/jean..."
-& $git checkout dev/jean
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($branch -ne "dev/jean") {
+    Write-Host ""
+    Write-Host "Trocando para dev/jean..."
+    & $git switch dev/jean
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 Write-Host ""
 Write-Host "Aplicando atualizacoes sem sobrescrever alteracoes locais..."
@@ -59,5 +90,5 @@ if (Test-Path -LiteralPath $python) {
 }
 
 Write-Host ""
-Write-Host "Codigo intermediario atualizado."
+Write-Host "Base dev/jean atualizada com seguranca."
 exit 0

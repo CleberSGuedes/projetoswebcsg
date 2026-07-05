@@ -2,14 +2,14 @@
 setlocal
 cd /d "%~dp0"
 
-echo Atualizando codigo do ambiente intermediario dev/jean.
+echo Atualizando base de codigo dev/jean com protecao de branches.
 echo.
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0atualizar_codigo_dev_jean.ps1"
 if errorlevel 1 goto erro
 
 echo.
-echo Codigo intermediario atualizado.
+echo Base dev/jean atualizada.
 pause
 exit /b 0
 

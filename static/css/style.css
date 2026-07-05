@@ -525,6 +525,7 @@ body.special-context-focus .main {
   align-items: center;
   gap: 6px;
   width: fit-content;
+  max-width: min(72vw, 560px);
   margin-top: 3px;
   padding: 2px 8px;
   border: 1px solid rgba(var(--accent-rgb), 0.34);
@@ -538,6 +539,12 @@ body.special-context-focus .main {
   text-transform: uppercase;
 }
 .lab-badge i { font-size: 12px; }
+.lab-badge-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .user-info { display: flex; align-items: center; gap: 8px; }
 .user-meta { font-weight: 600; font-size: 9px; color: var(--text); white-space: nowrap; }
 .theme-toggle { display: flex; align-items: center; gap: 6px; margin-left: 6px; }

@@ -251,6 +251,23 @@ def create_app():
         db.create_all()
 
 
+    @app.context_processor
+    def inject_spo_environment():
+        base_label = (os.getenv("SPO_ENV_LABEL") or "Integração DEV Jean").strip()
+        detail = (os.getenv("SPO_ENV_DETAIL") or "").strip()
+        port = (os.getenv("SPO_INSTANCE_PORT") or "").strip()
+        parts = [base_label]
+        if detail:
+            parts.append(detail)
+        if port:
+            parts.append(f":{port}")
+        badge = " · ".join(parts)
+        return {
+            "spo_environment_badge": badge,
+            "spo_environment_title": f"Ambiente ativo: {badge}",
+        }
+
+
     @app.errorhandler(Exception)
     def handle_exception(err):
         if isinstance(err, HTTPException):
