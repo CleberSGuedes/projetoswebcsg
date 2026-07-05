@@ -2105,6 +2105,8 @@
   function initPta2027Integration() {
     const frame = document.getElementById("pta2027-frame");
     const wrap = document.querySelector(".pta2027-frame-wrap");
+    const integration = document.querySelector(".pta2027-integration");
+    const stickyBack = document.getElementById("pta2027-sticky-back");
     if (!frame) return;
     if (typeof pta2027IntegrationCleanup === "function") {
       pta2027IntegrationCleanup();
@@ -2135,17 +2137,96 @@
       };
     };
 
+    const diagnostics = {
+      initializedAt: new Date().toISOString(),
+      lastMessages: {},
+      lastMeasuredHeight: null,
+      lastTheme: null,
+      loadCount: 0,
+    };
+
+    const markMessage = (type, details = {}) => {
+      diagnostics.lastMessages[type] = { at: new Date().toISOString(), ...details };
+      frame.dataset.integrationLastMessage = type;
+    };
+
+    const readIframeStatus = () => {
+      try {
+        const runtimeStatus = frame.contentWindow?.pta2027GetRuntimeStatus?.();
+        if (runtimeStatus) return runtimeStatus;
+        const doc = frame.contentDocument;
+        return {
+          available: Boolean(doc),
+          bodyClasses: doc?.body ? Array.from(doc.body.classList) : [],
+          visibleView: doc?.querySelector("#wizard-view:not(.hidden)") ? "wizard" : "value",
+        };
+      } catch (err) {
+        return { available: false, error: err?.message || "iframe indisponivel" };
+      }
+    };
+
+    const getIntegrationStatus = () => ({
+      kind: "spo-pta2027-host",
+      initializedAt: diagnostics.initializedAt,
+      route: window.location.hash || window.location.pathname,
+      contract: {
+        flow: integration?.dataset.contractFlow || null,
+        scope: integration?.dataset.contractScope || null,
+        embeddedFlow: frame.dataset.contractEmbeddedFlow || null,
+      },
+      host: {
+        immersive: document.body.classList.contains("pta2027-immersive"),
+        contextFocus: document.body.classList.contains("pta2027-context-focus"),
+        specialContextFocus: document.body.classList.contains("special-context-focus"),
+        stickyBackVisible: Boolean(stickyBack && !stickyBack.hidden),
+        theme: document.body.classList.contains("theme-dark") ? "dark" : "light",
+        sidebarCollapsed: Boolean(sidebar?.classList.contains("collapsed")),
+      },
+      frame: {
+        height: frame.style.height || null,
+        wrapMinHeight: wrap?.style.minHeight || null,
+        dataset: { ...frame.dataset },
+      },
+      lastMessages: { ...diagnostics.lastMessages },
+      lastMeasuredHeight: diagnostics.lastMeasuredHeight,
+      lastTheme: diagnostics.lastTheme,
+      loadCount: diagnostics.loadCount,
+      iframe: readIframeStatus(),
+    });
+
+    window.spoGetPta2027IntegrationStatus = getIntegrationStatus;
+    frame.dataset.integrationState = "initialized";
+
     const syncFrameHeight = (height) => {
       const safeHeight = Math.max(720, Math.ceil(Number(height) || 0));
+      diagnostics.lastMeasuredHeight = safeHeight;
       frame.style.height = `${safeHeight}px`;
       if (wrap) wrap.style.minHeight = `${safeHeight}px`;
+      frame.dataset.integrationHeight = String(safeHeight);
     };
 
     const postTheme = () => {
+      const payload = readThemePayload();
       try {
-        frame.contentWindow?.postMessage(readThemePayload(), window.location.origin);
+        frame.contentWindow?.postMessage(payload, window.location.origin);
+        diagnostics.lastTheme = {
+          at: new Date().toISOString(),
+          theme: payload.theme,
+          accent: payload.accent,
+          accentRgb: payload.accentRgb,
+        };
+        frame.dataset.integrationTheme = payload.theme;
       } catch (err) {
         console.debug("Falha ao sincronizar tema do PTA 2027", err);
+      }
+    };
+
+    const postBackToStrategicChain = () => {
+      try {
+        frame.contentWindow?.postMessage({ type: "spo-pta2027-back-to-map" }, window.location.origin);
+        markMessage("spo-pta2027-back-to-map");
+      } catch (err) {
+        console.debug("Falha ao solicitar retorno para a cadeia estrategica", err);
       }
     };
 
@@ -2162,6 +2243,8 @@
 
     const setImmersiveMode = (enabled) => {
       document.body.classList.toggle("pta2027-immersive", Boolean(enabled));
+      frame.dataset.integrationImmersive = enabled ? "on" : "off";
+      if (wrap) wrap.dataset.integrationImmersive = enabled ? "on" : "off";
       if (sidebar) {
         if (enabled) {
           sidebar.classList.remove("open");
@@ -2181,11 +2264,22 @@
 
     const onMessage = (event) => {
       if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
-      if (event.data?.type === "pta2027-height") syncFrameHeight(event.data.height);
-      if (event.data?.type === "pta2027-immersive") setImmersiveMode(Boolean(event.data.enabled));
+      if (event.data?.type === "pta2027-height") {
+        markMessage("pta2027-height", { height: event.data.height });
+        syncFrameHeight(event.data.height);
+      }
+      if (event.data?.type === "pta2027-immersive") {
+        const enabled = Boolean(event.data.enabled);
+        markMessage("pta2027-immersive", { enabled });
+        setImmersiveMode(enabled);
+      }
       if (event.data?.type === "pta2027-context-focus") {
-        document.body.classList.toggle("special-context-focus", Boolean(event.data.enabled));
-        document.body.classList.toggle("pta2027-context-focus", Boolean(event.data.enabled));
+        const enabled = Boolean(event.data.enabled);
+        markMessage("pta2027-context-focus", { enabled });
+        document.body.classList.toggle("special-context-focus", enabled);
+        document.body.classList.toggle("pta2027-context-focus", enabled);
+        frame.dataset.integrationContext = enabled ? "focused" : "idle";
+        if (stickyBack) stickyBack.hidden = !enabled;
         syncPtaContextMeta();
         syncTopbarHeight();
         window.setTimeout(() => {
@@ -2195,6 +2289,7 @@
         }, 80);
       }
       if (event.data?.type === "pta2027-scroll-top") {
+        markMessage("pta2027-scroll-top");
         document.querySelector(".pta2027-integration")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     };
@@ -2205,7 +2300,10 @@
     });
 
     window.addEventListener("message", onMessage);
+    stickyBack?.addEventListener("click", postBackToStrategicChain);
     frame.addEventListener("load", () => {
+      diagnostics.loadCount += 1;
+      frame.dataset.integrationState = "loaded";
       syncTopbarHeight();
       postTheme();
       resizeFromDocument();
@@ -2220,7 +2318,12 @@
 
     pta2027IntegrationCleanup = () => {
       window.removeEventListener("message", onMessage);
+      stickyBack?.removeEventListener("click", postBackToStrategicChain);
+      if (stickyBack) stickyBack.hidden = true;
       observer.disconnect();
+      if (window.spoGetPta2027IntegrationStatus === getIntegrationStatus) {
+        delete window.spoGetPta2027IntegrationStatus;
+      }
       document.body.classList.remove("special-context-focus", "pta2027-context-focus");
       syncTopbarHeight();
       setImmersiveMode(false);
@@ -2413,7 +2516,27 @@
   function syncPtaContextMeta() {
     const meta = document.getElementById("pta2027-context-meta");
     if (!meta) return;
-    meta.textContent = readHostUserMeta().text;
+    const hostUser = readHostUserMeta();
+    const text = hostUser.text || "";
+    if (!text) {
+      meta.textContent = "";
+      meta.removeAttribute("title");
+      return;
+    }
+    const [namePart, ...detailParts] = text.split(" - ");
+    const nameText = namePart || hostUser.name || text;
+    const detailText = detailParts.join(" - ");
+    const nameLine = document.createElement("span");
+    nameLine.className = "pta2027-context-user-name";
+    nameLine.textContent = nameText;
+    meta.replaceChildren(nameLine);
+    if (detailText) {
+      const detailLine = document.createElement("span");
+      detailLine.className = "pta2027-context-user-detail";
+      detailLine.textContent = detailText;
+      meta.appendChild(detailLine);
+    }
+    meta.title = text;
   }
 
   function setUserMeta() {
@@ -16780,6 +16903,118 @@
     load();
   }
 
+  function initGovernancaSemanticFlows() {
+    const panels = Array.from(document.querySelectorAll("[data-governanca-flow-panel]"));
+    if (!panels.length) return;
+
+    panels.forEach((panel) => {
+      if (panel.dataset.flowBound === "1") return;
+      panel.dataset.flowBound = "1";
+
+      const flow = panel.querySelector("[data-flow-node-container]") || panel.querySelector(".governanca-flow");
+      const nodes = Array.from(panel.querySelectorAll("[data-flow-node]"));
+      const contextPanel = panel.querySelector("[data-flow-context-panel]");
+      const contextLabel = contextPanel?.querySelector(".flow-context-label");
+      const contextTitle = contextPanel?.querySelector("strong");
+      const contextText = contextPanel?.querySelector("p");
+      const mobileFlowQuery = window.matchMedia ? window.matchMedia("(max-width: 720px)") : null;
+      let contextOpen = true;
+
+      if (!flow || !nodes.length) return;
+
+      const isMobileFlow = () => (mobileFlowQuery ? mobileFlowQuery.matches : window.innerWidth <= 720);
+
+      const placeContextPanel = (node) => {
+        if (!contextPanel) return;
+        const inline = isMobileFlow();
+        contextPanel.classList.toggle("is-inline", inline);
+        contextPanel.hidden = inline && !contextOpen;
+        if (inline && node && flow.contains(node)) {
+          node.insertAdjacentElement("afterend", contextPanel);
+        } else if (!inline) {
+          contextOpen = true;
+          contextPanel.hidden = false;
+          flow.insertAdjacentElement("afterend", contextPanel);
+        }
+      };
+
+      const selectNode = (node, options = {}) => {
+        if (!node) return;
+        const alreadySelected = node.classList.contains("is-selected");
+        if (isMobileFlow() && alreadySelected && options.toggleContext) {
+          contextOpen = !contextOpen;
+        } else {
+          contextOpen = true;
+        }
+        nodes.forEach((item) => {
+          const active = item === node;
+          item.classList.toggle("is-selected", active);
+          item.setAttribute("aria-expanded", active && (!isMobileFlow() || contextOpen) ? "true" : "false");
+          if (active) {
+            item.dataset.diagramState = "selected";
+          } else {
+            delete item.dataset.diagramState;
+          }
+          item.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+
+        if (contextLabel) contextLabel.textContent = node.dataset.flowContext || "Contexto ativo";
+        if (contextTitle) contextTitle.textContent = node.querySelector("strong")?.textContent?.trim() || "";
+        if (contextText) {
+          contextText.textContent =
+            node.dataset.flowDetail || node.querySelector("small")?.textContent?.trim() || "";
+        }
+        placeContextPanel(node);
+      };
+
+      const moveSelection = (offset) => {
+        const currentIndex = Math.max(
+          0,
+          nodes.findIndex((node) => node.classList.contains("is-selected"))
+        );
+        const nextIndex = (currentIndex + offset + nodes.length) % nodes.length;
+        nodes[nextIndex].focus();
+        selectNode(nodes[nextIndex]);
+      };
+
+      nodes.forEach((node) => {
+        node.setAttribute("aria-pressed", "false");
+        if (contextPanel?.id) node.setAttribute("aria-controls", contextPanel.id);
+        node.addEventListener("click", () => selectNode(node, { toggleContext: true }));
+        node.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            moveSelection(1);
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            moveSelection(-1);
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            nodes[0].focus();
+            selectNode(nodes[0]);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            nodes[nodes.length - 1].focus();
+            selectNode(nodes[nodes.length - 1]);
+          }
+        });
+      });
+
+      selectNode(nodes.find((node) => node.dataset.flowDefault === "true") || nodes[0]);
+      if (mobileFlowQuery) {
+        const syncContextPlacement = () => {
+          contextOpen = true;
+          placeContextPanel(nodes.find((node) => node.classList.contains("is-selected")) || nodes[0]);
+        };
+        if (typeof mobileFlowQuery.addEventListener === "function") {
+          mobileFlowQuery.addEventListener("change", syncContextPlacement);
+        } else if (typeof mobileFlowQuery.addListener === "function") {
+          mobileFlowQuery.addListener(syncContextPlacement);
+        }
+      }
+    });
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
@@ -16789,6 +17024,16 @@
     }
     if (route === "atualizar/governanca-resultados/programacao-pta2027") {
       initPta2027Integration();
+    }
+    if (
+      route === "atualizar/governanca-resultados/mapa" ||
+      route === "atualizar/governanca-resultados/estrategia" ||
+      route === "atualizar/governanca-resultados/eap-politicas" ||
+      route === "atualizar/governanca-resultados/entregas-okr" ||
+      route === "atualizar/governanca-resultados/processos-riscos-projetos" ||
+      route === "atualizar/governanca-resultados/matriculas-metas"
+    ) {
+      initGovernancaSemanticFlows();
     }
     if (route === "usuarios" || route === "usuarios/cadastrar") {
       initUsuariosForm();

@@ -8,13 +8,13 @@
       <div class="eyebrow">Ambiente administrativo</div>
       <h1>Personalizar SPO</h1>
       <p class="muted">Configure preferências visuais do ambiente e teste presets governados do contrato visual.</p>
+      {% if pode_contrato_protegido %}
       <nav class="personalizar-subnav" aria-label="Áreas de personalização">
         <a href="#spo-personalizacao-comum">Personalização comum</a>
-        {% if pode_contrato_protegido %}
         <a href="#spo-contrato-protegido">Contrato protegido</a>
-        {% endif %}
         <a href="#spo-previsualizacao">Prévia e restauração</a>
       </nav>
+      {% endif %}
     </div>
   </div>
 

@@ -1,4 +1,4 @@
-<section class="governanca-resultados">
+<section class="governanca-resultados" id="governanca-eap-politicas-panel" data-governanca-flow-panel>
   <div class="page-header">
     <div>
       <div class="eyebrow">Governança e Resultados</div>
@@ -7,21 +7,27 @@
     </div>
   </div>
 
-  <div class="governanca-grid">
-    <article class="card governanca-card">
+  <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões de EAP e políticas públicas">
+    <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Estrutura analítica" data-flow-detail="A EAP organiza a leitura gerencial das políticas sem substituir programa, ação ou produto oficial do PPA.">
       <i class="bi bi-layers governanca-icon"></i>
-      <div class="card-title">Estrutura analítica</div>
-      <p>A EAP deve funcionar como mapa de leitura das políticas, sem substituir programa, ação ou produto oficial do PPA.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Estrutura analítica</strong>
+      <small>A EAP deve funcionar como mapa de leitura das políticas, sem substituir programa, ação ou produto oficial do PPA.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Vínculos oficiais" data-flow-detail="Cada componente gerencial precisa apontar para o nó oficial adequado: programa, PAOE, produto, subação ou etapa.">
       <i class="bi bi-link-45deg governanca-icon"></i>
-      <div class="card-title">Vínculos oficiais</div>
-      <p>Cada componente gerencial precisa se ligar aos nós oficiais adequados: programa, PAOE, produto, subação ou etapa.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Vínculos oficiais</strong>
+      <small>Cada componente gerencial precisa se ligar aos nós oficiais adequados: programa, PAOE, produto, subação ou etapa.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Histórico anual" data-flow-detail="Alterações de políticas, componentes e prioridades devem preservar contexto por exercício e por ciclo de planejamento.">
       <i class="bi bi-clock-history governanca-icon"></i>
-      <div class="card-title">Histórico anual</div>
-      <p>Alterações de políticas, componentes e prioridades devem preservar contexto por exercício e por ciclo de planejamento.</p>
-    </article>
+      <strong>Histórico anual</strong>
+      <small>Alterações de políticas, componentes e prioridades devem preservar contexto por exercício e por ciclo de planejamento.</small>
+    </button>
+  </div>
+
+  <div class="flow-context-panel" id="governanca-eap-politicas-context" data-flow-context-panel aria-live="polite">
+    <span class="flow-context-label">Estrutura analítica</span>
+    <strong>Estrutura analítica</strong>
+    <p>A EAP organiza a leitura gerencial das políticas sem substituir programa, ação ou produto oficial do PPA.</p>
   </div>
 </section>

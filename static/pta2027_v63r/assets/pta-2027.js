@@ -103,6 +103,7 @@ const macros=[
 const steps=[["Direcionamento","Macropolítica e política"],["Regionalização","Regiões e metas físicas"],["Subações","Entregas anuais"],["Etapas","Marcos de execução"],["Orçamento","Recursos necessários"],["Revisão","Validar e concluir"]];
 const regions=[["R100","Região 100"],["R200","Região 200"],["R300","Região 300"],["R400","Região 400"],["R500","Região 500"],["R600","Região 600"],["R700","Região 700"],["R800","Região 800"],["R900","Região 900"],["R1000","Região 1000"],["R1100","Região 1100"],["R1200","Região 1200"],["R9900","Todo o Estado"]];
 const state={macro:null,axis:null,step:0,unit:"2",adjunct:"SAIP",subfunction:"361",regions:[],target:"",subactions:[],stages:[],budget:"",contextGoalsOpen:false,contextPolicyOpen:false,contextOpenGoals:[]};
+const pta2027DraftKey="spo-pta-2027-draft";
 const currentUser={name:"Jean Carlos Alves Figueiredo",role:"admin"};
 const defaultStrategicElements={
  mission:"Garantir acesso, permanência e aprendizagem com qualidade e equidade.",
@@ -1263,24 +1264,59 @@ function isSpoScrollable(el){if(!el)return false;if(el===document.body)return do
 function setSpoScrollbarVisible(el,visible){if(!el)return;el.classList.toggle("scrollbar-visible",!!visible)}
 function bindSpoScrollbar(el){if(!el||el.dataset?.spoScrollbarBound==="1")return;if(el.dataset)el.dataset.spoScrollbarBound="1";let timer=null;const show=()=>{if(!isSpoScrollable(el))return;setSpoScrollbarVisible(el,true);clearTimeout(timer);timer=setTimeout(()=>setSpoScrollbarVisible(el,false),900)};const move=ev=>{if(!isSpoScrollable(el))return;const rect=el===document.body?{right:window.innerWidth,bottom:window.innerHeight}:el.getBoundingClientRect();setSpoScrollbarVisible(el,ev.clientX>=rect.right-28||ev.clientY>=rect.bottom-28)};const hide=()=>{clearTimeout(timer);setSpoScrollbarVisible(el,false)};(el===document.body?window:el).addEventListener("scroll",show,{passive:true});el.addEventListener("mousemove",move,{passive:true});el.addEventListener("mouseleave",hide,{passive:true})}
 function refreshSpoScrollbars(){if(!isEmbeddedMode)return;document.querySelectorAll(spoScrollbarTargets).forEach(bindSpoScrollbar)}
+function pta2027CurrentView(){const wizard=$("#wizard-view");return wizard&&!wizard.classList.contains("hidden")?"wizard":"value"}
+function pta2027StorageStatus(){return ["spo-strategic-elements","spo-strategic-pending","spo-support-texts","spo-support-texts-pending","spo-eap-rows",pta2027DraftKey].reduce((acc,key)=>{acc[key]=Boolean(localStorage.getItem(key));return acc},{})}
+function syncPta2027RuntimeMarkers(){document.body.dataset.pta2027Embedded=isEmbeddedMode?"1":"0";document.body.dataset.pta2027View=pta2027CurrentView();document.body.dataset.pta2027Programming=document.body.classList.contains("programming-focus")?"on":"off";document.body.dataset.pta2027Step=String(state.step??"");document.body.dataset.pta2027Macro=state.macro?.code||"";document.body.dataset.pta2027Axis=state.axis?.[0]||""}
+function pta2027GetRuntimeStatus(){syncPta2027RuntimeMarkers();return {kind:"pta2027-v63r",embeddedMode:isEmbeddedMode,programmingFocus:document.body.classList.contains("programming-focus"),theme:document.body.classList.contains("dark")?"dark":"light",view:pta2027CurrentView(),state:{macroCode:state.macro?.code||null,macroName:state.macro?.name||null,axisName:state.axis?.[0]||null,axisPolicy:state.axis?.[2]||null,stepIndex:state.step,stepLabel:steps[state.step]||null},counts:{treeSteps:document.querySelectorAll(".tree-step").length,contextCards:document.querySelectorAll("#context-cards .context-item").length,collapsedContextPanels:document.querySelectorAll("[data-mobile-context-panel].is-collapsed").length,subactions:normalizeSubactions(state.subactions).length,stages:normalizeStages(state.stages).length,eapRows:eapRows.length},storage:pta2027StorageStatus(),bodyDataset:{...document.body.dataset}}}
+window.pta2027GetRuntimeStatus=pta2027GetRuntimeStatus;
 function postEmbeddedHeight(){if(!isEmbeddedMode||!window.parent||window.parent===window)return;const visible=document.querySelector("#wizard-view:not(.hidden),#value-view:not(.hidden)")||document.body;const appbar=document.querySelector(".appbar");const appbarHeight=appbar&&getComputedStyle(appbar).display!=="none"?Math.ceil(appbar.getBoundingClientRect().height):0;const height=Math.max(visible.scrollHeight+appbarHeight,Math.ceil(visible.getBoundingClientRect().height)+appbarHeight,720)+2;window.parent.postMessage({type:"pta2027-height",height},window.location.origin)}
-function requestEmbeddedLayout(){if(!isEmbeddedMode)return;requestAnimationFrame(()=>requestAnimationFrame(()=>{refreshSpoScrollbars();postEmbeddedHeight()}))}
+function requestEmbeddedLayout(){syncPta2027RuntimeMarkers();if(!isEmbeddedMode)return;requestAnimationFrame(()=>requestAnimationFrame(()=>{refreshSpoScrollbars();postEmbeddedHeight()}))}
 function requestImmersiveMode(enabled){if(!isEmbeddedMode||!window.parent||window.parent===window)return;window.parent.postMessage({type:"pta2027-immersive",enabled:!!enabled},window.location.origin)}
-function requestContextFocus(enabled){document.body.classList.toggle("programming-focus",!!enabled);if(!isEmbeddedMode||!window.parent||window.parent===window)return;window.parent.postMessage({type:"pta2027-context-focus",enabled:!!enabled},window.location.origin);requestEmbeddedLayout()}
+function requestContextFocus(enabled){document.body.classList.toggle("programming-focus",!!enabled);syncPta2027RuntimeMarkers();if(!isEmbeddedMode||!window.parent||window.parent===window)return;window.parent.postMessage({type:"pta2027-context-focus",enabled:!!enabled},window.location.origin);requestEmbeddedLayout()}
+const mobileContextQuery=window.matchMedia?window.matchMedia("(max-width: 760px)"):null;
+function updateMobileContextPanel(panel){const collapsed=panel.classList.contains("is-collapsed");const body=panel.querySelector(".mobile-context-body");const mobile=mobileContextQuery?.matches||false;if(mobile){panel.setAttribute("role","button");panel.setAttribute("tabindex","0");panel.setAttribute("aria-expanded",String(!collapsed));if(body?.id)panel.setAttribute("aria-controls",body.id);panel.dataset.mobileContextState=collapsed?"collapsed":"expanded";return}panel.removeAttribute("role");panel.removeAttribute("tabindex");panel.removeAttribute("aria-expanded");panel.removeAttribute("aria-controls");delete panel.dataset.mobileContextState}
+function toggleMobileContextPanel(panel){if(!(mobileContextQuery?.matches))return;panel.dataset.mobileContextTouched="1";panel.classList.toggle("is-collapsed");updateMobileContextPanel(panel);requestEmbeddedLayout()}
+function syncMobileContextPanels(){const mobile=mobileContextQuery?.matches||false;document.querySelectorAll("[data-mobile-context-panel]").forEach(panel=>{if(!mobile){panel.classList.remove("is-collapsed");panel.dataset.mobileContextReady="0";updateMobileContextPanel(panel);return}if(panel.dataset.mobileContextReady!=="1"&&!panel.dataset.mobileContextTouched){panel.classList.add("is-collapsed")}panel.dataset.mobileContextReady="1";updateMobileContextPanel(panel)});requestEmbeddedLayout()}
+function setupMobileContextPanels(){document.querySelectorAll("[data-mobile-context-panel]").forEach(panel=>{panel.addEventListener("click",event=>{if(event.target.closest("a,button,input,select,textarea,label"))return;toggleMobileContextPanel(panel)});panel.addEventListener("keydown",event=>{if(event.key!=="Enter"&&event.key!==" ")return;event.preventDefault();toggleMobileContextPanel(panel)})});if(mobileContextQuery?.addEventListener)mobileContextQuery.addEventListener("change",syncMobileContextPanels);else if(mobileContextQuery?.addListener)mobileContextQuery.addListener(syncMobileContextPanels);syncMobileContextPanels()}
 function applySpoHostUser(payload={}){if(!isEmbeddedMode)return;const meta=$("#pta-standalone-clock");const avatar=document.querySelector(".avatar");if(meta&&payload.userMeta)meta.textContent=payload.userMeta;if(avatar&&payload.userInitials)avatar.textContent=payload.userInitials}
 function applySpoHostTheme(payload={}){if(!isEmbeddedMode)return;document.body.classList.toggle("dark",payload.theme==="dark");const root=document.documentElement;if(payload.accent)root.style.setProperty("--teal",payload.accent);if(payload.accentStrong)root.style.setProperty("--teal-dark",payload.accentStrong);if(payload.accentRgb)root.style.setProperty("--spo-accent-rgb",payload.accentRgb);if(payload.layoutPageGutter)root.style.setProperty("--spo-host-page-gutter",payload.layoutPageGutter);if(payload.layoutPanelGap)root.style.setProperty("--spo-host-panel-gap",payload.layoutPanelGap);if(payload.layoutSidebarCollapsed)root.style.setProperty("--spo-host-sidebar-collapsed",payload.layoutSidebarCollapsed);applySpoHostUser(payload);syncThemedSvgs(document);requestEmbeddedLayout()}
-window.addEventListener("message",event=>{if(event.origin!==window.location.origin)return;if(event.data?.type==="spo-theme")applySpoHostTheme(event.data)});
+function returnToStrategicChain(){saveCurrentStepInputs();$("#wizard-view").classList.add("hidden");$("#value-view").classList.remove("hidden");requestImmersiveMode(true);requestContextFocus(false);requestEmbeddedLayout()}
+function restoreDraftState(raw){
+ let saved;
+ try{saved=JSON.parse(raw)}catch(error){return {ok:false,message:"O rascunho local não pôde ser lido. Salve um novo rascunho para substituir este registro."}}
+ if(!saved||typeof saved!=="object")return {ok:false,message:"O rascunho local está vazio ou incompleto."};
+ const macroCode=saved.macro?.code||saved.macroCode;
+ const macro=macros.find(m=>m.code===macroCode);
+ if(!macro)return {ok:false,message:"O rascunho local não combina mais com o catálogo atual do PTA 2027."};
+ const savedAxis=Array.isArray(saved.axis)?saved.axis:[];
+ const axis=macro.axes.find(a=>a[1]===savedAxis[1]||a[2]===savedAxis[2]||a[0]===savedAxis[0]);
+ if(!axis)return {ok:false,message:"O eixo salvo no rascunho não foi localizado no catálogo atual."};
+ Object.assign(state,saved,{macro,axis});
+ state.step=Math.min(Math.max(Number(saved.step)||0,0),steps.length-1);
+ state.unit=saved.unit||"2";
+ state.adjunct=saved.adjunct||"SAIP";
+ state.subfunction=saved.subfunction||"361";
+ state.regions=Array.isArray(saved.regions)?saved.regions.filter(Boolean):[];
+ state.subactions=normalizeSubactions(saved.subactions);
+ state.stages=normalizeStages(saved.stages);
+ state.budget=saved.budget||"";
+ state.contextGoalsOpen=!!saved.contextGoalsOpen;
+ state.contextPolicyOpen=!!saved.contextPolicyOpen;
+ state.contextOpenGoals=Array.isArray(saved.contextOpenGoals)?saved.contextOpenGoals:[];
+ return {ok:true};
+}
+window.addEventListener("message",event=>{if(event.origin!==window.location.origin)return;if(event.data?.type==="spo-theme")applySpoHostTheme(event.data);if(event.data?.type==="spo-pta2027-back-to-map")returnToStrategicChain()});
 if(isEmbeddedMode){refreshSpoScrollbars();window.addEventListener("load",requestEmbeddedLayout);window.addEventListener("resize",requestEmbeddedLayout);if("ResizeObserver"in window)new ResizeObserver(requestEmbeddedLayout).observe(document.body);document.addEventListener("click",()=>setTimeout(requestEmbeddedLayout,80),true);document.addEventListener("input",()=>setTimeout(requestEmbeddedLayout,80),true);document.addEventListener("change",()=>setTimeout(requestEmbeddedLayout,80),true)}
 $("#next-step").onclick=()=>{saveCurrentStepInputs();if(state.step<5){state.step++;renderWizard();if(isEmbeddedMode)window.parent?.postMessage({type:"pta2027-scroll-top"},window.location.origin);else scrollTo({top:0,behavior:"smooth"});requestEmbeddedLayout()}else toast("Programação validada. Gabarito pronto para geração.")};
 $("#previous-step").onclick=()=>{saveCurrentStepInputs();if(state.step>0){state.step--;renderWizard();requestEmbeddedLayout()}};
-$("#save-draft").onclick=()=>{saveCurrentStepInputs();localStorage.setItem("spo-pta-2027-draft",JSON.stringify(state));toast("Rascunho salvo neste navegador.");requestEmbeddedLayout()};
-$("#back-to-map").onclick=()=>{$("#wizard-view").classList.add("hidden");$("#value-view").classList.remove("hidden");requestImmersiveMode(true);requestContextFocus(false);requestEmbeddedLayout()};
+$("#save-draft").onclick=()=>{saveCurrentStepInputs();try{localStorage.setItem(pta2027DraftKey,JSON.stringify(state));toast("Rascunho salvo neste navegador.")}catch(error){toast("Não foi possível salvar o rascunho neste navegador.")}requestEmbeddedLayout()};
+$("#back-to-map").onclick=returnToStrategicChain;
 $("#theme-button").onclick=()=>{document.body.classList.toggle("dark");syncThemedSvgs(document);requestEmbeddedLayout()};
-$("#resume-button").onclick=()=>{const raw=localStorage.getItem("spo-pta-2027-draft");if(!raw)return toast("Ainda não há rascunho salvo.");const saved=JSON.parse(raw);Object.assign(state,saved);state.subactions=normalizeSubactions(state.subactions);state.macro=macros.find(m=>m.code===saved.macro.code);$("#value-view").classList.add("hidden");$("#wizard-view").classList.remove("hidden");$("#journey-title").textContent=state.macro.name;requestImmersiveMode(true);requestContextFocus(true);renderWizard();requestEmbeddedLayout()};
+$("#resume-button").onclick=()=>{const raw=localStorage.getItem(pta2027DraftKey);if(!raw)return toast("Ainda não há rascunho salvo.");const restored=restoreDraftState(raw);if(!restored.ok)return toast(restored.message);$("#value-view").classList.add("hidden");$("#wizard-view").classList.remove("hidden");$("#journey-title").textContent=state.macro.name;requestImmersiveMode(true);requestContextFocus(true);renderWizard();requestEmbeddedLayout()};
 function updateStandaloneClock(){const clock=$("#pta-standalone-clock");if(clock)clock.textContent=new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"medium"}).format(new Date())}
 updateStandaloneClock();
 setInterval(updateStandaloneClock,1000);
-renderStrategicElements();renderPillars();renderMacros();setupEapTable();
+renderStrategicElements();renderPillars();renderMacros();setupEapTable();setupMobileContextPanels();
 requestImmersiveMode(true);
 requestContextFocus(false);
 requestEmbeddedLayout();

@@ -1,4 +1,4 @@
-<section class="governanca-resultados">
+<section class="governanca-resultados" id="governanca-matriculas-metas-panel" data-governanca-flow-panel>
   <div class="page-header">
     <div>
       <div class="eyebrow">Governança e Resultados</div>
@@ -7,21 +7,27 @@
     </div>
   </div>
 
-  <div class="governanca-grid">
-    <article class="card governanca-card">
+  <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões de matrículas e metas físicas">
+    <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Dados de base" data-flow-detail="Matrículas funcionam como fonte histórica para análise, projeção e validação das metas físicas regionalizadas.">
       <i class="bi bi-people governanca-icon"></i>
-      <div class="card-title">Dados de base</div>
-      <p>As matrículas serão tratadas como fonte histórica para análise, projeção e validação das metas físicas regionalizadas.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Dados de base</strong>
+      <small>As matrículas serão tratadas como fonte histórica para análise, projeção e validação das metas físicas regionalizadas.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Metas por região" data-flow-detail="O histórico deve apoiar a revisão anual do PPA e a programação do PTA, preservando rastreabilidade entre dado bruto e meta definida.">
       <i class="bi bi-table governanca-icon"></i>
-      <div class="card-title">Metas por região</div>
-      <p>O histórico deve apoiar a revisão anual do PPA e a programação do PTA, mantendo rastreabilidade entre dado bruto e meta definida.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Metas por região</strong>
+      <small>O histórico deve apoiar a revisão anual do PPA e a programação do PTA, mantendo rastreabilidade entre dado bruto e meta definida.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Análise gerencial" data-flow-detail="A comparação entre matrículas, metas físicas, orçamento e execução produz insumos para alocação e monitoramento.">
       <i class="bi bi-clipboard-data governanca-icon"></i>
-      <div class="card-title">Análise gerencial</div>
-      <p>A comparação entre matrículas, metas físicas, orçamento e execução cria insumos para decisões de alocação e monitoramento.</p>
-    </article>
+      <strong>Análise gerencial</strong>
+      <small>A comparação entre matrículas, metas físicas, orçamento e execução cria insumos para decisões de alocação e monitoramento.</small>
+    </button>
+  </div>
+
+  <div class="flow-context-panel" id="governanca-matriculas-metas-context" data-flow-context-panel aria-live="polite">
+    <span class="flow-context-label">Dados de base</span>
+    <strong>Dados de base</strong>
+    <p>Matrículas funcionam como fonte histórica para análise, projeção e validação das metas físicas regionalizadas.</p>
   </div>
 </section>

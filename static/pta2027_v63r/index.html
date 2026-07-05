@@ -227,17 +227,23 @@
 
       <aside class="context-panel">
         <section><span class="eyebrow">CONTEXTO ATIVO</span><div id="context-cards"></div></section>
-        <section class="key-card">
-          <div class="key-heading"><span>Chave de planejamento</span><span class="live-dot">ao vivo</span></div>
-          <code id="planning-key">* R___ * ___._ * ____ * __________ * __________ * __________ * __________ * _ *</code>
-          <p>O sistema constrói e valida a chave conforme as decisões da programação.</p>
+        <section class="key-card mobile-context-panel" data-mobile-context-panel>
+          <div class="key-heading mobile-context-heading"><span>Chave de planejamento</span><span class="live-dot">ao vivo</span></div>
+          <div class="mobile-context-body" id="planning-key-panel">
+            <code id="planning-key">* R___ * ___._ * ____ * __________ * __________ * __________ * __________ * _ *</code>
+            <p>O sistema constrói e valida a chave conforme as decisões da programação.</p>
+          </div>
         </section>
-        <section class="quality-card">
-          <strong>Qualidade da programação</strong>
-          <div><span>Coerência estratégica</span><b>✓</b></div>
-          <div><span>Regionalização</span><b id="quality-region">—</b></div>
-          <div><span>Entrega definida</span><b id="quality-delivery">—</b></div>
-          <div><span>Orçamento vinculado</span><b id="quality-budget">—</b></div>
+        <section class="quality-card mobile-context-panel" data-mobile-context-panel>
+          <div class="quality-heading mobile-context-heading">
+            <strong>Qualidade da programação</strong>
+          </div>
+          <div class="mobile-context-body" id="quality-check-panel">
+            <div><span>Coerência estratégica</span><b>✓</b></div>
+            <div><span>Regionalização</span><b id="quality-region">—</b></div>
+            <div><span>Entrega definida</span><b id="quality-delivery">—</b></div>
+            <div><span>Orçamento vinculado</span><b id="quality-budget">—</b></div>
+          </div>
         </section>
       </aside>
     </section>

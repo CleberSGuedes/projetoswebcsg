@@ -81,6 +81,39 @@ Tokens semânticos de diagramas:
 - em `forced-colors: active`, esses tokens devem ser mapeados para as cores semânticas do sistema;
 - a verificação local `window.spoGetDiagramSemanticTokens()` expõe o modo resolvido e os tokens ativos para teste no navegador.
 
+Estados semânticos reais em fluxos conceituais:
+
+- decisão LAB em 04/07/2026: o `Mapa Conceitual` foi o primeiro fluxo com seleção semântica real, usando botões de nó, `data-flow-node`, `data-diagram-state="selected"` e painel de contexto vinculado ao item ativo;
+- expansão LAB em 04/07/2026: o mesmo padrão passa a valer para os fluxos simples de `Governança e Resultados`: `Estratégia e Cadeia de Valor`, `EAP e Políticas`, `Entregas-MT e OKR`, `Processos, Riscos e Projetos` e `Matrículas e Metas Físicas`;
+- a estrutura técnica comum usa `data-governanca-flow-panel`, `data-flow-node-container`, `data-flow-node`, `data-flow-context`, `data-flow-detail` e `data-flow-context-panel`, permitindo inicialização única sem criar scripts por página;
+- `Programação PTA 2027` fica fora deste padrão simples nesta etapa porque já possui jornada, contexto ativo e componentes próprios. Ela deve seguir o contrato visual como fluxo imersivo especializado, não como lista simples de cards. Qualquer migração futura deve preservar essa lógica especializada;
+- a seleção deve alterar estado e conteúdo, não apenas desenho: o card ativo atualiza título, rótulo e texto do painel de contexto;
+- o estado selecionado precisa ficar visível em tema claro, tema escuro, preferências de diagrama e cores forçadas, sem depender somente da cor;
+- no desktop, o painel de contexto permanece visível como leitura complementar do fluxo;
+- no modo móvel, o painel de contexto deve aparecer abaixo do card selecionado e pode ser aberto ou fechado por cliques sucessivos no mesmo card; selecionar outro card reabre o contexto correspondente;
+- a navegação por teclado deve preservar o `Tab` nativo para entrada e saída do componente. A navegação cíclica interna deve usar setas, `Home` e `End`, sem criar armadilha de foco;
+- `warning` e `critical` continuam reservados para estados de dados reais. Os fluxos conceituais simples usam seleção e foco; não devem simular alerta apenas para enriquecer a interface.
+
+Fluxo imersivo especializado `Programação PTA 2027`:
+
+- a página deve abrir como ambiente de programação imersiva, preservando a área ampla de trabalho e o recolhimento lateral quando o mockup solicitar modo imersivo;
+- os cards explicativos continuam disponíveis como apoio conceitual, mas não devem substituir a jornada principal de programação;
+- ao selecionar `programar` um eixo de política, a experiência principal deve preservar as três áreas funcionais: árvore de evolução, coluna principal de edição e contexto ativo;
+- a hierarquia funcional registrada na auditoria do módulo é a referência de leitura para próximos ajustes: cadeia estratégica, macropolíticas, eixo/PAOE, jornada de seis etapas, contexto ativo e persistência local temporária;
+- novos ajustes não devem quebrar a sequência `cadeia estratégica -> macropolítica -> eixo/PAOE -> Programar -> etapas -> revisão -> rascunho local`;
+- no modo móvel, `value-view`, `wizard-view`, árvore de jornada e contexto ativo devem permanecer fluidos, sem restaurar largura mínima de mockup quando `spo-split-pressure` não estiver ativo;
+- o cabeçalho do host substitui a topbar global quando o iframe solicita foco contextual. Ele deve preservar o rótulo `Governança e Resultados`, o título `Programação PTA 2027`, a linha de usuário/data/logados e o retorno `Voltar à cadeia estratégica`;
+- no celular estreito, o cabeçalho imersivo deve ser compacto: texto auxiliar pode ser omitido, mas rótulo, título, usuário/data/logados e retorno permanecem visíveis. O retorno deve ficar integrado ao cabeçalho do host, não como card flutuante sobre o conteúdo;
+- em tablet e split largo, o cabeçalho imersivo pode usar duas áreas: título à esquerda e metadados/retorno à direita. Quando a largura não comportar essa divisão sem perda de leitura, ele pode cair para organização compacta;
+- no modo `Programar`, a faixa empilhada de leitura vale para viewports até `1180px`. Nessa faixa, a jornada, o contexto ativo e a coluna principal deixam de disputar largura lateral e aparecem como blocos sequenciais;
+- `1280x800` e larguras superiores devem ser tratadas como desktop compacto, não como modo móvel/tablet. Isso evita a árvore vertical com grande área vazia lateral em telas como Nest Hub Max;
+- `1024x600`, `768x1024`, `912x1368` e larguras semelhantes permanecem como tablet/split: a árvore fica horizontal compacta quando houver largura, o contexto ativo pode usar duas colunas e o progresso fica à esquerda da etapa para preservar leitura;
+- abaixo de `640px`, a árvore de etapas vira lista vertical guiada, os botões `Programar` ocupam linha própria nos cards e os painéis secundários do contexto ativo podem iniciar recolhidos, abrindo/fechando pelo toque no próprio card;
+- a comunicação entre host e iframe deve continuar por mensagens explícitas (`spo-theme`, `pta2027-height`, `pta2027-immersive`, `pta2027-context-focus` e `pta2027-scroll-top`), mantendo sincronização de tema, altura, foco contextual e retorno ao topo;
+- a página host pode usar marcadores como `data-contract-flow="pta2027-immersive"` e `data-contract-scope="specialized"` para indicar que este fluxo pertence ao contrato visual, mas não deve ser inicializado pelo padrão genérico dos fluxos simples;
+- a página deve manter diagnósticos locais de integração, como `spoGetPta2027IntegrationStatus()` no host e `pta2027GetRuntimeStatus()` no iframe, para validar modo imersivo, foco contextual, altura, tema, vista atual e etapa ativa sem depender de inspeção manual do DOM;
+- ajustes futuros devem harmonizar tokens, foco, contraste, responsividade e leitura, sem desmontar a funcionalidade esperada da programação.
+
 Validação automática local:
 
 - os temas de diagramas devem ser validados por `window.spoValidateDiagramContrast()`;

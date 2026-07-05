@@ -1,4 +1,4 @@
-<section class="governanca-resultados">
+<section class="governanca-resultados" id="governanca-estrategia-panel" data-governanca-flow-panel>
   <div class="page-header">
     <div>
       <div class="eyebrow">Governança e Resultados</div>
@@ -7,21 +7,27 @@
     </div>
   </div>
 
-  <div class="governanca-grid">
-    <article class="card governanca-card">
+  <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões estratégicas e cadeia de valor">
+    <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Direção estratégica" data-flow-detail="Define a orientação institucional que deve vir antes da programação: missão, visão, objetivos, indicadores e metas.">
       <i class="bi bi-bullseye governanca-icon"></i>
-      <div class="card-title">Direção estratégica</div>
-      <p>Missão, visão, objetivos, indicadores e metas institucionais devem orientar a programação antes da escolha dos elementos contábeis.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Direção estratégica</strong>
+      <small>Missão, visão, objetivos, indicadores e metas institucionais devem orientar a programação antes da escolha dos elementos contábeis.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Cadeia de valor" data-flow-detail="Conecta processos finalísticos, gerenciais e de suporte com política pública, capacidade organizacional e entrega pública.">
       <i class="bi bi-diagram-2 governanca-icon"></i>
-      <div class="card-title">Cadeia de valor</div>
-      <p>Processos finalísticos, gerenciais e de suporte serão a ponte entre política pública, capacidade organizacional e entrega pública.</p>
-    </article>
-    <article class="card governanca-card">
+      <strong>Cadeia de valor</strong>
+      <small>Processos finalísticos, gerenciais e de suporte serão a ponte entre política pública, capacidade organizacional e entrega pública.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Mapa estratégico" data-flow-detail="Organiza a conexão entre visão estratégica, PPA, PTA e painéis futuros de resultado e desenvolvimento organizacional.">
       <i class="bi bi-compass governanca-icon"></i>
-      <div class="card-title">Mapa estratégico</div>
-      <p>A visão estratégica deve se conectar ao PPA, ao PTA e aos painéis futuros de resultado e desenvolvimento organizacional.</p>
-    </article>
+      <strong>Mapa estratégico</strong>
+      <small>A visão estratégica deve se conectar ao PPA, ao PTA e aos painéis futuros de resultado e desenvolvimento organizacional.</small>
+    </button>
+  </div>
+
+  <div class="flow-context-panel" id="governanca-estrategia-context" data-flow-context-panel aria-live="polite">
+    <span class="flow-context-label">Direção estratégica</span>
+    <strong>Direção estratégica</strong>
+    <p>Define a orientação institucional que deve vir antes da programação: missão, visão, objetivos, indicadores e metas.</p>
   </div>
 </section>

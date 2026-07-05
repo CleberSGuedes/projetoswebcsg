@@ -2133,3 +2133,302 @@ body.embedded-mode textarea{
   grid-template-columns:repeat(2,minmax(0,1fr))!important;
  }
 }
+
+/* Contrato Responsivo SPO/PTA v3: modo Programar prioriza leitura em split e tablet.
+   A jornada continua imersiva, mas contexto e workspace deixam de disputar largura. */
+@media(max-width:1180px){
+ body.embedded-mode.programming-focus .wizard-view{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  grid-template-areas:
+   "journey"
+   "context"
+   "workspace"!important;
+  min-width:0!important;
+ }
+ body.embedded-mode.programming-focus .journey-panel{
+  grid-area:journey!important;
+  border-right:0!important;
+  border-bottom:1px solid var(--line)!important;
+ }
+ body.embedded-mode.programming-focus .context-panel{
+  grid-area:context!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:12px!important;
+  min-width:0!important;
+  padding:14px clamp(14px,2.6vw,24px)!important;
+  border-left:0!important;
+  border-bottom:1px solid var(--line)!important;
+  overflow:visible!important;
+ }
+ body.embedded-mode.programming-focus .workspace{
+  grid-area:workspace!important;
+  min-width:0!important;
+  padding:24px clamp(18px,3.2vw,42px)!important;
+ }
+ body.embedded-mode.programming-focus .context-panel > section:first-child,
+ body.embedded-mode.programming-focus .key-card,
+ body.embedded-mode.programming-focus .quality-card{
+  grid-column:1!important;
+  grid-row:auto!important;
+  min-width:0!important;
+  max-width:100%!important;
+  opacity:1!important;
+  filter:none!important;
+  max-height:none!important;
+  overflow:visible!important;
+ }
+ body.embedded-mode.programming-focus #context-cards{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))!important;
+  gap:10px!important;
+  min-width:0!important;
+ }
+ body.embedded-mode.programming-focus .context-item{
+  min-width:0!important;
+ }
+ body.embedded-mode.programming-focus .context-item strong,
+ body.embedded-mode.programming-focus .context-item em{
+  overflow-wrap:anywhere!important;
+ }
+ body.embedded-mode.programming-focus .key-card,
+ body.embedded-mode.programming-focus .quality-card{
+  padding:12px 14px!important;
+ }
+ body.embedded-mode.programming-focus .key-card code{
+  max-height:none!important;
+  overflow:visible!important;
+ }
+ body.embedded-mode.programming-focus .key-card p{
+  display:block!important;
+ }
+}
+
+@media(max-width:760px){
+ body.embedded-mode.programming-focus .context-panel{
+  padding:12px!important;
+  gap:10px!important;
+ }
+ body.embedded-mode.programming-focus .workspace{
+  padding:16px 12px!important;
+ }
+ body.embedded-mode.programming-focus #context-cards{
+  grid-template-columns:minmax(0,1fr)!important;
+ }
+ body.embedded-mode.programming-focus .key-card,
+ body.embedded-mode.programming-focus .quality-card{
+  padding:12px!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v4: no celular, a arvore vira lista guiada. */
+@media(max-width:640px){
+ body.embedded-mode.programming-focus .journey-panel{
+  padding:14px 12px!important;
+ }
+ body.embedded-mode.programming-focus .journey-heading{
+  margin:10px 0 12px!important;
+ }
+ body.embedded-mode.programming-focus .journey-tree{
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:7px!important;
+  overflow-x:visible!important;
+  padding-bottom:0!important;
+  scrollbar-gutter:auto!important;
+ }
+ body.embedded-mode.programming-focus .tree-step{
+  grid-template-columns:34px minmax(0,1fr)!important;
+  min-height:48px!important;
+  min-width:0!important;
+  padding:7px 8px!important;
+  border:1px solid var(--line)!important;
+  border-radius:12px!important;
+  background:color-mix(in srgb,var(--surface) 94%,var(--teal) 6%)!important;
+ }
+ body.embedded-mode.programming-focus .tree-step.active,
+ body.embedded-mode.programming-focus .tree-step.complete{
+  border-color:rgba(var(--spo-accent-rgb,28,113,216),.46)!important;
+  background:color-mix(in srgb,var(--surface) 86%,var(--teal) 14%)!important;
+ }
+ body.embedded-mode.programming-focus .tree-step b,
+ body.embedded-mode.programming-focus .tree-step span{
+  min-width:0!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:normal!important;
+ }
+ body.embedded-mode.programming-focus .tree-step b{
+  font-size:12px!important;
+  line-height:1.25!important;
+ }
+ body.embedded-mode.programming-focus .tree-step span{
+  font-size:10px!important;
+  line-height:1.28!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v5: contexto secundario recolhivel no celular. */
+body.embedded-mode.programming-focus .quality-heading{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:10px;
+ padding:0!important;
+ color:var(--text)!important;
+ border-top:0!important;
+ margin-bottom:10px;
+}
+body.embedded-mode.programming-focus .quality-heading strong{
+ margin-bottom:0!important;
+}
+body.embedded-mode.programming-focus .quality-card .mobile-context-body{
+ display:block!important;
+ padding:0!important;
+ color:inherit!important;
+ border-top:0!important;
+}
+@media(max-width:760px){
+ body.embedded-mode.programming-focus .mobile-context-panel{
+  cursor:pointer;
+  transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel:focus-visible{
+  outline:3px solid rgba(var(--spo-accent-rgb,28,113,216),.30);
+  outline-offset:2px;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel:active{
+  transform:translateY(1px);
+ }
+ body.embedded-mode.programming-focus .mobile-context-heading{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+ }
+ body.embedded-mode.programming-focus .mobile-context-heading:after{
+  content:"";
+  flex:0 0 auto;
+  width:8px;
+  height:8px;
+  margin-left:auto;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  opacity:.72;
+  transform:rotate(225deg);
+  transition:transform .16s ease,opacity .16s ease;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed .mobile-context-heading:after{
+  transform:rotate(45deg);
+  opacity:.62;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed{
+  padding:10px 12px!important;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed .mobile-context-body{
+  display:none!important;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed .key-heading,
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed .quality-heading{
+  margin-bottom:0!important;
+ }
+ body.embedded-mode.programming-focus .mobile-context-panel.is-collapsed .live-dot{
+  display:none!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v6: botoes Programar nao escapam dos cards no celular. */
+@media(max-width:760px){
+ body.embedded-mode .policy-expansion .policy-option{
+  grid-template-columns:34px minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:10px!important;
+  padding:12px!important;
+ }
+ body.embedded-mode .policy-expansion .policy-icon{
+  width:34px!important;
+  height:34px!important;
+ }
+ body.embedded-mode .policy-expansion .policy-option > div{
+  min-width:0!important;
+ }
+ body.embedded-mode .policy-expansion .policy-option strong,
+ body.embedded-mode .policy-expansion .policy-option span{
+  overflow-wrap:anywhere!important;
+ }
+ body.embedded-mode .policy-expansion .start-policy{
+  grid-column:1/-1!important;
+  justify-self:stretch!important;
+  width:100%!important;
+  min-width:0!important;
+  margin-top:2px!important;
+  text-align:center!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v7: contexto ativo mais compacto em tablet e split largo. */
+@media(min-width:641px) and (max-width:1024px){
+ body.embedded-mode.programming-focus .context-panel{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  align-items:start!important;
+  gap:10px 12px!important;
+  padding:14px clamp(16px,3vw,24px)!important;
+ }
+ body.embedded-mode.programming-focus .context-panel > section:first-child{
+  grid-column:1/-1!important;
+ }
+ body.embedded-mode.programming-focus #context-cards{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:10px!important;
+ }
+ body.embedded-mode.programming-focus #context-cards .context-item{
+  margin-top:0!important;
+ }
+ body.embedded-mode.programming-focus #context-cards .context-components-panel,
+ body.embedded-mode.programming-focus #context-cards .context-goals-panel{
+  grid-column:1/-1!important;
+ }
+ body.embedded-mode.programming-focus .key-card,
+ body.embedded-mode.programming-focus .quality-card{
+  grid-column:auto!important;
+  align-self:stretch!important;
+  margin-top:0!important;
+ }
+ body.embedded-mode.programming-focus .key-card{
+  grid-column:1!important;
+ }
+ body.embedded-mode.programming-focus .quality-card{
+  grid-column:2!important;
+ }
+ body.embedded-mode.programming-focus .key-card code{
+  max-height:92px!important;
+  overflow:auto!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v8: progresso mantem leitura lateral em tablets. */
+@media(min-width:641px) and (max-width:1024px){
+ body.embedded-mode.programming-focus .workspace-top{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:14px!important;
+ }
+ body.embedded-mode.programming-focus .workspace-top > div:first-child{
+  min-width:0!important;
+ }
+ body.embedded-mode.programming-focus .progress-ring{
+  order:-1!important;
+  width:62px!important;
+  height:62px!important;
+  border-width:6px!important;
+ }
+}
+
+/* Contrato Responsivo SPO/PTA v9: retorno fixo fica no host em movel/tablet. */
+@media(max-width:1024px){
+ body.embedded-mode.programming-focus #back-to-map{
+  display:none!important;
+ }
+}
