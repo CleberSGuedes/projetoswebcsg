@@ -6,6 +6,44 @@
   <div class="card">
     <div class="card-title">Status</div>
     <p>Ambiente conectado. Verifique permissões para acessar usuários.</p>
+    {% if spo_environment_git and (spo_environment_git.commit or spo_environment_git.branch) %}
+      <div class="environment-status-panel" aria-label="Status técnico do ambiente">
+        <div class="environment-status-title">Ambiente DEV</div>
+        <div class="environment-status-grid">
+          {% if spo_environment_git.branch %}
+            <span>Branch</span>
+            <strong>{{ spo_environment_git.branch }}{% if spo_environment_git.dirty %}*{% endif %}</strong>
+          {% endif %}
+          {% if spo_environment_git.commit %}
+            <span>Commit</span>
+            <strong>{{ spo_environment_git.commit }}</strong>
+          {% endif %}
+          <span>Estado</span>
+          <strong>{{ "alterações locais" if spo_environment_git.dirty else "limpo" }}</strong>
+          {% if spo_environment_git.upstream %}
+            <span>Remoto</span>
+            <strong>{{ spo_environment_git.upstream }}</strong>
+          {% endif %}
+          {% if spo_environment_git.checkpoint %}
+            <span>Checkpoint</span>
+            <strong>{{ spo_environment_git.checkpoint }}</strong>
+          {% endif %}
+          {% if spo_environment_git.delta_summary %}
+            <span>Frentes</span>
+            <strong>{{ spo_environment_git.delta_summary }}</strong>
+          {% endif %}
+        </div>
+        {% if spo_environment_git.front_status %}
+          <div class="environment-fronts" aria-label="Frentes DEV mapeadas">
+            {% for item in spo_environment_git.front_status %}
+              <span class="environment-front-pill{% if item.devOnly or item.frontOnly %} is-different{% endif %}" title="{{ item.branch }} · DEV +{{ item.devOnly }} / frente +{{ item.frontOnly }}">
+                {{ item.key }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
     {% if can_view_sessions %}
       <hr>
       <div class="muted">Usuários logados agora: {{ active_sessions|length }}</div>

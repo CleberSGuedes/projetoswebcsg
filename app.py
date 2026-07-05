@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from datetime import datetime, timedelta
+import json
 import secrets
 import logging
 import os
@@ -261,7 +262,18 @@ def create_app():
         upstream = (os.getenv("SPO_ENV_GIT_UPSTREAM") or "").strip()
         checkpoint = (os.getenv("SPO_ENV_GIT_CHECKPOINT") or "").strip()
         delta_summary = (os.getenv("SPO_ENV_GIT_DELTA_SUMMARY") or "").strip()
+        front_status_raw = (os.getenv("SPO_ENV_GIT_FRONT_STATUS") or "").strip()
         git_title = (os.getenv("SPO_ENV_GIT_TITLE") or "").strip()
+        front_status = []
+        if front_status_raw:
+            try:
+                parsed_status = json.loads(front_status_raw)
+                if isinstance(parsed_status, dict):
+                    front_status = [parsed_status]
+                elif isinstance(parsed_status, list):
+                    front_status = [item for item in parsed_status if isinstance(item, dict)]
+            except Exception:
+                front_status = []
         parts = [base_label]
         if detail:
             parts.append(f"{detail}{'*' if dirty else ''}")
@@ -269,8 +281,6 @@ def create_app():
             parts.append(f":{port}")
         if commit:
             parts.append(commit)
-        if delta_summary:
-            parts.append(delta_summary)
         badge = " · ".join(parts)
         title_parts = [f"Ambiente ativo: {badge}"]
         if git_title:
@@ -285,6 +295,17 @@ def create_app():
         return {
             "spo_environment_badge": badge,
             "spo_environment_title": " | ".join(title_parts),
+            "spo_environment_git": {
+                "label": base_label,
+                "branch": detail,
+                "port": port,
+                "commit": commit,
+                "dirty": dirty,
+                "upstream": upstream,
+                "checkpoint": checkpoint,
+                "delta_summary": delta_summary,
+                "front_status": front_status,
+            },
         }
 
 
