@@ -123,7 +123,7 @@ def _commit_upload_filename(model_cls, upload_id: int, output_filename: str | No
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Background worker for heavy uploads.")
-    parser.add_argument("--kind", choices=["emp", "nob"], required=True)
+    parser.add_argument("--kind", choices=["emp", "nob", "see"], required=True)
     parser.add_argument("--upload-id", type=int, required=True)
     return parser.parse_args()
 
@@ -186,8 +186,12 @@ def main() -> int:
             )
             if args.kind == "emp":
                 _run_emp(args.upload_id)
-            else:
+            elif args.kind == "nob":
                 _run_nob(args.upload_id)
+            else:
+                from rotas.home_routes import _run_see_processamento
+
+                _run_see_processamento(app, args.upload_id)
         except Exception as exc:
             msg = f"{type(exc).__name__}: {exc}"
             if "PROCESSAMENTO_CANCELADO" in msg:

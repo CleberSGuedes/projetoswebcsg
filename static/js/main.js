@@ -782,12 +782,18 @@
     const selectTipo = document.getElementById("painel-tipo");
     const selectPerfil = document.getElementById("painel-perfil");
     const selectNivel = document.getElementById("painel-nivel");
+    const selectUsuario = document.getElementById("painel-usuario");
+    const usuarioPesquisa = document.getElementById("painel-usuario-pesquisa");
+    const usuarioOpcoes = document.getElementById("painel-usuario-opcoes");
+    const usuarioSelecionados = document.getElementById("painel-usuario-selecionados");
     const fieldPerfil = document.getElementById("painel-perfil-field");
     const fieldNivel = document.getElementById("painel-nivel-field");
+    const fieldUsuario = document.getElementById("painel-usuario-field");
+    const usuarioLegenda = document.getElementById("painel-usuario-legenda");
     const btnSalvar = document.getElementById("painel-salvar");
     const btnCancelar = document.getElementById("painel-cancelar");
     const msg = document.getElementById("painel-msg");
-    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectTipo) return;
+    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectUsuario || !usuarioOpcoes || !selectTipo) return;
     if (treeEl.dataset.bound === "1") return;
     treeEl.dataset.bound = "1";
 
@@ -796,6 +802,11 @@
     const allowedNivelRaw = JSON.parse(dataScript.dataset.allowedNivel || "{}");
     const allowedPerfil = {};
     const allowedNivel = {};
+    const allowedUsuario = {};
+    const inheritedUsuario = {};
+    const userAllow = {};
+    const userDeny = {};
+    let mixedUsuario = new Set();
     Object.entries(allowedPerfilRaw).forEach(([k, v]) => {
       allowedPerfil[String(k)] = v;
     });
@@ -823,26 +834,62 @@
     let profileLocked = new Set();
     let currentMode = selectTipo.value || "perfil";
 
-    const getAllowedMap = () => (currentMode === "nivel" ? allowedNivel : allowedPerfil);
+    const getAllowedMap = () => {
+      if (currentMode === "nivel") return allowedNivel;
+      if (currentMode === "usuario") return allowedUsuario;
+      return allowedPerfil;
+    };
     const getOriginalMap = () => (currentMode === "nivel" ? originalNivel : originalPerfil);
-    const getSelectedKey = () => String(currentMode === "nivel" ? selectNivel.value || "" : selectPerfil.value || "");
+    const getSelectedUserIds = () => Array.from(
+      usuarioOpcoes.querySelectorAll("input[type='checkbox']:checked")
+    ).map((input) => String(input.value));
+    const getSelectedKey = () => String(
+      currentMode === "nivel"
+        ? selectNivel.value || ""
+        : currentMode === "usuario"
+          ? (getSelectedUserIds().length ? "__usuarios__" : "")
+          : selectPerfil.value || ""
+    );
     const getLockedSet = () => {
       const locked = new Set(lockedBase);
       if (currentMode === "perfil") {
         nivelLocked.forEach((id) => locked.add(id));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((id) => locked.add(id));
       }
       return locked;
     };
 
+    const featureNames = new Map();
+    const indexFeatureNames = (items) => (items || []).forEach((f) => {
+      featureNames.set(f.id, f.nome || f.id);
+      indexFeatureNames(f.children || []);
+    });
+    indexFeatureNames(features);
+
     const renderAtivos = (list) => {
       ativosEl.innerHTML = "";
       list.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = item;
+        li.textContent = featureNames.get(item) || item;
         ativosEl.appendChild(li);
       });
+    };
+
+    const aggregateSelectedUsers = () => {
+      const ids = getSelectedUserIds();
+      if (!ids.length) {
+        allowedUsuario.__usuarios__ = [];
+        mixedUsuario = new Set();
+        return;
+      }
+      const sets = ids.map((id) => new Set(allowedUsuario[id] || []));
+      const union = new Set(sets.flatMap((set) => Array.from(set)));
+      const intersection = new Set(Array.from(union).filter((feature) =>
+        sets.every((set) => set.has(feature))
+      ));
+      allowedUsuario.__usuarios__ = Array.from(intersection);
+      mixedUsuario = new Set(Array.from(union).filter((feature) => !intersection.has(feature)));
     };
 
     const buildTree = (key) => {
@@ -851,15 +898,43 @@
         ativosEl.innerHTML = "";
         return;
       }
+      if (currentMode === "usuario") aggregateSelectedUsers();
       const allowedMap = getAllowedMap();
       const currentAllowed = new Set(allowedMap[key] || []);
       lockedBase.forEach((f) => currentAllowed.add(f));
       if (currentMode === "perfil") {
         nivelLocked.forEach((f) => currentAllowed.add(f));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((f) => currentAllowed.add(f));
       }
       const lockedAll = getLockedSet();
+
+      const setUserPermission = (id, checked) => {
+        if (currentMode !== "usuario") return;
+        getSelectedUserIds().forEach((usuarioId) => {
+          const inherited = new Set(inheritedUsuario[usuarioId] || []);
+          const allow = new Set(userAllow[usuarioId] || []);
+          const deny = new Set(userDeny[usuarioId] || []);
+          const effective = new Set(allowedUsuario[usuarioId] || []);
+          if (checked) {
+            effective.add(id);
+            deny.delete(id);
+            if (inherited.has(id)) allow.delete(id);
+            else allow.add(id);
+          } else {
+            effective.delete(id);
+            allow.delete(id);
+            if (inherited.has(id)) deny.add(id);
+            else deny.delete(id);
+          }
+          userAllow[usuarioId] = Array.from(allow);
+          userDeny[usuarioId] = Array.from(deny);
+          allowedUsuario[usuarioId] = Array.from(effective).filter((feature) => !lockedBase.has(feature));
+        });
+        if (checked) currentAllowed.add(id);
+        else currentAllowed.delete(id);
+        mixedUsuario.delete(id);
+      };
 
       const toggleChildren = (node, checked) => {
         node.querySelectorAll("input[type='checkbox']").forEach((cb) => {
@@ -869,7 +944,8 @@
             return;
           }
           cb.checked = checked;
-          if (checked) currentAllowed.add(id);
+          if (currentMode === "usuario") setUserPermission(id, checked);
+          else if (checked) currentAllowed.add(id);
           else currentAllowed.delete(id);
         });
       };
@@ -877,6 +953,9 @@
       const createNode = (feat) => {
         const wrapper = document.createElement("div");
         wrapper.className = "tree-item";
+        if (feat.children && feat.children.length) wrapper.classList.add("has-children");
+        const row = document.createElement("div");
+        row.className = "tree-row";
         const controls = document.createElement("div");
         controls.className = "tree-controls";
         if (feat.children && feat.children.length) {
@@ -902,33 +981,38 @@
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.checked = currentAllowed.has(feat.id);
+        cb.indeterminate = currentMode === "usuario" && mixedUsuario.has(feat.id);
         cb.dataset.id = feat.id;
         cb.disabled = lockedAll.has(feat.id);
         controls.appendChild(cb);
         const label = document.createElement("span");
         label.textContent = feat.nome;
-        wrapper.appendChild(controls);
-        wrapper.appendChild(label);
+        row.appendChild(controls);
+        row.appendChild(label);
+        wrapper.appendChild(row);
 
         cb.addEventListener("change", () => {
           if (cb.checked) {
-            currentAllowed.add(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, true);
+            else currentAllowed.add(feat.id);
             if (feat.parentId) {
               const parentCb = treeEl.querySelector(`input[data-id='${feat.parentId}']`);
               if (parentCb) {
                 parentCb.checked = true;
-                currentAllowed.add(feat.parentId);
+                if (currentMode === "usuario") setUserPermission(feat.parentId, true);
+                else currentAllowed.add(feat.parentId);
               }
             }
           } else {
-            if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, false);
+            else if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
             if (feat.children && feat.children.length) {
               const subtree = wrapper.querySelector(".tree-children");
               if (subtree) toggleChildren(subtree, false);
             }
           }
           const updated = Array.from(currentAllowed).filter((id) => !lockedAll.has(id));
-          allowedMap[key] = updated;
+          if (currentMode !== "usuario") allowedMap[key] = updated;
           renderAtivos(Array.from(currentAllowed));
         });
 
@@ -996,12 +1080,42 @@
       }
     };
 
+    const loadUsuarioPermissions = async (usuario) => {
+      if (!usuario) return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      try {
+        const res = await fetch(`/api/permissoes/usuario/${usuario}`, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissões do usuário.");
+        return {
+          effectiveFeatures: Array.isArray(data.effective_features) ? data.effective_features : [],
+          inheritedFeatures: Array.isArray(data.inherited_features) ? data.inherited_features : [],
+          allow: Array.isArray(data.user_allow) ? data.user_allow : [],
+          deny: Array.isArray(data.user_deny) ? data.user_deny : [],
+        };
+      } catch (err) {
+        console.error(err);
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      }
+    };
+
     const updateMode = async () => {
       currentMode = selectTipo.value || "perfil";
       if (fieldPerfil) fieldPerfil.style.display = currentMode === "perfil" ? "" : "none";
       if (fieldNivel) fieldNivel.style.display = currentMode === "nivel" ? "" : "none";
+      if (fieldUsuario) fieldUsuario.style.display = currentMode === "usuario" ? "" : "none";
+      if (usuarioLegenda) usuarioLegenda.style.display = currentMode === "usuario" ? "" : "none";
       if (ativosTitle) {
-        ativosTitle.textContent = currentMode === "nivel" ? "Ativos para o nivel" : "Ativos para o perfil";
+        ativosTitle.textContent = currentMode === "nivel"
+          ? "Ativos para o nível"
+          : currentMode === "usuario"
+            ? "Ativos para os usuários selecionados"
+            : "Ativos para o perfil";
       }
       treeEl.innerHTML = "";
       ativosEl.innerHTML = "";
@@ -1021,12 +1135,24 @@
         originalPerfil[key] = [...allowedPerfil[key]];
         nivelLocked = new Set(result.nivelFeatures.filter((f) => typeof f === "string"));
         profileLocked = new Set();
-      } else {
+      } else if (currentMode === "nivel") {
         const result = await loadNivelPermissions(key);
         allowedNivel[key] = result.features.filter((f) => typeof f === "string");
         originalNivel[key] = [...allowedNivel[key]];
         nivelLocked = new Set();
         profileLocked = new Set(result.perfilFeatures.filter((f) => typeof f === "string"));
+      } else {
+        const ids = getSelectedUserIds();
+        const results = await Promise.all(ids.map((id) => loadUsuarioPermissions(id)));
+        results.forEach((result, index) => {
+          const id = ids[index];
+          allowedUsuario[id] = result.effectiveFeatures.filter((f) => typeof f === "string");
+          inheritedUsuario[id] = result.inheritedFeatures.filter((f) => typeof f === "string");
+          userAllow[id] = result.allow.filter((f) => typeof f === "string");
+          userDeny[id] = result.deny.filter((f) => typeof f === "string");
+        });
+        nivelLocked = new Set();
+        profileLocked = new Set();
       }
       buildTree(key);
     };
@@ -1064,16 +1190,68 @@
       buildTree(nivel);
     });
 
+    const updateSelectedUsersLabel = () => {
+      if (!usuarioSelecionados) return;
+      const count = getSelectedUserIds().length;
+      usuarioSelecionados.textContent = count
+        ? `${count} usuário${count === 1 ? "" : "s"} selecionado${count === 1 ? "" : "s"}.`
+        : "Nenhum usuário selecionado.";
+    };
+
+    usuarioOpcoes.addEventListener("change", async (event) => {
+      if (!event.target.matches("input[type='checkbox']")) return;
+      updateSelectedUsersLabel();
+      if (currentMode !== "usuario") return;
+      if (!getSelectedUserIds().length) {
+        treeEl.innerHTML = "";
+        ativosEl.innerHTML = "";
+        return;
+      }
+      await updateMode();
+    });
+
+    if (usuarioPesquisa) {
+      usuarioPesquisa.addEventListener("input", () => {
+        const term = usuarioPesquisa.value.trim().toLocaleLowerCase("pt-BR");
+        usuarioOpcoes.querySelectorAll(".painel-user-option").forEach((option) => {
+          const searchText = (option.dataset.search || option.textContent || "").toLocaleLowerCase("pt-BR");
+          option.hidden = Boolean(term) && !searchText.includes(term);
+        });
+      });
+    }
+
     const handleSalvar = async () => {
       const key = getSelectedKey();
       if (!key) {
-        if (msg) msg.textContent = currentMode === "nivel" ? "Selecione um nivel." : "Selecione um perfil.";
+        if (msg) msg.textContent = currentMode === "nivel"
+          ? "Selecione um nível."
+          : currentMode === "usuario"
+            ? "Selecione um usuário."
+            : "Selecione um perfil.";
         return;
       }
       const allowedMap = getAllowedMap();
       const feats = allowedMap[key] || [];
       if (msg) msg.textContent = "Salvando...";
       try {
+        if (currentMode === "usuario") {
+          const ids = getSelectedUserIds();
+          for (const usuarioId of ids) {
+            const response = await fetch(`/api/permissoes/usuario/${usuarioId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+              body: JSON.stringify({
+                allow: userAllow[usuarioId] || [],
+                deny: userDeny[usuarioId] || [],
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+          }
+          await updateMode();
+          if (msg) msg.textContent = `Permissões atualizadas para ${ids.length} usuário${ids.length === 1 ? "" : "s"}.`;
+          return;
+        }
         const url = currentMode === "nivel" ? `/api/permissoes/nivel/${key}` : `/api/permissoes/${key}`;
         const res = await fetch(url, {
           method: "POST",
@@ -1100,6 +1278,10 @@
     const handleCancelar = () => {
       const key = getSelectedKey();
       if (!key) return;
+      if (currentMode === "usuario") {
+        updateMode();
+        return;
+      }
       const allowedMap = getAllowedMap();
       const originalMap = getOriginalMap();
       allowedMap[key] = [...(originalMap[key] || [])];
@@ -14762,6 +14944,306 @@
     load();
   }
 
+  function initNotasSee() {
+    const root = document.getElementById("see-page");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+    const catalogSelect = document.getElementById("see-catalog-select");
+    const catalogForm = document.getElementById("see-catalog-form");
+    const productForm = document.getElementById("see-product-form");
+    const productsWrap = document.getElementById("see-products-wrap");
+    const productsBody = document.getElementById("see-products-body");
+    const processForm = document.getElementById("see-process-form");
+    const processCatalogId = document.getElementById("see-process-catalog-id");
+    const folderInput = document.getElementById("see-folder-input");
+    const filesInput = document.getElementById("see-files-input");
+    const submit = document.getElementById("see-process-submit");
+    const catalogMsg = document.getElementById("see-catalog-msg");
+    const processMsg = document.getElementById("see-process-msg");
+    const progressCard = document.getElementById("see-progress-card");
+    const appendChoice = document.getElementById("see-append-choice");
+    const processingMeta = document.getElementById("see-processing-meta");
+    const seeGrid = root.querySelector(".see-grid");
+    const uploadCard = processForm.closest(".see-card");
+    if (seeGrid && uploadCard && progressCard) {
+      const processColumn = document.createElement("div");
+      processColumn.className = "see-process-column";
+      seeGrid.insertBefore(processColumn, uploadCard);
+      processColumn.append(uploadCard, progressCard);
+    }
+    let catalogs = [];
+    let jobId = null;
+    let pollTimer = null;
+    let lastProcessing = null;
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const selectedCatalog = () => catalogs.find((item) => String(item.id) === String(catalogSelect.value));
+    const setMessage = (el, message, error = false) => {
+      if (!el) return;
+      el.textContent = message || "";
+      el.classList.toggle("text-error", error);
+    };
+    const clearVisibleErrors = () => {
+      [catalogMsg, processMsg].forEach((el) => {
+        if (el?.classList.contains("text-error")) setMessage(el, "");
+      });
+    };
+    root.addEventListener("input", clearVisibleErrors);
+    root.addEventListener("change", clearVisibleErrors);
+    root.addEventListener("click", clearVisibleErrors);
+    const requestJson = async (url, options = {}) => {
+      const { headers = {}, ...rest } = options;
+      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+      return data;
+    };
+    const renderProducts = () => {
+      const catalog = selectedCatalog();
+      processCatalogId.value = catalog ? catalog.id : "";
+      document.getElementById("see-catalog-edit").disabled = !catalog;
+      document.getElementById("see-catalog-delete").disabled = !catalog;
+      productsWrap.hidden = !catalog;
+      productForm.hidden = true;
+      productsBody.innerHTML = catalog ? catalog.produtos.map((product) => `
+        <tr>
+          <td>${escapeHtml(product.codigo)}</td><td>${escapeHtml(product.nome)}</td>
+          <td class="see-row-actions"><button class="icon-btn sm see-product-edit" data-id="${product.id}" title="Editar"><i class="bi bi-pencil"></i></button><button class="icon-btn sm see-product-delete" data-id="${product.id}" title="Remover"><i class="bi bi-trash"></i></button></td>
+        </tr>`).join("") : "";
+      updateSelection();
+    };
+    const loadCatalogs = async (keepId = "") => {
+      const data = await requestJson("/api/notas-see/catalogos");
+      catalogs = data.catalogos || [];
+      catalogSelect.innerHTML = '<option value="">Selecione</option>' + catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${escapeHtml(item.nome)} (${item.produtos.length})</option>`).join("");
+      if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
+      renderProducts();
+    };
+    const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    function updateSelection() {
+      const files = selectedFiles();
+      const size = files.reduce((total, file) => total + file.size, 0);
+      document.getElementById("see-selection-summary").textContent = files.length
+        ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
+        : "Nenhum PDF selecionado.";
+      const catalog = selectedCatalog();
+      const processingActive = lastProcessing
+        && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
+      const canAppend = lastProcessing
+        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
+        && String(lastProcessing.catalog_id) === String(catalog?.id);
+      appendChoice.hidden = !canAppend;
+    }
+
+    catalogSelect.addEventListener("change", async () => {
+      renderProducts();
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      jobId = null;
+      lastProcessing = null;
+      progressCard.hidden = true;
+      appendChoice.hidden = true;
+      processingMeta.innerHTML = "";
+      if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
+    });
+    folderInput.addEventListener("click", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("click", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    folderInput.addEventListener("change", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("change", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    document.getElementById("see-catalog-new").addEventListener("click", () => {
+      catalogForm.reset();
+      document.getElementById("see-catalog-id").value = "";
+      catalogForm.hidden = false;
+      document.getElementById("see-catalog-name").focus();
+    });
+    document.getElementById("see-catalog-form-cancel").addEventListener("click", () => { catalogForm.reset(); catalogForm.hidden = true; });
+    document.getElementById("see-catalog-edit").addEventListener("click", () => {
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      document.getElementById("see-catalog-id").value = catalog.id;
+      document.getElementById("see-catalog-name").value = catalog.nome;
+      document.getElementById("see-catalog-description").value = catalog.descricao || "";
+      catalogForm.hidden = false;
+    });
+    document.getElementById("see-catalog-delete").addEventListener("click", async () => {
+      const catalog = selectedCatalog();
+      if (!catalog || !confirm(`Desativar o catálogo ${catalog.nome}?`)) return;
+      try { await requestJson(`/api/notas-see/catalogos/${catalog.id}`, { method: "DELETE" }); await loadCatalogs(); setMessage(catalogMsg, "Catálogo desativado."); }
+      catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    catalogForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const catalogId = document.getElementById("see-catalog-id").value;
+        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
+        catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    document.getElementById("see-product-add").addEventListener("click", () => { productForm.reset(); document.getElementById("see-product-id").value = ""; productForm.hidden = false; document.getElementById("see-product-code").focus(); });
+    document.getElementById("see-product-cancel").addEventListener("click", () => { productForm.reset(); productForm.hidden = true; });
+    productForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      const productId = document.getElementById("see-product-id").value;
+      const payload = { codigo: document.getElementById("see-product-code").value, nome: document.getElementById("see-product-name").value };
+      try {
+        await requestJson(productId ? `/api/notas-see/produtos/${productId}` : `/api/notas-see/catalogos/${catalog.id}/produtos`, { method: productId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        productForm.reset(); productForm.hidden = true; await loadCatalogs(catalog.id); setMessage(catalogMsg, "Produto salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    productsBody.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".see-product-edit");
+      const remove = event.target.closest(".see-product-delete");
+      const catalog = selectedCatalog();
+      if (edit && catalog) {
+        const product = catalog.produtos.find((item) => String(item.id) === edit.dataset.id);
+        if (!product) return;
+        document.getElementById("see-product-id").value = product.id;
+        document.getElementById("see-product-code").value = product.codigo;
+        document.getElementById("see-product-name").value = product.nome;
+        productForm.hidden = false;
+      }
+      if (remove && catalog && confirm("Remover este produto do catálogo?")) {
+        try { await requestJson(`/api/notas-see/produtos/${remove.dataset.id}`, { method: "DELETE" }); await loadCatalogs(catalog.id); }
+        catch (error) { setMessage(catalogMsg, error.message, true); }
+      }
+    });
+
+    const renderStatus = (data) => {
+      lastProcessing = data;
+      progressCard.hidden = false;
+      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
+      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
+      document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
+      document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
+      document.getElementById("see-stat-success").textContent = data.success;
+      document.getElementById("see-stat-warning").textContent = data.warnings;
+      document.getElementById("see-stat-error").textContent = data.errors;
+      document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
+      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
+      document.getElementById("see-download").hidden = !data.download_ready;
+      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
+      const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
+      const updateSummary = data.initial_count
+        ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
+        : `<span><strong>${data.total ?? 0}</strong>Total do processamento</span>`;
+      const ignoredSummary = data.ignored_count
+        ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
+        : "";
+      processingMeta.innerHTML = `
+        <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
+        <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
+        <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
+        ${updateSummary}
+        ${ignoredSummary}`;
+      updateSelection();
+    };
+    const poll = async () => {
+      if (!jobId) return;
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
+        renderStatus(data);
+        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
+          pollTimer = setTimeout(poll, 1000);
+        } else {
+          updateSelection();
+        }
+      } catch (error) { setMessage(processMsg, error.message, true); }
+    };
+    const restoreLastProcessing = async (catalogId) => {
+      if (!catalogId) return;
+      const requestedCatalogId = String(catalogId);
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
+        if (String(catalogSelect.value) !== requestedCatalogId) return;
+        if (!data.job_id) return;
+        jobId = data.job_id;
+        await poll();
+      } catch (error) {
+        setMessage(processMsg, error.message, true);
+      }
+    };
+    processForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!processForm.reportValidity() || submit.disabled) return;
+      submit.disabled = true; setMessage(processMsg, "Enviando PDFs...");
+      try {
+        const formData = new FormData();
+        formData.append("catalogo_id", catalogSelect.value);
+        const appendMode = appendChoice.hidden
+          ? "novo"
+          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
+        formData.append("append_mode", appendMode);
+        if (appendMode === "acrescentar" && lastProcessing?.id) formData.append("base_job_id", lastProcessing.id);
+        selectedFiles().forEach((file) => formData.append("pdfs", file, file.webkitRelativePath || file.name));
+        const data = await requestJson("/api/notas-see/processamentos", { method: "POST", body: formData });
+        jobId = data.job_id;
+        setMessage(processMsg, data.message);
+        progressCard.hidden = false;
+        renderStatus({
+          id: data.job_id,
+          status: "na_fila",
+          message: data.message || "Processamento colocado na fila.",
+          progress: 0,
+          processed: 0,
+          total: data.total || selectedFiles().length,
+          success: 0,
+          warnings: 0,
+          errors: 0,
+          duration: 0,
+          files: [
+            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
+            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+          ],
+          catalog_id: Number(catalogSelect.value),
+          catalog_name: selectedCatalog()?.nome,
+          executed_by: lastProcessing?.executed_by,
+          created_at: new Date().toISOString(),
+          initial_count: data.initial || 0,
+          added_count: data.added || selectedFiles().length,
+          ignored_count: data.ignored_count || 0,
+        });
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        poll();
+      } catch (error) { setMessage(processMsg, error.message, true); submit.disabled = false; }
+    });
+    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
+    document.getElementById("see-download").addEventListener("click", async () => {
+      if (!jobId) return;
+      const url = `/api/notas-see/processamentos/${jobId}/download`;
+      if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
+      try {
+        const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
+        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${jobId}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        const writable = await handle.createWritable();
+        await writable.write(await response.blob());
+        await writable.close();
+      } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
+    });
+    loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
@@ -14783,6 +15265,9 @@
     }
     if (route === "painel") {
       initPainel();
+    }
+    if (route === "area-uens/sage/notas-see") {
+      initNotasSee();
     }
     if (route === "atualizar/fip613") {
       initFip613();

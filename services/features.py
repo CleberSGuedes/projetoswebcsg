@@ -18,20 +18,20 @@ FEATURES = [
             {"id": "usuarios/cadastrar", "nome": "Cadastrar"},
             {"id": "usuarios/editar", "nome": "Editar"},
             {"id": "usuarios/perfil", "nome": "Perfil"},
-            {"id": "usuarios/senha", "nome": "Alterar senha"},
+            {"id": "usuarios/senha", "nome": "Alterar Senha"},
             {"id": "usuarios/api-acessos", "nome": "API de Acessos"},
         ],
     },
     {
         "id": "painel",
-        "nome": "Painel",
+        "nome": "Painel - Permissões",
         "children": [],
     },
     {
         "id": "atualizar",
         "nome": "Atualizar",
         "children": [
-            {"id": "atualizar/fip613", "nome": "FIP 613 (Atualizar)"},
+            {"id": "atualizar/fip613", "nome": "FIP 613"},
             {"id": "atualizar/ped", "nome": "PED"},
             {"id": "atualizar/emp", "nome": "EMP"},
             {"id": "atualizar/est-emp", "nome": "EST EMP"},
@@ -40,44 +40,44 @@ FEATURES = [
             {"id": "atualizar/teto-seduc", "nome": "Teto - SEDUC"},
             {
                 "id": "atualizar/estrutura-planejamento/programas",
-                "nome": "Estrutura do Planejamento - Programas",
+                "nome": "Programas",
             },
             {
                 "id": "atualizar/estrutura-planejamento/acoes",
-                "nome": "Estrutura do Planejamento - Ações/PAOE",
+                "nome": "Ações/PAOE",
             },
             {
                 "id": "atualizar/estrutura-planejamento/produtos",
-                "nome": "Estrutura do Planejamento - Produtos da Ação",
+                "nome": "Produtos da Ação",
             },
             {
                 "id": "atualizar/estrutura-planejamento/componentes-rev",
-                "nome": "Estrutura do Planejamento - Componentes da Revista",
+                "nome": "Componentes da Revista",
             },
             {
                 "id": "atualizar/estrutura-planejamento/componentes",
-                "nome": "Estrutura do Planejamento - Componentes",
+                "nome": "Componentes",
             },
             {
                 "id": "atualizar/estrutura-planejamento/vinculos",
-                "nome": "Estrutura do Planejamento - Gerenciar Vínculos",
+                "nome": "Gerenciar Vínculos",
             },
             {
                 "id": "atualizar/estrutura-planejamento/modelos-chave",
-                "nome": "Estrutura do Planejamento - Modelos de Chave",
+                "nome": "Modelos de Chave",
             },
             {
                 "id": "atualizar/estrutura-planejamento/catalogo-chave",
-                "nome": "Estrutura do Planejamento - Catálogo de Chaves",
+                "nome": "Catálogo de Chaves",
             },
             {
                 "id": "atualizar/estrutura-planejamento/replicar-exercicio",
-                "nome": "Estrutura do Planejamento - Replicar Exercicio",
+                "nome": "Replicar exercício",
             },
             {"id": "atualizar/chave_planejamento_regra", "nome": "Regras Chave Planejamento"},
             {
                 "id": "atualizar/chaves_planejamento_upload",
-                "nome": "Upload anual chave_planejamento",
+                "nome": "Upload anual de chaves de planejamento",
             },
         ],
     },
@@ -85,11 +85,11 @@ FEATURES = [
         "id": "cadastrar",
         "nome": "Cadastrar",
         "children": [
-            {"id": "cadastrar/dotacao", "nome": "Dotacao"},
-            {"id": "cadastrar/est-dotacao", "nome": "Estorno de Dotacao"},
-            {"id": "cadastrar/plan_21-nger/meta_fisica", "nome": "Plan 21 - NGER - Meta Fisica"},
-            {"id": "cadastrar/plan_21-nger/subacao", "nome": "Plan 21 - NGER - Subacao"},
-            {"id": "cadastrar/plan_21-nger/etapa", "nome": "Plan 21 - NGER - Etapa"},
+            {"id": "cadastrar/dotacao", "nome": "Dotação"},
+            {"id": "cadastrar/est-dotacao", "nome": "Estorno de Dotação"},
+            {"id": "cadastrar/plan_21-nger/meta_fisica", "nome": "Meta Física"},
+            {"id": "cadastrar/plan_21-nger/subacao", "nome": "Subação"},
+            {"id": "cadastrar/plan_21-nger/etapa", "nome": "Etapa"},
         ],
     },
     {
@@ -106,19 +106,19 @@ FEATURES = [
         "id": "relatorios",
         "nome": "Relatórios",
         "children": [
-            {"id": "relatorios/fip613", "nome": "FIP 613 (Relatório)"},
-            {"id": "relatorios/plan20-seduc", "nome": "Plan20 - SEDUC"},
-            {"id": "relatorios/plan21-nger", "nome": "Plan21_NGER"},
+            {"id": "relatorios/fip613", "nome": "FIP 613"},
+            {"id": "relatorios/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+            {"id": "relatorios/plan21-nger", "nome": "PLAN21_NGER"},
             {
                 "id": "relatorios/estrutura-planejamento",
-                "nome": "Estrutura do Planejamento",
+                "nome": "Consultar Estrutura",
             },
             {"id": "relatorios/ped", "nome": "PED"},
             {"id": "relatorios/emp", "nome": "EMP"},
-            {"id": "relatorios/est-emp", "nome": "Est Emp"},
+            {"id": "relatorios/est-emp", "nome": "EST EMP"},
             {"id": "relatorios/nob", "nome": "NOB"},
-            {"id": "relatorios/dotacao", "nome": "Dotação"},
-            {"id": "relatorios/est-dotacao", "nome": "Estorno de Dotação"},
+            {"id": "relatorios/dotacao", "nome": "DOTAÇÃO"},
+            {"id": "relatorios/est-dotacao", "nome": "ESTORNO DE DOTAÇÃO"},
         ],
     },
     {
@@ -126,6 +126,19 @@ FEATURES = [
         "nome": "Painéis/Dashboards",
         "children": [
             {"id": "paineis-dashboards/teto-orcamentario", "nome": "Teto Orçamentário"},
+        ],
+    },
+    {
+        "id": "area-uens",
+        "nome": "Área UENs",
+        "children": [
+            {
+                "id": "area-uens/sage",
+                "nome": "SAGE",
+                "children": [
+                    {"id": "area-uens/sage/notas-see", "nome": "Notas SEE"},
+                ],
+            },
         ],
     },
 ]
@@ -139,7 +152,7 @@ def flatten_features(features=None):
     for f in features:
         flat.append(f["id"])
         if f.get("children"):
-            flat.extend([c["id"] for c in f["children"]])
+            flat.extend(flatten_features(f["children"]))
     return flat
 
 
@@ -152,4 +165,5 @@ def build_parent_map(features=None):
         if f.get("children"):
             for child in f["children"]:
                 parent_map[child["id"]] = f["id"]
+            parent_map.update(build_parent_map(f["children"]))
     return parent_map

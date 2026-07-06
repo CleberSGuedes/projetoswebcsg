@@ -1,17 +1,38 @@
-<div class="grid">
-  <div class="card">
-    <div class="card-title">Painel de Acesso</div>
-    <p class="muted">Escolha um perfil ou nivel e marque quais áreas/submenus ele pode acessar.</p>
+<div class="permission-page">
+  <header class="permission-header">
+    <div class="permission-header-icon" aria-hidden="true">
+      <i class="bi bi-shield-lock"></i>
+    </div>
+    <div class="permission-header-copy">
+      <h1>Permissões de acesso</h1>
+      <p>Gerencie os acessos por perfil, nível ou usuário.</p>
+    </div>
+    <div class="permission-header-badge">
+      <i class="bi bi-shield-check" aria-hidden="true"></i>
+      Administração
+    </div>
+  </header>
 
-    <div class="form" id="painel-acesso">
-      <div class="form-grid">
+  <div class="form permission-form" id="painel-acesso">
+    <section class="permission-config-card">
+      <div class="permission-section-heading">
+        <span class="permission-section-icon"><i class="bi bi-sliders"></i></span>
+        <div>
+          <h2>Escopo da configuração</h2>
+          <p>Escolha onde as permissões serão aplicadas.</p>
+        </div>
+      </div>
+
+      <div class="form-grid permission-selector-grid">
         <label class="field">
-          <span>Tipo</span>
+          <span>Tipo de acesso</span>
           <select id="painel-tipo">
             <option value="perfil">Perfil</option>
-            <option value="nivel">Nivel</option>
+            <option value="nivel">Nível</option>
+            <option value="usuario">Usuário</option>
           </select>
         </label>
+
         <label class="field" id="painel-perfil-field">
           <span>Perfil</span>
           <select id="painel-perfil">
@@ -21,33 +42,88 @@
             {% endfor %}
           </select>
         </label>
+
         <label class="field" id="painel-nivel-field" style="display:none;">
-          <span>Nivel</span>
+          <span>Nível</span>
           <select id="painel-nivel">
-            <option value="">Selecione um nivel</option>
+            <option value="">Selecione um nível</option>
             {% for n in niveis %}
-            <option value="{{ n }}">{{ n }}</option>
+            <option value="{{ n }}">Nível {{ n }}</option>
             {% endfor %}
           </select>
         </label>
-      </div>
 
-      <div class="painel-wrapper">
-        <div class="card mini">
-          <div class="card-title" style="margin-bottom:6px;">Funcionalidades</div>
-          <div id="painel-tree" class="tree-list"></div>
-        </div>
-        <div class="card mini">
-          <div class="card-title" id="painel-ativos-title" style="margin-bottom:6px;">Ativos para o perfil</div>
-          <ul id="painel-ativos" class="pill-list"></ul>
+        <div class="field" id="painel-usuario-field" style="display:none;">
+          <span>Usuários</span>
+          <div class="painel-user-multiselect" id="painel-usuario">
+            <div class="permission-search">
+              <i class="bi bi-search" aria-hidden="true"></i>
+              <input type="search" id="painel-usuario-pesquisa" placeholder="Pesquisar por nome ou e-mail..." autocomplete="off" />
+            </div>
+            <div class="painel-user-options" id="painel-usuario-opcoes">
+              {% for u in usuarios %}
+              <label class="painel-user-option" data-search="{{ (u.nome ~ ' ' ~ u.email)|lower }}">
+                <input type="checkbox" value="{{ u.id }}" />
+                <span class="painel-user-check" aria-hidden="true"><i class="bi bi-check"></i></span>
+                <span class="painel-user-identity">
+                  <strong>{{ u.nome }}</strong>
+                  <small>{{ u.email }}</small>
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="permission-selection-count" id="painel-usuario-selecionados">
+              Nenhum usuário selecionado.
+            </div>
+          </div>
         </div>
       </div>
-      <div class="actions">
-        <button class="btn btn-danger sm" id="painel-cancelar" type="button">Cancelar</button>
-        <button class="btn btn-primary sm" id="painel-salvar" type="button">Salvar</button>
-        <div id="painel-msg" class="muted"></div>
-      </div>
+    </section>
+
+    <div class="painel-wrapper permission-workspace">
+      <section class="permission-panel permission-tree-panel">
+        <div class="permission-panel-header">
+          <div>
+            <h2>Áreas e funcionalidades</h2>
+            <p>Marque os itens que poderão ser acessados.</p>
+          </div>
+          <span class="permission-panel-icon"><i class="bi bi-ui-checks-grid"></i></span>
+        </div>
+        <div id="painel-tree" class="tree-list permission-tree"></div>
+      </section>
+
+      <section class="permission-panel permission-active-panel">
+        <div class="permission-panel-header">
+          <div>
+            <h2 id="painel-ativos-title">Ativos para o perfil</h2>
+            <p>Resumo das permissões efetivas.</p>
+          </div>
+          <span class="permission-panel-icon is-active"><i class="bi bi-check2-circle"></i></span>
+        </div>
+        <ul id="painel-ativos" class="pill-list permission-active-list"></ul>
+      </section>
     </div>
+
+    <div class="permission-note" id="painel-usuario-legenda" style="display:none;">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <span>
+        Desmarcar um acesso herdado cria uma exceção de bloqueio. Com vários usuários,
+        o estado intermediário indica permissões diferentes entre eles.
+      </span>
+    </div>
+
+    <footer class="permission-actions">
+      <div id="painel-msg" class="permission-message muted" aria-live="polite"></div>
+      <div class="permission-action-buttons">
+        <button class="btn permission-btn-secondary sm" id="painel-cancelar" type="button">
+          Cancelar
+        </button>
+        <button class="btn btn-primary permission-btn-primary sm" id="painel-salvar" type="button">
+          <i class="bi bi-check2" aria-hidden="true"></i>
+          Salvar alterações
+        </button>
+      </div>
+    </footer>
   </div>
 </div>
 

@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError, OperationalError, ResourceClosedErro
 from flask import Flask, g, session, request, jsonify
 from flask_mail import Mail
 from config import Config
-from models import db, ActiveSession, Perfil
+from models import db, ActiveSession, Perfil, Usuario
 from rotas import register_blueprints
 
 mail = Mail()
@@ -221,6 +221,7 @@ def _restore_cached_user_context(user) -> bool:
     if not email:
         return False
     g.user = user
+    g.user_id = _as_int_or_none(user.get("id"))
     g.user_perfil_id = _as_int_or_none(user.get("perfil_id"))
     g.user_nivel = _as_int_or_none(user.get("nivel"))
     return True
@@ -312,6 +313,7 @@ def create_app():
         if request.path.startswith("/static/") or request.path == "/favicon.ico":
             return
         g.user = None
+        g.user_id = None
         g.active_sessions_count = 0
         g.user_perfil_id = None
         g.user_nivel = None
@@ -527,6 +529,7 @@ def create_app():
                 _debug_probe("preload_last_activity_exception_cached_session_kept", path=request.path, email=user.get("email"))
             return
         g.user = user
+        g.user_id = _as_int_or_none(user.get("id"))
         user["_active_session_checked_at"] = now_ts
         session["user"] = user
         perfil_id = user.get("perfil_id")
@@ -625,9 +628,19 @@ def create_app():
             user["perfil"] = (perfil_row.nome or "").strip()
             user["perfil_id"] = perfil_row.id
             user["nivel"] = perfil_row.nivel
+            if user.get("id") is None:
+                try:
+                    usuario_id = db.session.execute(
+                        select(Usuario.id).where(func.lower(Usuario.email) == (user.get("email") or "").lower())
+                    ).scalar_one_or_none()
+                    if usuario_id is not None:
+                        user["id"] = usuario_id
+                except SQLAlchemyError:
+                    _safe_session_rollback()
             user["_perfil_cached_at"] = _now_ts()
             session["user"] = user
         if perfil_row:
+            g.user_id = _as_int_or_none(user.get("id"))
             g.user_perfil_id = perfil_row.id
             g.user_nivel = perfil_row.nivel
         try:
