@@ -26,6 +26,8 @@ from .user import (
     EstEmpRegistro,
     NobUpload,
     NobRegistro,
+    ProcessamentoJob,
+    ProcessamentoEvento,
     Plan21Nger,
     Adj,
     Regiao,

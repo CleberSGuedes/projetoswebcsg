@@ -1990,6 +1990,7 @@
   function initPersonalizarSpo() {
     const panel = document.getElementById("personalizar-spo-panel");
     if (!panel || panel.dataset.bound === "1") return;
+    panel.querySelectorAll(".personalizar-subnav").forEach((node) => node.remove());
     panel.dataset.bound = "1";
     syncThemeControls(panel);
     initCommonVisualControls(panel);
@@ -2348,7 +2349,7 @@
         return;
       }
       if (res.status === 403) {
-        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Requer perfil admin.</p></div>';
+        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Seu usuário não possui permissão para acessar esta funcionalidade.</p></div>';
         return;
       }
       const html = await res.text();
@@ -2608,7 +2609,40 @@
 
   initTheme();
   refreshAccentScrollbars();
+  function initLocalTableFilter(inputId, tbodyId) {
+    const input = document.getElementById(inputId);
+    const tbody = document.getElementById(tbodyId);
+    if (!input || !tbody || input.dataset.bound === "1") return;
+    input.dataset.bound = "1";
+    const normalize = (value) => String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .trim();
+    const empty = document.createElement("tr");
+    empty.className = "users-filter-empty";
+    empty.hidden = true;
+    const cell = document.createElement("td");
+    cell.colSpan = Math.max(tbody.closest("table")?.querySelectorAll("thead th").length || 1, 1);
+    cell.textContent = "Nenhum registro encontrado.";
+    empty.appendChild(cell);
+    tbody.appendChild(empty);
+    const applyFilter = () => {
+      const query = normalize(input.value);
+      let visible = 0;
+      Array.from(tbody.querySelectorAll("tr:not(.users-filter-empty)")).forEach((row) => {
+        const show = !query || normalize(row.textContent).includes(query);
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+      empty.hidden = visible !== 0;
+    };
+    input.addEventListener("input", applyFilter);
+    applyFilter();
+  }
+
   function initUsuariosForm() {
+    initLocalTableFilter("usuarios-cadastrar-search", "usuarios-cadastrar-tbody");
     const form = document.getElementById("form-criar-usuario");
     const msg = document.getElementById("criar-usuario-msg");
     if (!form || !msg) return;
@@ -2651,6 +2685,7 @@
   }
 
   function initUsuariosEditar() {
+    initLocalTableFilter("usuarios-editar-search", "usuarios-editar-tbody");
     const form = document.getElementById("form-editar-usuario");
     const msg = document.getElementById("editar-usuario-msg");
     const fillFromRow = (row) => {
@@ -2673,6 +2708,38 @@
       btn.addEventListener("click", () => {
         const row = btn.closest("tr[data-id]");
         if (row) fillFromRow(row);
+      });
+    });
+
+    document.querySelectorAll(".delete-usuario").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest("tr[data-id]");
+        const id = row?.dataset.id || btn.dataset.id || "";
+        const nome = btn.dataset.nome || row?.dataset.nome || "este usuário";
+        if (!id || !window.confirm(`Excluir ${nome} da lista de usuários ativos?\n\nO registro será preservado e apenas desativado.`)) return;
+        btn.disabled = true;
+        msg.textContent = "Desativando usuário...";
+        msg.classList.remove("text-error");
+        try {
+          const res = await fetch(`/api/usuarios/id/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao excluir usuário.");
+          if (document.getElementById("edit-id").value === id) {
+            form.reset();
+            document.getElementById("edit-id").value = "";
+          }
+          row?.remove();
+          document.getElementById("usuarios-editar-search")?.dispatchEvent(new Event("input"));
+          msg.textContent = "Usuário desativado e removido da lista.";
+        } catch (err) {
+          console.error(err);
+          btn.disabled = false;
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
       });
     });
 
@@ -2736,6 +2803,7 @@
   }
 
   function initPerfis() {
+    initLocalTableFilter("perfis-search", "perfis-tbody");
     const form = document.getElementById("form-perfil");
     const msg = document.getElementById("perfil-msg");
     if (!form || !msg) return;
@@ -3085,7 +3153,7 @@
 
   function applyMenuPermissions(features = []) {
     if (!menu) return;
-    const allowed = new Set(["dashboard", "logout", "atualizar/personalizar-spo", ...features]);
+    const allowed = new Set(["dashboard", "logout", ...features]);
     const isAllowedRoute = (route) => {
       if (!route) return false;
       if (allowed.has(route)) return true;
@@ -3104,16 +3172,19 @@
       link.style.display = isAllowedRoute(route) ? "" : "none";
     });
 
-    // Parents: show if any allowed child
-    menu.querySelectorAll(".menu-group").forEach((group) => {
+    // Processa de dentro para fora para preservar todos os ancestrais de rotas visíveis.
+    Array.from(menu.querySelectorAll(".menu-group")).reverse().forEach((group) => {
       const submenu = group.querySelector(".submenu");
       if (!submenu) return;
       const parentId = group.id?.replace("menu-", "") || "";
-      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some((item) =>
-        isAllowedRoute(item.getAttribute("data-route"))
+      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some(
+        (item) => item.style.display !== "none"
+      );
+      const hasVisibleGroup = Array.from(submenu.querySelectorAll(".menu-group")).some(
+        (child) => child.style.display !== "none"
       );
       const parentAllowed = parentId && allowed.has(parentId);
-      group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
+      group.style.display = hasAllowedChild || hasVisibleGroup || parentAllowed ? "" : "none";
     });
 
     // Top-level items without submenu
@@ -3148,14 +3219,6 @@
   }
 
   async function fetchCurrentPermissions() {
-    if (userNivel === "1") {
-      // admin: libera tudo visível no menu
-      const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
-        el.getAttribute("data-route")
-      );
-      applyMenuPermissions(allRoutes);
-      return;
-    }
     try {
       const res = await fetch("/api/permissoes/current", {
         headers: { "X-Requested-With": "fetch" },
@@ -3210,14 +3273,7 @@
       allowedNivel[String(k)] = v;
     });
     const lockedBase = new Set(features.filter((f) => f.locked).map((f) => f.id));
-    const sortFeatures = (items) =>
-      (items || [])
-        .map((f) => ({
-          ...f,
-          children: f.children ? sortFeatures([...f.children]) : [],
-        }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-    const sortedFeatures = sortFeatures(features);
+    const menuFeatures = features;
     let originalPerfil = {};
     let originalNivel = {};
     Object.entries(allowedPerfil).forEach(([k, v]) => {
@@ -3374,20 +3430,22 @@
           spacer.style.width = "14px";
           controls.appendChild(spacer);
         }
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = currentAllowed.has(feat.id);
-        cb.indeterminate = currentMode === "usuario" && mixedUsuario.has(feat.id);
-        cb.dataset.id = feat.id;
-        cb.disabled = lockedAll.has(feat.id);
-        controls.appendChild(cb);
+        const cb = feat.group ? null : document.createElement("input");
+        if (cb) {
+          cb.type = "checkbox";
+          cb.checked = currentAllowed.has(feat.id);
+          cb.indeterminate = currentMode === "usuario" && mixedUsuario.has(feat.id);
+          cb.dataset.id = feat.id;
+          cb.disabled = lockedAll.has(feat.id);
+          controls.appendChild(cb);
+        }
         const label = document.createElement("span");
         label.textContent = feat.nome;
         row.appendChild(controls);
         row.appendChild(label);
         wrapper.appendChild(row);
 
-        cb.addEventListener("change", () => {
+        cb?.addEventListener("change", () => {
           if (cb.checked) {
             if (currentMode === "usuario") setUserPermission(feat.id, true);
             else currentAllowed.add(feat.id);
@@ -3419,7 +3477,7 @@
             childrenBox.style.display = "none";
           }
           feat.children.forEach((ch) => {
-            ch.parentId = feat.id;
+            ch.parentId = feat.group ? feat.parentId : feat.id;
             const childNode = createNode(ch);
             childrenBox.appendChild(childNode);
           });
@@ -3428,7 +3486,7 @@
         return wrapper;
       };
 
-      sortedFeatures.forEach((f) => {
+      menuFeatures.forEach((f) => {
         const node = createNode(f);
         treeEl.appendChild(node);
       });
@@ -3808,7 +3866,74 @@
     return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
   };
 
-  async function loadFipStatus(target) {
+  async function loadManagedJobStatus(endpoint, target, submitBtn, viewLabel) {
+    if (!target) return null;
+    target.textContent = "Carregando...";
+    try {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
+      if (!data.last) {
+        target.textContent = "Nenhuma atualização encontrada.";
+        return null;
+      }
+      const last = data.last;
+      const safe = (value) => String(value ?? "-")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+      const progress = Number(
+        last.status_progress !== null && last.status_progress !== undefined
+          ? last.status_progress
+          : (last.output_filename ? 100 : 0)
+      );
+      const rawStatus = String(last.status || (last.output_filename ? "finalizado" : "aguardando"));
+      const statusKey = rawStatus.toLowerCase().replaceAll(" ", "_");
+      const normalizedStatus = statusKey.includes("falha") ? "falha"
+        : statusKey.includes("cancel") ? "cancelado"
+        : statusKey.includes("finalizado") ? "finalizado"
+        : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
+        : statusKey;
+      const duration = last.duration_seconds == null ? "-" : `${Number(last.duration_seconds).toFixed(1)}s`;
+      const alertDetails = last.alerts && last.total_alerts
+        ? `<details class="job-alerts"><summary>${last.total_alerts} alerta(s)</summary><pre>${safe(JSON.stringify(last.alerts, null, 2))}</pre></details>` : "";
+      target.innerHTML = `
+        <div class="job-status-head"><strong>${safe(rawStatus)}</strong><strong>${progress.toFixed(0)}%</strong></div>
+        <div class="job-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
+        <div><strong>Etapa:</strong> ${safe(last.status_message)}</div>
+        <div><strong>Enviado por:</strong> ${safe(last.user_email)}</div>
+        <div><strong>Upload em:</strong> ${formatAmazonTime(last.uploaded_at)}</div>
+        <div><strong>Data do download:</strong> ${formatAmazonLocalTime(last.data_arquivo)}</div>
+        <div><strong>Arquivo original:</strong> ${safe(last.original_filename)}</div>
+        <div><strong>Registros:</strong> ${last.processed_records || 0} / ${last.total_records || 0}</div>
+        <div><strong>Duração:</strong> ${duration}</div>
+        <div><strong>Saída gerada:</strong> ${safe(last.output_filename)}</div>
+        ${last.error ? `<div class="text-error"><strong>Erro:</strong> ${safe(last.error)}</div>` : ""}
+        ${alertDetails}
+      `;
+      if (submitBtn && last.output_filename) {
+        submitBtn.dataset.mode = "view";
+        submitBtn.dataset.output = last.output_filename;
+        submitBtn.textContent = viewLabel || "Ver relatório";
+      }
+      const isRunning = ["aguardando", "em_processamento", "cancelamento_solicitado"].includes(normalizedStatus);
+      const actionBox = target.closest(".card");
+      const actionButtons = actionBox?.querySelectorAll(".upload-status-actions button") || [];
+      if (actionButtons[0]) actionButtons[0].disabled = isRunning;
+      if (actionButtons[1]) actionButtons[1].disabled = !isRunning || normalizedStatus === "cancelamento_solicitado";
+      if (isRunning) return "running";
+      if (["finalizado", "finalizado_com_alertas"].includes(normalizedStatus) || last.output_filename) return "done";
+      if (["falha", "cancelado"].includes(normalizedStatus)) return "error";
+      return normalizedStatus || null;
+    } catch (err) {
+      target.textContent = "Falha ao carregar status.";
+      console.error(err);
+      return null;
+    }
+  }
+
+  async function loadFipStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/fip613/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3836,6 +3961,8 @@
   }
 
   async function loadPedStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/ped/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3873,6 +4000,8 @@
   }
 
   async function loadEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3930,6 +4059,8 @@
   }
 
   async function loadEstEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/est-emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3967,6 +4098,8 @@
   }
 
   async function loadNobStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/nob/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -4018,7 +4151,7 @@
     }
   }
 
-  function startStatusPolling(loader, attempts = 20, intervalMs = 30000) {
+  function startStatusPolling(loader, attempts = 240, intervalMs = 3000) {
     const tick = async (left) => {
       if (left <= 0) return;
       const state = await loader();
@@ -4056,6 +4189,8 @@
     const fileInput = document.getElementById("fip613-file");
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
+  const reprocessBtn = document.getElementById("fip613-reprocess");
+  const cancelBtn = document.getElementById("fip613-cancel");
   const defaultLabel = "Upload e processar";
   const viewLabel = "Ver Relatório";
 
@@ -4063,7 +4198,21 @@
     setDefaultAmazonTime(inputData);
   }
 
-    loadFipStatus(statusBox);
+    loadFipStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadFipStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/fip613/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/fip613/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4112,11 +4261,8 @@
         }
         form.reset();
         if (inputData) inputData.value = "";
-        loadFipStatus(statusBox);
-        if (submitBtn) {
-          submitBtn.textContent = viewLabel;
-          submitBtn.dataset.mode = "view";
-        }
+        await loadFipStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -4158,7 +4304,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadPedStatus(statusBox, submitBtn, viewLabel);
+    loadPedStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4259,6 +4407,7 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadPedStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -4305,7 +4454,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4440,6 +4591,8 @@
     const fileInput = document.getElementById("est-emp-file");
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
+    const reprocessBtn = document.getElementById("est-emp-reprocess");
+    const cancelBtn = document.getElementById("est-emp-cancel");
     const defaultLabel = "Upload e processar";
     const viewLabel = "Ver relatório";
     const goToReport = () => {
@@ -4451,7 +4604,21 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEstEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/est-emp/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/est-emp/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4499,6 +4666,7 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -4545,7 +4713,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadNobStatus(statusBox, submitBtn, viewLabel);
+    loadNobStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -17810,7 +17980,10 @@
     if (route === "dashboard") {
       initDashboard();
     }
-    if (route === "atualizar/personalizar-spo") {
+    if (
+      route === "atualizar/personalizar-spo/temas" ||
+      route === "atualizar/personalizar-spo/contrato-visual-protegido"
+    ) {
       initPersonalizarSpo();
     }
     if (route === "atualizar/governanca-resultados/programacao-pta2027") {

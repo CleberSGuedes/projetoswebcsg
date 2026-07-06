@@ -41,6 +41,8 @@ from models import (
     EstEmpRegistro,
     NobUpload,
     NobRegistro,
+    ProcessamentoJob,
+    ProcessamentoEvento,
     Plan21Nger,
     Adj,
     Regiao,
@@ -110,7 +112,7 @@ from sqlalchemy.exc import (
 )
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
-from services.features import FEATURES, flatten_features, build_parent_map
+from services.features import FEATURES, build_menu_tree, flatten_features, build_parent_map
 from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20
@@ -133,6 +135,7 @@ from services.est_emp_runner import (
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
+from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
 from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
@@ -685,6 +688,13 @@ def _start_worker(kind: str, upload_id: int) -> None:
             stderr=log_handle,
             creationflags=creationflags,
         )
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.worker_pid = proc.pid
+                job.mensagem_atual = "Worker externo iniciado."
+                db.session.commit()
+            return
         update_status_fields(
             kind,
             upload_id,
@@ -692,6 +702,15 @@ def _start_worker(kind: str, upload_id: int) -> None:
             pid=proc.pid,
         )
     except Exception as exc:
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.status = "falha"
+                job.erro_tecnico = f"{type(exc).__name__}: {exc}"
+                job.mensagem_atual = "Não foi possível iniciar o worker externo."
+                job.finalizado_em = datetime.utcnow()
+                db.session.commit()
+            raise
         update_status_fields(
             kind,
             upload_id,
@@ -709,7 +728,12 @@ def index():
         getattr(g, "user_nivel", None),
         _current_usuario_id(),
     )
-    return render_template("base.html", initial_content="dashboard", initial_features=allowed)
+    return render_template(
+        "base.html",
+        initial_content="dashboard",
+        initial_features=allowed,
+        menu_features=build_menu_tree(),
+    )
 
 
 @home_bp.route("/partial/dashboard")
@@ -802,6 +826,14 @@ def partial_dashboard():
             active_sessions = []
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
+    try:
+        last_ped_job = ProcessamentoJob.query.filter_by(tipo="ped").order_by(ProcessamentoJob.id.desc()).first()
+        if last_ped_job and last_ped_job.detalhes_alertas:
+            ped_alerts = json.loads(last_ped_job.detalhes_alertas)
+            ped_dotacao_missing = ped_alerts.get("chaves_dotacao") or ped_dotacao_missing
+            ped_planejamento_missing_lines = ped_alerts.get("linhas_planejamento") or ped_planejamento_missing_lines
+    except Exception:
+        _safe_session_rollback()
     if not ped_dotacao_missing:
         try:
             t2 = datetime.utcnow()
@@ -1122,59 +1154,7 @@ def _current_usuario_id() -> int | None:
         session["user"] = user_session
         return int(usuario_id)
     return None
-ADMIN_SPO_PERFIS = {"ADMIN", "NGER"}
-ADMIN_SPO_FEATURE_PREFIXES = ("atualizar/", "cadastrar/plan_21-nger/")
-ADMIN_SPO_FEATURES = {
-    "atualizar",
-    "cadastrar/plan_21-nger/meta_fisica",
-    "cadastrar/plan_21-nger/subacao",
-    "cadastrar/plan_21-nger/etapa",
-}
-
-
-def _normalize_perfil_nome(value) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    ascii_name = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
-    return ascii_name.upper()
-
-
-def _current_perfil_nome() -> str:
-    for source in (getattr(g, "user", None), session.get("user") or {}):
-        if not source:
-            continue
-        if isinstance(source, dict):
-            nome = source.get("perfil")
-        else:
-            nome = getattr(source, "perfil", "")
-        normalized = _normalize_perfil_nome(nome)
-        if normalized:
-            return normalized
-    return ""
-
-
-def _is_admin_spo_profile() -> bool:
-    return _current_perfil_nome() in ADMIN_SPO_PERFIS
-
-
-def _is_admin_spo_feature(feature: str | None) -> bool:
-    feature = str(feature or "").strip()
-    return bool(
-        feature in ADMIN_SPO_FEATURES
-        or feature.startswith(ADMIN_SPO_FEATURE_PREFIXES)
-    )
-
-
-def _admin_spo_feature_ids() -> list[str]:
-    return [fid for fid in flatten_features(FEATURES) if _is_admin_spo_feature(fid)]
-
-
 def has_permission(feature: str) -> bool:
-    if getattr(g, "user_nivel", None) == 1:
-        return True
-    if _is_admin_spo_profile() and _is_admin_spo_feature(feature):
-        return True
     perfil_id = getattr(g, "user_perfil_id", None)
     nivel = getattr(g, "user_nivel", None)
     if not perfil_id and nivel is None:
@@ -1324,8 +1304,6 @@ def _permissoes_with_parents(
     feats.extend(user_allowed)
     denied = set(user_denied)
     feats = [feat for feat in feats if feat not in denied]
-    if _is_admin_spo_profile():
-        feats.extend(_admin_spo_feature_ids())
     # include parents of children
     feats = _add_parent_features(feats)
     # add locked always
@@ -1339,8 +1317,6 @@ def require_feature(feature_id):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if getattr(g, "user_nivel", None) == 1:
-                return view(*args, **kwargs)
             if has_permission(feature_id):
                 return view(*args, **kwargs)
             abort(403)
@@ -1406,7 +1382,7 @@ def partial_usuarios_cadastrar():
 @login_required
 @require_feature("usuarios/editar")
 def partial_usuarios_editar():
-    usuarios = Usuario.query.order_by(Usuario.nome).all()
+    usuarios = Usuario.query.filter_by(ativo=True).order_by(Usuario.nome).all()
     perfis_query = Perfil.query.filter_by(ativo=True)
     caller_nivel = getattr(g, "user_nivel", None)
     if caller_nivel != 1:
@@ -1417,7 +1393,7 @@ def partial_usuarios_editar():
 
 @home_bp.route("/partial/usuarios/perfil")
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def partial_usuarios_perfil():
     perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
     return render_template("partials/usuarios_perfil.html", perfis=perfis)
@@ -2641,8 +2617,6 @@ def api_notas_see_status(processamento_id: int):
     job = db.session.get(SeeProcessamento, processamento_id)
     if not job:
         return jsonify({"error": "Processamento não encontrado."}), 404
-    if getattr(g, "user_nivel", None) != 1 and job.usuario_id != _current_usuario_id():
-        return jsonify({"error": "Sem permissão."}), 403
     files = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).order_by(SeeProcessamentoArquivo.ordem).all()
     ignored_occurrences = SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
     ignored_files = [
@@ -2699,7 +2673,7 @@ def api_notas_see_ultimo_processamento():
         return jsonify({"job_id": None})
     job = (
         SeeProcessamento.query
-        .filter_by(usuario_id=_current_usuario_id(), catalogo_id=catalogo_id)
+        .filter_by(catalogo_id=catalogo_id)
         .order_by(SeeProcessamento.id.desc())
         .first()
     )
@@ -2713,8 +2687,6 @@ def api_notas_see_cancelar(processamento_id: int):
     job = db.session.get(SeeProcessamento, processamento_id)
     if not job:
         return jsonify({"error": "Processamento não encontrado."}), 404
-    if getattr(g, "user_nivel", None) != 1 and job.usuario_id != _current_usuario_id():
-        return jsonify({"error": "Sem permissão."}), 403
     job.cancelamento_solicitado = True
     db.session.commit()
     return jsonify({"ok": True, "message": "Cancelamento solicitado."})
@@ -2727,8 +2699,6 @@ def api_notas_see_download(processamento_id: int):
     job = db.session.get(SeeProcessamento, processamento_id)
     if not job or not job.caminho_arquivo_saida:
         return jsonify({"error": "Arquivo de saída não disponível."}), 404
-    if getattr(g, "user_nivel", None) != 1 and job.usuario_id != _current_usuario_id():
-        return jsonify({"error": "Sem permissão."}), 403
     target = Path(job.caminho_arquivo_saida).resolve()
     output_root = SEE_OUTPUT_DIR.resolve()
     if output_root not in target.parents or not target.exists():
@@ -2743,11 +2713,26 @@ def partial_atualizar_fip613():
     return render_template("partials/atualizar_fip613.html")
 
 
-@home_bp.route("/partial/atualizar/personalizar-spo")
+@home_bp.route("/partial/atualizar/personalizar-spo/temas")
 @login_required
-@require_feature("atualizar/personalizar-spo")
-def partial_atualizar_personalizar_spo():
-    return render_template("partials/atualizar_personalizar_spo.html")
+@require_feature("atualizar/personalizar-spo/temas")
+def partial_atualizar_personalizar_spo_temas():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=True,
+        mostrar_contrato=False,
+    )
+
+
+@home_bp.route("/partial/atualizar/personalizar-spo/contrato-visual-protegido")
+@login_required
+@require_feature("atualizar/personalizar-spo/contrato-visual-protegido")
+def partial_atualizar_contrato_visual_protegido():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=False,
+        mostrar_contrato=True,
+    )
 
 
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")
@@ -3203,7 +3188,7 @@ def _require_planning_structure_entity(view):
         feature = _planning_structure_feature(entity)
         if not feature:
             abort(404)
-        if getattr(g, "user_nivel", None) != 1 and not has_permission(feature):
+        if not has_permission(feature):
             abort(403)
         return view(entity, *args, **kwargs)
 
@@ -3225,10 +3210,7 @@ def partial_atualizar_estrutura_planejamento(entity: str):
 
 def _planning_component_public_config(component: str) -> dict:
     config = PLANNING_COMPONENTS[component]
-    can_manage_links = (
-        getattr(g, "user_nivel", None) == 1
-        or has_permission("atualizar/estrutura-planejamento/vinculos")
-    )
+    can_manage_links = has_permission("atualizar/estrutura-planejamento/vinculos")
     return {
         "key": component,
         "title": config["title"],
@@ -9030,7 +9012,7 @@ def api_permissoes(perfil_id):
     if not perfil:
         return jsonify({"error": "Perfil nao encontrado."}), 404
 
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
 
     if request.method == "GET":
@@ -9087,7 +9069,7 @@ def api_permissoes(perfil_id):
 @home_bp.route("/api/permissoes/nivel/<int:nivel>", methods=["GET", "POST"])
 @login_required
 def api_permissoes_nivel(nivel):
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
     if nivel < 1 or nivel > 5:
         return jsonify({"error": "Nivel invalido."}), 400
@@ -9136,7 +9118,7 @@ def api_permissoes_nivel(nivel):
 @home_bp.route("/api/permissoes/usuario/<int:usuario_id>", methods=["GET", "POST"])
 @login_required
 def api_permissoes_usuario(usuario_id):
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
 
     usuario = db.session.get(Usuario, usuario_id)
@@ -9144,9 +9126,6 @@ def api_permissoes_usuario(usuario_id):
         return jsonify({"error": "Usuario nao encontrado."}), 404
     perfil = db.session.get(Perfil, usuario.perfil_id) if usuario.perfil_id else None
     nivel = perfil.nivel if perfil else None
-    if nivel == 1:
-        return jsonify({"error": "Permissoes individuais nao se aplicam a usuarios de nivel 1."}), 400
-
     perfil_features = _load_permissoes_perfil(usuario.perfil_id)
     nivel_features = _load_permissoes_nivel(nivel)
     inherited_features = _add_parent_features(list(set(perfil_features + nivel_features)))
@@ -15909,10 +15888,93 @@ def api_dotacao_saldo():
     )
 
 
+def _managed_job_status(tipo: str, upload_model):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        upload = upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+        if not upload:
+            return jsonify({"ok": True, "last": None})
+        return jsonify({"ok": True, "last": {
+            "user_email": upload.user_email,
+            "original_filename": upload.original_filename,
+            "output_filename": upload.output_filename,
+            "status": "historico",
+            "status_message": "Processamento anterior à implantação do acompanhamento detalhado.",
+            "status_progress": 100 if upload.output_filename else 0,
+            "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+            "data_arquivo": upload.data_arquivo.isoformat() if upload.data_arquivo else None,
+            "total_records": 0, "processed_records": 0, "total_alerts": 0, "total_errors": 0,
+        }})
+    upload = db.session.get(upload_model, job.upload_id)
+    data = serialize_job(job)
+    data["data_arquivo"] = upload.data_arquivo.isoformat() if upload and upload.data_arquivo else None
+    data["events"] = [
+        {
+            "type": item.tipo_evento, "stage": item.etapa, "message": item.mensagem,
+            "progress": float(item.progresso) if item.progresso is not None else None,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
+        for item in ProcessamentoEvento.query.filter_by(processamento_id=job.id)
+        .order_by(ProcessamentoEvento.id.desc()).limit(20).all()
+    ]
+    return jsonify({"ok": True, "last": data})
+
+
+def _managed_reprocess(tipo: str, upload_model, input_dir: Path):
+    payload = request.get_json(silent=True) or {}
+    upload_id = payload.get("upload_id")
+    upload = db.session.get(upload_model, upload_id) if upload_id else upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+    if not upload:
+        return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    active = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
+        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+    ).first()
+    if active:
+        return jsonify({"error": f"Já existe um processamento {tipo.upper()} em andamento."}), 409
+    file_path = _find_upload_path(input_dir, upload.stored_filename)
+    if not file_path:
+        return jsonify({"error": "Arquivo original do upload não foi encontrado."}), 404
+    stored_filename = f"tmp/{file_path.name}" if file_path.parent.name == "tmp" else upload.stored_filename
+    novo_upload = upload_model(
+        user_email=(session.get("user") or {}).get("email") or upload.user_email,
+        original_filename=upload.original_filename,
+        stored_filename=stored_filename,
+        data_arquivo=upload.data_arquivo,
+        uploaded_at=datetime.utcnow(),
+    )
+    db.session.add(novo_upload)
+    db.session.commit()
+    try:
+        job = create_job(tipo, novo_upload, _current_usuario_id())
+        job.tentativa = (
+            db.session.query(func.count(ProcessamentoJob.id))
+            .filter_by(tipo=tipo).scalar() or 1
+        )
+        db.session.commit()
+        _start_worker(tipo, job.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": job.id})
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
+def _managed_cancel(tipo: str):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        return jsonify({"error": "Nenhum processamento encontrado."}), 404
+    if job.status not in {"aguardando", "em_processamento", "cancelamento_solicitado"}:
+        return jsonify({"error": "O processamento já foi finalizado."}), 409
+    update_job(job, status="cancelamento_solicitado", etapa="cancelamento",
+               mensagem="Cancelamento solicitado pelo usuário.", event_type="cancelamento",
+               cancelamento_solicitado=True)
+    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": job.id})
+
+
 @home_bp.route("/api/fip613/status", methods=["GET"])
 @login_required
 @require_feature("atualizar/fip613")
 def api_fip613_status():
+    return _managed_job_status("fip613", Fip613Upload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -15997,21 +16059,26 @@ def api_fip613_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_fip613(save_path, data_arquivo, user_email, registro.id)
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("fip613", registro, _current_usuario_id())
+        _start_worker("fip613", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/fip613/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_reprocess():
+    return _managed_reprocess("fip613", Fip613Upload, UPLOAD_DIR)
+
+
+@home_bp.route("/api/fip613/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_cancel():
+    return _managed_cancel("fip613")
 
 
 @home_bp.route("/api/relatorios/fip613", methods=["GET"])
@@ -16369,6 +16436,8 @@ def api_relatorio_fip613_download():
 @login_required
 @require_feature("atualizar/ped")
 def api_ped_status():
+    return _managed_job_status("ped", PedUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if value in (None, ""):
             return None
@@ -16451,38 +16520,26 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
-            save_path, data_arquivo, user_email, registro.id
-        )
-
-        if missing_dotacao_keys:
-            session["ped_dotacao_missing"] = missing_dotacao_keys
-            session.modified = True
-        else:
-            if "ped_dotacao_missing" in session:
-                session["ped_dotacao_missing"] = []
-                session.modified = True
-        if missing_planejamento_lines:
-            session["ped_planejamento_missing_lines"] = missing_planejamento_lines
-            session.modified = True
-        else:
-            if "ped_planejamento_missing_lines" in session:
-                session["ped_planejamento_missing_lines"] = []
-                session.modified = True
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("ped", registro, _current_usuario_id())
+        _start_worker("ped", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/ped/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_reprocess():
+    return _managed_reprocess("ped", PedUpload, PED_UPLOAD_DIR)
+
+
+@home_bp.route("/api/ped/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_cancel():
+    return _managed_cancel("ped")
 
 
 # EMP
@@ -16544,6 +16601,8 @@ def api_emp_status():
 @login_required
 @require_feature("atualizar/est-emp")
 def api_est_emp_status():
+    return _managed_job_status("est_emp", EstEmpUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -16784,21 +16843,26 @@ def api_est_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_est_emp(save_path, data_arquivo, user_email, registro.id)
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("est_emp", registro, _current_usuario_id())
+        _start_worker("est_emp", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/est-emp/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_reprocess():
+    return _managed_reprocess("est_emp", EstEmpUpload, EST_EMP_UPLOAD_DIR)
+
+
+@home_bp.route("/api/est-emp/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_cancel():
+    return _managed_cancel("est_emp")
 
 
 @home_bp.route("/api/nob/upload", methods=["POST"])
@@ -19990,7 +20054,7 @@ def api_usuario(email):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -20003,7 +20067,7 @@ def api_usuario(email):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -20012,7 +20076,7 @@ def api_usuario(email):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -20056,7 +20120,7 @@ def api_usuario_por_id(user_id: int):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -20070,7 +20134,7 @@ def api_usuario_por_id(user_id: int):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -20079,7 +20143,7 @@ def api_usuario_por_id(user_id: int):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -20148,7 +20212,7 @@ def api_usuario_senha(email):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -20178,7 +20242,7 @@ def api_usuario_senha_por_id(user_id: int):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -20200,7 +20264,7 @@ def api_usuario_senha_por_id(user_id: int):
 
 @home_bp.route("/api/perfis", methods=["GET", "POST"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfis():
     if request.method == "GET":
         perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
@@ -20247,7 +20311,7 @@ def api_perfis():
 
 @home_bp.route("/api/perfis/<int:perfil_id>", methods=["PUT", "DELETE"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfil(perfil_id):
     perfil = db.session.get(Perfil, perfil_id)
     if not perfil:

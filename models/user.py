@@ -549,6 +549,55 @@ class NobUpload(db.Model):
     uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
+class ProcessamentoJob(db.Model):
+    __tablename__ = "processamento_jobs"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    tipo = db.Column(db.String(30), nullable=False, index=True)
+    upload_id = db.Column(db.BigInteger, nullable=False)
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"), nullable=True)
+    user_email = db.Column(db.String(255), nullable=False)
+    arquivo_original = db.Column(db.String(255))
+    arquivo_armazenado = db.Column(db.String(255))
+    arquivo_saida = db.Column(db.String(255))
+    caminho_saida = db.Column(db.String(500))
+    status = db.Column(db.String(40), nullable=False, default="aguardando")
+    etapa_atual = db.Column(db.String(100))
+    mensagem_atual = db.Column(db.String(1000))
+    progresso = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    total_registros = db.Column(db.BigInteger, nullable=False, default=0)
+    registros_processados = db.Column(db.BigInteger, nullable=False, default=0)
+    total_alertas = db.Column(db.Integer, nullable=False, default=0)
+    total_erros = db.Column(db.Integer, nullable=False, default=0)
+    worker_pid = db.Column(db.BigInteger)
+    cancelamento_solicitado = db.Column(db.Boolean, nullable=False, default=False)
+    tentativa = db.Column(db.Integer, nullable=False, default=1)
+    detalhes_alertas = db.Column(db.Text)
+    erro_tecnico = db.Column(db.Text)
+    solicitado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    iniciado_em = db.Column(db.DateTime)
+    finalizado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(
+        db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now()
+    )
+    duracao_segundos = db.Column(db.Numeric(14, 3))
+
+
+class ProcessamentoEvento(db.Model):
+    __tablename__ = "processamento_eventos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(
+        db.BigInteger, db.ForeignKey("processamento_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo_evento = db.Column(db.String(30), nullable=False, default="informacao")
+    etapa = db.Column(db.String(100))
+    mensagem = db.Column(db.String(2000), nullable=False)
+    progresso = db.Column(db.Numeric(5, 2))
+    detalhes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
 class NobRegistro(db.Model):
     __tablename__ = "nob"
 

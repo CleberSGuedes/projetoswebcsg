@@ -1,23 +1,13 @@
-{% set contrato_nome = (g.user.nome|default('', true)|lower) if g.user else '' %}
-{% set contrato_email = (g.user.email|default('', true)|lower) if g.user else '' %}
-{% set pode_contrato_protegido = ('jean' in contrato_nome) or ('jean' in contrato_email) or ('cleber' in contrato_nome) or ('cleber' in contrato_email) %}
-
 <section class="personalizar-spo" id="personalizar-spo-panel">
   <div class="page-header">
     <div>
       <div class="eyebrow">Ambiente administrativo</div>
-      <h1>Personalizar SPO</h1>
-      <p class="muted">Configure preferências visuais do ambiente e teste presets governados do contrato visual.</p>
-      {% if pode_contrato_protegido %}
-      <nav class="personalizar-subnav" aria-label="Áreas de personalização">
-        <a href="#spo-personalizacao-comum">Personalização comum</a>
-        <a href="#spo-contrato-protegido">Contrato protegido</a>
-        <a href="#spo-previsualizacao">Prévia e restauração</a>
-      </nav>
-      {% endif %}
+      <h1>{{ "Personalizar Temas SPO" if mostrar_temas else "Contrato Visual Protegido" }}</h1>
+      <p class="muted">{{ "Configure preferências visuais do ambiente." if mostrar_temas else "Gerencie presets versionados do contrato visual do SPO." }}</p>
     </div>
   </div>
 
+  {% if mostrar_temas %}
   <div class="personalizar-grid" id="spo-personalizacao-comum">
     <article class="card personalizar-card">
       <div class="eyebrow">Tema</div>
@@ -193,14 +183,16 @@
     </article>
   </div>
 
-  {% if pode_contrato_protegido %}
+  {% endif %}
+
+  {% if mostrar_contrato %}
   <article class="card personalizar-card protected-contract-card" id="spo-protected-contract-card" data-contract-version="2026.07.visual-1">
     <div id="spo-contrato-protegido"></div>
     <div class="protected-contract-heading">
       <div>
-        <div class="eyebrow">Contrato protegido</div>
+        <div class="eyebrow">Contrato Visual Protegido</div>
         <div class="card-title">Presets gerenciais do layout</div>
-        <p class="muted">Área restrita a Jean e Cleber. Use para testar presets versionados sem alterar banco de dados.</p>
+        <p class="muted">Área controlada exclusivamente pelo Painel de Permissões. Use para testar presets versionados sem alterar o banco de dados.</p>
         <p class="muted contract-local-note">Catálogo local em JavaScript/localStorage para testes. A migração para banco estruturado fica reservada para a próxima etapa de governança.</p>
       </div>
       <span class="contract-version-pill">v2026.07</span>
