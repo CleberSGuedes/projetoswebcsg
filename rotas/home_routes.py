@@ -1122,10 +1122,58 @@ def _current_usuario_id() -> int | None:
         session["user"] = user_session
         return int(usuario_id)
     return None
+ADMIN_SPO_PERFIS = {"ADMIN", "NGER"}
+ADMIN_SPO_FEATURE_PREFIXES = ("atualizar/", "cadastrar/plan_21-nger/")
+ADMIN_SPO_FEATURES = {
+    "atualizar",
+    "cadastrar/plan_21-nger/meta_fisica",
+    "cadastrar/plan_21-nger/subacao",
+    "cadastrar/plan_21-nger/etapa",
+}
+
+
+def _normalize_perfil_nome(value) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    ascii_name = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    return ascii_name.upper()
+
+
+def _current_perfil_nome() -> str:
+    for source in (getattr(g, "user", None), session.get("user") or {}):
+        if not source:
+            continue
+        if isinstance(source, dict):
+            nome = source.get("perfil")
+        else:
+            nome = getattr(source, "perfil", "")
+        normalized = _normalize_perfil_nome(nome)
+        if normalized:
+            return normalized
+    return ""
+
+
+def _is_admin_spo_profile() -> bool:
+    return _current_perfil_nome() in ADMIN_SPO_PERFIS
+
+
+def _is_admin_spo_feature(feature: str | None) -> bool:
+    feature = str(feature or "").strip()
+    return bool(
+        feature in ADMIN_SPO_FEATURES
+        or feature.startswith(ADMIN_SPO_FEATURE_PREFIXES)
+    )
+
+
+def _admin_spo_feature_ids() -> list[str]:
+    return [fid for fid in flatten_features(FEATURES) if _is_admin_spo_feature(fid)]
 
 
 def has_permission(feature: str) -> bool:
     if getattr(g, "user_nivel", None) == 1:
+        return True
+    if _is_admin_spo_profile() and _is_admin_spo_feature(feature):
         return True
     perfil_id = getattr(g, "user_perfil_id", None)
     nivel = getattr(g, "user_nivel", None)
@@ -1276,6 +1324,8 @@ def _permissoes_with_parents(
     feats.extend(user_allowed)
     denied = set(user_denied)
     feats = [feat for feat in feats if feat not in denied]
+    if _is_admin_spo_profile():
+        feats.extend(_admin_spo_feature_ids())
     # include parents of children
     feats = _add_parent_features(feats)
     # add locked always
@@ -2691,6 +2741,62 @@ def api_notas_see_download(processamento_id: int):
 @require_feature("atualizar/fip613")
 def partial_atualizar_fip613():
     return render_template("partials/atualizar_fip613.html")
+
+
+@home_bp.route("/partial/atualizar/personalizar-spo")
+@login_required
+@require_feature("atualizar/personalizar-spo")
+def partial_atualizar_personalizar_spo():
+    return render_template("partials/atualizar_personalizar_spo.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/mapa")
+@login_required
+@require_feature("atualizar/governanca-resultados/mapa")
+def partial_atualizar_governanca_resultados_mapa():
+    return render_template("partials/atualizar_governanca_resultados_mapa.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/programacao-pta2027")
+@login_required
+@require_feature("atualizar/governanca-resultados/programacao-pta2027")
+def partial_atualizar_governanca_resultados_programacao_pta2027():
+    return render_template("partials/atualizar_governanca_resultados_programacao_pta2027.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/estrategia")
+@login_required
+@require_feature("atualizar/governanca-resultados/estrategia")
+def partial_atualizar_governanca_resultados_estrategia():
+    return render_template("partials/atualizar_governanca_resultados_estrategia.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/eap-politicas")
+@login_required
+@require_feature("atualizar/governanca-resultados/eap-politicas")
+def partial_atualizar_governanca_resultados_eap_politicas():
+    return render_template("partials/atualizar_governanca_resultados_eap_politicas.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/entregas-okr")
+@login_required
+@require_feature("atualizar/governanca-resultados/entregas-okr")
+def partial_atualizar_governanca_resultados_entregas_okr():
+    return render_template("partials/atualizar_governanca_resultados_entregas_okr.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/processos-riscos-projetos")
+@login_required
+@require_feature("atualizar/governanca-resultados/processos-riscos-projetos")
+def partial_atualizar_governanca_resultados_processos_riscos_projetos():
+    return render_template("partials/atualizar_governanca_resultados_processos_riscos_projetos.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/matriculas-metas")
+@login_required
+@require_feature("atualizar/governanca-resultados/matriculas-metas")
+def partial_atualizar_governanca_resultados_matriculas_metas():
+    return render_template("partials/atualizar_governanca_resultados_matriculas_metas.html")
 
 
 @home_bp.route("/partial/atualizar/ped")

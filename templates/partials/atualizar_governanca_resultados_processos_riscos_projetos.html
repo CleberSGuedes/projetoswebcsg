@@ -1,0 +1,33 @@
+<section class="governanca-resultados" id="governanca-processos-riscos-projetos-panel" data-governanca-flow-panel>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Governança e Resultados</div>
+      <h1>Processos, Riscos e Projetos</h1>
+      <p class="muted">Camada para conectar etapas do PTA aos processos, riscos, controles e projetos necessários à entrega.</p>
+    </div>
+  </div>
+
+  <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões de processos, riscos e projetos">
+    <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Processos vinculados" data-flow-detail="Etapas podem se relacionar a processos finalísticos, gerenciais ou de suporte para reduzir retrabalho e melhorar a leitura operacional.">
+      <i class="bi bi-kanban governanca-icon"></i>
+      <strong>Processos vinculados</strong>
+      <small>Etapas podem apontar para processos finalísticos, gerenciais ou de suporte, reduzindo retrabalho e melhorando a leitura operacional.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Riscos e controles" data-flow-detail="Riscos são informação gerencial vinculada à entrega, à etapa ou ao programa, sem bloquear a execução orçamentária por padrão.">
+      <i class="bi bi-shield-exclamation governanca-icon"></i>
+      <strong>Riscos e controles</strong>
+      <small>Riscos devem ser tratados como informação gerencial vinculada à entrega, à etapa ou ao programa, sem travar a execução orçamentária.</small>
+    </button>
+    <button class="flow-node" type="button" data-flow-node data-flow-context="Projetos e execução" data-flow-detail="Projetos ajudam a organizar cronograma, responsáveis, marcos e capacidade de entrega quando a subação exige gestão estruturada.">
+      <i class="bi bi-calendar-check governanca-icon"></i>
+      <strong>Projetos e execução</strong>
+      <small>Projetos ajudam a organizar cronograma, responsáveis, marcos e capacidade de entrega quando a subação exigir gestão estruturada.</small>
+    </button>
+  </div>
+
+  <div class="flow-context-panel" id="governanca-processos-riscos-projetos-context" data-flow-context-panel aria-live="polite">
+    <span class="flow-context-label">Processos vinculados</span>
+    <strong>Processos vinculados</strong>
+    <p>Etapas podem se relacionar a processos finalísticos, gerenciais ou de suporte para reduzir retrabalho e melhorar a leitura operacional.</p>
+  </div>
+</section>

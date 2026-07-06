@@ -6,11 +6,42 @@
   <title>SPO</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260703.8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706.integration.1">
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
-<body class="app-body">
+<body class="app-body spo-shell">
   <div class="layout">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <img class="brand-logo" src="{{ url_for('static', filename='img/logo.jpg') }}" alt="Logo">
+        <div>
+          <div class="subtitle">Sistema de Planejamento e Orçamento</div>
+          <div class="muted">SPO-NGER-SEDUCMT</div>
+          {% if environment_label %}
+          <div class="environment-inline-badge environment-inline-badge-{{ environment_badge_class|default('homolog')|e }}" role="status" aria-label="Ambiente atual">
+            <i class="bi bi-git" aria-hidden="true"></i>
+            <span>{{ environment_label }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="user-info">
+        {% if g.user %}
+          <div class="user-meta" id="user-meta"
+               data-name="{{ g.user.nome }}"
+               data-email="{{ g.user.email|default('', true) }}"
+               data-active-count="{{ g.active_sessions_count or 0 }}"
+               data-perfil-id="{{ g.user_perfil_id or '' }}"
+               data-nivel="{{ g.user_nivel or '' }}"
+               data-features='{{ (initial_features or [])|tojson }}'></div>
+        {% endif %}
+        <div class="theme-toggle" aria-label="Alternar tema">
+          <button class="icon-btn sm theme-btn" id="theme-light" type="button" title="Tema claro"><i class="bi bi-sun"></i></button>
+          <button class="icon-btn sm theme-btn" id="theme-dark" type="button" title="Tema escuro"><i class="bi bi-moon"></i></button>
+        </div>
+      </div>
+    </header>
+
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <button class="icon-btn toggle-btn" id="sidebar-toggle" aria-label="Alternar menu">
@@ -18,36 +49,83 @@
         </button>
       </div>
       <nav class="menu" id="menu">
-        <a href="#" data-route="dashboard" class="menu-item active" title="Início"><i class="bi bi-house"></i> <span>Início</span></a>
+        <a href="#" data-route="dashboard" class="menu-item" title="Início"><i class="bi bi-house"></i> <span>Início</span></a>
         {% set nivel_atual = g.user_nivel or 99 %}
         {% if g.user %}
-        <div class="menu-group" id="menu-atualizar">
-          <div class="menu-item menu-parent" data-submenu="submenu-atualizar" title="Atualizar"><i class="bi bi-arrow-repeat"></i> <span>Atualizar</span></div>
+        {% set perfil_atual = (g.user.perfil or '')|upper|trim %}
+        {% set pode_administrar_spo = nivel_atual|string == '1' or perfil_atual in ['ADMIN', 'NGER'] %}
+        {% if pode_administrar_spo %}
+        <div class="menu-group menu-admin-spo" id="menu-atualizar">
+          <div class="menu-item menu-parent" data-submenu="submenu-atualizar" title="Administrar SPO"><i class="bi bi-sliders"></i> <span>Administrar SPO</span></div>
           <div class="submenu" id="submenu-atualizar">
+            <a href="#" data-route="atualizar/personalizar-spo" class="menu-item" title="Personalizar cores e modos do SPO"><i class="bi bi-palette"></i> <span>Personalizar SPO</span></a>
+            <div class="menu-group" id="menu-atualizar-governanca-resultados">
+              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-governanca-resultados" title="Governança e Resultados"><i class="bi bi-compass"></i> <span>Governança e Resultados</span></div>
+              <div class="submenu" id="submenu-atualizar-governanca-resultados">
+                <a href="#" data-route="atualizar/governanca-resultados/mapa" class="menu-item" title="Mapa Conceitual"><i class="bi bi-diagram-3"></i> <span>Mapa Conceitual</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/programacao-pta2027" class="menu-item" title="Programação PTA 2027"><i class="bi bi-map"></i> <span>Programação PTA 2027</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/estrategia" class="menu-item" title="Estratégia e Cadeia de Valor"><i class="bi bi-bullseye"></i> <span>Estratégia e Cadeia de Valor</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/eap-politicas" class="menu-item" title="EAP e Políticas"><i class="bi bi-layers"></i> <span>EAP e Políticas</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/entregas-okr" class="menu-item" title="Entregas-MT e OKR"><i class="bi bi-check2-square"></i> <span>Entregas-MT e OKR</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/processos-riscos-projetos" class="menu-item" title="Processos, Riscos e Projetos"><i class="bi bi-kanban"></i> <span>Processos, Riscos e Projetos</span></a>
+                <a href="#" data-route="atualizar/governanca-resultados/matriculas-metas" class="menu-item" title="Matrículas e Metas Físicas"><i class="bi bi-people"></i> <span>Matrículas e Metas Físicas</span></a>
+              </div>
+            </div>
             <div class="menu-group" id="menu-atualizar-planejamento">
-              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-planejamento" title="Planejamento"><i class="bi bi-diagram-3"></i> <span>Planejamento</span></div>
+              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-planejamento" title="PTA - Programação"><i class="bi bi-diagram-3"></i> <span>PTA - Programação</span></div>
               <div class="submenu" id="submenu-atualizar-planejamento">
-                <a href="#" data-route="atualizar/plan20-seduc" class="menu-item" title="PLAN20 - SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN20 - SEDUC</span></a>
-                <a href="#" data-route="atualizar/teto-seduc" class="menu-item" title="Teto - SEDUC"><i class="bi bi-cash-stack"></i> <span>Teto - SEDUC</span></a>
                 <div class="menu-group" id="menu-atualizar-estrutura-planejamento">
                   <div class="menu-item menu-parent" data-submenu="submenu-atualizar-estrutura-planejamento" title="Estrutura do Planejamento"><i class="bi bi-diagram-2"></i> <span>Estrutura do Planejamento</span></div>
                   <div class="submenu" id="submenu-atualizar-estrutura-planejamento">
                     <a href="#" data-route="atualizar/estrutura-planejamento/programas" class="menu-item" title="Programas"><i class="bi bi-folder2-open"></i> <span>Programas</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/acoes" class="menu-item" title="Ações/PAOE"><i class="bi bi-list-task"></i> <span>Ações/PAOE</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/produtos" class="menu-item" title="Produtos da Ação"><i class="bi bi-box-seam"></i> <span>Produtos da Ação</span></a>
-                    <a href="#" data-route="atualizar/estrutura-planejamento/componentes-rev" class="menu-item" title="Componentes da Revista"><i class="bi bi-journal-text"></i> <span>Componentes da Revista</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/componentes" class="menu-item" title="Componentes"><i class="bi bi-layers"></i> <span>Componentes</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/modelos-chave" class="menu-item" title="Modelos de Chave"><i class="bi bi-ui-checks-grid"></i> <span>Modelos de Chave</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/catalogo-chave" class="menu-item" title="Catálogo de Chaves"><i class="bi bi-key"></i> <span>Catálogo de Chaves</span></a>
                     <a href="#" data-route="atualizar/estrutura-planejamento/replicar-exercicio" class="menu-item" title="Replicar exercício"><i class="bi bi-arrow-repeat"></i> <span>Replicar exercício</span></a>
                   </div>
                 </div>
-                <a href="#" data-route="atualizar/chave_planejamento_regra" class="menu-item" title="Regras de Chave de Planejamento"><i class="bi bi-list-check"></i> <span>Regras Chave Planejamento</span></a>
+                <a href="#" data-route="atualizar/teto-seduc" class="menu-item" title="Teto Financeiro"><i class="bi bi-cash-stack"></i> <span>Teto Financeiro</span></a>
+              </div>
+            </div>
+            <div class="menu-group" id="menu-atualizar-plan21">
+              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-plan21" title="PTA-Gerencial NGER"><i class="bi bi-diagram-3-fill"></i> <span>PTA-Gerencial NGER</span></div>
+              <div class="submenu" id="submenu-atualizar-plan21">
+                <a href="#" data-route="atualizar/plan20-seduc" class="menu-item" title="PLAN-20 FIPLAN"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN-20 FIPLAN</span></a>
+                <div class="menu-group" id="menu-atualizar-plan21-atualizacao">
+                  <div class="menu-item menu-parent" data-submenu="submenu-atualizar-plan21-atualizacao" title="Atualização"><i class="bi bi-pencil-square"></i> <span>Atualização</span></div>
+                  <div class="submenu" id="submenu-atualizar-plan21-atualizacao">
+                    <div class="menu-group" id="menu-atualizar-plan21-meta-fisica">
+                      <div class="menu-item menu-parent" data-submenu="submenu-atualizar-plan21-meta-fisica" title="Meta Física"><i class="bi bi-table"></i> <span>Meta Física</span></div>
+                      <div class="submenu" id="submenu-atualizar-plan21-meta-fisica">
+                        <a href="#" data-route="cadastrar/plan_21-nger/meta_fisica/formulario" class="menu-item" title="Formulário Meta Física"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
+                        <a href="#" data-route="cadastrar/plan_21-nger/meta_fisica/consultar" class="menu-item" title="Consultar Meta Física"><i class="bi bi-search"></i> <span>Consultar</span></a>
+                      </div>
+                    </div>
+                    <div class="menu-group" id="menu-atualizar-plan21-subacao">
+                      <div class="menu-item menu-parent" data-submenu="submenu-atualizar-plan21-subacao" title="Subação"><i class="bi bi-diagram-3-fill"></i> <span>Subação</span></div>
+                      <div class="submenu" id="submenu-atualizar-plan21-subacao">
+                        <a href="#" data-route="cadastrar/plan_21-nger/subacao/formulario" class="menu-item" title="Formulário Subação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
+                        <a href="#" data-route="cadastrar/plan_21-nger/subacao/consultar" class="menu-item" title="Consultar Subação"><i class="bi bi-search"></i> <span>Consultar</span></a>
+                      </div>
+                    </div>
+                    <div class="menu-group" id="menu-atualizar-plan21-etapa">
+                      <div class="menu-item menu-parent" data-submenu="submenu-atualizar-plan21-etapa" title="Etapa"><i class="bi bi-list-task"></i> <span>Etapa</span></div>
+                      <div class="submenu" id="submenu-atualizar-plan21-etapa">
+                        <a href="#" data-route="cadastrar/plan_21-nger/etapa/formulario" class="menu-item" title="Formulário Etapa"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
+                        <a href="#" data-route="cadastrar/plan_21-nger/etapa/consultar" class="menu-item" title="Consultar Etapa"><i class="bi bi-search"></i> <span>Consultar</span></a>
+                      </div>
+                    </div>
+                    <div class="menu-item menu-placeholder" aria-disabled="true" title="Orçamento / Memória de Cálculo"><i class="bi bi-calculator"></i> <span>Orçamento / Memória de Cálculo</span></div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="menu-group" id="menu-atualizar-execucao">
-              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-execucao" title="Execução"><i class="bi bi-bar-chart-steps"></i> <span>Execução</span></div>
+              <div class="menu-item menu-parent" data-submenu="submenu-atualizar-execucao" title="Atualizar Execução Orçamentária"><i class="bi bi-bar-chart-steps"></i> <span>Atualizar Execução Orçamentária</span></div>
               <div class="submenu" id="submenu-atualizar-execucao">
+                <a href="#" data-route="atualizar/chave_planejamento_regra" class="menu-item" title="Correção de erros da chave de planejamento"><i class="bi bi-tools"></i> <span>Correção de Erros de Chave</span></a>
                 <a href="#" data-route="atualizar/fip613" class="menu-item" title="FIP 613 (Atualizar)"><i class="bi bi-cloud-upload"></i> <span>FIP 613</span></a>
                 <a href="#" data-route="atualizar/ped" class="menu-item" title="PED"><i class="bi bi-arrow-up-circle"></i> <span>PED</span></a>
                 <a href="#" data-route="atualizar/emp" class="menu-item" title="EMP"><i class="bi bi-cloud-arrow-up"></i> <span>EMP</span></a>
@@ -57,57 +135,22 @@
             </div>
           </div>
         </div>
+        {% endif %}
         <div class="menu-group" id="menu-cadastrar">
-          <div class="menu-item menu-parent" data-submenu="submenu-cadastrar" title="Cadastrar"><i class="bi bi-plus-circle"></i> <span>Cadastrar</span></div>
+          <div class="menu-item menu-parent" data-submenu="submenu-cadastrar" title="Emitir/Ajustar Dotação"><i class="bi bi-clipboard-plus"></i> <span>Emitir/Ajustar Dotação</span></div>
           <div class="submenu" id="submenu-cadastrar">
-            <div class="menu-group" id="menu-cadastrar-planejamento">
-              <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-planejamento" title="Planejamento"><i class="bi bi-diagram-3"></i> <span>Planejamento</span></div>
-              <div class="submenu" id="submenu-cadastrar-planejamento">
-                <div class="menu-group" id="menu-cadastrar-plan21">
-                  <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-plan21" title="Plan 21 - NGER"><i class="bi bi-diagram-3-fill"></i> <span>Plan 21 - NGER</span></div>
-                  <div class="submenu" id="submenu-cadastrar-plan21">
-                    <div class="menu-group" id="menu-cadastrar-plan21-meta-fisica">
-                      <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-plan21-meta-fisica" title="Meta Física"><i class="bi bi-table"></i> <span>Meta Física</span></div>
-                      <div class="submenu" id="submenu-cadastrar-plan21-meta-fisica">
-                        <a href="#" data-route="cadastrar/plan_21-nger/meta_fisica/formulario" class="menu-item" title="Formulário Meta Física"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
-                        <a href="#" data-route="cadastrar/plan_21-nger/meta_fisica/consultar" class="menu-item" title="Consultar Meta Física"><i class="bi bi-search"></i> <span>Consultar</span></a>
-                      </div>
-                    </div>
-                    <div class="menu-group" id="menu-cadastrar-plan21-subacao">
-                      <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-plan21-subacao" title="Subação"><i class="bi bi-diagram-3-fill"></i> <span>Subação</span></div>
-                      <div class="submenu" id="submenu-cadastrar-plan21-subacao">
-                        <a href="#" data-route="cadastrar/plan_21-nger/subacao/formulario" class="menu-item" title="Formulário Subação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
-                        <a href="#" data-route="cadastrar/plan_21-nger/subacao/consultar" class="menu-item" title="Consultar Subação"><i class="bi bi-search"></i> <span>Consultar</span></a>
-                      </div>
-                    </div>
-                    <div class="menu-group" id="menu-cadastrar-plan21-etapa">
-                      <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-plan21-etapa" title="Etapa"><i class="bi bi-list-task"></i> <span>Etapa</span></div>
-                      <div class="submenu" id="submenu-cadastrar-plan21-etapa">
-                        <a href="#" data-route="cadastrar/plan_21-nger/etapa/formulario" class="menu-item" title="Formulário Etapa"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
-                        <a href="#" data-route="cadastrar/plan_21-nger/etapa/consultar" class="menu-item" title="Consultar Etapa"><i class="bi bi-search"></i> <span>Consultar</span></a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div class="menu-group" id="menu-cadastrar-dotacao">
+              <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-dotacao" title="Dotação"><i class="bi bi-clipboard-plus"></i> <span>Dotação</span></div>
+              <div class="submenu" id="submenu-cadastrar-dotacao">
+                <a href="#" data-route="cadastrar/dotacao/formulario" class="menu-item" title="Formulário Dotação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
+                <a href="#" data-route="cadastrar/dotacao/consultar" class="menu-item" title="Consultar Dotação"><i class="bi bi-search"></i> <span>Consultar</span></a>
               </div>
             </div>
-            <div class="menu-group" id="menu-cadastrar-execucao">
-              <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-execucao" title="Execução"><i class="bi bi-bar-chart-steps"></i> <span>Execução</span></div>
-              <div class="submenu" id="submenu-cadastrar-execucao">
-                <div class="menu-group" id="menu-cadastrar-dotacao">
-                  <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-dotacao" title="Dotação"><i class="bi bi-clipboard-plus"></i> <span>Dotação</span></div>
-                  <div class="submenu" id="submenu-cadastrar-dotacao">
-                    <a href="#" data-route="cadastrar/dotacao/formulario" class="menu-item" title="Formulário Dotação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
-                    <a href="#" data-route="cadastrar/dotacao/consultar" class="menu-item" title="Consultar Dotação"><i class="bi bi-search"></i> <span>Consultar</span></a>
-                  </div>
-                </div>
-                <div class="menu-group" id="menu-cadastrar-est-dotacao">
-                  <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-est-dotacao" title="Estorno de Dotação"><i class="bi bi-clipboard-minus"></i> <span>Estorno de Dotação</span></div>
-                  <div class="submenu" id="submenu-cadastrar-est-dotacao">
-                    <a href="#" data-route="cadastrar/est-dotacao/formulario" class="menu-item" title="Formulário Estorno de Dotação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
-                    <a href="#" data-route="cadastrar/est-dotacao/consultar" class="menu-item" title="Consultar Estorno de Dotação"><i class="bi bi-search"></i> <span>Consultar</span></a>
-                  </div>
-                </div>
+            <div class="menu-group" id="menu-cadastrar-est-dotacao">
+              <div class="menu-item menu-parent" data-submenu="submenu-cadastrar-est-dotacao" title="Estorno de Dotação"><i class="bi bi-clipboard-minus"></i> <span>Estorno de Dotação</span></div>
+              <div class="submenu" id="submenu-cadastrar-est-dotacao">
+                <a href="#" data-route="cadastrar/est-dotacao/formulario" class="menu-item" title="Formulário Estorno de Dotação"><i class="bi bi-ui-checks"></i> <span>Formulário</span></a>
+                <a href="#" data-route="cadastrar/est-dotacao/consultar" class="menu-item" title="Consultar Estorno de Dotação"><i class="bi bi-search"></i> <span>Consultar</span></a>
               </div>
             </div>
           </div>
@@ -171,7 +214,7 @@
         <div class="menu-group" id="menu-area-uens">
           <div class="menu-item menu-parent" data-submenu="submenu-area-uens" title="Área UENs"><i class="bi bi-diagram-3"></i> <span>Área UENs</span></div>
           <div class="submenu" id="submenu-area-uens">
-            <div class="menu-group" id="menu-area-uens/sage">
+            <div class="menu-group" id="menu-area-uens-sage">
               <div class="menu-item menu-parent" data-submenu="submenu-area-uens-sage" title="SAGE"><i class="bi bi-folder2-open"></i> <span>SAGE</span></div>
               <div class="submenu" id="submenu-area-uens-sage">
                 <a href="#" data-route="area-uens/sage/notas-see" class="menu-item" title="Notas SEE"><i class="bi bi-file-earmark-pdf"></i> <span>Notas SEE</span></a>
@@ -196,40 +239,6 @@
     </aside>
 
     <div class="main">
-      <header class="topbar">
-        <div class="brand-wrap">
-          <img class="brand-logo" src="{{ url_for('static', filename='img/logo.jpg') }}" alt="Logo">
-          <div>
-            <div class="subtitle">Sistema de Planejamento e Orçamento</div>
-            <div class="muted">SPO-NGER-SEDUCMT</div>
-            {% if environment_label %}
-            <div class="environment-inline-badge environment-inline-badge-{{ environment_badge_class|default('homolog')|e }}" role="status" aria-label="Ambiente atual">
-              <i class="bi bi-git" aria-hidden="true"></i>
-              <span>{{ environment_label }}</span>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        <div class="user-info">
-          {% if g.user %}
-            <div class="user-meta" id="user-meta"
-                 data-name="{{ g.user.nome }}"
-                 data-active-count="{{ g.active_sessions_count or 0 }}"
-                 data-perfil-id="{{ g.user_perfil_id or '' }}"
-                 data-nivel="{{ g.user_nivel or '' }}"
-                 data-features='{{ (initial_features or [])|tojson }}'></div>
-          {% endif %}
-          <div class="theme-toggle" aria-label="Alternar tema">
-            <button class="icon-btn sm theme-btn" id="theme-light" type="button" title="Tema claro">
-              <i class="bi bi-sun"></i>
-            </button>
-            <button class="icon-btn sm theme-btn" id="theme-dark" type="button" title="Tema escuro">
-              <i class="bi bi-moon"></i>
-            </button>
-          </div>
-        </div>
-      </header>
-
       <main id="content-area" data-initial="{{ initial_content or 'dashboard' }}"></main>
 
       <footer class="footer">
@@ -260,6 +269,6 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}?v=20260703.14"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}?v=20260706.integration.1"></script>
 </body>
 </html>
