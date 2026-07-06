@@ -1990,6 +1990,7 @@
   function initPersonalizarSpo() {
     const panel = document.getElementById("personalizar-spo-panel");
     if (!panel || panel.dataset.bound === "1") return;
+    panel.querySelectorAll(".personalizar-subnav").forEach((node) => node.remove());
     panel.dataset.bound = "1";
     syncThemeControls(panel);
     initCommonVisualControls(panel);

@@ -36,6 +36,19 @@ _active_sessions_count_cache_lock = threading.Lock()
 _active_sessions_count_cache = {"expires_at": 0.0, "value": 0}
 
 
+def _environment_short_badge(base_label: str, detail: str, port: str, commit: str, dirty: bool) -> str:
+    base = "DEV" if base_label.lower().startswith("integracao dev") else base_label.strip()
+    branch = detail.strip()
+    if "/" in branch:
+        branch = branch.rsplit("/", 1)[-1]
+    branch = branch.replace("-", "/").upper()
+    if branch and dirty:
+        branch = f"{branch}*"
+    port_label = f":{port.lstrip(':')}" if port else ""
+    parts = [part for part in (base.upper(), branch, port_label, commit.upper()) if part]
+    return " - ".join(parts)
+
+
 def _setup_logging(app: Flask) -> None:
     log_dir = Path("logs")
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -294,6 +307,13 @@ def create_app():
                 title_parts.append("Worktree com alteracoes locais")
         return {
             "spo_environment_badge": badge,
+            "spo_environment_badge_short": _environment_short_badge(
+                base_label,
+                detail,
+                port,
+                commit,
+                dirty,
+            ),
             "spo_environment_title": " | ".join(title_parts),
             "spo_environment_git": {
                 "label": base_label,
