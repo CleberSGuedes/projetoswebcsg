@@ -1,11 +1,12 @@
 <section
   id="relatorio-estrutura-planejamento"
-  class="planning-report-page"
+  class="planning-report-page report-page"
   data-configs='{{ report_configs|tojson }}'
   data-active-view="cadastros"
 >
-  <div class="planning-report-header">
-    <div>
+  <div class="planning-report-header report-header">
+    <div class="report-header-copy">
+      <div class="report-eyebrow">Relatórios · Planejamento</div>
       <div class="card-title">Estrutura do Planejamento</div>
       <p class="muted">Consulte os cadastros e vínculos utilizados na montagem das chaves de planejamento.</p>
     </div>
@@ -19,7 +20,7 @@
     </div>
   </div>
 
-  <div class="card planning-report-filters">
+  <div class="card planning-report-filters report-filter-card">
     <div class="form-grid planning-report-filter-grid">
       <label class="field">
         <span id="planning-report-type-label">*Tipo de cadastro</span>
@@ -49,7 +50,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card report-data-card planning-report-data-card">
     <div class="planning-structure-list-header">
       <div>
         <div class="card-title" id="planning-report-title">Cadastros</div>

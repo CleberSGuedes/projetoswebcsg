@@ -200,6 +200,7 @@ def login():
                 flash("Perfil do usuario invalido.", "error")
                 return redirect(url_for("auth.login"))
             session["user"] = {
+                "id": usuario.id,
                 "email": usuario.email,
                 "nome": usuario.nome,
                 "perfil": (perfil_row.nome or "").strip(),

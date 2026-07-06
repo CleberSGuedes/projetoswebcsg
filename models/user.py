@@ -78,6 +78,176 @@ class NivelPermissao(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
 
+class UsuarioPermissao(db.Model):
+    __tablename__ = "usuario_permissoes"
+    __table_args__ = (
+        db.UniqueConstraint("usuario_id", "feature", name="uq_usuario_permissao_feature"),
+    )
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"), nullable=False)
+    feature = db.Column(db.String(255), nullable=False)
+    permitido = db.Column(db.Boolean, nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
+
+
+class SeeCatalogo(db.Model):
+    __tablename__ = "see_catalogos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    descricao = db.Column(db.String(500))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    criado_por = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    atualizado_por = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class SeeCatalogoProduto(db.Model):
+    __tablename__ = "see_catalogo_produtos"
+    __table_args__ = (db.UniqueConstraint("catalogo_id", "codigo", name="uq_see_catalogo_produto_codigo"),)
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    catalogo_id = db.Column(db.BigInteger, db.ForeignKey("see_catalogos.id"), nullable=False)
+    codigo = db.Column(db.String(50), nullable=False)
+    nome = db.Column(db.String(255), nullable=False)
+    observacao = db.Column(db.String(500))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class SeeProcessamento(db.Model):
+    __tablename__ = "see_processamentos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    user_email = db.Column(db.String(255), nullable=False)
+    catalogo_id = db.Column(db.BigInteger, db.ForeignKey("see_catalogos.id"), nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="aguardando_upload")
+    etapa_atual = db.Column(db.String(80))
+    mensagem_atual = db.Column(db.String(1000))
+    total_arquivos = db.Column(db.Integer, nullable=False, default=0)
+    arquivos_enviados = db.Column(db.Integer, nullable=False, default=0)
+    arquivos_processados = db.Column(db.Integer, nullable=False, default=0)
+    arquivos_sucesso = db.Column(db.Integer, nullable=False, default=0)
+    arquivos_alerta = db.Column(db.Integer, nullable=False, default=0)
+    arquivos_erro = db.Column(db.Integer, nullable=False, default=0)
+    progresso = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    cancelamento_solicitado = db.Column(db.Boolean, nullable=False, default=False)
+    nome_arquivo_saida = db.Column(db.String(255))
+    caminho_arquivo_saida = db.Column(db.String(500))
+    tamanho_arquivo_saida = db.Column(db.BigInteger)
+    erro_geral = db.Column(db.String(2000))
+    worker_pid = db.Column(db.BigInteger)
+    iniciado_em = db.Column(db.DateTime)
+    finalizado_em = db.Column(db.DateTime)
+    duracao_segundos = db.Column(db.Numeric(14, 3))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class SeeProcessamentoArquivo(db.Model):
+    __tablename__ = "see_processamento_arquivos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(db.BigInteger, db.ForeignKey("see_processamentos.id"), nullable=False)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    nome_original = db.Column(db.String(255), nullable=False)
+    caminho_relativo = db.Column(db.String(500))
+    nome_armazenado = db.Column(db.String(255), nullable=False)
+    caminho_armazenado = db.Column(db.String(500), nullable=False)
+    mime_type = db.Column(db.String(100))
+    tamanho_bytes = db.Column(db.BigInteger, nullable=False, default=0)
+    sha256 = db.Column(db.String(64))
+    status = db.Column(db.String(40), nullable=False, default="aguardando")
+    etapa_atual = db.Column(db.String(80))
+    progresso = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    total_paginas = db.Column(db.Integer)
+    pagina_atual = db.Column(db.Integer)
+    metodo_extracao = db.Column(db.String(50))
+    chave_acesso = db.Column(db.String(44))
+    numero_danfe = db.Column(db.String(30))
+    dre = db.Column(db.String(255))
+    codigo_escola = db.Column(db.String(50))
+    nome_escola = db.Column(db.String(500))
+    confianca_metadados = db.Column(db.Numeric(5, 4))
+    total_produtos = db.Column(db.Integer, nullable=False, default=0)
+    total_alertas = db.Column(db.Integer, nullable=False, default=0)
+    total_erros = db.Column(db.Integer, nullable=False, default=0)
+    dados_extraidos_json = db.Column(db.JSON)
+    erro_resumido = db.Column(db.String(2000))
+    iniciado_em = db.Column(db.DateTime)
+    finalizado_em = db.Column(db.DateTime)
+    duracao_segundos = db.Column(db.Numeric(14, 3))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class SeeItemExtraido(db.Model):
+    __tablename__ = "see_itens_extraidos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(db.BigInteger, db.ForeignKey("see_processamentos.id"), nullable=False)
+    arquivo_id = db.Column(db.BigInteger, db.ForeignKey("see_processamento_arquivos.id"), nullable=False)
+    catalogo_produto_id = db.Column(db.BigInteger, db.ForeignKey("see_catalogo_produtos.id"))
+    codigo_produto = db.Column(db.String(50), nullable=False)
+    nome_produto = db.Column(db.String(255), nullable=False)
+    unidade = db.Column(db.String(20))
+    quantidade = db.Column(db.Numeric(18, 4), nullable=False, default=0)
+    pagina = db.Column(db.Integer)
+    linha_referencia = db.Column(db.Integer)
+    estrategia_extracao = db.Column(db.String(80))
+    confianca = db.Column(db.Numeric(5, 4))
+    texto_origem = db.Column(db.Text)
+    revisado = db.Column(db.Boolean, nullable=False, default=False)
+    corrigido_manualmente = db.Column(db.Boolean, nullable=False, default=False)
+    valor_original = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
+
+
+class SeeOcorrencia(db.Model):
+    __tablename__ = "see_ocorrencias"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(db.BigInteger, db.ForeignKey("see_processamentos.id"), nullable=False)
+    arquivo_id = db.Column(db.BigInteger, db.ForeignKey("see_processamento_arquivos.id"))
+    severidade = db.Column(db.String(20), nullable=False)
+    fase = db.Column(db.String(50), nullable=False)
+    codigo = db.Column(db.String(80))
+    mensagem = db.Column(db.String(2000), nullable=False)
+    detalhe_tecnico = db.Column(db.Text)
+    pagina = db.Column(db.Integer)
+    contexto = db.Column(db.Text)
+    dados_contexto_json = db.Column(db.JSON)
+    resolvido = db.Column(db.Boolean, nullable=False, default=False)
+    resolvido_por = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
+    resolvido_em = db.Column(db.DateTime)
+    observacao_resolucao = db.Column(db.String(1000))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class SeeProcessamentoEvento(db.Model):
+    __tablename__ = "see_processamento_eventos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(db.BigInteger, db.ForeignKey("see_processamentos.id"), nullable=False)
+    arquivo_id = db.Column(db.BigInteger, db.ForeignKey("see_processamento_arquivos.id"))
+    tipo = db.Column(db.String(40), nullable=False)
+    estado = db.Column(db.String(40))
+    mensagem = db.Column(db.String(1000))
+    progresso = db.Column(db.Numeric(5, 2))
+    arquivos_processados = db.Column(db.Integer)
+    arquivos_sucesso = db.Column(db.Integer)
+    arquivos_alerta = db.Column(db.Integer)
+    arquivos_erro = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
 class Fip613Upload(db.Model):
     __tablename__ = "fip613_uploads"
 
@@ -377,6 +547,55 @@ class NobUpload(db.Model):
     output_filename = db.Column(db.String(255), nullable=True)
     data_arquivo = db.Column(db.DateTime, nullable=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class ProcessamentoJob(db.Model):
+    __tablename__ = "processamento_jobs"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    tipo = db.Column(db.String(30), nullable=False, index=True)
+    upload_id = db.Column(db.BigInteger, nullable=False)
+    usuario_id = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"), nullable=True)
+    user_email = db.Column(db.String(255), nullable=False)
+    arquivo_original = db.Column(db.String(255))
+    arquivo_armazenado = db.Column(db.String(255))
+    arquivo_saida = db.Column(db.String(255))
+    caminho_saida = db.Column(db.String(500))
+    status = db.Column(db.String(40), nullable=False, default="aguardando")
+    etapa_atual = db.Column(db.String(100))
+    mensagem_atual = db.Column(db.String(1000))
+    progresso = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    total_registros = db.Column(db.BigInteger, nullable=False, default=0)
+    registros_processados = db.Column(db.BigInteger, nullable=False, default=0)
+    total_alertas = db.Column(db.Integer, nullable=False, default=0)
+    total_erros = db.Column(db.Integer, nullable=False, default=0)
+    worker_pid = db.Column(db.BigInteger)
+    cancelamento_solicitado = db.Column(db.Boolean, nullable=False, default=False)
+    tentativa = db.Column(db.Integer, nullable=False, default=1)
+    detalhes_alertas = db.Column(db.Text)
+    erro_tecnico = db.Column(db.Text)
+    solicitado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    iniciado_em = db.Column(db.DateTime)
+    finalizado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(
+        db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now()
+    )
+    duracao_segundos = db.Column(db.Numeric(14, 3))
+
+
+class ProcessamentoEvento(db.Model):
+    __tablename__ = "processamento_eventos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    processamento_id = db.Column(
+        db.BigInteger, db.ForeignKey("processamento_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo_evento = db.Column(db.String(30), nullable=False, default="informacao")
+    etapa = db.Column(db.String(100))
+    mensagem = db.Column(db.String(2000), nullable=False)
+    progresso = db.Column(db.Numeric(5, 2))
+    detalhes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
 class NobRegistro(db.Model):

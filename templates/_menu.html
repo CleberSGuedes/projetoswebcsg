@@ -1,0 +1,25 @@
+{% macro render_menu_node(node) -%}
+    {% if node.children or node.menu_routes %}
+      <div class="menu-group {{ node.css_class|default('') }}" id="menu-{{ node.dom_id }}">
+        <div class="menu-item menu-parent" data-submenu="submenu-{{ node.dom_id }}" title="{{ node.nome }}">
+          <i class="bi bi-{{ node.icon }}"></i> <span>{{ node.nome }}</span>
+        </div>
+        <div class="submenu" id="submenu-{{ node.dom_id }}">
+          {% if node.menu_routes %}
+            {% for item in node.menu_routes %}
+              <a href="#" data-route="{{ item.route }}" class="menu-item" title="{{ item.nome }} {{ node.nome }}">
+                <i class="bi bi-{{ item.icon }}"></i> <span>{{ item.nome }}</span>
+              </a>
+            {% endfor %}
+          {% else %}
+            {% for child in node.children %}{{ render_menu_node(child) }}{% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <a href="#" data-route="{{ node.id }}" class="menu-item" title="{{ node.nome }}">
+        <i class="bi bi-{{ node.icon }}"></i> <span>{{ node.nome }}</span>
+      </a>
+    {% endif %}
+{%- endmacro %}
+{% for node in menu_features %}{{ render_menu_node(node) }}{% endfor %}
