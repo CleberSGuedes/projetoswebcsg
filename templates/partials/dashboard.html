@@ -3,75 +3,29 @@
     <div class="card-title">Bem-vindo</div>
     <p>Use o menu ao lado para navegar. Itens carregam sem sair da Home.</p>
   </div>
-  <div class="card home-next-card">
-    <div class="card-title">Próximos passos</div>
-    <ul>
-      <li>Completar telas do MVP</li>
-      <li>Configurar regras por perfil</li>
-      <li>Adicionar indicadores do dashboard</li>
-    </ul>
-  </div>
-  <div class="card home-status-card">
-    <div class="home-card-heading">
-      <div class="card-title">Status</div>
-      <p>Ambiente conectado.</p>
-    </div>
-    {% if spo_environment_git and (spo_environment_git.commit or spo_environment_git.branch) %}
-      <div class="environment-status-panel" aria-label="Status técnico do ambiente">
-        <div class="environment-status-head">
-          <div>
-            <div class="environment-status-title">Ambiente DEV</div>
-            <div class="environment-status-note">Diagnóstico técnico desta instância.</div>
-          </div>
-          <span class="environment-state-badge{% if spo_environment_git.dirty %} is-dirty{% endif %}">
-            {{ "sujo" if spo_environment_git.dirty else "limpo" }}
-          </span>
-        </div>
-        <div class="environment-status-primary">
-          {% if spo_environment_git.branch %}
-            <div class="environment-status-metric">
-              <span>Branch</span>
-              <strong>{{ spo_environment_git.branch }}{% if spo_environment_git.dirty %}*{% endif %}</strong>
-            </div>
-          {% endif %}
-          {% if spo_environment_git.commit %}
-            <div class="environment-status-metric">
-              <span>Commit</span>
-              <strong>{{ spo_environment_git.commit }}</strong>
-            </div>
-          {% endif %}
-          <div class="environment-status-metric">
-            <span>Estado</span>
-            <strong>{{ "alterações locais" if spo_environment_git.dirty else "sem alterações locais" }}</strong>
-          </div>
-        </div>
-        {% if spo_environment_git.upstream or spo_environment_git.checkpoint %}
-          <div class="environment-status-secondary">
-            {% if spo_environment_git.upstream %}
-              <span>Remoto: <strong>{{ spo_environment_git.upstream }}</strong></span>
-            {% endif %}
-            {% if spo_environment_git.checkpoint %}
-              <span>Checkpoint: <strong>{{ spo_environment_git.checkpoint }}</strong></span>
-            {% endif %}
-          </div>
-        {% endif %}
-        {% if spo_environment_git.delta_summary or spo_environment_git.front_status %}
-          <details class="environment-fronts-detail">
-            <summary>
-              <span>{{ spo_environment_git.delta_summary or (spo_environment_git.front_status|length ~ " frentes mapeadas") }}</span>
-              <small>ver chips</small>
-            </summary>
-            {% if spo_environment_git.front_status %}
-              <div class="environment-fronts" aria-label="Frentes DEV mapeadas">
-                {% for item in spo_environment_git.front_status %}
-                  <span class="environment-front-pill{% if item.devOnly or item.frontOnly %} is-different{% endif %}" title="{{ item.branch }} · DEV +{{ item.devOnly }} / frente +{{ item.frontOnly }}">
-                    {{ item.key }}
-                  </span>
-                {% endfor %}
-              </div>
-            {% endif %}
-          </details>
-        {% endif %}
+  {% set has_environment_details = spo_environment_git and (spo_environment_git.commit or spo_environment_git.branch) %}
+  <div class="card home-status-card{% if has_environment_details %} has-status-details{% endif %}"{% if has_environment_details %} data-home-status-card{% endif %}>
+    {% if has_environment_details %}
+      <button
+        class="home-status-toggle"
+        type="button"
+        data-home-status-toggle
+        aria-expanded="false"
+        aria-controls="home-status-details"
+      >
+        <span class="home-card-heading">
+          <span class="card-title">Status</span>
+          <span class="home-status-summary">Ambiente conectado. Verifique permissões para acessar usuários.</span>
+        </span>
+        <span class="home-status-toggle-meta">
+          <span data-home-status-toggle-label>Ver detalhes</span>
+          <i class="bi bi-chevron-down" aria-hidden="true"></i>
+        </span>
+      </button>
+    {% else %}
+      <div class="home-card-heading">
+        <div class="card-title">Status</div>
+        <p>Ambiente conectado. Verifique permissões para acessar usuários.</p>
       </div>
     {% endif %}
     {% if can_view_sessions %}
@@ -88,6 +42,74 @@
         {% endif %}
       </div>
     {% endif %}
+    {% if has_environment_details %}
+      <div class="home-status-details" id="home-status-details" hidden>
+        <div class="environment-status-panel" aria-label="Status técnico do ambiente">
+          <div class="environment-status-head">
+            <div>
+              <div class="environment-status-title">Ambiente DEV</div>
+              <div class="environment-status-note">Diagnóstico técnico desta instância.</div>
+            </div>
+            <span class="environment-state-badge{% if spo_environment_git.dirty %} is-dirty{% endif %}">
+              {{ "sujo" if spo_environment_git.dirty else "limpo" }}
+            </span>
+          </div>
+          <div class="environment-status-primary">
+            {% if spo_environment_git.branch %}
+              <div class="environment-status-metric">
+                <span>Branch</span>
+                <strong>{{ spo_environment_git.branch }}{% if spo_environment_git.dirty %}*{% endif %}</strong>
+              </div>
+            {% endif %}
+            {% if spo_environment_git.commit %}
+              <div class="environment-status-metric">
+                <span>Commit</span>
+                <strong>{{ spo_environment_git.commit }}</strong>
+              </div>
+            {% endif %}
+            <div class="environment-status-metric">
+              <span>Estado</span>
+              <strong>{{ "alterações locais" if spo_environment_git.dirty else "sem alterações locais" }}</strong>
+            </div>
+          </div>
+          {% if spo_environment_git.upstream or spo_environment_git.checkpoint %}
+            <div class="environment-status-secondary">
+              {% if spo_environment_git.upstream %}
+                <span>Remoto: <strong>{{ spo_environment_git.upstream }}</strong></span>
+              {% endif %}
+              {% if spo_environment_git.checkpoint %}
+                <span>Checkpoint: <strong>{{ spo_environment_git.checkpoint }}</strong></span>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% if spo_environment_git.delta_summary or spo_environment_git.front_status %}
+            <details class="environment-fronts-detail">
+              <summary>
+                <span>{{ spo_environment_git.delta_summary or (spo_environment_git.front_status|length ~ " frentes mapeadas") }}</span>
+                <small>ver chips</small>
+              </summary>
+              {% if spo_environment_git.front_status %}
+                <div class="environment-fronts" aria-label="Frentes DEV mapeadas">
+                  {% for item in spo_environment_git.front_status %}
+                    <span class="environment-front-pill{% if item.devOnly or item.frontOnly %} is-different{% endif %}" title="{{ item.branch }} · DEV +{{ item.devOnly }} / frente +{{ item.frontOnly }}">
+                      {{ item.key }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </details>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+  <div class="card home-next-card">
+    <div class="card-title">Próximos passos</div>
+    <ul>
+      <li>Completar telas do MVP</li>
+      <li>Configurar regras por perfil</li>
+      <li>Adicionar indicadores do dashboard</li>
+    </ul>
   </div>
 </div>
 

@@ -18899,6 +18899,34 @@
   }
 
   function initDashboard({ forceShow = false } = {}) {
+    const statusCard = document.querySelector("[data-home-status-card]");
+    if (statusCard && statusCard.dataset.bound !== "1") {
+      const statusToggle = statusCard.querySelector("[data-home-status-toggle]");
+      const statusDetails = statusCard.querySelector("#home-status-details");
+      const statusLabel = statusCard.querySelector("[data-home-status-toggle-label]");
+      const setStatusExpanded = (expanded) => {
+        statusCard.classList.toggle("is-expanded", expanded);
+        if (statusToggle) statusToggle.setAttribute("aria-expanded", String(expanded));
+        if (statusDetails) statusDetails.hidden = !expanded;
+        if (statusLabel) statusLabel.textContent = expanded ? "Ocultar detalhes" : "Ver detalhes";
+      };
+      const toggleStatusDetails = () => {
+        setStatusExpanded(!statusCard.classList.contains("is-expanded"));
+      };
+      statusToggle?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleStatusDetails();
+      });
+      statusCard.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest(".home-status-details, a, button, details, summary")) return;
+        toggleStatusDetails();
+      });
+      setStatusExpanded(false);
+      statusCard.dataset.bound = "1";
+    }
+
     const recordModal = document.getElementById("emp-record-modal");
     if (recordModal) {
       const renderDigits = (container) => {

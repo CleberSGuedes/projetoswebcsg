@@ -583,7 +583,7 @@ body.special-context-focus .main {
 .card-title { font-weight: 700; margin-bottom: 8px; }
 .card.highlight { background: linear-gradient(135deg, rgba(var(--accent-rgb),0.13), rgba(var(--accent-soft-rgb),0.22)); border-color: rgba(var(--accent-rgb),0.35); }
 .home-dashboard-grid {
-  align-items: start;
+  align-items: stretch;
   gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -597,17 +597,75 @@ body.special-context-focus .main {
 .home-welcome-card,
 .home-status-card,
 .home-next-card {
-  align-self: start;
+  align-self: stretch;
 }
 .home-welcome-card {
   min-height: 128px;
 }
 .home-welcome-card p,
-.home-card-heading p {
+.home-card-heading p,
+.home-status-summary {
   color: var(--muted);
+  display: block;
   font-size: 12px;
   line-height: 1.45;
   margin: 0;
+}
+.home-status-card.has-status-details {
+  cursor: pointer;
+}
+.home-status-toggle {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  font: inherit;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+.home-status-toggle:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  outline: 2px solid rgba(var(--accent-rgb), 0.48);
+  outline-offset: 4px;
+}
+.home-status-toggle .card-title {
+  display: block;
+}
+.home-status-toggle .home-card-heading {
+  min-width: 0;
+}
+.home-status-toggle-meta {
+  align-items: center;
+  color: var(--accent);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 5px;
+  line-height: 1.2;
+  margin-top: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.home-status-toggle-meta i {
+  font-size: 12px;
+  transition: transform .16s ease;
+}
+.home-status-card.is-expanded .home-status-toggle-meta i {
+  transform: rotate(180deg);
+}
+.home-status-details {
+  margin-top: 12px;
+}
+.home-status-details[hidden] {
+  display: none !important;
 }
 .home-status-card,
 .home-next-card {
@@ -619,6 +677,9 @@ body.special-context-focus .main {
   border-radius: 10px;
   margin-top: 12px;
   padding: 10px;
+}
+.home-status-details .environment-status-panel {
+  margin-top: 0;
 }
 .environment-status-head {
   align-items: flex-start;
