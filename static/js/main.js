@@ -2349,7 +2349,7 @@
         return;
       }
       if (res.status === 403) {
-        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Requer perfil admin.</p></div>';
+        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Seu usuário não possui permissão para acessar esta funcionalidade.</p></div>';
         return;
       }
       const html = await res.text();
@@ -2609,7 +2609,40 @@
 
   initTheme();
   refreshAccentScrollbars();
+  function initLocalTableFilter(inputId, tbodyId) {
+    const input = document.getElementById(inputId);
+    const tbody = document.getElementById(tbodyId);
+    if (!input || !tbody || input.dataset.bound === "1") return;
+    input.dataset.bound = "1";
+    const normalize = (value) => String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .trim();
+    const empty = document.createElement("tr");
+    empty.className = "users-filter-empty";
+    empty.hidden = true;
+    const cell = document.createElement("td");
+    cell.colSpan = Math.max(tbody.closest("table")?.querySelectorAll("thead th").length || 1, 1);
+    cell.textContent = "Nenhum registro encontrado.";
+    empty.appendChild(cell);
+    tbody.appendChild(empty);
+    const applyFilter = () => {
+      const query = normalize(input.value);
+      let visible = 0;
+      Array.from(tbody.querySelectorAll("tr:not(.users-filter-empty)")).forEach((row) => {
+        const show = !query || normalize(row.textContent).includes(query);
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+      empty.hidden = visible !== 0;
+    };
+    input.addEventListener("input", applyFilter);
+    applyFilter();
+  }
+
   function initUsuariosForm() {
+    initLocalTableFilter("usuarios-cadastrar-search", "usuarios-cadastrar-tbody");
     const form = document.getElementById("form-criar-usuario");
     const msg = document.getElementById("criar-usuario-msg");
     if (!form || !msg) return;
@@ -2652,6 +2685,7 @@
   }
 
   function initUsuariosEditar() {
+    initLocalTableFilter("usuarios-editar-search", "usuarios-editar-tbody");
     const form = document.getElementById("form-editar-usuario");
     const msg = document.getElementById("editar-usuario-msg");
     const fillFromRow = (row) => {
@@ -2674,6 +2708,38 @@
       btn.addEventListener("click", () => {
         const row = btn.closest("tr[data-id]");
         if (row) fillFromRow(row);
+      });
+    });
+
+    document.querySelectorAll(".delete-usuario").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest("tr[data-id]");
+        const id = row?.dataset.id || btn.dataset.id || "";
+        const nome = btn.dataset.nome || row?.dataset.nome || "este usuário";
+        if (!id || !window.confirm(`Excluir ${nome} da lista de usuários ativos?\n\nO registro será preservado e apenas desativado.`)) return;
+        btn.disabled = true;
+        msg.textContent = "Desativando usuário...";
+        msg.classList.remove("text-error");
+        try {
+          const res = await fetch(`/api/usuarios/id/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao excluir usuário.");
+          if (document.getElementById("edit-id").value === id) {
+            form.reset();
+            document.getElementById("edit-id").value = "";
+          }
+          row?.remove();
+          document.getElementById("usuarios-editar-search")?.dispatchEvent(new Event("input"));
+          msg.textContent = "Usuário desativado e removido da lista.";
+        } catch (err) {
+          console.error(err);
+          btn.disabled = false;
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
       });
     });
 
@@ -2737,6 +2803,7 @@
   }
 
   function initPerfis() {
+    initLocalTableFilter("perfis-search", "perfis-tbody");
     const form = document.getElementById("form-perfil");
     const msg = document.getElementById("perfil-msg");
     if (!form || !msg) return;
@@ -3086,7 +3153,7 @@
 
   function applyMenuPermissions(features = []) {
     if (!menu) return;
-    const allowed = new Set(["dashboard", "logout", "atualizar/personalizar-spo", ...features]);
+    const allowed = new Set(["dashboard", "logout", ...features]);
     const isAllowedRoute = (route) => {
       if (!route) return false;
       if (allowed.has(route)) return true;
@@ -3105,16 +3172,19 @@
       link.style.display = isAllowedRoute(route) ? "" : "none";
     });
 
-    // Parents: show if any allowed child
-    menu.querySelectorAll(".menu-group").forEach((group) => {
+    // Processa de dentro para fora para preservar todos os ancestrais de rotas visíveis.
+    Array.from(menu.querySelectorAll(".menu-group")).reverse().forEach((group) => {
       const submenu = group.querySelector(".submenu");
       if (!submenu) return;
       const parentId = group.id?.replace("menu-", "") || "";
-      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some((item) =>
-        isAllowedRoute(item.getAttribute("data-route"))
+      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some(
+        (item) => item.style.display !== "none"
+      );
+      const hasVisibleGroup = Array.from(submenu.querySelectorAll(".menu-group")).some(
+        (child) => child.style.display !== "none"
       );
       const parentAllowed = parentId && allowed.has(parentId);
-      group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
+      group.style.display = hasAllowedChild || hasVisibleGroup || parentAllowed ? "" : "none";
     });
 
     // Top-level items without submenu
@@ -3149,14 +3219,6 @@
   }
 
   async function fetchCurrentPermissions() {
-    if (userNivel === "1") {
-      // admin: libera tudo visível no menu
-      const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
-        el.getAttribute("data-route")
-      );
-      applyMenuPermissions(allRoutes);
-      return;
-    }
     try {
       const res = await fetch("/api/permissoes/current", {
         headers: { "X-Requested-With": "fetch" },
@@ -3179,12 +3241,18 @@
     const selectTipo = document.getElementById("painel-tipo");
     const selectPerfil = document.getElementById("painel-perfil");
     const selectNivel = document.getElementById("painel-nivel");
+    const selectUsuario = document.getElementById("painel-usuario");
+    const usuarioPesquisa = document.getElementById("painel-usuario-pesquisa");
+    const usuarioOpcoes = document.getElementById("painel-usuario-opcoes");
+    const usuarioSelecionados = document.getElementById("painel-usuario-selecionados");
     const fieldPerfil = document.getElementById("painel-perfil-field");
     const fieldNivel = document.getElementById("painel-nivel-field");
+    const fieldUsuario = document.getElementById("painel-usuario-field");
+    const usuarioLegenda = document.getElementById("painel-usuario-legenda");
     const btnSalvar = document.getElementById("painel-salvar");
     const btnCancelar = document.getElementById("painel-cancelar");
     const msg = document.getElementById("painel-msg");
-    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectTipo) return;
+    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectUsuario || !usuarioOpcoes || !selectTipo) return;
     if (treeEl.dataset.bound === "1") return;
     treeEl.dataset.bound = "1";
 
@@ -3193,6 +3261,11 @@
     const allowedNivelRaw = JSON.parse(dataScript.dataset.allowedNivel || "{}");
     const allowedPerfil = {};
     const allowedNivel = {};
+    const allowedUsuario = {};
+    const inheritedUsuario = {};
+    const userAllow = {};
+    const userDeny = {};
+    let mixedUsuario = new Set();
     Object.entries(allowedPerfilRaw).forEach(([k, v]) => {
       allowedPerfil[String(k)] = v;
     });
@@ -3200,14 +3273,7 @@
       allowedNivel[String(k)] = v;
     });
     const lockedBase = new Set(features.filter((f) => f.locked).map((f) => f.id));
-    const sortFeatures = (items) =>
-      (items || [])
-        .map((f) => ({
-          ...f,
-          children: f.children ? sortFeatures([...f.children]) : [],
-        }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-    const sortedFeatures = sortFeatures(features);
+    const menuFeatures = features;
     let originalPerfil = {};
     let originalNivel = {};
     Object.entries(allowedPerfil).forEach(([k, v]) => {
@@ -3220,26 +3286,62 @@
     let profileLocked = new Set();
     let currentMode = selectTipo.value || "perfil";
 
-    const getAllowedMap = () => (currentMode === "nivel" ? allowedNivel : allowedPerfil);
+    const getAllowedMap = () => {
+      if (currentMode === "nivel") return allowedNivel;
+      if (currentMode === "usuario") return allowedUsuario;
+      return allowedPerfil;
+    };
     const getOriginalMap = () => (currentMode === "nivel" ? originalNivel : originalPerfil);
-    const getSelectedKey = () => String(currentMode === "nivel" ? selectNivel.value || "" : selectPerfil.value || "");
+    const getSelectedUserIds = () => Array.from(
+      usuarioOpcoes.querySelectorAll("input[type='checkbox']:checked")
+    ).map((input) => String(input.value));
+    const getSelectedKey = () => String(
+      currentMode === "nivel"
+        ? selectNivel.value || ""
+        : currentMode === "usuario"
+          ? (getSelectedUserIds().length ? "__usuarios__" : "")
+          : selectPerfil.value || ""
+    );
     const getLockedSet = () => {
       const locked = new Set(lockedBase);
       if (currentMode === "perfil") {
         nivelLocked.forEach((id) => locked.add(id));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((id) => locked.add(id));
       }
       return locked;
     };
 
+    const featureNames = new Map();
+    const indexFeatureNames = (items) => (items || []).forEach((f) => {
+      featureNames.set(f.id, f.nome || f.id);
+      indexFeatureNames(f.children || []);
+    });
+    indexFeatureNames(features);
+
     const renderAtivos = (list) => {
       ativosEl.innerHTML = "";
       list.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = item;
+        li.textContent = featureNames.get(item) || item;
         ativosEl.appendChild(li);
       });
+    };
+
+    const aggregateSelectedUsers = () => {
+      const ids = getSelectedUserIds();
+      if (!ids.length) {
+        allowedUsuario.__usuarios__ = [];
+        mixedUsuario = new Set();
+        return;
+      }
+      const sets = ids.map((id) => new Set(allowedUsuario[id] || []));
+      const union = new Set(sets.flatMap((set) => Array.from(set)));
+      const intersection = new Set(Array.from(union).filter((feature) =>
+        sets.every((set) => set.has(feature))
+      ));
+      allowedUsuario.__usuarios__ = Array.from(intersection);
+      mixedUsuario = new Set(Array.from(union).filter((feature) => !intersection.has(feature)));
     };
 
     const buildTree = (key) => {
@@ -3248,15 +3350,43 @@
         ativosEl.innerHTML = "";
         return;
       }
+      if (currentMode === "usuario") aggregateSelectedUsers();
       const allowedMap = getAllowedMap();
       const currentAllowed = new Set(allowedMap[key] || []);
       lockedBase.forEach((f) => currentAllowed.add(f));
       if (currentMode === "perfil") {
         nivelLocked.forEach((f) => currentAllowed.add(f));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((f) => currentAllowed.add(f));
       }
       const lockedAll = getLockedSet();
+
+      const setUserPermission = (id, checked) => {
+        if (currentMode !== "usuario") return;
+        getSelectedUserIds().forEach((usuarioId) => {
+          const inherited = new Set(inheritedUsuario[usuarioId] || []);
+          const allow = new Set(userAllow[usuarioId] || []);
+          const deny = new Set(userDeny[usuarioId] || []);
+          const effective = new Set(allowedUsuario[usuarioId] || []);
+          if (checked) {
+            effective.add(id);
+            deny.delete(id);
+            if (inherited.has(id)) allow.delete(id);
+            else allow.add(id);
+          } else {
+            effective.delete(id);
+            allow.delete(id);
+            if (inherited.has(id)) deny.add(id);
+            else deny.delete(id);
+          }
+          userAllow[usuarioId] = Array.from(allow);
+          userDeny[usuarioId] = Array.from(deny);
+          allowedUsuario[usuarioId] = Array.from(effective).filter((feature) => !lockedBase.has(feature));
+        });
+        if (checked) currentAllowed.add(id);
+        else currentAllowed.delete(id);
+        mixedUsuario.delete(id);
+      };
 
       const toggleChildren = (node, checked) => {
         node.querySelectorAll("input[type='checkbox']").forEach((cb) => {
@@ -3266,7 +3396,8 @@
             return;
           }
           cb.checked = checked;
-          if (checked) currentAllowed.add(id);
+          if (currentMode === "usuario") setUserPermission(id, checked);
+          else if (checked) currentAllowed.add(id);
           else currentAllowed.delete(id);
         });
       };
@@ -3274,6 +3405,9 @@
       const createNode = (feat) => {
         const wrapper = document.createElement("div");
         wrapper.className = "tree-item";
+        if (feat.children && feat.children.length) wrapper.classList.add("has-children");
+        const row = document.createElement("div");
+        row.className = "tree-row";
         const controls = document.createElement("div");
         controls.className = "tree-controls";
         if (feat.children && feat.children.length) {
@@ -3296,36 +3430,43 @@
           spacer.style.width = "14px";
           controls.appendChild(spacer);
         }
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = currentAllowed.has(feat.id);
-        cb.dataset.id = feat.id;
-        cb.disabled = lockedAll.has(feat.id);
-        controls.appendChild(cb);
+        const cb = feat.group ? null : document.createElement("input");
+        if (cb) {
+          cb.type = "checkbox";
+          cb.checked = currentAllowed.has(feat.id);
+          cb.indeterminate = currentMode === "usuario" && mixedUsuario.has(feat.id);
+          cb.dataset.id = feat.id;
+          cb.disabled = lockedAll.has(feat.id);
+          controls.appendChild(cb);
+        }
         const label = document.createElement("span");
         label.textContent = feat.nome;
-        wrapper.appendChild(controls);
-        wrapper.appendChild(label);
+        row.appendChild(controls);
+        row.appendChild(label);
+        wrapper.appendChild(row);
 
-        cb.addEventListener("change", () => {
+        cb?.addEventListener("change", () => {
           if (cb.checked) {
-            currentAllowed.add(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, true);
+            else currentAllowed.add(feat.id);
             if (feat.parentId) {
               const parentCb = treeEl.querySelector(`input[data-id='${feat.parentId}']`);
               if (parentCb) {
                 parentCb.checked = true;
-                currentAllowed.add(feat.parentId);
+                if (currentMode === "usuario") setUserPermission(feat.parentId, true);
+                else currentAllowed.add(feat.parentId);
               }
             }
           } else {
-            if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, false);
+            else if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
             if (feat.children && feat.children.length) {
               const subtree = wrapper.querySelector(".tree-children");
               if (subtree) toggleChildren(subtree, false);
             }
           }
           const updated = Array.from(currentAllowed).filter((id) => !lockedAll.has(id));
-          allowedMap[key] = updated;
+          if (currentMode !== "usuario") allowedMap[key] = updated;
           renderAtivos(Array.from(currentAllowed));
         });
 
@@ -3336,7 +3477,7 @@
             childrenBox.style.display = "none";
           }
           feat.children.forEach((ch) => {
-            ch.parentId = feat.id;
+            ch.parentId = feat.group ? feat.parentId : feat.id;
             const childNode = createNode(ch);
             childrenBox.appendChild(childNode);
           });
@@ -3345,7 +3486,7 @@
         return wrapper;
       };
 
-      sortedFeatures.forEach((f) => {
+      menuFeatures.forEach((f) => {
         const node = createNode(f);
         treeEl.appendChild(node);
       });
@@ -3393,12 +3534,42 @@
       }
     };
 
+    const loadUsuarioPermissions = async (usuario) => {
+      if (!usuario) return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      try {
+        const res = await fetch(`/api/permissoes/usuario/${usuario}`, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissões do usuário.");
+        return {
+          effectiveFeatures: Array.isArray(data.effective_features) ? data.effective_features : [],
+          inheritedFeatures: Array.isArray(data.inherited_features) ? data.inherited_features : [],
+          allow: Array.isArray(data.user_allow) ? data.user_allow : [],
+          deny: Array.isArray(data.user_deny) ? data.user_deny : [],
+        };
+      } catch (err) {
+        console.error(err);
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      }
+    };
+
     const updateMode = async () => {
       currentMode = selectTipo.value || "perfil";
       if (fieldPerfil) fieldPerfil.style.display = currentMode === "perfil" ? "" : "none";
       if (fieldNivel) fieldNivel.style.display = currentMode === "nivel" ? "" : "none";
+      if (fieldUsuario) fieldUsuario.style.display = currentMode === "usuario" ? "" : "none";
+      if (usuarioLegenda) usuarioLegenda.style.display = currentMode === "usuario" ? "" : "none";
       if (ativosTitle) {
-        ativosTitle.textContent = currentMode === "nivel" ? "Ativos para o nivel" : "Ativos para o perfil";
+        ativosTitle.textContent = currentMode === "nivel"
+          ? "Ativos para o nível"
+          : currentMode === "usuario"
+            ? "Ativos para os usuários selecionados"
+            : "Ativos para o perfil";
       }
       treeEl.innerHTML = "";
       ativosEl.innerHTML = "";
@@ -3418,12 +3589,24 @@
         originalPerfil[key] = [...allowedPerfil[key]];
         nivelLocked = new Set(result.nivelFeatures.filter((f) => typeof f === "string"));
         profileLocked = new Set();
-      } else {
+      } else if (currentMode === "nivel") {
         const result = await loadNivelPermissions(key);
         allowedNivel[key] = result.features.filter((f) => typeof f === "string");
         originalNivel[key] = [...allowedNivel[key]];
         nivelLocked = new Set();
         profileLocked = new Set(result.perfilFeatures.filter((f) => typeof f === "string"));
+      } else {
+        const ids = getSelectedUserIds();
+        const results = await Promise.all(ids.map((id) => loadUsuarioPermissions(id)));
+        results.forEach((result, index) => {
+          const id = ids[index];
+          allowedUsuario[id] = result.effectiveFeatures.filter((f) => typeof f === "string");
+          inheritedUsuario[id] = result.inheritedFeatures.filter((f) => typeof f === "string");
+          userAllow[id] = result.allow.filter((f) => typeof f === "string");
+          userDeny[id] = result.deny.filter((f) => typeof f === "string");
+        });
+        nivelLocked = new Set();
+        profileLocked = new Set();
       }
       buildTree(key);
     };
@@ -3461,16 +3644,68 @@
       buildTree(nivel);
     });
 
+    const updateSelectedUsersLabel = () => {
+      if (!usuarioSelecionados) return;
+      const count = getSelectedUserIds().length;
+      usuarioSelecionados.textContent = count
+        ? `${count} usuário${count === 1 ? "" : "s"} selecionado${count === 1 ? "" : "s"}.`
+        : "Nenhum usuário selecionado.";
+    };
+
+    usuarioOpcoes.addEventListener("change", async (event) => {
+      if (!event.target.matches("input[type='checkbox']")) return;
+      updateSelectedUsersLabel();
+      if (currentMode !== "usuario") return;
+      if (!getSelectedUserIds().length) {
+        treeEl.innerHTML = "";
+        ativosEl.innerHTML = "";
+        return;
+      }
+      await updateMode();
+    });
+
+    if (usuarioPesquisa) {
+      usuarioPesquisa.addEventListener("input", () => {
+        const term = usuarioPesquisa.value.trim().toLocaleLowerCase("pt-BR");
+        usuarioOpcoes.querySelectorAll(".painel-user-option").forEach((option) => {
+          const searchText = (option.dataset.search || option.textContent || "").toLocaleLowerCase("pt-BR");
+          option.hidden = Boolean(term) && !searchText.includes(term);
+        });
+      });
+    }
+
     const handleSalvar = async () => {
       const key = getSelectedKey();
       if (!key) {
-        if (msg) msg.textContent = currentMode === "nivel" ? "Selecione um nivel." : "Selecione um perfil.";
+        if (msg) msg.textContent = currentMode === "nivel"
+          ? "Selecione um nível."
+          : currentMode === "usuario"
+            ? "Selecione um usuário."
+            : "Selecione um perfil.";
         return;
       }
       const allowedMap = getAllowedMap();
       const feats = allowedMap[key] || [];
       if (msg) msg.textContent = "Salvando...";
       try {
+        if (currentMode === "usuario") {
+          const ids = getSelectedUserIds();
+          for (const usuarioId of ids) {
+            const response = await fetch(`/api/permissoes/usuario/${usuarioId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+              body: JSON.stringify({
+                allow: userAllow[usuarioId] || [],
+                deny: userDeny[usuarioId] || [],
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+          }
+          await updateMode();
+          if (msg) msg.textContent = `Permissões atualizadas para ${ids.length} usuário${ids.length === 1 ? "" : "s"}.`;
+          return;
+        }
         const url = currentMode === "nivel" ? `/api/permissoes/nivel/${key}` : `/api/permissoes/${key}`;
         const res = await fetch(url, {
           method: "POST",
@@ -3497,6 +3732,10 @@
     const handleCancelar = () => {
       const key = getSelectedKey();
       if (!key) return;
+      if (currentMode === "usuario") {
+        updateMode();
+        return;
+      }
       const allowedMap = getAllowedMap();
       const originalMap = getOriginalMap();
       allowedMap[key] = [...(originalMap[key] || [])];
@@ -3627,7 +3866,74 @@
     return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
   };
 
-  async function loadFipStatus(target) {
+  async function loadManagedJobStatus(endpoint, target, submitBtn, viewLabel) {
+    if (!target) return null;
+    target.textContent = "Carregando...";
+    try {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
+      if (!data.last) {
+        target.textContent = "Nenhuma atualização encontrada.";
+        return null;
+      }
+      const last = data.last;
+      const safe = (value) => String(value ?? "-")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+      const progress = Number(
+        last.status_progress !== null && last.status_progress !== undefined
+          ? last.status_progress
+          : (last.output_filename ? 100 : 0)
+      );
+      const rawStatus = String(last.status || (last.output_filename ? "finalizado" : "aguardando"));
+      const statusKey = rawStatus.toLowerCase().replaceAll(" ", "_");
+      const normalizedStatus = statusKey.includes("falha") ? "falha"
+        : statusKey.includes("cancel") ? "cancelado"
+        : statusKey.includes("finalizado") ? "finalizado"
+        : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
+        : statusKey;
+      const duration = last.duration_seconds == null ? "-" : `${Number(last.duration_seconds).toFixed(1)}s`;
+      const alertDetails = last.alerts && last.total_alerts
+        ? `<details class="job-alerts"><summary>${last.total_alerts} alerta(s)</summary><pre>${safe(JSON.stringify(last.alerts, null, 2))}</pre></details>` : "";
+      target.innerHTML = `
+        <div class="job-status-head"><strong>${safe(rawStatus)}</strong><strong>${progress.toFixed(0)}%</strong></div>
+        <div class="job-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
+        <div><strong>Etapa:</strong> ${safe(last.status_message)}</div>
+        <div><strong>Enviado por:</strong> ${safe(last.user_email)}</div>
+        <div><strong>Upload em:</strong> ${formatAmazonTime(last.uploaded_at)}</div>
+        <div><strong>Data do download:</strong> ${formatAmazonLocalTime(last.data_arquivo)}</div>
+        <div><strong>Arquivo original:</strong> ${safe(last.original_filename)}</div>
+        <div><strong>Registros:</strong> ${last.processed_records || 0} / ${last.total_records || 0}</div>
+        <div><strong>Duração:</strong> ${duration}</div>
+        <div><strong>Saída gerada:</strong> ${safe(last.output_filename)}</div>
+        ${last.error ? `<div class="text-error"><strong>Erro:</strong> ${safe(last.error)}</div>` : ""}
+        ${alertDetails}
+      `;
+      if (submitBtn && last.output_filename) {
+        submitBtn.dataset.mode = "view";
+        submitBtn.dataset.output = last.output_filename;
+        submitBtn.textContent = viewLabel || "Ver relatório";
+      }
+      const isRunning = ["aguardando", "em_processamento", "cancelamento_solicitado"].includes(normalizedStatus);
+      const actionBox = target.closest(".card");
+      const actionButtons = actionBox?.querySelectorAll(".upload-status-actions button") || [];
+      if (actionButtons[0]) actionButtons[0].disabled = isRunning;
+      if (actionButtons[1]) actionButtons[1].disabled = !isRunning || normalizedStatus === "cancelamento_solicitado";
+      if (isRunning) return "running";
+      if (["finalizado", "finalizado_com_alertas"].includes(normalizedStatus) || last.output_filename) return "done";
+      if (["falha", "cancelado"].includes(normalizedStatus)) return "error";
+      return normalizedStatus || null;
+    } catch (err) {
+      target.textContent = "Falha ao carregar status.";
+      console.error(err);
+      return null;
+    }
+  }
+
+  async function loadFipStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/fip613/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3655,6 +3961,8 @@
   }
 
   async function loadPedStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/ped/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3692,6 +4000,8 @@
   }
 
   async function loadEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3749,6 +4059,8 @@
   }
 
   async function loadEstEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/est-emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3786,6 +4098,8 @@
   }
 
   async function loadNobStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/nob/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -3837,7 +4151,7 @@
     }
   }
 
-  function startStatusPolling(loader, attempts = 20, intervalMs = 30000) {
+  function startStatusPolling(loader, attempts = 240, intervalMs = 3000) {
     const tick = async (left) => {
       if (left <= 0) return;
       const state = await loader();
@@ -3875,6 +4189,8 @@
     const fileInput = document.getElementById("fip613-file");
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
+  const reprocessBtn = document.getElementById("fip613-reprocess");
+  const cancelBtn = document.getElementById("fip613-cancel");
   const defaultLabel = "Upload e processar";
   const viewLabel = "Ver Relatório";
 
@@ -3882,7 +4198,21 @@
     setDefaultAmazonTime(inputData);
   }
 
-    loadFipStatus(statusBox);
+    loadFipStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadFipStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/fip613/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/fip613/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -3931,11 +4261,8 @@
         }
         form.reset();
         if (inputData) inputData.value = "";
-        loadFipStatus(statusBox);
-        if (submitBtn) {
-          submitBtn.textContent = viewLabel;
-          submitBtn.dataset.mode = "view";
-        }
+        await loadFipStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -3977,7 +4304,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadPedStatus(statusBox, submitBtn, viewLabel);
+    loadPedStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4078,6 +4407,7 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadPedStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -4124,7 +4454,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4259,6 +4591,8 @@
     const fileInput = document.getElementById("est-emp-file");
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
+    const reprocessBtn = document.getElementById("est-emp-reprocess");
+    const cancelBtn = document.getElementById("est-emp-cancel");
     const defaultLabel = "Upload e processar";
     const viewLabel = "Ver relatório";
     const goToReport = () => {
@@ -4270,7 +4604,21 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEstEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/est-emp/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/est-emp/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -4318,6 +4666,7 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -4364,7 +4713,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadNobStatus(statusBox, submitBtn, viewLabel);
+    loadNobStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -6532,6 +6883,18 @@
     const productLinkSaveBtn = document.getElementById("estrutura-planejamento-produto-link-save");
     const productLinksMsg = document.getElementById("estrutura-planejamento-produto-links-msg");
     const productLinksBody = document.getElementById("estrutura-planejamento-produto-links-body");
+    const revLinksCard = document.getElementById("estrutura-planejamento-revista-links-card");
+    const revLinksTitle = document.getElementById("estrutura-planejamento-revista-links-title");
+    const revLinksClose = document.getElementById("estrutura-planejamento-revista-links-close");
+    const revLinkTipoEl = document.getElementById("estrutura-planejamento-revista-link-tipo");
+    const revLinkValorEl = document.getElementById("estrutura-planejamento-revista-link-valor");
+    const revLinkValoresEl = document.getElementById("estrutura-planejamento-revista-link-valores");
+    const revLinkValoresToggle = document.getElementById("estrutura-planejamento-revista-link-valores-toggle");
+    const revLinkValoresPanel = document.getElementById("estrutura-planejamento-revista-link-valores-panel");
+    const revLinkValoresOptions = document.getElementById("estrutura-planejamento-revista-link-valores-options");
+    const revLinkSaveBtn = document.getElementById("estrutura-planejamento-revista-link-save");
+    const revLinksMsg = document.getElementById("estrutura-planejamento-revista-links-msg");
+    const revLinksBody = document.getElementById("estrutura-planejamento-revista-links-body");
 
     let rows = [];
     let programas = [];
@@ -6540,12 +6903,21 @@
     let currentPage = 1;
     let pageSize = Number(pageSizeEl?.value || 10) || 10;
     const isProductEntity = entity === "produtos";
+    const isRevComponentEntity = entity === "componentes-rev";
     const productLinkState = {
       productId: "",
       subfuncoes: [],
       ugs: [],
       ugBySubfuncao: {},
       rows: [],
+    };
+    const revLinkState = {
+      componentId: "",
+      tipos: [],
+      options: {},
+      rows: [],
+      nextType: "",
+      sequenceInvalid: false,
     };
 
     const esc = (value) =>
@@ -6574,6 +6946,12 @@
       if (!productLinksMsg) return;
       productLinksMsg.textContent = text || "";
       productLinksMsg.classList.toggle("text-error", !!isError);
+    };
+
+    const setRevLinksMsg = (text, isError = false) => {
+      if (!revLinksMsg) return;
+      revLinksMsg.textContent = text || "";
+      revLinksMsg.classList.toggle("text-error", !!isError);
     };
 
     const optionLabel = (row) => {
@@ -6634,6 +7012,67 @@
       );
       productLinkUgEl.disabled = !options.length;
     };
+
+    const populateRevLinkValues = (selectedValue = "") => {
+      if (!revLinkValorEl) return;
+      const tipo = String(revLinkTipoEl?.value || "");
+      const isMultiple = tipo === "produto_acao";
+      revLinkValorEl.hidden = isMultiple;
+      if (revLinkValoresEl) revLinkValoresEl.hidden = !isMultiple;
+      if (!tipo) {
+        setLabeledOptions(revLinkValorEl, [], "Selecione primeiro o tipo...");
+        revLinkValorEl.disabled = true;
+        renderRevLinkValueChecklist([]);
+        return;
+      }
+      const options = revLinkState.options[tipo] || [];
+      if (isMultiple) {
+        revLinkValorEl.disabled = true;
+        renderRevLinkValueChecklist(options);
+        return;
+      }
+      setLabeledOptions(
+        revLinkValorEl,
+        options,
+        options.length ? "Selecione..." : "Nenhum registro disponível",
+        selectedValue
+      );
+      revLinkValorEl.disabled = !options.length;
+    };
+
+    const selectedRevLinkValueIds = () => {
+      if (!revLinkValoresOptions) return [];
+      return Array.from(
+        revLinkValoresOptions.querySelectorAll("input[type='checkbox']:checked")
+      ).map((input) => input.value);
+    };
+
+    const updateRevLinkValueChecklistLabel = () => {
+      if (!revLinkValoresToggle) return;
+      const selected = selectedRevLinkValueIds();
+      revLinkValoresToggle.textContent = selected.length
+        ? `${selected.length} produto(s) selecionado(s)`
+        : "Selecione...";
+    };
+
+    function renderRevLinkValueChecklist(options = []) {
+      if (!revLinkValoresOptions) return;
+      revLinkValoresOptions.innerHTML = options.length
+        ? options
+            .map(
+              (option) => `
+                <label class="planning-action-checklist-option">
+                  <input type="checkbox" value="${esc(option.id)}" />
+                  <span>${esc(option.label || "")}</span>
+                </label>
+              `
+            )
+            .join("")
+        : '<div class="muted">Nenhum produto compatível disponível.</div>';
+      if (revLinkValoresToggle) revLinkValoresToggle.disabled = !options.length;
+      if (revLinkValoresPanel) revLinkValoresPanel.hidden = true;
+      updateRevLinkValueChecklistLabel();
+    }
 
     const selectedChecklistActionIds = () => {
       if (!acaoChecklistOptions) return [];
@@ -6838,9 +7277,35 @@
         currentPage * pageSize
       );
       if (!pageRows.length) {
-        const colspan = entity === "produtos" ? 9 : entity === "acoes" ? 8 : 7;
+        const colspan = isRevComponentEntity ? 4 : entity === "produtos" ? 9 : entity === "acoes" ? 8 : 7;
         tableBody.innerHTML = `<tr><td colspan="${colspan}" class="muted">Nenhum registro encontrado.</td></tr>`;
         renderPagination(0);
+        return;
+      }
+      if (isRevComponentEntity) {
+        tableBody.innerHTML = pageRows
+          .map(
+            (row) => `
+              <tr data-id="${esc(row.id)}">
+                <td>${esc(row.exercicio)}</td>
+                <td>${esc(row.nome || "")}</td>
+                <td><span class="planning-status ${row.ativo ? "is-active" : "is-inactive"}">${row.ativo ? "Ativo" : "Inativo"}</span></td>
+                <td class="planning-structure-row-actions">
+                  <button class="icon-btn sm planning-rev-links" type="button" data-id="${esc(row.id)}" title="Vínculos do Componente da Revista" aria-label="Vínculos do Componente da Revista">
+                    <i class="bi bi-link-45deg"></i>
+                  </button>
+                  <button class="icon-btn sm planning-edit" type="button" data-id="${esc(row.id)}" title="Editar" aria-label="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="icon-btn sm planning-disable" type="button" data-id="${esc(row.id)}" title="Desativar" aria-label="Desativar" ${row.ativo ? "" : "disabled"}>
+                    <i class="bi bi-slash-circle"></i>
+                  </button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
+        renderPagination(totalPages);
         return;
       }
       tableBody.innerHTML = pageRows
@@ -6970,6 +7435,111 @@
       }
     };
 
+    const renderRevLinks = () => {
+      if (!revLinksBody) return;
+      if (!revLinkState.componentId) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Selecione um componente para visualizar os vínculos.</td></tr>';
+        return;
+      }
+      if (!revLinkState.rows.length) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Nenhum vínculo cadastrado.</td></tr>';
+        return;
+      }
+      revLinksBody.innerHTML = revLinkState.rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${esc(row.tipo_label || "")}</td>
+              <td>${esc(row.label || "")}</td>
+              <td class="planning-structure-row-actions">
+                <button
+                  class="icon-btn sm planning-rev-link-delete"
+                  type="button"
+                  data-tipo="${esc(row.tipo)}"
+                  data-valor-id="${esc(row.valor_id)}"
+                  title="Remover vínculo"
+                  aria-label="Remover vínculo"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+    };
+
+    const closeRevLinks = () => {
+      if (revLinksCard) revLinksCard.hidden = true;
+      revLinkState.componentId = "";
+      revLinkState.tipos = [];
+      revLinkState.options = {};
+      revLinkState.rows = [];
+      revLinkState.nextType = "";
+      revLinkState.sequenceInvalid = false;
+      if (revLinkTipoEl) revLinkTipoEl.value = "";
+      populateRevLinkValues();
+      setRevLinksMsg("");
+      renderRevLinks();
+    };
+
+    const loadRevLinks = async (componentId) => {
+      if (!isRevComponentEntity || !revLinksCard) return;
+      revLinksCard.hidden = false;
+      revLinkState.componentId = String(componentId || "");
+      if (revLinksTitle) revLinksTitle.textContent = "Carregando componente...";
+      if (revLinksBody) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Carregando vínculos...</td></tr>';
+      }
+      setRevLinksMsg("");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(componentId)}/vinculos`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar vínculos.");
+        revLinkState.tipos = Array.isArray(data.tipos) ? data.tipos : [];
+        revLinkState.options = data.options || {};
+        revLinkState.rows = Array.isArray(data.rows) ? data.rows : [];
+        revLinkState.nextType = String(data.next_type || "");
+        revLinkState.sequenceInvalid = !!data.sequence_invalid;
+        const component = data.component || {};
+        if (revLinksTitle) {
+          revLinksTitle.textContent = [component.exercicio, component.nome].filter(Boolean).join(" | ");
+        }
+        setLabeledOptions(
+          revLinkTipoEl,
+          revLinkState.tipos,
+          revLinkState.tipos.length ? "Selecione..." : "Sequência concluída",
+          revLinkState.nextType
+        );
+        populateRevLinkValues();
+        if (revLinkState.sequenceInvalid) {
+          if (revLinkTipoEl) revLinkTipoEl.disabled = true;
+          if (revLinkValorEl) revLinkValorEl.disabled = true;
+          if (revLinkValoresToggle) revLinkValoresToggle.disabled = true;
+          if (revLinkSaveBtn) revLinkSaveBtn.disabled = true;
+          setRevLinksMsg(
+            "Remova os vínculos existentes e reinicie pela Política do Decreto.",
+            true
+          );
+        } else {
+          if (revLinkTipoEl) revLinkTipoEl.disabled = !revLinkState.tipos.length;
+          if (revLinkSaveBtn) revLinkSaveBtn.disabled = !revLinkState.tipos.length;
+        }
+        renderRevLinks();
+        revLinksCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao carregar vínculos.", true);
+        renderRevLinks();
+      }
+    };
+
     const populateFilterYears = () => {
       if (!filtroExercicioEl) return;
       const selected = filtroExercicioEl.value;
@@ -7012,6 +7582,9 @@
         renderTable();
         if (productLinkState.productId) {
           await loadProductLinks(productLinkState.productId);
+        }
+        if (revLinkState.componentId) {
+          await loadRevLinks(revLinkState.componentId);
         }
         setMsg("");
       } catch (error) {
@@ -7149,10 +7722,93 @@
         setProductLinksMsg(error.message || "Falha ao remover vínculo.", true);
       }
     });
+    revLinksClose?.addEventListener("click", closeRevLinks);
+    revLinkTipoEl?.addEventListener("change", () => {
+      populateRevLinkValues();
+      setRevLinksMsg("");
+    });
+    revLinkValorEl?.addEventListener("change", () => setRevLinksMsg(""));
+    revLinkValoresToggle?.addEventListener("click", () => {
+      if (revLinkValoresToggle.disabled || !revLinkValoresPanel) return;
+      revLinkValoresPanel.hidden = !revLinkValoresPanel.hidden;
+    });
+    revLinkValoresOptions?.addEventListener("change", () => {
+      updateRevLinkValueChecklistLabel();
+      setRevLinksMsg("");
+    });
+    revLinkSaveBtn?.addEventListener("click", async () => {
+      if (!revLinkState.componentId) return;
+      const isMultiple = revLinkTipoEl?.value === "produto_acao";
+      const payload = {
+        tipo: revLinkTipoEl?.value || "",
+        valor_id: revLinkValorEl?.value || "",
+      };
+      if (isMultiple) payload.valor_ids = selectedRevLinkValueIds();
+      if (!payload.tipo || (isMultiple ? !payload.valor_ids.length : !payload.valor_id)) {
+        setRevLinksMsg("Selecione o tipo e o registro do vínculo.", true);
+        return;
+      }
+      setRevLinksMsg("Salvando vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(revLinkState.componentId)}/vinculos`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar vínculo.");
+        showToast(data.message || "Vínculo cadastrado.", "success");
+        if (revLinkValorEl) revLinkValorEl.value = "";
+        await loadRevLinks(revLinkState.componentId);
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao salvar vínculo.", true);
+      }
+    });
+    revLinksBody?.addEventListener("click", async (event) => {
+      const deleteButton = event.target.closest(".planning-rev-link-delete");
+      if (!deleteButton || !revLinkState.componentId) return;
+      if (!window.confirm("Remover este vínculo?")) return;
+      setRevLinksMsg("Removendo vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(revLinkState.componentId)}/vinculos`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify({
+              tipo: deleteButton.dataset.tipo || "",
+              valor_id: deleteButton.dataset.valorId || "",
+            }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao remover vínculo.");
+        showToast(data.message || "Vínculo removido.", "success");
+        await loadRevLinks(revLinkState.componentId);
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao remover vínculo.", true);
+      }
+    });
 
     setProductActionMode(false);
 
     tableBody?.addEventListener("click", async (event) => {
+      const revLinkButton = event.target.closest(".planning-rev-links");
+      if (revLinkButton) {
+        await loadRevLinks(revLinkButton.dataset.id);
+        return;
+      }
       const linkButton = event.target.closest(".planning-product-links");
       if (linkButton) {
         await loadProductLinks(linkButton.dataset.id);
@@ -7197,15 +7853,19 @@
       const id = String(idEl?.value || "").trim();
       const payload = {
         exercicio: exercicioEl?.value || "",
-        programa_id: programaEl?.value || null,
-        acao_id: acaoEl?.value || null,
-        codigo: codigoEl?.value || "",
         nome: nomeEl?.value || "",
-        responsavel: responsavelEl?.value || "",
-        cpf: cpfEl?.value || "",
-        email: emailEl?.value || "",
         ativo: !!ativoEl?.checked,
       };
+      if (!isRevComponentEntity) {
+        Object.assign(payload, {
+          programa_id: programaEl?.value || null,
+          acao_id: acaoEl?.value || null,
+          codigo: codigoEl?.value || "",
+          responsavel: responsavelEl?.value || "",
+          cpf: cpfEl?.value || "",
+          email: emailEl?.value || "",
+        });
+      }
       if (isProductEntity && acaoEl) {
         payload.acao_ids = selectedChecklistActionIds();
         payload.acao_id = payload.acao_ids[0] || null;
@@ -16904,6 +17564,306 @@
     load();
   }
 
+  function initNotasSee() {
+    const root = document.getElementById("see-page");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+    const catalogSelect = document.getElementById("see-catalog-select");
+    const catalogForm = document.getElementById("see-catalog-form");
+    const productForm = document.getElementById("see-product-form");
+    const productsWrap = document.getElementById("see-products-wrap");
+    const productsBody = document.getElementById("see-products-body");
+    const processForm = document.getElementById("see-process-form");
+    const processCatalogId = document.getElementById("see-process-catalog-id");
+    const folderInput = document.getElementById("see-folder-input");
+    const filesInput = document.getElementById("see-files-input");
+    const submit = document.getElementById("see-process-submit");
+    const catalogMsg = document.getElementById("see-catalog-msg");
+    const processMsg = document.getElementById("see-process-msg");
+    const progressCard = document.getElementById("see-progress-card");
+    const appendChoice = document.getElementById("see-append-choice");
+    const processingMeta = document.getElementById("see-processing-meta");
+    const seeGrid = root.querySelector(".see-grid");
+    const uploadCard = processForm.closest(".see-card");
+    if (seeGrid && uploadCard && progressCard) {
+      const processColumn = document.createElement("div");
+      processColumn.className = "see-process-column";
+      seeGrid.insertBefore(processColumn, uploadCard);
+      processColumn.append(uploadCard, progressCard);
+    }
+    let catalogs = [];
+    let jobId = null;
+    let pollTimer = null;
+    let lastProcessing = null;
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const selectedCatalog = () => catalogs.find((item) => String(item.id) === String(catalogSelect.value));
+    const setMessage = (el, message, error = false) => {
+      if (!el) return;
+      el.textContent = message || "";
+      el.classList.toggle("text-error", error);
+    };
+    const clearVisibleErrors = () => {
+      [catalogMsg, processMsg].forEach((el) => {
+        if (el?.classList.contains("text-error")) setMessage(el, "");
+      });
+    };
+    root.addEventListener("input", clearVisibleErrors);
+    root.addEventListener("change", clearVisibleErrors);
+    root.addEventListener("click", clearVisibleErrors);
+    const requestJson = async (url, options = {}) => {
+      const { headers = {}, ...rest } = options;
+      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+      return data;
+    };
+    const renderProducts = () => {
+      const catalog = selectedCatalog();
+      processCatalogId.value = catalog ? catalog.id : "";
+      document.getElementById("see-catalog-edit").disabled = !catalog;
+      document.getElementById("see-catalog-delete").disabled = !catalog;
+      productsWrap.hidden = !catalog;
+      productForm.hidden = true;
+      productsBody.innerHTML = catalog ? catalog.produtos.map((product) => `
+        <tr>
+          <td>${escapeHtml(product.codigo)}</td><td>${escapeHtml(product.nome)}</td>
+          <td class="see-row-actions"><button class="icon-btn sm see-product-edit" data-id="${product.id}" title="Editar"><i class="bi bi-pencil"></i></button><button class="icon-btn sm see-product-delete" data-id="${product.id}" title="Remover"><i class="bi bi-trash"></i></button></td>
+        </tr>`).join("") : "";
+      updateSelection();
+    };
+    const loadCatalogs = async (keepId = "") => {
+      const data = await requestJson("/api/notas-see/catalogos");
+      catalogs = data.catalogos || [];
+      catalogSelect.innerHTML = '<option value="">Selecione</option>' + catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${escapeHtml(item.nome)} (${item.produtos.length})</option>`).join("");
+      if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
+      renderProducts();
+    };
+    const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    function updateSelection() {
+      const files = selectedFiles();
+      const size = files.reduce((total, file) => total + file.size, 0);
+      document.getElementById("see-selection-summary").textContent = files.length
+        ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
+        : "Nenhum PDF selecionado.";
+      const catalog = selectedCatalog();
+      const processingActive = lastProcessing
+        && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
+      const canAppend = lastProcessing
+        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
+        && String(lastProcessing.catalog_id) === String(catalog?.id);
+      appendChoice.hidden = !canAppend;
+    }
+
+    catalogSelect.addEventListener("change", async () => {
+      renderProducts();
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      jobId = null;
+      lastProcessing = null;
+      progressCard.hidden = true;
+      appendChoice.hidden = true;
+      processingMeta.innerHTML = "";
+      if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
+    });
+    folderInput.addEventListener("click", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("click", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    folderInput.addEventListener("change", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("change", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    document.getElementById("see-catalog-new").addEventListener("click", () => {
+      catalogForm.reset();
+      document.getElementById("see-catalog-id").value = "";
+      catalogForm.hidden = false;
+      document.getElementById("see-catalog-name").focus();
+    });
+    document.getElementById("see-catalog-form-cancel").addEventListener("click", () => { catalogForm.reset(); catalogForm.hidden = true; });
+    document.getElementById("see-catalog-edit").addEventListener("click", () => {
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      document.getElementById("see-catalog-id").value = catalog.id;
+      document.getElementById("see-catalog-name").value = catalog.nome;
+      document.getElementById("see-catalog-description").value = catalog.descricao || "";
+      catalogForm.hidden = false;
+    });
+    document.getElementById("see-catalog-delete").addEventListener("click", async () => {
+      const catalog = selectedCatalog();
+      if (!catalog || !confirm(`Desativar o catálogo ${catalog.nome}?`)) return;
+      try { await requestJson(`/api/notas-see/catalogos/${catalog.id}`, { method: "DELETE" }); await loadCatalogs(); setMessage(catalogMsg, "Catálogo desativado."); }
+      catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    catalogForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const catalogId = document.getElementById("see-catalog-id").value;
+        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
+        catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    document.getElementById("see-product-add").addEventListener("click", () => { productForm.reset(); document.getElementById("see-product-id").value = ""; productForm.hidden = false; document.getElementById("see-product-code").focus(); });
+    document.getElementById("see-product-cancel").addEventListener("click", () => { productForm.reset(); productForm.hidden = true; });
+    productForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      const productId = document.getElementById("see-product-id").value;
+      const payload = { codigo: document.getElementById("see-product-code").value, nome: document.getElementById("see-product-name").value };
+      try {
+        await requestJson(productId ? `/api/notas-see/produtos/${productId}` : `/api/notas-see/catalogos/${catalog.id}/produtos`, { method: productId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        productForm.reset(); productForm.hidden = true; await loadCatalogs(catalog.id); setMessage(catalogMsg, "Produto salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    productsBody.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".see-product-edit");
+      const remove = event.target.closest(".see-product-delete");
+      const catalog = selectedCatalog();
+      if (edit && catalog) {
+        const product = catalog.produtos.find((item) => String(item.id) === edit.dataset.id);
+        if (!product) return;
+        document.getElementById("see-product-id").value = product.id;
+        document.getElementById("see-product-code").value = product.codigo;
+        document.getElementById("see-product-name").value = product.nome;
+        productForm.hidden = false;
+      }
+      if (remove && catalog && confirm("Remover este produto do catálogo?")) {
+        try { await requestJson(`/api/notas-see/produtos/${remove.dataset.id}`, { method: "DELETE" }); await loadCatalogs(catalog.id); }
+        catch (error) { setMessage(catalogMsg, error.message, true); }
+      }
+    });
+
+    const renderStatus = (data) => {
+      lastProcessing = data;
+      progressCard.hidden = false;
+      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
+      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
+      document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
+      document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
+      document.getElementById("see-stat-success").textContent = data.success;
+      document.getElementById("see-stat-warning").textContent = data.warnings;
+      document.getElementById("see-stat-error").textContent = data.errors;
+      document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
+      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
+      document.getElementById("see-download").hidden = !data.download_ready;
+      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
+      const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
+      const updateSummary = data.initial_count
+        ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
+        : `<span><strong>${data.total ?? 0}</strong>Total do processamento</span>`;
+      const ignoredSummary = data.ignored_count
+        ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
+        : "";
+      processingMeta.innerHTML = `
+        <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
+        <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
+        <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
+        ${updateSummary}
+        ${ignoredSummary}`;
+      updateSelection();
+    };
+    const poll = async () => {
+      if (!jobId) return;
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
+        renderStatus(data);
+        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
+          pollTimer = setTimeout(poll, 1000);
+        } else {
+          updateSelection();
+        }
+      } catch (error) { setMessage(processMsg, error.message, true); }
+    };
+    const restoreLastProcessing = async (catalogId) => {
+      if (!catalogId) return;
+      const requestedCatalogId = String(catalogId);
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
+        if (String(catalogSelect.value) !== requestedCatalogId) return;
+        if (!data.job_id) return;
+        jobId = data.job_id;
+        await poll();
+      } catch (error) {
+        setMessage(processMsg, error.message, true);
+      }
+    };
+    processForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!processForm.reportValidity() || submit.disabled) return;
+      submit.disabled = true; setMessage(processMsg, "Enviando PDFs...");
+      try {
+        const formData = new FormData();
+        formData.append("catalogo_id", catalogSelect.value);
+        const appendMode = appendChoice.hidden
+          ? "novo"
+          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
+        formData.append("append_mode", appendMode);
+        if (appendMode === "acrescentar" && lastProcessing?.id) formData.append("base_job_id", lastProcessing.id);
+        selectedFiles().forEach((file) => formData.append("pdfs", file, file.webkitRelativePath || file.name));
+        const data = await requestJson("/api/notas-see/processamentos", { method: "POST", body: formData });
+        jobId = data.job_id;
+        setMessage(processMsg, data.message);
+        progressCard.hidden = false;
+        renderStatus({
+          id: data.job_id,
+          status: "na_fila",
+          message: data.message || "Processamento colocado na fila.",
+          progress: 0,
+          processed: 0,
+          total: data.total || selectedFiles().length,
+          success: 0,
+          warnings: 0,
+          errors: 0,
+          duration: 0,
+          files: [
+            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
+            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+          ],
+          catalog_id: Number(catalogSelect.value),
+          catalog_name: selectedCatalog()?.nome,
+          executed_by: lastProcessing?.executed_by,
+          created_at: new Date().toISOString(),
+          initial_count: data.initial || 0,
+          added_count: data.added || selectedFiles().length,
+          ignored_count: data.ignored_count || 0,
+        });
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        poll();
+      } catch (error) { setMessage(processMsg, error.message, true); submit.disabled = false; }
+    });
+    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
+    document.getElementById("see-download").addEventListener("click", async () => {
+      if (!jobId) return;
+      const url = `/api/notas-see/processamentos/${jobId}/download`;
+      if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
+      try {
+        const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
+        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${jobId}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        const writable = await handle.createWritable();
+        await writable.write(await response.blob());
+        await writable.close();
+      } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
+    });
+    loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
+  }
+
   function initGovernancaSemanticFlows() {
     const panels = Array.from(document.querySelectorAll("[data-governanca-flow-panel]"));
     if (!panels.length) return;
@@ -17020,7 +17980,10 @@
     if (route === "dashboard") {
       initDashboard();
     }
-    if (route === "atualizar/personalizar-spo") {
+    if (
+      route === "atualizar/personalizar-spo/temas" ||
+      route === "atualizar/personalizar-spo/contrato-visual-protegido"
+    ) {
       initPersonalizarSpo();
     }
     if (route === "atualizar/governanca-resultados/programacao-pta2027") {
@@ -17053,6 +18016,9 @@
     }
     if (route === "painel") {
       initPainel();
+    }
+    if (route === "area-uens/sage/notas-see") {
+      initNotasSee();
     }
     if (route === "atualizar/fip613") {
       initFip613();

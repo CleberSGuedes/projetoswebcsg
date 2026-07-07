@@ -1,7 +1,11 @@
-<div class="grid">
-  <div class="card fip-card">
+<section class="report-page">
+  <header class="report-header">
+    <div class="report-header-copy"><div class="report-eyebrow">Relatórios · Execução</div><h1>FIP 613</h1><p>Acompanhe a execução orçamentária, aplique filtros e exporte os resultados.</p></div>
+    <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i>
+  </header>
+  <div class="card fip-card report-data-card">
     <div class="card-title">FIP 613</div>
-    <div class="actions relatorio-top" style="padding-right:0; align-items:center;">
+    <div class="actions relatorio-top">
       <div class="muted" id="fip613-relatorio-meta">Carregando...</div>
       <div class="relatorio-top-right">
         <div class="totais-box" id="fip613-totais">
@@ -13,7 +17,7 @@
           <div class="totais-row"><span>Teto Disponível:</span> <strong id="tot-teto">-</strong></div>
           <div class="totais-row"><span>Saldo de Dotação:</span> <strong id="tot-saldo-dotacao">-</strong></div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="actions report-actions">
           <button class="btn sm compact" id="fip613-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
           <button class="btn sm compact" id="fip613-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
         </div>
@@ -96,5 +100,4 @@
       <div id="fip613-pagination" class="pagination"></div>
     </div>
   </div>
-</div>
-</div>
+</section>

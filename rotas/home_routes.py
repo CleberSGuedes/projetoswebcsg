@@ -22,6 +22,14 @@ from models import (
     Perfil,
     PerfilPermissao,
     NivelPermissao,
+    UsuarioPermissao,
+    SeeCatalogo,
+    SeeCatalogoProduto,
+    SeeProcessamento,
+    SeeProcessamentoArquivo,
+    SeeItemExtraido,
+    SeeOcorrencia,
+    SeeProcessamentoEvento,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -33,6 +41,8 @@ from models import (
     EstEmpRegistro,
     NobUpload,
     NobRegistro,
+    ProcessamentoJob,
+    ProcessamentoEvento,
     Plan21Nger,
     Adj,
     Regiao,
@@ -77,6 +87,11 @@ from models import (
     ProgramaPlanejamento,
     AcaoPlanejamento,
     ProdutoAcaoPlanejamento,
+    ComponenteRev,
+    ComponenteRevMacropolitica,
+    ComponenteRevEixo,
+    ComponenteRevProdutoAcao,
+    ComponenteRevPoliticaDecreto,
     Momp,
     PoliticaTeto,
     ApiClient,
@@ -97,7 +112,8 @@ from sqlalchemy.exc import (
 )
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
-from services.features import FEATURES, flatten_features, build_parent_map
+from services.features import FEATURES, build_menu_tree, flatten_features, build_parent_map
+from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20
 from services.teto_seduc import (
@@ -119,6 +135,7 @@ from services.est_emp_runner import (
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
+from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
 from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
@@ -671,6 +688,13 @@ def _start_worker(kind: str, upload_id: int) -> None:
             stderr=log_handle,
             creationflags=creationflags,
         )
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.worker_pid = proc.pid
+                job.mensagem_atual = "Worker externo iniciado."
+                db.session.commit()
+            return
         update_status_fields(
             kind,
             upload_id,
@@ -678,6 +702,15 @@ def _start_worker(kind: str, upload_id: int) -> None:
             pid=proc.pid,
         )
     except Exception as exc:
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.status = "falha"
+                job.erro_tecnico = f"{type(exc).__name__}: {exc}"
+                job.mensagem_atual = "Não foi possível iniciar o worker externo."
+                job.finalizado_em = datetime.utcnow()
+                db.session.commit()
+            raise
         update_status_fields(
             kind,
             upload_id,
@@ -693,8 +726,14 @@ def index():
     allowed = _permissoes_with_parents(
         getattr(g, "user_perfil_id", None),
         getattr(g, "user_nivel", None),
+        _current_usuario_id(),
     )
-    return render_template("base.html", initial_content="dashboard", initial_features=allowed)
+    return render_template(
+        "base.html",
+        initial_content="dashboard",
+        initial_features=allowed,
+        menu_features=build_menu_tree(),
+    )
 
 
 @home_bp.route("/partial/dashboard")
@@ -787,6 +826,14 @@ def partial_dashboard():
             active_sessions = []
     ped_dotacao_missing = session.get("ped_dotacao_missing", [])
     ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
+    try:
+        last_ped_job = ProcessamentoJob.query.filter_by(tipo="ped").order_by(ProcessamentoJob.id.desc()).first()
+        if last_ped_job and last_ped_job.detalhes_alertas:
+            ped_alerts = json.loads(last_ped_job.detalhes_alertas)
+            ped_dotacao_missing = ped_alerts.get("chaves_dotacao") or ped_dotacao_missing
+            ped_planejamento_missing_lines = ped_alerts.get("linhas_planejamento") or ped_planejamento_missing_lines
+    except Exception:
+        _safe_session_rollback()
     if not ped_dotacao_missing:
         try:
             t2 = datetime.utcnow()
@@ -1082,68 +1129,61 @@ def ensure_admin_nivel1():
         abort(403)
 
 
-ADMIN_SPO_PERFIS = {"ADMIN", "NGER"}
-ADMIN_SPO_FEATURE_PREFIXES = ("atualizar/", "cadastrar/plan_21-nger/")
-ADMIN_SPO_FEATURES = {
-    "atualizar",
-    "cadastrar/plan_21-nger/meta_fisica",
-    "cadastrar/plan_21-nger/subacao",
-    "cadastrar/plan_21-nger/etapa",
-}
-
-
-def _normalize_perfil_nome(value) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    ascii_name = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
-    return ascii_name.upper()
-
-
-def _current_perfil_nome() -> str:
-    for source in (getattr(g, "user", None), session.get("user") or {}):
-        if not source:
-            continue
-        if isinstance(source, dict):
-            nome = source.get("perfil")
-        else:
-            nome = getattr(source, "perfil", "")
-        normalized = _normalize_perfil_nome(nome)
-        if normalized:
-            return normalized
-    return ""
-
-
-def _is_admin_spo_profile() -> bool:
-    return _current_perfil_nome() in ADMIN_SPO_PERFIS
-
-
-def _is_admin_spo_feature(feature: str | None) -> bool:
-    feature = str(feature or "").strip()
-    return bool(
-        feature in ADMIN_SPO_FEATURES
-        or feature.startswith(ADMIN_SPO_FEATURE_PREFIXES)
-    )
-
-
-def _admin_spo_feature_ids() -> list[str]:
-    return [fid for fid in flatten_features(FEATURES) if _is_admin_spo_feature(fid)]
-
-
+def _current_usuario_id() -> int | None:
+    usuario_id = getattr(g, "user_id", None)
+    if usuario_id:
+        return int(usuario_id)
+    user_session = session.get("user") or {}
+    usuario_id = user_session.get("id")
+    if usuario_id:
+        g.user_id = int(usuario_id)
+        return int(usuario_id)
+    email = (user_session.get("email") or "").strip().lower()
+    if not email:
+        return None
+    try:
+        usuario_id = db.session.execute(
+            select(Usuario.id).where(func.lower(func.trim(Usuario.email)) == email)
+        ).scalar_one_or_none()
+    except SQLAlchemyError:
+        _safe_session_rollback()
+        return None
+    if usuario_id is not None:
+        g.user_id = int(usuario_id)
+        user_session["id"] = int(usuario_id)
+        session["user"] = user_session
+        return int(usuario_id)
+    return None
 def has_permission(feature: str) -> bool:
-    if getattr(g, "user_nivel", None) == 1:
-        return True
-    if _is_admin_spo_profile() and _is_admin_spo_feature(feature):
-        return True
     perfil_id = getattr(g, "user_perfil_id", None)
     nivel = getattr(g, "user_nivel", None)
     if not perfil_id and nivel is None:
         return False
+    usuario_id = _current_usuario_id()
+    if usuario_id:
+        try:
+            override = (
+                db.session.query(UsuarioPermissao.permitido)
+                .filter(
+                    UsuarioPermissao.usuario_id == usuario_id,
+                    UsuarioPermissao.feature == feature,
+                    UsuarioPermissao.ativo == True,  # noqa: E712
+                )
+                .scalar()
+            )
+            if override is not None:
+                return bool(override)
+        except ProgrammingError:
+            db.session.rollback()
     try:
         if perfil_id:
             exists = (
                 db.session.query(PerfilPermissao.id)
-                .filter(PerfilPermissao.perfil_id == perfil_id, PerfilPermissao.feature == feature)
+                .filter(
+                    PerfilPermissao.perfil_id == perfil_id,
+                    PerfilPermissao.feature == feature,
+                    PerfilPermissao.ativo == True,  # noqa: E712
+                )
                 .first()
             )
             if exists:
@@ -1154,7 +1194,11 @@ def has_permission(feature: str) -> bool:
         if nivel is not None:
             exists = (
                 db.session.query(NivelPermissao.id)
-                .filter(NivelPermissao.nivel == nivel, NivelPermissao.feature == feature)
+                .filter(
+                    NivelPermissao.nivel == nivel,
+                    NivelPermissao.feature == feature,
+                    NivelPermissao.ativo == True,  # noqa: E712
+                )
                 .first()
             )
             return bool(exists)
@@ -1197,13 +1241,34 @@ def _load_permissoes_nivel(nivel: int | None):
         return []
 
 
+def _load_permissoes_usuario(usuario_id: int | None):
+    if usuario_id is None:
+        return [], []
+    try:
+        rows = db.session.execute(
+            select(UsuarioPermissao.feature, UsuarioPermissao.permitido).where(
+                UsuarioPermissao.usuario_id == usuario_id,
+                UsuarioPermissao.ativo == True,  # noqa: E712
+                UsuarioPermissao.feature.isnot(None),
+            )
+        ).all()
+        allowed = [feature for feature, permitido in rows if feature and permitido]
+        denied = [feature for feature, permitido in rows if feature and not permitido]
+        return allowed, denied
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+        _safe_session_rollback()
+        return [], []
+
+
 def _add_parent_features(features: list[str]) -> list[str]:
     parent_map = build_parent_map()
     feats = list(features)
-    for feat in list(feats):
-        parent = parent_map.get(feat)
+    pending = list(feats)
+    while pending:
+        parent = parent_map.get(pending.pop())
         if parent and parent not in feats:
             feats.append(parent)
+            pending.append(parent)
     return feats
 
 
@@ -1227,12 +1292,18 @@ def _load_permissoes_por_nivel_perfis(nivel: int):
         return []
 
 
-def _permissoes_with_parents(perfil_id: int | None, nivel: int | None = None):
+def _permissoes_with_parents(
+    perfil_id: int | None,
+    nivel: int | None = None,
+    usuario_id: int | None = None,
+):
     locked = [f["id"] for f in FEATURES if f.get("locked")]
     parent_map = build_parent_map()
     feats = _load_permissoes_perfil(perfil_id) + _load_permissoes_nivel(nivel)
-    if _is_admin_spo_profile():
-        feats.extend(_admin_spo_feature_ids())
+    user_allowed, user_denied = _load_permissoes_usuario(usuario_id)
+    feats.extend(user_allowed)
+    denied = set(user_denied)
+    feats = [feat for feat in feats if feat not in denied]
     # include parents of children
     feats = _add_parent_features(feats)
     # add locked always
@@ -1246,8 +1317,6 @@ def require_feature(feature_id):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if getattr(g, "user_nivel", None) == 1:
-                return view(*args, **kwargs)
             if has_permission(feature_id):
                 return view(*args, **kwargs)
             abort(403)
@@ -1313,7 +1382,7 @@ def partial_usuarios_cadastrar():
 @login_required
 @require_feature("usuarios/editar")
 def partial_usuarios_editar():
-    usuarios = Usuario.query.order_by(Usuario.nome).all()
+    usuarios = Usuario.query.filter_by(ativo=True).order_by(Usuario.nome).all()
     perfis_query = Perfil.query.filter_by(ativo=True)
     caller_nivel = getattr(g, "user_nivel", None)
     if caller_nivel != 1:
@@ -1324,7 +1393,7 @@ def partial_usuarios_editar():
 
 @home_bp.route("/partial/usuarios/perfil")
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def partial_usuarios_perfil():
     perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
     return render_template("partials/usuarios_perfil.html", perfis=perfis)
@@ -1968,6 +2037,12 @@ def partial_painel():
     allowed_nivel = {}
     for nivel in niveis:
         allowed_nivel[nivel] = _load_permissoes_nivel(nivel)
+    usuarios = (
+        Usuario.query.join(Perfil, Usuario.perfil_id == Perfil.id)
+        .filter(Usuario.ativo == True, Perfil.nivel != 1)  # noqa: E712
+        .order_by(Usuario.nome, Usuario.email)
+        .all()
+    )
     return render_template(
         "partials/painel.html",
         perfis=perfis,
@@ -1975,7 +2050,660 @@ def partial_painel():
         allowed_perfil=allowed_perfil,
         allowed_nivel=allowed_nivel,
         niveis=niveis,
+        usuarios=usuarios,
     )
+
+
+SEE_UPLOAD_DIR = Path("upload") / "notas_see"
+SEE_OUTPUT_DIR = Path("outputs") / "notas_see"
+
+
+def _see_catalog_payload(catalogo: SeeCatalogo) -> dict:
+    produtos = (
+        SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo.id, ativo=True)
+        .order_by(SeeCatalogoProduto.codigo)
+        .all()
+    )
+    return {
+        "id": catalogo.id,
+        "nome": catalogo.nome,
+        "descricao": catalogo.descricao or "",
+        "ativo": bool(catalogo.ativo),
+        "produtos": [
+            {
+                "id": produto.id,
+                "codigo": produto.codigo,
+                "nome": produto.nome,
+                "observacao": produto.observacao or "",
+            }
+            for produto in produtos
+        ],
+    }
+
+
+@home_bp.route("/partial/area-uens/sage/notas-see")
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def partial_notas_see():
+    return render_template("partials/notas_see.html")
+
+
+@home_bp.route("/api/notas-see/catalogos", methods=["GET", "POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_catalogos():
+    if request.method == "GET":
+        catalogos = SeeCatalogo.query.order_by(SeeCatalogo.ativo.desc(), SeeCatalogo.nome).all()
+        return jsonify({"catalogos": [_see_catalog_payload(catalogo) for catalogo in catalogos]})
+    data = request.get_json() or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
+    if SeeCatalogo.query.filter(func.lower(SeeCatalogo.nome) == nome.lower()).first():
+        return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
+    catalogo = SeeCatalogo(
+        nome=nome,
+        descricao=(data.get("descricao") or "").strip() or None,
+        ativo=True,
+        criado_por=_current_usuario_id(),
+        atualizado_por=_current_usuario_id(),
+    )
+    db.session.add(catalogo)
+    db.session.commit()
+    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
+
+
+@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>", methods=["PUT", "DELETE"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_catalogo(catalogo_id: int):
+    catalogo = db.session.get(SeeCatalogo, catalogo_id)
+    if not catalogo:
+        return jsonify({"error": "Catálogo não encontrado."}), 404
+    if request.method == "DELETE":
+        catalogo.ativo = False
+    else:
+        data = request.get_json() or {}
+        nome = (data.get("nome") or "").strip()
+        if not nome:
+            return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
+        duplicate = SeeCatalogo.query.filter(
+            func.lower(SeeCatalogo.nome) == nome.lower(), SeeCatalogo.id != catalogo.id
+        ).first()
+        if duplicate:
+            return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
+        catalogo.nome = nome
+        catalogo.descricao = (data.get("descricao") or "").strip() or None
+        catalogo.ativo = bool(data.get("ativo", catalogo.ativo))
+    catalogo.atualizado_por = _current_usuario_id()
+    db.session.commit()
+    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
+
+
+@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>/produtos", methods=["POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_produto_criar(catalogo_id: int):
+    catalogo = db.session.get(SeeCatalogo, catalogo_id)
+    if not catalogo or not catalogo.ativo:
+        return jsonify({"error": "Catálogo não encontrado ou inativo."}), 404
+    data = request.get_json() or {}
+    codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
+    nome = (data.get("nome") or "").strip()
+    if not codigo or not nome:
+        return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
+    existing = SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, codigo=codigo).first()
+    if existing:
+        if existing.ativo:
+            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
+        existing.nome = nome
+        existing.observacao = (data.get("observacao") or "").strip() or None
+        existing.ativo = True
+        produto = existing
+    else:
+        produto = SeeCatalogoProduto(
+            catalogo_id=catalogo_id,
+            codigo=codigo,
+            nome=nome,
+            observacao=(data.get("observacao") or "").strip() or None,
+            ativo=True,
+        )
+        db.session.add(produto)
+    db.session.commit()
+    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
+
+
+@home_bp.route("/api/notas-see/produtos/<int:produto_id>", methods=["PUT", "DELETE"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_produto(produto_id: int):
+    produto = db.session.get(SeeCatalogoProduto, produto_id)
+    if not produto:
+        return jsonify({"error": "Produto não encontrado."}), 404
+    if request.method == "DELETE":
+        produto.ativo = False
+    else:
+        data = request.get_json() or {}
+        codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
+        nome = (data.get("nome") or "").strip()
+        if not codigo or not nome:
+            return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
+        duplicate = SeeCatalogoProduto.query.filter(
+            SeeCatalogoProduto.catalogo_id == produto.catalogo_id,
+            SeeCatalogoProduto.codigo == codigo,
+            SeeCatalogoProduto.id != produto.id,
+            SeeCatalogoProduto.ativo == True,  # noqa: E712
+        ).first()
+        if duplicate:
+            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
+        produto.codigo = codigo
+        produto.nome = nome
+        produto.observacao = (data.get("observacao") or "").strip() or None
+    db.session.commit()
+    catalogo = db.session.get(SeeCatalogo, produto.catalogo_id)
+    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
+
+
+def _see_add_event(job: SeeProcessamento, message: str, arquivo_id: int | None = None) -> None:
+    db.session.add(
+        SeeProcessamentoEvento(
+            processamento_id=job.id,
+            arquivo_id=arquivo_id,
+            tipo="progresso",
+            estado=job.status,
+            mensagem=message,
+            progresso=job.progresso,
+            arquivos_processados=job.arquivos_processados,
+            arquivos_sucesso=job.arquivos_sucesso,
+            arquivos_alerta=job.arquivos_alerta,
+            arquivos_erro=job.arquivos_erro,
+        )
+    )
+
+
+def _see_server_datetime_iso(value):
+    """Serializa datas sem fuso do MySQL como horário do servidor."""
+    if not value:
+        return None
+    if value.tzinfo is not None:
+        return value.isoformat()
+    timezone_name = os.getenv("SEE_SERVER_TIMEZONE", "America/Sao_Paulo")
+    try:
+        return pytz.timezone(timezone_name).localize(value).isoformat()
+    except (pytz.UnknownTimeZoneError, ValueError):
+        current_app.logger.warning("Fuso SEE_SERVER_TIMEZONE inválido: %s", timezone_name)
+        return pytz.timezone("America/Sao_Paulo").localize(value).isoformat()
+
+
+def _run_see_processamento(app, processamento_id: int) -> None:
+    with app.app_context():
+        started = datetime.utcnow()
+        try:
+            job = db.session.get(SeeProcessamento, processamento_id)
+            if not job:
+                return
+            job.status = "processando"
+            job.etapa_atual = "extração"
+            job.mensagem_atual = "Processamento dos PDFs iniciado."
+            job.iniciado_em = started
+            job.progresso = 1
+            _see_add_event(job, job.mensagem_atual)
+            db.session.commit()
+            product_rows = SeeCatalogoProduto.query.filter_by(catalogo_id=job.catalogo_id, ativo=True).all()
+            products = [
+                {"id": row.id, "codigo": row.codigo, "nome": row.nome}
+                for row in product_rows
+            ]
+            files = (
+                SeeProcessamentoArquivo.query
+                .filter_by(processamento_id=job.id, status="enviado")
+                .order_by(SeeProcessamentoArquivo.ordem)
+                .all()
+            )
+            for index, file_row in enumerate(files, start=1):
+                db.session.refresh(job)
+                if job.cancelamento_solicitado:
+                    job.status = "cancelado"
+                    job.mensagem_atual = "Processamento cancelado pelo usuário."
+                    break
+                file_started = datetime.utcnow()
+                file_row.status = "processando"
+                file_row.etapa_atual = "extração do PDF"
+                file_row.iniciado_em = file_started
+                job.mensagem_atual = f"Processando {index} de {len(files)}: {file_row.nome_original}"
+                db.session.commit()
+
+                def page_progress(page: int, total: int) -> None:
+                    file_row.pagina_atual = page
+                    file_row.total_paginas = total
+                    file_row.progresso = round((page / max(total, 1)) * 100, 2)
+                    db.session.commit()
+
+                try:
+                    result = extract_see_pdf(Path(file_row.caminho_armazenado), products, page_progress)
+                    metadata = result["metadata"]
+                    file_row.total_paginas = result["total_pages"]
+                    file_row.metodo_extracao = result["method"]
+                    file_row.chave_acesso = metadata.get("chave_acesso")
+                    file_row.numero_danfe = metadata.get("numero_danfe")
+                    file_row.dre = metadata.get("dre")
+                    file_row.codigo_escola = metadata.get("codigo_escola")
+                    file_row.nome_escola = metadata.get("nome_escola")
+                    file_row.confianca_metadados = metadata.get("confianca")
+                    file_row.dados_extraidos_json = metadata
+                    for item in result["items"]:
+                        db.session.add(
+                            SeeItemExtraido(
+                                processamento_id=job.id,
+                                arquivo_id=file_row.id,
+                                catalogo_produto_id=item.get("catalogo_produto_id"),
+                                codigo_produto=item["codigo"],
+                                nome_produto=item["nome"],
+                                unidade=item.get("unidade"),
+                                quantidade=item["quantidade"],
+                                pagina=item.get("pagina"),
+                                estrategia_extracao=item.get("estrategia"),
+                                confianca=item.get("confianca"),
+                                texto_origem=item.get("texto_origem"),
+                            )
+                        )
+                    for warning in result["warnings"]:
+                        db.session.add(
+                            SeeOcorrencia(
+                                processamento_id=job.id,
+                                arquivo_id=file_row.id,
+                                severidade="alerta",
+                                fase="extração",
+                                codigo=warning["codigo"],
+                                mensagem=warning["mensagem"],
+                            )
+                        )
+                    file_row.total_produtos = len(result["items"])
+                    file_row.total_alertas = len(result["warnings"])
+                    file_row.status = "finalizado_com_alerta" if result["warnings"] else "finalizado"
+                    file_row.progresso = 100
+                    if result["warnings"]:
+                        job.arquivos_alerta += 1
+                    else:
+                        job.arquivos_sucesso += 1
+                except Exception as exc:
+                    file_row.status = "falha"
+                    file_row.total_erros = 1
+                    file_row.erro_resumido = f"{type(exc).__name__}: {exc}"[:2000]
+                    job.arquivos_erro += 1
+                    db.session.add(
+                        SeeOcorrencia(
+                            processamento_id=job.id,
+                            arquivo_id=file_row.id,
+                            severidade="erro",
+                            fase="extração",
+                            codigo=type(exc).__name__,
+                            mensagem=f"Falha ao processar {file_row.nome_original}.",
+                            detalhe_tecnico=str(exc),
+                        )
+                    )
+                file_row.finalizado_em = datetime.utcnow()
+                file_row.duracao_segundos = (file_row.finalizado_em - file_started).total_seconds()
+                job.arquivos_processados += 1
+                job.progresso = round(5 + (job.arquivos_processados / max(job.total_arquivos, 1)) * 85, 2)
+                _see_add_event(job, job.mensagem_atual, file_row.id)
+                db.session.commit()
+
+            if job.status != "cancelado":
+                job.status = "gerando_excel"
+                job.etapa_atual = "geração do Excel"
+                job.mensagem_atual = "Gerando arquivo Excel."
+                job.progresso = 92
+                db.session.commit()
+                file_rows = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).all()
+                item_rows = SeeItemExtraido.query.filter_by(processamento_id=job.id).all()
+                occurrence_rows = SeeOcorrencia.query.filter_by(processamento_id=job.id).all()
+                file_map = {row.id: row for row in file_rows}
+                output = SEE_OUTPUT_DIR / f"notas_see_{job.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                generate_see_xlsx(
+                    output,
+                    [{"Arquivo PDF": row.nome_original, "Status": row.status, "DANFE": row.numero_danfe, "DRE": row.dre, "Código Escola": row.codigo_escola, "Escola": row.nome_escola, "Produtos": row.total_produtos, "Alertas": row.total_alertas, "Erros": row.total_erros} for row in file_rows],
+                    [{"arquivo": file_map[row.arquivo_id].nome_original, "dre": file_map[row.arquivo_id].dre, "codigo_escola": file_map[row.arquivo_id].codigo_escola, "nome_escola": file_map[row.arquivo_id].nome_escola, "numero_danfe": file_map[row.arquivo_id].numero_danfe, "codigo": row.codigo_produto, "nome": row.nome_produto, "quantidade": row.quantidade} for row in item_rows],
+                    [{"Arquivo PDF": file_map[row.arquivo_id].nome_original if row.arquivo_id in file_map else "", "Severidade": row.severidade, "Fase": row.fase, "Código": row.codigo, "Mensagem": row.mensagem, "Detalhe": row.detalhe_tecnico} for row in occurrence_rows],
+                    products,
+                )
+                job.nome_arquivo_saida = output.name
+                job.caminho_arquivo_saida = str(output.resolve())
+                job.tamanho_arquivo_saida = output.stat().st_size
+                job.status = "finalizado_com_alertas" if job.arquivos_alerta or job.arquivos_erro else "finalizado"
+                job.etapa_atual = "concluído"
+                job.mensagem_atual = "Processamento concluído."
+                job.progresso = 100
+            job.finalizado_em = datetime.utcnow()
+            job.duracao_segundos = (job.finalizado_em - started).total_seconds()
+            _see_add_event(job, job.mensagem_atual)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            job = db.session.get(SeeProcessamento, processamento_id)
+            if job:
+                job.status = "falha"
+                job.erro_geral = f"{type(exc).__name__}: {exc}"[:2000]
+                job.mensagem_atual = "Falha geral no processamento."
+                job.finalizado_em = datetime.utcnow()
+                job.duracao_segundos = (job.finalizado_em - started).total_seconds()
+                db.session.commit()
+            current_app.logger.exception("Falha no processamento Notas SEE %s", processamento_id)
+        finally:
+            db.session.remove()
+
+
+def _start_see_worker(job: SeeProcessamento) -> None:
+    worker_path = Path(__file__).resolve().parents[1] / "worker.py"
+    log_dir = Path("outputs") / "status"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_handle = open(log_dir / f"worker_see_{job.id}.log", "a", encoding="utf-8")
+    creationflags = 0
+    if sys.platform.startswith("win"):
+        creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+    try:
+        process = subprocess.Popen(
+            [sys.executable, str(worker_path), "--kind", "see", "--upload-id", str(job.id)],
+            cwd=str(worker_path.parent),
+            stdout=log_handle,
+            stderr=log_handle,
+            creationflags=creationflags,
+        )
+        job.worker_pid = process.pid
+        db.session.commit()
+    except Exception:
+        log_handle.close()
+        current_app.logger.exception("Falha ao iniciar worker SEE; usando thread.")
+        app = current_app._get_current_object()
+        threading.Thread(target=_run_see_processamento, args=(app, job.id), daemon=True).start()
+
+
+@home_bp.route("/api/notas-see/processamentos", methods=["POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_processar():
+    try:
+        catalogo_id = int(request.form.get("catalogo_id") or 0)
+    except ValueError:
+        catalogo_id = 0
+    catalogo = db.session.get(SeeCatalogo, catalogo_id)
+    if not catalogo or not catalogo.ativo:
+        return jsonify({"error": "Selecione um catálogo ativo."}), 400
+    if not SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, ativo=True).first():
+        return jsonify({"error": "O catálogo selecionado não possui produtos ativos."}), 400
+    uploads = [file for file in request.files.getlist("pdfs") if file and file.filename]
+    if not uploads:
+        return jsonify({"error": "Selecione ao menos um arquivo PDF."}), 400
+    append_mode = (request.form.get("append_mode") or "novo").strip().lower()
+    try:
+        base_job_id = int(request.form.get("base_job_id") or 0)
+    except ValueError:
+        base_job_id = 0
+    base_job = None
+    base_files = []
+    if append_mode == "acrescentar":
+        base_job = db.session.get(SeeProcessamento, base_job_id)
+        terminal_statuses = {"finalizado", "finalizado_com_alertas"}
+        if (
+            not base_job
+            or base_job.usuario_id != _current_usuario_id()
+            or base_job.catalogo_id != catalogo_id
+            or base_job.status not in terminal_statuses
+        ):
+            return jsonify({"error": "O processamento anterior não pode ser atualizado."}), 400
+        base_files = (
+            SeeProcessamentoArquivo.query
+            .filter_by(processamento_id=base_job.id)
+            .order_by(SeeProcessamentoArquivo.ordem)
+            .all()
+        )
+    user = session.get("user") or {}
+    job = SeeProcessamento(
+        usuario_id=_current_usuario_id(),
+        user_email=(user.get("email") or "desconhecido"),
+        catalogo_id=catalogo_id,
+        status="enviando",
+        etapa_atual="upload",
+        total_arquivos=len(uploads),
+    )
+    db.session.add(job)
+    db.session.flush()
+    upload_dir = SEE_UPLOAD_DIR / str(job.id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    base_hashes = {row.sha256 for row in base_files if row.sha256}
+    seen_hashes = set(base_hashes)
+    saved = 0
+    ignored = []
+    accepted_names = []
+    inherited = 0
+    inherited_file_map = {}
+    for old_file in base_files:
+        copied_file = SeeProcessamentoArquivo(
+            processamento_id=job.id,
+            ordem=old_file.ordem,
+            nome_original=old_file.nome_original,
+            caminho_relativo=old_file.caminho_relativo,
+            nome_armazenado=old_file.nome_armazenado,
+            caminho_armazenado=old_file.caminho_armazenado,
+            mime_type=old_file.mime_type,
+            tamanho_bytes=old_file.tamanho_bytes,
+            sha256=old_file.sha256,
+            status=old_file.status,
+            etapa_atual="herdado",
+            progresso=100,
+            total_paginas=old_file.total_paginas,
+            pagina_atual=old_file.pagina_atual,
+            metodo_extracao=old_file.metodo_extracao,
+            chave_acesso=old_file.chave_acesso,
+            numero_danfe=old_file.numero_danfe,
+            dre=old_file.dre,
+            codigo_escola=old_file.codigo_escola,
+            nome_escola=old_file.nome_escola,
+            confianca_metadados=old_file.confianca_metadados,
+            total_produtos=old_file.total_produtos,
+            total_alertas=old_file.total_alertas,
+            total_erros=old_file.total_erros,
+            dados_extraidos_json=old_file.dados_extraidos_json,
+            erro_resumido=old_file.erro_resumido,
+            iniciado_em=old_file.iniciado_em,
+            finalizado_em=old_file.finalizado_em,
+            duracao_segundos=old_file.duracao_segundos,
+        )
+        db.session.add(copied_file)
+        db.session.flush()
+        inherited_file_map[old_file.id] = copied_file.id
+        inherited += 1
+    if base_job:
+        for old_item in SeeItemExtraido.query.filter_by(processamento_id=base_job.id).all():
+            if old_item.arquivo_id not in inherited_file_map:
+                continue
+            db.session.add(SeeItemExtraido(
+                processamento_id=job.id, arquivo_id=inherited_file_map[old_item.arquivo_id],
+                catalogo_produto_id=old_item.catalogo_produto_id, codigo_produto=old_item.codigo_produto,
+                nome_produto=old_item.nome_produto, unidade=old_item.unidade, quantidade=old_item.quantidade,
+                pagina=old_item.pagina, linha_referencia=old_item.linha_referencia,
+                estrategia_extracao=old_item.estrategia_extracao, confianca=old_item.confianca,
+                texto_origem=old_item.texto_origem, revisado=old_item.revisado,
+                corrigido_manualmente=old_item.corrigido_manualmente, valor_original=old_item.valor_original,
+            ))
+        for old_occurrence in SeeOcorrencia.query.filter_by(processamento_id=base_job.id).all():
+            if old_occurrence.codigo == "ARQUIVO_IGNORADO":
+                continue
+            mapped_file_id = inherited_file_map.get(old_occurrence.arquivo_id)
+            if old_occurrence.arquivo_id and not mapped_file_id:
+                continue
+            db.session.add(SeeOcorrencia(
+                processamento_id=job.id, arquivo_id=mapped_file_id, severidade=old_occurrence.severidade,
+                fase=old_occurrence.fase, codigo=old_occurrence.codigo, mensagem=old_occurrence.mensagem,
+                detalhe_tecnico=old_occurrence.detalhe_tecnico, pagina=old_occurrence.pagina,
+                contexto=old_occurrence.contexto, dados_contexto_json=old_occurrence.dados_contexto_json,
+                resolvido=old_occurrence.resolvido, resolvido_por=old_occurrence.resolvido_por,
+                resolvido_em=old_occurrence.resolvido_em, observacao_resolucao=old_occurrence.observacao_resolucao,
+            ))
+    for order, upload in enumerate(uploads, start=inherited + 1):
+        original = upload.filename.replace("\\", "/")
+        display_name = Path(original).name
+        if not original.lower().endswith(".pdf"):
+            ignored.append({"name": display_name, "reason": "Extensão diferente de PDF."})
+            continue
+        data = upload.read()
+        if not data.startswith(b"%PDF"):
+            ignored.append({"name": display_name, "reason": "O conteúdo do arquivo não é um PDF válido."})
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        if digest in seen_hashes:
+            reason = "Arquivo já processado anteriormente." if digest in base_hashes else "Arquivo duplicado na seleção atual."
+            ignored.append({"name": display_name, "reason": reason})
+            continue
+        seen_hashes.add(digest)
+        stored = f"{order:05d}_{uuid.uuid4().hex}.pdf"
+        path = upload_dir / stored
+        path.write_bytes(data)
+        db.session.add(
+            SeeProcessamentoArquivo(
+                processamento_id=job.id,
+                ordem=order,
+                nome_original=Path(original).name,
+                caminho_relativo=original,
+                nome_armazenado=stored,
+                caminho_armazenado=str(path.resolve()),
+                mime_type=upload.mimetype or "application/pdf",
+                tamanho_bytes=len(data),
+                sha256=digest,
+                status="enviado",
+            )
+        )
+        saved += 1
+        accepted_names.append(display_name)
+    if not saved:
+        db.session.rollback()
+        details = "; ".join(f"{item['name']}: {item['reason']}" for item in ignored[:5])
+        suffix = f"; e mais {len(ignored) - 5}" if len(ignored) > 5 else ""
+        message = f"Nenhum arquivo novo para processar. {details}{suffix}" if details else "Nenhum PDF válido foi recebido."
+        return jsonify({"error": message, "ignored": ignored, "ignored_count": len(ignored)}), 400
+    for item in ignored:
+        db.session.add(SeeOcorrencia(
+            processamento_id=job.id,
+            severidade="informacao",
+            fase="upload",
+            codigo="ARQUIVO_IGNORADO",
+            mensagem=f"{item['name']}: {item['reason']}",
+            contexto=item["name"],
+            dados_contexto_json=item,
+        ))
+    job.total_arquivos = inherited + saved
+    job.arquivos_enviados = saved
+    job.arquivos_processados = inherited
+    job.arquivos_sucesso = sum(1 for row in base_files if row.status == "finalizado")
+    job.arquivos_alerta = sum(1 for row in base_files if row.status == "finalizado_com_alerta")
+    job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
+    job.status = "na_fila"
+    job.etapa_atual = "fila"
+    job.mensagem_atual = (
+        f"Atualização iniciada: {inherited} anterior(es) + {saved} novo(s), {len(ignored)} ignorado(s)."
+        if inherited else f"{saved} PDF(s) recebido(s), {len(ignored)} ignorado(s)."
+    )
+    db.session.commit()
+    _start_see_worker(job)
+    return jsonify({"ok": True, "job_id": job.id, "message": job.mensagem_atual, "initial": inherited, "added": saved, "total": inherited + saved, "ignored": ignored, "ignored_count": len(ignored), "accepted": accepted_names}), 202
+
+
+@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>", methods=["GET"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_status(processamento_id: int):
+    job = db.session.get(SeeProcessamento, processamento_id)
+    if not job:
+        return jsonify({"error": "Processamento não encontrado."}), 404
+    files = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).order_by(SeeProcessamentoArquivo.ordem).all()
+    ignored_occurrences = SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
+    ignored_files = [
+        {
+            "name": (row.dados_contexto_json or {}).get("name") or row.contexto or "Arquivo",
+            "reason": (row.dados_contexto_json or {}).get("reason") or row.mensagem,
+        }
+        for row in ignored_occurrences
+    ]
+    catalog = db.session.get(SeeCatalogo, job.catalogo_id)
+    inherited = sum(1 for row in files if row.etapa_atual == "herdado")
+    duration = float(job.duracao_segundos or 0)
+    if not duration and job.iniciado_em:
+        duration = max(0, (datetime.utcnow() - job.iniciado_em).total_seconds())
+    return jsonify({
+        "id": job.id,
+        "catalog_id": job.catalogo_id,
+        "catalog_name": catalog.nome if catalog else "Catálogo removido",
+        "executed_by": job.user_email,
+        "created_at": _see_server_datetime_iso(job.created_at),
+        "initial_count": inherited,
+        "added_count": max(0, job.total_arquivos - inherited),
+        "ignored_count": len(ignored_files),
+        "status": job.status,
+        "etapa": job.etapa_atual,
+        "message": job.mensagem_atual,
+        "progress": float(job.progresso or 0),
+        "total": job.total_arquivos,
+        "processed": job.arquivos_processados,
+        "success": job.arquivos_sucesso,
+        "warnings": job.arquivos_alerta,
+        "errors": job.arquivos_erro,
+        "duration": duration,
+        "download_ready": bool(job.caminho_arquivo_saida),
+        "files": [
+            {"name": row.nome_original, "status": row.status, "progress": float(row.progresso or 0), "error": row.erro_resumido or "", "warnings": row.total_alertas}
+            for row in files
+        ] + [
+            {"name": item["name"], "status": "ignorado", "progress": 0, "error": item["reason"], "warnings": 0}
+            for item in ignored_files
+        ],
+    })
+
+
+@home_bp.route("/api/notas-see/processamentos/ultimo", methods=["GET"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_ultimo_processamento():
+    try:
+        catalogo_id = int(request.args.get("catalogo_id") or 0)
+    except ValueError:
+        catalogo_id = 0
+    if not catalogo_id:
+        return jsonify({"job_id": None})
+    job = (
+        SeeProcessamento.query
+        .filter_by(catalogo_id=catalogo_id)
+        .order_by(SeeProcessamento.id.desc())
+        .first()
+    )
+    return jsonify({"job_id": job.id if job else None})
+
+
+@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/cancelar", methods=["POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_cancelar(processamento_id: int):
+    job = db.session.get(SeeProcessamento, processamento_id)
+    if not job:
+        return jsonify({"error": "Processamento não encontrado."}), 404
+    job.cancelamento_solicitado = True
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Cancelamento solicitado."})
+
+
+@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/download")
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_download(processamento_id: int):
+    job = db.session.get(SeeProcessamento, processamento_id)
+    if not job or not job.caminho_arquivo_saida:
+        return jsonify({"error": "Arquivo de saída não disponível."}), 404
+    target = Path(job.caminho_arquivo_saida).resolve()
+    output_root = SEE_OUTPUT_DIR.resolve()
+    if output_root not in target.parents or not target.exists():
+        return jsonify({"error": "Arquivo de saída não encontrado."}), 404
+    return send_file(target, as_attachment=True, download_name=job.nome_arquivo_saida or target.name)
 
 
 @home_bp.route("/partial/atualizar/fip613")
@@ -1985,11 +2713,26 @@ def partial_atualizar_fip613():
     return render_template("partials/atualizar_fip613.html")
 
 
-@home_bp.route("/partial/atualizar/personalizar-spo")
+@home_bp.route("/partial/atualizar/personalizar-spo/temas")
 @login_required
-@require_feature("atualizar/personalizar-spo")
-def partial_atualizar_personalizar_spo():
-    return render_template("partials/atualizar_personalizar_spo.html")
+@require_feature("atualizar/personalizar-spo/temas")
+def partial_atualizar_personalizar_spo_temas():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=True,
+        mostrar_contrato=False,
+    )
+
+
+@home_bp.route("/partial/atualizar/personalizar-spo/contrato-visual-protegido")
+@login_required
+@require_feature("atualizar/personalizar-spo/contrato-visual-protegido")
+def partial_atualizar_contrato_visual_protegido():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=False,
+        mostrar_contrato=True,
+    )
 
 
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")
@@ -2091,6 +2834,11 @@ PLANNING_STRUCTURE_ENTITIES = {
         "feature": "atualizar/estrutura-planejamento/produtos",
         "title": "Produtos da Ação",
         "singular": "Produto da Ação",
+    },
+    "componentes-rev": {
+        "feature": "atualizar/estrutura-planejamento/componentes-rev",
+        "title": "Componentes da Revista",
+        "singular": "Componente da Revista",
     },
 }
 
@@ -2440,7 +3188,7 @@ def _require_planning_structure_entity(view):
         feature = _planning_structure_feature(entity)
         if not feature:
             abort(404)
-        if getattr(g, "user_nivel", None) != 1 and not has_permission(feature):
+        if not has_permission(feature):
             abort(403)
         return view(entity, *args, **kwargs)
 
@@ -2462,10 +3210,7 @@ def partial_atualizar_estrutura_planejamento(entity: str):
 
 def _planning_component_public_config(component: str) -> dict:
     config = PLANNING_COMPONENTS[component]
-    can_manage_links = (
-        getattr(g, "user_nivel", None) == 1
-        or has_permission("atualizar/estrutura-planejamento/vinculos")
-    )
+    can_manage_links = has_permission("atualizar/estrutura-planejamento/vinculos")
     return {
         "key": component,
         "title": config["title"],
@@ -4194,6 +4939,39 @@ PLANNING_REPLICATION_OPTIONS = {
             "politica_produto",
         ],
     },
+    "componentes_rev": {
+        "label": "Componentes da Revista",
+        "group": "estrutura",
+        "requires": [],
+    },
+    "componentes_rev_macropolitica": {
+        "label": "Componente da Revista × Macropolítica",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_eixo": {
+        "label": "Componente da Revista × Eixo",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_politica": {
+        "label": "Componente da Revista × Política do Decreto",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_produto": {
+        "label": "Componente da Revista × Produto da Ação",
+        "group": "vinculos",
+        "requires": [
+            "componentes_rev",
+            "produtos",
+            "acoes",
+            "programas",
+            "funcao_programa",
+            "subfuncao_acao",
+            "politica_produto",
+        ],
+    },
     "modelos": {
         "label": "Modelos e partes da chave",
         "group": "chaves",
@@ -4347,6 +5125,56 @@ def _planning_replication_source_counts(exercise: int) -> dict[str, int]:
             )
             .count()
         ),
+        "componentes_rev": ComponenteRev.query.filter_by(exercicio=exercise)
+        .filter(ComponenteRev.excluido_em.is_(None))
+        .count(),
+        "componentes_rev_macropolitica": (
+            ComponenteRevMacropolitica.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevMacropolitica.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_eixo": (
+            ComponenteRevEixo.query.join(
+                ComponenteRev,
+                ComponenteRev.id == ComponenteRevEixo.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_politica": (
+            ComponenteRevPoliticaDecreto.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevPoliticaDecreto.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_produto": (
+            ComponenteRevProdutoAcao.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevProdutoAcao.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
     }
 
 
@@ -4367,6 +5195,7 @@ def partial_atualizar_replicar_exercicio():
                 ProgramaPlanejamento,
                 AcaoPlanejamento,
                 ProdutoAcaoPlanejamento,
+                ComponenteRev,
                 ChaveCatalogo,
             )
             for (year,) in db.session.query(model.exercicio).distinct().all()
@@ -4566,6 +5395,40 @@ def _planning_replication_copy_products(
     return result
 
 
+def _planning_replication_copy_rev_components(
+    source: int, target: int, user_id: int | None, stats: dict
+) -> dict[int, int]:
+    source_rows = ComponenteRev.query.filter_by(exercicio=source).filter(
+        ComponenteRev.excluido_em.is_(None)
+    ).all()
+    destination = {
+        (row.nome or "").casefold(): row
+        for row in ComponenteRev.query.filter_by(exercicio=target).filter(
+            ComponenteRev.excluido_em.is_(None)
+        ).all()
+    }
+    result = {}
+    for row in source_rows:
+        key = (row.nome or "").casefold()
+        copy = destination.get(key)
+        if copy:
+            stats["componentes_rev"]["reutilizados"] += 1
+        else:
+            copy = ComponenteRev(
+                exercicio=target,
+                nome=row.nome,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(copy)
+            db.session.flush()
+            destination[key] = copy
+            stats["componentes_rev"]["criados"] += 1
+        result[row.id] = copy.id
+    return result
+
+
 def _planning_replication_copy_mapping(
     model,
     source_rows,
@@ -4584,6 +5447,39 @@ def _planning_replication_copy_mapping(
         values = {
             fixed_field: getattr(row, fixed_field),
             mapped_field: target_id,
+        }
+        if model.query.filter_by(**values).first():
+            stats[stat_key]["reutilizados"] += 1
+        else:
+            db.session.add(model(**values))
+            stats[stat_key]["criados"] += 1
+
+
+def _planning_replication_copy_rev_mapping(
+    model,
+    source_rows,
+    value_field: str,
+    component_map: dict[int, int],
+    stats: dict,
+    stat_key: str,
+    value_map: dict[int, int] | None = None,
+):
+    for row in source_rows:
+        target_component_id = component_map.get(row.componente_rev_id)
+        if not target_component_id:
+            raise ValueError(
+                f"Não foi possível replicar {PLANNING_REPLICATION_OPTIONS[stat_key]['label']}."
+            )
+        target_value_id = getattr(row, value_field)
+        if value_map is not None:
+            target_value_id = value_map.get(target_value_id)
+            if not target_value_id:
+                raise ValueError(
+                    f"Não foi possível replicar {PLANNING_REPLICATION_OPTIONS[stat_key]['label']}."
+                )
+        values = {
+            "componente_rev_id": target_component_id,
+            value_field: target_value_id,
         }
         if model.query.filter_by(**values).first():
             stats[stat_key]["reutilizados"] += 1
@@ -4845,6 +5741,13 @@ def api_replicar_exercicio_executar():
             if "produtos" in selected
             else {}
         )
+        rev_component_map = (
+            _planning_replication_copy_rev_components(
+                source, target, user_id, stats
+            )
+            if "componentes_rev" in selected
+            else {}
+        )
         if "funcao_programa" in selected:
             source_rows = (
                 FuncaoPrograma.query.join(
@@ -4899,6 +5802,76 @@ def api_replicar_exercicio_executar():
                 product_map,
                 stats,
                 "politica_produto",
+            )
+        if "componentes_rev_macropolitica" in selected:
+            source_rows = (
+                ComponenteRevMacropolitica.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevMacropolitica.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevMacropolitica,
+                source_rows,
+                "macropolitica_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_macropolitica",
+            )
+        if "componentes_rev_eixo" in selected:
+            source_rows = (
+                ComponenteRevEixo.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevEixo.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevEixo,
+                source_rows,
+                "eixo_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_eixo",
+            )
+        if "componentes_rev_politica" in selected:
+            source_rows = (
+                ComponenteRevPoliticaDecreto.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id
+                    == ComponenteRevPoliticaDecreto.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevPoliticaDecreto,
+                source_rows,
+                "politica_decr_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_politica",
+            )
+        if "componentes_rev_produto" in selected:
+            source_rows = (
+                ComponenteRevProdutoAcao.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevProdutoAcao.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevProdutoAcao,
+                source_rows,
+                "produto_acao_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_produto",
+                product_map,
             )
         if "modelos" in selected:
             model_map, component_map = _planning_replication_copy_models(
@@ -5062,6 +6035,35 @@ def _planning_common_payload(payload: dict) -> tuple[dict | None, str | None]:
     )
 
 
+def _planning_rev_component_payload(payload: dict) -> tuple[dict | None, str | None]:
+    exercicio = _planning_exercicio(payload.get("exercicio"))
+    nome = _planning_text(payload.get("nome"), 255)
+    if not exercicio:
+        return None, "Informe um exercício válido com quatro dígitos."
+    if not nome:
+        return None, "Informe o nome."
+    return (
+        {
+            "exercicio": exercicio,
+            "nome": nome,
+            "ativo": bool(payload.get("ativo", True)),
+        },
+        None,
+    )
+
+
+def _planning_rev_component_has_links(row_id: int) -> bool:
+    return any(
+        model.query.filter_by(componente_rev_id=row_id).first()
+        for model in (
+            ComponenteRevMacropolitica,
+            ComponenteRevEixo,
+            ComponenteRevProdutoAcao,
+            ComponenteRevPoliticaDecreto,
+        )
+    )
+
+
 def _serialize_programa(row: ProgramaPlanejamento) -> dict:
     return {
         "id": row.id,
@@ -5109,6 +6111,15 @@ def _serialize_produto(row: ProdutoAcaoPlanejamento) -> dict:
         "responsavel": row.responsavel or "",
         "cpf": row.cpf or "",
         "email": row.email or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+def _serialize_componente_rev(row: ComponenteRev) -> dict:
+    return {
+        "id": row.id,
+        "exercicio": row.exercicio,
+        "nome": row.nome or "",
         "ativo": bool(row.ativo),
     }
 
@@ -5534,12 +6545,18 @@ def api_estrutura_planejamento_list(entity: str):
             AcaoPlanejamento.nome.asc(),
         ).all()
         serialized = [_serialize_acao(row) for row in rows]
-    else:
+    elif entity == "produtos":
         rows = ProdutoAcaoPlanejamento.query.order_by(
             ProdutoAcaoPlanejamento.exercicio.desc(),
             ProdutoAcaoPlanejamento.nome.asc(),
         ).all()
         serialized = [_serialize_produto(row) for row in rows]
+    else:
+        rows = ComponenteRev.query.order_by(
+            ComponenteRev.exercicio.desc(),
+            ComponenteRev.nome.asc(),
+        ).all()
+        serialized = [_serialize_componente_rev(row) for row in rows]
     return jsonify(
         {
             "ok": True,
@@ -5626,6 +6643,28 @@ def _planning_product_action_ids(payload: dict) -> tuple[list[int] | None, str |
 @_require_planning_structure_entity
 def api_estrutura_planejamento_create(entity: str):
     payload = request.get_json(silent=True) or {}
+    if entity == "componentes-rev":
+        values, error = _planning_rev_component_payload(payload)
+        if error:
+            return jsonify({"error": error}), 400
+        now = _now_local()
+        values["usuario_id"] = _resolve_usuario_id()
+        values["criado_em"] = now
+        values["excluido_em"] = None if values["ativo"] else now
+        try:
+            db.session.add(ComponenteRev(**values))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"error": "Já existe um componente equivalente neste exercício."}), 409
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao cadastrar componente da revista."
+            )
+            return jsonify({"error": "Falha ao cadastrar o registro."}), 500
+        return jsonify({"ok": True, "message": "Registro cadastrado com sucesso."}), 201
+
     values, error = _planning_common_payload(payload)
     if error:
         return jsonify({"error": error}), 400
@@ -5673,6 +6712,7 @@ def api_estrutura_planejamento_create(entity: str):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     now = _now_local()
     values["usuario_id"] = _resolve_usuario_id()
@@ -5704,13 +6744,18 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     row = db.session.get(model, row_id)
     if not row:
         return jsonify({"error": "Registro não encontrado."}), 404
 
     payload = request.get_json(silent=True) or {}
-    values, error = _planning_common_payload(payload)
+    values, error = (
+        _planning_rev_component_payload(payload)
+        if entity == "componentes-rev"
+        else _planning_common_payload(payload)
+    )
     if error:
         return jsonify({"error": error}), 400
     product_extra_rows = []
@@ -5726,9 +6771,10 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
         ]
         payload = {**payload, "acao_id": primary_action_id}
 
-    values, error = _planning_validate_parent(entity, payload, values)
-    if error:
-        return jsonify({"error": error}), 400
+    if entity != "componentes-rev":
+        values, error = _planning_validate_parent(entity, payload, values)
+        if error:
+            return jsonify({"error": error}), 400
 
     if entity == "programas":
         has_children = AcaoPlanejamento.query.filter_by(programa_id=row.id).first()
@@ -5788,14 +6834,12 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
                         )
                     }
                 ), 409
-            if ProdutoAcaoSubfuncaoUg.query.filter_by(
-                produto_acao_id=row.id
-            ).first():
+        elif entity == "componentes-rev":
+            if _planning_rev_component_has_links(row.id):
                 return jsonify(
                     {
                         "error": (
-                            "Remova primeiro os vínculos do produto com "
-                            "subfunções e UGs."
+                            "Remova primeiro os vínculos do componente da revista."
                         )
                     }
                 ), 409
@@ -5852,6 +6896,7 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     row = db.session.get(model, row_id)
     if not row:
@@ -5902,6 +6947,10 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
                     "Remova primeiro os vínculos do produto com subfunções e UGs."
                 )
             }
+        ), 409
+    if entity == "componentes-rev" and _planning_rev_component_has_links(row.id):
+        return jsonify(
+            {"error": "Remova primeiro os vínculos do componente da revista."}
         ), 409
 
     now = _now_local()
@@ -6099,6 +7148,355 @@ def api_produto_subfuncao_ug_delete(produto_id: int):
         db.session.rollback()
         current_app.logger.exception(
             "Falha ao remover produto/subfunção/UG: %s", produto_id
+        )
+        return jsonify({"error": "Falha ao remover o vínculo."}), 500
+    return jsonify({"ok": True, "message": "Vínculo removido com sucesso."})
+
+
+REV_COMPONENT_LINKS = {
+    "macropolitica": {
+        "label": "Macropolítica",
+        "model": ComponenteRevMacropolitica,
+        "field": "macropolitica_id",
+        "target_model": Macropolitica,
+        "source": "macropolitica",
+    },
+    "eixo": {
+        "label": "Eixo",
+        "model": ComponenteRevEixo,
+        "field": "eixo_id",
+        "target_model": Eixo,
+        "source": "eixo",
+    },
+    "produto_acao": {
+        "label": "Produto da Ação",
+        "model": ComponenteRevProdutoAcao,
+        "field": "produto_acao_id",
+        "target_model": ProdutoAcaoPlanejamento,
+        "source": "produto_acao_planejamento",
+    },
+    "politica_decr": {
+        "label": "Política do Decreto",
+        "model": ComponenteRevPoliticaDecreto,
+        "field": "politica_decr_id",
+        "target_model": PoliticaDecreto,
+        "source": "politica_decreto",
+    },
+}
+
+REV_COMPONENT_LINK_SEQUENCE = (
+    "politica_decr",
+    "produto_acao",
+    "eixo",
+    "macropolitica",
+)
+
+
+def _rev_component_link_ids(component_id: int) -> dict[str, set[int]]:
+    return {
+        tipo: {
+            int(getattr(row, cfg["field"]))
+            for row in cfg["model"].query.filter_by(
+                componente_rev_id=component_id
+            ).all()
+        }
+        for tipo, cfg in REV_COMPONENT_LINKS.items()
+    }
+
+
+def _rev_component_next_link_type(link_ids: dict[str, set[int]]) -> str | None:
+    return next(
+        (tipo for tipo in REV_COMPONENT_LINK_SEQUENCE if not link_ids[tipo]),
+        None,
+    )
+
+
+def _rev_component_links_out_of_sequence(
+    link_ids: dict[str, set[int]],
+) -> bool:
+    found_missing = False
+    for tipo in REV_COMPONENT_LINK_SEQUENCE:
+        if not link_ids[tipo]:
+            found_missing = True
+        elif found_missing:
+            return True
+    return False
+
+
+def _rev_component_options(
+    component: ComponenteRev,
+    tipo: str,
+    link_ids: dict[str, set[int]] | None = None,
+) -> list[dict]:
+    cfg = REV_COMPONENT_LINKS[tipo]
+    model = cfg["target_model"]
+    link_ids = link_ids or _rev_component_link_ids(component.id)
+    politica_ids = link_ids["politica_decr"]
+    produto_ids = link_ids["produto_acao"]
+
+    if tipo == "produto_acao" and politica_ids:
+        rows = (
+            ProdutoAcaoPlanejamento.query.join(
+                PoliticaDecretoProdutoAcao,
+                PoliticaDecretoProdutoAcao.produto_acao_id
+                == ProdutoAcaoPlanejamento.id,
+            )
+            .filter(
+                ProdutoAcaoPlanejamento.exercicio == component.exercicio,
+                ProdutoAcaoPlanejamento.ativo.is_(True),
+                ProdutoAcaoPlanejamento.excluido_em.is_(None),
+                PoliticaDecretoProdutoAcao.politica_decr_id.in_(politica_ids),
+            )
+            .distinct()
+            .order_by(ProdutoAcaoPlanejamento.nome.asc())
+            .all()
+        )
+    elif tipo == "eixo" and politica_ids and produto_ids:
+        rows = (
+            Eixo.query.join(
+                PoliticaDecretoEixo,
+                PoliticaDecretoEixo.eixo_id == Eixo.id,
+            )
+            .filter(
+                Eixo.ativo.is_(True),
+                PoliticaDecretoEixo.politica_id.in_(politica_ids),
+            )
+            .distinct()
+            .order_by(Eixo.abreviacao.asc())
+            .all()
+        )
+    elif tipo == "macropolitica" and politica_ids:
+        rows = (
+            Macropolitica.query.join(
+                PoliticaDecretoMacropolitica,
+                PoliticaDecretoMacropolitica.macropolitica_id
+                == Macropolitica.id,
+            )
+            .filter(
+                Macropolitica.ativo.is_(True),
+                PoliticaDecretoMacropolitica.politica_decr_id.in_(politica_ids),
+            )
+            .distinct()
+            .order_by(Macropolitica.abreviacao.asc())
+            .all()
+        )
+    elif tipo in ("produto_acao", "eixo", "macropolitica"):
+        rows = []
+    else:
+        order_field = getattr(model, "codigo", None)
+        if order_field is None:
+            order_field = getattr(model, "nome", None)
+        if order_field is None:
+            order_field = model.id
+        rows = _active_component_query(model).order_by(order_field.asc()).all()
+    return [
+        {
+            "id": row.id,
+            "label": _planning_source_label(cfg["source"], row),
+            "ativo": bool(getattr(row, "ativo", True)),
+        }
+        for row in rows
+    ]
+
+
+def _serialize_rev_component_link(tipo: str, row) -> dict:
+    cfg = REV_COMPONENT_LINKS[tipo]
+    value_id = getattr(row, cfg["field"])
+    target = db.session.get(cfg["target_model"], value_id)
+    return {
+        "tipo": tipo,
+        "tipo_label": cfg["label"],
+        "valor_id": value_id,
+        "label": _planning_source_label(cfg["source"], target) if target else "",
+    }
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["GET"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_list(component_id: int):
+    component = db.session.get(ComponenteRev, component_id)
+    if not component or component.excluido_em:
+        return jsonify({"error": "Componente da Revista não encontrado."}), 404
+    link_ids = _rev_component_link_ids(component.id)
+    sequence_invalid = _rev_component_links_out_of_sequence(link_ids)
+    next_type = _rev_component_next_link_type(link_ids)
+    options = {
+        tipo: _rev_component_options(component, tipo, link_ids)
+        for tipo in REV_COMPONENT_LINKS
+    }
+    rows = []
+    for tipo, cfg in REV_COMPONENT_LINKS.items():
+        link_rows = (
+            cfg["model"].query.filter_by(componente_rev_id=component.id)
+            .order_by(getattr(cfg["model"], cfg["field"]).asc())
+            .all()
+        )
+        rows.extend(_serialize_rev_component_link(tipo, row) for row in link_rows)
+    return jsonify(
+        {
+            "ok": True,
+            "component": _serialize_componente_rev(component),
+            "tipos": (
+                [{"id": next_type, "label": REV_COMPONENT_LINKS[next_type]["label"]}]
+                if next_type
+                else []
+            ),
+            "next_type": next_type,
+            "sequence_invalid": sequence_invalid,
+            "options": options,
+            "rows": rows,
+        }
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_create(component_id: int):
+    component = db.session.get(ComponenteRev, component_id)
+    if not component or component.excluido_em:
+        return jsonify({"error": "Componente da Revista não encontrado."}), 404
+    payload = request.get_json(silent=True) or {}
+    tipo = _planning_text(payload.get("tipo"))
+    cfg = REV_COMPONENT_LINKS.get(tipo)
+    if not cfg:
+        return jsonify({"error": "Selecione um tipo de vínculo válido."}), 400
+    link_ids = _rev_component_link_ids(component.id)
+    if _rev_component_links_out_of_sequence(link_ids):
+        return jsonify(
+            {
+                "error": (
+                    "Existem vínculos da sequência anterior. Remova-os antes "
+                    "de iniciar pela Política do Decreto."
+                )
+            }
+        ), 409
+    next_type = _rev_component_next_link_type(link_ids)
+    if not next_type:
+        return jsonify({"error": "A sequência de vínculos já está completa."}), 409
+    if tipo != next_type:
+        return jsonify(
+            {
+                "error": (
+                    "Respeite a sequência obrigatória: Política do Decreto, "
+                    "Produto da Ação, Eixo e Macropolítica."
+                )
+            }
+        ), 409
+    raw_value_ids = (
+        payload.get("valor_ids")
+        if tipo == "produto_acao"
+        else [payload.get("valor_id")]
+    )
+    if not isinstance(raw_value_ids, list) or not raw_value_ids:
+        return jsonify({"error": "Selecione ao menos um registro."}), 400
+    try:
+        value_ids = list(dict.fromkeys(int(value) for value in raw_value_ids))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione registros válidos."}), 400
+    allowed_ids = {
+        int(item["id"])
+        for item in _rev_component_options(component, tipo, link_ids)
+    }
+    if any(value_id not in allowed_ids for value_id in value_ids):
+        return jsonify(
+            {"error": "Um dos registros não é compatível com os vínculos anteriores."}
+        ), 409
+    targets = [db.session.get(cfg["target_model"], value_id) for value_id in value_ids]
+    if any(not target or not getattr(target, "ativo", True) for target in targets):
+        return jsonify({"error": "Registro não encontrado ou inativo."}), 404
+    if tipo == "produto_acao" and any(
+        target.excluido_em or target.exercicio != component.exercicio
+        for target in targets
+    ):
+        return jsonify(
+            {
+                "error": (
+                    "Um produto selecionado não pertence ao exercício do componente."
+                )
+            }
+        ), 409
+    links = [
+        cfg["model"](
+            componente_rev_id=component.id,
+            **{cfg["field"]: value_id},
+        )
+        for value_id in value_ids
+    ]
+    try:
+        db.session.add_all(links)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Este vínculo já está cadastrado."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao vincular componente da revista: %s/%s", component_id, tipo
+        )
+        return jsonify({"error": "Falha ao cadastrar o vínculo."}), 500
+    return jsonify(
+        {
+            "ok": True,
+            "message": (
+                f"{len(links)} vínculos cadastrados com sucesso."
+                if len(links) > 1
+                else "Vínculo cadastrado com sucesso."
+            ),
+        }
+    ), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["DELETE"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_delete(component_id: int):
+    payload = request.get_json(silent=True) or {}
+    tipo = _planning_text(payload.get("tipo"))
+    cfg = REV_COMPONENT_LINKS.get(tipo)
+    if not cfg:
+        return jsonify({"error": "Informe o tipo de vínculo que será removido."}), 400
+    try:
+        value_id = int(payload.get("valor_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Informe o vínculo que será removido."}), 400
+    link = cfg["model"].query.filter_by(
+        componente_rev_id=component_id,
+        **{cfg["field"]: value_id},
+    ).first()
+    if not link:
+        return jsonify({"error": "Vínculo não encontrado."}), 404
+    link_ids = _rev_component_link_ids(component_id)
+    tipo_index = REV_COMPONENT_LINK_SEQUENCE.index(tipo)
+    later_types = REV_COMPONENT_LINK_SEQUENCE[tipo_index + 1 :]
+    if any(link_ids[later_type] for later_type in later_types):
+        return jsonify(
+            {
+                "error": (
+                    "Remova primeiro os vínculos posteriores, seguindo a ordem "
+                    "inversa da sequência."
+                )
+            }
+        ), 409
+    try:
+        db.session.delete(link)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao remover vínculo do componente da revista: %s/%s",
+            component_id,
+            tipo,
         )
         return jsonify({"error": "Falha ao remover o vínculo."}), 500
     return jsonify({"ok": True, "message": "Vínculo removido com sucesso."})
@@ -7614,7 +9012,7 @@ def api_permissoes(perfil_id):
     if not perfil:
         return jsonify({"error": "Perfil nao encontrado."}), 404
 
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
 
     if request.method == "GET":
@@ -7641,6 +9039,10 @@ def api_permissoes(perfil_id):
             continue
         seen.add(fid)
         clean_feats.append(fid)
+    valid_features = set(flatten_features())
+    invalid_features = [f for f in clean_feats if f not in valid_features]
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
     locked_feats = {f["id"] for f in FEATURES if f.get("locked")}
     clean_feats = [f for f in clean_feats if f not in locked_feats]
     try:
@@ -7667,7 +9069,7 @@ def api_permissoes(perfil_id):
 @home_bp.route("/api/permissoes/nivel/<int:nivel>", methods=["GET", "POST"])
 @login_required
 def api_permissoes_nivel(nivel):
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
     if nivel < 1 or nivel > 5:
         return jsonify({"error": "Nivel invalido."}), 400
@@ -7695,6 +9097,10 @@ def api_permissoes_nivel(nivel):
             continue
         seen.add(fid)
         clean_feats.append(fid)
+    valid_features = set(flatten_features())
+    invalid_features = [f for f in clean_feats if f not in valid_features]
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
     locked_feats = {f["id"] for f in FEATURES if f.get("locked")}
     clean_feats = [f for f in clean_feats if f not in locked_feats]
     try:
@@ -7707,6 +9113,96 @@ def api_permissoes_nivel(nivel):
         db.session.rollback()
         return jsonify({"error": "Tabela nivel_permissoes inexistente. Crie a tabela antes de salvar."}), 500
     return jsonify({"ok": True, "message": "Permissoes atualizadas."})
+
+
+@home_bp.route("/api/permissoes/usuario/<int:usuario_id>", methods=["GET", "POST"])
+@login_required
+def api_permissoes_usuario(usuario_id):
+    if not has_permission("painel"):
+        return jsonify({"error": "Sem permissao."}), 403
+
+    usuario = db.session.get(Usuario, usuario_id)
+    if not usuario:
+        return jsonify({"error": "Usuario nao encontrado."}), 404
+    perfil = db.session.get(Perfil, usuario.perfil_id) if usuario.perfil_id else None
+    nivel = perfil.nivel if perfil else None
+    perfil_features = _load_permissoes_perfil(usuario.perfil_id)
+    nivel_features = _load_permissoes_nivel(nivel)
+    inherited_features = _add_parent_features(list(set(perfil_features + nivel_features)))
+    user_allow, user_deny = _load_permissoes_usuario(usuario_id)
+
+    if request.method == "GET":
+        effective_features = _permissoes_with_parents(usuario.perfil_id, nivel, usuario_id)
+        return jsonify(
+            {
+                "usuario": {
+                    "id": usuario.id,
+                    "nome": usuario.nome,
+                    "email": usuario.email,
+                    "perfil": usuario.perfil,
+                    "nivel": nivel,
+                },
+                "perfil_features": perfil_features,
+                "nivel_features": nivel_features,
+                "inherited_features": inherited_features,
+                "user_allow": user_allow,
+                "user_deny": user_deny,
+                "effective_features": effective_features,
+            }
+        )
+
+    data = request.get_json() or {}
+    allow = data.get("allow") or []
+    deny = data.get("deny") or []
+    if not isinstance(allow, list) or not isinstance(deny, list):
+        return jsonify({"error": "Formato invalido."}), 400
+
+    valid_features = set(flatten_features())
+    locked_features = {f["id"] for f in FEATURES if f.get("locked")}
+    allow_set = {f.strip() for f in allow if isinstance(f, str) and f.strip()}
+    deny_set = {f.strip() for f in deny if isinstance(f, str) and f.strip()}
+    invalid_features = sorted((allow_set | deny_set) - valid_features)
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
+    if allow_set & deny_set:
+        return jsonify({"error": "Uma funcionalidade nao pode ser permitida e negada ao mesmo tempo."}), 400
+    if deny_set & locked_features:
+        return jsonify({"error": "Funcionalidades obrigatorias nao podem ser negadas."}), 400
+
+    # Guarda apenas excecoes reais: permissoes herdadas nao precisam de allow e
+    # permissoes ausentes nao precisam de deny.
+    inherited_set = set(inherited_features)
+    allow_set -= inherited_set
+    deny_set &= inherited_set
+    try:
+        UsuarioPermissao.query.filter_by(usuario_id=usuario_id).delete(synchronize_session=False)
+        now = datetime.utcnow()
+        for feature in sorted(allow_set):
+            db.session.add(
+                UsuarioPermissao(
+                    usuario_id=usuario_id,
+                    feature=feature,
+                    permitido=True,
+                    ativo=True,
+                    created_at=now,
+                )
+            )
+        for feature in sorted(deny_set):
+            db.session.add(
+                UsuarioPermissao(
+                    usuario_id=usuario_id,
+                    feature=feature,
+                    permitido=False,
+                    ativo=True,
+                    created_at=now,
+                )
+            )
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao salvar permissoes do usuario %s", usuario_id)
+        return jsonify({"error": "Falha ao salvar permissoes do usuario."}), 500
+    return jsonify({"ok": True, "message": "Permissoes do usuario atualizadas."})
 
 
 @home_bp.route("/api/permissoes/current", methods=["GET"])
@@ -7722,7 +9218,11 @@ def api_permissoes_current():
         has_user=bool(session.get("user")),
     )
     try:
-        feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
+        feats = _permissoes_with_parents(
+            perfil_id,
+            getattr(g, "user_nivel", None),
+            _current_usuario_id(),
+        )
     except SQLAlchemyError as exc:
         current_app.logger.warning(
             "Falha de banco ao carregar permissoes (perfil_id=%s, path=%s): %s",
@@ -14388,10 +15888,93 @@ def api_dotacao_saldo():
     )
 
 
+def _managed_job_status(tipo: str, upload_model):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        upload = upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+        if not upload:
+            return jsonify({"ok": True, "last": None})
+        return jsonify({"ok": True, "last": {
+            "user_email": upload.user_email,
+            "original_filename": upload.original_filename,
+            "output_filename": upload.output_filename,
+            "status": "historico",
+            "status_message": "Processamento anterior à implantação do acompanhamento detalhado.",
+            "status_progress": 100 if upload.output_filename else 0,
+            "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+            "data_arquivo": upload.data_arquivo.isoformat() if upload.data_arquivo else None,
+            "total_records": 0, "processed_records": 0, "total_alerts": 0, "total_errors": 0,
+        }})
+    upload = db.session.get(upload_model, job.upload_id)
+    data = serialize_job(job)
+    data["data_arquivo"] = upload.data_arquivo.isoformat() if upload and upload.data_arquivo else None
+    data["events"] = [
+        {
+            "type": item.tipo_evento, "stage": item.etapa, "message": item.mensagem,
+            "progress": float(item.progresso) if item.progresso is not None else None,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
+        for item in ProcessamentoEvento.query.filter_by(processamento_id=job.id)
+        .order_by(ProcessamentoEvento.id.desc()).limit(20).all()
+    ]
+    return jsonify({"ok": True, "last": data})
+
+
+def _managed_reprocess(tipo: str, upload_model, input_dir: Path):
+    payload = request.get_json(silent=True) or {}
+    upload_id = payload.get("upload_id")
+    upload = db.session.get(upload_model, upload_id) if upload_id else upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+    if not upload:
+        return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    active = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
+        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+    ).first()
+    if active:
+        return jsonify({"error": f"Já existe um processamento {tipo.upper()} em andamento."}), 409
+    file_path = _find_upload_path(input_dir, upload.stored_filename)
+    if not file_path:
+        return jsonify({"error": "Arquivo original do upload não foi encontrado."}), 404
+    stored_filename = f"tmp/{file_path.name}" if file_path.parent.name == "tmp" else upload.stored_filename
+    novo_upload = upload_model(
+        user_email=(session.get("user") or {}).get("email") or upload.user_email,
+        original_filename=upload.original_filename,
+        stored_filename=stored_filename,
+        data_arquivo=upload.data_arquivo,
+        uploaded_at=datetime.utcnow(),
+    )
+    db.session.add(novo_upload)
+    db.session.commit()
+    try:
+        job = create_job(tipo, novo_upload, _current_usuario_id())
+        job.tentativa = (
+            db.session.query(func.count(ProcessamentoJob.id))
+            .filter_by(tipo=tipo).scalar() or 1
+        )
+        db.session.commit()
+        _start_worker(tipo, job.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": job.id})
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
+def _managed_cancel(tipo: str):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        return jsonify({"error": "Nenhum processamento encontrado."}), 404
+    if job.status not in {"aguardando", "em_processamento", "cancelamento_solicitado"}:
+        return jsonify({"error": "O processamento já foi finalizado."}), 409
+    update_job(job, status="cancelamento_solicitado", etapa="cancelamento",
+               mensagem="Cancelamento solicitado pelo usuário.", event_type="cancelamento",
+               cancelamento_solicitado=True)
+    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": job.id})
+
+
 @home_bp.route("/api/fip613/status", methods=["GET"])
 @login_required
 @require_feature("atualizar/fip613")
 def api_fip613_status():
+    return _managed_job_status("fip613", Fip613Upload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -14476,21 +16059,26 @@ def api_fip613_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_fip613(save_path, data_arquivo, user_email, registro.id)
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("fip613", registro, _current_usuario_id())
+        _start_worker("fip613", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/fip613/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_reprocess():
+    return _managed_reprocess("fip613", Fip613Upload, UPLOAD_DIR)
+
+
+@home_bp.route("/api/fip613/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_cancel():
+    return _managed_cancel("fip613")
 
 
 @home_bp.route("/api/relatorios/fip613", methods=["GET"])
@@ -14848,6 +16436,8 @@ def api_relatorio_fip613_download():
 @login_required
 @require_feature("atualizar/ped")
 def api_ped_status():
+    return _managed_job_status("ped", PedUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if value in (None, ""):
             return None
@@ -14930,38 +16520,26 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
-            save_path, data_arquivo, user_email, registro.id
-        )
-
-        if missing_dotacao_keys:
-            session["ped_dotacao_missing"] = missing_dotacao_keys
-            session.modified = True
-        else:
-            if "ped_dotacao_missing" in session:
-                session["ped_dotacao_missing"] = []
-                session.modified = True
-        if missing_planejamento_lines:
-            session["ped_planejamento_missing_lines"] = missing_planejamento_lines
-            session.modified = True
-        else:
-            if "ped_planejamento_missing_lines" in session:
-                session["ped_planejamento_missing_lines"] = []
-                session.modified = True
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("ped", registro, _current_usuario_id())
+        _start_worker("ped", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/ped/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_reprocess():
+    return _managed_reprocess("ped", PedUpload, PED_UPLOAD_DIR)
+
+
+@home_bp.route("/api/ped/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_cancel():
+    return _managed_cancel("ped")
 
 
 # EMP
@@ -15023,6 +16601,8 @@ def api_emp_status():
 @login_required
 @require_feature("atualizar/est-emp")
 def api_est_emp_status():
+    return _managed_job_status("est_emp", EstEmpUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -15263,21 +16843,26 @@ def api_est_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_est_emp(save_path, data_arquivo, user_email, registro.id)
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("est_emp", registro, _current_usuario_id())
+        _start_worker("est_emp", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/est-emp/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_reprocess():
+    return _managed_reprocess("est_emp", EstEmpUpload, EST_EMP_UPLOAD_DIR)
+
+
+@home_bp.route("/api/est-emp/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_cancel():
+    return _managed_cancel("est_emp")
 
 
 @home_bp.route("/api/nob/upload", methods=["POST"])
@@ -18469,7 +20054,7 @@ def api_usuario(email):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -18482,7 +20067,7 @@ def api_usuario(email):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -18491,7 +20076,7 @@ def api_usuario(email):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -18535,7 +20120,7 @@ def api_usuario_por_id(user_id: int):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -18549,7 +20134,7 @@ def api_usuario_por_id(user_id: int):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -18558,7 +20143,7 @@ def api_usuario_por_id(user_id: int):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -18627,7 +20212,7 @@ def api_usuario_senha(email):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -18657,7 +20242,7 @@ def api_usuario_senha_por_id(user_id: int):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -18679,7 +20264,7 @@ def api_usuario_senha_por_id(user_id: int):
 
 @home_bp.route("/api/perfis", methods=["GET", "POST"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfis():
     if request.method == "GET":
         perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
@@ -18726,7 +20311,7 @@ def api_perfis():
 
 @home_bp.route("/api/perfis/<int:perfil_id>", methods=["PUT", "DELETE"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfil(perfil_id):
     perfil = db.session.get(Perfil, perfil_id)
     if not perfil:

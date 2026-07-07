@@ -78,7 +78,6 @@ def build_mssql_sqlalchemy_uri() -> str:
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
-    SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "spo_session")
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
 
