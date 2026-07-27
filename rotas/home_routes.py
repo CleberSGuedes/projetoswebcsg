@@ -77,6 +77,11 @@ from models import (
     ProgramaPlanejamento,
     AcaoPlanejamento,
     ProdutoAcaoPlanejamento,
+    ComponenteRev,
+    ComponenteRevMacropolitica,
+    ComponenteRevEixo,
+    ComponenteRevProdutoAcao,
+    ComponenteRevPoliticaDecreto,
     Momp,
     PoliticaTeto,
     ApiClient,
@@ -1982,6 +1987,11 @@ PLANNING_STRUCTURE_ENTITIES = {
         "feature": "atualizar/estrutura-planejamento/produtos",
         "title": "Produtos da Ação",
         "singular": "Produto da Ação",
+    },
+    "componentes-rev": {
+        "feature": "atualizar/estrutura-planejamento/componentes-rev",
+        "title": "Componentes da Revista",
+        "singular": "Componente da Revista",
     },
 }
 
@@ -4085,6 +4095,39 @@ PLANNING_REPLICATION_OPTIONS = {
             "politica_produto",
         ],
     },
+    "componentes_rev": {
+        "label": "Componentes da Revista",
+        "group": "estrutura",
+        "requires": [],
+    },
+    "componentes_rev_macropolitica": {
+        "label": "Componente da Revista × Macropolítica",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_eixo": {
+        "label": "Componente da Revista × Eixo",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_politica": {
+        "label": "Componente da Revista × Política do Decreto",
+        "group": "vinculos",
+        "requires": ["componentes_rev"],
+    },
+    "componentes_rev_produto": {
+        "label": "Componente da Revista × Produto da Ação",
+        "group": "vinculos",
+        "requires": [
+            "componentes_rev",
+            "produtos",
+            "acoes",
+            "programas",
+            "funcao_programa",
+            "subfuncao_acao",
+            "politica_produto",
+        ],
+    },
     "modelos": {
         "label": "Modelos e partes da chave",
         "group": "chaves",
@@ -4238,6 +4281,56 @@ def _planning_replication_source_counts(exercise: int) -> dict[str, int]:
             )
             .count()
         ),
+        "componentes_rev": ComponenteRev.query.filter_by(exercicio=exercise)
+        .filter(ComponenteRev.excluido_em.is_(None))
+        .count(),
+        "componentes_rev_macropolitica": (
+            ComponenteRevMacropolitica.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevMacropolitica.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_eixo": (
+            ComponenteRevEixo.query.join(
+                ComponenteRev,
+                ComponenteRev.id == ComponenteRevEixo.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_politica": (
+            ComponenteRevPoliticaDecreto.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevPoliticaDecreto.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
+        "componentes_rev_produto": (
+            ComponenteRevProdutoAcao.query.join(
+                ComponenteRev,
+                ComponenteRev.id
+                == ComponenteRevProdutoAcao.componente_rev_id,
+            )
+            .filter(
+                ComponenteRev.exercicio == exercise,
+                ComponenteRev.excluido_em.is_(None),
+            )
+            .count()
+        ),
     }
 
 
@@ -4258,6 +4351,7 @@ def partial_atualizar_replicar_exercicio():
                 ProgramaPlanejamento,
                 AcaoPlanejamento,
                 ProdutoAcaoPlanejamento,
+                ComponenteRev,
                 ChaveCatalogo,
             )
             for (year,) in db.session.query(model.exercicio).distinct().all()
@@ -4457,6 +4551,40 @@ def _planning_replication_copy_products(
     return result
 
 
+def _planning_replication_copy_rev_components(
+    source: int, target: int, user_id: int | None, stats: dict
+) -> dict[int, int]:
+    source_rows = ComponenteRev.query.filter_by(exercicio=source).filter(
+        ComponenteRev.excluido_em.is_(None)
+    ).all()
+    destination = {
+        (row.nome or "").casefold(): row
+        for row in ComponenteRev.query.filter_by(exercicio=target).filter(
+            ComponenteRev.excluido_em.is_(None)
+        ).all()
+    }
+    result = {}
+    for row in source_rows:
+        key = (row.nome or "").casefold()
+        copy = destination.get(key)
+        if copy:
+            stats["componentes_rev"]["reutilizados"] += 1
+        else:
+            copy = ComponenteRev(
+                exercicio=target,
+                nome=row.nome,
+                ativo=row.ativo,
+                usuario_id=user_id,
+                criado_em=_now_local(),
+            )
+            db.session.add(copy)
+            db.session.flush()
+            destination[key] = copy
+            stats["componentes_rev"]["criados"] += 1
+        result[row.id] = copy.id
+    return result
+
+
 def _planning_replication_copy_mapping(
     model,
     source_rows,
@@ -4475,6 +4603,39 @@ def _planning_replication_copy_mapping(
         values = {
             fixed_field: getattr(row, fixed_field),
             mapped_field: target_id,
+        }
+        if model.query.filter_by(**values).first():
+            stats[stat_key]["reutilizados"] += 1
+        else:
+            db.session.add(model(**values))
+            stats[stat_key]["criados"] += 1
+
+
+def _planning_replication_copy_rev_mapping(
+    model,
+    source_rows,
+    value_field: str,
+    component_map: dict[int, int],
+    stats: dict,
+    stat_key: str,
+    value_map: dict[int, int] | None = None,
+):
+    for row in source_rows:
+        target_component_id = component_map.get(row.componente_rev_id)
+        if not target_component_id:
+            raise ValueError(
+                f"Não foi possível replicar {PLANNING_REPLICATION_OPTIONS[stat_key]['label']}."
+            )
+        target_value_id = getattr(row, value_field)
+        if value_map is not None:
+            target_value_id = value_map.get(target_value_id)
+            if not target_value_id:
+                raise ValueError(
+                    f"Não foi possível replicar {PLANNING_REPLICATION_OPTIONS[stat_key]['label']}."
+                )
+        values = {
+            "componente_rev_id": target_component_id,
+            value_field: target_value_id,
         }
         if model.query.filter_by(**values).first():
             stats[stat_key]["reutilizados"] += 1
@@ -4736,6 +4897,13 @@ def api_replicar_exercicio_executar():
             if "produtos" in selected
             else {}
         )
+        rev_component_map = (
+            _planning_replication_copy_rev_components(
+                source, target, user_id, stats
+            )
+            if "componentes_rev" in selected
+            else {}
+        )
         if "funcao_programa" in selected:
             source_rows = (
                 FuncaoPrograma.query.join(
@@ -4790,6 +4958,76 @@ def api_replicar_exercicio_executar():
                 product_map,
                 stats,
                 "politica_produto",
+            )
+        if "componentes_rev_macropolitica" in selected:
+            source_rows = (
+                ComponenteRevMacropolitica.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevMacropolitica.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevMacropolitica,
+                source_rows,
+                "macropolitica_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_macropolitica",
+            )
+        if "componentes_rev_eixo" in selected:
+            source_rows = (
+                ComponenteRevEixo.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevEixo.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevEixo,
+                source_rows,
+                "eixo_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_eixo",
+            )
+        if "componentes_rev_politica" in selected:
+            source_rows = (
+                ComponenteRevPoliticaDecreto.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id
+                    == ComponenteRevPoliticaDecreto.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevPoliticaDecreto,
+                source_rows,
+                "politica_decr_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_politica",
+            )
+        if "componentes_rev_produto" in selected:
+            source_rows = (
+                ComponenteRevProdutoAcao.query.join(
+                    ComponenteRev,
+                    ComponenteRev.id == ComponenteRevProdutoAcao.componente_rev_id,
+                )
+                .filter(ComponenteRev.exercicio == source)
+                .all()
+            )
+            _planning_replication_copy_rev_mapping(
+                ComponenteRevProdutoAcao,
+                source_rows,
+                "produto_acao_id",
+                rev_component_map,
+                stats,
+                "componentes_rev_produto",
+                product_map,
             )
         if "modelos" in selected:
             model_map, component_map = _planning_replication_copy_models(
@@ -4953,6 +5191,35 @@ def _planning_common_payload(payload: dict) -> tuple[dict | None, str | None]:
     )
 
 
+def _planning_rev_component_payload(payload: dict) -> tuple[dict | None, str | None]:
+    exercicio = _planning_exercicio(payload.get("exercicio"))
+    nome = _planning_text(payload.get("nome"), 255)
+    if not exercicio:
+        return None, "Informe um exercício válido com quatro dígitos."
+    if not nome:
+        return None, "Informe o nome."
+    return (
+        {
+            "exercicio": exercicio,
+            "nome": nome,
+            "ativo": bool(payload.get("ativo", True)),
+        },
+        None,
+    )
+
+
+def _planning_rev_component_has_links(row_id: int) -> bool:
+    return any(
+        model.query.filter_by(componente_rev_id=row_id).first()
+        for model in (
+            ComponenteRevMacropolitica,
+            ComponenteRevEixo,
+            ComponenteRevProdutoAcao,
+            ComponenteRevPoliticaDecreto,
+        )
+    )
+
+
 def _serialize_programa(row: ProgramaPlanejamento) -> dict:
     return {
         "id": row.id,
@@ -5000,6 +5267,15 @@ def _serialize_produto(row: ProdutoAcaoPlanejamento) -> dict:
         "responsavel": row.responsavel or "",
         "cpf": row.cpf or "",
         "email": row.email or "",
+        "ativo": bool(row.ativo),
+    }
+
+
+def _serialize_componente_rev(row: ComponenteRev) -> dict:
+    return {
+        "id": row.id,
+        "exercicio": row.exercicio,
+        "nome": row.nome or "",
         "ativo": bool(row.ativo),
     }
 
@@ -5425,12 +5701,18 @@ def api_estrutura_planejamento_list(entity: str):
             AcaoPlanejamento.nome.asc(),
         ).all()
         serialized = [_serialize_acao(row) for row in rows]
-    else:
+    elif entity == "produtos":
         rows = ProdutoAcaoPlanejamento.query.order_by(
             ProdutoAcaoPlanejamento.exercicio.desc(),
             ProdutoAcaoPlanejamento.nome.asc(),
         ).all()
         serialized = [_serialize_produto(row) for row in rows]
+    else:
+        rows = ComponenteRev.query.order_by(
+            ComponenteRev.exercicio.desc(),
+            ComponenteRev.nome.asc(),
+        ).all()
+        serialized = [_serialize_componente_rev(row) for row in rows]
     return jsonify(
         {
             "ok": True,
@@ -5517,6 +5799,28 @@ def _planning_product_action_ids(payload: dict) -> tuple[list[int] | None, str |
 @_require_planning_structure_entity
 def api_estrutura_planejamento_create(entity: str):
     payload = request.get_json(silent=True) or {}
+    if entity == "componentes-rev":
+        values, error = _planning_rev_component_payload(payload)
+        if error:
+            return jsonify({"error": error}), 400
+        now = _now_local()
+        values["usuario_id"] = _resolve_usuario_id()
+        values["criado_em"] = now
+        values["excluido_em"] = None if values["ativo"] else now
+        try:
+            db.session.add(ComponenteRev(**values))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"error": "Já existe um componente equivalente neste exercício."}), 409
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao cadastrar componente da revista."
+            )
+            return jsonify({"error": "Falha ao cadastrar o registro."}), 500
+        return jsonify({"ok": True, "message": "Registro cadastrado com sucesso."}), 201
+
     values, error = _planning_common_payload(payload)
     if error:
         return jsonify({"error": error}), 400
@@ -5564,6 +5868,7 @@ def api_estrutura_planejamento_create(entity: str):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     now = _now_local()
     values["usuario_id"] = _resolve_usuario_id()
@@ -5595,13 +5900,18 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     row = db.session.get(model, row_id)
     if not row:
         return jsonify({"error": "Registro não encontrado."}), 404
 
     payload = request.get_json(silent=True) or {}
-    values, error = _planning_common_payload(payload)
+    values, error = (
+        _planning_rev_component_payload(payload)
+        if entity == "componentes-rev"
+        else _planning_common_payload(payload)
+    )
     if error:
         return jsonify({"error": error}), 400
     product_extra_rows = []
@@ -5617,9 +5927,10 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
         ]
         payload = {**payload, "acao_id": primary_action_id}
 
-    values, error = _planning_validate_parent(entity, payload, values)
-    if error:
-        return jsonify({"error": error}), 400
+    if entity != "componentes-rev":
+        values, error = _planning_validate_parent(entity, payload, values)
+        if error:
+            return jsonify({"error": error}), 400
 
     if entity == "programas":
         has_children = AcaoPlanejamento.query.filter_by(programa_id=row.id).first()
@@ -5679,14 +5990,12 @@ def api_estrutura_planejamento_update(entity: str, row_id: int):
                         )
                     }
                 ), 409
-            if ProdutoAcaoSubfuncaoUg.query.filter_by(
-                produto_acao_id=row.id
-            ).first():
+        elif entity == "componentes-rev":
+            if _planning_rev_component_has_links(row.id):
                 return jsonify(
                     {
                         "error": (
-                            "Remova primeiro os vínculos do produto com "
-                            "subfunções e UGs."
+                            "Remova primeiro os vínculos do componente da revista."
                         )
                     }
                 ), 409
@@ -5743,6 +6052,7 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
         "programas": ProgramaPlanejamento,
         "acoes": AcaoPlanejamento,
         "produtos": ProdutoAcaoPlanejamento,
+        "componentes-rev": ComponenteRev,
     }[entity]
     row = db.session.get(model, row_id)
     if not row:
@@ -5793,6 +6103,10 @@ def api_estrutura_planejamento_delete(entity: str, row_id: int):
                     "Remova primeiro os vínculos do produto com subfunções e UGs."
                 )
             }
+        ), 409
+    if entity == "componentes-rev" and _planning_rev_component_has_links(row.id):
+        return jsonify(
+            {"error": "Remova primeiro os vínculos do componente da revista."}
         ), 409
 
     now = _now_local()
@@ -5990,6 +6304,199 @@ def api_produto_subfuncao_ug_delete(produto_id: int):
         db.session.rollback()
         current_app.logger.exception(
             "Falha ao remover produto/subfunção/UG: %s", produto_id
+        )
+        return jsonify({"error": "Falha ao remover o vínculo."}), 500
+    return jsonify({"ok": True, "message": "Vínculo removido com sucesso."})
+
+
+REV_COMPONENT_LINKS = {
+    "macropolitica": {
+        "label": "Macropolítica",
+        "model": ComponenteRevMacropolitica,
+        "field": "macropolitica_id",
+        "target_model": Macropolitica,
+        "source": "macropolitica",
+    },
+    "eixo": {
+        "label": "Eixo",
+        "model": ComponenteRevEixo,
+        "field": "eixo_id",
+        "target_model": Eixo,
+        "source": "eixo",
+    },
+    "produto_acao": {
+        "label": "Produto da Ação",
+        "model": ComponenteRevProdutoAcao,
+        "field": "produto_acao_id",
+        "target_model": ProdutoAcaoPlanejamento,
+        "source": "produto_acao_planejamento",
+    },
+    "politica_decr": {
+        "label": "Política do Decreto",
+        "model": ComponenteRevPoliticaDecreto,
+        "field": "politica_decr_id",
+        "target_model": PoliticaDecreto,
+        "source": "politica_decreto",
+    },
+}
+
+
+def _rev_component_options(component: ComponenteRev, tipo: str) -> list[dict]:
+    cfg = REV_COMPONENT_LINKS[tipo]
+    model = cfg["target_model"]
+    if tipo == "produto_acao":
+        rows = (
+            ProdutoAcaoPlanejamento.query.filter(
+                ProdutoAcaoPlanejamento.exercicio == component.exercicio,
+                ProdutoAcaoPlanejamento.ativo.is_(True),
+                ProdutoAcaoPlanejamento.excluido_em.is_(None),
+            )
+            .order_by(ProdutoAcaoPlanejamento.nome.asc())
+            .all()
+        )
+    else:
+        order_field = getattr(model, "codigo", None)
+        if order_field is None:
+            order_field = getattr(model, "nome", None)
+        if order_field is None:
+            order_field = model.id
+        rows = _active_component_query(model).order_by(order_field.asc()).all()
+    return [
+        {
+            "id": row.id,
+            "label": _planning_source_label(cfg["source"], row),
+            "ativo": bool(getattr(row, "ativo", True)),
+        }
+        for row in rows
+    ]
+
+
+def _serialize_rev_component_link(tipo: str, row) -> dict:
+    cfg = REV_COMPONENT_LINKS[tipo]
+    value_id = getattr(row, cfg["field"])
+    target = db.session.get(cfg["target_model"], value_id)
+    return {
+        "tipo": tipo,
+        "tipo_label": cfg["label"],
+        "valor_id": value_id,
+        "label": _planning_source_label(cfg["source"], target) if target else "",
+    }
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["GET"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_list(component_id: int):
+    component = db.session.get(ComponenteRev, component_id)
+    if not component or component.excluido_em:
+        return jsonify({"error": "Componente da Revista não encontrado."}), 404
+    options = {
+        tipo: _rev_component_options(component, tipo)
+        for tipo in REV_COMPONENT_LINKS
+    }
+    rows = []
+    for tipo, cfg in REV_COMPONENT_LINKS.items():
+        link_rows = (
+            cfg["model"].query.filter_by(componente_rev_id=component.id)
+            .order_by(getattr(cfg["model"], cfg["field"]).asc())
+            .all()
+        )
+        rows.extend(_serialize_rev_component_link(tipo, row) for row in link_rows)
+    return jsonify(
+        {
+            "ok": True,
+            "component": _serialize_componente_rev(component),
+            "tipos": [
+                {"id": tipo, "label": cfg["label"]}
+                for tipo, cfg in REV_COMPONENT_LINKS.items()
+            ],
+            "options": options,
+            "rows": rows,
+        }
+    )
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["POST"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_create(component_id: int):
+    component = db.session.get(ComponenteRev, component_id)
+    if not component or component.excluido_em:
+        return jsonify({"error": "Componente da Revista não encontrado."}), 404
+    payload = request.get_json(silent=True) or {}
+    tipo = _planning_text(payload.get("tipo"))
+    cfg = REV_COMPONENT_LINKS.get(tipo)
+    if not cfg:
+        return jsonify({"error": "Selecione um tipo de vínculo válido."}), 400
+    try:
+        value_id = int(payload.get("valor_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Selecione o registro que será vinculado."}), 400
+    target = db.session.get(cfg["target_model"], value_id)
+    if not target or not getattr(target, "ativo", True):
+        return jsonify({"error": "Registro não encontrado ou inativo."}), 404
+    if tipo == "produto_acao":
+        if target.excluido_em or target.exercicio != component.exercicio:
+            return jsonify(
+                {
+                    "error": (
+                        "O produto selecionado não pertence ao exercício do componente."
+                    )
+                }
+            ), 409
+    link = cfg["model"](componente_rev_id=component.id, **{cfg["field"]: value_id})
+    try:
+        db.session.add(link)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Este vínculo já está cadastrado."}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao vincular componente da revista: %s/%s", component_id, tipo
+        )
+        return jsonify({"error": "Falha ao cadastrar o vínculo."}), 500
+    return jsonify({"ok": True, "message": "Vínculo cadastrado com sucesso."}), 201
+
+
+@home_bp.route(
+    "/api/estrutura-planejamento/componentes-rev/<int:component_id>/vinculos",
+    methods=["DELETE"],
+)
+@login_required
+@require_feature("atualizar/estrutura-planejamento/componentes-rev")
+def api_componente_rev_links_delete(component_id: int):
+    payload = request.get_json(silent=True) or {}
+    tipo = _planning_text(payload.get("tipo"))
+    cfg = REV_COMPONENT_LINKS.get(tipo)
+    if not cfg:
+        return jsonify({"error": "Informe o tipo de vínculo que será removido."}), 400
+    try:
+        value_id = int(payload.get("valor_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Informe o vínculo que será removido."}), 400
+    link = cfg["model"].query.filter_by(
+        componente_rev_id=component_id,
+        **{cfg["field"]: value_id},
+    ).first()
+    if not link:
+        return jsonify({"error": "Vínculo não encontrado."}), 404
+    try:
+        db.session.delete(link)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Falha ao remover vínculo do componente da revista: %s/%s",
+            component_id,
+            tipo,
         )
         return jsonify({"error": "Falha ao remover o vínculo."}), 500
     return jsonify({"ok": True, "message": "Vínculo removido com sucesso."})

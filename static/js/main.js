@@ -4135,6 +4135,14 @@
     const productLinkSaveBtn = document.getElementById("estrutura-planejamento-produto-link-save");
     const productLinksMsg = document.getElementById("estrutura-planejamento-produto-links-msg");
     const productLinksBody = document.getElementById("estrutura-planejamento-produto-links-body");
+    const revLinksCard = document.getElementById("estrutura-planejamento-revista-links-card");
+    const revLinksTitle = document.getElementById("estrutura-planejamento-revista-links-title");
+    const revLinksClose = document.getElementById("estrutura-planejamento-revista-links-close");
+    const revLinkTipoEl = document.getElementById("estrutura-planejamento-revista-link-tipo");
+    const revLinkValorEl = document.getElementById("estrutura-planejamento-revista-link-valor");
+    const revLinkSaveBtn = document.getElementById("estrutura-planejamento-revista-link-save");
+    const revLinksMsg = document.getElementById("estrutura-planejamento-revista-links-msg");
+    const revLinksBody = document.getElementById("estrutura-planejamento-revista-links-body");
 
     let rows = [];
     let programas = [];
@@ -4143,11 +4151,18 @@
     let currentPage = 1;
     let pageSize = Number(pageSizeEl?.value || 10) || 10;
     const isProductEntity = entity === "produtos";
+    const isRevComponentEntity = entity === "componentes-rev";
     const productLinkState = {
       productId: "",
       subfuncoes: [],
       ugs: [],
       ugBySubfuncao: {},
+      rows: [],
+    };
+    const revLinkState = {
+      componentId: "",
+      tipos: [],
+      options: {},
       rows: [],
     };
 
@@ -4177,6 +4192,12 @@
       if (!productLinksMsg) return;
       productLinksMsg.textContent = text || "";
       productLinksMsg.classList.toggle("text-error", !!isError);
+    };
+
+    const setRevLinksMsg = (text, isError = false) => {
+      if (!revLinksMsg) return;
+      revLinksMsg.textContent = text || "";
+      revLinksMsg.classList.toggle("text-error", !!isError);
     };
 
     const optionLabel = (row) => {
@@ -4236,6 +4257,24 @@
         selectedValue
       );
       productLinkUgEl.disabled = !options.length;
+    };
+
+    const populateRevLinkValues = (selectedValue = "") => {
+      if (!revLinkValorEl) return;
+      const tipo = String(revLinkTipoEl?.value || "");
+      if (!tipo) {
+        setLabeledOptions(revLinkValorEl, [], "Selecione primeiro o tipo...");
+        revLinkValorEl.disabled = true;
+        return;
+      }
+      const options = revLinkState.options[tipo] || [];
+      setLabeledOptions(
+        revLinkValorEl,
+        options,
+        options.length ? "Selecione..." : "Nenhum registro disponível",
+        selectedValue
+      );
+      revLinkValorEl.disabled = !options.length;
     };
 
     const selectedChecklistActionIds = () => {
@@ -4441,9 +4480,35 @@
         currentPage * pageSize
       );
       if (!pageRows.length) {
-        const colspan = entity === "produtos" ? 9 : entity === "acoes" ? 8 : 7;
+        const colspan = isRevComponentEntity ? 4 : entity === "produtos" ? 9 : entity === "acoes" ? 8 : 7;
         tableBody.innerHTML = `<tr><td colspan="${colspan}" class="muted">Nenhum registro encontrado.</td></tr>`;
         renderPagination(0);
+        return;
+      }
+      if (isRevComponentEntity) {
+        tableBody.innerHTML = pageRows
+          .map(
+            (row) => `
+              <tr data-id="${esc(row.id)}">
+                <td>${esc(row.exercicio)}</td>
+                <td>${esc(row.nome || "")}</td>
+                <td><span class="planning-status ${row.ativo ? "is-active" : "is-inactive"}">${row.ativo ? "Ativo" : "Inativo"}</span></td>
+                <td class="planning-structure-row-actions">
+                  <button class="icon-btn sm planning-rev-links" type="button" data-id="${esc(row.id)}" title="Vínculos do Componente da Revista" aria-label="Vínculos do Componente da Revista">
+                    <i class="bi bi-link-45deg"></i>
+                  </button>
+                  <button class="icon-btn sm planning-edit" type="button" data-id="${esc(row.id)}" title="Editar" aria-label="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="icon-btn sm planning-disable" type="button" data-id="${esc(row.id)}" title="Desativar" aria-label="Desativar" ${row.ativo ? "" : "disabled"}>
+                    <i class="bi bi-slash-circle"></i>
+                  </button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
+        renderPagination(totalPages);
         return;
       }
       tableBody.innerHTML = pageRows
@@ -4573,6 +4638,93 @@
       }
     };
 
+    const renderRevLinks = () => {
+      if (!revLinksBody) return;
+      if (!revLinkState.componentId) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Selecione um componente para visualizar os vínculos.</td></tr>';
+        return;
+      }
+      if (!revLinkState.rows.length) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Nenhum vínculo cadastrado.</td></tr>';
+        return;
+      }
+      revLinksBody.innerHTML = revLinkState.rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${esc(row.tipo_label || "")}</td>
+              <td>${esc(row.label || "")}</td>
+              <td class="planning-structure-row-actions">
+                <button
+                  class="icon-btn sm planning-rev-link-delete"
+                  type="button"
+                  data-tipo="${esc(row.tipo)}"
+                  data-valor-id="${esc(row.valor_id)}"
+                  title="Remover vínculo"
+                  aria-label="Remover vínculo"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+    };
+
+    const closeRevLinks = () => {
+      if (revLinksCard) revLinksCard.hidden = true;
+      revLinkState.componentId = "";
+      revLinkState.tipos = [];
+      revLinkState.options = {};
+      revLinkState.rows = [];
+      if (revLinkTipoEl) revLinkTipoEl.value = "";
+      populateRevLinkValues();
+      setRevLinksMsg("");
+      renderRevLinks();
+    };
+
+    const loadRevLinks = async (componentId) => {
+      if (!isRevComponentEntity || !revLinksCard) return;
+      revLinksCard.hidden = false;
+      revLinkState.componentId = String(componentId || "");
+      if (revLinksTitle) revLinksTitle.textContent = "Carregando componente...";
+      if (revLinksBody) {
+        revLinksBody.innerHTML =
+          '<tr><td colspan="3" class="muted">Carregando vínculos...</td></tr>';
+      }
+      setRevLinksMsg("");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(componentId)}/vinculos`,
+          { headers: { "X-Requested-With": "fetch" } }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao carregar vínculos.");
+        revLinkState.tipos = Array.isArray(data.tipos) ? data.tipos : [];
+        revLinkState.options = data.options || {};
+        revLinkState.rows = Array.isArray(data.rows) ? data.rows : [];
+        const component = data.component || {};
+        if (revLinksTitle) {
+          revLinksTitle.textContent = [component.exercicio, component.nome].filter(Boolean).join(" | ");
+        }
+        setLabeledOptions(
+          revLinkTipoEl,
+          revLinkState.tipos,
+          revLinkState.tipos.length ? "Selecione..." : "Nenhum tipo de vínculo disponível"
+        );
+        populateRevLinkValues();
+        renderRevLinks();
+        revLinksCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao carregar vínculos.", true);
+        renderRevLinks();
+      }
+    };
+
     const populateFilterYears = () => {
       if (!filtroExercicioEl) return;
       const selected = filtroExercicioEl.value;
@@ -4615,6 +4767,9 @@
         renderTable();
         if (productLinkState.productId) {
           await loadProductLinks(productLinkState.productId);
+        }
+        if (revLinkState.componentId) {
+          await loadRevLinks(revLinkState.componentId);
         }
         setMsg("");
       } catch (error) {
@@ -4752,10 +4907,83 @@
         setProductLinksMsg(error.message || "Falha ao remover vínculo.", true);
       }
     });
+    revLinksClose?.addEventListener("click", closeRevLinks);
+    revLinkTipoEl?.addEventListener("change", () => {
+      populateRevLinkValues();
+      setRevLinksMsg("");
+    });
+    revLinkValorEl?.addEventListener("change", () => setRevLinksMsg(""));
+    revLinkSaveBtn?.addEventListener("click", async () => {
+      if (!revLinkState.componentId) return;
+      const payload = {
+        tipo: revLinkTipoEl?.value || "",
+        valor_id: revLinkValorEl?.value || "",
+      };
+      if (!payload.tipo || !payload.valor_id) {
+        setRevLinksMsg("Selecione o tipo e o registro do vínculo.", true);
+        return;
+      }
+      setRevLinksMsg("Salvando vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(revLinkState.componentId)}/vinculos`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao salvar vínculo.");
+        showToast(data.message || "Vínculo cadastrado.", "success");
+        if (revLinkValorEl) revLinkValorEl.value = "";
+        await loadRevLinks(revLinkState.componentId);
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao salvar vínculo.", true);
+      }
+    });
+    revLinksBody?.addEventListener("click", async (event) => {
+      const deleteButton = event.target.closest(".planning-rev-link-delete");
+      if (!deleteButton || !revLinkState.componentId) return;
+      if (!window.confirm("Remover este vínculo?")) return;
+      setRevLinksMsg("Removendo vínculo...");
+      try {
+        const response = await fetch(
+          `/api/estrutura-planejamento/componentes-rev/${encodeURIComponent(revLinkState.componentId)}/vinculos`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "fetch",
+            },
+            body: JSON.stringify({
+              tipo: deleteButton.dataset.tipo || "",
+              valor_id: deleteButton.dataset.valorId || "",
+            }),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Falha ao remover vínculo.");
+        showToast(data.message || "Vínculo removido.", "success");
+        await loadRevLinks(revLinkState.componentId);
+      } catch (error) {
+        console.error(error);
+        setRevLinksMsg(error.message || "Falha ao remover vínculo.", true);
+      }
+    });
 
     setProductActionMode(false);
 
     tableBody?.addEventListener("click", async (event) => {
+      const revLinkButton = event.target.closest(".planning-rev-links");
+      if (revLinkButton) {
+        await loadRevLinks(revLinkButton.dataset.id);
+        return;
+      }
       const linkButton = event.target.closest(".planning-product-links");
       if (linkButton) {
         await loadProductLinks(linkButton.dataset.id);
@@ -4800,15 +5028,19 @@
       const id = String(idEl?.value || "").trim();
       const payload = {
         exercicio: exercicioEl?.value || "",
-        programa_id: programaEl?.value || null,
-        acao_id: acaoEl?.value || null,
-        codigo: codigoEl?.value || "",
         nome: nomeEl?.value || "",
-        responsavel: responsavelEl?.value || "",
-        cpf: cpfEl?.value || "",
-        email: emailEl?.value || "",
         ativo: !!ativoEl?.checked,
       };
+      if (!isRevComponentEntity) {
+        Object.assign(payload, {
+          programa_id: programaEl?.value || null,
+          acao_id: acaoEl?.value || null,
+          codigo: codigoEl?.value || "",
+          responsavel: responsavelEl?.value || "",
+          cpf: cpfEl?.value || "",
+          email: emailEl?.value || "",
+        });
+      }
       if (isProductEntity && acaoEl) {
         payload.acao_ids = selectedChecklistActionIds();
         payload.acao_id = payload.acao_ids[0] || null;
@@ -21454,6 +21686,12 @@
 
       const link = ev.target.closest("[data-route]");
       if (!link) return;
+      const externalUrl = link.getAttribute("data-external-url");
+      if (externalUrl) {
+        ev.preventDefault();
+        window.open(externalUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
       ev.preventDefault();
       const route = link.getAttribute("data-route");
       setActive(route);

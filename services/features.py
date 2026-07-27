@@ -51,6 +51,10 @@ FEATURES = [
                 "nome": "Estrutura do Planejamento - Produtos da Ação",
             },
             {
+                "id": "atualizar/estrutura-planejamento/componentes-rev",
+                "nome": "Estrutura do Planejamento - Componentes da Revista",
+            },
+            {
                 "id": "atualizar/estrutura-planejamento/componentes",
                 "nome": "Estrutura do Planejamento - Componentes",
             },
@@ -86,6 +90,7 @@ FEATURES = [
             {"id": "cadastrar/plan_21-nger/meta_fisica", "nome": "Plan 21 - NGER - Meta Fisica"},
             {"id": "cadastrar/plan_21-nger/subacao", "nome": "Plan 21 - NGER - Subacao"},
             {"id": "cadastrar/plan_21-nger/etapa", "nome": "Plan 21 - NGER - Etapa"},
+            {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA"},
         ],
     },
     {
