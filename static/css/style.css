@@ -1848,6 +1848,18 @@ body.special-context-focus .main {
   font-size: 11px;
 }
 .report-data-card .totais-row strong { color: var(--text); font-size: 12px; text-align: left; }
+.report-data-card .totais-box.totais-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  column-gap: 24px;
+  row-gap: 7px;
+}
+.report-data-card .totais-box.totais-two-col .totais-title {
+  grid-column: 1 / -1;
+}
+.report-data-card .totais-box.totais-two-col .totais-row {
+  grid-template-columns: minmax(115px, 1fr) minmax(0, 1fr);
+}
 .report-actions { justify-content: flex-end; gap: 8px; }
 .report-actions .btn {
   min-height: 38px;
@@ -1930,6 +1942,8 @@ body.special-context-focus .main {
   .report-data-card .relatorio-top > .muted { width: 100%; flex-basis: auto; }
   .report-data-card .relatorio-top-right { flex-basis: auto; padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--border); }
   .report-actions .btn { flex: 1 1 180px; justify-content: center; }
+  .report-data-card .totais-box.totais-two-col { grid-template-columns: 1fr; }
+  .report-data-card .totais-box.totais-two-col .totais-title { grid-column: auto; }
   .report-data-card > .table-foot { align-items: flex-start; flex-direction: column; }
 }
 
@@ -7005,6 +7019,20 @@ html.spo-split-pressure .governanca-grid {
 .job-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .25s ease; }
 .job-alerts { margin-top: .65rem; }
 .job-alerts pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }
+.job-alerts-danger,
+.job-validation-error {
+  color: var(--danger, #c01c28);
+}
+.job-alerts-danger summary {
+  font-weight: 800;
+}
+.job-alerts-danger ul {
+  margin: .35rem 0 0 1rem;
+  padding: 0;
+}
+.job-alerts-danger li {
+  margin: .25rem 0;
+}
 .upload-status-actions {
   margin-top: .85rem;
   padding-top: .85rem;

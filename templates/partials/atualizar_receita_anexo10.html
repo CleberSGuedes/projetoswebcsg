@@ -1,0 +1,67 @@
+<div class="grid">
+  <header class="module-header">
+    <div class="module-header-copy">
+      <div class="module-eyebrow">Administrar SPO · Atualizar execução orçamentária</div>
+      <h1>Receita Anexo 10</h1>
+      <p>Envie arquivos do Anexo 10 e acompanhe a importação em segundo plano.</p>
+    </div>
+    <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+  </header>
+
+  <div class="card module-card">
+    <div class="module-card-title">
+      <i class="bi bi-file-earmark-spreadsheet"></i>
+      <div>
+        <h2>Arquivos para processamento</h2>
+        <p>Informe a data de referência e envie um ou mais arquivos.</p>
+      </div>
+    </div>
+    <p class="muted">
+      Aceita PDF, XLS/XLS falso, XLSX/XLSX falso e CSV brasileiro separados por ponto e vírgula.
+    </p>
+
+    <form id="form-receita-anexo10" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Arquivos Anexo 10</span>
+          <input
+            type="file"
+            name="arquivos"
+            id="receita-anexo10-files"
+            accept=".pdf,.xls,.xlsx,.csv"
+            multiple
+            required
+          />
+        </label>
+        <label class="field">
+          <span>Data/hora do download</span>
+          <input type="datetime-local" name="data_arquivo" id="receita-anexo10-data" required />
+        </label>
+        <label class="field">
+          <span>Mês fechado?</span>
+          <select name="mes_fechado" id="receita-anexo10-mes-fechado" required>
+            <option value="">Selecione</option>
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="receita-anexo10-submit">Upload e processar</button>
+        <div id="receita-anexo10-loading" class="muted" style="display:none;">
+          <i class="bi bi-hourglass-split"></i> Processando...
+        </div>
+        <div id="receita-anexo10-msg" class="muted"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Última atualização</div>
+    <div id="receita-anexo10-status" class="muted">Carregando...</div>
+    <div class="actions upload-status-actions">
+      <button class="btn btn-secondary sm" type="button" id="receita-anexo10-reprocess">Reprocessar</button>
+      <button class="btn btn-danger sm" type="button" id="receita-anexo10-cancel">Cancelar</button>
+    </div>
+  </div>
+</div>

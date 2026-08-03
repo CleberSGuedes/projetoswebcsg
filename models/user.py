@@ -549,6 +549,127 @@ class NobUpload(db.Model):
     uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
+class ReceitaAnexo10Upload(db.Model):
+    __tablename__ = "receita_anexo10_uploads"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_email = db.Column(db.String(255), nullable=False)
+    modo_upload = db.Column(
+        db.String(30), nullable=False, default="arquivo_unico", server_default="arquivo_unico"
+    )
+    original_filename = db.Column(db.String(255))
+    stored_filename = db.Column(db.String(255))
+    output_filename = db.Column(db.String(255))
+    data_arquivo = db.Column(db.DateTime)
+    uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    total_arquivos = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    arquivos_processados = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    arquivos_sucesso = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    arquivos_alerta = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    arquivos_erro = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    total_registros = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    total_alertas = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    total_erros = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    detalhes_alertas = db.Column(db.Text)
+    erro_tecnico = db.Column(db.Text)
+    mes_fechado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+    tipo_carga = db.Column(db.String(20), nullable=False, default="aberta", server_default="aberta")
+    status_validacao = db.Column(db.String(30), nullable=False, default="pendente", server_default="pendente")
+    mensagem_validacao = db.Column(db.Text)
+    substitui_upload_ids = db.Column(db.Text)
+    permite_corrigir_fechada = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+
+
+class ReceitaAnexo10Arquivo(db.Model):
+    __tablename__ = "receita_anexo10_arquivos"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    upload_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("receita_anexo10_uploads.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_email = db.Column(db.String(255), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    extensao_original = db.Column(db.String(20))
+    formato_detectado = db.Column(db.String(40), nullable=False, default="desconhecido", server_default="desconhecido")
+    mime_detectado = db.Column(db.String(120))
+    hash_sha256 = db.Column(db.String(64), nullable=False)
+    tamanho_bytes = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    relatorio_detectado = db.Column(db.String(120))
+    fonte_recurso = db.Column(db.String(50))
+    exercicio = db.Column(db.SmallInteger)
+    mes = db.Column(db.SmallInteger)
+    competencia = db.Column(db.String(7))
+    orgao_codigo = db.Column(db.String(30))
+    orgao_nome = db.Column(db.String(255))
+    escopo_relatorio = db.Column(db.String(255))
+    cod_uo = db.Column(db.String(30))
+    uo = db.Column(db.String(255))
+    mes_fechado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+    tipo_carga = db.Column(db.String(20), nullable=False, default="aberta", server_default="aberta")
+    chave_competencia_fonte_uo = db.Column(db.String(120))
+    substituido_por_upload_id = db.Column(db.BigInteger)
+    status = db.Column(db.String(40), nullable=False, default="aguardando", server_default="aguardando")
+    mensagem = db.Column(db.String(1000))
+    total_linhas_detectadas = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    total_linhas_importadas = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    total_alertas = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    total_erros = db.Column(db.Integer, nullable=False, default=0, server_default=db.text("0"))
+    alertas_json = db.Column(db.Text)
+    erro_tecnico = db.Column(db.Text)
+    data_arquivo = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+    upload = db.relationship("ReceitaAnexo10Upload", lazy="joined")
+
+
+class ReceitaAnexo10Registro(db.Model):
+    __tablename__ = "receita_anexo10_registros"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    upload_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("receita_anexo10_uploads.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    arquivo_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("receita_anexo10_arquivos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fonte_recurso = db.Column(db.String(50))
+    exercicio = db.Column(db.SmallInteger)
+    mes = db.Column(db.SmallInteger)
+    competencia = db.Column(db.String(7))
+    orgao_codigo = db.Column(db.String(30))
+    orgao_nome = db.Column(db.String(255))
+    escopo_relatorio = db.Column(db.String(255))
+    cod_uo = db.Column(db.String(30))
+    uo = db.Column(db.String(255))
+    mes_fechado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
+    tipo_carga = db.Column(db.String(20), nullable=False, default="aberta", server_default="aberta")
+    chave_competencia_fonte_uo = db.Column(db.String(120))
+    substituido_por_upload_id = db.Column(db.BigInteger)
+    codigo_receita = db.Column(db.String(50), nullable=False)
+    descricao_receita = db.Column(db.String(1000), nullable=False)
+    orcado_atualizado = db.Column(db.Numeric(20, 2))
+    arrecadada = db.Column(db.Numeric(20, 2))
+    diferenca_para_mais = db.Column(db.Numeric(20, 2))
+    diferenca_para_menos = db.Column(db.Numeric(20, 2))
+    linha_origem = db.Column(db.Integer)
+    pagina_origem = db.Column(db.Integer)
+    raw_payload = db.Column(db.Text)
+    data_arquivo = db.Column(db.DateTime)
+    user_email = db.Column(db.String(255))
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+    upload = db.relationship("ReceitaAnexo10Upload", lazy="joined")
+    arquivo = db.relationship("ReceitaAnexo10Arquivo", lazy="joined")
+
+
 class ProcessamentoJob(db.Model):
     __tablename__ = "processamento_jobs"
 

@@ -3888,22 +3888,75 @@
       );
       const rawStatus = String(last.status || (last.output_filename ? "finalizado" : "aguardando"));
       const statusKey = rawStatus.toLowerCase().replaceAll(" ", "_");
+      const statusLabelMap = {
+        aguardando: "Aguardando",
+        em_processamento: "Em processamento",
+        cancelamento_solicitado: "Cancelamento solicitado",
+        finalizado: "Finalizado",
+        finalizado_com_alertas: "Finalizado com alertas",
+        falha: "Falha",
+        cancelado: "Cancelado",
+        historico: "Histórico",
+        "histórico": "Histórico",
+      };
+      const statusLabel = statusLabelMap[statusKey] || rawStatus.replaceAll("_", " ");
       const normalizedStatus = statusKey.includes("falha") ? "falha"
         : statusKey.includes("cancel") ? "cancelado"
         : statusKey.includes("finalizado") ? "finalizado"
         : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
         : statusKey;
       const duration = last.duration_seconds == null ? "-" : `${Number(last.duration_seconds).toFixed(1)}s`;
+      const hasValidationErrors = Number(last.total_errors || 0) > 0 || /nao processado|não processado/i.test(String(last.mensagem_validacao || ""));
+      const prettyMessage = (value) =>
+        String(value ?? "-")
+          .replace(/\bNao\b/g, "Não")
+          .replace(/\bnao\b/g, "não")
+          .replace(/\bmes\b/g, "mês")
+          .replace(/\bcompetencia\b/g, "competência")
+          .replace(/\brelatorio\b/g, "relatório")
+          .replace(/\bfisico\b/g, "físico")
+          .replace(/\bobrigatorios\b/g, "obrigatórios")
+          .replace(/\binvalida\b/g, "inválida")
+          .replace(/\bconteudo\b/g, "conteúdo")
+          .replace(/\bja\b/g, "já")
+          .replace(/\bnao processado/g, "não processado");
+      const renderAlerts = (alerts) => {
+        if (!alerts) return "";
+        if (Array.isArray(alerts)) {
+          return alerts.map((item) => `<li>${safe(prettyMessage(item))}</li>`).join("");
+        }
+        if (typeof alerts === "object") {
+          return Object.entries(alerts)
+            .map(([name, messages]) => {
+              const list = Array.isArray(messages) ? messages : [messages];
+              return `
+                <li>
+                  <strong>${safe(name)}</strong>
+                  <ul>${list.map((msg) => `<li>${safe(prettyMessage(msg))}</li>`).join("")}</ul>
+                </li>
+              `;
+            })
+            .join("");
+        }
+        return `<li>${safe(prettyMessage(alerts))}</li>`;
+      };
       const alertDetails = last.alerts && last.total_alerts
-        ? `<details class="job-alerts"><summary>${last.total_alerts} alerta(s)</summary><pre>${safe(JSON.stringify(last.alerts, null, 2))}</pre></details>` : "";
+        ? `<details class="job-alerts job-alerts-danger"><summary>${last.total_alerts} alerta(s)</summary><ul>${renderAlerts(last.alerts)}</ul></details>` : "";
+      const receitaDetails = last.tipo === "receita_anexo10" ? `
+        <div><strong>Tipo de carga:</strong> ${safe(last.tipo_carga)}</div>
+        <div><strong>Mês fechado:</strong> ${safe(last.mes_fechado_label)}</div>
+        ${last.status_validacao ? `<div><strong>Validação:</strong> ${safe(last.status_validacao)}</div>` : ""}
+        ${last.mensagem_validacao ? `<div class="${hasValidationErrors ? "job-validation-error" : ""}"><strong>Mensagem validação:</strong> ${safe(prettyMessage(last.mensagem_validacao))}</div>` : ""}
+      ` : "";
       target.innerHTML = `
-        <div class="job-status-head"><strong>${safe(rawStatus)}</strong><strong>${progress.toFixed(0)}%</strong></div>
+        <div class="job-status-head"><strong>${safe(statusLabel)}</strong><strong>${progress.toFixed(0)}%</strong></div>
         <div class="job-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
-        <div><strong>Etapa:</strong> ${safe(last.status_message)}</div>
+        <div><strong>Etapa:</strong> ${safe(prettyMessage(last.status_message))}</div>
         <div><strong>Enviado por:</strong> ${safe(last.user_email)}</div>
         <div><strong>Upload em:</strong> ${formatAmazonTime(last.uploaded_at)}</div>
         <div><strong>Data do download:</strong> ${formatAmazonLocalTime(last.data_arquivo)}</div>
         <div><strong>Arquivo original:</strong> ${safe(last.original_filename)}</div>
+        ${receitaDetails}
         <div><strong>Registros:</strong> ${last.processed_records || 0} / ${last.total_records || 0}</div>
         <div><strong>Duração:</strong> ${duration}</div>
         <div><strong>Saída gerada:</strong> ${safe(last.output_filename)}</div>
@@ -4095,6 +4148,10 @@
       target.textContent = "Falha ao carregar status.";
       console.error(err);
     }
+  }
+
+  async function loadReceitaAnexo10Status(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/receita-anexo10/status", target, submitBtn, viewLabel);
   }
 
   async function loadNobStatus(target, submitBtn, viewLabel) {
@@ -4672,6 +4729,123 @@
           submitBtn.dataset.mode = "view";
           submitBtn.dataset.output = data.output;
         }
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        console.error(err);
+        if (submitBtn) {
+          submitBtn.textContent = defaultLabel;
+          submitBtn.dataset.mode = "upload";
+        }
+      } finally {
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  function initReceitaAnexo10() {
+    const form = document.getElementById("form-receita-anexo10");
+    if (!form) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const msg = document.getElementById("receita-anexo10-msg");
+    const statusBox = document.getElementById("receita-anexo10-status");
+    const inputData = document.getElementById("receita-anexo10-data");
+    const fileInput = document.getElementById("receita-anexo10-files");
+    const loading = document.getElementById("receita-anexo10-loading");
+    const submitBtn = document.getElementById("receita-anexo10-submit");
+    const reprocessBtn = document.getElementById("receita-anexo10-reprocess");
+    const cancelBtn = document.getElementById("receita-anexo10-cancel");
+    const defaultLabel = "Upload e processar";
+    const viewLabel = "Processado";
+
+    if (inputData) {
+      setDefaultAmazonTime(inputData);
+    }
+
+    loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") {
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+      }
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) {
+        msg.textContent = pendingText;
+        msg.classList.remove("text-error");
+      }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+    };
+
+    reprocessBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/reprocess", "Reprocessamento iniciado.").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    cancelBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/cancel", "Solicitando cancelamento...").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    if (submitBtn) {
+      submitBtn.dataset.mode = "upload";
+      submitBtn.textContent = defaultLabel;
+    }
+
+    if (fileInput && submitBtn) {
+      fileInput.addEventListener("change", () => {
+        submitBtn.dataset.mode = "upload";
+        submitBtn.textContent = defaultLabel;
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!fileInput?.files?.length) {
+        if (msg) {
+          msg.textContent = "Selecione ao menos um arquivo.";
+          msg.classList.add("text-error");
+        }
+        return;
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/api/receita-anexo10/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
+        if (msg) {
+          msg.textContent = data.message || "Upload concluido.";
+          msg.classList.remove("text-error");
+        }
+        form.reset();
+        if (inputData) inputData.value = "";
+        await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -13743,6 +13917,520 @@
     load();
   }
 
+  function initRelatorioReceitaAnexo10() {
+    const table = document.getElementById("receita-anexo10-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("receita-anexo10-empty");
+    const meta = document.getElementById("receita-anexo10-relatorio-meta");
+    const pager = document.getElementById("receita-anexo10-pagination");
+    const pageSizeSelect = document.getElementById("receita-anexo10-page-size");
+    const btnDownload = document.getElementById("receita-anexo10-download");
+    const btnReset = document.getElementById("receita-anexo10-reset");
+    const totRegistros = document.getElementById("receita-anexo10-tot-registros");
+    const totArquivos = document.getElementById("receita-anexo10-tot-arquivos");
+    const totFontes = document.getElementById("receita-anexo10-tot-fontes");
+    const totCompetencias = document.getElementById("receita-anexo10-tot-competencias");
+    const totOrcado = document.getElementById("receita-anexo10-tot-orcado");
+    const totArrecadada = document.getElementById("receita-anexo10-tot-arrecadada");
+    const totMais = document.getElementById("receita-anexo10-tot-mais");
+    const totMenos = document.getElementById("receita-anexo10-tot-menos");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+    const allData = { rows: [] };
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+    const fmtNum = (v) => {
+      const n = Number(v || 0);
+      if (Number.isNaN(n)) return "";
+      return numFmt.format(n);
+    };
+    const esc = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const colKeys = [
+      "competencia",
+      "exercicio",
+      "mes",
+      "fonte_recurso",
+      "cod_uo",
+      "uo",
+      "tipo_carga",
+      "mes_fechado_label",
+      "situacao_movimentacao",
+      "codigo_receita",
+      "descricao_receita",
+      "orcado_atualizado",
+      "arrecadada",
+      "diferenca_para_mais",
+      "diferenca_para_menos",
+      "original_filename",
+      "formato_detectado",
+      "arquivo_status",
+      "linha_origem",
+      "pagina_origem",
+      "upload_id",
+      "user_email",
+      "data_arquivo_fmt",
+      "uploaded_at_fmt",
+    ];
+
+    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
+    const filters = Object.fromEntries(colKeys.map((key) => [key, new Set()]));
+    const filterControls = {};
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const filterValue = (row, key) => {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") return "";
+      if (["orcado_atualizado", "arrecadada", "diferenca_para_mais", "diferenca_para_menos"].includes(key)) {
+        return fmtNum(value);
+      }
+      return String(value);
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((value) => map[value] || value)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          row.style.display = txt.textContent.toLowerCase().includes(term) ? "" : "none";
+        });
+        allRow.style.display = "(todos)".includes(term) || term === "" ? "" : "none";
+        selectVisibleRow.style.display = "";
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((value) => tempSelected.add(value));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((value) => set.add(value));
+        updateDisplay(key);
+        renderFiltered();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          tempSelected.clear();
+          filters[key].forEach((value) => tempSelected.add(value));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      container.innerHTML = "";
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((item) => item.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((row) => {
+        colKeys.forEach((key, idx) => {
+          const value = filterValue(row, key);
+          uniques[idx].add(value);
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx])
+          .filter((value) => value !== "")
+          .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "page-btn";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          render();
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) start = Math.max(1, end - maxButtons + 1);
+      if (start > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          pager.appendChild(ellipsis);
+        }
+      }
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const updateTotals = (rows) => {
+      const arquivos = new Set();
+      const fontes = new Set();
+      const competencias = new Set();
+      let orcado = 0;
+      let arrecadada = 0;
+      let mais = 0;
+      let menos = 0;
+      rows.forEach((row) => {
+        if (row.original_filename) arquivos.add(row.original_filename);
+        if (row.fonte_recurso) fontes.add(row.fonte_recurso);
+        if (row.competencia) competencias.add(row.competencia);
+        if (row.tipo_linha !== "sem_movimentacao") {
+          orcado += Number(row.orcado_atualizado || 0);
+          arrecadada += Number(row.arrecadada || 0);
+          mais += Number(row.diferenca_para_mais || 0);
+          menos += Number(row.diferenca_para_menos || 0);
+        }
+      });
+      if (totRegistros) {
+        totRegistros.textContent = intFmt.format(rows.filter((row) => row.tipo_linha !== "sem_movimentacao").length);
+      }
+      if (totArquivos) totArquivos.textContent = intFmt.format(arquivos.size);
+      if (totFontes) totFontes.textContent = intFmt.format(fontes.size);
+      if (totCompetencias) {
+        totCompetencias.textContent = competencias.size
+          ? Array.from(competencias).sort((a, b) => a.localeCompare(b, "pt-BR")).join(" | ")
+          : "-";
+      }
+      if (totOrcado) totOrcado.textContent = fmtNum(orcado);
+      if (totArrecadada) totArrecadada.textContent = fmtNum(arrecadada);
+      if (totMais) totMais.textContent = fmtNum(mais);
+      if (totMenos) totMenos.textContent = fmtNum(menos);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(r.competencia)}</td>
+          <td>${esc(r.exercicio)}</td>
+          <td>${esc(r.mes)}</td>
+          <td>${esc(r.fonte_recurso)}</td>
+          <td>${esc(r.cod_uo)}</td>
+          <td>${esc(r.uo)}</td>
+          <td>${esc(r.tipo_carga)}</td>
+          <td>${esc(r.mes_fechado_label)}</td>
+          <td>${esc(r.situacao_movimentacao)}</td>
+          <td>${esc(r.codigo_receita)}</td>
+          <td>${esc(r.descricao_receita)}</td>
+          <td class="num">${fmtNum(r.orcado_atualizado)}</td>
+          <td class="num">${fmtNum(r.arrecadada)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_mais)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_menos)}</td>
+          <td>${esc(r.original_filename)}</td>
+          <td>${esc(r.formato_detectado)}</td>
+          <td>${esc(r.arquivo_status)}</td>
+          <td>${esc(r.linha_origem)}</td>
+          <td>${esc(r.pagina_origem)}</td>
+          <td>${esc(r.upload_id)}</td>
+          <td>${esc(r.user_email)}</td>
+          <td>${esc(r.data_arquivo_fmt)}</td>
+          <td>${esc(r.uploaded_at_fmt)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((row) =>
+        colKeys.every((key) => {
+          const selected = filters[key];
+          if (!selected || selected.size === 0) return true;
+          return selected.has(filterValue(row, key).toLowerCase());
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/receita-anexo10");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        allData.rows = (data.data || []).map((row) => ({
+          ...row,
+          data_arquivo_fmt: formatAmazonLocalTime(row.data_arquivo),
+          uploaded_at_fmt: formatAmazonTime(row.uploaded_at),
+        }));
+        filteredRows = allData.rows;
+        setOptions(allData.rows);
+        render();
+        if (meta) {
+          const dt = formatAmazonLocalTime(data.data_arquivo);
+          const user = data.user_email || "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
+          meta.innerHTML = `
+            <div><strong>Última atualização</strong></div>
+            <div>Enviado por: ${esc(user)}</div>
+            <div>Upload em: ${esc(uploaded)}</div>
+            <div>Data do download: ${esc(dt)}</div>
+            <div>Arquivos: ${esc(data.total_arquivos ?? 0)} | Registros: ${esc(data.total_registros ?? 0)} | Alertas: ${esc(data.total_alertas ?? 0)} | Erros: ${esc(data.total_erros ?? 0)}</div>
+          `;
+        }
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/receita-anexo10/download", "_blank");
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        closeAllPanels();
+        Object.keys(filters).forEach((key) => filters[key].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    load();
+  }
+
   function initMetaFisicaPlan21() {
     const form = document.getElementById("form-meta-fisica");
     const msg = document.getElementById("meta-fisica-msg");
@@ -18029,6 +18717,9 @@
     if (route === "atualizar/emp") {
       initEmp();
     }
+    if (route === "atualizar/receita-anexo10") {
+      initReceitaAnexo10();
+    }
     if (route === "atualizar/est-emp") {
       initEstEmp();
     }
@@ -18091,6 +18782,9 @@
     }
     if (route === "relatorios/nob") {
       initRelatorioNob();
+    }
+    if (route === "relatorios/receita-anexo10") {
+      initRelatorioReceitaAnexo10();
     }
     if (route === "relatorios/ped") {
       initRelatorioPed();
@@ -25005,6 +25699,10 @@
 
       const link = ev.target.closest("[data-route]");
       if (!link) return;
+      const externalUrl = link.getAttribute("data-external-url");
+      if (externalUrl) {
+        return;
+      }
       ev.preventDefault();
       const route = link.getAttribute("data-route");
       setActive(route);

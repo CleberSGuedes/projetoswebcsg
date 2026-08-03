@@ -17,7 +17,13 @@
         </div>
       </div>
     {% else %}
-      <a href="#" data-route="{{ node.id }}" class="menu-item" title="{{ node.nome }}">
+      <a
+        href="{{ node.url|default('#') }}"
+        data-route="{{ node.id }}"
+        {% if node.url %}data-external-url="{{ node.url }}" target="_blank" rel="noopener noreferrer"{% endif %}
+        class="menu-item"
+        title="{{ node.nome }}"
+      >
         <i class="bi bi-{{ node.icon }}"></i> <span>{{ node.nome }}</span>
       </a>
     {% endif %}
