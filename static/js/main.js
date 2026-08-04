@@ -4299,7 +4299,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4444,7 +4444,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4594,7 +4594,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4703,7 +4703,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4969,7 +4969,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";

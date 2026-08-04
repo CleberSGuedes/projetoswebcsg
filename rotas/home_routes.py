@@ -145,6 +145,7 @@ from services.est_emp_runner import (
     OUTPUT_DIR as EST_EMP_OUTPUT_DIR,
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
+from services.fiplan_file_reader import FiplanFormatError, detect_fiplan_format, iter_preview_rows
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
@@ -236,7 +237,7 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
     if not tmp_dir.exists():
         return None
     stem = Path(stored_filename).stem
-    matches = sorted(tmp_dir.glob(f"{stem}_*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
+    matches = sorted(tmp_dir.glob(f"{stem}_*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0] if matches else None
 
 
@@ -253,16 +254,16 @@ def _normalize_header_token(value: object) -> str:
 
 def _detect_upload_layouts(file_path: Path) -> set[str]:
     try:
-        df_raw = pd.read_excel(file_path, sheet_name=0, header=None, dtype=str, nrows=260)
+        preview_rows = list(iter_preview_rows(file_path, max_rows=260))
     except Exception:
         return set()
-    if df_raw is None or df_raw.empty:
+    if not preview_rows:
         return set()
 
     rows_tokens: list[set[str]] = []
     all_tokens: list[str] = []
-    for _, row in df_raw.iterrows():
-        vals = [str(v).strip() if pd.notna(v) else "" for v in row.tolist()]
+    for row in preview_rows:
+        vals = [str(v).strip() if pd.notna(v) else "" for v in row]
         vals = [v for v in vals if v]
         if not vals:
             continue
@@ -380,6 +381,54 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
         f"Arquivo invalido para {expected_label}: layout detectado ({detected_text}). "
         f"Envie um arquivo de {expected_label}."
     )
+
+
+def _move_existing_fiplan_files_to_tmp(base_dir: Path) -> None:
+    tmp = base_dir / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    for f in base_dir.iterdir():
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in {".xls", ".xlsx", ".csv"}:
+            continue
+        dest = tmp / f"{f.stem}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{f.suffix}"
+        try:
+            f.rename(dest)
+        except OSError:
+            pass
+
+
+def _save_fiplan_upload_file(arquivo, upload_dir: Path, prefix: str, expected_kind: str, expected_label: str) -> tuple[str, Path, str]:
+    original_name = arquivo.filename or ""
+    safe_original = secure_filename(original_name) or "arquivo"
+    suffix = Path(safe_original).suffix.lower()
+    if suffix not in {".xls", ".xlsx", ".csv"}:
+        raise FiplanFormatError("Envie um arquivo FIPLAN nos formatos .xls, .xlsx ou .csv.")
+
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    (upload_dir / "tmp").mkdir(parents=True, exist_ok=True)
+    stem = f"{prefix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    raw_name = f"{stem}{suffix}"
+    raw_path = upload_dir / raw_name
+    arquivo.save(raw_path)
+
+    try:
+        formato_detectado = detect_fiplan_format(raw_path)
+        if formato_detectado not in {"xlsx", "xls_biff", "html_excel", "xml_excel", "csv_br"}:
+            if formato_detectado == "pdf":
+                raise FiplanFormatError("PDF não está habilitado para esta funcionalidade.")
+            raise FiplanFormatError(f"Formato de arquivo não suportado ou não identificado: {formato_detectado}.")
+        layout_error = _validate_upload_layout(raw_path, expected_kind, expected_label)
+        if layout_error:
+            raise FiplanFormatError(layout_error)
+    except Exception:
+        try:
+            raw_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
+
+    return raw_name, raw_path, formato_detectado
 
 
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
@@ -16084,32 +16133,14 @@ def api_fip613_upload():
     except ValueError:
         return jsonify({"error": "Data do download invÃƒÂ¡lida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         (UPLOAD_DIR / "tmp").mkdir(parents=True, exist_ok=True)
-        for f in UPLOAD_DIR.glob("*.xlsx"):
-            dest = UPLOAD_DIR / "tmp" / f"{f.stem}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{f.suffix}"
-            try:
-                f.rename(dest)
-            except OSError:
-                pass
-        stored_name = f"fip613_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "fip613", "FIP613")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, UPLOAD_DIR, "fip613", "fip613", "FIP613")
 
         registro = Fip613Upload(
             user_email=user_email,
@@ -16122,8 +16153,13 @@ def api_fip613_upload():
         db.session.commit()
 
         job = create_job("fip613", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("fip613", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -16551,26 +16587,13 @@ def api_ped_upload():
     except ValueError:
         return jsonify({"error": "Data do download inválida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         PED_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        move_existing_to_tmp(PED_UPLOAD_DIR)
-        stored_name = f"ped_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = PED_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "ped", "PED")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(PED_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, PED_UPLOAD_DIR, "ped", "ped", "PED")
 
         registro = PedUpload(
             user_email=user_email,
@@ -16583,8 +16606,13 @@ def api_ped_upload():
         db.session.commit()
 
         job = create_job("ped", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("ped", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -16768,26 +16796,13 @@ def api_emp_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        _move_existing_to_tmp(EMP_UPLOAD_DIR)
-        stored_name = f"emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = EMP_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "emp", "EMP")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(EMP_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, EMP_UPLOAD_DIR, "emp", "emp", "EMP")
 
         registro = EmpUpload(
             user_email=user_email,
@@ -16799,7 +16814,7 @@ def api_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        write_status("emp", registro.id, "em processamento", "Arquivo recebido. Processamento em background.")
+        write_status("emp", registro.id, "em processamento", f"Arquivo recebido. Formato detectado: {formato_detectado}. Processamento em background.")
         _start_worker("emp", registro.id)
         return jsonify(
             {
@@ -16808,6 +16823,9 @@ def api_emp_upload():
                 "job_id": registro.id,
             }
         )
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -17066,26 +17084,13 @@ def api_est_emp_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         EST_EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        move_est_emp_existing_to_tmp(EST_EMP_UPLOAD_DIR)
-        stored_name = f"est_emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = EST_EMP_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "est_emp", "EST_EMP")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(EST_EMP_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, EST_EMP_UPLOAD_DIR, "est_emp", "est_emp", "EST_EMP")
 
         registro = EstEmpUpload(
             user_email=user_email,
@@ -17098,8 +17103,13 @@ def api_est_emp_upload():
         db.session.commit()
 
         job = create_job("est_emp", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("est_emp", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -17134,26 +17144,13 @@ def api_nob_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         NOB_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        _move_existing_to_tmp(NOB_UPLOAD_DIR)
-        stored_name = f"nob_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = NOB_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "nob", "NOB")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(NOB_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, NOB_UPLOAD_DIR, "nob", "nob", "NOB")
 
         registro = NobUpload(
             user_email=user_email,
@@ -17165,7 +17162,7 @@ def api_nob_upload():
         db.session.add(registro)
         db.session.commit()
 
-        write_status("nob", registro.id, "em processamento", "Arquivo recebido. Processamento em background.")
+        write_status("nob", registro.id, "em processamento", f"Arquivo recebido. Formato detectado: {formato_detectado}. Processamento em background.")
         _start_worker("nob", registro.id)
         return jsonify(
             {
@@ -17174,6 +17171,9 @@ def api_nob_upload():
                 "job_id": registro.id,
             }
         )
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
