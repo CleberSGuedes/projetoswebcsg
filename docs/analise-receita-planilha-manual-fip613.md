@@ -11,6 +11,23 @@ para análise de receita. A intenção é transformar essas regras, fórmulas e
 visões em uma funcionalidade futura chamada `Análise de Receita`, usando os
 dados já extraídos pela funcionalidade `Receita Anexo 10`.
 
+Observação importante: `FIP 613` aparece neste documento apenas porque é parte
+do nome do arquivo manual enviado para análise. Isso não significa relação com a
+funcionalidade `FIP 613` já existente na aplicação. A funcionalidade existente
+`FIP 613` permanece independente; este documento trata da frente de receita.
+
+## Etapas da frente de receita
+
+A frente de receita fica organizada em três etapas:
+
+1. `Receita Anexo 10`: upload, leitura, validação e gravação dos relatórios
+   Anexo 10 no banco de dados.
+2. `Análise de Receita`: etapa atual a ser desenhada/implementada, baseada nos
+   dados já gravados pela `Receita Anexo 10`, reproduzindo as análises manuais
+   da planilha de referência.
+3. `Painéis/Dashboards de Receita`: etapa futura para gráficos, painéis visuais,
+   comparativos executivos e indicadores consolidados.
+
 ## Estrutura do arquivo
 
 A pasta de trabalho possui 3 abas:
@@ -39,7 +56,8 @@ As três abas seguem a mesma lógica:
 5. Comparar a arrecadação mensal realizada contra o orçamento mensal linear.
 6. Medir a evolução acumulada contra o orçamento anual.
 7. Medir o percentual acumulado já realizado sobre o orçamento anual.
-8. Exibir gráficos comparando planejado x realizado e evolução mensal.
+8. Registrar as séries necessárias para, em etapa futura, exibir gráficos
+   comparando planejado x realizado e evolução mensal.
 
 ## Colunas padrão
 
@@ -406,7 +424,7 @@ mas a fórmula manual gera valor mensal negativo em junho porque subtrai o
 acumulado de maio de uma célula vazia. A aplicação deve tratar esse caso como
 ausência de dado.
 
-## Gráficos identificados
+## Insumos para terceira etapa: gráficos identificados
 
 A pasta contém gráficos associados às análises:
 
@@ -418,8 +436,9 @@ A pasta contém gráficos associados às análises:
   objeto de gráfico foi detectado pelo leitor utilizado. Pode ser imagem, objeto
   não suportado pelo `openpyxl`, ou gráfico removido.
 
-Para a aplicação, o ideal é não depender dos objetos do Excel, mas reconstruir
-os gráficos a partir das séries calculadas.
+Para a terceira etapa (`Painéis/Dashboards de Receita`), o ideal é não depender
+dos objetos do Excel, mas reconstruir os gráficos a partir das séries
+calculadas na `Análise de Receita`.
 
 ## O que a aplicação precisa reproduzir
 
@@ -456,7 +475,7 @@ Para FUNDEB, incluir também:
 - 70% do acumulado;
 - 90% do acumulado.
 
-### Gráficos sugeridos
+### Gráficos sugeridos para a terceira etapa
 
 1. Planejado x realizado mensal:
    - série planejada: `orcado_mes`;
@@ -510,11 +529,16 @@ Para a análise, a aplicação deve considerar somente registros ativos.
 
 ## Entendimento final
 
-A planilha manual não é apenas uma extração do FIP 613. Ela transforma a receita
-do Anexo 10 em uma análise temporal por fonte/grupo, comparando orçamento anual
-contra arrecadação mensal e acumulada.
+A planilha manual de referência, apesar de ter `FIP 613` no nome do arquivo,
+não representa a funcionalidade `FIP 613` da aplicação. Ela transforma a
+receita do Anexo 10 em uma análise temporal por fonte/grupo, comparando
+orçamento anual contra arrecadação mensal e acumulada.
 
 A implementação da `Análise de Receita` deve ser uma camada calculada em cima
 das tabelas da `Receita Anexo 10`, sem novo upload nesta etapa. O usuário deve
-poder conferir os mesmos números hoje obtidos no Excel, mas com filtros,
-gráficos e totalizadores gerados diretamente pela aplicação.
+poder conferir os mesmos números hoje obtidos no Excel, com filtros e
+totalizadores gerados diretamente pela aplicação.
+
+Os gráficos, visões executivas e sugestões visuais identificados na planilha
+ficam registrados como insumo da terceira etapa: `Painéis/Dashboards de
+Receita`.
