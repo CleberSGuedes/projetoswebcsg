@@ -16,15 +16,9 @@ auth_bp = Blueprint("auth", __name__)
 SESSION_TIMEOUT = timedelta(hours=2)
 
 
-def _next_pk(model) -> int:
-    """Gera próximo ID para tabelas sem IDENTITY/auto_increment (SQL Server 2008)."""
-    max_id = db.session.query(func.max(model.id)).scalar() or 0
-    return int(max_id) + 1
-
-
 def _log_login(email: str, status: str, motivo: Optional[str] = None) -> None:
     try:
-        entry = LogLogin(id=_next_pk(LogLogin), email=email or "", status=status, motivo=motivo)
+        entry = LogLogin(email=email or "", status=status, motivo=motivo)
         db.session.add(entry)
         db.session.commit()
     except Exception:
@@ -49,7 +43,6 @@ def _set_active_session(email: str) -> None:
         active = ActiveSession.query.filter_by(email=email).first()
         if not active:
             active = ActiveSession(
-                id=_next_pk(ActiveSession),
                 email=email,
                 session_token=token,
                 last_activity=now,

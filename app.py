@@ -146,15 +146,6 @@ def _fetch_active_session(email: str):
         return None
 
 
-def _next_pk_active_session() -> int:
-    try:
-        max_id = db.session.query(func.max(ActiveSession.id)).scalar() or 0
-        return int(max_id) + 1
-    except Exception:
-        _safe_session_rollback()
-        return 1
-
-
 def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
     if not email or not token:
         return False
@@ -162,7 +153,6 @@ def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
         active = ActiveSession.query.filter_by(email=email).first()
         if not active:
             active = ActiveSession(
-                id=_next_pk_active_session(),
                 email=email,
                 session_token=token,
                 last_activity=now,

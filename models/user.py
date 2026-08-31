@@ -26,7 +26,7 @@ class Usuario(db.Model):
 class LogLogin(db.Model):
     __tablename__ = "logs_login"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=False)
+    id = db.Column(db.BigInteger, primary_key=True)
     email = db.Column(db.String(255), nullable=False)
     data_hora = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     status = db.Column(db.String(20), nullable=False)
@@ -49,8 +49,7 @@ class Perfil(db.Model):
 class ActiveSession(db.Model):
     __tablename__ = "active_sessions"
 
-    # usa autoincrement para compatibilidade com MySQL
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=False)
+    id = db.Column(db.BigInteger, primary_key=True)
     email = db.Column(db.String(255), nullable=False)
     session_token = db.Column(db.String(64), nullable=False, unique=True)
     last_activity = db.Column(db.DateTime, nullable=False, server_default=db.func.now())

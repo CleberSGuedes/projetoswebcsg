@@ -440,11 +440,6 @@ def _send_excel_bytes(buffer: BytesIO, filename: str):
     return resp
 
 
-def _next_pk(model) -> int:
-    max_id = db.session.query(func.max(model.id)).scalar() or 0
-    return int(max_id) + 1
-
-
 def _row_value(row, key: str, index: int | None = None):
     if row is None:
         return None
@@ -19112,7 +19107,7 @@ def api_perfis():
         return jsonify({"error": "Nivel invalido."}), 400
     if nivel_int < 1 or nivel_int > 5:
         return jsonify({"error": "Nivel deve estar entre 1 e 5."}), 400
-    perfil = Perfil(id=_next_pk(Perfil), nome=nome, nivel=nivel_int, ativo=ativo)
+    perfil = Perfil(nome=nome, nivel=nivel_int, ativo=ativo)
     db.session.add(perfil)
     try:
         db.session.commit()
