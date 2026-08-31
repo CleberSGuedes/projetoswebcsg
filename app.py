@@ -641,7 +641,7 @@ def create_app():
 
 
 app = create_app()
-application = app  # WSGI entrypoint para IIS/wfastcgi
+application = app  # WSGI entrypoint para o Passenger do cPanel (Setup Python App)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
