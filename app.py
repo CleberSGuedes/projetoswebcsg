@@ -249,6 +249,11 @@ def create_app():
     # Garante que as tabelas existam quando subir sem migrações
     with app.app_context():
         db.create_all()
+        app.logger.info(
+            "Banco de dados ativo: host=%s db=%s",
+            db.engine.url.host,
+            db.engine.url.database,
+        )
 
 
     @app.errorhandler(Exception)
