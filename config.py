@@ -44,6 +44,7 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = build_mysql_sqlalchemy_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH_MB", "150")) * 1024 * 1024
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),

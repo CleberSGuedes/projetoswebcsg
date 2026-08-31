@@ -9,3 +9,4 @@ node_modules/
 node_runners/node_modules/
 outputs/
 upload/
+.pytest_cache/

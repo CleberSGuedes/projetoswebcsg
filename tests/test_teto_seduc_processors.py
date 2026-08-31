@@ -8,7 +8,7 @@ from app import create_app
 from services.teto_seduc import processar_plan23, processar_plan134
 
 
-def main():
+def test_teto_seduc_processors():
     with TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
 
@@ -93,9 +93,3 @@ def main():
             "excluido_em",
             "publico_transversal",
         }.issubset(politica_columns)
-
-    print("teto_seduc processors, routes and schema: ok")
-
-
-if __name__ == "__main__":
-    main()
