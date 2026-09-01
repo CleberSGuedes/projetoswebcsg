@@ -6698,28 +6698,48 @@ def _start_teto_seduc_thread(
                         f"mas o arquivo enviado foi identificado como {arquivo_tipo}. "
                         "Selecione a opção ou o arquivo correto."
                     )
-                if relatorio == "momp":
-                    resultado = _persistir_plan23(processar_plan23(temp_path, exercicio))
-                    message = (
-                        "Plan 23 processado. "
-                        f"Registros inseridos: {resultado['inseridas']}; "
-                        f"anteriores desativados: {resultado['desativadas']}; "
-                        f"vínculos migrados: {resultado['vinculos_migrados']}."
+                # Serializa processamentos do Teto-SEDUC (Plan 23 e Plan 134
+                # competem pelos mesmos registros de `momp`) para o mesmo
+                # exercício. Sem essa trava, dois uploads sobrepostos podem
+                # cada um deixar de enxergar o que o outro acabou de gravar
+                # (REPEATABLE READ) e duplicar os registros ativos.
+                lock_name = f"teto_seduc:{exercicio}"
+                obtido_lock = db.session.execute(
+                    text("SELECT GET_LOCK(:name, :timeout)"),
+                    {"name": lock_name, "timeout": 30},
+                ).scalar()
+                if not obtido_lock:
+                    raise ValueError(
+                        "Já existe um processamento do Teto - SEDUC em andamento "
+                        "para este exercício. Aguarde a conclusão e tente novamente."
                     )
-                else:
-                    resultado = _persistir_plan134(processar_plan134(temp_path), exercicio)
-                    message = (
-                        "Plan 134 processado. "
-                        f"Registros inseridos: {resultado['inseridas']}; "
-                        f"anteriores desativados: {resultado['desativadas']}."
-                    )
-                    if resultado["sem_correspondencia"]:
-                        message += (
-                            " Linhas sem correspondência no MOMP: "
-                            f"{resultado['sem_correspondencia']}."
+                try:
+                    if relatorio == "momp":
+                        resultado = _persistir_plan23(processar_plan23(temp_path, exercicio))
+                        message = (
+                            "Plan 23 processado. "
+                            f"Registros inseridos: {resultado['inseridas']}; "
+                            f"anteriores desativados: {resultado['desativadas']}; "
+                            f"vínculos migrados: {resultado['vinculos_migrados']}."
                         )
+                    else:
+                        resultado = _persistir_plan134(processar_plan134(temp_path), exercicio)
+                        message = (
+                            "Plan 134 processado. "
+                            f"Registros inseridos: {resultado['inseridas']}; "
+                            f"anteriores desativados: {resultado['desativadas']}."
+                        )
+                        if resultado["sem_correspondencia"]:
+                            message += (
+                                " Linhas sem correspondência no MOMP: "
+                                f"{resultado['sem_correspondencia']}."
+                            )
 
-                db.session.commit()
+                    db.session.commit()
+                finally:
+                    db.session.execute(
+                        text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                    )
                 write_status(
                     "teto_seduc",
                     upload_id,
