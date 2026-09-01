@@ -108,6 +108,8 @@ from services.plan20_runner import run_plan20
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
+    grupo_key,
+    subteto_key,
     processar_plan23,
     processar_plan134,
 )
@@ -6511,11 +6513,40 @@ def _teto_nullable_text(value):
     return text_value or None
 
 
+def _plan23_chave_estavel(exercicio, fonte, grupo, subteto, teto_despesa_momp):
+    # Casa registros pelo codigo estavel (antes do " - "), nao pela descricao
+    # completa: se o texto de FONTE_MAP/GRUPO_PLAN23_MAP/SUBTETO_PLAN23_MAP
+    # mudar no futuro, os registros antigos continuam sendo reconhecidos.
+    return (
+        _teto_text(exercicio),
+        fonte_key(fonte),
+        grupo_key(grupo),
+        subteto_key(subteto),
+        _teto_text(teto_despesa_momp),
+    )
+
+
 def _persistir_plan23(df: pd.DataFrame) -> dict:
     inseridas = 0
     desativadas = 0
     vinculos_migrados = 0
     now = _now_local()
+
+    exercicios = {_teto_text(row.get("exercicio")) for _, row in df.iterrows()}
+    ativos_por_chave: dict[tuple, list] = {}
+    if exercicios:
+        ativos = Momp.query.filter(
+            Momp.exercicio.in_(exercicios), Momp.ativo == True  # noqa: E712
+        ).all()
+        for item in ativos:
+            chave = _plan23_chave_estavel(
+                item.exercicio,
+                item.fonte,
+                item.grupo_despesa,
+                item.subteto_despesa_momp,
+                item.teto_despesa_momp,
+            )
+            ativos_por_chave.setdefault(chave, []).append(item)
 
     for _, row in df.iterrows():
         filtros = {
@@ -6525,7 +6556,14 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
             "teto_despesa_momp": _teto_text(row.get("teto_despesa_momp")),
             "subteto_despesa_momp": _teto_text(row.get("subteto_despesa_momp")),
         }
-        antigos = Momp.query.filter_by(**filtros).all()
+        chave = _plan23_chave_estavel(
+            filtros["exercicio"],
+            filtros["fonte"],
+            filtros["grupo_despesa"],
+            filtros["subteto_despesa_momp"],
+            filtros["teto_despesa_momp"],
+        )
+        antigos = ativos_por_chave.pop(chave, [])
         old_ids = [item.id for item in antigos]
 
         novo = Momp(
@@ -6536,6 +6574,9 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
         db.session.add(novo)
         db.session.flush()
         inseridas += 1
+        # Registra o novo na mesma estrutura, caso a chave se repita mais
+        # adiante neste mesmo arquivo (autocorrecao dentro do proprio upload).
+        ativos_por_chave[chave] = [novo]
 
         if old_ids:
             vinculos_migrados += (
@@ -6590,8 +6631,8 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         )
         numeric_key = (
             fonte_key(momp.fonte),
-            _teto_text(momp.grupo_despesa),
-            _teto_text(momp.subteto_despesa_momp),
+            grupo_key(momp.grupo_despesa),
+            subteto_key(momp.subteto_despesa_momp),
         )
         exact_map.setdefault(exact_key, momp)
         numeric_map.setdefault(numeric_key, momp)
@@ -6604,7 +6645,7 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         subteto = _teto_text(row.get("subteto_despesa_momp"))
         momp = exact_map.get((fonte, grupo, subteto))
         if momp is None:
-            momp = numeric_map.get((fonte_key(fonte), grupo, subteto))
+            momp = numeric_map.get((fonte_key(fonte), grupo_key(grupo), subteto_key(subteto)))
         if momp is None:
             sem_correspondencia += 1
             continue

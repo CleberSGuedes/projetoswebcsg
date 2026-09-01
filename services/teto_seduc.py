@@ -427,3 +427,15 @@ def fonte_key(value) -> str:
     text = str(value or "").strip()
     match = re.match(r"^\s*(\d{5,})", text)
     return match.group(1) if match else text
+
+
+def grupo_key(value) -> str:
+    text = str(value or "").strip()
+    match = re.match(r"^\s*(\d+)", text)
+    return match.group(1) if match else text
+
+
+def subteto_key(value) -> str:
+    text = str(value or "").strip()
+    match = re.match(r"^\s*([A-Za-z])", text)
+    return match.group(1).upper() if match else text
