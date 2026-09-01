@@ -1958,6 +1958,11 @@ body.app-loading-active {
   margin: 0;
   font-size: 11px;
 }
+/* data-graph-filter e o UNICO lugar que define quais campos ficam
+   visiveis na aba "Graficos" (o atributo e marcado no HTML, em
+   templates/partials/paineis_teto_orcamentario.html; procurar so no
+   main.js dá zero resultado - o efeito dele e so aqui). Na aba
+   "Tabelas" nao ha essa regra, entao todos os filtros aparecem. */
 .teto-dashboard[data-active-view="graficos"] .teto-filter-grid .field:not([data-graph-filter]) {
   display: none;
 }
