@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório (sem alterações de código) em 2026-08-31.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-09-01) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 ---
@@ -22,10 +22,10 @@
 - **Flask 3.1.2** como framework web (`app.py`, `config.py`).
 - **Flask-SQLAlchemy 3.1.1** / **SQLAlchemy 2.0.44** como ORM.
 - **Flask-Mail 0.10.0** para envio de e-mail (recuperação de senha).
-- **PyMySQL 1.1.1** (driver MySQL) e **pyodbc 5.3.0** (driver SQL Server) — o projeto suporta os dois engines, ver seção 4.
+- **PyMySQL 1.1.1** (driver MySQL) — único engine de banco suportado hoje. O suporte a SQL Server (`pyodbc`) foi removido em 2026-08-31 por ser código morto (ver seção 9, itens 3/4) — se você leu uma versão antiga deste documento ou um histórico de código mencionando MSSQL/`DB_ENGINE`, isso já não reflete o estado atual.
 - **pandas / numpy / openpyxl / XlsxWriter / rapidfuzz** — processamento de planilhas Excel (upload/tratamento/relatórios), fuzzy matching de chaves de planejamento.
 - **python-dotenv** para carregar `.env`.
-- Sem framework de testes (não há `pytest`/`unittest` nas dependências). Existe apenas um script manual de smoke test: `scripts/test_teto_seduc_processors.py` (roda com `python scripts/test_teto_seduc_processors.py`, não é descoberto por um test runner).
+- **pytest 8.3.4** (adicionado em 2026-08-31, ver seção 9 item 8) — testes em `tests/`, executados com `pytest` a partir da raiz do projeto (`pytest.ini` configura `pythonpath = .`). Ainda sem CI (GitHub Actions) — decisão consciente, os testes usam o mesmo banco MySQL remoto compartilhado, sem banco de teste dedicado.
 
 ### Processamento em segundo plano (Node.js)
 - Pasta `node_runners/` — processos Node chamados via `subprocess` pelo Python (`worker.py`) para processar uploads pesados (EMP e NOB).
@@ -68,7 +68,8 @@ projetoswebcsg/
 │   ├── fip613_runner.py, ped_runner.py, plan20_runner.py, est_emp_runner.py, emp_record.py, teto_seduc.py
 ├── node_runners/               # workers Node.js p/ EMP e NOB (processamento pesado de planilhas)
 ├── db/                          # scripts .sql de schema (CREATE TABLE) por módulo — não são migrations versionadas (tipo Alembic)
-├── scripts/                     # utilitário único de smoke test manual
+├── tests/                       # suíte pytest (adicionada em 2026-08-31, ver seção 9 item 8)
+├── pytest.ini                   # pythonpath = . — permite rodar `pytest` de qualquer diretório
 ├── templates/, static/          # front-end server-side (Jinja2)
 ├── upload/, outputs/             # armazenamento de arquivos enviados/gerados (NÃO versionado, ver seção 9)
 ├── logs/                         # log rotativo da aplicação (app.log)
@@ -82,11 +83,8 @@ projetoswebcsg/
 
 ### 4.1 Motor e conexão
 - ORM: **SQLAlchemy** via Flask-SQLAlchemy, instância única em `models/db.py`, todas as tabelas mapeadas em `models/user.py` (nome do arquivo é enganoso — não contém só o model `Usuario`, contém **todo o schema do sistema**, ~65 classes/tabelas).
-- `config.py` suporta **dois engines** de banco: MySQL (via PyMySQL) e SQL Server/MSSQL (via pyodbc), decidido pela variável `DB_ENGINE`:
-  - Se `DB_ENGINE=mssql` **e** existirem variáveis `DB_*_HMG` preenchidas → usa SQL Server.
-  - Caso contrário (mesmo que `DB_ENGINE=mssql`) → cai no branch MySQL, usando as variáveis `DB_*_CSG` (com fallback para `DB_USER`/`DB_PASSWORD`/etc. genéricos).
-  - **Achado importante:** no `.env` atual, `DB_ENGINE=mssql` está definido, mas **não existem variáveis `DB_*_HMG`** — portanto, na prática, a aplicação está rodando em **MySQL** (usando as credenciais `*_CSG`), apesar do comentário no `.env` dizer "BANCO DE DADOS (MySQL remoto)" e do `DB_ENGINE` sugerir SQL Server. Isso é uma inconsistência de nomenclatura/config que pode confundir quem for mexer no projeto — vale confirmar a intenção real antes de qualquer alteração de config.
-  - O mesmo padrão de resolução de engine existe duplicado em `node_runners/db.js` (JS reimplementa a mesma lógica do `config.py` em paralelo — **duas fontes de verdade para a mesma regra**, risco de dessincronização).
+- `config.py` suporta **um único engine**: MySQL (via PyMySQL), configurado pelas variáveis `DB_*_CSG` (com fallback para `DB_USER`/`DB_PASSWORD`/etc. genéricos). Até 2026-08-31 havia um segundo caminho (SQL Server/MSSQL via pyodbc, selecionado por `DB_ENGINE=mssql` + variáveis `DB_*_HMG`) que nunca era efetivamente usado — foi removido por ser código morto (histórico completo na seção 9, itens 3/4). A variável `DB_ENGINE` deixou de ser lida pelo Python; se ainda existir no `.env` de algum ambiente, é inofensiva.
+  - `node_runners/db.js` (lado Node, usado só por EMP/NOB) **ainda mantém** essa lógica de dois engines duplicada — decisão consciente de não mexer lá agora, fica a cargo do trabalho de separação de ambientes da v2.
 - Host do banco remoto: `186.209.113.112:3306`, schema `proj5954_spo-csg` (nome típico de hospedagem cPanel: `proj5954_...`).
 - Pool de conexões configurado via env vars (`DB_POOL_SIZE`, `DB_POOL_RECYCLE`, `DB_POOL_TIMEOUT`, `DB_MAX_OVERFLOW`, `DB_CONNECT_TIMEOUT`) com `pool_pre_ping=True`.
 - `db.create_all()` é chamado no `create_app()` (app.py) — cria tabelas que não existem automaticamente ao subir a aplicação, **sem uso de um sistema formal de migrations** (não há Alembic/Flask-Migrate). Alterações de schema são feitas via os arquivos soltos em `db/*.sql` (aplicados manualmente, aparentemente) e/ou via `gerar_migracao_chaves.py`.
@@ -105,7 +103,8 @@ Categorias principais de tabelas (ver `models/user.py` para o detalhe completo):
 ### 4.3 Padrões observados no schema
 - **Soft delete** amplamente usado via coluna `excluido_em` (datetime nulo = ativo) combinado com flag booleana `ativo`.
 - Timestamps em português: `criado_em`/`created_at`, `alterado_em`/`updated_at`, `atualizado_em` — nomenclatura **inconsistente** entre tabelas (mistura de inglês e português para os mesmos conceitos).
-- Alguns PKs usam `autoincrement=False` com geração manual de próximo ID em Python (`_next_pk`, `_next_pk_active_session` em `app.py`/`auth_routes.py`) — herança aparente de compatibilidade com SQL Server antigo (comentário no código: "Gera próximo ID para tabelas sem IDENTITY/auto_increment (SQL Server 2008)"), mas a tabela hoje roda em MySQL. Esse padrão gera **condição de corrida** em cenário de concorrência (dois inserts simultâneos podem calcular o mesmo `MAX(id)+1`), pois não há lock/transação serializável nem uso de sequence.
+- ~~Alguns PKs usavam `autoincrement=False` com geração manual de próximo ID em Python~~ — **resolvido em 2026-08-31** (commit `caf1701`, detalhes na seção 9 item 5): `logs_login`, `active_sessions` e `perfil` já tinham `AUTO_INCREMENT` nativo no MySQL; removida a geração manual (`_next_pk`/`_next_pk_active_session`), os `INSERT`s hoje deixam o banco gerar o `id`.
+- **Esse mesmo padrão de risco (casar/gerar dado sem lock, assumindo que a concorrência "não vai acontecer") se repetiu no módulo Teto-SEDUC** (tabela `momp`) e causou um incidente real de duplicação de dados — investigado e corrigido em 2026-08-31/09-01, ver seção 12.
 - Os arquivos SQL soltos em `db/` (`emp_schema.sql`, `est_emp_schema.sql`, `nob_schema.sql`, `ped_schema.sql`, `meta_fisica_indexes.sql`) são `CREATE TABLE IF NOT EXISTS` — parecem ser a origem "manual" do schema para módulos específicos, complementando o `db.create_all()` automático do SQLAlchemy.
 
 ---
@@ -239,3 +238,40 @@ Os três itens abaixo (6, 7 e 14 da lista acima) foram deliberadamente **não co
 - Toda rota HTML "parcial" (carregada via AJAX no `home.html`) segue o padrão de URL `/partial/<módulo>/<ação>`, servida por `rotas/home_routes.py`, e a contraparte de dados fica em `/api/<módulo>/...`. Ao adicionar uma nova tela, normalmente é necessário: (1) uma entrada em `services/features.py` (menu + controle de permissão), (2) uma rota `/partial/...` retornando um template em `templates/partials/`, (3) uma ou mais rotas `/api/...` para os dados.
 - Regras de acesso por papel usam `login_required`/`role_required` de `services/auth.py`, combinadas com o nível do perfil (`g.user_nivel`) carregado no `before_request` de `app.py`.
 - Alterações de schema devem considerar que o banco é **compartilhado com o ambiente online** (seção 8) — qualquer novo `CREATE TABLE`/`ALTER TABLE` deveria, idealmente, ser adicionado tanto ao model SQLAlchemy quanto (se seguir o padrão dos módulos de upload existentes) a um script em `db/*.sql`, documentando a intenção antes de rodar contra o banco remoto.
+
+---
+
+## 12. Incidente investigado e corrigido: duplicação de dados no Teto-SEDUC (2026-08-31 a 2026-09-01)
+
+Registro de uma investigação real, de ponta a ponta, motivada por um problema relatado pelo usuário (dashboard mostrando valor errado). Mantido aqui como referência de "como isso foi diagnosticado e corrigido", útil se um problema parecido aparecer em outro módulo.
+
+### 12.1 O módulo, por baixo dos panos
+- **Teto-SEDUC** (`atualizar/teto-seduc`) processa dois relatórios do FIPLAN: **Plan 23** (`processar_plan23`/`_persistir_plan23` em `services/teto_seduc.py`/`rotas/home_routes.py`, alimenta a tabela `momp`) e **Plan 134** (`processar_plan134`/`_persistir_plan134`, alimenta `politicateto`, vinculada a `momp` por `momp_id`).
+- O painel **"Teto Orçamentário"** (`paineis-dashboards/teto-orcamentario`) lê tudo via `/api/paineis-dashboards/teto-orcamentario`, **sem filtro de exercício no servidor** — a rota devolve todo `momp`/`politicateto` ativo, e a filtragem é 100% client-side em `static/js/main.js` (função `initTetoOrcamentarioDashboard`).
+
+### 12.2 Sintoma
+Dashboard mostrando **R$ 13.070.486.258,00** para o exercício 2027 — exatamente o dobro do valor real (R$ 6.535.243.129,00), calculado de forma independente processando o arquivo FIPLAN original (`Plan23_14101_2027.xlsx`) pelo próprio parser do sistema.
+
+### 12.3 Causa raiz 1 — condição de corrida em `_persistir_plan23`/`_persistir_plan134`
+- Confirmado por consulta direta ao banco (só leitura): **82 linhas ativas** em `momp` para 2027 (deveria ser 41) — 41 pares idênticos, nenhum nunca desativado (`alterado_em` nulo em todas).
+- Mecanismo: o código segue o padrão "`SELECT` acha antigos → `INSERT` do novo → `UPDATE` desativa os antigos", **sem nenhuma trava**, sob isolamento `REPEATABLE READ` (confirmado no servidor via `SHOW VARIABLES`). Se dois uploads do mesmo exercício se sobrepõem no tempo — não precisa ser no mesmo instante, só a primeira consulta do segundo acontecer antes do `commit()` final do primeiro — a transação do segundo fica cega para os dados do primeiro durante toda a sua duração, mesmo depois do commit dele.
+- **Reproduzido de forma controlada** (duas sessões SQLAlchemy independentes, exercício fictício descartável, sem tocar dado real) para confirmar o mecanismo exato antes de corrigir.
+- **Decisão de arquitetura (deixada a critério da IA pelo usuário):** manter o padrão atual — `_persistir_plan23`/`_persistir_plan134` rodam dentro de uma `threading.Thread` iniciada em `_start_teto_seduc_thread()`, a única funcionalidade do sistema que grava no banco a partir de thread em background dentro do próprio processo Flask (diferente de EMP/NOB, que rodam como processo Node separado via `worker.py`). **Não foi migrado** para o padrão de processo separado: a causa é uma corrida de **transações MySQL**, não de threads Python — dois processos concorrentes teriam exatamente o mesmo problema, cada um com sua própria conexão/transação. Migrar de arquitetura não resolveria nada aqui.
+- **Fix:** lock nomeado do MySQL (`GET_LOCK`/`RELEASE_LOCK`) por exercício, serializando qualquer upload de Plan 23/Plan 134 para o mesmo exercício. Commit `20e1a89`. Validado com um teste que usa duas threads reais concorrentes (`tests/test_teto_seduc_lock.py`).
+
+### 12.4 Causa raiz 2 — casamento de registros por texto exato, não por código estável
+- Depois do fix acima, um reenvio do Plan 23 ainda deixou o total R$ 26.826.480,00 acima do correto. Causa: 4 registros órfãos (fonte gravada como `"15460000"`, texto cru sem descrição) sobraram da duplicação original — gravados **antes** de `FONTE_MAP` ganhar a entrada dessa fonte (ver 12.5). O reenvio gerou a mesma fonte já com nome completo, e como o casamento antigo×novo é por **texto exato** de `fonte`/`grupo_despesa`/`subteto_despesa_momp`, os registros antigos nunca foram reconhecidos como "a mesma fonte".
+- Risco mais amplo identificado: qualquer correção futura de texto em `FONTE_MAP`, `GRUPO_PLAN23_MAP` ou `SUBTETO_PLAN23_MAP` reproduziria o mesmo problema — órfãos silenciosos, sem erro, só o total do dashboard errado até alguém notar.
+- **Fix:** novos `grupo_key()`/`subteto_key()` em `services/teto_seduc.py` (ao lado do `fonte_key()` que já existia e já era usado como fallback parcial em `_persistir_plan134`), extraindo o código estável (dígito/letra) antes do "` - `". `_persistir_plan23` passou a pré-carregar os registros ativos do exercício (1 consulta em vez de uma por linha, ganho de brinde) e casar pela chave estável; `_persistir_plan134` ganhou a mesma normalização no seu fallback. Commit `56f4b74`. Teste dedicado reproduzindo o cenário exato de texto antigo × novo (`tests/test_teto_seduc_key_normalization.py`).
+- Dado real de 2027 corrigido com um reenvio do arquivo já com o fix em produção — confirmado pelo usuário e validado no banco: 41 registros ativos, R$ 6.535.243.129,00.
+
+### 12.5 Achado lateral: fonte 15460000 sem descrição
+Durante a análise do arquivo `Plan23_14101_2027.xlsx` (fora do repositório, em `C:\workspace\Planilhas\`), identificada a fonte `15460000` sem entrada em `FONTE_MAP`. Nome oficial confirmado com o usuário ("Transferências do FUNDEB - Complementação da União - ETI") e adicionado. Commit `bfe13b2`. Foi essa mudança que expôs a causa raiz 2 (registros antigos gravados com o texto "cru").
+
+### 12.6 Dashboard "Teto Orçamentário" — os dois grupos de filtros
+- Os filtros do painel se dividem em dois grupos de **dados**, não de visualização: nível MOMP (`exercicio`, `fonte`, `grupo`, `subgrupo` — Plan 23) e nível política orçamentária (`regiao`, `subfuncao`, `paoe`, `adj`, `macropolitica`, `pilar`, `eixo`, `politica` — Plan 134/`politicateto`). Ao usar qualquer filtro do segundo grupo, o dashboard troca a base de KPIs/gráficos/tabelas de `momp` para o cruzamento `momp × politicateto` — **silenciosamente**, sem aviso destacado. Se o Plan 134 não foi carregado para o exercício (situação comum — só há registro de uso em testes locais antigos), a tela zera sem explicação clara, facilmente confundido com "os dados sumiram de novo".
+  - **Fix:** aviso visível (`alert alert-info`, mesmo padrão já usado em `partials/dashboard.html` e nas telas de login) quando isso acontece, sem mudar nenhum cálculo/filtro existente. Commit `e6d1971`.
+- **Atenção — atributo `data-graph-filter`** (`templates/partials/paineis_teto_orcamentario.html` + `static/css/style.css:1961`): controla, **via CSS, não via JS**, quais dos 12 filtros ficam visíveis na aba "Gráficos" (só 5: Exercício, Grupo de despesa, Tipificação, Ação/PAOE, Fonte) vs. "Tabelas" (todos). Comentários explicativos adicionados nos dois arquivos (commit `8233513`) depois de esse atributo ter sido **removido por engano** numa análise que só checou o JS — corrigido assim que os filtros da aba Gráficos sumiram na tela real (commits `4ac76ae` → `e383254`; ver lição de processo em 12.7).
+
+### 12.7 Lição de processo (vale para qualquer investigação futura, não só este módulo)
+Ao avaliar se um atributo/seletor HTML está "morto": **sempre checar CSS além de JS, em comandos separados**. Encadear buscas com `&&` é uma armadilha — se a primeira não achar nada, ela sai com código 1 e o `&&` **nunca chega a rodar a segunda**, sem nenhum aviso óbvio no output. Prefira `;` entre buscas independentes, ou rode cada uma isoladamente e confirme o resultado de cada uma antes de concluir "não está em uso em lugar nenhum".
