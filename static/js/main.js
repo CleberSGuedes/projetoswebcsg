@@ -14182,6 +14182,7 @@
     );
     const statusEl = document.getElementById("teto-dashboard-status");
     const activeFiltersEl = document.getElementById("teto-active-filters");
+    const politicalWarningEl = document.getElementById("teto-political-warning");
     const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
     const number = new Intl.NumberFormat("pt-BR");
     const oldChartPalette = [
@@ -14269,6 +14270,11 @@
       );
       const validIds = new Set(momp.map((row) => row.id));
       let politicas = state.politicas.filter((row) => validIds.has(row.momp_id));
+      // Antes de aplicar os filtros de politica: existe ALGUM dado de Plan 134
+      // vinculado a este recorte de MOMP? Se nao, o modo politico vai zerar a
+      // tela nao porque o filtro escolhido nao bateu, mas porque o Plan 134
+      // nem foi carregado ainda para esses registros.
+      const existePoliticaNoEscopo = politicas.length > 0;
       politicas = politicas.filter((row) =>
         (!filters.regiao || row.regiao === filters.regiao) &&
         (!filters.subfuncao || subfunctionOf(row.subfuncao) === filters.subfuncao) &&
@@ -14280,7 +14286,8 @@
         (!filters.politica || row.politica === filters.politica)
       );
 
-      if (isPoliticalMode(filters)) {
+      const political = isPoliticalMode(filters);
+      if (political) {
         const policyMompIds = new Set(politicas.map((row) => row.momp_id));
         momp = momp.filter((row) => policyMompIds.has(row.id));
       }
@@ -14288,7 +14295,13 @@
       const joined = politicas
         .map((row) => ({ ...mompById.get(row.momp_id), ...row, valor: Number(row.valor || 0) }))
         .filter((row) => row.id && mompById.has(row.momp_id));
-      return { momp, politicas, joined, policyMode: isPoliticalMode(filters) };
+      return {
+        momp,
+        politicas,
+        joined,
+        policyMode: political,
+        politicaIndisponivel: political && !existePoliticaNoEscopo,
+      };
     };
 
     const optionValuesFor = (key, data) => {
@@ -14636,6 +14649,18 @@
       renderKpis(data);
       renderCharts(data);
       renderTables(data);
+      if (politicalWarningEl) {
+        if (data.politicaIndisponivel) {
+          const exercicioTexto = state.filters.exercicio
+            ? `para o exercício ${escapeHtml(state.filters.exercicio)}`
+            : "para os registros selecionados";
+          politicalWarningEl.innerHTML = `<div class="alert alert-info">O relatório Plan 134 (política orçamentária) ainda não foi carregado ${exercicioTexto}. Os filtros de Região, Subfunção, ADJ, Macropolítica, Pilar, Eixo, Política do decreto e Ação/PAOE não têm dados para aplicar até esse relatório ser carregado em "Atualizar → Teto - SEDUC".</div>`;
+          politicalWarningEl.hidden = false;
+        } else {
+          politicalWarningEl.hidden = true;
+          politicalWarningEl.innerHTML = "";
+        }
+      }
       const valueRows = data.policyMode ? data.joined.length : data.momp.length;
       setStatus(`${number.format(valueRows)} registros considerados. Base monetária: ${data.policyMode ? "políticas orçamentárias" : "MOMP"}.`);
     };
