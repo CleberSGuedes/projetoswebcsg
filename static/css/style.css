@@ -1978,6 +1978,44 @@ body.app-loading-active {
   border-radius: 8px;
   font-size: 11px;
 }
+/* Reaproveita o componente .planning-action-checklist (ja usado em
+   Estrutura do Planejamento), so encolhendo pra caber na grade compacta
+   de filtros do dashboard. */
+.teto-multi-filter.planning-action-checklist-toggle,
+.teto-multi-filter .planning-action-checklist-toggle {
+  min-height: 32px;
+  padding: 5px 28px 5px 9px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+.teto-multi-filter .planning-action-checklist-panel {
+  width: max-content;
+  min-width: 100%;
+  max-width: 320px;
+}
+.teto-multi-filter .planning-action-checklist-option {
+  padding: 5px 6px;
+  font-size: 11px;
+}
+.teto-checklist-actions {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.teto-checklist-actions button {
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+.teto-checklist-actions button:hover {
+  text-decoration: underline;
+}
 .teto-active-filters {
   display: flex;
   flex-wrap: wrap;
@@ -1992,6 +2030,11 @@ body.app-loading-active {
   color: var(--text);
   padding: 4px 8px;
   font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.teto-filter-chip:hover {
+  background: rgba(31,155,126,0.2);
 }
 .teto-dashboard-status {
   min-height: 16px;

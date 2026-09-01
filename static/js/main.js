@@ -14176,9 +14176,12 @@
 
     const state = { momp: [], politicas: [], filters: {} };
     let chartFilterTimer = null;
-    const filterEls = Array.from(root.querySelectorAll("[data-filter]"));
+    const filterWrappers = Array.from(root.querySelectorAll(".teto-multi-filter[data-filter]"));
     const filterEmptyLabels = Object.fromEntries(
-      filterEls.map((el) => [el.dataset.filter, el.options[0]?.textContent || "Todos"])
+      filterWrappers.map((el) => [
+        el.dataset.filter,
+        el.querySelector(".planning-action-checklist-toggle")?.textContent.trim() || "Todos",
+      ])
     );
     const statusEl = document.getElementById("teto-dashboard-status");
     const activeFiltersEl = document.getElementById("teto-active-filters");
@@ -14250,23 +14253,33 @@
       statusEl.classList.toggle("text-error", isError);
     };
 
+    const checkedValues = (wrapper) =>
+      Array.from(
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]:checked')
+      ).map((input) => input.value);
+
     const readFilters = () => {
-      filterEls.forEach((el) => {
-        state.filters[el.dataset.filter] = clean(el.value);
+      filterWrappers.forEach((el) => {
+        state.filters[el.dataset.filter] = checkedValues(el);
       });
       return state.filters;
     };
 
     const isPoliticalMode = (filters = state.filters) =>
-      politicalKeys.some((key) => Boolean(filters[key]));
+      politicalKeys.some((key) => (filters[key] || []).length > 0);
+
+    // Filtro de multipla selecao: sem valor marcado = sem restricao; com
+    // valores marcados = linha precisa bater com ALGUM deles (OR).
+    const matchesFilter = (value, selected) =>
+      !selected || !selected.length || selected.includes(value);
 
     const filteredData = (filtersInput = null) => {
       const filters = filtersInput || readFilters();
       let momp = state.momp.filter((row) =>
-        (!filters.exercicio || row.exercicio === filters.exercicio) &&
-        (!filters.fonte || row.fonte === filters.fonte) &&
-        (!filters.grupo || row.grupo === filters.grupo) &&
-        (!filters.subgrupo || row.subgrupo === filters.subgrupo)
+        matchesFilter(row.exercicio, filters.exercicio) &&
+        matchesFilter(row.fonte, filters.fonte) &&
+        matchesFilter(row.grupo, filters.grupo) &&
+        matchesFilter(row.subgrupo, filters.subgrupo)
       );
       const validIds = new Set(momp.map((row) => row.id));
       let politicas = state.politicas.filter((row) => validIds.has(row.momp_id));
@@ -14276,14 +14289,14 @@
       // nem foi carregado ainda para esses registros.
       const existePoliticaNoEscopo = politicas.length > 0;
       politicas = politicas.filter((row) =>
-        (!filters.regiao || row.regiao === filters.regiao) &&
-        (!filters.subfuncao || subfunctionOf(row.subfuncao) === filters.subfuncao) &&
-        (!filters.paoe || row.paoe === filters.paoe) &&
-        (!filters.adj || row.adj === filters.adj) &&
-        (!filters.macropolitica || row.macropolitica === filters.macropolitica) &&
-        (!filters.pilar || row.pilar === filters.pilar) &&
-        (!filters.eixo || row.eixo === filters.eixo) &&
-        (!filters.politica || row.politica === filters.politica)
+        matchesFilter(row.regiao, filters.regiao) &&
+        matchesFilter(subfunctionOf(row.subfuncao), filters.subfuncao) &&
+        matchesFilter(row.paoe, filters.paoe) &&
+        matchesFilter(row.adj, filters.adj) &&
+        matchesFilter(row.macropolitica, filters.macropolitica) &&
+        matchesFilter(row.pilar, filters.pilar) &&
+        matchesFilter(row.eixo, filters.eixo) &&
+        matchesFilter(row.politica, filters.politica)
       );
 
       const political = isPoliticalMode(filters);
@@ -14322,31 +14335,52 @@
       return unique(sources[key]?.() || []);
     };
 
+    const setChecklistToggleText = (wrapper, key) => {
+      const toggle = wrapper.querySelector(".planning-action-checklist-toggle");
+      if (!toggle) return;
+      const selected = state.filters[key] || [];
+      if (!selected.length) toggle.textContent = filterEmptyLabels[key] || "Todos";
+      else if (selected.length === 1) toggle.textContent = "1 selecionado";
+      else toggle.textContent = `${selected.length} selecionados`;
+    };
+
     const refreshFilterOptions = () => {
       // Duas passagens estabilizam as listas quando uma combinação deixa
       // alguma seleção anterior sem correspondência.
       for (let pass = 0; pass < 2; pass += 1) {
-        filterEls.forEach((el) => {
+        filterWrappers.forEach((el) => {
           const key = el.dataset.filter;
-          const current = clean(state.filters[key] ?? el.value);
-          const candidateFilters = { ...state.filters, [key]: "" };
+          const current = state.filters[key] || [];
+          const candidateFilters = { ...state.filters, [key]: [] };
           const values = optionValuesFor(key, filteredData(candidateFilters));
-          el.innerHTML = `<option value="">${escapeHtml(filterEmptyLabels[key] || "Todos")}</option>`;
-          values.forEach((value) => {
-            const option = document.createElement("option");
-            option.value = value;
-            option.textContent = value;
-            el.appendChild(option);
-          });
-          if (current && values.includes(current)) {
-            el.value = current;
-            state.filters[key] = current;
-          } else {
-            el.value = "";
-            state.filters[key] = "";
+          const survivors = current.filter((value) => values.includes(value));
+          const optionsEl = el.querySelector(".planning-action-checklist-options");
+          if (optionsEl) {
+            optionsEl.innerHTML = values
+              .map(
+                (value) => `
+                  <label class="planning-action-checklist-option">
+                    <input type="checkbox" value="${escapeHtml(value)}" ${survivors.includes(value) ? "checked" : ""} />
+                    <span>${escapeHtml(value)}</span>
+                  </label>
+                `
+              )
+              .join("");
           }
+          state.filters[key] = survivors;
+          setChecklistToggleText(el, key);
         });
       }
+    };
+
+    const removeFilterValue = (key, value) => {
+      const wrapper = root.querySelector(`.teto-multi-filter[data-filter="${key}"]`);
+      if (!wrapper) return;
+      const checkbox = Array.from(
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]')
+      ).find((input) => input.value === value);
+      if (checkbox) checkbox.checked = false;
+      render();
     };
 
     const renderActiveFilters = () => {
@@ -14356,10 +14390,20 @@
         subgrupo: "Tipificação", paoe: "PAOE", fonte: "Fonte", adj: "ADJ",
         macropolitica: "Macropolítica", pilar: "Pilar", eixo: "Eixo", politica: "Política",
       };
-      activeFiltersEl.innerHTML = Object.entries(state.filters)
-        .filter(([, value]) => value)
-        .map(([key, value]) => `<span class="teto-filter-chip">${escapeHtml(labels[key])}: ${escapeHtml(value)}</span>`)
+      const chips = [];
+      Object.entries(state.filters).forEach(([key, values]) => {
+        (values || []).forEach((value) => chips.push({ key, value }));
+      });
+      activeFiltersEl.innerHTML = chips
+        .map(
+          ({ key, value }, index) =>
+            `<button type="button" class="teto-filter-chip" data-chip-index="${index}" title="Remover filtro">${escapeHtml(labels[key] || key)}: ${escapeHtml(value)} ✕</button>`
+        )
         .join("");
+      activeFiltersEl.querySelectorAll("[data-chip-index]").forEach((btn) => {
+        const chip = chips[Number(btn.dataset.chipIndex)];
+        if (chip) btn.addEventListener("click", () => removeFilterValue(chip.key, chip.value));
+      });
     };
 
     const emptyPlot = (id, message) => {
@@ -14379,14 +14423,15 @@
       el.on("plotly_click", (event) => {
         const point = event?.points?.[0];
         const value = clean(valueResolver(point));
-        const select = root.querySelector(`[data-filter="${key}"]`);
-        if (!value || !select) return;
-        const option = Array.from(select.options).find((item) => item.value === value);
-        if (!option) return;
-        readFilters();
-        const nextValue = state.filters[key] === value ? "" : value;
-        select.value = nextValue;
-        state.filters[key] = nextValue;
+        const wrapper = root.querySelector(`.teto-multi-filter[data-filter="${key}"]`);
+        if (!value || !wrapper) return;
+        const checkbox = Array.from(
+          wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]')
+        ).find((input) => input.value === value);
+        if (!checkbox) return;
+        // Clique no grafico adiciona/remove esse valor da selecao (mesma
+        // semantica de marcar/desmarcar o checkbox correspondente).
+        checkbox.checked = !checkbox.checked;
         window.clearTimeout(chartFilterTimer);
         chartFilterTimer = window.setTimeout(() => render(), 0);
       });
@@ -14681,9 +14726,51 @@
       }
     };
 
-    filterEls.forEach((el) => el.addEventListener("change", render));
+    const closeAllChecklistPanels = () => {
+      filterWrappers.forEach((wrapper) => {
+        const panel = wrapper.querySelector(".planning-action-checklist-panel");
+        if (panel) panel.hidden = true;
+      });
+    };
+
+    const initTetoChecklistFilter = (wrapper) => {
+      const toggle = wrapper.querySelector(".planning-action-checklist-toggle");
+      const panel = wrapper.querySelector(".planning-action-checklist-panel");
+      const optionsEl = wrapper.querySelector(".planning-action-checklist-options");
+      if (!toggle || !panel || !optionsEl) return;
+
+      toggle.addEventListener("click", () => {
+        const willOpen = panel.hidden;
+        closeAllChecklistPanels();
+        panel.hidden = !willOpen;
+      });
+      optionsEl.addEventListener("change", (event) => {
+        if (event.target?.type !== "checkbox") return;
+        render();
+      });
+      wrapper.querySelector("[data-select-all]")?.addEventListener("click", () => {
+        optionsEl.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = true; });
+        render();
+      });
+      wrapper.querySelector("[data-select-none]")?.addEventListener("click", () => {
+        optionsEl.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = false; });
+        render();
+      });
+    };
+
+    filterWrappers.forEach(initTetoChecklistFilter);
+    document.addEventListener("click", (event) => {
+      const insideAnyWrapper = filterWrappers.some((wrapper) => wrapper.contains(event.target));
+      if (!insideAnyWrapper) closeAllChecklistPanels();
+    });
+
     document.getElementById("teto-dashboard-clear")?.addEventListener("click", () => {
-      filterEls.forEach((el) => { el.value = ""; });
+      filterWrappers.forEach((wrapper) => {
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]').forEach((input) => {
+          input.checked = false;
+        });
+      });
+      closeAllChecklistPanels();
       render();
     });
     document.getElementById("teto-dashboard-refresh")?.addEventListener("click", load);

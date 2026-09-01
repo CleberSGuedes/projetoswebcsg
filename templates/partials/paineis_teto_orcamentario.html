@@ -31,19 +31,36 @@
          [data-active-view="graficos"] ... :not([data-graph-filter])).
          Nao remova esse atributo sem checar o CSS - ele nao aparece em
          nenhum JS, so tem efeito ali. -->
+    {% set teto_filters = [
+      ("exercicio", "Exercício", "Todos", true),
+      ("regiao", "Região", "Todas", false),
+      ("subfuncao", "Subfunção", "Todas", false),
+      ("grupo", "Grupo de despesa", "Todos", true),
+      ("subgrupo", "Tipificação da despesa", "Todas", true),
+      ("paoe", "Ação/PAOE", "Todas", true),
+      ("fonte", "Fonte", "Todas", true),
+      ("adj", "ADJ", "Todas", false),
+      ("macropolitica", "Macropolítica", "Todas", false),
+      ("pilar", "Pilar", "Todos", false),
+      ("eixo", "Eixo", "Todos", false),
+      ("politica", "Política do decreto", "Todas", false),
+    ] %}
     <div class="teto-filter-grid form-grid">
-      <label class="field" data-graph-filter><span>Exercício</span><select data-filter="exercicio"><option value="">Todos</option></select></label>
-      <label class="field"><span>Região</span><select data-filter="regiao"><option value="">Todas</option></select></label>
-      <label class="field"><span>Subfunção</span><select data-filter="subfuncao"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Grupo de despesa</span><select data-filter="grupo"><option value="">Todos</option></select></label>
-      <label class="field" data-graph-filter><span>Tipificação da despesa</span><select data-filter="subgrupo"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Ação/PAOE</span><select data-filter="paoe"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Fonte</span><select data-filter="fonte"><option value="">Todas</option></select></label>
-      <label class="field"><span>ADJ</span><select data-filter="adj"><option value="">Todas</option></select></label>
-      <label class="field"><span>Macropolítica</span><select data-filter="macropolitica"><option value="">Todas</option></select></label>
-      <label class="field"><span>Pilar</span><select data-filter="pilar"><option value="">Todos</option></select></label>
-      <label class="field"><span>Eixo</span><select data-filter="eixo"><option value="">Todos</option></select></label>
-      <label class="field"><span>Política do decreto</span><select data-filter="politica"><option value="">Todas</option></select></label>
+      {% for key, label, empty_label, is_graph in teto_filters %}
+      <label class="field"{{ ' data-graph-filter' if is_graph else '' }}>
+        <span>{{ label }}</span>
+        <div class="planning-action-checklist teto-multi-filter" data-filter="{{ key }}">
+          <button class="planning-action-checklist-toggle" type="button">{{ empty_label }}</button>
+          <div class="planning-action-checklist-panel" hidden>
+            <div class="teto-checklist-actions">
+              <button type="button" data-select-all>Selecionar todos</button>
+              <button type="button" data-select-none>Limpar</button>
+            </div>
+            <div class="planning-action-checklist-options"></div>
+          </div>
+        </div>
+      </label>
+      {% endfor %}
     </div>
     <div class="teto-active-filters" id="teto-active-filters" aria-live="polite"></div>
   </div>
