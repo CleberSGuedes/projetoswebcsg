@@ -83,6 +83,7 @@ FONTE_MAP = {
     "15010100": "15010100 - Outros Recursos não vinculados destinados ao Tesouro",
     "15400000": "15400000 - Transferência de recursos do FUNDEB desenvolvimento do Ensino",
     "15401070": "15401070 - Transferência de recursos do FUNDEB Remuneração Educação Básica",
+    "15460000": "15460000 - Transferências do FUNDEB - Complementação da União - ETI",
     "15500000": "15500000 - Recursos da Contribuição ao Salário Educação",
     "15510000": "15510000 - Transferências de Recursos do FNDE referente ao Programa Dinheiro Direto na Escola (PDDE)",
     "15520000": "15520000 - Transferências de Recursos do FNDE referente ao Programa Nacional de Alimentação Escolar (PNAE)",
