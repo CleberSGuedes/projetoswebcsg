@@ -6530,9 +6530,14 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
     inseridas = 0
     desativadas = 0
     vinculos_migrados = 0
+    removidos = 0
     now = _now_local()
 
     exercicios = {_teto_text(row.get("exercicio")) for _, row in df.iterrows()}
+    # Estado original do banco antes deste upload - so vai sendo consumido
+    # (pop) conforme cada linha do arquivo casa com uma chave; NUNCA e
+    # repopulado. O que sobrar aqui apos o loop e o que estava ativo mas
+    # nao apareceu em nenhuma linha do arquivo atual.
     ativos_por_chave: dict[tuple, list] = {}
     if exercicios:
         ativos = Momp.query.filter(
@@ -6547,6 +6552,12 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
                 item.teto_despesa_momp,
             )
             ativos_por_chave.setdefault(chave, []).append(item)
+
+    # Registros inseridos NESTE upload, por chave - separado de
+    # ativos_por_chave para nao confundir "recem-inserido" com "sobrou do
+    # banco". So existe para autocorrigir uma chave repetida dentro do
+    # proprio arquivo (duas linhas com a mesma fonte/grupo/subteto).
+    novos_no_arquivo: dict[tuple, "Momp"] = {}
 
     for _, row in df.iterrows():
         filtros = {
@@ -6563,8 +6574,11 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
             filtros["subteto_despesa_momp"],
             filtros["teto_despesa_momp"],
         )
-        antigos = ativos_por_chave.pop(chave, [])
-        old_ids = [item.id for item in antigos]
+        if chave in novos_no_arquivo:
+            old_ids = [novos_no_arquivo[chave].id]
+        else:
+            antigos = ativos_por_chave.pop(chave, [])
+            old_ids = [item.id for item in antigos]
 
         novo = Momp(
             **filtros,
@@ -6574,9 +6588,7 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
         db.session.add(novo)
         db.session.flush()
         inseridas += 1
-        # Registra o novo na mesma estrutura, caso a chave se repita mais
-        # adiante neste mesmo arquivo (autocorrecao dentro do proprio upload).
-        ativos_por_chave[chave] = [novo]
+        novos_no_arquivo[chave] = novo
 
         if old_ids:
             vinculos_migrados += (
@@ -6599,10 +6611,38 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
                 )
             )
 
+    # O que sobrou em ativos_por_chave estava ativo para o exercicio mas
+    # nao apareceu em nenhuma linha deste arquivo - a combinacao foi
+    # removida/reclassificada no FIPLAN. Desativa tambem, para o upload
+    # refletir o teto vigente por completo (nao so substituir o que
+    # bateu, mas tambem remover o que sumiu).
+    orfaos = [item for items in ativos_por_chave.values() for item in items]
+    if orfaos:
+        orfaos_ids = [item.id for item in orfaos]
+        PoliticaTeto.query.filter(
+            PoliticaTeto.momp_id.in_(orfaos_ids), PoliticaTeto.ativo == True  # noqa: E712
+        ).update(
+            {
+                PoliticaTeto.ativo: False,
+                PoliticaTeto.alterado_em: now,
+                PoliticaTeto.excluido_em: now,
+            },
+            synchronize_session=False,
+        )
+        removidos = Momp.query.filter(Momp.id.in_(orfaos_ids)).update(
+            {
+                Momp.ativo: False,
+                Momp.alterado_em: now,
+                Momp.excluido_em: now,
+            },
+            synchronize_session=False,
+        )
+
     return {
         "inseridas": inseridas,
         "desativadas": desativadas,
         "vinculos_migrados": vinculos_migrados,
+        "removidos": removidos,
     }
 
 
@@ -6761,6 +6801,7 @@ def _start_teto_seduc_thread(
                             "Plan 23 processado. "
                             f"Registros inseridos: {resultado['inseridas']}; "
                             f"anteriores desativados: {resultado['desativadas']}; "
+                            f"removidos por não constarem mais no arquivo: {resultado['removidos']}; "
                             f"vínculos migrados: {resultado['vinculos_migrados']}."
                         )
                     else:

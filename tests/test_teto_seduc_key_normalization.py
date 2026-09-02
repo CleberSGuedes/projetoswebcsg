@@ -85,3 +85,85 @@ def test_reenvio_reconhece_registro_antigo_com_texto_diferente():
         finally:
             Momp.query.filter_by(exercicio=TEST_EXERCICIO).delete()
             db.session.commit()
+
+
+def test_reenvio_desativa_combinacao_que_sumiu_do_arquivo():
+    """Reproduz o incidente de 2026-09-02: uma combinacao fonte/grupo/subteto
+    que estava ativa no banco mas nao aparece em nenhuma linha do novo
+    upload deve ser desativada (nao ficar orfa ativa para sempre). Caso de
+    controle: um registro ativo de OUTRO exercicio nao pode ser tocado."""
+    exercicio_alvo = "9993"
+    exercicio_outro = "9992"
+    app = create_app()
+    with app.app_context():
+        try:
+            orfao = Momp(
+                exercicio=exercicio_alvo,
+                fonte="15000000 - Fonte teste",
+                grupo_despesa="3 - Outras Despesas Corrente",
+                teto_despesa_momp="4 - A Classificar",
+                subteto_despesa_momp="C - Prioridades Estratégicas LDO",
+                teto_anual=10000000,
+                ativo=True,
+            )
+            mantido = Momp(
+                exercicio=exercicio_alvo,
+                fonte="15001001 - Outra fonte teste",
+                grupo_despesa="1 - Pessoal e Encargos Sociais",
+                teto_despesa_momp="4 - A Classificar",
+                subteto_despesa_momp="A - Despesas Obrigatórias",
+                teto_anual=5000000,
+                ativo=True,
+            )
+            outro_exercicio = Momp(
+                exercicio=exercicio_outro,
+                fonte="15000000 - Fonte teste",
+                grupo_despesa="3 - Outras Despesas Corrente",
+                teto_despesa_momp="4 - A Classificar",
+                subteto_despesa_momp="C - Prioridades Estratégicas LDO",
+                teto_anual=99999999,
+                ativo=True,
+            )
+            db.session.add_all([orfao, mantido, outro_exercicio])
+            db.session.commit()
+            orfao_id, mantido_id, outro_id = orfao.id, mantido.id, outro_exercicio.id
+
+            # Novo arquivo so traz a combinacao "mantido" - "orfao" sumiu.
+            df = pd.DataFrame(
+                [
+                    {
+                        "exercicio": exercicio_alvo,
+                        "fonte": "15001001 - Outra fonte teste",
+                        "grupo_despesa": "1 - Pessoal e Encargos Sociais",
+                        "teto_despesa_momp": "4 - A Classificar",
+                        "subteto_despesa_momp": "A - Despesas Obrigatórias",
+                        "teto_anual": 5000000,
+                    }
+                ]
+            )
+            resultado = _persistir_plan23(df)
+            db.session.commit()
+
+            assert resultado["removidos"] == 1, (
+                f"esperado 1 registro removido (orfao), resultado={resultado}"
+            )
+            assert resultado["desativadas"] == 1  # o "mantido" foi substituido por uma nova linha
+
+            assert db.session.get(Momp, orfao_id).ativo is False, (
+                "combinacao que sumiu do arquivo deveria ter sido desativada"
+            )
+            ativos_alvo = Momp.query.filter_by(exercicio=exercicio_alvo, ativo=True).all()
+            assert len(ativos_alvo) == 1 and ativos_alvo[0].fonte.startswith("15001001"), (
+                "so deveria sobrar o registro que apareceu no arquivo (reinserido)"
+            )
+
+            # Caso de controle: registro de OUTRO exercicio nao pode ter sido tocado.
+            outro_recarregado = db.session.get(Momp, outro_id)
+            assert outro_recarregado.ativo is True, (
+                "registro de outro exercicio nao deveria ser afetado pelo upload"
+            )
+        finally:
+            Momp.query.filter(Momp.exercicio.in_([exercicio_alvo, exercicio_outro])).delete(
+                synchronize_session=False
+            )
+            db.session.commit()
