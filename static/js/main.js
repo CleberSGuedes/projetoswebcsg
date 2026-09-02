@@ -14753,11 +14753,11 @@
       const base = data.policyMode ? data.joined : data.momp;
       const total = sum(base);
       renderGroupSummary(base, total);
+      renderGrupo1PorFontes();
+      renderGrupoTotal(base);
       renderFonteRank(base, total);
       renderGrupoRank(base, total);
 
-      renderGrupo1PorFontes();
-      renderGrupoTotal(base);
       renderFonteGrupo(base, total);
       renderQomp(base, total);
     };
@@ -14851,7 +14851,7 @@
     // demais filtros ativos (exercicio, regiao etc. continuam se aplicando
     // normalmente) - e restrito so ao grupo "1 - Pessoal e Encargos
     // Sociais" (sem 3 - Outras Despesas Correntes / 4 - Investimentos).
-    const GRUPO1_FONTES_FIXAS = ["15000000", "15001001", "15000100", "15400000", "15401070"];
+    const GRUPO1_FONTES_FIXAS = ["15000000", "15001001", "15010100", "15400000", "15401070"];
     const renderGrupo1PorFontes = () => {
       const scopedData = filteredData({ ...state.filters, fonte: [] });
       const scopedBase = (scopedData.policyMode ? scopedData.joined : scopedData.momp)

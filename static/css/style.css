@@ -2267,6 +2267,12 @@ body.app-loading-active {
   background: rgba(61,214,183,0.13);
 }
 .theme-dark .teto-filter-chip { background: rgba(31,155,126,0.18); }
+/* Destaque extra pros cards "Grupo 1 por Fontes" e "Grupo por Teto Total" -
+   um meio-termo: mais forte que o tom claro (0.12) dos demais cabecalhos,
+   mas sem ser solido (isso ficava igual as barras/botoes "ativos" do app e
+   competia com elas visualmente). */
+.teto-panel-highlight > h2 { background: rgba(15,124,104,0.30); }
+.theme-dark .teto-panel-highlight > h2 { background: rgba(61,214,183,0.30); }
 
 /* Card QOMP (aba Tabelas) - grade CSS (nao tabela) com Fonte (so codigo) e
    Grupo/Tipificacao fixos ao rolar horizontalmente, uma coluna por
