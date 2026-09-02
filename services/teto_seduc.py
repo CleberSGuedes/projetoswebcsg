@@ -94,7 +94,7 @@ FONTE_MAP = {
 }
 
 GRUPO_PLAN23_MAP = {
-    "3 - OUTRAS DESPESAS CORRENTES": "3 - Outras Despesas Corrente",
+    "3 - OUTRAS DESPESAS CORRENTES": "3 - Outras Despesas Correntes",
     "4 - INVESTIMENTOS": "4 - Investimentos",
     "1 - PESSOAL E ENCARGOS SOCIAIS": "1 - Pessoal e Encargos Sociais",
 }
@@ -235,7 +235,7 @@ PLAN134_HEADERS = {
 
 GRUPO_PLAN134_MAP = {
     "4-INVESTIMENTOS": "4 - Investimentos",
-    "3-OUTRAS DESPESAS CORRENTES": "3 - Outras Despesas Corrente",
+    "3-OUTRAS DESPESAS CORRENTES": "3 - Outras Despesas Correntes",
     "1-PESSOAL E ENCARGOS SOCIAIS": "1 - Pessoal e Encargos Sociais",
 }
 

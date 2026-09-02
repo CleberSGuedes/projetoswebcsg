@@ -14215,6 +14215,11 @@
       return text.includes(" - ") ? text.split(" - ")[0].trim() : text;
     };
     const subfunctionOf = (value) => codeOf(value).split(".")[0].trim();
+    // Correcao apenas de exibicao: dados ja gravados no banco tem "Outras
+    // Despesas Corrente" (sem S, erro de digitacao no mapeamento de origem).
+    // So corrige o texto mostrado na tela - nunca usar pra comparar/filtrar
+    // (isso continua contra o valor cru de row.grupo).
+    const displayGrupo = (value) => clean(value).replace(/Despesas Corrente$/, "Despesas Correntes");
     const unique = (values) =>
       Array.from(new Set(values.map(clean).filter(Boolean))).sort((a, b) =>
         a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" })
@@ -14462,7 +14467,7 @@
       } else {
         Plotly.react(groupEl, [{
           type: "pie",
-          labels: byGroup.map((row) => row.label),
+          labels: byGroup.map((row) => displayGrupo(row.label)),
           values: byGroup.map((row) => row.valor),
           customdata: byGroup.map((row) => row.label),
           textinfo: "percent",
@@ -14583,7 +14588,7 @@
           marker: {
             color: groupColors[codeOf(group)] || oldChartPalette[index % oldChartPalette.length],
           },
-          hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(group)}<br>R$ %{y:,.2f}<extra></extra>`,
+          hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(displayGrupo(group))}<br>R$ %{y:,.2f}<extra></extra>`,
         }));
         traces.push({
           type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
@@ -14637,7 +14642,7 @@
       legendEl.innerHTML = groups
         .map(
           (group, index) =>
-            `<span><i class="dot" style="background:${colorFor(group.label, index)}"></i>${escapeHtml(group.label)}</span>`
+            `<span><i class="dot" style="background:${colorFor(group.label, index)}"></i>${escapeHtml(displayGrupo(group.label))}</span>`
         )
         .join("");
 
@@ -14645,7 +14650,7 @@
         .map((group, index) => {
           const pct = total ? (group.valor / total) * 100 : 0;
           const gap = index > 0 ? '<div class="teto-group-gap"></div>' : "";
-          return `${gap}<div style="width:${pct}%;background:${colorFor(group.label, index)}" title="${escapeHtml(group.label)}: ${money.format(group.valor)}"></div>`;
+          return `${gap}<div style="width:${pct}%;background:${colorFor(group.label, index)}" title="${escapeHtml(displayGrupo(group.label))}: ${money.format(group.valor)}"></div>`;
         })
         .join("");
 
@@ -14654,7 +14659,7 @@
           const color = colorFor(group.label, index);
           return `
             <div class="teto-group-card">
-              <div class="name"><i class="dot" style="background:${color}"></i>${escapeHtml(group.label)}</div>
+              <div class="name"><i class="dot" style="background:${color}"></i>${escapeHtml(displayGrupo(group.label))}</div>
               <div class="value">${money.format(group.valor)}</div>
               <div class="pct">${percent(group.valor, total)} do teto geral</div>
             </div>`;
@@ -14712,11 +14717,12 @@
 
       const rankRow = (label, valor, color, isChild) => {
         const width = max ? Math.max(3, (valor / max) * 100) : 3;
+        const displayLabel = displayGrupo(label);
         return `
-          <div class="teto-rank-row${isChild ? " teto-rank-child" : ""}" title="${escapeHtml(label)}">
+          <div class="teto-rank-row${isChild ? " teto-rank-child" : ""}" title="${escapeHtml(displayLabel)}">
             <div class="teto-rank-id">
-              <div class="teto-rank-code">${escapeHtml(codeOf(label))}</div>
-              <div class="teto-rank-name">${escapeHtml(nameOf(label))}</div>
+              <div class="teto-rank-code">${escapeHtml(codeOf(displayLabel))}</div>
+              <div class="teto-rank-name">${escapeHtml(nameOf(displayLabel))}</div>
             </div>
             <div class="teto-rank-track"><div class="teto-rank-fill" style="width:${width}%;background:${color}"></div></div>
             <div class="teto-rank-val">${money.format(valor)}<span class="teto-rank-pct">${percent(valor, total)}</span></div>
@@ -14750,8 +14756,107 @@
       renderFonteRank(base, total);
       renderGrupoRank(base, total);
 
+      renderGrupo1PorFontes();
+      renderGrupoTotal(base);
       renderFonteGrupo(base, total);
       renderQomp(base, total);
+    };
+
+    // Renderiza o card "Grupo x exercicio" (sem coluna Fonte) - mesmo
+    // esqueleto usado pelo "Grupo por Teto Total" (todas as fontes) e pelo
+    // "Grupo 1 por Fontes" (fontes fixas), num helper unico pra nao
+    // duplicar a logica entre os dois.
+    const renderGrupoOnlyCard = (elId, base) => {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const total = sum(base);
+      const years = unique(base.map((row) => row.exercicio));
+      if (!years.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
+      const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
+
+      const deltaChip = (curr, prevValue) => {
+        if (prevValue === null) return '<div class="teto-qomp-delta-placeholder"></div>';
+        if (!prevValue) return '<span class="teto-qomp-delta flat">—</span>';
+        const change = (curr - prevValue) / prevValue;
+        if (Math.abs(change) < 0.0005) return '<span class="teto-qomp-delta flat">= 0,00%</span>';
+        const cls = change > 0 ? "up" : "down";
+        const arrow = change > 0 ? "▲" : "▼";
+        return `<span class="teto-qomp-delta ${cls}">${arrow} ${pctChange(change)}</span>`;
+      };
+
+      const yearCell = (value, max, prevValue, tooltip) => {
+        const width = max ? Math.max(3, (value / max) * 100) : 3;
+        return `
+          <div class="teto-qomp-cell teto-qomp-year-cell" title="${escapeHtml(tooltip)}">
+            <div class="teto-qomp-value">${money.format(value)}</div>
+            <div class="teto-qomp-track"><div class="teto-qomp-fill" style="width:${width}%"></div></div>
+            <div class="teto-qomp-delta-row">${deltaChip(value, prevValue)}</div>
+          </div>`;
+      };
+
+      const totalsByYear = Object.fromEntries(years.map((year) => [year, sumByYear(base, year)]));
+      let html = `<div class="teto-qomp-row teto-qomp-head" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-head-label">Grupo de despesa</div>
+        ${years.map((year) => `
+          <div class="teto-qomp-cell teto-qomp-year-head" title="Total geral - ${escapeHtml(year)}">
+            <div class="yr">${escapeHtml(year)}</div>
+            <div class="yr-total">${money.format(totalsByYear[year])}</div>
+          </div>`).join("")}
+      </div>`;
+
+      const groups = groupSum(base, "grupo");
+      groups.forEach((group, gi) => {
+        const groupRows = base.filter((row) => clean(row.grupo) === group.label);
+        const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
+        const altClass = gi % 2 === 1 ? " fonte-alt" : "";
+        html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
+          <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
+          ${years.map((year, yi) => {
+            const prevYear = yi > 0 ? years[yi - 1] : null;
+            const value = sumByYear(groupRows, year);
+            const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
+            return yearCell(value, groupMax, prevValue, `${displayGrupo(group.label)} - ${year}`);
+          }).join("")}
+        </div>`;
+      });
+
+      // Com um so grupo, a linha "Total Geral" seria identica a unica
+      // linha de dado - so faz sentido mostrar o total quando ha mais de
+      // um grupo pra somar.
+      if (groups.length > 1) {
+        const totalMax = Math.max(0, ...years.map((year) => totalsByYear[year]));
+        html += `<div class="teto-qomp-row total" style="--qomp-n-anos:${years.length}">
+          <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">Total Geral</div>
+          ${years.map((year, yi) => {
+            const prevYear = yi > 0 ? years[yi - 1] : null;
+            const value = totalsByYear[year];
+            const prevValue = prevYear != null ? totalsByYear[prevYear] : null;
+            return yearCell(value, totalMax, prevValue, `Total geral - ${year}`);
+          }).join("")}
+        </div>`;
+      }
+
+      el.innerHTML = html;
+    };
+
+    const renderGrupoTotal = (base) => renderGrupoOnlyCard("teto-table-grupo-total", base);
+
+    // Card "Grupo 1 por Fontes": mesmo estilo/colunas do "Grupo por Teto
+    // Total", mas com um filtro de fonte FIXO (nao o filtro "Fonte" do
+    // dashboard) - sempre mostra so estas 5 fontes, quaisquer que sejam os
+    // demais filtros ativos (exercicio, regiao etc. continuam se aplicando
+    // normalmente) - e restrito so ao grupo "1 - Pessoal e Encargos
+    // Sociais" (sem 3 - Outras Despesas Correntes / 4 - Investimentos).
+    const GRUPO1_FONTES_FIXAS = ["15000000", "15001001", "15000100", "15400000", "15401070"];
+    const renderGrupo1PorFontes = () => {
+      const scopedData = filteredData({ ...state.filters, fonte: [] });
+      const scopedBase = (scopedData.policyMode ? scopedData.joined : scopedData.momp)
+        .filter((row) => GRUPO1_FONTES_FIXAS.includes(codeOf(row.fonte)) && codeOf(row.grupo) === "1");
+      renderGrupoOnlyCard("teto-table-grupo1-fontes", scopedBase);
     };
 
     // Card "Quadro comparativo de Fonte/Grupo": mesmo estilo/regra do QOMP
@@ -14808,12 +14913,12 @@
           const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
           html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
             <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-fonte-code">${gi === 0 ? escapeHtml(fonteCode) : ""}</div>
-            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(group.label)}</div>
+            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
             ${years.map((year, yi) => {
               const prevYear = yi > 0 ? years[yi - 1] : null;
               const value = sumByYear(groupRows, year);
               const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
-              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${group.label} - ${year}`);
+              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} - ${year}`);
             }).join("")}
           </div>`;
         });
@@ -14891,12 +14996,12 @@
           const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
           html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
             <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-fonte-code">${gi === 0 ? escapeHtml(fonteCode) : ""}</div>
-            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(group.label)}</div>
+            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
             ${years.map((year, yi) => {
               const prevYear = yi > 0 ? years[yi - 1] : null;
               const value = sumByYear(groupRows, year);
               const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
-              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${group.label} - ${year}`);
+              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} - ${year}`);
             }).join("")}
           </div>`;
 
@@ -14910,7 +15015,7 @@
                 const prevYear = yi > 0 ? years[yi - 1] : null;
                 const value = sumByYear(subRows, year);
                 const prevValue = prevYear != null ? sumByYear(subRows, prevYear) : null;
-                return yearCell(value, subMax, prevValue, `${fonteCode} · ${group.label} · ${subgroup.label} - ${year}`);
+                return yearCell(value, subMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} · ${subgroup.label} - ${year}`);
               }).join("")}
             </div>`;
           });

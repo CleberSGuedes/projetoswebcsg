@@ -2304,6 +2304,12 @@ body.app-loading-active {
   background: var(--card);
   border-right: 1px solid var(--border);
 }
+/* Variante sem a coluna Fonte (card "Grupo por Teto Total") - so Grupo +
+   exercicios; Grupo assume o lugar (sticky left:0) que seria da Fonte. */
+.teto-qomp-grid.qomp-flat .teto-qomp-row {
+  grid-template-columns: var(--qomp-w-grupo) repeat(var(--qomp-n-anos), minmax(var(--qomp-w-ano), 1fr));
+}
+.teto-qomp-grid.qomp-flat .teto-qomp-col-grupo { left: 0; }
 /* Zebra por bloco de fonte (nao por linha) - todas as linhas (grupo e
    tipificacao) de uma mesma fonte recebem o mesmo fundo, alternando entre
    fontes, pra separar visualmente onde uma fonte termina e a proxima
