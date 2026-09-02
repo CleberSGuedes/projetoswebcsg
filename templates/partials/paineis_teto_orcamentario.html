@@ -85,19 +85,29 @@
   </div>
 
   <div class="teto-dashboard-view" data-view-panel="tabelas" hidden>
-    <div class="teto-primary-tables">
-      <section class="teto-panel teto-table-panel">
-        <h2>Teto por fonte de recurso</h2>
-        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-fonte"><thead><tr><th>Fonte</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
-      </section>
-      <section class="teto-panel teto-table-panel">
-        <h2>Teto por grupo e tipificação da despesa</h2>
-        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-grupo"><thead><tr><th>Descrição</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
-      </section>
-    </div>
+    <section class="teto-panel teto-table-panel">
+      <h2>Por grupo de despesa</h2>
+      <div class="teto-group-legend" id="teto-group-legend"></div>
+      <div class="teto-group-stack" id="teto-group-stack"></div>
+      <div class="teto-group-cards" id="teto-group-cards"></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Teto por fonte de recurso</h2>
+      <div class="teto-fonte-rank" id="teto-fonte-rank"></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Teto por grupo e tipificação da despesa</h2>
+      <div class="teto-fonte-rank" id="teto-grupo-rank"></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Quadro comparativo de Fonte/Grupo</h2>
+      <p class="muted teto-qomp-sub">Teto por fonte e grupo de despesa, comparado entre os exercícios do filtro (todos, se nenhum for selecionado).</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid" id="teto-table-fonte-grupo"></div></div>
+    </section>
     <section class="teto-panel teto-table-panel">
       <h2>Quadro Orçamentário de Médio Prazo (QOMP)</h2>
-      <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-qomp"><thead></thead><tbody></tbody></table></div>
+      <p class="muted teto-qomp-sub">Teto por fonte, grupo de despesa e tipificação, comparado entre os exercícios do filtro (todos, se nenhum for selecionado).</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid" id="teto-table-qomp"></div></div>
     </section>
   </div>
 </section>
