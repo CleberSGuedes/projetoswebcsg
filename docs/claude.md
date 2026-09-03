@@ -322,3 +322,32 @@ O usuário notou que "Grupo 1 por Fontes" e "Grupo por Teto Total" mostravam val
 - **Reposição:** os dois cards passaram a ficar logo abaixo de "Por grupo de despesa", no topo da aba Tabelas (antes ficavam perto do QOMP, no fim).
 - **Destaque visual:** cabeçalho dos dois cards com a classe `.teto-panel-highlight` (`static/css/style.css`) — depois de duas tentativas: primeiro um tom 2 níveis mais escuro na rampa (`--color-700` em rgba baixa) ainda ficou apagado; depois um fundo sólido em `--accent` (o mesmo padrão usado em `.wizard-step-btn.active` pra estado "ativo" no app) ficou forte demais e visualmente igual às barras/botões já existentes, competindo com eles; o ajuste final é um meio-termo — `rgba(15,124,104,0.30)` claro/dark — mais forte que o tom padrão dos outros cabeçalhos (0.12) mas sem ser sólido.
 - Commit `b5d3a29`. Filtros do dashboard não foram tocados (checado por `git diff | grep -ci "teto-multi-filter\|checklist\|data-filter="` = 0). Validado com `pytest` completo, `node --check`, e a divergência de valores foi confirmada e depois refeita por consulta direta ao banco antes/depois da correção do código de fonte. Teste manual na tela aprovado pelo usuário a cada ajuste (posição, e as duas rodadas do tom de destaque).
+
+## 13. Incidente investigado e corrigido: menu de login renderizando quase vazio em instabilidade de conexão com o banco (2026-09-03)
+
+### 13.1 Sintoma
+"De vez em quando", ao logar, o usuário via só o menu "Início"/"Sair" — o resto do menu (Cadastrar, Planejamento, Usuários, Painel-Permissões etc.) simplesmente não aparecia, sem nenhum erro visível na tela (o "Erro" vermelho num print enviado pelo usuário era o indicador de sync da conta do Chrome, fora do sistema — não relacionado).
+
+### 13.2 Investigação
+Analisado o log de produção do dia (sem alteração de código nessa etapa). Achados:
+- O banco remoto compartilhado (`186.209.113.112`) tem quedas de conexão transitórias durante consultas — confirmado literalmente no log: `(pymysql.err.OperationalError) (2013, 'Lost connection to MySQL server during query')`.
+- Erros como `Could not locate column in row for column 'perfil_permissoes.feature'` (tipo `NoSuchColumnError`) são **sintoma dessa mesma instabilidade**, não coluna realmente ausente — a coluna existe e a consulta funciona normalmente na tentativa seguinte (confirmado pelo padrão no log: `"DB scalar fetch retry 1/2 failed: ..."` seguido, milissegundos depois, de sucesso).
+- `_fetch_scalars_all_with_retry` (`rotas/home_routes.py`) já tinha lógica de retry (`DB_RETRY_ATTEMPTS=2` por padrão), mas quando as **duas** tentativas falhavam, devolvia `[]` (lista vazia) **silenciosamente**, sem levantar exceção.
+- `_load_permissoes_perfil`/`_load_permissoes_nivel` (que carregam as permissões do usuário logo no login, via `_permissoes_with_parents`, chamada pela rota `/`) usam esse `[]` diretamente — e um `[]` aí é **indistinguível** de "usuário sem nenhuma permissão". O menu no `base.html` é renderizado por completo no HTML e depois escondido/mostrado via JS (`applyMenuPermissions()`) conforme essa lista; com lista vazia, só os itens sempre-visíveis (`dashboard`/`logout`, hardcoded em `main.js`) ficam de pé — exatamente o sintoma do print.
+- `pool_pre_ping`/`pool_recycle` (`config.py`) já estavam configurados corretamente — não é o problema clássico de conexão obsoleta reciclada pelo pool; a queda acontece **no meio de uma query em andamento**, algo que `pool_pre_ping` não previne (ele só testa a conexão antes de emprestá-la do pool, não durante o uso). Ou seja, a causa de fundo é instabilidade de rede/hospedagem do host remoto, fora do nosso controle direto.
+
+### 13.3 Fix
+Depois de confirmar a causa com o usuário e alinhar a abordagem (aumentar tentativas de retry **e** corrigir o fallback silencioso, não só uma das duas):
+- `DB_RETRY_ATTEMPTS` (2→4) e `DB_RETRY_BACKOFF` (0.2→0.35) como novos valores-padrão nos três helpers de retry (`_execute_with_retry`, `_fetch_all_with_retry`, `_fetch_scalars_all_with_retry`) — dá mais chance de recuperação automática antes de desistir.
+- `_fetch_scalars_all_with_retry` ganhou o parâmetro `raise_on_failure` (padrão `False` — preserva o comportamento histórico dos ~15 outros pontos que já chamam essa função no carregamento do dashboard e tratam `[]` como "sem dados", um estado normal ali). `_load_permissoes_perfil`/`_load_permissoes_nivel` passaram a usar `raise_on_failure=True` e a só engolir `ProgrammingError` (tabela/coluna genuinamente ausente, ex.: banco novo sem migração) — qualquer outra falha (conexão perdida etc.) agora propaga em vez de virar `[]` silencioso.
+- A rota `/` (`index()`) passou a capturar essa falha, logar um aviso explícito (`"Falha ao carregar permissoes no login"`) e renderizar um banner (`templates/base.html`, condicional a `permissoes_indisponiveis`) pedindo pra atualizar a página — em vez do menu quebrado sem nenhuma explicação.
+- O endpoint `/api/permissoes/current` (chamado pelo JS logo após o carregamento inicial, pra reconfirmar as permissões) **já tinha** tratamento correto pra esse tipo de erro (`except SQLAlchemyError` → 503, e o JS (`fetchCurrentPermissions()`) já ignora respostas não-OK sem sobrescrever o menu) — só nunca disparava porque a falha era engolida numa camada mais interna antes de chegar lá. Nenhuma mudança necessária nesse endpoint.
+- Commit `cf20d62`.
+
+### 13.4 Testes
+Como é um bug intermitente e raro (a instabilidade de rede não é reproduzível sob demanda), a validação não foi por clique na tela — foi por revisão de código e um novo arquivo de testes automatizados, `tests/test_permission_retry_failure.py` (5 casos, sem tocar no banco real — simula a falha via `monkeypatch` em `db.session.execute`):
+- `_fetch_scalars_all_with_retry` com `raise_on_failure=False` (padrão) continua devolvendo `[]` após esgotar as tentativas — não quebra os ~15 call sites existentes do dashboard.
+- Com `raise_on_failure=True`, propaga a exceção depois de esgotar as tentativas.
+- `_load_permissoes_perfil`/`_load_permissoes_nivel` propagam uma falha de conexão persistente (`OperationalError`).
+- `_load_permissoes_perfil` continua tratando tabela/coluna realmente ausente (`ProgrammingError`) como "sem permissões" — não regride esse caso.
+- Suite completa: 16/16 (`pytest`).
