@@ -476,8 +476,8 @@ def _safe_session_rollback() -> None:
 
 
 def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt)
@@ -512,8 +512,8 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
 
 
 def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt).all()
@@ -542,13 +542,17 @@ def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | 
     return []
 
 
-def _fetch_scalars_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+def _fetch_scalars_all_with_retry(
+    stmt, attempts: int | None = None, backoff_s: float | None = None, raise_on_failure: bool = False
+):
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
+    last_exc: Exception | None = None
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt).scalars().all()
         except (OperationalError, ResourceClosedError, SQLAlchemyError, IndexError) as exc:
+            last_exc = exc
             _safe_session_rollback()
             try:
                 db.engine.dispose()
@@ -570,6 +574,14 @@ def _fetch_scalars_all_with_retry(stmt, attempts: int | None = None, backoff_s: 
                     time.sleep(backoff_s * (idx + 1))
                 except Exception:
                     pass
+    # Todas as tentativas se esgotaram. Por padrao (raise_on_failure=False,
+    # comportamento historico, usado pelas consultas de dashboard) volta []
+    # pra nao quebrar callers que ja tratam "sem dados" como estado normal.
+    # Callers em caminhos criticos (ex.: permissoes de login) pedem
+    # raise_on_failure=True pra distinguir "sem dados" de "falha de conexao
+    # persistente" - ver _load_permissoes_perfil/_load_permissoes_nivel.
+    if raise_on_failure and last_exc is not None:
+        raise last_exc
     return []
 
 
@@ -692,11 +704,33 @@ def _start_worker(kind: str, upload_id: int) -> None:
 @login_required
 def index():
     # initial_content tells JS which partial to load first
-    allowed = _permissoes_with_parents(
-        getattr(g, "user_perfil_id", None),
-        getattr(g, "user_nivel", None),
+    permissoes_indisponiveis = False
+    try:
+        allowed = _permissoes_with_parents(
+            getattr(g, "user_perfil_id", None),
+            getattr(g, "user_nivel", None),
+        )
+    except SQLAlchemyError as exc:
+        # Instabilidade de conexao com o banco esgotou todas as tentativas
+        # de retry ao carregar as permissoes do usuario. Antes disso caia
+        # silenciosamente pra lista vazia e o menu renderizava quase todo
+        # oculto sem nenhum aviso - agora avisa na tela e pede pra
+        # atualizar, em vez de deixar o usuario achando que o sistema "nao
+        # carregou nada" sem explicacao.
+        current_app.logger.warning(
+            "Falha ao carregar permissoes no login (perfil_id=%s, nivel=%s): %s",
+            getattr(g, "user_perfil_id", None),
+            getattr(g, "user_nivel", None),
+            exc,
+        )
+        allowed = []
+        permissoes_indisponiveis = True
+    return render_template(
+        "base.html",
+        initial_content="dashboard",
+        initial_features=allowed,
+        permissoes_indisponiveis=permissoes_indisponiveis,
     )
-    return render_template("base.html", initial_content="dashboard", initial_features=allowed)
 
 
 @home_bp.route("/partial/dashboard")
@@ -1115,6 +1149,11 @@ def has_permission(feature: str) -> bool:
 
 
 def _load_permissoes_perfil(perfil_id: int | None):
+    # raise_on_failure=True: se as tentativas de retry se esgotarem por
+    # instabilidade de conexao (nao por tabela/coluna realmente ausente),
+    # propaga o erro em vez de devolver [] - um [] aqui e indistinguivel de
+    # "usuario sem nenhuma permissao" e faz o menu renderizar quase vazio
+    # silenciosamente (ver docs/claude.md, secao do bug de menu vazio).
     if perfil_id is None:
         return []
     try:
@@ -1123,10 +1162,13 @@ def _load_permissoes_perfil(perfil_id: int | None):
                 PerfilPermissao.perfil_id == perfil_id,
                 PerfilPermissao.ativo == True,  # noqa: E712
                 PerfilPermissao.feature.isnot(None),
-            )
+            ),
+            raise_on_failure=True,
         )
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+    except ProgrammingError:
+        # Tabela/coluna realmente ausente (ex.: banco novo sem migracao) -
+        # esse caso continua tratado como "sem permissoes", nao um erro.
         _safe_session_rollback()
         return []
 
@@ -1140,10 +1182,11 @@ def _load_permissoes_nivel(nivel: int | None):
                 NivelPermissao.nivel == nivel,
                 NivelPermissao.ativo == True,  # noqa: E712
                 NivelPermissao.feature.isnot(None),
-            )
+            ),
+            raise_on_failure=True,
         )
         return [f for f in rows if f]
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+    except ProgrammingError:
         _safe_session_rollback()
         return []
 
