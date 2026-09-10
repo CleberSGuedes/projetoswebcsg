@@ -380,5 +380,106 @@ O relatório de 2027 ganhou um bloco novo antes de cada Programa (Eixo, Objetivo
 
 Isso funciona "por sorte" da convenção de linha em branco entre os blocos — é um comportamento correto hoje, mas **frágil**: se um relatório futuro remover essa linha em branco, o bloco novo pode ser interpretado como se fosse o bloco de dados real, corrompendo o Programa/Função/UO/Ação/Subfunção/Esfera/Responsável de qualquer C-block seguinte que dependa da contagem posicional.
 
-### 14.4 Ainda não corrigido
-Combinado com o usuário: documentar agora, corrigir depois. Nenhuma alteração de código feita até este ponto — as investigações rodaram via scripts descartáveis fora do controle de versão (`_plan20_test_run*.py`, `_plan20_compare.py`), sempre apagados depois de cada rodada. Quando for corrigir, o ponto de partida é `services/plan20_runner.py` (comparação exata de UO) e — se quiser blindar contra a mudança de layout também — considerar validar/alertar quando o bloco de campos após "Programa:" não tiver exatamente os 8 rótulos esperados na ordem esperada, já que hoje a extração confia inteiramente na posição, sem checar o texto de cada rótulo.
+### 14.4 Ainda não corrigido (nesta seção) — corrigido na seção 15
+Combinado com o usuário: documentar agora, corrigir depois. Nenhuma alteração de código feita até este ponto — as investigações rodaram via scripts descartáveis fora do controle de versão (`_plan20_test_run*.py`, `_plan20_compare.py`), sempre apagados depois de cada rodada. A correção completa (incluindo mais achados que apareceram numa investigação mais profunda) está na seção 15.
+
+## 15. Correção do parser do Plan20 pro layout 2027 (2026-09-08 a 2026-09-10)
+
+### 15.1 Escopo ficou maior do que a seção 14 sugeria
+O usuário testou o parser por conta própria com o arquivo real e achou problemas em blocos que a seção 14 tinha dado como não afetados. Investigando mais a fundo (ainda sem alterar código), apareceram mais dois bugs reais, além do filtro de UO (14.1):
+
+- **Tabela "ODS | Código Meta | Metas" por Ação quebrada.** Entre "Produto(s) da Ação:" e "PLANO DE AÇÃO POR PRODUTO", o layout 2027 insere uma tabela nova (cabeçalho + 0, 1 ou várias linhas de Código Meta/Metas do ODS vinculado à ação). Como nenhuma linha dela batia com os regex existentes, caía no fallback posicional do parser e virava um "Produto" fantasma (`Produto(s) da Ação = "Código Meta"`, demais campos vazios). Em algumas ações a tabela tem dados reais — confirmado no arquivo de teste: um caso com 9 linhas de metas do ODS 4 (Educação de qualidade).
+- **Bloco de capa do 2º Programa em diante contamina o Programa anterior, não é só descartado.** Rastreando a transição entre dois Programas no arquivo real (a partir da 2ª ocorrência de "Eixo:"), ficou claro que `linha_vazia()` (o reset de linha em branco) só limpa Etapa/Item (H/I) — nunca Produto/Subação/Programa (D/E/F/G/C). Como o bloco de capa novo (Eixo/Objetivo Estratégico/Programa/Público Alvo/Tipo/UO Responsável) não bate com nenhum regex reconhecido, suas linhas grudavam como filhas espúrias da última Subação/Produto do Programa **anterior**, em vez de serem descartadas — só não apareceu no 1º Programa do arquivo porque não havia nada anterior pra contaminar.
+
+**Causa raiz única:** qualquer linha que o parser não reconhece cai num fallback que "gruda no ID mais recente que sobrou", e o reset por linha em branco é raso demais pro layout novo, que tem seções sem marcador reconhecido espalhadas pelo arquivo inteiro.
+
+### 15.2 Decisão de escopo (confirmada com o usuário)
+Diferente da ideia inicial ("ignorar os blocos novos com segurança"), o usuário pediu que **nenhuma informação fique de fora** — os blocos novos (Eixo, Objetivo Estratégico, Público Alvo, Tipo, UO Responsável, ODS/Código Meta/Metas) viram colunas de saída de verdade, não só ruído descartado.
+
+Uma pista útil: o script já tinha uma regra pra "ação padronizada" (`"Produto exclusivo para ação padronizada"`, no tratamento do bloco de Produto/PLANO DE AÇÃO POR PRODUTO) — texto padrão explicando a ausência de produto específico em ações administrativas genéricas (ex.: Programa "036 - Apoio administrativo"). Cruzando as 28 tabelas ODS do arquivo de teste com o texto de "PLANO DE AÇÃO POR PRODUTO" de cada ação, confirmou-se a correlação: **toda ação com "Produto exclusivo para ação padronizada" tem a tabela ODS vazia; toda ação com produto específico (finalística) tem a tabela ODS preenchida.** Não foi preciso nenhuma lógica nova pra distinguir "padronizada" de "finalística" — o próprio reconhecimento do cabeçalho ODS + coleta das linhas seguintes já reproduz esse comportamento sozinho. O que foi reaproveitado da regra existente foi só a **convenção de texto padrão explicando a ausência** (`defaults_text`): as colunas de ODS vazias recebem `"Ação padronizada - sem ODS vinculado"` em vez de um "-" seco.
+
+### 15.3 Implementação (`services/plan20_runner.py`)
+- **`_uo_key()`** (novo helper): extrai só os dígitos do código da UO antes do " - ", ignorando pontuação. `mask_uo` no `run_plan20()` passou a comparar `"14101"` contra `"14101"` em vez do texto completo — tolera tanto "14.101" (2026) quanto "14101" (2027, e qualquer outra pontuação futura).
+- **Bloco de capa por Programa (K)**: `"Eixo:"` virou um marcador reconhecido próprio (`KEYS["Eixo"]`) — ao ser detectado, **reseta a hierarquia inteira C→I** (não só H/I, como o reset de linha em branco) porque é o sinal mais confiável de que um Programa novo está começando de verdade. Enquanto o estado `k_ativo` estiver ligado, toda linha não-vazia é absorvida num novo identificador `K{n}` (ex.: `A1.B1.K3`) em vez de cair no fallback; a 2ª ocorrência de "Programa:" (a real, seguida de "Função:") desliga `k_ativo` e segue o fluxo normal de sempre.
+- **Tabela ODS por Ação (L)**: `"ODS"` (cabeçalho) virou outro marcador reconhecido, escopado dentro da Ação atual (`L_id = f"{C_id}.L{n}"`) — coleta 0/1/várias linhas de dado até a próxima linha em branco (que agora também reseta esse estado, além do que já resetava antes).
+- **Bloco C por rótulo de texto, não mais por posição**: `extrair_dados()` passou a casar cada linha do bloco C (Programa/Função/Unidade Orçamentária/Ação/Subfunção/Objetivo Específico/Esfera/Responsável) pelo próprio rótulo (`col_1`, via regex), em vez de "a 2ª linha depois de Programa é Função, a 3ª é UO...". Linha sem rótulo reconhecido é ignorada em vez de embaralhar as seguintes.
+- **Colunas novas em `EXTR_HEADERS`**: `Eixo`, `Objetivo Estratégico`, `Público Alvo`, `Tipo`, `UO Responsável` (nível Programa) e `ODS`, `Código Meta (ODS)`, `Metas (ODS)` (nível Ação, múltiplas entradas concatenadas com `" * "`, mesmo padrão já usado em Público Transversal/Código/Município). Ficam com `"-"` (capa) ou `"Ação padronizada - sem ODS vinculado"` (ODS) quando vazias — inclusive em arquivos do layout antigo (2026), que não têm nenhum desses blocos.
+- **Bug pego só depois de conferir dados reais, não nos testes de campo vazio/preenchido**: a primeira versão da capa por Programa usava "A.B" (arquivo.aba) como chave de junção — como só existe 1 aba no arquivo inteiro, isso colapsava a capa de **todos** os Programas numa só, sempre sobrescrita pela última processada (Eixo/Objetivo Estratégico/Tipo idênticos em todos os Programas da saída). Corrigido casando pelo **código do Programa** (ex.: "036"), extraído da própria linha "Programa:" dentro do bloco de capa. Um bug secundário junto: quando o valor de um campo da capa vinha vazio (ex.: "Público Alvo:" sem nada depois), o código caía pro texto do rótulo ("Público Alvo:") como valor — corrigido pra só preencher quando há valor de verdade, deixando o default `"-"` cuidar do resto.
+
+### 15.4 Validação
+- Os 3 arquivos reais (`C:\workspace\Planilhas\`, fora do repositório) reprocessados sem gravar no banco:
+  - **2026**: 871 linhas (idêntico ao baseline da seção 14), soma do Valor Total idêntica (R$ 5.801.058.678,00), todas as colunas novas com o default esperado (arquivo não tem nenhum bloco novo).
+  - **2027**: 1.386 linhas em `Plan20_SEDUC` (era 0 antes da correção), zero campos vazios em nenhuma coluna (capa + ODS incluídos), zero linhas com o "Produto" fantasma da tabela ODS, zero contaminação entre Programas (checado em `Subação/entrega`, `Detalhamento do produto`, `Região da Subação`, `Produto(s) da Ação`), soma do Valor Total R$ 6.485.243.129,00. Eixo/Objetivo Estratégico/Público Alvo/Tipo variam corretamente por Programa (ex.: "036 - Apoio administrativo" → Eixo "08 - Programas e ações padronizados", Tipo "Gestão de Políticas Públicas"; "533 - Educação 10 Anos" → Eixo "01 - Social", Tipo "Finalístico"). ODS preenchido só nos Programas finalísticos (533/534, "Educação de qualidade"), default nos administrativos (036/996/997/998) — confere exatamente com a correlação achada na seção 15.2.
+- **`tests/test_plan20_runner.py`** (novo, 3 testes, não toca no banco — monta planilhas `.xlsx` sintéticas em diretório temporário e roda `run_plan20()` de verdade):
+  - 2 Programas, UO sem ponto (formato 2027): confere que o filtro de UO não zera a saída, que a capa de cada Programa não vaza pro outro, que Público Alvo vazio vira `"-"` (não o texto do rótulo), que a tabela ODS vazia/preenchida não vaza entre Programas, e que a última Subação/Detalhamento do Programa 1 não foi contaminada pela capa do Programa 2.
+  - UO com ponto (formato 2026): confirma que o formato antigo continua funcionando depois do filtro ficar tolerante.
+  - Layout 2026 sem nenhum bloco de capa: regressão — Eixo/Objetivo Estratégico/Público Alvo ficam `"-"`, ODS fica no texto padrão, resto do processamento idêntico.
+- Suite completa: 19/19 (`pytest`) — os 16 testes já existentes continuam passando.
+
+### 15.5 Nada gravado no banco durante a investigação/implementação
+Combinado com o usuário: implementar sem gravar nada em `plan20_seduc` (a rota `/api/plan20/upload`, único ponto que grava no banco, não foi tocada nem chamada em nenhuma etapa das seções 14 a 17 — todos os testes rodaram `run_plan20()` direto, que só gera o `.xlsx` de saída). Commit final na seção 17.3.
+
+## 16. Dois achados conferindo o arquivo de saída manualmente, antes do commit (2026-09-10)
+
+Pedido do usuário antes de aprovar o commit da seção 15: gerar o `.xlsx` de saída de verdade e conferir linha por linha. Dois problemas apareceram — um deles achado pelo usuário, o outro só depois de eu investigar a fundo por que o primeiro acontecia.
+
+### 16.1 Produtos sem Subação vinculada (não são linhas em branco do relatório)
+O usuário notou, olhando o arquivo gerado, várias linhas com `Subação/entrega`, `Responsável`, `Prazo`, `Unid. Gestora` etc. vazias (`-`), e imaginou que fossem linhas em branco do relatório sendo trazidas por engano. Investigando: **não são** — é um mecanismo que já existia no script antes desta sessão (`if produtos: for p in produtos: if not p.get("_usado"): ...`): quando um Produto listado em "Produto(s) da Ação:" nunca é escolhido por nenhuma Subação, ele vira uma linha própria, com os campos de Subação em branco. Isso sempre existiu, só nunca tinha aparecido no 2027 porque o filtro de UO (seção 14) zerava a saída inteira antes de chegar até aqui. No 2026 esse número é **zero**; no 2027, antes do fix da seção 16.2, eram **166 linhas** — volume alto demais pra ser só "produto genuinamente sem subação", o que levou à investigação do item seguinte.
+
+### 16.2 Causa raiz real: "PLANO DE AÇÃO POR PRODUTO" mudou de coluna no layout 2027
+Rastreando por que tantas Subações ficavam sem Produto (ou com o Produto errado — Meta/Saldo trocados, o segundo ponto que o usuário reportou), a causa apareceu comparando o dado bruto linha a linha:
+
+- **2026:** a linha vem como `col_1 = "PLANO DE AÇÃO POR PRODUTO"` (rótulo sozinho) e o **produto vem numa coluna separada, `col_5`** (ex.: `col_5 = "Alimentação escolar mantida"`).
+- **2027:** a linha vem como `col_1 = "PLANO DE AÇÃO POR PRODUTO: Avaliação (Avalia MT) desenvolvida"` — **rótulo e valor na mesma célula**, com `col_5` sempre vazia.
+
+O código só lia `col_5` (`services/plan20_runner.py`, extração de `produto_por_fid`) — no 2027, isso significa que o valor real **nunca** era lido, e `produto_por_fid.get(fid, "Produto exclusivo para ação padronizada")` caía sempre no texto padrão, mesmo pra Ações com produto específico de verdade. Sem esse vínculo, o casamento Produto↔Subação (cascata `d_escolhido` em `extrair_dados()`) perdia o filtro mais preciso (por nome do produto) e caía nos fallbacks mais fracos (por região, depois "o primeiro Produto da lista") — daí a mesma Subação aparecer sempre casada com o primeiro Produto ("Acesso e permanência desenvolvido", nas imagens que o usuário mandou), com a Meta/Saldo *daquele* Produto, errados pra ela.
+
+**Confirmado que é problema de layout, não bug introduzido nesta sessão:** a lógica de casamento em si (`extrair_dados()`, cascata `d_escolhido`) não foi tocada na seção 15 — só ficou visível agora que o filtro de UO parou de zerar a saída do 2027.
+
+**Fix:** `produto_por_fid` passou a tentar `col_5` primeiro (compatibilidade com 2026) e, se vazia, extrair o valor de dentro de `col_1` depois dos dois-pontos (layout 2027) — `services/plan20_runner.py`, item "4.1) Produto do F".
+
+**Validação (arquivos reais, sem gravar no banco):**
+- 2026: sem mudança (871 linhas, mesma soma de Valor Total, zero linhas com Subação vazia).
+- 2027: linhas com Subação vazia caíram de 166 para **58** (concentradas em Ações de infraestrutura, plausivelmente produtos mesmo sem Subação própria — não mais um sintoma de casamento errado). Total de linhas caiu de 1.386 para **1.278** (menos linhas redundantes/mal casadas). Conferido especificamente a Ação "2936 - Desenvolvimento das Modalidades de Ensino" das imagens do usuário: "Acesso e permanência desenvolvido" (o Produto que aparecia repetido incorretamente) passou de dominar dezenas de linhas pra aparecer **1 vez só** — a distribuição de Produtos por Subação ficou plausível (16 Produtos usados, sem nenhum monopolizando por fallback).
+- Novo teste em `tests/test_plan20_runner.py` (4º teste): monta uma Ação sintética com 2 Produtos e 2 grupos "PLANO DE AÇÃO POR PRODUTO" no formato inline (2027), cada um com sua própria Subação, e confere que cada Subação casa com o Produto (e a Meta/Saldo) que o relatório vincula a ela — não as duas caindo no mesmo.
+- Suite completa: 20/20 (`pytest`).
+
+### 16.3 Saldo Meta do Produto "errado" — investigado, não era bug
+Usuário reportou, na Ação 2957, "Acesso e permanência desenvolvido" e "Bem-estar escolar desenvolvido" saindo com Saldo = 3.44 (igual à Meta) quando "o relatório" mostraria 0.0, e levantou a hipótese de o ponto decimal do Saldo (vs. vírgula da Meta) estar causando erro de leitura.
+
+Conferido direto na célula bruta do `.xlsx` original via `openpyxl` (bypassando o pandas, sem cache de fórmula nem formatação envolvida): a célula já traz literalmente `"3.44"` como texto — o script só copia esse texto, não faz nenhuma conversão numérica em Meta/Saldo (então o "." em vez de "," não causa erro nenhum, é só uma inconsistência do próprio relatório de origem). O valor na saída bate exatamente com o valor bruto do relatório, e a Subação vinculada a cada um tem a chave de planejamento citando "ACESSO_E_PERM"/"BEM-ESTAR_ESCOLAR" respectivamente — confirmando que o casamento Produto↔Subação está correto nesse caso. Hipótese mais provável: o usuário comparou com a tabela "Total por Produto" (um resumo agregado logo abaixo da tabela detalhada por região, mesmos nomes de produto, mas **sem nenhuma coluna de Saldo** — correta e propositalmente ignorada pelo parser, ver seção 15.3) em vez da tabela de detalhe por região (a fonte certa, com Saldo = 3.44). Nenhuma mudança de código feita aqui.
+
+### 16.4 Produtos sem Subação vinculada removidos da saída (por pedido do usuário)
+Confirmado que as linhas de Produto sem nenhuma Subação vinculada sempre têm **Valor Total = 0** (Etapa/Fonte/Descrição do Item também vazios) — não carregam nenhuma informação orçamentária, só um metadado de "esse Produto existe no planejamento mas nenhuma Subação/entrega foi vinculada a ele". Usuário confirmou (`AskUserQuestion`) que podem ser descartadas.
+
+**Fix:** `extrair_dados()` deixou de incluir no resultado final as linhas com `_gid is None` (nem "usadas" por uma Subação, nem parte de uma Ação sem Subação nenhuma) — `services/plan20_runner.py`, logo antes da montagem de `extr_df`.
+
+**Validação:**
+- 2026: sem mudança (já eram 0 linhas desse tipo).
+- 2027: linhas com Subação vazia foram de 58 para **0**; total de linhas caiu de 1.278 para **1.220**; soma do Valor Total **idêntica** (R$ 6.485.243.129,00) — confirma que nenhum valor orçamentário foi perdido.
+- Novo teste em `tests/test_plan20_runner.py` (5º teste): Ação sintética com 2 Produtos, só 1 com Subação vinculada — confere que só a linha vinculada aparece na saída.
+- Suite completa: 21/21 (`pytest`).
+
+Arquivo de saída conferido pelo usuário, sem mais inconsistências encontradas nessa rodada — inclusive testado um arquivo novo baixado já com a Meta do Produto corrigida na origem (ver seção 17.1).
+
+## 17. UO 14601 (FMTE) e teste com relatório recém-baixado (2026-09-10)
+
+### 17.1 Reteste com relatório 2027 já corrigido na origem
+Usuário baixou um novo Plan20 2027 (`Plan20_2027 - 2026-09-10.xlsx`) já com a Meta do Produto corrigida no FIPLAN e pediu pra reprocessar. Resultado: 1.211 linhas em `Plan20_SEDUC`, mesma soma de Valor Total (R$ 6.485.243.129,00), zero linhas com Subação vazia, zero nulos. Conferido especificamente o caso da Ação 2957 ("Acesso e permanência desenvolvido"/"Bem-estar escolar desenvolvido", seção 16.3): agora vem com Saldo = 0.0 nesse arquivo novo — confirma que era mesmo dado da origem (já corrigido lá), não bug do parser.
+
+### 17.2 UO 14601 (FMTE) não passava pelo filtro
+A SEDUC tem uma segunda Unidade Orçamentária própria — usuário pediu pra testar um relatório dela (`Plan20_2027_uo14601_10-09-2026.xlsx`, UO **14601 - FUNDO EST DE APOIO À MELHORIA DAS CONDIÇ. DE OFERTA DA EDUC INFANT., ENS. FUNDAM. E ENS. MÉDIO NO MT**, vinculado à SEDUC mas com código de UO diferente).
+
+Rodando sem alterar nada: o parser extraiu os dados **perfeitamente** (`Extrair_dados`: 9 linhas, Programa "544 - Mato Grosso Mais Educação", 3 Ações, R$ 50.000.000,00) — mas `Plan20_SEDUC` saiu **vazio**. Diferente dos bugs anteriores, essa não é uma quebra de layout: o filtro de UO (mesmo já tolerante a formatação, seção 14) comparava contra um único código fixo, `"14101"` — a 14601 nunca esteve na lista de UOs aceitas, por desenho original do módulo (pensado só pra UO única da SEDUC).
+
+**Decisão do usuário:** aceitar uma lista fixa de UOs, não remover o filtro nem deixar só 14101.
+
+**Fix:** nova constante `UOS_ACEITAS = {"14101", "14601"}` (`services/plan20_runner.py`, topo do arquivo) - `mask_uo` passou de `== "14101"` para `.isin(UOS_ACEITAS)`. Uma UO nova da secretaria no futuro precisa ser adicionada nessa lista.
+
+**Validação:**
+- Reprocessados os 3 arquivos reais: 2026 (UO 14101) e o 2027 novo (UO 14101) sem nenhuma mudança; o arquivo da UO 14601 passou a gerar as 9 linhas corretas em `Plan20_SEDUC` (R$ 50.000.000,00).
+- 2 novos testes em `tests/test_plan20_runner.py` (6º e 7º): UO 14601 é aceita; uma UO fora da lista (não cadastrada) continua corretamente de fora.
+- Suite completa: 23/23 (`pytest`).
+
+### 17.3 Commit
+Usuário conferiu os arquivos de saída (2026, os dois 2027 de UO 14101, e o de UO 14601) sem encontrar mais inconsistências e aprovou. Commit `edc74cb` (`services/plan20_runner.py` + `tests/test_plan20_runner.py`). Nenhuma gravação em `plan20_seduc`/banco em nenhum momento das seções 14 a 17 — só o filtro de layout, o parsing e os testes foram exercitados; o upload real (rota `/api/plan20/upload`) segue sem ser usado nesta investigação, então o próximo upload de verdade vai ser o primeiro teste "de ponta a ponta" com gravação no banco.
