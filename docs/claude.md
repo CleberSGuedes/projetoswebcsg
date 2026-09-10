@@ -351,3 +351,34 @@ Como é um bug intermitente e raro (a instabilidade de rede não é reproduzíve
 - `_load_permissoes_perfil`/`_load_permissoes_nivel` propagam uma falha de conexão persistente (`OperationalError`).
 - `_load_permissoes_perfil` continua tratando tabela/coluna realmente ausente (`ProgrammingError`) como "sem permissões" — não regride esse caso.
 - Suite completa: 16/16 (`pytest`).
+
+## 14. Achado (ainda não corrigido): filtro de UO do Plan20 quebra silenciosamente com o novo layout do relatório de 2027 (2026-09-08)
+
+### 14.1 Contexto
+Pedido do usuário: analisar `services/plan20_runner.py` (módulo "Atualizar → Planejamento → PLAN20 - SEDUC") e rodar arquivos reais de teste, **sem alterar código e sem gravar no banco**, pra entender a funcionalidade e validar se um relatório mais recente (planejamento 2027) — que a empresa fornecedora aparentemente reformatou — ainda processa corretamente. `run_plan20()` não faz nenhuma escrita em banco (só gera o `.xlsx` de saída), então testar com ele é seguro; a gravação em `plan20_seduc` só acontece na rota `/api/plan20/upload`.
+
+Testados 3 arquivos (`C:\workspace\Planilhas\`, fora do repositório):
+- `Plan 20 - 2026_12-09-2025=.xlsx` (2026, arquivo correto — o primeiro teste, com outro arquivo, tinha sido engano do usuário): 7.215 linhas brutas → 871 linhas em `Extrair_dados`/`Plan20_SEDUC`. Chave de Planejamento, Programa, Ação e Subação sem nenhuma lacuna (0 "-" em 871 linhas); zero linhas com flag de "Região divergente"; zero duplicatas; soma do Valor Total = R$ 5.801.058.678,00, muito próxima do teto MOMP 2026 já validado nos cards do Teto Orçamentário (R$ 5.812.610.192,00, ~0,2% de diferença) — bom sinal cruzado de que os valores extraídos batem com outra fonte independente.
+- `Plan20 2027 para teste.xlsx`: processou **sem lançar exceção**, mas `Plan20_SEDUC` saiu com **0 linhas** (`Extrair_dados` tinha 1.393 linhas válidas — a falha é só no filtro final, não no parsing).
+
+### 14.2 Causa raiz confirmada
+`run_plan20()` (`services/plan20_runner.py`, por volta da linha 1543-1548) filtra as linhas que vão pra `Plan20_SEDUC` com comparação de string **exata**:
+```python
+mask_uo = df_tmp["Unidade Orçamentária"].astype(str).str.strip() == "14.101 - SECRETARIA DE ESTADO DE EDUCAÇÃO"
+```
+No relatório de 2027, o campo "Unidade Orçamentária" vem como `"14101 - SECRETARIA DE ESTADO DE EDUCAÇÃO"` — **sem o ponto** entre "14" e "101" (mudança de formatação na origem, confirmada comparando o dump bruto dos dois arquivos linha a linha). Comparação exata bate zero vezes → as 1.393 linhas válidas somem silenciosamente da aba final e, por extensão, não iriam para o banco.
+
+Confirmado isolando o filtro fora do código real: com o ponto → 0/1393 passam; sem o ponto (formato real do arquivo 2027) → 1393/1393 passam.
+
+**Por que é perigoso:** o detector de layout que roda na tela de upload (`_detect_upload_layouts`, `rotas/home_routes.py`) não usa a Unidade Orçamentária como critério — só tokens como "Exercício", "Programa", "Ação (P/A/OE)" etc., que não mudaram. Ou seja, esse arquivo passaria pela validação da tela normalmente, o usuário veria "Plan20 processado com sucesso" e **nenhuma linha nova cairia no banco**, sem nenhum aviso.
+
+### 14.3 Outra mudança de layout encontrada (não quebra nada, mas vale registrar)
+O relatório de 2027 ganhou um bloco novo antes de cada Programa (Eixo, Objetivo Estratégico, Programa, Público Alvo, Tipo, UO Responsável, seção de Objetivo de Desenvolvimento Sustentável) que não existia em 2026. Ele **não** corrompe a extração porque:
+- Nenhum desses rótulos novos bate com os regex de `KEYS` (Programa/Ação/Produto/etc.) além do próprio "Programa:", que reaparece de verdade logo depois, com Função/Unidade Orçamentária/Ação/Subfunção/Esfera/Responsável na mesma ordem de 2026.
+- O mecanismo de `linha_vazia()` (uma linha em branco reresulta em `c_pend_indices`/`c_pend_ativo` limpos) descarta esse bloco novo pendente antes que ele seja fechado por um "Ação (P/A/OE):" — como há uma linha em branco separando o bloco novo do bloco real, o parser esquece o que coletou e recomeça do zero no "Programa:" real.
+- Confirmado nos 3 arquivos de teste: **zero campos vazios** em Programa/Função/Unidade Orçamentária/Ação/Subfunção/Objetivo Específico/Esfera/Responsável nas 1.393 linhas de 2027 — a extração desses campos continua 100% correta.
+
+Isso funciona "por sorte" da convenção de linha em branco entre os blocos — é um comportamento correto hoje, mas **frágil**: se um relatório futuro remover essa linha em branco, o bloco novo pode ser interpretado como se fosse o bloco de dados real, corrompendo o Programa/Função/UO/Ação/Subfunção/Esfera/Responsável de qualquer C-block seguinte que dependa da contagem posicional.
+
+### 14.4 Ainda não corrigido
+Combinado com o usuário: documentar agora, corrigir depois. Nenhuma alteração de código feita até este ponto — as investigações rodaram via scripts descartáveis fora do controle de versão (`_plan20_test_run*.py`, `_plan20_compare.py`), sempre apagados depois de cada rodada. Quando for corrigir, o ponto de partida é `services/plan20_runner.py` (comparação exata de UO) e — se quiser blindar contra a mudança de layout também — considerar validar/alertar quando o bloco de campos após "Programa:" não tiver exatamente os 8 rótulos esperados na ordem esperada, já que hoje a extração confia inteiramente na posição, sem checar o texto de cada rótulo.
