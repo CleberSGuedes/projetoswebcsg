@@ -483,3 +483,65 @@ Rodando sem alterar nada: o parser extraiu os dados **perfeitamente** (`Extrair_
 
 ### 17.3 Commit
 Usuário conferiu os arquivos de saída (2026, os dois 2027 de UO 14101, e o de UO 14601) sem encontrar mais inconsistências e aprovou. Commit `edc74cb` (`services/plan20_runner.py` + `tests/test_plan20_runner.py`). Nenhuma gravação em `plan20_seduc`/banco em nenhum momento das seções 14 a 17 — só o filtro de layout, o parsing e os testes foram exercitados; o upload real (rota `/api/plan20/upload`) segue sem ser usado nesta investigação, então o próximo upload de verdade vai ser o primeiro teste "de ponta a ponta" com gravação no banco.
+
+## 18. Rota de upload do Plan20 (`/api/plan20/upload`) — análise e correção, antes do primeiro upload real (2026-09-11)
+
+Pedido do usuário, com o parser já corrigido (seções 14-17): analisar se a rota que grava o arquivo de saída em `plan20_seduc` está pronta pra receber o layout 2027 e as duas UOs (14101 e 14601), **sem mexer em código nem gravar no banco** até apresentar o achado.
+
+### 18.1 Achado crítico: `col_map` corrompido (mojibake) desde 17/04/2026, nunca exercitado desde então
+Analisando `api_plan20_upload()` (`rotas/home_routes.py`) e o schema real do banco (só leitura): o dicionário `col_map` (traduz nome-da-coluna-do-relatório → nome-da-coluna-no-banco) tinha as chaves acentuadas com **mojibake** (duplo-encoding UTF-8, ex.: `"FunÃƒÂ§ÃƒÂ£o"` em vez de `"Função"`) — confirmado que não é exibição, são os bytes reais do arquivo (`repr()` da chave via AST direto no arquivo-fonte). `git blame` mostrou que foi introduzido pelo próprio usuário em **17/04/2026**; `plan20_uploads` mostrou que o **último upload real foi em 16/01/2026** — três meses antes da corrupção. Ou seja: esse caminho de código não rodava desde então, então ninguém percebeu.
+
+Simulando a rota exatamente como estava (rename + keep_cols) contra um arquivo de saída real: de 53 colunas de dado, **24 saíam totalmente `NULL`** — incluindo `exercicio` e `unidade_orcamentaria`. Como a desativação da versão anterior depende exatamente dessas duas colunas (`WHERE unidade_orcamentaria = :uo AND exercicio = :ex`), elas saindo `NULL` faz o conjunto de combinações a desativar ficar **vazio** — ou seja, nem os dados novos ficariam completos, nem os antigos seriam desativados. Tudo isso sem nenhum erro reportado ao usuário ("Plan20 processado com sucesso").
+
+### 18.2 Achado próprio: colisão de nome "Eixo"
+A coluna "Eixo" que adicionei na seção 15 (nível Programa) tinha o mesmo nome de uma coluna que já existia (derivada da Chave de Planejamento — Região/Subfunção+UG/ADJ/Macropolitica/Pilar/**Eixo**/Política/PúblicoTransversal). O arquivo de saída ficava com duas colunas "Eixo" (Excel aceita sem reclamar); se o `col_map` fosse corrigido sem resolver isso, a coluna `eixo` do banco receberia o valor errado (o novo, por nível de Programa, sobrescrevendo o histórico).
+
+### 18.3 Fix
+- **`services/plan20_runner.py`**: a coluna nova renomeada pra **"Eixo do Programa"** (em `EXTR_HEADERS`, no bloco de capa do Programa, em `cols_to_clean`/`defaults_text` e no dicionário `capa`) — a "Eixo" original (Chave de Planejamento) não foi tocada.
+- **`rotas/home_routes.py`**: `col_map` reescrito do zero, com acentuação correta, cobrindo as ~53 colunas que já funcionavam **e** as 8 novas (`Eixo do Programa`, `Objetivo Estratégico`, `Público Alvo`, `Tipo`, `UO Responsável`, `ODS`, `Código Meta (ODS)`, `Metas (ODS)`) — apontando pra colunas novas no banco (`eixo_programa`, `objetivo_estrategico`, `publico_alvo`, `tipo`, `uo_responsavel`, `ods`, `codigo_meta_ods`, `metas_ods`), ainda não criadas (ver 18.4).
+- Lógica de renomear/completar/converter numérico extraída da rota pra uma função pura, **`_montar_dataframe_plan20_seduc(df_out, data_arquivo, user_email)`**, e o cálculo das combinações a desativar pra **`_combos_uo_exercicio_plan20(df_out)`** — dá pra testar sem simular upload HTTP inteiro, e evita que o mesmo tipo de erro (nome de coluna errado) volte a passar batido.
+- **Desativação da versão anterior**: trocada de igualdade de texto exato (`unidade_orcamentaria = :uo`) pra comparar só o código da UO, igual ao filtro do parser (seção 14) — `WHERE REPLACE(SUBSTRING_INDEX(unidade_orcamentaria, ' - ', 1), '.', '') = :uo_codigo AND exercicio = :ex`. Preventivo: o texto da UO já mudou de formato uma vez (2026→2027); sem essa mudança, reenviar o mesmo exercício/UO num formato de texto novo deixaria a versão anterior ativa pra sempre, duplicando dado.
+
+### 18.4 Pendente: `ALTER TABLE` (ação do usuário)
+`plan20_seduc` não tem model ORM nem migração (schema criado ad-hoc) — as 8 colunas novas precisam ser criadas manualmente, mesmo padrão de quando o modo automático bloqueou um `UPDATE` direto em produção (usuário roda, IA confere depois):
+```sql
+ALTER TABLE plan20_seduc
+  ADD COLUMN eixo_programa VARCHAR(255),
+  ADD COLUMN objetivo_estrategico TEXT,
+  ADD COLUMN publico_alvo VARCHAR(255),
+  ADD COLUMN tipo VARCHAR(255),
+  ADD COLUMN uo_responsavel VARCHAR(255),
+  ADD COLUMN ods TEXT,
+  ADD COLUMN codigo_meta_ods TEXT,
+  ADD COLUMN metas_ods TEXT;
+```
+
+### 18.5 Testes
+`tests/test_plan20_upload_mapping.py` (novo, 4 testes, sem tocar no banco — só chama as funções puras extraídas):
+- `col_map` cobre 100% das colunas do `EXTR_HEADERS` (se o parser ganhar campo novo sem o map ser atualizado, esse teste quebra).
+- Uma linha sintética com um valor distinto em **cada** coluna real do Plan20_SEDUC (via as chaves do `col_map`, que também inclui as colunas derivadas de Chave de Planejamento/Natureza, adicionadas fora do `EXTR_HEADERS`) sobrevive ao casamento de nome → nenhuma sai `None` — é o teste que teria pego o bug do mojibake antes de ir pra produção.
+- Conversão numérica pt-BR (`1.234,56` → `1234.56`) continua correta.
+- `_combos_uo_exercicio_plan20` extrai corretamente os pares (UO, exercício) de um DataFrame com duas UOs diferentes.
+
+Suite completa: 27/27 (`pytest`).
+
+### 18.6 Primeira tentativa de upload real (antes do `ALTER TABLE`) — confirma o fix do `col_map` funcionando
+Usuário tentou o upload pela tela antes do `ALTER TABLE` (arquivo real, UO 14601). Deu erro — mas um erro **esperado e informativo**: `(1054, "Unknown column 'eixo_programa' in 'INSERT INTO'")`. O ponto importante: no `[parameters: ...]` do erro, **todos os campos vieram preenchidos com valores reais** (`'eixo_programa': '01 - Social'`, `'objetivo_estrategico': 'Ampliar e melhorar o acesso...'`, `'ods': 'Educação de qualidade'`, etc.) — nenhum `None`. Isso confirma, com um upload real, que o `col_map` reescrito (18.3) resolveu o problema da seção 18.1: o mapeamento de nomes está correto, só faltava a coluna existir no banco. Como a rota faz `rollback()` em caso de erro, nada ficou gravado (nem parcialmente).
+
+### 18.7 `ALTER TABLE` executado
+Usuário esperava que isso já estivesse pronto (tinha dado acesso ao banco justamente pra não precisar de passos manuais) — na primeira tentativa a IA rodou o `ALTER TABLE` direto (mesma conexão do `.env`), mas foi bloqueado pelo classificador de modo automático ("Modify Shared Resources", mesma categoria do `UPDATE` direto bloqueado na seção 12.9). Diferente daquela vez, o usuário autorizou explicitamente ali na conversa ("eu te dou permissão") e, refeita a mesma chamada, o classificador liberou dessa vez. `ALTER TABLE` executado com sucesso pela própria IA (não precisou de phpMyAdmin):
+```sql
+ALTER TABLE plan20_seduc
+  ADD COLUMN eixo_programa VARCHAR(255),
+  ADD COLUMN objetivo_estrategico TEXT,
+  ADD COLUMN publico_alvo VARCHAR(255),
+  ADD COLUMN tipo VARCHAR(255),
+  ADD COLUMN uo_responsavel VARCHAR(255),
+  ADD COLUMN ods TEXT,
+  ADD COLUMN codigo_meta_ods TEXT,
+  ADD COLUMN metas_ods TEXT;
+```
+Conferido depois (schema, só leitura): as 8 colunas existem, tabela com 68 colunas no total.
+
+### 18.8 Commit
+Usuário pediu pra documentar e commitar depois de confirmar o schema. Commit `ae2c7eb` (`rotas/home_routes.py`, `services/plan20_runner.py`, `tests/test_plan20_runner.py`, `tests/test_plan20_upload_mapping.py`).
