@@ -20,7 +20,11 @@ EXTR_HEADERS = [
     "Exercício",
     # Bloco de capa do Programa (layout novo, a partir de 2027 - fica
     # vazio/"-" em relatorios do layout antigo, que nao tem essas linhas).
-    "Eixo",
+    # "Eixo do Programa" (nao "Eixo") de proposito - ja existe uma coluna
+    # "Eixo" mais abaixo (derivada da Chave de Planejamento, historica,
+    # usada em outras partes do app) e usar o mesmo nome gerava duas
+    # colunas "Eixo" na planilha de saida (docs/claude.md, secao 18).
+    "Eixo do Programa",
     "Objetivo Estratégico",
     "Programa",
     "Público Alvo",
@@ -910,7 +914,7 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
             col1_norm = normaliza(col1)
             if acha(KEYS["Eixo"], col1_norm):
                 if col4:
-                    capa["Eixo"] = col4
+                    capa["Eixo do Programa"] = col4
             elif acha(KEYS["ObjetivoEstrategico"], col1_norm):
                 if col4:
                     capa["Objetivo Estratégico"] = col4
@@ -1331,7 +1335,7 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
             def _base_from_d(d_escolhido: dict[str, Any] | None) -> dict[str, Any]:
                 base = {
                     "Exercício": exercicio,
-                    "Eixo": capa.get("Eixo", ""),
+                    "Eixo do Programa": capa.get("Eixo do Programa", ""),
                     "Objetivo Estratégico": capa.get("Objetivo Estratégico", ""),
                     "Programa": campos.get("Programa", ""),
                     "Público Alvo": capa.get("Público Alvo", ""),
@@ -1631,7 +1635,7 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
     # PÓS-REGRA: preencher vazios padrão
     # ----------------------------------------
     cols_to_clean = [
-        "Eixo",
+        "Eixo do Programa",
         "Objetivo Estratégico",
         "Público Alvo",
         "Tipo",
@@ -1667,7 +1671,7 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         extr_df[col] = extr_df[col].replace({"nan": pd.NA, "<NA>": pd.NA}).replace(r"^\s*$", pd.NA, regex=True)
 
     defaults_text = {
-        "Eixo": "-",
+        "Eixo do Programa": "-",
         "Objetivo Estratégico": "-",
         "Público Alvo": "-",
         "Tipo": "-",

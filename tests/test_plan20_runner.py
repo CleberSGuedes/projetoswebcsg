@@ -161,8 +161,8 @@ def test_plan20_layout_2027_uo_sem_ponto_e_dois_programas_sem_contaminacao():
 
         # Cada Programa mantém sua própria capa - não pode colapsar pra
         # um valor só repetido nos dois (bug do "ab" como chave).
-        assert prog1["Eixo"] == "08 - Programas e ações padronizados"
-        assert prog2["Eixo"] == "01 - Social"
+        assert prog1["Eixo do Programa"] == "08 - Programas e ações padronizados"
+        assert prog2["Eixo do Programa"] == "01 - Social"
         assert prog1["Objetivo Estratégico"] == "Objetivo estratégico administrativo"
         assert prog2["Objetivo Estratégico"] == "Objetivo estratégico de educação"
         assert prog1["Tipo"] == "Gestão de Políticas Públicas"
@@ -231,7 +231,7 @@ def test_plan20_layout_2026_sem_capa_continua_identico():
         p20 = pd.read_excel(out_path, sheet_name="Plan20_SEDUC")
         assert len(p20) == 1
         row = p20.iloc[0]
-        assert row["Eixo"] == "-"
+        assert row["Eixo do Programa"] == "-"
         assert row["Objetivo Estratégico"] == "-"
         assert row["Público Alvo"] == "-"
         assert row["ODS"] == "Ação padronizada - sem ODS vinculado"

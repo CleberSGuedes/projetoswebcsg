@@ -104,7 +104,7 @@ from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
-from services.plan20_runner import run_plan20
+from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
@@ -16417,6 +16417,153 @@ PLAN20_UPLOAD_DIR = Path("upload/plan20_seduc")
 PLAN20_OUTPUT_DIR = Path("outputs/plan20_seduc")
 
 
+def _plan20_seduc_col_map() -> dict[str, str]:
+    """Mapa nome-da-coluna-no-relatorio -> nome-da-coluna-no-banco
+    (tabela plan20_seduc). Reescrito do zero em 2026-09 porque a versao
+    anterior tinha as chaves acentuadas corrompidas (mojibake, introduzido
+    em 17/04/2026 - nunca exercitado desde entao, o ultimo upload real
+    tinha sido em 16/01/2026), fazendo a maioria das colunas sair NULL
+    silenciosamente no banco, sem nenhum erro (docs/claude.md, secao 18).
+    """
+    return {
+        "Exercício": "exercicio",
+        "Programa": "programa",
+        "Função": "funcao",
+        "Unidade Orçamentária": "unidade_orcamentaria",
+        "Ação (P/A/OE)": "acao_paoe",
+        "Subfunção": "subfuncao",
+        "Objetivo Específico": "objetivo_especifico",
+        "Esfera": "esfera",
+        "Responsável pela Ação": "responsavel_acao",
+        "Produto(s) da Ação": "produto_acao",
+        "Unidade de Medida do Produto": "unid_medida_produto",
+        "Região do Produto": "regiao_produto",
+        "Meta do Produto": "meta_produto",
+        "Saldo Meta do Produto": "saldo_meta_produto",
+        "Público Transversal": "publico_transversal",
+        "Subação/entrega": "subacao_entrega",
+        "Responsável": "responsavel",
+        "Prazo": "prazo",
+        "Unid. Gestora": "unid_gestora",
+        "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
+        "Produto da Subação": "produto_subacao",
+        "Unidade de Medida": "unidade_medida",
+        "Região da Subação": "regiao_subacao",
+        "Código": "codigo",
+        "Município(s) da entrega": "municipios_entrega",
+        "Meta da Subação": "meta_subacao",
+        "Detalhamento do produto": "detalhamento_produto",
+        "Etapa": "etapa",
+        "Responsável da Etapa": "responsavel_etapa",
+        "Prazo da Etapa": "prazo_etapa",
+        "Região da Etapa": "regiao_etapa",
+        "Natureza": "natureza",
+        "Fonte": "fonte",
+        "IDU": "idu",
+        "Descrição do Item de Despesa": "descricao_item_despesa",
+        "Unid. Medida": "unid_medida_item",
+        "Quantidade": "quantidade",
+        "Valor Unitário": "valor_unitario",
+        "Valor Total": "valor_total",
+        "Chave de Planejamento": "chave_planejamento",
+        "Região": "regiao",
+        "Subfunção + UG": "subfuncao_ug",
+        "ADJ": "adj",
+        "Macropolitica": "macropolitica",
+        "Pilar": "pilar",
+        "Eixo": "eixo",
+        "Politica_Decreto": "politica_decreto",
+        "Público Transversal (chave)": "publico_transversal_chave",
+        "Cat.Econ": "cat_econ",
+        "Grupo": "grupo",
+        "Modalidade": "modalidade",
+        "Elemento": "elemento",
+        "Subelemento": "subelemento",
+        # Colunas novas do layout 2027 (docs/claude.md, seções 15 e 18) -
+        # exigem as colunas correspondentes já criadas em plan20_seduc via
+        # ALTER TABLE (eixo_programa, objetivo_estrategico, publico_alvo,
+        # tipo, uo_responsavel, ods, codigo_meta_ods, metas_ods).
+        "Eixo do Programa": "eixo_programa",
+        "Objetivo Estratégico": "objetivo_estrategico",
+        "Público Alvo": "publico_alvo",
+        "Tipo": "tipo",
+        "UO Responsável": "uo_responsavel",
+        "ODS": "ods",
+        "Código Meta (ODS)": "codigo_meta_ods",
+        "Metas (ODS)": "metas_ods",
+    }
+
+
+def _plan20_seduc_norm_col(name: str) -> str:
+    base = unicodedata.normalize("NFKD", str(name or ""))
+    ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
+    return ascii_only.lower().replace(" ", "").replace("_", "").replace(".", "").replace("/", "")
+
+
+def _montar_dataframe_plan20_seduc(df_out, data_arquivo, user_email: str):
+    """Recebe o DataFrame lido direto da aba Plan20_SEDUC do arquivo de
+    saída do parser e devolve o DataFrame pronto para INSERT na tabela
+    plan20_seduc: colunas renomeadas para o nome usado no banco, colunas
+    numéricas convertidas (formato pt-BR), colunas de metadado
+    preenchidas. Extraída da rota de upload para dar pra testar sem
+    precisar simular uma requisição HTTP inteira (docs/claude.md, seção
+    18) - é justamente essa lógica de casamento de nomes que ficou
+    quebrada silenciosamente por meses (seção 18.1).
+    """
+    col_map = _plan20_seduc_col_map()
+    norm_map = {_plan20_seduc_norm_col(src): dst for src, dst in col_map.items()}
+    rename_dict = {}
+    for col in df_out.columns:
+        norm = _plan20_seduc_norm_col(col)
+        if norm in norm_map:
+            rename_dict[col] = norm_map[norm]
+    df_out = df_out.rename(columns=rename_dict)
+
+    meta_cols = {"data_atualizacao", "ano", "data_arquivo", "user_email", "ativo"}
+    keep_cols = list(col_map.values()) + list(meta_cols)
+    for col in keep_cols:
+        if col not in df_out.columns:
+            df_out[col] = None
+    df_out = df_out[[c for c in keep_cols if c in df_out.columns]]
+
+    def _to_numeric_br(series):
+        return pd.to_numeric(
+            series.astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False),
+            errors="coerce",
+        )
+
+    numeric_cols = ["exercicio", "quantidade", "valor_unitario", "valor_total"]
+    for col in numeric_cols:
+        if col in df_out.columns:
+            df_out[col] = _to_numeric_br(df_out[col])
+
+    df_out["data_atualizacao"] = datetime.utcnow()
+    df_out["data_arquivo"] = data_arquivo
+    df_out["user_email"] = user_email
+    df_out["ativo"] = True
+    if "exercicio" in df_out.columns:
+        df_out["ano"] = pd.to_numeric(df_out["exercicio"], errors="coerce")
+    else:
+        df_out["ano"] = None
+    return df_out
+
+
+def _combos_uo_exercicio_plan20(df_out) -> set:
+    """(unidade_orcamentaria em texto cru, exercicio) de cada linha do
+    DataFrame já montado por _montar_dataframe_plan20_seduc - usado pra
+    decidir quais combinações desativar antes de inserir a nova versão.
+    """
+    combos = set()
+    if "unidade_orcamentaria" in df_out.columns and "exercicio" in df_out.columns:
+        for _, uo, ex in df_out[["unidade_orcamentaria", "exercicio"]].dropna().itertuples():
+            try:
+                ex_int = int(ex)
+            except (TypeError, ValueError):
+                continue
+            combos.add((str(uo).strip(), ex_int))
+    return combos
+
+
 @home_bp.route("/api/plan20/status", methods=["GET"])
 @login_required
 @require_feature("atualizar/plan20-seduc")
@@ -16545,132 +16692,27 @@ def api_plan20_upload():
         try:
             df_out = pd.read_excel(output_path, sheet_name="Plan20_SEDUC")
             if not df_out.empty:
-                col_map = {
-                    "ExercÃƒÂ­cio": "exercicio",
-                    "Programa": "programa",
-                    "FunÃƒÂ§ÃƒÂ£o": "funcao",
-                    "Unidade OrÃƒÂ§amentÃƒÂ¡ria": "unidade_orcamentaria",
-                    "AÃƒÂ§ÃƒÂ£o (P/A/OE)": "acao_paoe",
-                    "SubfunÃƒÂ§ÃƒÂ£o": "subfuncao",
-                    "Objetivo EspecÃƒÂ­fico": "objetivo_especifico",
-                    "Esfera": "esfera",
-                    "ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o": "responsavel_acao",
-                    "Produto(s) da AÃƒÂ§ÃƒÂ£o": "produto_acao",
-                    "Unidade de Medida do Produto": "unid_medida_produto",
-                    "RegiÃƒÂ£o do Produto": "regiao_produto",
-                    "Meta do Produto": "meta_produto",
-                    "Saldo Meta do Produto": "saldo_meta_produto",
-                    "PÃƒÂºblico Transversal": "publico_transversal",
-                    "SubAÃƒÂ§ÃƒÂ£o/entrega": "subacao_entrega",
-                    "ResponsÃƒÂ¡vel": "responsavel",
-                    "Prazo": "prazo",
-                    "Unid. Gestora": "unid_gestora",
-                    "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
-                    "Produto da SubAÃƒÂ§ÃƒÂ£o": "produto_subacao",
-                    "Unidade de Medida": "unidade_medida",
-                    "RegiÃƒÂ£o da SubAÃƒÂ§ÃƒÂ£o": "regiao_subacao",
-                    "CÃƒÂ³digo": "codigo",
-                    "MunicÃƒÂ­pio(s) da entrega": "municipios_entrega",
-                    "Meta da SubAÃƒÂ§ÃƒÂ£o": "meta_subacao",
-                    "Detalhamento do produto": "detalhamento_produto",
-                    "Etapa": "etapa",
-                    "ResponsÃƒÂ¡vel da Etapa": "responsavel_etapa",
-                    "Prazo da Etapa": "prazo_etapa",
-                    "RegiÃƒÂ£o da Etapa": "regiao_etapa",
-                    "Natureza": "natureza",
-                    "Fonte": "fonte",
-                    "IDU": "idu",
-                    "DescriÃƒÂ§ÃƒÂ£o do Item de Despesa": "descricao_item_despesa",
-                    "Unid. Medida": "unid_medida_item",
-                    "Quantidade": "quantidade",
-                    "Valor UnitÃƒÂ¡rio": "valor_unitario",
-                    "Valor Total": "valor_total",
-                    "Chave de Planejamento": "chave_planejamento",
-                    "RegiÃƒÂ£o": "regiao",
-                    "SubfunÃƒÂ§ÃƒÂ£o + UG": "subfuncao_ug",
-                    "ADJ": "adj",
-                    "Macropolitica": "macropolitica",
-                    "Pilar": "pilar",
-                    "Eixo": "eixo",
-                    "Politica_Decreto": "politica_decreto",
-                    "PÃƒÂºblico Transversal (chave)": "publico_transversal_chave",
-                    "Cat.Econ": "cat_econ",
-                    "Grupo": "grupo",
-                    "Modalidade": "modalidade",
-                    "Elemento": "elemento",
-                    "Subelemento": "subelemento",
-                }
+                df_out = _montar_dataframe_plan20_seduc(df_out, data_arquivo, user_email)
 
-                def _norm_col(name: str) -> str:
-                    base = unicodedata.normalize("NFKD", str(name or ""))
-                    ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
-                    return ascii_only.lower().replace(" ", "").replace("_", "").replace(".", "").replace("/", "")
-
-                norm_map = {_norm_col(src): dst for src, dst in col_map.items()}
-                rename_dict = {}
-                for col in df_out.columns:
-                    norm = _norm_col(col)
-                    if norm in norm_map:
-                        rename_dict[col] = norm_map[norm]
-                df_out = df_out.rename(columns=rename_dict)
-
-                meta_cols = {
-                    "data_atualizacao",
-                    "ano",
-                    "data_arquivo",
-                    "user_email",
-                    "ativo",
-                }
-                keep_cols = list(col_map.values()) + list(meta_cols)
-                for col in keep_cols:
-                    if col not in df_out.columns:
-                        df_out[col] = None
-                df_out = df_out[[c for c in keep_cols if c in df_out.columns]]
-
-                # Converte colunas numericas para evitar erro de cast (usa formato pt-BR)
-                def _to_numeric_br(series):
-                    return pd.to_numeric(
-                        series.astype(str)
-                        .str.replace(".", "", regex=False)
-                        .str.replace(",", ".", regex=False),
-                        errors="coerce",
-                    )
-
-                # Apenas colunas realmente numÃƒÂ©ricas no banco
-                numeric_cols = [
-                    "exercicio",
-                    "quantidade",
-                    "valor_unitario",
-                    "valor_total",
-                ]
-                for col in numeric_cols:
-                    if col in df_out.columns:
-                        df_out[col] = _to_numeric_br(df_out[col])
-
-                now = datetime.utcnow()
-                df_out["data_atualizacao"] = now
-                df_out["data_arquivo"] = data_arquivo
-                df_out["user_email"] = user_email
-                df_out["ativo"] = True
-                if "exercicio" in df_out.columns:
-                    df_out["ano"] = pd.to_numeric(df_out["exercicio"], errors="coerce")
-                else:
-                    df_out["ano"] = None
-                # Desativa somente registros do mesmo exercicio+unidade_orcamentaria
-                combos = set()
-                if "unidade_orcamentaria" in df_out.columns and "exercicio" in df_out.columns:
-                    for _, uo, ex in df_out[["unidade_orcamentaria", "exercicio"]].dropna().itertuples():
-                        try:
-                            ex_int = int(ex)
-                        except (TypeError, ValueError):
-                            continue
-                        combos.add((str(uo).strip(), ex_int))
+                # Desativa somente registros do mesmo exercicio+unidade
+                # orcamentaria - compara so o codigo numerico da UO (nao o
+                # texto completo), porque esse texto ja mudou de
+                # formatacao uma vez ("14.101" -> "14101") e pode mudar de
+                # novo; com igualdade de texto exato, um reenvio do mesmo
+                # exercicio/UO num formato novo deixaria a versao anterior
+                # ativa pra sempre, duplicando dado (docs/claude.md, secao
+                # 18 - mesma causa raiz da secao 14, aqui na desativacao
+                # em vez do filtro do parser).
+                combos = _combos_uo_exercicio_plan20(df_out)
                 for uo, ex in combos:
+                    uo_codigo = _plan20_uo_key(uo)
                     db.session.execute(
                         text(
-                            "UPDATE plan20_seduc SET ativo = 0 WHERE unidade_orcamentaria = :uo AND exercicio = :ex"
+                            "UPDATE plan20_seduc SET ativo = 0 "
+                            "WHERE REPLACE(SUBSTRING_INDEX(unidade_orcamentaria, ' - ', 1), '.', '') = :uo_codigo "
+                            "AND exercicio = :ex"
                         ),
-                        {"uo": uo, "ex": ex},
+                        {"uo_codigo": uo_codigo, "ex": ex},
                     )
                 db.session.commit()
                 df_out.to_sql("plan20_seduc", db.engine, if_exists="append", index=False)
