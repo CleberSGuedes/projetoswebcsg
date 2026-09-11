@@ -7732,6 +7732,8 @@
     const btnReset = document.getElementById("plan20-reset");
     const totExercicio = document.getElementById("plan20-tot-exercicio");
     const totValorTotal = document.getElementById("plan20-tot-valor-total");
+    const headerRow = document.getElementById("plan20-header-row");
+    const filterRow = document.getElementById("plan20-filter-row");
     if (!table || !tbody) return;
     if (table.dataset.bound === "1") return;
     table.dataset.bound = "1";
@@ -7749,6 +7751,13 @@
       if (Number.isNaN(n)) return v ?? "";
       return numFmt.format(n);
     };
+    const esc = (v) =>
+      String(v ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 
     const updateTotals = (rows) => {
       const exSet = new Set();
@@ -7817,61 +7826,9 @@
       tbody.innerHTML = "";
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${r.exercicio ?? ""}</td>
-          <td>${r.chave_planejamento ?? ""}</td>
-          <td>${r.regiao ?? ""}</td>
-          <td>${r.subfuncao_ug ?? ""}</td>
-          <td>${r.adj ?? ""}</td>
-          <td>${r.macropolitica ?? ""}</td>
-          <td>${r.pilar ?? ""}</td>
-          <td>${r.eixo ?? ""}</td>
-          <td>${r.politica_decreto ?? ""}</td>
-          <td>${r.publico_transversal_chave ?? ""}</td>
-          <td>${r.programa ?? ""}</td>
-          <td>${r.funcao ?? ""}</td>
-          <td>${r.unidade_orcamentaria ?? ""}</td>
-          <td>${r.acao_paoe ?? ""}</td>
-          <td>${r.subfuncao ?? ""}</td>
-          <td>${r.objetivo_especifico ?? ""}</td>
-          <td>${r.esfera ?? ""}</td>
-          <td>${r.responsavel_acao ?? ""}</td>
-          <td>${r.produto_acao ?? ""}</td>
-          <td>${r.unid_medida_produto ?? ""}</td>
-          <td>${r.regiao_produto ?? ""}</td>
-          <td>${r.meta_produto ?? ""}</td>
-          <td>${r.saldo_meta_produto ?? ""}</td>
-          <td>${r.publico_transversal ?? ""}</td>
-          <td>${r.subacao_entrega ?? ""}</td>
-          <td>${r.responsavel ?? ""}</td>
-          <td>${r.prazo ?? ""}</td>
-          <td>${r.unid_gestora ?? ""}</td>
-          <td>${r.unidade_setorial_planejamento ?? ""}</td>
-          <td>${r.produto_subacao ?? ""}</td>
-          <td>${r.unidade_medida ?? ""}</td>
-          <td>${r.regiao_subacao ?? ""}</td>
-          <td>${r.codigo ?? ""}</td>
-          <td>${r.municipios_entrega ?? ""}</td>
-          <td>${r.meta_subacao ?? ""}</td>
-          <td>${r.detalhamento_produto ?? ""}</td>
-          <td>${r.etapa ?? ""}</td>
-          <td>${r.responsavel_etapa ?? ""}</td>
-          <td>${r.prazo_etapa ?? ""}</td>
-          <td>${r.regiao_etapa ?? ""}</td>
-          <td>${r.natureza ?? ""}</td>
-          <td>${r.cat_econ ?? ""}</td>
-          <td>${r.grupo ?? ""}</td>
-          <td>${r.modalidade ?? ""}</td>
-          <td>${r.elemento ?? ""}</td>
-          <td>${r.subelemento ?? ""}</td>
-          <td>${r.fonte ?? ""}</td>
-          <td>${r.idu ?? ""}</td>
-          <td>${r.descricao_item_despesa ?? ""}</td>
-          <td>${r.unid_medida_item ?? ""}</td>
-          <td class="num">${fmtNum(r.quantidade)}</td>
-          <td class="num">${fmtNum(r.valor_unitario)}</td>
-          <td class="num">${fmtNum(r.valor_total)}</td>
-        `;
+        tr.innerHTML = columns
+          .map((c) => (c.numeric ? `<td class="num">${fmtNum(r[c.key])}</td>` : `<td>${esc(r[c.key])}</td>`))
+          .join("");
         tbody.appendChild(tr);
       });
 
@@ -7888,65 +7845,31 @@
 
     const allData = { rows: [] };
 
-    const colKeys = [
-      "exercicio",
-      "chave_planejamento",
-      "regiao",
-      "subfuncao_ug",
-      "adj",
-      "macropolitica",
-      "pilar",
-      "eixo",
-      "politica_decreto",
-      "publico_transversal_chave",
-      "programa",
-      "funcao",
-      "unidade_orcamentaria",
-      "acao_paoe",
-      "subfuncao",
-      "objetivo_especifico",
-      "esfera",
-      "responsavel_acao",
-      "produto_acao",
-      "unid_medida_produto",
-      "regiao_produto",
-      "meta_produto",
-      "saldo_meta_produto",
-      "publico_transversal",
-      "subacao_entrega",
-      "responsavel",
-      "prazo",
-      "unid_gestora",
-      "unidade_setorial_planejamento",
-      "produto_subacao",
-      "unidade_medida",
-      "regiao_subacao",
-      "codigo",
-      "municipios_entrega",
-      "meta_subacao",
-      "detalhamento_produto",
-      "etapa",
-      "responsavel_etapa",
-      "prazo_etapa",
-      "regiao_etapa",
-      "natureza",
-      "cat_econ",
-      "grupo",
-      "modalidade",
-      "elemento",
-      "subelemento",
-      "fonte",
-      "idu",
-      "descricao_item_despesa",
-      "unid_medida_item",
-      "quantidade",
-      "valor_unitario",
-      "valor_total",
-    ];
+    // Colunas vem da API (data.columns), nao ficam mais fixas aqui - ver
+    // PLAN20_RELATORIO_COLUNAS em rotas/home_routes.py (docs/claude.md,
+    // secao 19). initColumnsUI() preenche essas variaveis e o cabecalho
+    // da tabela assim que a resposta chega, antes do primeiro render().
+    let columns = [];
+    let colKeys = [];
+    let filterContainers = [];
+    let filters = {};
+    let filterControls = {};
 
-    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
-    const filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
-    const filterControls = {};
+    const initColumnsUI = (cols) => {
+      columns = Array.isArray(cols) ? cols : [];
+      colKeys = columns.map((c) => c.key);
+      if (headerRow) {
+        headerRow.innerHTML = columns.map((c) => `<th>${esc(c.label)}</th>`).join("");
+      }
+      if (filterRow) {
+        filterRow.innerHTML = columns
+          .map((c) => `<th><div class="multi-filter" data-col="${esc(c.key)}"></div></th>`)
+          .join("");
+      }
+      filterContainers = table.querySelectorAll(".filter-row [data-col]");
+      filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+      filterControls = {};
+    };
 
     const closeAllPanels = () => {
       Object.values(filterControls).forEach((ctrl) => {
@@ -8207,6 +8130,7 @@
         const res = await fetch("/api/relatorios/plan20-seduc");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        initColumnsUI(data.columns);
         allData.rows = data.data || [];
         setOptions(allData.rows);
         filteredRows = allData.rows;

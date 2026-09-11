@@ -16494,6 +16494,95 @@ def _plan20_seduc_col_map() -> dict[str, str]:
     }
 
 
+# Fonte única de colunas do relatório "Plan20 - SEDUC" (tela + download) -
+# (rótulo exibido, coluna no banco, tipo). "tipo" controla a formatação:
+# "num" = Quantidade/Valor Unitário/Valor Total (2 casas decimais, tela e
+# Excel); "int" = Exercício (inteiro, só no Excel); "text" = as demais.
+# Unificada em 2026-09 porque a tela e o download tinham cada um o seu
+# proprio SELECT + lista de colunas, escritos de forma independente - o
+# mesmo tipo de duplicacao que causou o incidente do col_map corrompido do
+# upload (docs/claude.md, secao 18). O conjunto de colunas aqui precisa
+# bater exatamente com o de _plan20_seduc_col_map() - ha um teste
+# (tests/test_plan20_upload_mapping.py) que garante isso.
+PLAN20_RELATORIO_COLUNAS = [
+    ("Exercício", "exercicio", "int"),
+    ("Chave de Planejamento", "chave_planejamento", "text"),
+    ("Região", "regiao", "text"),
+    ("Subfunção + UG", "subfuncao_ug", "text"),
+    ("ADJ", "adj", "text"),
+    ("Macropolítica", "macropolitica", "text"),
+    ("Pilar", "pilar", "text"),
+    ("Eixo", "eixo", "text"),
+    ("Política_Decreto", "politica_decreto", "text"),
+    ("Público Transversal (chave)", "publico_transversal_chave", "text"),
+    ("Programa", "programa", "text"),
+    ("Eixo do Programa", "eixo_programa", "text"),
+    ("Objetivo Estratégico", "objetivo_estrategico", "text"),
+    ("Público Alvo", "publico_alvo", "text"),
+    ("Tipo", "tipo", "text"),
+    ("Função", "funcao", "text"),
+    ("Unidade Orçamentária", "unidade_orcamentaria", "text"),
+    ("UO Responsável", "uo_responsavel", "text"),
+    ("Ação (P/A/OE)", "acao_paoe", "text"),
+    ("Subfunção", "subfuncao", "text"),
+    ("Objetivo Específico", "objetivo_especifico", "text"),
+    ("Esfera", "esfera", "text"),
+    ("Responsável pela Ação", "responsavel_acao", "text"),
+    ("ODS", "ods", "text"),
+    ("Código Meta (ODS)", "codigo_meta_ods", "text"),
+    ("Metas (ODS)", "metas_ods", "text"),
+    ("Produto(s) da Ação", "produto_acao", "text"),
+    ("Unidade de Medida do Produto", "unid_medida_produto", "text"),
+    ("Região do Produto", "regiao_produto", "text"),
+    ("Meta do Produto", "meta_produto", "text"),
+    ("Saldo Meta do Produto", "saldo_meta_produto", "text"),
+    ("Público Transversal", "publico_transversal", "text"),
+    ("Subação/entrega", "subacao_entrega", "text"),
+    ("Responsável", "responsavel", "text"),
+    ("Prazo", "prazo", "text"),
+    ("Unid. Gestora", "unid_gestora", "text"),
+    ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento", "text"),
+    ("Produto da Subação", "produto_subacao", "text"),
+    ("Unidade de Medida", "unidade_medida", "text"),
+    ("Região da Subação", "regiao_subacao", "text"),
+    ("Código", "codigo", "text"),
+    ("Município(s) da entrega", "municipios_entrega", "text"),
+    ("Meta da Subação", "meta_subacao", "text"),
+    ("Detalhamento do produto", "detalhamento_produto", "text"),
+    ("Etapa", "etapa", "text"),
+    ("Responsável da Etapa", "responsavel_etapa", "text"),
+    ("Prazo da Etapa", "prazo_etapa", "text"),
+    ("Região da Etapa", "regiao_etapa", "text"),
+    ("Natureza", "natureza", "text"),
+    ("Cat.Econ", "cat_econ", "text"),
+    ("Grupo", "grupo", "text"),
+    ("Modalidade", "modalidade", "text"),
+    ("Elemento", "elemento", "text"),
+    ("Subelemento", "subelemento", "text"),
+    ("Fonte", "fonte", "text"),
+    ("IDU", "idu", "text"),
+    ("Descrição do Item de Despesa", "descricao_item_despesa", "text"),
+    ("Unid. Medida", "unid_medida_item", "text"),
+    ("Quantidade", "quantidade", "num"),
+    ("Valor Unitário", "valor_unitario", "num"),
+    ("Valor Total", "valor_total", "num"),
+]
+
+
+def _plan20_relatorio_rows():
+    """Executa o SELECT do relatório Plan20_SEDUC a partir da fonte única
+    de colunas (PLAN20_RELATORIO_COLUNAS) - usado tanto pela tela quanto
+    pelo download, pra não ter dois SELECTs escritos de forma independente."""
+    colunas_sql = ",\n                        ".join(col for _, col, _ in PLAN20_RELATORIO_COLUNAS)
+    return (
+        db.session.execute(
+            text(f"SELECT\n                        {colunas_sql}\n                    FROM plan20_seduc WHERE ativo = 1")
+        )
+        .mappings()
+        .all()
+    )
+
+
 def _plan20_seduc_norm_col(name: str) -> str:
     base = unicodedata.normalize("NFKD", str(name or ""))
     ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
@@ -16780,72 +16869,7 @@ def api_relatorio_plan20():
             return 0.0
 
     try:
-        rows = (
-            db.session.execute(
-                text(
-                    """
-                    SELECT
-                        exercicio,
-                        chave_planejamento,
-                        regiao,
-                        subfuncao_ug,
-                        adj,
-                        macropolitica,
-                        pilar,
-                        eixo,
-                        politica_decreto,
-                        publico_transversal_chave,
-                        programa,
-                        funcao,
-                        unidade_orcamentaria,
-                        acao_paoe,
-                        subfuncao,
-                        objetivo_especifico,
-                        esfera,
-                        responsavel_acao,
-                        produto_acao,
-                        unid_medida_produto,
-                        regiao_produto,
-                        meta_produto,
-                        saldo_meta_produto,
-                        publico_transversal,
-                        subacao_entrega,
-                        responsavel,
-                        prazo,
-                        unid_gestora,
-                        unidade_setorial_planejamento,
-                        produto_subacao,
-                        unidade_medida,
-                        regiao_subacao,
-                        codigo,
-                        municipios_entrega,
-                        meta_subacao,
-                        detalhamento_produto,
-                        etapa,
-                        responsavel_etapa,
-                        prazo_etapa,
-                        regiao_etapa,
-                        natureza,
-                        cat_econ,
-                        grupo,
-                        modalidade,
-                        elemento,
-                        subelemento,
-                        fonte,
-                        idu,
-                        descricao_item_despesa,
-                        unid_medida_item,
-                        quantidade,
-                        valor_unitario,
-                        valor_total
-                    FROM plan20_seduc
-                    WHERE ativo = 1
-                    """
-                )
-            )
-            .mappings()
-            .all()
-        )
+        rows = _plan20_relatorio_rows()
 
         last_upload = Plan20Upload.query.order_by(Plan20Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(getattr(last_upload, "data_arquivo", None)) if last_upload else None
@@ -16854,68 +16878,21 @@ def api_relatorio_plan20():
 
         data = []
         for r in rows:
-            data.append(
-                {
-                    "exercicio": r.get("exercicio"),
-                    "chave_planejamento": r.get("chave_planejamento"),
-                    "regiao": r.get("regiao"),
-                    "subfuncao_ug": r.get("subfuncao_ug"),
-                    "adj": r.get("adj"),
-                    "macropolitica": r.get("macropolitica"),
-                    "pilar": r.get("pilar"),
-                    "eixo": r.get("eixo"),
-                    "politica_decreto": r.get("politica_decreto"),
-                    "publico_transversal_chave": r.get("publico_transversal_chave"),
-                    "programa": r.get("programa"),
-                    "funcao": r.get("funcao"),
-                    "unidade_orcamentaria": r.get("unidade_orcamentaria"),
-                    "acao_paoe": r.get("acao_paoe"),
-                    "subfuncao": r.get("subfuncao"),
-                    "objetivo_especifico": r.get("objetivo_especifico"),
-                    "esfera": r.get("esfera"),
-                    "responsavel_acao": r.get("responsavel_acao"),
-                    "produto_acao": r.get("produto_acao"),
-                    "unid_medida_produto": r.get("unid_medida_produto"),
-                    "regiao_produto": r.get("regiao_produto"),
-                    "meta_produto": r.get("meta_produto"),
-                    "saldo_meta_produto": r.get("saldo_meta_produto"),
-                    "publico_transversal": r.get("publico_transversal"),
-                    "subacao_entrega": r.get("subacao_entrega"),
-                    "responsavel": r.get("responsavel"),
-                    "prazo": r.get("prazo"),
-                    "unid_gestora": r.get("unid_gestora"),
-                    "unidade_setorial_planejamento": r.get("unidade_setorial_planejamento"),
-                    "produto_subacao": r.get("produto_subacao"),
-                    "unidade_medida": r.get("unidade_medida"),
-                    "regiao_subacao": r.get("regiao_subacao"),
-                    "codigo": r.get("codigo"),
-                    "municipios_entrega": r.get("municipios_entrega"),
-                    "meta_subacao": r.get("meta_subacao"),
-                    "detalhamento_produto": r.get("detalhamento_produto"),
-                    "etapa": r.get("etapa"),
-                    "responsavel_etapa": r.get("responsavel_etapa"),
-                    "prazo_etapa": r.get("prazo_etapa"),
-                    "regiao_etapa": r.get("regiao_etapa"),
-                    "natureza": r.get("natureza"),
-                    "cat_econ": r.get("cat_econ"),
-                    "grupo": r.get("grupo"),
-                    "modalidade": r.get("modalidade"),
-                    "elemento": r.get("elemento"),
-                    "subelemento": r.get("subelemento"),
-                    "fonte": r.get("fonte"),
-                    "idu": r.get("idu"),
-                    "descricao_item_despesa": r.get("descricao_item_despesa"),
-                    "unid_medida_item": r.get("unid_medida_item"),
-                    "quantidade": _to_float(r.get("quantidade")),
-                    "valor_unitario": _to_float(r.get("valor_unitario")),
-                    "valor_total": _to_float(r.get("valor_total")),
-                }
-            )
+            item = {}
+            for _, col, tipo in PLAN20_RELATORIO_COLUNAS:
+                item[col] = _to_float(r.get(col)) if tipo == "num" else r.get(col)
+            data.append(item)
+
+        columns = [
+            {"key": col, "label": label, "numeric": tipo == "num"}
+            for label, col, tipo in PLAN20_RELATORIO_COLUNAS
+        ]
 
         return jsonify(
             {
                 "ok": True,
                 "data": data,
+                "columns": columns,
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
@@ -18556,138 +18533,20 @@ def api_relatorio_plan20_download():
             return 0.0
 
     try:
-        rows = (
-            db.session.execute(
-                text(
-                    """
-                    SELECT
-                        exercicio,
-                        chave_planejamento,
-                        regiao,
-                        subfuncao_ug,
-                        adj,
-                        macropolitica,
-                        pilar,
-                        eixo,
-                        politica_decreto,
-                        publico_transversal_chave,
-                        programa,
-                        funcao,
-                        unidade_orcamentaria,
-                        acao_paoe,
-                        subfuncao,
-                        objetivo_especifico,
-                        esfera,
-                        responsavel_acao,
-                        produto_acao,
-                        unid_medida_produto,
-                        regiao_produto,
-                        meta_produto,
-                        saldo_meta_produto,
-                        publico_transversal,
-                        subacao_entrega,
-                        responsavel,
-                        prazo,
-                        unid_gestora,
-                        unidade_setorial_planejamento,
-                        produto_subacao,
-                        unidade_medida,
-                        regiao_subacao,
-                        codigo,
-                        municipios_entrega,
-                        meta_subacao,
-                        detalhamento_produto,
-                        etapa,
-                        responsavel_etapa,
-                        prazo_etapa,
-                        regiao_etapa,
-                        natureza,
-                        cat_econ,
-                        grupo,
-                        modalidade,
-                        elemento,
-                        subelemento,
-                        fonte,
-                        idu,
-                        descricao_item_despesa,
-                        unid_medida_item,
-                        quantidade,
-                        valor_unitario,
-                        valor_total
-                    FROM plan20_seduc
-                    WHERE ativo = 1
-                    """
-                )
-            )
-            .mappings()
-            .all()
-        )
+        rows = _plan20_relatorio_rows()
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
         db.session.close()
 
-        headers = [
-            ("Exercício", "exercicio"),
-            ("Chave de Planejamento", "chave_planejamento"),
-            ("Região", "regiao"),
-            ("Subfunção + UG", "subfuncao_ug"),
-            ("ADJ", "adj"),
-            ("Macropolitica", "macropolitica"),
-            ("Pilar", "pilar"),
-            ("Eixo", "eixo"),
-            ("Politica_Decreto", "politica_decreto"),
-            ("Público Transversal (chave)", "publico_transversal_chave"),
-            ("Programa", "programa"),
-            ("Função", "funcao"),
-            ("Unidade Orçamentária", "unidade_orcamentaria"),
-            ("Ação (P/A/OE)", "acao_paoe"),
-            ("Subfunção", "subfuncao"),
-            ("Objetivo Específico", "objetivo_especifico"),
-            ("Esfera", "esfera"),
-            ("Responsável pela Ação", "responsavel_acao"),
-            ("Produto(s) da Ação", "produto_acao"),
-            ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("Região do Produto", "regiao_produto"),
-            ("Meta do Produto", "meta_produto"),
-            ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("P\u00fablico Transversal", "publico_transversal"),
-            ("SubA\u00e7\u00e3o/entrega", "subacao_entrega"),
-            ("Respons\u00e1vel", "responsavel"),
-            ("Prazo", "prazo"),
-            ("Unid. Gestora", "unid_gestora"),
-            ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubA\u00e7\u00e3o", "produto_subacao"),
-            ("Unidade de Medida", "unidade_medida"),
-            ("Regi\u00e3o da SubA\u00e7\u00e3o", "regiao_subacao"),
-            ("C\u00f3digo", "codigo"),
-            ("Munic\u00edpio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubA\u00e7\u00e3o", "meta_subacao"),
-            ("Detalhamento do produto", "detalhamento_produto"),
-            ("Etapa", "etapa"),
-            ("Respons\u00e1vel da Etapa", "responsavel_etapa"),
-            ("Prazo da Etapa", "prazo_etapa"),
-            ("Regi\u00e3o da Etapa", "regiao_etapa"),
-            ("Natureza", "natureza"),
-            ("Cat.Econ", "cat_econ"),
-            ("Grupo", "grupo"),
-            ("Modalidade", "modalidade"),
-            ("Elemento", "elemento"),
-            ("Subelemento", "subelemento"),
-            ("Fonte", "fonte"),
-            ("IDU", "idu"),
-            ("Descri\u00e7\u00e3o do Item de Despesa", "descricao_item_despesa"),
-            ("Unid. Medida", "unid_medida_item"),
-            ("Quantidade", "quantidade"),
-            ("Valor Unit\u00e1rio", "valor_unitario"),
-            ("Valor Total", "valor_total"),
-        ]
+        headers = [(label, col) for label, col, _ in PLAN20_RELATORIO_COLUNAS]
+        numeric_keys = {col for _, col, tipo in PLAN20_RELATORIO_COLUNAS if tipo == "num"}
 
         data = []
         for r in rows:
             row_dict = {}
             for label, key in headers:
                 val = r.get(key)
-                if key in {"quantidade", "valor_unitario", "valor_total"}:
+                if key in numeric_keys:
                     val = _to_float(val)
                 row_dict[label] = val
             data.append(row_dict)
@@ -18707,20 +18566,17 @@ def api_relatorio_plan20_download():
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
-            idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
-            numeric_cols = {
-                idx_map.get("Quantidade"),
-                idx_map.get("Valor Unit\u00e1rio"),
-                idx_map.get("Valor Total"),
-            }
-            numeric_cols = {c for c in numeric_cols if c}
+            key_idx_map = {key: i + 1 for i, (_, key) in enumerate(headers)}
+            numeric_cols = {key_idx_map[k] for k in numeric_keys if k in key_idx_map}
+            int_keys = {col for _, col, tipo in PLAN20_RELATORIO_COLUNAS if tipo == "int"}
+            int_cols = {key_idx_map[k] for k in int_keys if k in key_idx_map}
             number_format = "#,##0.00"
             for row in ws.iter_rows():
                 for cell in row:
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("Exerc\u00edcio") and isinstance(cell.value, (int, float, str)):
+                    if cell.col_idx in int_cols and isinstance(cell.value, (int, float, str)):
                         try:
                             cell.value = int(str(cell.value).split(".")[0])
                         except Exception:

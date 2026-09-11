@@ -21,6 +21,7 @@ from rotas.home_routes import (
     _plan20_seduc_col_map,
     _montar_dataframe_plan20_seduc,
     _combos_uo_exercicio_plan20,
+    PLAN20_RELATORIO_COLUNAS,
 )
 from services.plan20_runner import EXTR_HEADERS
 
@@ -106,3 +107,31 @@ def test_combos_uo_exercicio():
             ("14101 - SECRETARIA DE ESTADO DE EDUCAÇÃO", 2027),
             ("14601 - FUNDO EST DE APOIO...", 2027),
         }
+
+
+def test_relatorio_colunas_bate_com_col_map():
+    # O relatorio (tela + download, rotas/home_routes.py) tem sua propria
+    # lista de colunas (PLAN20_RELATORIO_COLUNAS), unificada em 2026-09 a
+    # partir de 4 listas independentes que existiam antes (docs/claude.md,
+    # secao 19). Se ela saír de sincronia com o col_map do upload - uma
+    # coluna gravada no banco mas ausente do relatorio, ou vice-versa -,
+    # esse teste quebra em vez de deixar passar batido, mesmo espirito do
+    # teste acima para o EXTR_HEADERS.
+    colunas_relatorio = {col for _, col, _ in PLAN20_RELATORIO_COLUNAS}
+    colunas_upload = set(_plan20_seduc_col_map().values())
+    assert colunas_relatorio == colunas_upload, (
+        f"so no relatorio: {colunas_relatorio - colunas_upload}; "
+        f"so no upload: {colunas_upload - colunas_relatorio}"
+    )
+
+    # Cada rotulo e cada coluna de banco aparecem uma unica vez - se algo
+    # for duplicado (o que ja aconteceu no relatorio antigo por engano
+    # entre "Eixo" e "Eixo do Programa" antes da renomeacao), o SELECT
+    # gerado teria uma coluna repetida.
+    labels = [label for label, _, _ in PLAN20_RELATORIO_COLUNAS]
+    colunas = [col for _, col, _ in PLAN20_RELATORIO_COLUNAS]
+    assert len(labels) == len(set(labels))
+    assert len(colunas) == len(set(colunas))
+
+    tipos_validos = {"text", "num", "int"}
+    assert all(tipo in tipos_validos for _, _, tipo in PLAN20_RELATORIO_COLUNAS)

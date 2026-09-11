@@ -545,3 +545,39 @@ Conferido depois (schema, só leitura): as 8 colunas existem, tabela com 68 colu
 
 ### 18.8 Commit
 Usuário pediu pra documentar e commitar depois de confirmar o schema. Commit `ae2c7eb` (`rotas/home_routes.py`, `services/plan20_runner.py`, `tests/test_plan20_runner.py`, `tests/test_plan20_upload_mapping.py`).
+
+## 19. Relatório "Plan20 - SEDUC" (tela + download) — unificação das 4 fontes de colunas e as 8 colunas novas (2026-09-11)
+
+Com o parser e o upload já migrados (seções 15-18), faltava a última etapa: a tela "Relatórios → Plan20 - SEDUC" e o download em Excel ainda não conheciam as 8 colunas novas do layout 2027. Pedido do usuário: analisar como a funcionalidade estava hoje pra montar um plano de ajuste.
+
+### 19.1 Achado: 4 listas de colunas independentes, sem fonte comum
+Analisando o código (sem mexer em nada), a tela era sustentada por **4 listas hardcoded e totalmente independentes entre si**:
+1. `api_relatorio_plan20()` (`rotas/home_routes.py`) — um `SELECT` de 53 colunas + um dict Python montado campo a campo.
+2. `api_relatorio_plan20_download()` — um **segundo** `SELECT` idêntico, escrito de forma independente, + uma lista `headers` de 53 pares (rótulo, chave) — inclusive com alguns rótulos escritos via escape unicode (`"Valor Unitário"`) em vez de caractere literal, e pequenas divergências de acentuação com o que a tela mostrava (ex.: "Macropolitica" sem acento no download vs. "Macropolítica" com acento na tela).
+3. `templates/partials/relatorios_plan20.html` — 53 `<th>` de cabeçalho + 53 `<th data-col="...">` da linha de filtro, escritos à mão.
+4. `static/js/main.js::initRelatorioPlan20()` — o array `colKeys` (53 chaves) + um template `<tr>` com 53 `<td>` fixos, na mesma ordem.
+
+Nada impedia essas 4 listas de divergirem entre si silenciosamente — exatamente o tipo de estrutura que já tinha causado o incidente do `col_map` corrompido do upload (seção 18). O usuário perguntou explicitamente a vantagem/risco de unificar tudo antes de aprovar: vantagem é eliminar essa classe de bug de vez; risco principal identificado foi no lado do frontend (reescrever `<thead>`/render pra ser dirigido por dados muda o comportamento de "cabeçalho aparece antes do fetch terminar" para "cabeçalho só aparece depois da resposta chegar"). Usuário pediu unificação completa, incluindo frontend.
+
+### 19.2 Fix: fonte única de colunas, ponta a ponta
+**Backend (`rotas/home_routes.py`)**:
+- Nova constante `PLAN20_RELATORIO_COLUNAS` — lista de 61 tuplas `(rótulo, coluna_no_banco, tipo)`, `tipo` em `"text"`/`"num"` (Quantidade/Valor Unitário/Valor Total)/`"int"` (Exercício), logo depois de `_plan20_seduc_col_map()`. As 8 colunas novas entram na ordem de exibição já combinada com o usuário: `Eixo do Programa`/`Objetivo Estratégico`/`Público Alvo`/`Tipo` depois de `Programa`; `UO Responsável` depois de `Unidade Orçamentária`; `ODS`/`Código Meta (ODS)`/`Metas (ODS)` depois de `Responsável pela Ação`.
+- `_plan20_relatorio_rows()` — helper único que monta o `SELECT` a partir dessa lista; usado pelas duas rotas (antes, cada uma tinha o seu).
+- `api_relatorio_plan20()` monta a resposta iterando a lista e agora devolve também `"columns": [{"key", "label", "numeric"}, ...]`.
+- `api_relatorio_plan20_download()` monta `headers` e a formatação numérica/inteira do Excel (`numeric_cols`/`int_cols`) a partir da mesma lista, em vez de comparar strings de rótulo.
+
+**Frontend**:
+- `relatorios_plan20.html`: `<thead>` virou dois `<tr>` vazios com id fixo (`plan20-header-row`, `plan20-filter-row`).
+- `main.js::initRelatorioPlan20()`: novo `initColumnsUI(cols)`, chamado dentro de `load()` assim que `data.columns` chega — monta `colKeys`, preenche as duas linhas do `<thead>`, e só então inicializa `filters`/`filterContainers`/`filterControls` (que passaram de `const` pra `let`, reatribuídos nesse passo). O `render()` trocou o template fixo de `<td>` por `columns.map(...)`, aplicando `class="num"` + formatação só quando `column.numeric`. Esse padrão (colunas descritas pelo backend, tabela montada pelo JS a partir delas) já existia no projeto em `initRelatorioEstruturaPlanejamento()` — não foi inventado do zero. Aproveitado pra também escapar o texto de cada célula (`esc()`, mesmo padrão daquela função) — o template antigo não escapava nada.
+- Confirmado antes de mexer: `static/css/style.css` só tem `.plan20-table th/td/td.num` — nenhuma regra por posição de coluna (`nth-child`) que a geração dinâmica do cabeçalho pudesse quebrar.
+
+### 19.3 Testes
+Novo teste em `tests/test_plan20_upload_mapping.py` (`test_relatorio_colunas_bate_com_col_map`): compara o conjunto de colunas de `PLAN20_RELATORIO_COLUNAS` com o conjunto de valores de `_plan20_seduc_col_map()` — precisa ser exatamente igual; se o relatório e o upload saírem de sincronia de novo (coluna gravada mas não exibida, ou exibida mas não gravada), esse teste quebra. Também confere que não há rótulo nem coluna de banco duplicados. Suite completa: 28/28 (`pytest`).
+
+### 19.4 Validação
+- Dry-run direto contra o banco real (só leitura, sem passar pela rota HTTP): `PLAN20_RELATORIO_COLUNAS` e `_plan20_seduc_col_map()` batem em 61 colunas cada; as 8 colunas novas vêm corretamente `NULL` nas 1.902 linhas ativas de 2025/2026 (anteriores à migração, esperado) e corretamente preenchidas nas 1.220 linhas ativas de 2027 (UO 14101 e 14601), sem mojibake.
+- Dry-run da geração do Excel (mesma lógica da rota, fora do Flask): 61 colunas no arquivo gerado, as 8 novas nas posições esperadas (12-15, 18, 24-26), formatação numérica/inteira ainda nas colunas certas (59-61 numéricas, 1 inteira).
+- Usuário testou manualmente a tela e o download (arquivo real) e confirmou que funcionou.
+
+### 19.5 Commit
+Usuário aprovou depois do teste manual. Commit a seguir (`rotas/home_routes.py`, `static/js/main.js`, `templates/partials/relatorios_plan20.html`, `tests/test_plan20_upload_mapping.py`).
