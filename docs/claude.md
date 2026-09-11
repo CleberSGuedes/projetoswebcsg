@@ -580,4 +580,4 @@ Novo teste em `tests/test_plan20_upload_mapping.py` (`test_relatorio_colunas_bat
 - Usuário testou manualmente a tela e o download (arquivo real) e confirmou que funcionou.
 
 ### 19.5 Commit
-Usuário aprovou depois do teste manual. Commit a seguir (`rotas/home_routes.py`, `static/js/main.js`, `templates/partials/relatorios_plan20.html`, `tests/test_plan20_upload_mapping.py`).
+Usuário testou tela e download e aprovou. Commit `7f9861c` (`rotas/home_routes.py`, `static/js/main.js`, `templates/partials/relatorios_plan20.html`, `tests/test_plan20_upload_mapping.py`).
