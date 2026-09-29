@@ -537,6 +537,23 @@ def grupo_key(value) -> str:
     return match.group(1) if match else text
 
 
+# Nome oficial de cada grupo de despesa, pelo codigo. Registros gravados antes
+# da correcao de 2026-09-02 (docs/claude.md, secoes 12.11 e 20.8) ainda tem
+# "3 - Outras Despesas Corrente" (sem S) no banco - sem unificar pelo codigo,
+# o dashboard mostrava o grupo 3 duas vezes.
+GRUPO_NOMES = {
+    "1": "1 - Pessoal e Encargos Sociais",
+    "3": "3 - Outras Despesas Correntes",
+    "4": "4 - Investimentos",
+}
+
+
+def normalizar_grupo(value) -> str:
+    """Nome unico do grupo de despesa para exibir/filtrar/agrupar: casa pelo
+    codigo (grupo_key); grupo de codigo desconhecido fica com o texto original."""
+    return GRUPO_NOMES.get(grupo_key(value), _norm(value))
+
+
 def subteto_key(value) -> str:
     text = str(value or "").strip()
     match = re.match(r"^\s*([A-Za-z])", text)

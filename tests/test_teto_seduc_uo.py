@@ -26,6 +26,7 @@ from rotas.home_routes import (
 from services.teto_seduc import (
     ler_cabecalho_fiplan,
     normalizar_acao,
+    normalizar_grupo,
     processar_plan134,
     validar_cabecalho_fiplan,
 )
@@ -159,6 +160,18 @@ def test_normalizar_acao_igual_ao_mapa_antigo():
         assert normalizar_acao(bruto) == esperado
         # idempotente: valor ja normalizado nao muda
         assert normalizar_acao(esperado) == esperado
+
+
+def test_normalizar_grupo_unifica_pelo_codigo():
+    # 2025/2026 gravados com "Corrente" (sem S) e 2027 com "Correntes" tem que
+    # virar um grupo so no dashboard (docs/claude.md, secao 20.8).
+    assert normalizar_grupo("3 - Outras Despesas Corrente") == "3 - Outras Despesas Correntes"
+    assert normalizar_grupo("3 - Outras Despesas Correntes") == "3 - Outras Despesas Correntes"
+    assert normalizar_grupo("3 - OUTRAS DESPESAS CORRENTES") == "3 - Outras Despesas Correntes"
+    assert normalizar_grupo("1 - Pessoal e Encargos Sociais") == "1 - Pessoal e Encargos Sociais"
+    assert normalizar_grupo("4 - Investimentos") == "4 - Investimentos"
+    assert normalizar_grupo("9 - Grupo novo") == "9 - Grupo novo"
+    assert normalizar_grupo(None) == ""
 
 
 def test_normalizar_acao_casos_novos():

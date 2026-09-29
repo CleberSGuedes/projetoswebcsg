@@ -113,6 +113,7 @@ from services.teto_seduc import (
     subteto_key,
     ler_cabecalho_fiplan,
     normalizar_acao,
+    normalizar_grupo,
     processar_plan23,
     processar_plan134,
     validar_cabecalho_fiplan,
@@ -8200,7 +8201,9 @@ def api_paineis_teto_orcamentario():
             "exercicio": str(row.exercicio or "").strip(),
             "uo": uo_label(row.uo),
             "fonte": str(row.fonte or "").strip(),
-            "grupo": str(row.grupo_despesa or "").strip(),
+            # Unificado pelo codigo: 2025/2026 ainda tem "Outras Despesas
+            # Corrente" no banco (docs/claude.md, secao 20.8).
+            "grupo": normalizar_grupo(row.grupo_despesa),
             "subgrupo": str(row.subteto_despesa_momp or "").strip(),
             "valor": float(row.teto_anual or 0),
         }
