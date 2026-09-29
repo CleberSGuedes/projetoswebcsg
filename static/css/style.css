@@ -1966,8 +1966,10 @@ body.app-loading-active {
 .teto-dashboard[data-active-view="graficos"] .teto-filter-grid .field:not([data-graph-filter]) {
   display: none;
 }
+/* 6 colunas = os 6 campos com data-graph-filter (Exercicio, UO, Grupo,
+   Tipificacao, Acao/PAOE, Fonte) numa linha so. */
 .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
-  grid-template-columns: repeat(5, minmax(125px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
 }
 .teto-filter-grid select {
   width: 100%;
@@ -2374,7 +2376,7 @@ body.app-loading-active {
 @container teto-dashboard (max-width: 1350px) {
   .teto-filter-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
   .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
-    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
   }
 }
 @container teto-dashboard (max-width: 1050px) {

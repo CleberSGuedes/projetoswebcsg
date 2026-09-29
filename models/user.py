@@ -1179,6 +1179,10 @@ class Momp(db.Model):
     alterado_em = db.Column(db.DateTime)
     excluido_em = db.Column(db.DateTime)
     exercicio = db.Column(db.String(4))
+    # Codigo da Unidade Orcamentaria (ex.: "14101", "14601"), lido do proprio
+    # relatorio FIPLAN. Todo upload substitui/desativa so dentro do mesmo
+    # exercicio + UO (docs/claude.md, secao 20).
+    uo = db.Column(db.String(5))
 
     politicas = db.relationship("PoliticaTeto", back_populates="momp", lazy="select")
 

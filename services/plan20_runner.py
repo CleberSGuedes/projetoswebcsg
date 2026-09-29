@@ -13,6 +13,8 @@ from typing import Any
 import pandas as pd
 from openpyxl.styles import Font
 
+from services.uo import UOS_ACEITAS, uo_key as _uo_key
+
 # ----------------------------
 # CONFIG / CONSTANTES
 # ----------------------------
@@ -117,12 +119,8 @@ KEYS = {
 # Unidades Orçamentárias da SEDUC aceitas na aba Plan20_SEDUC (e, por
 # extensão, no que é gravado no banco) - comparado só pelo código
 # numérico via _uo_key(), não pelo texto completo (ver docs/claude.md,
-# seção 14). 14101 = Secretaria de Estado de Educação; 14601 = Fundo
-# Estadual de Apoio à Melhoria das Condições de Oferta da Educação
-# Infantil, Ensino Fundamental e Ensino Médio no MT (FMTE) - vinculado à
-# SEDUC, mas é uma UO própria. Uma UO nova da secretaria precisa ser
-# adicionada aqui.
-UOS_ACEITAS = {"14101", "14601"}
+# seção 14). A lista vive em services/uo.py, compartilhada com o
+# Teto-SEDUC - uma UO nova da secretaria precisa ser adicionada lá.
 
 NORMALIZA_MAP = {
     "á": "a",
@@ -767,17 +765,6 @@ def processar_arquivo(caminho_arquivo: Path, a_contador_inicial: int = 1) -> tup
 def _ab_from_id(c_id: str) -> str | None:
     m = re.match(r"(A\d+\.B\d+)", c_id)
     return m.group(1) if m else None
-
-
-def _uo_key(valor: Any) -> str:
-    """Extrai só os dígitos do código da UO (antes do " - "), ignorando
-    pontuação. A empresa que gera o relatório mudou de "14.101 - ..." pra
-    "14101 - ..." no layout 2027 - comparar por igualdade de texto exato
-    quebrava silenciosamente com essa mudança (docs/claude.md, seção 14).
-    """
-    s = str(valor or "").strip()
-    codigo = s.split(" - ", 1)[0] if " - " in s else s
-    return re.sub(r"\D", "", codigo)
 
 
 def _split_produto_unidade(texto: str) -> tuple[str, str]:

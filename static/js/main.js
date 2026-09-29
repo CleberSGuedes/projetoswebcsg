@@ -14206,6 +14206,7 @@
       const filters = filtersInput || readFilters();
       let momp = state.momp.filter((row) =>
         matchesFilter(row.exercicio, filters.exercicio) &&
+        matchesFilter(row.uo, filters.uo) &&
         matchesFilter(row.fonte, filters.fonte) &&
         matchesFilter(row.grupo, filters.grupo) &&
         matchesFilter(row.subgrupo, filters.subgrupo)
@@ -14249,6 +14250,7 @@
     const optionValuesFor = (key, data) => {
       const sources = {
         exercicio: () => data.momp.map((row) => row.exercicio),
+        uo: () => data.momp.map((row) => row.uo),
         fonte: () => data.momp.map((row) => row.fonte),
         grupo: () => data.momp.map((row) => row.grupo),
         subgrupo: () => data.momp.map((row) => row.subgrupo),
@@ -14315,7 +14317,7 @@
     const renderActiveFilters = () => {
       if (!activeFiltersEl) return;
       const labels = {
-        exercicio: "Exercício", regiao: "Região", subfuncao: "Subfunção", grupo: "Grupo",
+        exercicio: "Exercício", uo: "UO", regiao: "Região", subfuncao: "Subfunção", grupo: "Grupo",
         subgrupo: "Tipificação", paoe: "PAOE", fonte: "Fonte", adj: "ADJ",
         macropolitica: "Macropolítica", pilar: "Pilar", eixo: "Eixo", politica: "Política",
       };

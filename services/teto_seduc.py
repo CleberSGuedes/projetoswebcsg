@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from services.uo import UOS_ACEITAS, uo_key
+
 
 def _as_text(value) -> str:
     if value is None:
@@ -107,6 +109,112 @@ SUBTETO_PLAN23_MAP = {
     "e. Projetos de Investimentos": "E - Projetos de Investimentos",
     "f. Demais ações e projetos": "F - Demais Ações e Projetos Finalísticos",
 }
+
+
+# Linhas de filtro/identificacao impressas pelo FIPLAN no topo (e no rodape)
+# do Plan 23 e do Plan 134 - comparadas ja normalizadas por _norm_key (sem
+# acento, maiusculas, espacos colapsados).
+_RE_EXERCICIO = re.compile(r"EXERCICIO\s+IGUAL\s+A\s+(\d{4})")
+_RE_UO_FILTRO = re.compile(r"CODIGO\s+DA\s+UNIDADE\s+ORCAMENTARIA\s+IGUAL\s+A\s+([\d.]+)")
+_RE_UO_PLAN23 = re.compile(r"^UO\s*:\s*([\d.]+)\s*-")
+_RE_UO_PLAN134 = re.compile(r"^([\d.]+)\s*-\s*\S")
+_RE_TOTAL_UO_PLAN134 = re.compile(r"^SUBTOTAL\s+UO\s+[\d.]+\s*:\s*([\d.]+,\d{2})")
+_RE_TOTAL_GERAL_PLAN134 = re.compile(r"^TOTAL\s+GERAL\s+([\d.]+,\d{2})")
+_RE_TOTAL_UO_PLAN23 = re.compile(r"^TOTAL\s+DA\s+UO\s*:?$")
+
+
+def ler_cabecalho_fiplan(input_path: Path) -> dict:
+    """Le do proprio relatorio (Plan 23 ou Plan 134) o exercicio, a UO e o
+    total impresso pelo FIPLAN, para o upload nao depender so do que o
+    usuario digitou na tela (docs/claude.md, secao 20).
+
+    - uo_filtro: UO da linha de filtro "Codigo da Unidade Orcamentaria igual a";
+    - uos_conteudo: UOs encontradas no corpo ("UO : 14101 - ..." no Plan 23,
+      coluna "U.O" de cada linha no Plan 134) - conferencia do filtro;
+    - total_relatorio: "Total da UO:" (Plan 23) ou "SUBTOTAL UO"/"TOTAL
+      GERAL" (Plan 134), para conferir com o que foi gravado.
+    """
+    raw = pd.read_excel(input_path, sheet_name=0, header=None, dtype=str)
+    exercicio = None
+    uo_filtro = None
+    uos_conteudo: set[str] = set()
+    total_uo = None
+    total_geral = None
+    col_uo_plan134 = None
+
+    for _, row in raw.iterrows():
+        cells = [_norm(value) for value in row.tolist()]
+        keys = [_norm_key(value) for value in cells]
+        for index, key in enumerate(keys):
+            if not key:
+                continue
+            if exercicio is None:
+                match = _RE_EXERCICIO.search(key)
+                if match:
+                    exercicio = match.group(1)
+            if uo_filtro is None:
+                match = _RE_UO_FILTRO.search(key)
+                if match:
+                    uo_filtro = uo_key(match.group(1))
+            match = _RE_UO_PLAN23.match(key)
+            if match:
+                uos_conteudo.add(uo_key(match.group(1)))
+            match = _RE_TOTAL_UO_PLAN134.match(key)
+            if match:
+                total_uo = _br_to_number(match.group(1))
+            match = _RE_TOTAL_GERAL_PLAN134.match(key)
+            if match:
+                total_geral = _br_to_number(match.group(1))
+            if _RE_TOTAL_UO_PLAN23.match(key):
+                valores = [c for c in cells[index + 1 :] if c]
+                if valores:
+                    total_uo = _br_to_number(valores[0])
+            if key == "U.O" and col_uo_plan134 is None:
+                col_uo_plan134 = index
+        if col_uo_plan134 is not None and col_uo_plan134 < len(keys):
+            match = _RE_UO_PLAN134.match(keys[col_uo_plan134])
+            if match:
+                uos_conteudo.add(uo_key(match.group(1)))
+
+    uos_conteudo.discard("")
+    return {
+        "exercicio": exercicio,
+        "uo_filtro": uo_filtro or None,
+        "uos_conteudo": uos_conteudo,
+        "total_relatorio": total_uo if total_uo is not None else total_geral,
+    }
+
+
+def validar_cabecalho_fiplan(cabecalho: dict, exercicio_informado: str) -> str:
+    """Confere UO e exercicio lidos do arquivo e devolve o codigo da UO.
+    Levanta ValueError (mensagem mostrada ao usuario) quando o arquivo nao
+    pode ser gravado com seguranca."""
+    uos = set(cabecalho.get("uos_conteudo") or set())
+    if cabecalho.get("uo_filtro"):
+        uos.add(cabecalho["uo_filtro"])
+    if not uos:
+        raise ValueError(
+            "Não foi possível identificar a Unidade Orçamentária no arquivo. "
+            "Gere o relatório no FIPLAN filtrando pelo código da UO."
+        )
+    if len(uos) > 1:
+        raise ValueError(
+            "O arquivo contém mais de uma Unidade Orçamentária "
+            f"({', '.join(sorted(uos))}). Gere um relatório para cada UO."
+        )
+    uo = next(iter(uos))
+    if uo not in UOS_ACEITAS:
+        raise ValueError(
+            f"A Unidade Orçamentária {uo} não está cadastrada no Teto - SEDUC "
+            f"(aceitas: {', '.join(sorted(UOS_ACEITAS))})."
+        )
+    exercicio_arquivo = cabecalho.get("exercicio")
+    if exercicio_arquivo and exercicio_arquivo != str(exercicio_informado).strip():
+        raise ValueError(
+            f"O exercício informado ({exercicio_informado}) é diferente do "
+            f"exercício do arquivo ({exercicio_arquivo})."
+        )
+    return uo
 
 
 def detectar_tipo_relatorio(input_path: Path) -> str | None:
@@ -247,35 +355,21 @@ SUBTETO_PLAN134_MAP = {
     "Essenciais à Manutenção da Unidade": "B - Essenciais à Manutenção da Unidade",
 }
 
-ACAO_PLAN134_MAP = {
-    "2009 -Manutenção de ações de informática": "2009 - Manutenção de ações de informática",
-    "2010 -Manutenção de órgãos colegiados": "2010 - Manutenção de órgãos colegiados",
-    "2014 -Publicidade institucional e propaganda": "2014 - Publicidade institucional e propaganda",
-    "2284 -Manutenção do Conselho Estadual de Educação - CEE": "2284 - Manutenção do Conselho Estadual de Educação - CEE",
-    "2895 -Alimentação Escolar da Educação de Jovens e Adultos": "2895 - Alimentação Escolar da Educação de Jovens e Adultos",
-    "2897 -Alimentação Escolar da Educação Especial": "2897 - Alimentação Escolar da Educação Especial",
-    "2898 -Alimentação Escolar do Ensino Fundamental": "2898 - Alimentação Escolar do Ensino Fundamental",
-    "2899 -Alimentação Escolar do Ensino Médio": "2899 - Alimentação Escolar do Ensino Médio",
-    "2900 -Desenvolvimento da Educação de Jovens e Adultos": "2900 - Desenvolvimento da Educação de Jovens e Adultos",
-    "2936 -Desenvolvimento das Modalidades de Ensino": "2936 - Desenvolvimento das Modalidades de Ensino",
-    "2957 -Desenvolvimento da Educação Especial": "2957 - Desenvolvimento da Educação Especial",
-    "4172 -Desenvolvimento do Ensino Fundamental": "4172 - Desenvolvimento do Ensino Fundamental",
-    "4173 -Infraestrutura do Ensino Fundamental": "4173 - Infraestrutura do Ensino Fundamental",
-    "4174 -Desenvolvimento do Ensino Médio": "4174 - Desenvolvimento do Ensino Médio",
-    "4175 -Infraestrutura da Educação de Jovens e Adultos": "4175 - Infraestrutura da Educação de Jovens e Adultos",
-    "4177 -Infraestrutura do Ensino Médio": "4177 - Infraestrutura do Ensino Médio",
-    "4178 -Infraestrutura da Educação Especial": "4178 - Infraestrutura da Educação Especial",
-    "4179 -Transporte Escolar da Educação Especial": "4179 - Transporte Escolar da Educação Especial",
-    "4180 -Infraestrutura de Administração e Gestão": "4180 - Infraestrutura de Administração e Gestão",
-    "4181 -Transporte Escolar do Ensino Fundamental": "4181 - Transporte Escolar do Ensino Fundamental",
-    "4182 -Transporte Escolar do Ensino Médio": "4182 - Transporte Escolar do Ensino Médio",
-    "4491 -Pagamento de verbas indenizatórias a servidores estaduais.": "4491 - Pagamento de verbas indenizatórias a servidores estaduais",
-    "4524 -FMTE - Ensino Fundamental": "4524 - FMTE - Ensino Fundamental",
-    "4525 -FMTE - Educação Infantil": "4525 - FMTE - Educação Infantil",
-    "8002 -Recolhimento do PIS-PASEP e pagamento do abono": "8002 - Recolhimento do PIS-PASEP e pagamento do abono",
-    "8003 -Cumprimento de sentenças judiciais transitadas em julgado - Adm. Direta": "8003 - Cumprimento de sentenças judiciais transitadas em julgado - Adm. Direta",
-    "8040 -Recolhimento de encargos e obrigações previdenciárias de inativos e pensionistas do Estado de Mato Grosso": "8040 - Recolhimento de encargos e obrigações previdenciárias de inativos e pensionistas do Estado de Mato Grosso",
-}
+_RE_ACAO_CODIGO = re.compile(r"^(\d+)\s*-\s*(.*)$")
+
+
+def normalizar_acao(value) -> str:
+    """Padroniza o nome da Acao (PAOE) do Plan 134: o FIPLAN imprime
+    "2009 -Manutencao ..." (sem espaco depois do traco) e as vezes com ponto
+    final solto. Regra em vez de lista fixa, para cobrir acoes novas
+    (ex.: 4537, 4538, 4541, 4545) sem precisar cadastrar uma a uma
+    (docs/claude.md, secao 20). Texto sem codigo numerico fica como esta."""
+    text = _norm(value)
+    match = _RE_ACAO_CODIGO.match(text)
+    if not match:
+        return text
+    descricao = match.group(2).strip().rstrip(".").strip()
+    return f"{match.group(1)} - {descricao}"
 
 
 def _split_subacao(value) -> tuple[str, str]:
@@ -383,7 +477,7 @@ def processar_plan134(input_path: Path) -> pd.DataFrame:
     data["subteto_despesa_momp"] = _remap(
         data["subteto_despesa_momp"], SUBTETO_PLAN134_MAP
     )
-    data["acao_paoe"] = _remap(data["acao_paoe"], ACAO_PLAN134_MAP)
+    data["acao_paoe"] = data["acao_paoe"].map(normalizar_acao)
 
     columns = [
         "regiao",
@@ -418,6 +512,14 @@ def processar_plan134(input_path: Path) -> pd.DataFrame:
         ],
         how="all",
     )
+    # Subacao sem item de despesa: o FIPLAN imprime a linha com fonte "-" e
+    # Valor PTA 0/vazio. Nao carrega informacao orcamentaria - antes virava
+    # linha inutil em politicateto ou era contada como "sem correspondencia
+    # no MOMP", mascarando descartes de verdade (docs/claude.md, secao 20).
+    # Descarta so pelo valor zerado: uma linha COM valor e sem fonte segue
+    # adiante e aparece no aviso de "nao gravados", nunca some calada.
+    valor = pd.to_numeric(resultado["teto_politica_decreto"], errors="coerce").fillna(0)
+    resultado = resultado[valor != 0].copy()
     if resultado.empty:
         raise ValueError("Nenhum registro válido foi encontrado no Plan 134.")
     return resultado

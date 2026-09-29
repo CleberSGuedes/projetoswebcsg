@@ -29,9 +29,10 @@ CHAVE = dict(
 
 
 def _persistir_como_teto_seduc(session, hold_seconds: float = 0.0) -> None:
-    """Mesma sequencia de _persistir_plan23: adquire lock por exercicio,
-    procura registros ativos com a mesma chave, desativa e insere um novo."""
-    lock_name = f"teto_seduc:{TEST_EXERCICIO}"
+    """Mesma sequencia de _persistir_plan23: adquire lock por exercicio + UO
+    (mesmo formato de _start_teto_seduc_thread), procura registros ativos com
+    a mesma chave, desativa e insere um novo."""
+    lock_name = f"teto_seduc:{TEST_EXERCICIO}:14101"
     obtido = session.execute(
         text("SELECT GET_LOCK(:name, :timeout)"), {"name": lock_name, "timeout": 10}
     ).scalar()

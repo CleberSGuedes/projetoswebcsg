@@ -105,13 +105,17 @@ from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
+from services.uo import uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
     grupo_key,
     subteto_key,
+    ler_cabecalho_fiplan,
+    normalizar_acao,
     processar_plan23,
     processar_plan134,
+    validar_cabecalho_fiplan,
 )
 from services.ped_runner import (
     run_ped,
@@ -6569,11 +6573,16 @@ def _plan23_chave_estavel(exercicio, fonte, grupo, subteto, teto_despesa_momp):
     )
 
 
-def _persistir_plan23(df: pd.DataFrame) -> dict:
+def _persistir_plan23(df: pd.DataFrame, uo: str) -> dict:
+    # `uo` (codigo lido do proprio relatorio, ver ler_cabecalho_fiplan):
+    # todo o casamento/desativacao abaixo fica restrito a exercicio + UO -
+    # subir o Plan 23 da 14601 nunca pode desativar o teto da 14101 como se
+    # tivesse "sumido do arquivo" (docs/claude.md, secao 20).
     inseridas = 0
     desativadas = 0
     vinculos_migrados = 0
     removidos = 0
+    total_gravado = Decimal("0")
     now = _now_local()
 
     exercicios = {_teto_text(row.get("exercicio")) for _, row in df.iterrows()}
@@ -6584,7 +6593,9 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
     ativos_por_chave: dict[tuple, list] = {}
     if exercicios:
         ativos = Momp.query.filter(
-            Momp.exercicio.in_(exercicios), Momp.ativo == True  # noqa: E712
+            Momp.exercicio.in_(exercicios),
+            Momp.uo == uo,
+            Momp.ativo == True,  # noqa: E712
         ).all()
         for item in ativos:
             chave = _plan23_chave_estavel(
@@ -6625,12 +6636,14 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
 
         novo = Momp(
             **filtros,
+            uo=uo,
             teto_anual=Decimal(str(row.get("teto_anual") or 0)),
             ativo=True,
         )
         db.session.add(novo)
         db.session.flush()
         inseridas += 1
+        total_gravado += novo.teto_anual
         novos_no_arquivo[chave] = novo
 
         if old_ids:
@@ -6686,13 +6699,15 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
         "desativadas": desativadas,
         "vinculos_migrados": vinculos_migrados,
         "removidos": removidos,
+        "total_gravado": total_gravado,
     }
 
 
-def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
+def _persistir_plan134(df: pd.DataFrame, exercicio: str, uo: str) -> dict:
     momps = (
         Momp.query.filter(
             Momp.exercicio == exercicio,
+            Momp.uo == uo,
             Momp.ativo == True,  # noqa: E712
         )
         .order_by(Momp.id.asc())
@@ -6700,8 +6715,8 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
     )
     if not momps:
         raise ValueError(
-            f"Não existem registros MOMP ativos para o exercício {exercicio}. "
-            "Carregue primeiro o Plan 23."
+            f"Não existem registros MOMP ativos para o exercício {exercicio} "
+            f"na UO {uo}. Carregue primeiro o Plan 23 desta UO."
         )
 
     exact_map = {}
@@ -6721,7 +6736,11 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         numeric_map.setdefault(numeric_key, momp)
 
     preparados = []
-    sem_correspondencia = 0
+    # Linhas COM valor sem teto correspondente no Plan 23 desta UO/exercicio,
+    # agrupadas por combinacao fonte/grupo/tipificacao -> soma. Vao para a
+    # mensagem de status com o valor, nunca descartadas caladas (docs/claude.md,
+    # secao 20). Linhas de valor zero ja foram removidas no processar_plan134.
+    nao_gravados: dict[tuple, Decimal] = {}
     for _, row in df.iterrows():
         fonte = _teto_text(row.get("fonte"))
         grupo = _teto_text(row.get("grupo_despesa"))
@@ -6730,17 +6749,26 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         if momp is None:
             momp = numeric_map.get((fonte_key(fonte), grupo_key(grupo), subteto_key(subteto)))
         if momp is None:
-            sem_correspondencia += 1
+            chave = (fonte_key(fonte) or "-", grupo_key(grupo) or "-", subteto_key(subteto) or "-")
+            nao_gravados[chave] = nao_gravados.get(chave, Decimal("0")) + _teto_decimal(
+                row.get("teto_politica_decreto")
+            )
             continue
         preparados.append((momp.id, row))
 
     if not preparados:
         raise ValueError(
             "Nenhuma linha do Plan 134 corresponde aos registros ativos da tabela MOMP "
-            f"para o exercício {exercicio}."
+            f"para o exercício {exercicio} na UO {uo}."
         )
 
-    momp_ids = sorted({momp_id for momp_id, _ in preparados})
+    # Desativa TODO o PTA ativo desta UO/exercicio, nao so o das combinacoes
+    # presentes no arquivo: o Plan 134 e o retrato completo da UO, e uma
+    # combinacao que sumiu entre um envio e outro nao pode ficar ativa (mesmo
+    # padrao do Plan 23, secao 12.9). Seguro porque so chega aqui se ao menos
+    # uma linha casou - arquivo errado cai no ValueError acima sem desativar
+    # nada, e qualquer falha daqui em diante e desfeita pelo rollback.
+    momp_ids = [momp.id for momp in momps]
     now = _now_local()
     desativadas = PoliticaTeto.query.filter(
         PoliticaTeto.momp_id.in_(momp_ids),
@@ -6754,8 +6782,10 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         synchronize_session=False,
     )
 
+    total_gravado = Decimal("0")
     for momp_id, row in preparados:
         valor = row.get("teto_politica_decreto")
+        total_gravado += _teto_decimal(valor)
         db.session.add(
             PoliticaTeto(
                 momp_id=momp_id,
@@ -6779,12 +6809,38 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
     return {
         "inseridas": len(preparados),
         "desativadas": desativadas,
-        "sem_correspondencia": sem_correspondencia,
+        "total_gravado": total_gravado,
+        "nao_gravados": nao_gravados,
     }
 
 
 def value_not_blank(value) -> bool:
     return value is not None and not pd.isna(value) and str(value).strip() != ""
+
+
+def _teto_decimal(value) -> Decimal:
+    return Decimal(str(value)) if value_not_blank(value) else Decimal("0")
+
+
+def _teto_money(value) -> str:
+    """R$ no formato pt-BR (1.234.567,89) para as mensagens de status."""
+    texto = f"{Decimal(str(value or 0)):,.2f}"
+    return "R$ " + texto.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _teto_mensagem_conferencia(total_gravado, total_relatorio) -> str:
+    """Compara o total gravado com o total impresso pelo proprio FIPLAN no
+    relatorio (ler_cabecalho_fiplan). Divergencia nao desfaz o upload - so
+    fica explicita na mensagem, em vez de ser descoberta no dashboard."""
+    if total_relatorio is None:
+        return ""
+    diferenca = Decimal(str(total_gravado)) - Decimal(str(total_relatorio))
+    if abs(diferenca) < Decimal("0.01"):
+        return " (confere com o total do relatório)"
+    return (
+        f" ⚠ ATENÇÃO: o total do relatório é {_teto_money(total_relatorio)} - "
+        f"diferença de {_teto_money(diferenca)}"
+    )
 
 
 def _start_teto_seduc_thread(
@@ -6822,12 +6878,18 @@ def _start_teto_seduc_thread(
                         f"mas o arquivo enviado foi identificado como {arquivo_tipo}. "
                         "Selecione a opção ou o arquivo correto."
                     )
+                # UO e exercicio lidos do proprio relatorio (nao so do que
+                # foi digitado na tela) - tudo abaixo fica restrito a essa
+                # UO (docs/claude.md, secao 20).
+                cabecalho = ler_cabecalho_fiplan(temp_path)
+                uo = validar_cabecalho_fiplan(cabecalho, exercicio)
                 # Serializa processamentos do Teto-SEDUC (Plan 23 e Plan 134
                 # competem pelos mesmos registros de `momp`) para o mesmo
-                # exercício. Sem essa trava, dois uploads sobrepostos podem
-                # cada um deixar de enxergar o que o outro acabou de gravar
-                # (REPEATABLE READ) e duplicar os registros ativos.
-                lock_name = f"teto_seduc:{exercicio}"
+                # exercício e UO. Sem essa trava, dois uploads sobrepostos
+                # podem cada um deixar de enxergar o que o outro acabou de
+                # gravar (REPEATABLE READ) e duplicar os registros ativos.
+                # UOs diferentes nao disputam registros, entao nao se bloqueiam.
+                lock_name = f"teto_seduc:{exercicio}:{uo}"
                 obtido_lock = db.session.execute(
                     text("SELECT GET_LOCK(:name, :timeout)"),
                     {"name": lock_name, "timeout": 30},
@@ -6835,29 +6897,45 @@ def _start_teto_seduc_thread(
                 if not obtido_lock:
                     raise ValueError(
                         "Já existe um processamento do Teto - SEDUC em andamento "
-                        "para este exercício. Aguarde a conclusão e tente novamente."
+                        "para este exercício e UO. Aguarde a conclusão e tente novamente."
                     )
                 try:
                     if relatorio == "momp":
-                        resultado = _persistir_plan23(processar_plan23(temp_path, exercicio))
+                        resultado = _persistir_plan23(
+                            processar_plan23(temp_path, exercicio), uo
+                        )
                         message = (
-                            "Plan 23 processado. "
-                            f"Registros inseridos: {resultado['inseridas']}; "
+                            f"Plan 23 - UO {uo}, exercício {exercicio} processado. "
+                            f"Registros inseridos: {resultado['inseridas']} "
+                            f"({_teto_money(resultado['total_gravado'])})"
+                            f"{_teto_mensagem_conferencia(resultado['total_gravado'], cabecalho['total_relatorio'])}; "
                             f"anteriores desativados: {resultado['desativadas']}; "
                             f"removidos por não constarem mais no arquivo: {resultado['removidos']}; "
                             f"vínculos migrados: {resultado['vinculos_migrados']}."
                         )
                     else:
-                        resultado = _persistir_plan134(processar_plan134(temp_path), exercicio)
+                        resultado = _persistir_plan134(
+                            processar_plan134(temp_path), exercicio, uo
+                        )
                         message = (
-                            "Plan 134 processado. "
-                            f"Registros inseridos: {resultado['inseridas']}; "
+                            f"Plan 134 - UO {uo}, exercício {exercicio} processado. "
+                            f"Registros inseridos: {resultado['inseridas']} "
+                            f"({_teto_money(resultado['total_gravado'])})"
+                            f"{_teto_mensagem_conferencia(resultado['total_gravado'], cabecalho['total_relatorio'])}; "
                             f"anteriores desativados: {resultado['desativadas']}."
                         )
-                        if resultado["sem_correspondencia"]:
+                        nao_gravados = resultado["nao_gravados"]
+                        if nao_gravados:
+                            total_nao_gravado = sum(nao_gravados.values(), Decimal("0"))
+                            detalhes = "; ".join(
+                                f"{'/'.join(chave)} ({_teto_money(valor)})"
+                                for chave, valor in sorted(nao_gravados.items())
+                            )
                             message += (
-                                " Linhas sem correspondência no MOMP: "
-                                f"{resultado['sem_correspondencia']}."
+                                f" ⚠ {_teto_money(total_nao_gravado)} NÃO gravados por não "
+                                "existirem no teto (Plan 23) desta UO/exercício - "
+                                f"fonte/grupo/tipificação: {detalhes}. "
+                                "Atualize o Plan 23 e reenvie o Plan 134."
                             )
 
                     db.session.commit()
@@ -8089,6 +8167,7 @@ def api_paineis_teto_orcamentario():
         db.session.query(
             Momp.id,
             Momp.exercicio,
+            Momp.uo,
             Momp.fonte,
             Momp.grupo_despesa,
             Momp.subteto_despesa_momp,
@@ -8119,6 +8198,7 @@ def api_paineis_teto_orcamentario():
         {
             "id": row.id,
             "exercicio": str(row.exercicio or "").strip(),
+            "uo": uo_label(row.uo),
             "fonte": str(row.fonte or "").strip(),
             "grupo": str(row.grupo_despesa or "").strip(),
             "subgrupo": str(row.subteto_despesa_momp or "").strip(),
@@ -8137,7 +8217,9 @@ def api_paineis_teto_orcamentario():
             "pilar": str(row.pilar or "").strip(),
             "eixo": str(row.eixo or "").strip(),
             "politica": str(row.politica_decreto or "").strip(),
-            "paoe": str(row.acao_paoe or "").strip(),
+            # Normalizado so na exibicao: registros gravados antes da secao 20
+            # ainda tem "4541 -Educacao..." no banco (docs/claude.md, secao 20).
+            "paoe": normalizar_acao(row.acao_paoe),
             "valor": float(row.teto_politica_decreto or 0),
         }
         for row in politica_rows

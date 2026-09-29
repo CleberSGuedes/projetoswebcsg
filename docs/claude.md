@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-09-01) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-09-29) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 ---
@@ -66,6 +66,7 @@ projetoswebcsg/
 │   ├── features.py             # árvore de features/menus do sistema (controle de permissão por feature)
 │   ├── job_status.py           # status de jobs assíncronos em arquivos JSON (outputs/status/*.json)
 │   ├── fip613_runner.py, ped_runner.py, plan20_runner.py, est_emp_runner.py, emp_record.py, teto_seduc.py
+│   ├── uo.py                   # UOs aceitas (14101/14601) + uo_key/uo_label — regra única do Plan20 e do Teto-SEDUC (seção 20)
 ├── node_runners/               # workers Node.js p/ EMP e NOB (processamento pesado de planilhas)
 ├── db/                          # scripts .sql de schema (CREATE TABLE) por módulo — não são migrations versionadas (tipo Alembic)
 ├── tests/                       # suíte pytest (adicionada em 2026-08-31, ver seção 9 item 8)
@@ -581,3 +582,48 @@ Novo teste em `tests/test_plan20_upload_mapping.py` (`test_relatorio_colunas_bat
 
 ### 19.5 Commit
 Usuário testou tela e download e aprovou. Commit `7f9861c` (`rotas/home_routes.py`, `static/js/main.js`, `templates/partials/relatorios_plan20.html`, `tests/test_plan20_upload_mapping.py`).
+
+## 20. Teto-SEDUC: Plan 134 "com valor errado", UO por arquivo (14101 e 14601) e mensagens de conferência (2026-09-29)
+
+### 20.1 Sintoma e diagnóstico
+O usuário carregou o Plan 134 de 2027 (`Plan 134 - 14101 - 2027 29-09-2026.xlsx`, fora do repositório, em `C:\workspace\Planilhas\`): o relatório somava **R$ 6.485.317.811,00**, mas o dashboard mostrava **R$ 6.535.243.129,00**. Análise só de leitura (script descartável + consultas ao banco), sem alterar código:
+- **O parser estava certo**: `processar_plan134()` sobre o arquivo somava exatamente R$ 6.485.317.811,00.
+- **O valor da tela era o teto do Plan 23, não o PTA do Plan 134**: sem filtro de política o KPI soma `momp` (`renderKpis` em `static/js/main.js`; só passa a somar `politicateto` com algum filtro de Região/PAOE/Pilar etc. marcado — ver 12.6). R$ 6.535.243.129,00 era a soma dos registros ativos de `momp` 2027, de um Plan 23 desatualizado.
+- **O upload do Plan 134 descartou R$ 30.341.313,00 quase calado**: 12 linhas caíam em 4 combinações fonte/grupo/tipificação sem registro correspondente no Plan 23 (ex.: 15740000/3/B, R$ 13.900.000,00) e foram puladas. A única pista era "Linhas sem correspondência no MOMP: 61", número que misturava essas 12 com **49 linhas de valor 0** (subação sem item de despesa, fonte "-") e não dizia quais combinações nem quanto dinheiro.
+- Resolvido operacionalmente pelo usuário: baixou um Plan 23 atualizado (o teto tinha sido redistribuído no FIPLAN) e reenviou o mesmo Plan 134. Resultado: `momp` 2027 = 30 registros / R$ 6.485.317.811,00 e `politicateto` ativos = 334 / R$ 6.485.317.811,00, batendo centavo por centavo. A mensagem "inseridos 334; desativados 322" do reenvio é correta: 322 era o que o 1º envio tinha conseguido gravar, e as 12 linhas antes descartadas passaram a casar com o teto novo.
+
+### 20.2 Riscos encontrados na análise (além do sintoma)
+- **Órfãos no reenvio do Plan 134**: `_persistir_plan134` só desativava o PTA antigo dos MOMPs que apareciam no arquivo novo. Uma combinação que sumisse entre dois envios deixaria o PTA antigo ativo para sempre (mesmo padrão do bug do Plan 23 da seção 12.9).
+- **Nomes de Ação por lista fixa**: `ACAO_PLAN134_MAP` corrigia "2009 -Manutenção" → "2009 - Manutenção" só para 27 ações cadastradas à mão; ações novas (4537, 4538, 4541) apareciam no filtro PAOE como "4541 -Educação…".
+- **UO 14601 (FMTE)**: `momp`/`politicateto` não guardavam a UO, e todo upload tratava "exercício" como "o teto inteiro". Em 2025/2026 as ações do FMTE (4524/4525) estavam dentro da UO 14101, mas **a partir de 2027 o FMTE virou uma UO própria (14601)**, com Plan 23 e Plan 134 separados por UO — confirmado pelo usuário. Com a regra antiga, subir o Plan 23 da 14601 faria a correção da 12.9 desativar o teto inteiro da 14101 ("sumiu do arquivo"). A pergunta sobre a 14601 veio de evidência, não de suposição: linhas do FMTE ativas em `politicateto` 2025/2026, as ações 4524/4525 no `ACAO_PLAN134_MAP` e a seção 17.2.
+
+### 20.3 Banco (autorizado pelo usuário, executado pela IA)
+```sql
+ALTER TABLE momp ADD COLUMN uo VARCHAR(5) NULL, ADD INDEX ix_momp_exercicio_uo (exercicio, uo, ativo);
+UPDATE momp SET uo = '14101' WHERE uo IS NULL;   -- 413 linhas (todo o histórico era 14101)
+```
+Conferido depois: totais por exercício inalterados (2027 ativo: 30 registros, R$ 6.485.317.811,00). `politicateto` não ganhou coluna — herda a UO pelo `momp_id`. Model `Momp` ganhou o campo `uo`.
+
+**Atenção operacional (até este commit chegar a produção):** o código antigo não conhece a coluna `uo`. Um Plan 23 enviado pela versão online antiga grava `uo = NULL` e, depois que a 14601 estiver carregada, desativaria os registros dela (a regra antiga é só por exercício). Se isso acontecer, rodar de novo o `UPDATE ... WHERE uo IS NULL` com a UO certa e reenviar.
+
+### 20.4 Implementação
+- **`services/uo.py`** (novo): `UOS_ACEITAS = {"14101", "14601"}`, `uo_key()` (código da UO só com dígitos, "14.101" = "14101") e `uo_label()` ("14101 - SEDUC" / "14601 - FMTE"). Movidos de `services/plan20_runner.py` (que agora importa daqui, mantendo os nomes `UOS_ACEITAS`/`_uo_key`) para o Plan20 e o Teto-SEDUC nunca divergirem — uma UO nova da secretaria entra só nesse arquivo.
+- **`services/teto_seduc.py`**:
+  - `ler_cabecalho_fiplan()`: lê do próprio relatório o exercício ("*Exercício igual a 2027"), a UO do filtro ("Código da Unidade Orçamentária igual a 14601"), as UOs do corpo ("UO : 14601 - …" no Plan 23; coluna `U.O` de cada linha no Plan 134) e o **total impresso pelo FIPLAN** ("Total da UO:" no Plan 23; "SUBTOTAL UO"/"TOTAL GERAL" no Plan 134).
+  - `validar_cabecalho_fiplan()`: recusa arquivo sem UO, com UO fora de `UOS_ACEITAS`, com mais de uma UO (inclusive filtro ≠ corpo) ou com exercício diferente do digitado na tela (campo mantido e validado, decisão do usuário).
+  - `processar_plan134()`: descarta linhas de **valor 0** (subação sem item). Uma linha **com** valor e sem fonte não é descartada — segue e aparece no aviso de "não gravados", para nunca sumir dinheiro calado.
+  - `normalizar_acao()`: regra `^(\d+)\s*-\s*` → `"\1 - "` + remove ponto final solto; substitui o `ACAO_PLAN134_MAP` (removido). Teste confirma resultado idêntico para as 27 entradas antigas.
+- **`rotas/home_routes.py`**:
+  - `_persistir_plan23(df, uo)`: grava `uo`; busca de ativos e desativação de órfãos (12.9) restritas a exercício + UO. Devolve `total_gravado`.
+  - `_persistir_plan134(df, exercicio, uo)`: casa só com MOMPs da mesma UO; **desativa todo o PTA ativo da UO/exercício** (fim dos órfãos — seguro porque o `ValueError` de "nenhuma linha casou" acontece antes de desativar qualquer coisa, e o resto é desfeito pelo rollback). Devolve `total_gravado` e `nao_gravados` (combinação → soma).
+  - `_start_teto_seduc_thread`: lê/valida o cabeçalho antes de gravar; trava `GET_LOCK` passou a ser `teto_seduc:{exercicio}:{uo}` (UOs diferentes não se bloqueiam).
+  - Mensagens de status com UO, total gravado e **conferência com o total do relatório** (`_teto_mensagem_conferencia`); combinações não gravadas listadas com valor ("⚠ R$ 30.341.313,00 NÃO gravados … 15740000/3/B (R$ 13.900.000,00); …"). Exemplo: "Plan 134 - UO 14601, exercício 2027 processado. Registros inseridos: 10 (R$ 52.000.000,00) (confere com o total do relatório); anteriores desativados: 0."
+  - Endpoint do dashboard devolve `uo` (rótulo) em cada MOMP e normaliza o nome da Ação **só na exibição** (dados antigos no banco continuam como gravados — decisão do usuário).
+- **Dashboard** (`paineis_teto_orcamentario.html`, `main.js`, `style.css`): novo filtro **"UO"** no grupo de filtros de MOMP (não ativa o modo política), visível nas abas Gráficos e Tabelas (`data-graph-filter`). Aba Gráficos passou para 6 colunas (os 6 filtros numa linha). Componente de filtro em si não foi tocado (`git diff | grep "teto-multi-filter|checklist|data-filter="` = 0). Na aba Tabelas agora são 13 filtros — o último fica sozinho na 3ª linha.
+
+### 20.5 Testes e validação
+- `tests/test_teto_seduc_uo.py` (novo, 15 testes): normalização de ações (mapa antigo + casos novos); leitura de cabeçalho do Plan 23/134 sintéticos; recusas (exercício divergente, UO não cadastrada, filtro ≠ corpo, duas UOs no Plan 134, sem UO); descarte de valor 0; formatação/conferência de valores; e, no banco com exercícios descartáveis 9991/9990 (limpos ao final): Plan 23 da 14601 não desativa a 14101, Plan 134 casa só com o teto da mesma UO, reenvio sem uma combinação não deixa órfão nem toca a outra UO, Plan 134 sem teto da UO é recusado sem desativar nada.
+- `tests/test_teto_seduc_key_normalization.py` / `tests/test_teto_seduc_lock.py` ajustados ao novo contrato (UO obrigatória, nome da trava com UO).
+- Suite completa: **43/43** (`pytest`); `node --check static/js/main.js` ok.
+- Dry-run com os 4 arquivos reais (sem gravar): Plan 23 14101 (41 linhas, R$ 6.535.243.129,00 — arquivo antigo de 31/08), Plan 134 14101 (334 linhas, R$ 6.485.317.811,00), Plan 23 14601 (3 linhas, R$ 52.000.000,00), Plan 134 14601 (10 linhas, R$ 52.000.000,00, ações 4524/4525/4545) — todos **conferindo com o total impresso**; UO e exercício lidos corretamente; exercício errado recusado. Contra o Plan 23 antigo, o Plan 134 14101 reproduz exatamente as 12 linhas / R$ 30.341.313,00 sem teto — que agora apareceriam no aviso.
+- Teste manual na tela feito e aprovado pelo usuário (uploads das duas UOs e dashboard com o filtro UO).

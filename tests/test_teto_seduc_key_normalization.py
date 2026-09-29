@@ -16,6 +16,7 @@ from rotas.home_routes import _persistir_plan23
 from services.teto_seduc import fonte_key, grupo_key, subteto_key
 
 TEST_EXERCICIO = "9995"
+TEST_UO = "14101"
 
 
 def test_fonte_key():
@@ -46,6 +47,7 @@ def test_reenvio_reconhece_registro_antigo_com_texto_diferente():
                 fonte="15460000",  # texto "cru", como ficou o registro real antes do fix
                 grupo_despesa="3 - Outras Despesas Corrente",
                 teto_despesa_momp="4 - A Classificar",
+                uo=TEST_UO,
                 subteto_despesa_momp="C - Prioridades Estratégicas LDO",
                 teto_anual=11178276,
                 ativo=True,
@@ -66,7 +68,7 @@ def test_reenvio_reconhece_registro_antigo_com_texto_diferente():
                     }
                 ]
             )
-            resultado = _persistir_plan23(df)
+            resultado = _persistir_plan23(df, TEST_UO)
             db.session.commit()
 
             assert resultado["inseridas"] == 1
@@ -102,6 +104,7 @@ def test_reenvio_desativa_combinacao_que_sumiu_do_arquivo():
                 fonte="15000000 - Fonte teste",
                 grupo_despesa="3 - Outras Despesas Corrente",
                 teto_despesa_momp="4 - A Classificar",
+                uo=TEST_UO,
                 subteto_despesa_momp="C - Prioridades Estratégicas LDO",
                 teto_anual=10000000,
                 ativo=True,
@@ -111,6 +114,7 @@ def test_reenvio_desativa_combinacao_que_sumiu_do_arquivo():
                 fonte="15001001 - Outra fonte teste",
                 grupo_despesa="1 - Pessoal e Encargos Sociais",
                 teto_despesa_momp="4 - A Classificar",
+                uo=TEST_UO,
                 subteto_despesa_momp="A - Despesas Obrigatórias",
                 teto_anual=5000000,
                 ativo=True,
@@ -120,6 +124,7 @@ def test_reenvio_desativa_combinacao_que_sumiu_do_arquivo():
                 fonte="15000000 - Fonte teste",
                 grupo_despesa="3 - Outras Despesas Corrente",
                 teto_despesa_momp="4 - A Classificar",
+                uo=TEST_UO,
                 subteto_despesa_momp="C - Prioridades Estratégicas LDO",
                 teto_anual=99999999,
                 ativo=True,
@@ -141,7 +146,7 @@ def test_reenvio_desativa_combinacao_que_sumiu_do_arquivo():
                     }
                 ]
             )
-            resultado = _persistir_plan23(df)
+            resultado = _persistir_plan23(df, TEST_UO)
             db.session.commit()
 
             assert resultado["removidos"] == 1, (
