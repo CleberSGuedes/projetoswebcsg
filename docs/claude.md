@@ -628,5 +628,8 @@ Conferido depois: totais por exercício inalterados (2027 ativo: 30 registros, R
 - Dry-run com os 4 arquivos reais (sem gravar): Plan 23 14101 (41 linhas, R$ 6.535.243.129,00 — arquivo antigo de 31/08), Plan 134 14101 (334 linhas, R$ 6.485.317.811,00), Plan 23 14601 (3 linhas, R$ 52.000.000,00), Plan 134 14601 (10 linhas, R$ 52.000.000,00, ações 4524/4525/4545) — todos **conferindo com o total impresso**; UO e exercício lidos corretamente; exercício errado recusado. Contra o Plan 23 antigo, o Plan 134 14101 reproduz exatamente as 12 linhas / R$ 30.341.313,00 sem teto — que agora apareceriam no aviso.
 - Teste manual na tela feito e aprovado pelo usuário (uploads das duas UOs e dashboard com o filtro UO).
 
-### 20.6 Commit
+### 20.6 Fonte dos dados no cabeçalho do dashboard
+Pedido do usuário: citar no painel os relatórios FIPLAN de onde vêm os dados. Nova linha abaixo do subtítulo (`templates/partials/paineis_teto_orcamentario.html`, classe `.teto-dashboard-fonte` em `static/css/style.css`, 11px itálico): "Fonte: FIPLAN – PLAN 23 (Teto Orçamentário PTA) e PLAN 134 (Emitir PTA Detalhado por UO, Programa, Ação, Subação e Etapa)." Em linha separada, e não entre parênteses no subtítulo, para não apertar os botões Gráficos/Tabelas do cabeçalho; nomes dos relatórios exatamente como o FIPLAN imprime no cabeçalho de cada arquivo. Junto, release do rodapé (`templates/base.html`) atualizado pelo usuário para `RELEASE_2_2026_09_29.2`.
+
+### 20.7 Commit
 Usuário testou e aprovou. Commit `951f3c8` (`models/user.py`, `rotas/home_routes.py`, `services/plan20_runner.py`, `services/teto_seduc.py`, `services/uo.py`, `static/css/style.css`, `static/js/main.js`, `templates/partials/paineis_teto_orcamentario.html`, `tests/test_teto_seduc_key_normalization.py`, `tests/test_teto_seduc_lock.py`, `tests/test_teto_seduc_uo.py`, `docs/claude.md`).
