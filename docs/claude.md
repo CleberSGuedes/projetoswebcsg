@@ -627,3 +627,6 @@ Conferido depois: totais por exercício inalterados (2027 ativo: 30 registros, R
 - Suite completa: **43/43** (`pytest`); `node --check static/js/main.js` ok.
 - Dry-run com os 4 arquivos reais (sem gravar): Plan 23 14101 (41 linhas, R$ 6.535.243.129,00 — arquivo antigo de 31/08), Plan 134 14101 (334 linhas, R$ 6.485.317.811,00), Plan 23 14601 (3 linhas, R$ 52.000.000,00), Plan 134 14601 (10 linhas, R$ 52.000.000,00, ações 4524/4525/4545) — todos **conferindo com o total impresso**; UO e exercício lidos corretamente; exercício errado recusado. Contra o Plan 23 antigo, o Plan 134 14101 reproduz exatamente as 12 linhas / R$ 30.341.313,00 sem teto — que agora apareceriam no aviso.
 - Teste manual na tela feito e aprovado pelo usuário (uploads das duas UOs e dashboard com o filtro UO).
+
+### 20.6 Commit
+Usuário testou e aprovou. Commit `951f3c8` (`models/user.py`, `rotas/home_routes.py`, `services/plan20_runner.py`, `services/teto_seduc.py`, `services/uo.py`, `static/css/style.css`, `static/js/main.js`, `templates/partials/paineis_teto_orcamentario.html`, `tests/test_teto_seduc_key_normalization.py`, `tests/test_teto_seduc_lock.py`, `tests/test_teto_seduc_uo.py`, `docs/claude.md`).
