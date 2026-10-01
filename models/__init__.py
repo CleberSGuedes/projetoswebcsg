@@ -14,6 +14,7 @@ from .user import (
     SeeItemExtraido,
     SeeOcorrencia,
     SeeProcessamentoEvento,
+    SeeEscola,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,

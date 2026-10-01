@@ -7,6 +7,7 @@ import os
 from io import BytesIO
 import json
 import unicodedata
+import shutil
 import subprocess
 import sys
 import threading
@@ -30,6 +31,7 @@ from models import (
     SeeItemExtraido,
     SeeOcorrencia,
     SeeProcessamentoEvento,
+    SeeEscola,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -125,6 +127,7 @@ from services.features import (
     normalize_feature_list,
 )
 from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
+from services.see_escolas import Escola, EscolaIndex, identificar_escola
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20
 from services.teto_seduc import (
@@ -2131,6 +2134,7 @@ def _see_catalog_payload(catalogo: SeeCatalogo) -> dict:
     return {
         "id": catalogo.id,
         "nome": catalogo.nome,
+        "exercicio": catalogo.exercicio,
         "descricao": catalogo.descricao or "",
         "ativo": bool(catalogo.ativo),
         "produtos": [
@@ -2145,6 +2149,24 @@ def _see_catalog_payload(catalogo: SeeCatalogo) -> dict:
     }
 
 
+def _see_parse_exercicio(value) -> int | None:
+    try:
+        exercicio = int(str(value or "").strip())
+    except ValueError:
+        return None
+    return exercicio if 2000 <= exercicio <= 2100 else None
+
+
+def _see_catalogo_duplicado(nome: str, exercicio: int, ignorar_id: int | None = None) -> bool:
+    query = SeeCatalogo.query.filter(
+        func.lower(SeeCatalogo.nome) == nome.lower(),
+        SeeCatalogo.exercicio == exercicio,
+    )
+    if ignorar_id:
+        query = query.filter(SeeCatalogo.id != ignorar_id)
+    return query.first() is not None
+
+
 @home_bp.route("/partial/area-uens/sage/notas-see")
 @login_required
 @require_feature("area-uens/sage/notas-see")
@@ -2157,16 +2179,22 @@ def partial_notas_see():
 @require_feature("area-uens/sage/notas-see")
 def api_notas_see_catalogos():
     if request.method == "GET":
-        catalogos = SeeCatalogo.query.order_by(SeeCatalogo.ativo.desc(), SeeCatalogo.nome).all()
+        catalogos = SeeCatalogo.query.order_by(
+            SeeCatalogo.ativo.desc(), SeeCatalogo.exercicio.desc(), SeeCatalogo.nome
+        ).all()
         return jsonify({"catalogos": [_see_catalog_payload(catalogo) for catalogo in catalogos]})
     data = request.get_json() or {}
     nome = (data.get("nome") or "").strip()
+    exercicio = _see_parse_exercicio(data.get("exercicio"))
     if not nome:
         return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-    if SeeCatalogo.query.filter(func.lower(SeeCatalogo.nome) == nome.lower()).first():
-        return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
+    if not exercicio:
+        return jsonify({"error": "Informe um exercício válido (ex.: 2026)."}), 400
+    if _see_catalogo_duplicado(nome, exercicio):
+        return jsonify({"error": f"Já existe um catálogo com esse nome no exercício {exercicio}."}), 400
     catalogo = SeeCatalogo(
         nome=nome,
+        exercicio=exercicio,
         descricao=(data.get("descricao") or "").strip() or None,
         ativo=True,
         criado_por=_current_usuario_id(),
@@ -2189,14 +2217,15 @@ def api_notas_see_catalogo(catalogo_id: int):
     else:
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
+        exercicio = _see_parse_exercicio(data.get("exercicio"))
         if not nome:
             return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-        duplicate = SeeCatalogo.query.filter(
-            func.lower(SeeCatalogo.nome) == nome.lower(), SeeCatalogo.id != catalogo.id
-        ).first()
-        if duplicate:
-            return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
+        if not exercicio:
+            return jsonify({"error": "Informe um exercício válido (ex.: 2026)."}), 400
+        if _see_catalogo_duplicado(nome, exercicio, catalogo.id):
+            return jsonify({"error": f"Já existe um catálogo com esse nome no exercício {exercicio}."}), 400
         catalogo.nome = nome
+        catalogo.exercicio = exercicio
         catalogo.descricao = (data.get("descricao") or "").strip() or None
         catalogo.ativo = bool(data.get("ativo", catalogo.ativo))
     catalogo.atualizado_por = _current_usuario_id()
@@ -2318,6 +2347,10 @@ def _run_see_processamento(app, processamento_id: int) -> None:
                 {"id": row.id, "codigo": row.codigo, "nome": row.nome}
                 for row in product_rows
             ]
+            escola_index = EscolaIndex.build([
+                Escola(codigo=row.codigo, nome=row.nome, municipio=row.municipio, dre=row.dre, tipo=row.tipo, ativo=bool(row.ativo))
+                for row in SeeEscola.query.all()
+            ])
             files = (
                 SeeProcessamentoArquivo.query
                 .filter_by(processamento_id=job.id, status="enviado")
@@ -2346,13 +2379,24 @@ def _run_see_processamento(app, processamento_id: int) -> None:
                 try:
                     result = extract_see_pdf(Path(file_row.caminho_armazenado), products, page_progress)
                     metadata = result["metadata"]
+                    warnings = list(result["warnings"])
+                    cadastro = identificar_escola(metadata, escola_index)
+                    if cadastro["codigo"] and not metadata.get("codigo_escola"):
+                        # Código completado pelo cadastro: deixa de ser um campo ausente.
+                        warnings = [item for item in warnings if item["codigo"] != "CAMPO_CODIGO_ESCOLA_AUSENTE"]
+                    warnings += cadastro["warnings"]
+                    metadata["cadastro"] = {
+                        "origem_codigo": cadastro["origem_codigo"],
+                        "destaque": cadastro["destaque"],
+                        "conferencia": cadastro["conferencia"],
+                    }
                     file_row.total_paginas = result["total_pages"]
                     file_row.metodo_extracao = result["method"]
                     file_row.chave_acesso = metadata.get("chave_acesso")
                     file_row.numero_danfe = metadata.get("numero_danfe")
-                    file_row.dre = metadata.get("dre")
-                    file_row.codigo_escola = metadata.get("codigo_escola")
-                    file_row.nome_escola = metadata.get("nome_escola")
+                    file_row.dre = cadastro["dre"]
+                    file_row.codigo_escola = cadastro["codigo"]
+                    file_row.nome_escola = cadastro["nome"]
                     file_row.confianca_metadados = metadata.get("confianca")
                     file_row.dados_extraidos_json = metadata
                     for item in result["items"]:
@@ -2371,7 +2415,7 @@ def _run_see_processamento(app, processamento_id: int) -> None:
                                 texto_origem=item.get("texto_origem"),
                             )
                         )
-                    for warning in result["warnings"]:
+                    for warning in warnings:
                         db.session.add(
                             SeeOcorrencia(
                                 processamento_id=job.id,
@@ -2383,10 +2427,10 @@ def _run_see_processamento(app, processamento_id: int) -> None:
                             )
                         )
                     file_row.total_produtos = len(result["items"])
-                    file_row.total_alertas = len(result["warnings"])
-                    file_row.status = "finalizado_com_alerta" if result["warnings"] else "finalizado"
+                    file_row.total_alertas = len(warnings)
+                    file_row.status = "finalizado_com_alerta" if warnings else "finalizado"
                     file_row.progresso = 100
-                    if result["warnings"]:
+                    if warnings:
                         job.arquivos_alerta += 1
                     else:
                         job.arquivos_sucesso += 1
@@ -2423,11 +2467,22 @@ def _run_see_processamento(app, processamento_id: int) -> None:
                 item_rows = SeeItemExtraido.query.filter_by(processamento_id=job.id).all()
                 occurrence_rows = SeeOcorrencia.query.filter_by(processamento_id=job.id).all()
                 file_map = {row.id: row for row in file_rows}
+
+                def cadastro_info(row) -> dict:
+                    data = row.dados_extraidos_json or {}
+                    info = data.get("cadastro") or {}
+                    return {
+                        "escola_nota": data.get("nome_escola"),
+                        "origem_codigo": info.get("origem_codigo"),
+                        "destaque": info.get("destaque"),
+                        "conferencia": info.get("conferencia"),
+                    }
+
                 output = SEE_OUTPUT_DIR / f"notas_see_{job.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
                 generate_see_xlsx(
                     output,
-                    [{"Arquivo PDF": row.nome_original, "Status": row.status, "DANFE": row.numero_danfe, "DRE": row.dre, "Código Escola": row.codigo_escola, "Escola": row.nome_escola, "Produtos": row.total_produtos, "Alertas": row.total_alertas, "Erros": row.total_erros} for row in file_rows],
-                    [{"arquivo": file_map[row.arquivo_id].nome_original, "dre": file_map[row.arquivo_id].dre, "codigo_escola": file_map[row.arquivo_id].codigo_escola, "nome_escola": file_map[row.arquivo_id].nome_escola, "numero_danfe": file_map[row.arquivo_id].numero_danfe, "codigo": row.codigo_produto, "nome": row.nome_produto, "quantidade": row.quantidade} for row in item_rows],
+                    [{"Arquivo PDF": row.nome_original, "Status": row.status, "DANFE": row.numero_danfe, "DRE": row.dre, "Código Escola": row.codigo_escola, "Escola": row.nome_escola, "Escola (nota)": cadastro_info(row)["escola_nota"], "Origem do código": cadastro_info(row)["origem_codigo"], "Conferência": cadastro_info(row)["conferencia"], "Produtos": row.total_produtos, "Alertas": row.total_alertas, "Erros": row.total_erros} for row in file_rows],
+                    [{"arquivo": file_map[row.arquivo_id].nome_original, "dre": file_map[row.arquivo_id].dre, "codigo_escola": file_map[row.arquivo_id].codigo_escola, "nome_escola": file_map[row.arquivo_id].nome_escola, "numero_danfe": file_map[row.arquivo_id].numero_danfe, "codigo": row.codigo_produto, "nome": row.nome_produto, "quantidade": row.quantidade, **cadastro_info(file_map[row.arquivo_id])} for row in item_rows],
                     [{"Arquivo PDF": file_map[row.arquivo_id].nome_original if row.arquivo_id in file_map else "", "Severidade": row.severidade, "Fase": row.fase, "Código": row.codigo, "Mensagem": row.mensagem, "Detalhe": row.detalhe_tecnico} for row in occurrence_rows],
                     products,
                 )
@@ -2497,9 +2552,6 @@ def api_notas_see_processar():
         return jsonify({"error": "Selecione um catálogo ativo."}), 400
     if not SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, ativo=True).first():
         return jsonify({"error": "O catálogo selecionado não possui produtos ativos."}), 400
-    uploads = [file for file in request.files.getlist("pdfs") if file and file.filename]
-    if not uploads:
-        return jsonify({"error": "Selecione ao menos um arquivo PDF."}), 400
     append_mode = (request.form.get("append_mode") or "novo").strip().lower()
     try:
         base_job_id = int(request.form.get("base_job_id") or 0)
@@ -2530,17 +2582,10 @@ def api_notas_see_processar():
         catalogo_id=catalogo_id,
         status="enviando",
         etapa_atual="upload",
-        total_arquivos=len(uploads),
+        total_arquivos=0,
     )
     db.session.add(job)
     db.session.flush()
-    upload_dir = SEE_UPLOAD_DIR / str(job.id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    base_hashes = {row.sha256 for row in base_files if row.sha256}
-    seen_hashes = set(base_hashes)
-    saved = 0
-    ignored = []
-    accepted_names = []
     inherited = 0
     inherited_file_map = {}
     for old_file in base_files:
@@ -2606,7 +2651,59 @@ def api_notas_see_processar():
                 resolvido=old_occurrence.resolvido, resolvido_por=old_occurrence.resolvido_por,
                 resolvido_em=old_occurrence.resolvido_em, observacao_resolucao=old_occurrence.observacao_resolucao,
             ))
-    for order, upload in enumerate(uploads, start=inherited + 1):
+    job.total_arquivos = inherited
+    job.arquivos_enviados = 0
+    job.arquivos_processados = inherited
+    job.arquivos_sucesso = sum(1 for row in base_files if row.status == "finalizado")
+    job.arquivos_alerta = sum(1 for row in base_files if row.status == "finalizado_com_alerta")
+    job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
+    job.mensagem_atual = "Recebendo PDFs."
+    db.session.commit()
+    return jsonify({"ok": True, "job_id": job.id, "initial": inherited}), 201
+
+
+def _see_upload_job(processamento_id: int):
+    """Retorna o processamento em fase de upload do usuário atual, ou uma resposta de erro."""
+    job = db.session.get(SeeProcessamento, processamento_id)
+    if not job or job.usuario_id != _current_usuario_id():
+        return None, (jsonify({"error": "Processamento não encontrado."}), 404)
+    if job.status != "enviando":
+        return None, (jsonify({"error": "Este processamento não está mais recebendo arquivos."}), 409)
+    return job, None
+
+
+def _see_discard_upload(job: SeeProcessamento, message: str) -> None:
+    job.status = "descartado"
+    job.mensagem_atual = message
+    job.finalizado_em = datetime.utcnow()
+    db.session.commit()
+    shutil.rmtree(SEE_UPLOAD_DIR / str(job.id), ignore_errors=True)
+
+
+@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/arquivos", methods=["POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_enviar_arquivos(processamento_id: int):
+    job, error = _see_upload_job(processamento_id)
+    if error:
+        return error
+    uploads = [file for file in request.files.getlist("pdfs") if file and file.filename]
+    if not uploads:
+        return jsonify({"error": "Nenhum arquivo recebido neste lote."}), 400
+    existing = (
+        db.session.query(SeeProcessamentoArquivo.sha256, SeeProcessamentoArquivo.etapa_atual, SeeProcessamentoArquivo.ordem)
+        .filter(SeeProcessamentoArquivo.processamento_id == job.id)
+        .all()
+    )
+    base_hashes = {sha for sha, etapa, _ in existing if sha and etapa == "herdado"}
+    seen_hashes = {sha for sha, _, _ in existing if sha}
+    order = max((ordem or 0 for _, _, ordem in existing), default=0)
+    upload_dir = SEE_UPLOAD_DIR / str(job.id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    saved = 0
+    ignored = []
+    accepted_names = []
+    for upload in uploads:
         original = upload.filename.replace("\\", "/")
         display_name = Path(original).name
         if not original.lower().endswith(".pdf"):
@@ -2622,6 +2719,7 @@ def api_notas_see_processar():
             ignored.append({"name": display_name, "reason": reason})
             continue
         seen_hashes.add(digest)
+        order += 1
         stored = f"{order:05d}_{uuid.uuid4().hex}.pdf"
         path = upload_dir / stored
         path.write_bytes(data)
@@ -2629,7 +2727,7 @@ def api_notas_see_processar():
             SeeProcessamentoArquivo(
                 processamento_id=job.id,
                 ordem=order,
-                nome_original=Path(original).name,
+                nome_original=display_name,
                 caminho_relativo=original,
                 nome_armazenado=stored,
                 caminho_armazenado=str(path.resolve()),
@@ -2641,12 +2739,6 @@ def api_notas_see_processar():
         )
         saved += 1
         accepted_names.append(display_name)
-    if not saved:
-        db.session.rollback()
-        details = "; ".join(f"{item['name']}: {item['reason']}" for item in ignored[:5])
-        suffix = f"; e mais {len(ignored) - 5}" if len(ignored) > 5 else ""
-        message = f"Nenhum arquivo novo para processar. {details}{suffix}" if details else "Nenhum PDF válido foi recebido."
-        return jsonify({"error": message, "ignored": ignored, "ignored_count": len(ignored)}), 400
     for item in ignored:
         db.session.add(SeeOcorrencia(
             processamento_id=job.id,
@@ -2657,12 +2749,33 @@ def api_notas_see_processar():
             contexto=item["name"],
             dados_contexto_json=item,
         ))
+    job.arquivos_enviados = (job.arquivos_enviados or 0) + saved
+    job.mensagem_atual = f"{job.arquivos_enviados} PDF(s) recebido(s)."
+    db.session.commit()
+    return jsonify({"ok": True, "added": saved, "accepted": accepted_names, "ignored": ignored})
+
+
+@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/iniciar", methods=["POST"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_iniciar(processamento_id: int):
+    job, error = _see_upload_job(processamento_id)
+    if error:
+        return error
+    saved = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id, status="enviado").count()
+    inherited = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id, etapa_atual="herdado").count()
+    ignored = [
+        row.dados_contexto_json or {"name": row.contexto, "reason": row.mensagem}
+        for row in SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
+    ]
+    if not saved:
+        details = "; ".join(f"{item.get('name')}: {item.get('reason')}" for item in ignored[:5])
+        suffix = f"; e mais {len(ignored) - 5}" if len(ignored) > 5 else ""
+        message = f"Nenhum arquivo novo para processar. {details}{suffix}" if details else "Nenhum PDF válido foi recebido."
+        _see_discard_upload(job, message)
+        return jsonify({"error": message, "ignored_count": len(ignored)}), 400
     job.total_arquivos = inherited + saved
     job.arquivos_enviados = saved
-    job.arquivos_processados = inherited
-    job.arquivos_sucesso = sum(1 for row in base_files if row.status == "finalizado")
-    job.arquivos_alerta = sum(1 for row in base_files if row.status == "finalizado_com_alerta")
-    job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
     job.status = "na_fila"
     job.etapa_atual = "fila"
     job.mensagem_atual = (
@@ -2671,7 +2784,7 @@ def api_notas_see_processar():
     )
     db.session.commit()
     _start_see_worker(job)
-    return jsonify({"ok": True, "job_id": job.id, "message": job.mensagem_atual, "initial": inherited, "added": saved, "total": inherited + saved, "ignored": ignored, "ignored_count": len(ignored), "accepted": accepted_names}), 202
+    return jsonify({"ok": True, "job_id": job.id, "message": job.mensagem_atual, "initial": inherited, "added": saved, "total": inherited + saved, "ignored_count": len(ignored)}), 202
 
 
 @home_bp.route("/api/notas-see/processamentos/<int:processamento_id>", methods=["GET"])
@@ -2737,11 +2850,67 @@ def api_notas_see_ultimo_processamento():
         return jsonify({"job_id": None})
     job = (
         SeeProcessamento.query
-        .filter_by(catalogo_id=catalogo_id)
+        .filter(
+            SeeProcessamento.catalogo_id == catalogo_id,
+            SeeProcessamento.status.notin_(["enviando", "descartado"]),
+        )
         .order_by(SeeProcessamento.id.desc())
         .first()
     )
     return jsonify({"job_id": job.id if job else None})
+
+
+@home_bp.route("/api/notas-see/processamentos/historico", methods=["GET"])
+@login_required
+@require_feature("area-uens/sage/notas-see")
+def api_notas_see_historico():
+    try:
+        catalogo_id = int(request.args.get("catalogo_id") or 0)
+    except ValueError:
+        catalogo_id = 0
+    exercicio = _see_parse_exercicio(request.args.get("exercicio"))
+    # Cada atualização gera um novo processamento acumulado; só o mais recente de cada
+    # catálogo ativo (a versão atual) é exibido.
+    latest_ids = (
+        db.session.query(func.max(SeeProcessamento.id))
+        .join(SeeCatalogo, SeeCatalogo.id == SeeProcessamento.catalogo_id)
+        .filter(
+            SeeCatalogo.ativo == True,  # noqa: E712
+            SeeProcessamento.status.in_(["finalizado", "finalizado_com_alertas"]),
+            SeeProcessamento.caminho_arquivo_saida.isnot(None),
+        )
+        .group_by(SeeProcessamento.catalogo_id)
+    )
+    if catalogo_id:
+        latest_ids = latest_ids.filter(SeeProcessamento.catalogo_id == catalogo_id)
+    if exercicio:
+        latest_ids = latest_ids.filter(SeeCatalogo.exercicio == exercicio)
+    jobs = (
+        SeeProcessamento.query
+        .filter(SeeProcessamento.id.in_(latest_ids.scalar_subquery()))
+        .order_by(SeeProcessamento.id.desc())
+        .all()
+    )
+    catalogs_by_id = {
+        row.id: row
+        for row in SeeCatalogo.query.filter(SeeCatalogo.id.in_({job.catalogo_id for job in jobs})).all()
+    } if jobs else {}
+    items = []
+    for job in jobs:
+        items.append({
+            "id": job.id,
+            "catalog_id": job.catalogo_id,
+            "catalog_name": catalogs_by_id[job.catalogo_id].nome if job.catalogo_id in catalogs_by_id else "Catálogo removido",
+            "exercicio": catalogs_by_id[job.catalogo_id].exercicio if job.catalogo_id in catalogs_by_id else None,
+            "executed_by": job.user_email,
+            "created_at": _see_server_datetime_iso(job.created_at),
+            "status": job.status,
+            "total": job.total_arquivos,
+            "success": job.arquivos_sucesso,
+            "warnings": job.arquivos_alerta,
+            "errors": job.arquivos_erro,
+        })
+    return jsonify({"processamentos": items})
 
 
 @home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/cancelar", methods=["POST"])
@@ -2751,6 +2920,9 @@ def api_notas_see_cancelar(processamento_id: int):
     job = db.session.get(SeeProcessamento, processamento_id)
     if not job:
         return jsonify({"error": "Processamento não encontrado."}), 404
+    if job.status == "enviando":
+        _see_discard_upload(job, "Envio cancelado.")
+        return jsonify({"ok": True, "message": "Envio cancelado."})
     job.cancelamento_solicitado = True
     db.session.commit()
     return jsonify({"ok": True, "message": "Cancelamento solicitado."})

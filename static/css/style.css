@@ -1983,6 +1983,9 @@ body.special-context-focus .main {
 .see-upload-option > i { color: var(--accent); font-size: 25px; }
 .see-upload-option > span { color: var(--muted); font-size: 11px; }
 .see-upload-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.see-upload-option.is-disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.see-upload-step { font-size: 12px; font-weight: 600; }
+.see-process-catalog-info { font-size: 12px; }
 .see-selection-summary { padding: 10px 12px; color: var(--muted); background: rgba(127,127,127,.055); border-radius: 9px; font-size: 12px; }
 .see-append-choice { display: grid; gap: 7px; padding: 12px; background: rgba(var(--accent-rgb),.06); border: 1px solid rgba(var(--accent-rgb),.22); border-radius: 10px; font-size: 12px; }
 .see-append-choice label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
@@ -2006,8 +2009,17 @@ body.special-context-focus .main {
 .see-file-row strong,.see-file-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .see-file-row small { color: var(--muted); }
 .see-file-row > b { text-align: right; font-size: 11px; }
+.see-history-filters { display: grid; grid-template-columns: minmax(0,180px) minmax(0,360px); gap: 10px; margin-bottom: 10px; }
+.see-history-wrap { max-height: 420px; overflow: auto; }
+.see-history-wrap td { vertical-align: middle; }
+.see-done-modal { max-width: 520px; }
+.see-done-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 14px 0 6px; }
+.see-done-summary span { padding: 9px 10px; color: var(--muted); background: rgba(127,127,127,.05); border: 1px solid var(--border); border-radius: 9px; font-size: 11px; }
+.see-done-summary strong { display: block; color: var(--text); font-size: 16px; }
+.see-done-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.see-done-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 @media (max-width: 980px) { .see-grid { grid-template-columns: 1fr; } }
-@media (max-width: 680px) { .see-upload-options,.see-product-grid,.see-processing-meta { grid-template-columns: 1fr; } .see-stats { grid-template-columns: repeat(2,1fr); } .see-header > i { display:none; } }
+@media (max-width: 680px) { .see-history-filters,.see-upload-options,.see-product-grid,.see-processing-meta { grid-template-columns: 1fr; } .see-stats { grid-template-columns: repeat(2,1fr); } .see-header > i { display:none; } }
 
 
 /* Login */

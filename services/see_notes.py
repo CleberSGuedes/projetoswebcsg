@@ -40,6 +40,28 @@ def _near_label(text: str, labels: str, stop_labels: str, value_pattern: str = r
     return re.sub(r"\s+", " ", match.group(1)).strip(" :-") if match else None
 
 
+def _destinatario_escola(lines: list[str]) -> str | None:
+    """Nome do destinatário quando ele é uma escola (linha após 'NOME/RAZAO SOCIAL CNPJ/CPF')."""
+    for idx, line in enumerate(lines[:-1]):
+        if not re.match(r"NOME\s*/\s*RAZAO SOCIAL\s+CNPJ", line):
+            continue
+        match = re.match(r"(.+?)\s+\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", lines[idx + 1])
+        if match and "SECRETARIA" not in match.group(1):
+            return match.group(1).strip()
+        return None
+    return None
+
+
+def _municipio(lines: list[str], normalized: str) -> str | None:
+    """Município do destinatário (linha após 'MUNICIPIO FONE/FAX') ou 'CIDADE: X - MT'."""
+    for idx, line in enumerate(lines[:-1]):
+        if re.match(r"MUNICIPIO\s+FONE", line):
+            value = re.sub(r"\s+(?:\d.*|MT\b.*)$", "", lines[idx + 1]).strip()
+            return value or None
+    match = re.search(r"CIDADE\s*:\s*([A-Z' ]+?)\s*-\s*MT\b", normalized)
+    return match.group(1).strip() if match else None
+
+
 def _metadata(text: str, filename: str) -> dict:
     normalized = _ascii_upper(text).replace("\r", "")
     filename_digits = re.sub(r"\D", "", Path(filename).stem)
@@ -71,8 +93,17 @@ def _metadata(text: str, filename: str) -> dict:
         normalized,
         re.IGNORECASE,
     )
+    lines = [_ascii_upper(line) for line in text.splitlines()]
+    destinatario_escola = _destinatario_escola(lines)
+    dre_line = next((line for line in lines if re.fullmatch(r"DRE\s+[A-Z][A-Z ]{2,60}", line)), None)
+    codigo_fora_do_layout = False
     if combined:
         escola, dre, codigo = (combined.group(1).strip(), combined.group(2).strip(), combined.group(3).strip())
+    elif destinatario_escola and dre_line:
+        # Layout em que a escola é o destinatário e a DRE vem numa linha própria (ex.: Athos);
+        # esse modelo de nota não traz o código da escola.
+        escola, dre, codigo = destinatario_escola, dre_line, None
+        codigo_fora_do_layout = True
     else:
         dre = _near_label(
             normalized,
@@ -112,8 +143,13 @@ def _metadata(text: str, filename: str) -> dict:
     ):
         escola = None
     has_school_block = bool(re.search(r"(?:ESCOLA|ESC\.?|E\.E\.)\s*:", normalized, re.IGNORECASE))
-    entrega_direta_dre = bool(dre and not has_school_block)
-    expected_values = (dre, numero) if entrega_direta_dre else (dre, codigo, escola, numero)
+    entrega_direta_dre = bool(dre and not has_school_block and not codigo_fora_do_layout)
+    if codigo_fora_do_layout:
+        expected_values = (dre, escola, numero)
+    elif entrega_direta_dre:
+        expected_values = (dre, numero)
+    else:
+        expected_values = (dre, codigo, escola, numero)
     found = sum(bool(value) for value in expected_values)
     return {
         "chave_acesso": chave,
@@ -121,24 +157,49 @@ def _metadata(text: str, filename: str) -> dict:
         "dre": dre,
         "codigo_escola": codigo,
         "nome_escola": escola,
+        "municipio": _municipio(lines, normalized),
         "entrega_direta_dre": entrega_direta_dre,
+        "codigo_fora_do_layout": codigo_fora_do_layout,
         "confianca": round(found / len(expected_values), 4),
     }
 
 
-def _extract_row_quantity(words: list[dict], code: str) -> tuple[Decimal, str, str] | None:
+def _row_around(words: list[dict], anchor: dict, tolerance: float = 1.5) -> list[dict]:
+    """Palavras na mesma linha visual da palavra-âncora (o código do produto).
+
+    As colunas de uma DANFE podem ter alturas levemente diferentes (ex.: quantidade 0,75pt
+    abaixo do código), e há letras soltas de textos girados na margem; por isso a linha é
+    montada pela distância ao código, e não por faixas fixas de altura.
+    """
+    top = float(anchor.get("top", 0))
+    row = [word for word in words if abs(float(word.get("top", 0)) - top) <= tolerance]
+    return sorted(row, key=lambda item: float(item.get("x0", 0)))
+
+
+def _extract_row_quantity(words: list[dict], code: str) -> tuple[Decimal, str, str, bool] | None:
+    """Retorna quantidade, unidade, texto da linha e se quantidade x unitário confere com o total."""
     code_indexes = [idx for idx, word in enumerate(words) if re.sub(r"\D", "", word.get("text", "")) == code]
     units = {"UN", "UND", "UNID", "UNIDADE", "PC", "PCT", "CX"}
     for code_idx in code_indexes:
-        for idx in range(code_idx + 1, min(len(words), code_idx + 18)):
+        # A descrição do produto pode ter muitas palavras; procura a unidade em toda a linha.
+        for idx in range(code_idx + 1, len(words)):
             unit = _ascii_upper(words[idx].get("text", "")).rstrip(".")
             if unit not in units:
                 continue
-            for qty_word in words[idx + 1 : min(len(words), idx + 5)]:
-                qty = _decimal_pt(qty_word.get("text", ""))
-                if qty is not None:
-                    source = " ".join(word.get("text", "") for word in words)
-                    return qty, unit, source
+            numbers = [
+                value
+                for value in (_decimal_pt(word.get("text", "")) for word in words[idx + 1 : idx + 6])
+                if value is not None
+            ]
+            if not numbers:
+                continue
+            qty = numbers[0]
+            consistent = True
+            if len(numbers) >= 3:
+                unit_price, total = numbers[1], numbers[2]
+                consistent = bool(total) and abs(qty * unit_price - total) <= max(Decimal("0.05"), total * Decimal("0.01"))
+            source = " ".join(word.get("text", "") for word in words)
+            return qty, unit, source, consistent
     return None
 
 
@@ -151,6 +212,7 @@ def extract_pdf(
     occurrences: list[dict] = []
     seen: set[tuple] = set()
     texts: list[str] = []
+    inconsistent_codes: list[str] = []
 
     with pdfplumber.open(path) as pdf:
         total_pages = len(pdf.pages)
@@ -158,35 +220,34 @@ def extract_pdf(
             page_text = page.extract_text() or ""
             texts.append(page_text)
             words = page.extract_words(use_text_flow=True, keep_blank_chars=False)
-            rows: dict[int, list[dict]] = defaultdict(list)
-            for word in words:
-                rows[round(float(word.get("top", 0)) / 3)].append(word)
-            for row_words in rows.values():
-                row_words.sort(key=lambda word: float(word.get("x0", 0)))
-                row_digits = {re.sub(r"\D", "", word.get("text", "")) for word in row_words}
-                for code in product_by_code.keys() & row_digits:
-                    extracted = _extract_row_quantity(row_words, code)
-                    if not extracted:
-                        continue
-                    quantity, unit, source = extracted
-                    marker = (page_number, code, quantity, round(float(row_words[0].get("top", 0))))
-                    if marker in seen:
-                        continue
-                    seen.add(marker)
-                    product = product_by_code[code]
-                    occurrences.append(
-                        {
-                            "catalogo_produto_id": product.get("id"),
-                            "codigo": code,
-                            "nome": product.get("nome") or code,
-                            "unidade": unit,
-                            "quantidade": quantity,
-                            "pagina": page_number,
-                            "estrategia": "coordenadas_linha",
-                            "confianca": Decimal("0.9500"),
-                            "texto_origem": source[:2000],
-                        }
-                    )
+            for anchor in words:
+                code = re.sub(r"\D", "", anchor.get("text", ""))
+                if code not in product_by_code:
+                    continue
+                extracted = _extract_row_quantity(_row_around(words, anchor), code)
+                if not extracted:
+                    continue
+                quantity, unit, source, consistent = extracted
+                marker = (page_number, code, quantity, round(float(anchor.get("top", 0))))
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                if not consistent:
+                    inconsistent_codes.append(f"{code} (página {page_number})")
+                product = product_by_code[code]
+                occurrences.append(
+                    {
+                        "catalogo_produto_id": product.get("id"),
+                        "codigo": code,
+                        "nome": product.get("nome") or code,
+                        "unidade": unit,
+                        "quantidade": quantity,
+                        "pagina": page_number,
+                        "estrategia": "coordenadas_linha",
+                        "confianca": Decimal("0.9500") if consistent else Decimal("0.5000"),
+                        "texto_origem": source[:2000],
+                    }
+                )
             if page_callback:
                 page_callback(page_number, total_pages)
 
@@ -194,13 +255,24 @@ def extract_pdf(
     metadata = _metadata(full_text, path.name)
     warnings = []
     required_metadata = [("dre", "DRE"), ("numero_danfe", "número da DANFE")]
-    if not metadata.get("entrega_direta_dre"):
+    if metadata.get("codigo_fora_do_layout"):
+        required_metadata[1:1] = [("nome_escola", "nome da escola")]
+        warnings.append({
+            "codigo": "CAMPO_CODIGO_ESCOLA_AUSENTE",
+            "mensagem": "O modelo desta nota não informa o código da escola (escola identificada pelo destinatário).",
+        })
+    elif not metadata.get("entrega_direta_dre"):
         required_metadata[1:1] = [("codigo_escola", "código da escola"), ("nome_escola", "nome da escola")]
     for field, label in required_metadata:
         if not metadata.get(field):
             warnings.append({"codigo": f"CAMPO_{field.upper()}_AUSENTE", "mensagem": f"Não foi possível identificar {label}."})
     if not occurrences:
         warnings.append({"codigo": "PRODUTOS_NAO_ENCONTRADOS", "mensagem": "Nenhum produto do catálogo foi encontrado no PDF."})
+    if inconsistent_codes:
+        warnings.append({
+            "codigo": "QUANTIDADE_INCONSISTENTE",
+            "mensagem": "Quantidade x valor unitário não confere com o valor total: " + ", ".join(inconsistent_codes) + ".",
+        })
     return {
         "metadata": metadata,
         "items": occurrences,
@@ -210,7 +282,39 @@ def extract_pdf(
     }
 
 
+# Cores das linhas que precisam de conferência na Planilha Consolidada.
+DESTAQUE_CORES = {
+    "sugestao": "FFF2CC",        # amarelo: escola sugerida pelo cadastro, conferir o código
+    "divergente": "FCE4D6",      # laranja: nota diverge do cadastro (DRE/município)
+    "nao_encontrada": "FCE4D6",  # laranja: escola/código não encontrado no cadastro
+}
+INDEX_COLUMNS = ["DRE", "COD", "Escola", "Número DANFE"]
+LEGENDA = [
+    ("FFF2CC", "Amarelo", "Escola não encontrada com o mesmo nome; o cadastro sugere uma escola. Confira e informe o código (ver coluna Conferência)."),
+    ("FCE4D6", "Laranja", "Escola ou código não encontrado no cadastro, ou DRE/município da nota diverge do cadastro (ver coluna Conferência)."),
+    (None, "Sem cor", "Escola e DRE conferidas com o cadastro DRE/Escola."),
+]
+
+
+def _write_legend(sheet, column: int) -> None:
+    """Legenda das cores ao lado da tabela, sem deslocar o cabeçalho dos dados."""
+    from openpyxl.styles import Border, Font, PatternFill, Side
+
+    thin = Side(style="thin", color="BFBFBF")
+    title = sheet.cell(row=1, column=column, value="Legenda")
+    title.font = Font(bold=True)
+    for offset, (color, label, description) in enumerate(LEGENDA, start=2):
+        swatch = sheet.cell(row=offset, column=column, value=label)
+        swatch.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+        if color:
+            swatch.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+        sheet.cell(row=offset, column=column + 1, value=description)
+    sheet.column_dimensions[swatch.column_letter].width = 12
+
+
 def generate_xlsx(path: Path, files: list[dict], items: list[dict], occurrences: list[dict], products: list[dict]) -> None:
+    from openpyxl.styles import PatternFill
+
     path.parent.mkdir(parents=True, exist_ok=True)
     base_rows = []
     for item in items:
@@ -224,6 +328,10 @@ def generate_xlsx(path: Path, files: list[dict], items: list[dict], occurrences:
                 "Nome Produto": item.get("nome"),
                 "Quantidade": float(item.get("quantidade") or 0),
                 "Arquivo PDF": item.get("arquivo"),
+                "Escola (nota)": item.get("escola_nota"),
+                "Origem do código": item.get("origem_codigo"),
+                "Conferência": item.get("conferencia"),
+                "_destaque": item.get("destaque"),
             }
         )
     base = pd.DataFrame(base_rows)
@@ -238,13 +346,14 @@ def generate_xlsx(path: Path, files: list[dict], items: list[dict], occurrences:
         )
         for product in products
     }
+    destaques: list[str | None] = []
     if base.empty:
-        summary = pd.DataFrame(columns=["DRE", "COD", "Escola", "Número DANFE", *product_names.values()])
+        summary = pd.DataFrame(columns=[*INDEX_COLUMNS, *product_names.values(), "Conferência"])
     else:
-        for column in ("DRE", "COD", "Escola", "Número DANFE"):
+        for column in INDEX_COLUMNS:
             base[column] = base[column].fillna("NÃO IDENTIFICADO")
         summary = base.pivot_table(
-            index=["DRE", "COD", "Escola", "Número DANFE"],
+            index=INDEX_COLUMNS,
             columns="Código Produto",
             values="Quantidade",
             aggfunc="sum",
@@ -253,9 +362,25 @@ def generate_xlsx(path: Path, files: list[dict], items: list[dict], occurrences:
         for name in product_names.values():
             if name not in summary.columns:
                 summary[name] = 0
-        summary = summary.reindex(columns=["DRE", "COD", "Escola", "Número DANFE", *product_names.values()])
+        notes = base.groupby(INDEX_COLUMNS, dropna=False).agg(
+            conferencia=("Conferência", lambda values: next((v for v in values if v), None)),
+            destaque=("_destaque", lambda values: next((v for v in values if v), None)),
+        ).reset_index()
+        summary = summary.merge(notes, on=INDEX_COLUMNS, how="left").rename(columns={"conferencia": "Conferência"})
+        destaques = list(summary["destaque"])
+        summary = summary.reindex(columns=[*INDEX_COLUMNS, *product_names.values(), "Conferência"])
+    base = base.drop(columns=["_destaque"], errors="ignore")
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         summary.to_excel(writer, sheet_name="Planilha Consolidada", index=False)
+        sheet = writer.sheets["Planilha Consolidada"]
+        for offset, destaque in enumerate(destaques, start=2):
+            color = DESTAQUE_CORES.get(destaque or "")
+            if not color:
+                continue
+            fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+            for cell in sheet[offset]:
+                cell.fill = fill
+        _write_legend(sheet, column=len(summary.columns) + 2)
         base.to_excel(writer, sheet_name="Dados_Extraídos", index=False)
         pd.DataFrame(files).to_excel(writer, sheet_name="Auditoria_Arquivos", index=False)
         pd.DataFrame(occurrences).to_excel(writer, sheet_name="Ocorrências", index=False)

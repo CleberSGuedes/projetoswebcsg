@@ -95,9 +95,11 @@ class UsuarioPermissao(db.Model):
 
 class SeeCatalogo(db.Model):
     __tablename__ = "see_catalogos"
+    __table_args__ = (db.UniqueConstraint("exercicio", "nome", name="uq_see_catalogo_exercicio_nome"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    nome = db.Column(db.String(150), nullable=False, unique=True)
+    nome = db.Column(db.String(150), nullable=False)
+    exercicio = db.Column(db.SmallInteger, nullable=False)
     descricao = db.Column(db.String(500))
     ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
     criado_por = db.Column(db.BigInteger, db.ForeignKey("usuarios.id"))
@@ -246,6 +248,27 @@ class SeeProcessamentoEvento(db.Model):
     arquivos_alerta = db.Column(db.Integer)
     arquivos_erro = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class SeeEscola(db.Model):
+    """Cadastro DRE/Escola usado para validar e completar os dados das DANFEs.
+
+    O código de lotação é a única chave confiável: há escolas com o mesmo nome em
+    municípios/DREs diferentes. tipo='dre' identifica entregas feitas na própria DRE.
+    """
+
+    __tablename__ = "see_escolas"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    codigo = db.Column(db.String(20), nullable=False, unique=True)
+    nome = db.Column(db.String(255), nullable=False)
+    municipio = db.Column(db.String(120))
+    dre = db.Column(db.String(120), nullable=False, index=True)
+    tipo = db.Column(db.String(20), nullable=False, default="escola", server_default="escola")
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("1"))
+    fonte = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())
 
 
 class Fip613Upload(db.Model):

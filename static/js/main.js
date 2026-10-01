@@ -18263,6 +18263,8 @@
     const productsBody = document.getElementById("see-products-body");
     const processForm = document.getElementById("see-process-form");
     const processCatalogId = document.getElementById("see-process-catalog-id");
+    const processCatalogSelect = document.getElementById("see-process-catalog-select");
+    const processCatalogInfo = document.getElementById("see-process-catalog-info");
     const folderInput = document.getElementById("see-folder-input");
     const filesInput = document.getElementById("see-files-input");
     const submit = document.getElementById("see-process-submit");
@@ -18283,6 +18285,14 @@
     let jobId = null;
     let pollTimer = null;
     let lastProcessing = null;
+    let watchingJobId = null;
+    const historyCatalog = document.getElementById("see-history-catalog");
+    const historyExercicio = document.getElementById("see-history-exercicio");
+    const catalogLabel = (item) => `${item.exercicio} · ${escapeHtml(item.nome)}`;
+    const historyBody = document.getElementById("see-history-body");
+    const historyMsg = document.getElementById("see-history-msg");
+    const SEE_BATCH_MAX_FILES = 50;
+    const SEE_BATCH_MAX_BYTES = 20 * 1024 * 1024;
 
     const escapeHtml = (value) => String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -18315,6 +18325,15 @@
     const renderProducts = () => {
       const catalog = selectedCatalog();
       processCatalogId.value = catalog ? catalog.id : "";
+      processCatalogSelect.value = catalog ? String(catalog.id) : "";
+      processCatalogInfo.textContent = catalog
+        ? `As notas serão conferidas com os ${catalog.produtos.length} produto(s) de "${catalog.nome}" (exercício ${catalog.exercicio}).`
+        : "Escolha o catálogo antes de selecionar os PDFs.";
+      processCatalogInfo.classList.toggle("text-error", Boolean(catalog && !catalog.produtos.length));
+      [folderInput, filesInput].forEach((input) => {
+        input.disabled = !catalog || !catalog.produtos.length;
+        input.closest(".see-upload-option")?.classList.toggle("is-disabled", input.disabled);
+      });
       document.getElementById("see-catalog-edit").disabled = !catalog;
       document.getElementById("see-catalog-delete").disabled = !catalog;
       productsWrap.hidden = !catalog;
@@ -18329,7 +18348,14 @@
     const loadCatalogs = async (keepId = "") => {
       const data = await requestJson("/api/notas-see/catalogos");
       catalogs = data.catalogos || [];
-      catalogSelect.innerHTML = '<option value="">Selecione</option>' + catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${escapeHtml(item.nome)} (${item.produtos.length})</option>`).join("");
+      const options = catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${catalogLabel(item)} (${item.produtos.length})</option>`).join("");
+      catalogSelect.innerHTML = '<option value="">Selecione</option>' + options;
+      processCatalogSelect.innerHTML = '<option value="">Selecione o catálogo</option>' + options;
+      const exercicioValue = historyExercicio.value;
+      const exercicios = [...new Set(catalogs.filter((item) => item.ativo).map((item) => String(item.exercicio)))].sort().reverse();
+      historyExercicio.innerHTML = '<option value="">Todos os exercícios</option>' + exercicios.map((ano) => `<option value="${ano}">${ano}</option>`).join("");
+      historyExercicio.value = exercicios.includes(exercicioValue) ? exercicioValue : "";
+      renderHistoryCatalogs();
       if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
       renderProducts();
     };
@@ -18347,8 +18373,17 @@
       const canAppend = lastProcessing
         && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
         && String(lastProcessing.catalog_id) === String(catalog?.id);
-      appendChoice.hidden = !canAppend;
+      // A pergunta só faz sentido quando há novos PDFs para um catálogo que já foi processado.
+      appendChoice.hidden = !canAppend || !files.length;
     }
+    const resetUploadCard = () => {
+      folderInput.value = "";
+      filesInput.value = "";
+      const defaultMode = processForm.querySelector('input[name="see_append_mode"][value="acrescentar"]');
+      if (defaultMode) defaultMode.checked = true;
+      setMessage(processMsg, "");
+      updateSelection();
+    };
 
     catalogSelect.addEventListener("change", async () => {
       renderProducts();
@@ -18360,6 +18395,10 @@
       appendChoice.hidden = true;
       processingMeta.innerHTML = "";
       if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
+    });
+    processCatalogSelect.addEventListener("change", () => {
+      catalogSelect.value = processCatalogSelect.value;
+      catalogSelect.dispatchEvent(new Event("change"));
     });
     folderInput.addEventListener("click", () => {
       filesInput.value = "";
@@ -18380,6 +18419,7 @@
     document.getElementById("see-catalog-new").addEventListener("click", () => {
       catalogForm.reset();
       document.getElementById("see-catalog-id").value = "";
+      document.getElementById("see-catalog-exercicio").value = new Date().getFullYear();
       catalogForm.hidden = false;
       document.getElementById("see-catalog-name").focus();
     });
@@ -18389,6 +18429,7 @@
       if (!catalog) return;
       document.getElementById("see-catalog-id").value = catalog.id;
       document.getElementById("see-catalog-name").value = catalog.nome;
+      document.getElementById("see-catalog-exercicio").value = catalog.exercicio || "";
       document.getElementById("see-catalog-description").value = catalog.descricao || "";
       catalogForm.hidden = false;
     });
@@ -18402,7 +18443,7 @@
       event.preventDefault();
       try {
         const catalogId = document.getElementById("see-catalog-id").value;
-        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
+        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, exercicio: document.getElementById("see-catalog-exercicio").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
         catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
       } catch (error) { setMessage(catalogMsg, error.message, true); }
     });
@@ -18473,11 +18514,108 @@
         renderStatus(data);
         if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
           pollTimer = setTimeout(poll, 1000);
+        } else if (String(watchingJobId) === String(data.id)) {
+          // Concluiu um processamento iniciado nesta tela: limpa o envio e avisa o usuário.
+          watchingJobId = null;
+          resetUploadCard();
+          openDoneModal(data);
+          loadHistory();
         } else {
           updateSelection();
         }
       } catch (error) { setMessage(processMsg, error.message, true); }
     };
+    const openDoneModal = (data) => {
+      document.getElementById("see-done-overlay")?.remove();
+      const success = ["finalizado", "finalizado_com_alertas"].includes(data.status);
+      const title = success
+        ? `Catálogo "${data.catalog_name}" processado com sucesso!`
+        : data.status === "cancelado"
+          ? `Processamento do catálogo "${data.catalog_name}" cancelado.`
+          : `Falha no processamento do catálogo "${data.catalog_name}".`;
+      const note = data.status === "finalizado_com_alertas"
+        ? `<p class="see-done-note">Há notas com alertas ou erros. Confira a aba "Ocorrências" da planilha.</p>`
+        : !success ? `<p class="see-done-note">${escapeHtml(data.message || "")}</p>` : "";
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "see-done-overlay";
+      overlay.innerHTML = `
+        <div class="modal-card see-done-modal" role="dialog" aria-modal="true" aria-labelledby="see-done-title">
+          <div class="modal-header">
+            <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+            <div class="modal-header-text">
+              <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+              <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="modal-title" id="see-done-title">${escapeHtml(title)}</div>
+            <div class="see-done-summary">
+              <span><strong>${data.processed}/${data.total}</strong>Notas processadas</span>
+              <span><strong>${data.success}</strong>Sem alertas</span>
+              <span><strong>${data.warnings}</strong>Com alertas</span>
+              <span><strong>${data.errors}</strong>Com erros</span>
+              ${data.ignored_count ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>` : ""}
+              <span><strong>${data.duration ? `${data.duration.toFixed(1)}s` : "-"}</strong>Duração</span>
+            </div>
+            ${note}
+          </div>
+          <div class="see-done-footer">
+            ${data.download_ready ? '<button type="button" class="btn sm" data-see-done="download"><i class="bi bi-download"></i>Baixar Excel</button>' : ""}
+            <button type="button" class="btn btn-primary sm" data-see-done="close">Fechar</button>
+          </div>
+        </div>`;
+      const close = () => {
+        document.removeEventListener("keydown", onKeyDown, true);
+        overlay.remove();
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      const onKeyDown = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(); } };
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
+      overlay.querySelector('[data-see-done="close"]').addEventListener("click", close);
+      overlay.querySelector('[data-see-done="download"]')?.addEventListener("click", () => downloadJob(data.id));
+      document.addEventListener("keydown", onKeyDown, true);
+      document.body.appendChild(overlay);
+      overlay.querySelector('[data-see-done="close"]').focus();
+    };
+    function renderHistoryCatalogs() {
+      // O filtro de catálogo mostra só os catálogos ativos do exercício escolhido.
+      const current = historyCatalog.value;
+      const options = catalogs.filter((item) => item.ativo && (!historyExercicio.value || String(item.exercicio) === historyExercicio.value));
+      historyCatalog.innerHTML = '<option value="">Todos os catálogos</option>' + options.map((item) => `<option value="${item.id}">${catalogLabel(item)}</option>`).join("");
+      historyCatalog.value = options.some((item) => String(item.id) === current) ? current : "";
+    }
+    const loadHistory = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (historyExercicio.value) params.set("exercicio", historyExercicio.value);
+        if (historyCatalog.value) params.set("catalogo_id", historyCatalog.value);
+        const query = params.toString() ? `?${params}` : "";
+        const data = await requestJson(`/api/notas-see/processamentos/historico${query}`);
+        const items = data.processamentos || [];
+        historyBody.innerHTML = items.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.exercicio ?? "-")}</td>
+            <td>${escapeHtml(item.catalog_name)}</td>
+            <td>${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString("pt-BR") : "-")}</td>
+            <td>${escapeHtml(item.executed_by || "-")}</td>
+            <td>${item.total}</td>
+            <td>${item.warnings}</td>
+            <td>${item.errors}</td>
+            <td class="see-row-actions"><button class="btn sm see-history-download" type="button" data-id="${item.id}"><i class="bi bi-download"></i>Baixar</button></td>
+          </tr>`).join("");
+        setMessage(historyMsg, items.length ? "" : "Nenhum processamento concluído.");
+      } catch (error) { setMessage(historyMsg, error.message, true); }
+    };
+    historyCatalog.addEventListener("change", loadHistory);
+    historyExercicio.addEventListener("change", () => {
+      renderHistoryCatalogs();
+      loadHistory();
+    });
+    historyBody.addEventListener("click", (event) => {
+      const button = event.target.closest(".see-history-download");
+      if (button) downloadJob(button.dataset.id);
+    });
     const restoreLastProcessing = async (catalogId) => {
       if (!catalogId) return;
       const requestedCatalogId = String(catalogId);
@@ -18494,18 +18632,53 @@
     processForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!processForm.reportValidity() || submit.disabled) return;
-      submit.disabled = true; setMessage(processMsg, "Enviando PDFs...");
+      submit.disabled = true; setMessage(processMsg, "Preparando envio...");
+      let uploadJobId = null;
       try {
-        const formData = new FormData();
-        formData.append("catalogo_id", catalogSelect.value);
+        const files = selectedFiles();
+        const createData = new FormData();
+        createData.append("catalogo_id", catalogSelect.value);
         const appendMode = appendChoice.hidden
           ? "novo"
           : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
-        formData.append("append_mode", appendMode);
-        if (appendMode === "acrescentar" && lastProcessing?.id) formData.append("base_job_id", lastProcessing.id);
-        selectedFiles().forEach((file) => formData.append("pdfs", file, file.webkitRelativePath || file.name));
-        const data = await requestJson("/api/notas-see/processamentos", { method: "POST", body: formData });
+        createData.append("append_mode", appendMode);
+        if (appendMode === "acrescentar" && lastProcessing?.id) createData.append("base_job_id", lastProcessing.id);
+        const created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData });
+        uploadJobId = created.job_id;
+
+        // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
+        const batches = [];
+        let current = [];
+        let currentSize = 0;
+        files.forEach((file) => {
+          if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) {
+            batches.push(current);
+            current = [];
+            currentSize = 0;
+          }
+          current.push(file);
+          currentSize += file.size;
+        });
+        if (current.length) batches.push(current);
+        const accepted = [];
+        const ignored = [];
+        let sent = 0;
+        for (const batch of batches) {
+          setMessage(processMsg, `Enviando PDFs: ${sent} de ${files.length} (${Math.round((sent / files.length) * 100)}%)...`);
+          const batchData = new FormData();
+          batch.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
+          const result = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/arquivos`, { method: "POST", body: batchData });
+          accepted.push(...(result.accepted || []));
+          ignored.push(...(result.ignored || []));
+          sent += batch.length;
+        }
+        setMessage(processMsg, "Iniciando processamento...");
+        const data = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/iniciar`, { method: "POST" });
+        uploadJobId = null;
+        data.accepted = accepted;
+        data.ignored = ignored;
         jobId = data.job_id;
+        watchingJobId = data.job_id;
         setMessage(processMsg, data.message);
         progressCard.hidden = false;
         renderStatus({
@@ -18533,23 +18706,32 @@
         });
         progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
         poll();
-      } catch (error) { setMessage(processMsg, error.message, true); submit.disabled = false; }
+      } catch (error) {
+        // Envio interrompido: descarta o processamento parcial para não deixá-lo pendente.
+        if (uploadJobId) {
+          requestJson(`/api/notas-see/processamentos/${uploadJobId}/cancelar`, { method: "POST" }).catch(() => {});
+        }
+        setMessage(processMsg, error.message, true);
+        submit.disabled = false;
+      }
     });
     document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
-    document.getElementById("see-download").addEventListener("click", async () => {
-      if (!jobId) return;
-      const url = `/api/notas-see/processamentos/${jobId}/download`;
+    async function downloadJob(id) {
+      if (!id) return;
+      const url = `/api/notas-see/processamentos/${id}/download`;
       if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
       try {
         const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
         if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
-        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${jobId}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${id}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
         const writable = await handle.createWritable();
         await writable.write(await response.blob());
         await writable.close();
       } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
-    });
+    }
+    document.getElementById("see-download").addEventListener("click", () => downloadJob(jobId));
     loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
+    loadHistory();
   }
 
   function initGovernancaSemanticFlows() {
