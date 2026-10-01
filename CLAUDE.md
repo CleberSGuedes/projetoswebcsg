@@ -84,6 +84,8 @@ Problemas encontrados e corrigidos em `services/see_notes.py`:
 
 ### Implantação em homologação/produção (checklist)
 
+> **Situação (2026-10-01):** as alterações estão só na branch `dev/cleber`. A subida para homologação/produção foi **adiada** e será feita futuramente; não implantar sem pedido explícito.
+
 1. Executar `db/see_catalogo_exercicio.sql` **antes** de subir o código.
 2. Subir o código. A tabela `see_escolas` é criada pelo `db.create_all()` no start.
 3. Rodar `scripts/importar_escolas_see.py` com a planilha de escolas.
@@ -93,6 +95,6 @@ Problemas encontrados e corrigidos em `services/see_notes.py`:
 
 - Cada "acrescentar" cria um processamento novo com **cópia completa** das notas anteriores (o 2º bimestre tem 19 versões, ~86% dos itens duplicados). A tela mostra só a versão atual; limpar versões antigas ainda não foi feito.
 - Os nomes dos catálogos existentes ainda contêm o ano ("2º Bimistres 2026"); renomear pela tela.
-- Ainda não há tela para consultar ou importar o cadastro DRE/Escola (hoje só pelo script).
+- **Não criar tela de cadastro DRE/Escola.** Decisão: aguardar a futura funcionalidade de **cadastro de matrículas de alunos** (desenvolvida em outro projeto), que já trará DRE, município e escolas. O Notas SEE deverá passar a usar essa fonte, para não haver cadastros duplicados em lugares diferentes. Até lá, o cadastro é mantido pelo `scripts/importar_escolas_see.py`.
 - Fornecedor com layout novo de DANFE: processar uma amostra e conferir 5–10 notas contra o PDF antes de confiar no resultado. Produtos e quantidades tendem a funcionar (quadro padrão da NF-e); DRE e escola dependem do layout.
 - Notas a conferir no 3º bimestre: 44001 ("EE SAGRADO CORACAO DE JESUS", Denise: não consta no cadastro) e 44021 ("EE POXOREO": destinatário em Guarantã do Norte, mas a nota informa DRE Primavera do Leste).
