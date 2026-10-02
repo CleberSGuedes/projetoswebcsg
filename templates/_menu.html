@@ -16,6 +16,10 @@
           {% endif %}
         </div>
       </div>
+    {% elif node.external_url %}
+      <a href="{{ node.external_url }}" data-route="{{ node.id }}" data-external-url="{{ node.external_url }}" target="_blank" rel="noopener noreferrer" class="menu-item" title="{{ node.nome }}">
+        <i class="bi bi-{{ node.icon }}"></i> <span>{{ node.nome }}</span>
+      </a>
     {% else %}
       <a href="#" data-route="{{ node.id }}" class="menu-item" title="{{ node.nome }}">
         <i class="bi bi-{{ node.icon }}"></i> <span>{{ node.nome }}</span>

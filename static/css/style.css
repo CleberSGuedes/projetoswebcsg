@@ -3204,6 +3204,12 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   margin: 0;
   font-size: 12px;
 }
+/* Linha de fonte dos dados (relatorios FIPLAN usados pelo painel). */
+.teto-dashboard-header .teto-dashboard-fonte {
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: italic;
+}
 .teto-view-switch {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -3256,11 +3262,18 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   margin: 0;
   font-size: 11px;
 }
+/* data-graph-filter e o UNICO lugar que define quais campos ficam
+   visiveis na aba "Graficos" (o atributo e marcado no HTML, em
+   templates/partials/paineis_teto_orcamentario.html; procurar so no
+   main.js dá zero resultado - o efeito dele e so aqui). Na aba
+   "Tabelas" nao ha essa regra, entao todos os filtros aparecem. */
 .teto-dashboard[data-active-view="graficos"] .teto-filter-grid .field:not([data-graph-filter]) {
   display: none;
 }
+/* 6 colunas = os 6 campos com data-graph-filter (Exercicio, UO, Grupo,
+   Tipificacao, Acao/PAOE, Fonte) numa linha so. */
 .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
-  grid-template-columns: repeat(5, minmax(125px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
 }
 .teto-filter-grid select {
   width: 100%;
@@ -3270,6 +3283,44 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   padding: 5px 9px;
   border-radius: 8px;
   font-size: 11px;
+}
+/* Reaproveita o componente .planning-action-checklist (ja usado em
+   Estrutura do Planejamento), so encolhendo pra caber na grade compacta
+   de filtros do dashboard. */
+.teto-multi-filter.planning-action-checklist-toggle,
+.teto-multi-filter .planning-action-checklist-toggle {
+  min-height: 32px;
+  padding: 5px 28px 5px 9px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+.teto-multi-filter .planning-action-checklist-panel {
+  width: max-content;
+  min-width: 100%;
+  max-width: 320px;
+}
+.teto-multi-filter .planning-action-checklist-option {
+  padding: 5px 6px;
+  font-size: 11px;
+}
+.teto-checklist-actions {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.teto-checklist-actions button {
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+.teto-checklist-actions button:hover {
+  text-decoration: underline;
 }
 .teto-active-filters {
   display: flex;
@@ -3285,6 +3336,11 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   color: var(--text);
   padding: 4px 8px;
   font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.teto-filter-chip:hover {
+  background: rgba(31,155,126,0.2);
 }
 .teto-dashboard-status {
   min-height: 16px;
@@ -3345,12 +3401,138 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   min-height: 390px;
 }
 .teto-table-panel { margin-bottom: 12px; }
-.teto-primary-tables {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+/* Card "Por grupo de despesa" (aba Tabelas) - reaproveita as mesmas cores
+   fixas de groupColors (main.js), ja usadas no grafico de pizza da aba
+   Graficos, para o grupo de despesa ser sempre a mesma cor no app inteiro. */
+.teto-group-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
 }
-.teto-primary-tables .teto-table-panel { min-width: 0; }
+.teto-group-legend .dot,
+.teto-group-card .name .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex: none;
+}
+.teto-group-stack {
+  display: flex;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.teto-group-stack > div { height: 100%; }
+.teto-group-stack .teto-group-gap { width: 2px; background: var(--card); flex: none; }
+.teto-group-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.teto-group-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.teto-group-card .name {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.teto-group-card .value {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+.teto-group-card .pct {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+@media (max-width: 720px) {
+  .teto-group-cards { grid-template-columns: 1fr; }
+}
+/* Ranking "Teto por fonte de recurso" (aba Tabelas) - lista com barra
+   proporcional em vez de tabela simples. Serie unica (nao categorica),
+   entao usa um acento solido (--accent-strong) em vez de cores por item. */
+.teto-fonte-rank {
+  display: flex;
+  flex-direction: column;
+}
+.teto-rank-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(70px, 0.9fr) minmax(90px, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+.teto-rank-row + .teto-rank-row { border-top: 1px solid var(--border); }
+.teto-rank-id { min-width: 0; }
+.teto-rank-code { font-size: 11px; color: var(--muted); }
+.teto-rank-name {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teto-rank-track {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  height: 16px;
+  overflow: hidden;
+}
+.teto-rank-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--accent-strong);
+  min-width: 3px;
+}
+.teto-rank-val {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.teto-rank-pct {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.teto-rank-row.teto-rank-total {
+  border-top: 2px solid var(--border);
+  margin-top: 2px;
+  padding-top: 9px;
+}
+.teto-rank-row.teto-rank-total .teto-rank-id,
+.teto-rank-row.teto-rank-total .teto-rank-val {
+  font-weight: 700;
+}
+.teto-rank-fill-total { background: var(--accent); }
+/* Sub-linhas (tipificacao dentro de um grupo de despesa): indentadas,
+   herdam a cor do grupo-pai mas mais claras (opacidade), pra reforcar a
+   hierarquia sem precisar de uma paleta nova. */
+.teto-rank-row.teto-rank-child { padding: 5px 0; }
+.teto-rank-row.teto-rank-child .teto-rank-id { padding-left: 20px; }
+.teto-rank-row.teto-rank-child .teto-rank-code,
+.teto-rank-row.teto-rank-child .teto-rank-name { font-size: 11px; }
+.teto-rank-row.teto-rank-child .teto-rank-track { height: 12px; }
+.teto-rank-row.teto-rank-child .teto-rank-fill { opacity: 0.55; }
+.teto-rank-row.teto-rank-child .teto-rank-val { font-size: 11px; }
 .teto-table-panel > h2 {
   margin: -12px -12px 8px;
   padding: 8px 12px;
@@ -3369,13 +3551,10 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
   min-width: 680px;
   margin: 0;
 }
-#teto-table-qomp { min-width: 920px; }
 .teto-data-table th { white-space: nowrap; }
 .teto-data-table td,
 .teto-data-table th { padding: 7px; }
 .teto-data-table td:not(:first-child) { text-align: right; }
-#teto-table-qomp td:nth-child(2),
-#teto-table-qomp th:nth-child(2) { text-align: left; }
 .teto-data-table .teto-row-child td:first-child { padding-left: 26px; }
 #teto-table-qomp .teto-row-child td:first-child { padding-left: 7px; }
 #teto-table-qomp .teto-row-child td:nth-child(2) { padding-left: 26px; }
@@ -3409,10 +3588,6 @@ body.theme-dark[data-accent-preference="red"] .emp-record-digits .digit {
 .theme-dark #teto-table-fonte td:nth-child(2),
 .theme-dark #teto-table-grupo td:nth-child(2) {
   background: rgba(var(--accent-rgb),0.05);
-}
-.theme-dark #teto-table-qomp th.teto-qomp-value-col {
-  background: transparent;
-  font-weight: inherit;
 }
 .theme-dark .teto-table-panel > h2 {
   background: rgba(var(--accent-rgb),0.13);
@@ -5914,11 +6089,115 @@ body[data-visual-diagrams="high"] .preview-line {
   display: flex;
   justify-content: flex-end;
 }
+.theme-dark .teto-filter-chip { background: rgba(31,155,126,0.18); }
+/* Destaque extra pros cards "Grupo 1 por Fontes" e "Grupo por Teto Total" -
+   um meio-termo: mais forte que o tom claro (0.12) dos demais cabecalhos,
+   mas sem ser solido (isso ficava igual as barras/botoes "ativos" do app e
+   competia com elas visualmente). */
+.teto-panel-highlight > h2 { background: rgba(15,124,104,0.30); }
+.theme-dark .teto-panel-highlight > h2 { background: rgba(61,214,183,0.30); }
+
+/* Card QOMP (aba Tabelas) - grade CSS (nao tabela) com Fonte (so codigo) e
+   Grupo/Tipificacao fixos ao rolar horizontalmente, uma coluna por
+   exercicio do filtro (sem limite de 3), com indicador de variacao entre
+   anos consecutivos exibidos. Mesmo padrao visual do ranking de Fonte/
+   Grupo (barra proporcional), reaproveitando groupColors por grupo. */
+.teto-qomp-sub { margin: -4px 0 12px; font-size: 12px; }
+.teto-qomp-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.teto-qomp-grid {
+  display: grid;
+  width: 100%;
+  --qomp-w-fonte: 86px;
+  --qomp-w-grupo: 250px;
+  --qomp-w-ano: 150px;
+  --qomp-up: var(--accent-strong);
+  --qomp-down: #c0392b;
+}
+.theme-dark .teto-qomp-grid { --qomp-down: #f0715f; }
+.teto-qomp-row {
+  display: grid;
+  /* Colunas de ano se ajustam pra preencher a largura do card (1fr) mas
+     nunca ficam menores que --qomp-w-ano - com poucos exercicios elas
+     esticam sem sobrar espaco vazio; com muitos, o minimo forca a grade a
+     ultrapassar a largura do card e o .teto-qomp-scroll abre a rolagem
+     horizontal. */
+  grid-template-columns: var(--qomp-w-fonte) var(--qomp-w-grupo) repeat(var(--qomp-n-anos), minmax(var(--qomp-w-ano), 1fr));
+}
+.teto-qomp-row + .teto-qomp-row { border-top: 1px solid var(--border); }
+.teto-qomp-cell { padding: 8px 10px; min-width: 0; }
+.teto-qomp-col-fonte { position: sticky; left: 0; z-index: 2; background: var(--card); }
+.teto-qomp-col-grupo {
+  position: sticky;
+  left: var(--qomp-w-fonte);
+  z-index: 2;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+}
+/* Variante sem a coluna Fonte (card "Grupo por Teto Total") - so Grupo +
+   exercicios; Grupo assume o lugar (sticky left:0) que seria da Fonte. */
+.teto-qomp-grid.qomp-flat .teto-qomp-row {
+  grid-template-columns: var(--qomp-w-grupo) repeat(var(--qomp-n-anos), minmax(var(--qomp-w-ano), 1fr));
+}
+.teto-qomp-grid.qomp-flat .teto-qomp-col-grupo { left: 0; }
+/* Zebra por bloco de fonte (nao por linha) - todas as linhas (grupo e
+   tipificacao) de uma mesma fonte recebem o mesmo fundo, alternando entre
+   fontes, pra separar visualmente onde uma fonte termina e a proxima
+   comeca. Reaproveita --bg (ja usado como contraste sutil sobre --card
+   em .teto-rank-track) em vez de criar uma cor nova. */
+.teto-qomp-row.fonte-alt,
+.teto-qomp-row.fonte-alt .teto-qomp-col-fonte,
+.teto-qomp-row.fonte-alt .teto-qomp-col-grupo {
+  background: var(--bg);
+}
+.teto-qomp-head .teto-qomp-cell { padding: 6px 10px 9px; }
+.teto-qomp-head-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.teto-qomp-year-head { text-align: right; }
+.teto-qomp-year-head .yr { font-size: 13px; font-weight: 700; }
+.teto-qomp-year-head .yr-total { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.teto-qomp-fonte-code { font-size: 12px; font-weight: 600; }
+.teto-qomp-grupo-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.teto-qomp-row.child .teto-qomp-grupo-name { font-size: 11.5px; font-weight: 400; color: var(--muted); padding-left: 14px; }
+.teto-qomp-year-cell { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.teto-qomp-value { text-align: right; font-size: 13px; font-weight: 700; }
+.teto-qomp-track { height: 5px; border-radius: 3px; background: var(--bg); border: 1px solid var(--border); overflow: hidden; }
+.teto-qomp-fill { height: 100%; border-radius: 3px; background: var(--accent-strong); }
+.teto-qomp-delta-row { display: flex; justify-content: flex-end; }
+.teto-qomp-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.teto-qomp-delta.up { color: var(--qomp-up); background: rgba(31,155,126,0.12); }
+.teto-qomp-delta.down { color: var(--qomp-down); background: rgba(192,57,43,0.10); }
+.teto-qomp-delta.flat { color: var(--muted); background: var(--bg); }
+.teto-qomp-delta-placeholder { height: 17px; }
+.theme-dark .teto-qomp-delta.up { background: rgba(34,181,143,0.16); }
+.theme-dark .teto-qomp-delta.down { background: rgba(240,113,95,0.16); }
+.teto-qomp-row.child .teto-qomp-value { font-size: 12px; }
+.teto-qomp-row.child .teto-qomp-track { height: 4px; opacity: .82; }
+.teto-qomp-row.total { border-top: 2px solid var(--border); margin-top: 2px; }
+.teto-qomp-row.total .teto-qomp-cell { padding-top: 11px; }
+.teto-qomp-row.total .teto-qomp-grupo-name { font-size: 13px; font-weight: 700; }
+.teto-qomp-row.total .teto-qomp-value { font-size: 14px; }
+.teto-qomp-row.total .teto-qomp-fill { background: var(--accent); }
+@media (max-width: 720px) {
+  .teto-qomp-grid { --qomp-w-fonte: 70px; --qomp-w-grupo: 190px; --qomp-w-ano: 128px; }
+}
 
 @container teto-dashboard (max-width: 1350px) {
   .teto-filter-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
   .teto-dashboard[data-active-view="graficos"] .teto-filter-grid {
-    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
   }
 }
 @container teto-dashboard (max-width: 1050px) {
@@ -5928,7 +6207,6 @@ body[data-visual-diagrams="high"] .preview-line {
   }
   .teto-chart-grid { grid-template-columns: 1fr; }
   .teto-panel-wide { grid-column: auto; }
-  .teto-primary-tables { grid-template-columns: 1fr; }
 }
 @container teto-dashboard (max-width: 820px) {
   .teto-filter-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
