@@ -129,12 +129,19 @@ from services.features import (
 from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
 from services.see_escolas import Escola, EscolaIndex, identificar_escola
 from services.fip613_runner import run_fip613, UPLOAD_DIR
-from services.plan20_runner import run_plan20
+from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
+from services.uo import uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
+    grupo_key,
+    subteto_key,
+    ler_cabecalho_fiplan,
+    normalizar_acao,
+    normalizar_grupo,
     processar_plan23,
     processar_plan134,
+    validar_cabecalho_fiplan,
 )
 from services.ped_runner import (
     run_ped,
@@ -516,11 +523,6 @@ def _send_excel_bytes(buffer: BytesIO, filename: str):
     return resp
 
 
-def _next_pk(model) -> int:
-    max_id = db.session.query(func.max(model.id)).scalar() or 0
-    return int(max_id) + 1
-
-
 def _row_value(row, key: str, index: int | None = None):
     if row is None:
         return None
@@ -555,8 +557,8 @@ def _safe_session_rollback() -> None:
 
 
 def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt)
@@ -591,8 +593,8 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
 
 
 def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt).all()
@@ -621,13 +623,17 @@ def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | 
     return []
 
 
-def _fetch_scalars_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
-    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "2"))
-    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.2"))
+def _fetch_scalars_all_with_retry(
+    stmt, attempts: int | None = None, backoff_s: float | None = None, raise_on_failure: bool = False
+):
+    attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
+    backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
+    last_exc: Exception | None = None
     for idx in range(max(1, attempts)):
         try:
             return db.session.execute(stmt).scalars().all()
         except (OperationalError, ResourceClosedError, SQLAlchemyError, IndexError) as exc:
+            last_exc = exc
             _safe_session_rollback()
             try:
                 db.engine.dispose()
@@ -649,6 +655,14 @@ def _fetch_scalars_all_with_retry(stmt, attempts: int | None = None, backoff_s: 
                     time.sleep(backoff_s * (idx + 1))
                 except Exception:
                     pass
+    # Todas as tentativas se esgotaram. Por padrao (raise_on_failure=False,
+    # comportamento historico, usado pelas consultas de dashboard) volta []
+    # pra nao quebrar callers que ja tratam "sem dados" como estado normal.
+    # Callers em caminhos criticos (ex.: permissoes de login) pedem
+    # raise_on_failure=True pra distinguir "sem dados" de "falha de conexao
+    # persistente" - ver _load_permissoes_perfil/_load_permissoes_nivel.
+    if raise_on_failure and last_exc is not None:
+        raise last_exc
     return []
 
 
@@ -787,16 +801,34 @@ def _start_worker(kind: str, upload_id: int) -> None:
 @login_required
 def index():
     # initial_content tells JS which partial to load first
-    allowed = _permissoes_with_parents(
-        getattr(g, "user_perfil_id", None),
-        getattr(g, "user_nivel", None),
-        _current_usuario_id(),
-    )
+    permissoes_indisponiveis = False
+    try:
+        allowed = _permissoes_with_parents(
+            getattr(g, "user_perfil_id", None),
+            getattr(g, "user_nivel", None),
+            _current_usuario_id(),
+        )
+    except SQLAlchemyError as exc:
+        # Instabilidade de conexao com o banco esgotou todas as tentativas
+        # de retry ao carregar as permissoes do usuario. Antes disso caia
+        # silenciosamente pra lista vazia e o menu renderizava quase todo
+        # oculto sem nenhum aviso - agora avisa na tela e pede pra
+        # atualizar, em vez de deixar o usuario achando que o sistema "nao
+        # carregou nada" sem explicacao.
+        current_app.logger.warning(
+            "Falha ao carregar permissoes no login (perfil_id=%s, nivel=%s): %s",
+            getattr(g, "user_perfil_id", None),
+            getattr(g, "user_nivel", None),
+            exc,
+        )
+        allowed = []
+        permissoes_indisponiveis = True
     return render_template(
         "base.html",
         initial_content="dashboard",
         initial_features=allowed,
         menu_features=build_menu_tree(),
+        permissoes_indisponiveis=permissoes_indisponiveis,
     )
 
 
@@ -1275,6 +1307,11 @@ def has_permission(feature: str) -> bool:
 
 
 def _load_permissoes_perfil(perfil_id: int | None):
+    # raise_on_failure=True: se as tentativas de retry se esgotarem por
+    # instabilidade de conexao (nao por tabela/coluna realmente ausente),
+    # propaga o erro em vez de devolver [] - um [] aqui e indistinguivel de
+    # "usuario sem nenhuma permissao" e faz o menu renderizar quase vazio
+    # silenciosamente (ver docs/claude.md, secao do bug de menu vazio).
     if perfil_id is None:
         return []
     try:
@@ -1283,10 +1320,15 @@ def _load_permissoes_perfil(perfil_id: int | None):
                 PerfilPermissao.perfil_id == perfil_id,
                 PerfilPermissao.ativo == True,  # noqa: E712
                 PerfilPermissao.feature.isnot(None),
-            )
+            ),
+            raise_on_failure=True,
         )
         return normalize_feature_list([f for f in rows if f])
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+    except ProgrammingError:
+        # Tabela/coluna realmente ausente (ex.: banco novo sem migracao) -
+        # esse caso continua tratado como "sem permissoes", nao um erro.
+        # Falha de conexao (OperationalError etc.) propaga de proposito
+        # (docs/claude.md, secao 13).
         _safe_session_rollback()
         return []
 
@@ -1300,10 +1342,11 @@ def _load_permissoes_nivel(nivel: int | None):
                 NivelPermissao.nivel == nivel,
                 NivelPermissao.ativo == True,  # noqa: E712
                 NivelPermissao.feature.isnot(None),
-            )
+            ),
+            raise_on_failure=True,
         )
         return normalize_feature_list([f for f in rows if f])
-    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+    except ProgrammingError:
         _safe_session_rollback()
         return []
 
@@ -7759,11 +7802,58 @@ def _teto_nullable_text(value):
     return text_value or None
 
 
-def _persistir_plan23(df: pd.DataFrame) -> dict:
+def _plan23_chave_estavel(exercicio, fonte, grupo, subteto, teto_despesa_momp):
+    # Casa registros pelo codigo estavel (antes do " - "), nao pela descricao
+    # completa: se o texto de FONTE_MAP/GRUPO_PLAN23_MAP/SUBTETO_PLAN23_MAP
+    # mudar no futuro, os registros antigos continuam sendo reconhecidos.
+    return (
+        _teto_text(exercicio),
+        fonte_key(fonte),
+        grupo_key(grupo),
+        subteto_key(subteto),
+        _teto_text(teto_despesa_momp),
+    )
+
+
+def _persistir_plan23(df: pd.DataFrame, uo: str) -> dict:
+    # `uo` (codigo lido do proprio relatorio, ver ler_cabecalho_fiplan):
+    # todo o casamento/desativacao abaixo fica restrito a exercicio + UO -
+    # subir o Plan 23 da 14601 nunca pode desativar o teto da 14101 como se
+    # tivesse "sumido do arquivo" (docs/claude.md, secao 20).
     inseridas = 0
     desativadas = 0
     vinculos_migrados = 0
+    removidos = 0
+    total_gravado = Decimal("0")
     now = _now_local()
+
+    exercicios = {_teto_text(row.get("exercicio")) for _, row in df.iterrows()}
+    # Estado original do banco antes deste upload - so vai sendo consumido
+    # (pop) conforme cada linha do arquivo casa com uma chave; NUNCA e
+    # repopulado. O que sobrar aqui apos o loop e o que estava ativo mas
+    # nao apareceu em nenhuma linha do arquivo atual.
+    ativos_por_chave: dict[tuple, list] = {}
+    if exercicios:
+        ativos = Momp.query.filter(
+            Momp.exercicio.in_(exercicios),
+            Momp.uo == uo,
+            Momp.ativo == True,  # noqa: E712
+        ).all()
+        for item in ativos:
+            chave = _plan23_chave_estavel(
+                item.exercicio,
+                item.fonte,
+                item.grupo_despesa,
+                item.subteto_despesa_momp,
+                item.teto_despesa_momp,
+            )
+            ativos_por_chave.setdefault(chave, []).append(item)
+
+    # Registros inseridos NESTE upload, por chave - separado de
+    # ativos_por_chave para nao confundir "recem-inserido" com "sobrou do
+    # banco". So existe para autocorrigir uma chave repetida dentro do
+    # proprio arquivo (duas linhas com a mesma fonte/grupo/subteto).
+    novos_no_arquivo: dict[tuple, "Momp"] = {}
 
     for _, row in df.iterrows():
         filtros = {
@@ -7773,17 +7863,30 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
             "teto_despesa_momp": _teto_text(row.get("teto_despesa_momp")),
             "subteto_despesa_momp": _teto_text(row.get("subteto_despesa_momp")),
         }
-        antigos = Momp.query.filter_by(**filtros).all()
-        old_ids = [item.id for item in antigos]
+        chave = _plan23_chave_estavel(
+            filtros["exercicio"],
+            filtros["fonte"],
+            filtros["grupo_despesa"],
+            filtros["subteto_despesa_momp"],
+            filtros["teto_despesa_momp"],
+        )
+        if chave in novos_no_arquivo:
+            old_ids = [novos_no_arquivo[chave].id]
+        else:
+            antigos = ativos_por_chave.pop(chave, [])
+            old_ids = [item.id for item in antigos]
 
         novo = Momp(
             **filtros,
+            uo=uo,
             teto_anual=Decimal(str(row.get("teto_anual") or 0)),
             ativo=True,
         )
         db.session.add(novo)
         db.session.flush()
         inseridas += 1
+        total_gravado += novo.teto_anual
+        novos_no_arquivo[chave] = novo
 
         if old_ids:
             vinculos_migrados += (
@@ -7806,17 +7909,47 @@ def _persistir_plan23(df: pd.DataFrame) -> dict:
                 )
             )
 
+    # O que sobrou em ativos_por_chave estava ativo para o exercicio mas
+    # nao apareceu em nenhuma linha deste arquivo - a combinacao foi
+    # removida/reclassificada no FIPLAN. Desativa tambem, para o upload
+    # refletir o teto vigente por completo (nao so substituir o que
+    # bateu, mas tambem remover o que sumiu).
+    orfaos = [item for items in ativos_por_chave.values() for item in items]
+    if orfaos:
+        orfaos_ids = [item.id for item in orfaos]
+        PoliticaTeto.query.filter(
+            PoliticaTeto.momp_id.in_(orfaos_ids), PoliticaTeto.ativo == True  # noqa: E712
+        ).update(
+            {
+                PoliticaTeto.ativo: False,
+                PoliticaTeto.alterado_em: now,
+                PoliticaTeto.excluido_em: now,
+            },
+            synchronize_session=False,
+        )
+        removidos = Momp.query.filter(Momp.id.in_(orfaos_ids)).update(
+            {
+                Momp.ativo: False,
+                Momp.alterado_em: now,
+                Momp.excluido_em: now,
+            },
+            synchronize_session=False,
+        )
+
     return {
         "inseridas": inseridas,
         "desativadas": desativadas,
         "vinculos_migrados": vinculos_migrados,
+        "removidos": removidos,
+        "total_gravado": total_gravado,
     }
 
 
-def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
+def _persistir_plan134(df: pd.DataFrame, exercicio: str, uo: str) -> dict:
     momps = (
         Momp.query.filter(
             Momp.exercicio == exercicio,
+            Momp.uo == uo,
             Momp.ativo == True,  # noqa: E712
         )
         .order_by(Momp.id.asc())
@@ -7824,8 +7957,8 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
     )
     if not momps:
         raise ValueError(
-            f"Não existem registros MOMP ativos para o exercício {exercicio}. "
-            "Carregue primeiro o Plan 23."
+            f"Não existem registros MOMP ativos para o exercício {exercicio} "
+            f"na UO {uo}. Carregue primeiro o Plan 23 desta UO."
         )
 
     exact_map = {}
@@ -7838,33 +7971,46 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         )
         numeric_key = (
             fonte_key(momp.fonte),
-            _teto_text(momp.grupo_despesa),
-            _teto_text(momp.subteto_despesa_momp),
+            grupo_key(momp.grupo_despesa),
+            subteto_key(momp.subteto_despesa_momp),
         )
         exact_map.setdefault(exact_key, momp)
         numeric_map.setdefault(numeric_key, momp)
 
     preparados = []
-    sem_correspondencia = 0
+    # Linhas COM valor sem teto correspondente no Plan 23 desta UO/exercicio,
+    # agrupadas por combinacao fonte/grupo/tipificacao -> soma. Vao para a
+    # mensagem de status com o valor, nunca descartadas caladas (docs/claude.md,
+    # secao 20). Linhas de valor zero ja foram removidas no processar_plan134.
+    nao_gravados: dict[tuple, Decimal] = {}
     for _, row in df.iterrows():
         fonte = _teto_text(row.get("fonte"))
         grupo = _teto_text(row.get("grupo_despesa"))
         subteto = _teto_text(row.get("subteto_despesa_momp"))
         momp = exact_map.get((fonte, grupo, subteto))
         if momp is None:
-            momp = numeric_map.get((fonte_key(fonte), grupo, subteto))
+            momp = numeric_map.get((fonte_key(fonte), grupo_key(grupo), subteto_key(subteto)))
         if momp is None:
-            sem_correspondencia += 1
+            chave = (fonte_key(fonte) or "-", grupo_key(grupo) or "-", subteto_key(subteto) or "-")
+            nao_gravados[chave] = nao_gravados.get(chave, Decimal("0")) + _teto_decimal(
+                row.get("teto_politica_decreto")
+            )
             continue
         preparados.append((momp.id, row))
 
     if not preparados:
         raise ValueError(
             "Nenhuma linha do Plan 134 corresponde aos registros ativos da tabela MOMP "
-            f"para o exercício {exercicio}."
+            f"para o exercício {exercicio} na UO {uo}."
         )
 
-    momp_ids = sorted({momp_id for momp_id, _ in preparados})
+    # Desativa TODO o PTA ativo desta UO/exercicio, nao so o das combinacoes
+    # presentes no arquivo: o Plan 134 e o retrato completo da UO, e uma
+    # combinacao que sumiu entre um envio e outro nao pode ficar ativa (mesmo
+    # padrao do Plan 23, secao 12.9). Seguro porque so chega aqui se ao menos
+    # uma linha casou - arquivo errado cai no ValueError acima sem desativar
+    # nada, e qualquer falha daqui em diante e desfeita pelo rollback.
+    momp_ids = [momp.id for momp in momps]
     now = _now_local()
     desativadas = PoliticaTeto.query.filter(
         PoliticaTeto.momp_id.in_(momp_ids),
@@ -7878,8 +8024,10 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
         synchronize_session=False,
     )
 
+    total_gravado = Decimal("0")
     for momp_id, row in preparados:
         valor = row.get("teto_politica_decreto")
+        total_gravado += _teto_decimal(valor)
         db.session.add(
             PoliticaTeto(
                 momp_id=momp_id,
@@ -7903,12 +8051,38 @@ def _persistir_plan134(df: pd.DataFrame, exercicio: str) -> dict:
     return {
         "inseridas": len(preparados),
         "desativadas": desativadas,
-        "sem_correspondencia": sem_correspondencia,
+        "total_gravado": total_gravado,
+        "nao_gravados": nao_gravados,
     }
 
 
 def value_not_blank(value) -> bool:
     return value is not None and not pd.isna(value) and str(value).strip() != ""
+
+
+def _teto_decimal(value) -> Decimal:
+    return Decimal(str(value)) if value_not_blank(value) else Decimal("0")
+
+
+def _teto_money(value) -> str:
+    """R$ no formato pt-BR (1.234.567,89) para as mensagens de status."""
+    texto = f"{Decimal(str(value or 0)):,.2f}"
+    return "R$ " + texto.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _teto_mensagem_conferencia(total_gravado, total_relatorio) -> str:
+    """Compara o total gravado com o total impresso pelo proprio FIPLAN no
+    relatorio (ler_cabecalho_fiplan). Divergencia nao desfaz o upload - so
+    fica explicita na mensagem, em vez de ser descoberta no dashboard."""
+    if total_relatorio is None:
+        return ""
+    diferenca = Decimal(str(total_gravado)) - Decimal(str(total_relatorio))
+    if abs(diferenca) < Decimal("0.01"):
+        return " (confere com o total do relatório)"
+    return (
+        f" ⚠ ATENÇÃO: o total do relatório é {_teto_money(total_relatorio)} - "
+        f"diferença de {_teto_money(diferenca)}"
+    )
 
 
 def _start_teto_seduc_thread(
@@ -7946,28 +8120,71 @@ def _start_teto_seduc_thread(
                         f"mas o arquivo enviado foi identificado como {arquivo_tipo}. "
                         "Selecione a opção ou o arquivo correto."
                     )
-                if relatorio == "momp":
-                    resultado = _persistir_plan23(processar_plan23(temp_path, exercicio))
-                    message = (
-                        "Plan 23 processado. "
-                        f"Registros inseridos: {resultado['inseridas']}; "
-                        f"anteriores desativados: {resultado['desativadas']}; "
-                        f"vínculos migrados: {resultado['vinculos_migrados']}."
+                # UO e exercicio lidos do proprio relatorio (nao so do que
+                # foi digitado na tela) - tudo abaixo fica restrito a essa
+                # UO (docs/claude.md, secao 20).
+                cabecalho = ler_cabecalho_fiplan(temp_path)
+                uo = validar_cabecalho_fiplan(cabecalho, exercicio)
+                # Serializa processamentos do Teto-SEDUC (Plan 23 e Plan 134
+                # competem pelos mesmos registros de `momp`) para o mesmo
+                # exercício e UO. Sem essa trava, dois uploads sobrepostos
+                # podem cada um deixar de enxergar o que o outro acabou de
+                # gravar (REPEATABLE READ) e duplicar os registros ativos.
+                # UOs diferentes nao disputam registros, entao nao se bloqueiam.
+                lock_name = f"teto_seduc:{exercicio}:{uo}"
+                obtido_lock = db.session.execute(
+                    text("SELECT GET_LOCK(:name, :timeout)"),
+                    {"name": lock_name, "timeout": 30},
+                ).scalar()
+                if not obtido_lock:
+                    raise ValueError(
+                        "Já existe um processamento do Teto - SEDUC em andamento "
+                        "para este exercício e UO. Aguarde a conclusão e tente novamente."
                     )
-                else:
-                    resultado = _persistir_plan134(processar_plan134(temp_path), exercicio)
-                    message = (
-                        "Plan 134 processado. "
-                        f"Registros inseridos: {resultado['inseridas']}; "
-                        f"anteriores desativados: {resultado['desativadas']}."
-                    )
-                    if resultado["sem_correspondencia"]:
-                        message += (
-                            " Linhas sem correspondência no MOMP: "
-                            f"{resultado['sem_correspondencia']}."
+                try:
+                    if relatorio == "momp":
+                        resultado = _persistir_plan23(
+                            processar_plan23(temp_path, exercicio), uo
                         )
+                        message = (
+                            f"Plan 23 - UO {uo}, exercício {exercicio} processado. "
+                            f"Registros inseridos: {resultado['inseridas']} "
+                            f"({_teto_money(resultado['total_gravado'])})"
+                            f"{_teto_mensagem_conferencia(resultado['total_gravado'], cabecalho['total_relatorio'])}; "
+                            f"anteriores desativados: {resultado['desativadas']}; "
+                            f"removidos por não constarem mais no arquivo: {resultado['removidos']}; "
+                            f"vínculos migrados: {resultado['vinculos_migrados']}."
+                        )
+                    else:
+                        resultado = _persistir_plan134(
+                            processar_plan134(temp_path), exercicio, uo
+                        )
+                        message = (
+                            f"Plan 134 - UO {uo}, exercício {exercicio} processado. "
+                            f"Registros inseridos: {resultado['inseridas']} "
+                            f"({_teto_money(resultado['total_gravado'])})"
+                            f"{_teto_mensagem_conferencia(resultado['total_gravado'], cabecalho['total_relatorio'])}; "
+                            f"anteriores desativados: {resultado['desativadas']}."
+                        )
+                        nao_gravados = resultado["nao_gravados"]
+                        if nao_gravados:
+                            total_nao_gravado = sum(nao_gravados.values(), Decimal("0"))
+                            detalhes = "; ".join(
+                                f"{'/'.join(chave)} ({_teto_money(valor)})"
+                                for chave, valor in sorted(nao_gravados.items())
+                            )
+                            message += (
+                                f" ⚠ {_teto_money(total_nao_gravado)} NÃO gravados por não "
+                                "existirem no teto (Plan 23) desta UO/exercício - "
+                                f"fonte/grupo/tipificação: {detalhes}. "
+                                "Atualize o Plan 23 e reenvie o Plan 134."
+                            )
 
-                db.session.commit()
+                    db.session.commit()
+                finally:
+                    db.session.execute(
+                        text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                    )
                 write_status(
                     "teto_seduc",
                     upload_id,
@@ -9199,6 +9416,7 @@ def api_paineis_teto_orcamentario():
         db.session.query(
             Momp.id,
             Momp.exercicio,
+            Momp.uo,
             Momp.fonte,
             Momp.grupo_despesa,
             Momp.subteto_despesa_momp,
@@ -9229,8 +9447,11 @@ def api_paineis_teto_orcamentario():
         {
             "id": row.id,
             "exercicio": str(row.exercicio or "").strip(),
+            "uo": uo_label(row.uo),
             "fonte": str(row.fonte or "").strip(),
-            "grupo": str(row.grupo_despesa or "").strip(),
+            # Unificado pelo codigo: 2025/2026 ainda tem "Outras Despesas
+            # Corrente" no banco (docs/claude.md, secao 20.8).
+            "grupo": normalizar_grupo(row.grupo_despesa),
             "subgrupo": str(row.subteto_despesa_momp or "").strip(),
             "valor": float(row.teto_anual or 0),
         }
@@ -9247,7 +9468,9 @@ def api_paineis_teto_orcamentario():
             "pilar": str(row.pilar or "").strip(),
             "eixo": str(row.eixo or "").strip(),
             "politica": str(row.politica_decreto or "").strip(),
-            "paoe": str(row.acao_paoe or "").strip(),
+            # Normalizado so na exibicao: registros gravados antes da secao 20
+            # ainda tem "4541 -Educacao..." no banco (docs/claude.md, secao 20).
+            "paoe": normalizar_acao(row.acao_paoe),
             "valor": float(row.teto_politica_decreto or 0),
         }
         for row in politica_rows
@@ -17890,6 +18113,242 @@ PLAN20_UPLOAD_DIR = Path("upload/plan20_seduc")
 PLAN20_OUTPUT_DIR = Path("outputs/plan20_seduc")
 
 
+def _plan20_seduc_col_map() -> dict[str, str]:
+    """Mapa nome-da-coluna-no-relatorio -> nome-da-coluna-no-banco
+    (tabela plan20_seduc). Reescrito do zero em 2026-09 porque a versao
+    anterior tinha as chaves acentuadas corrompidas (mojibake, introduzido
+    em 17/04/2026 - nunca exercitado desde entao, o ultimo upload real
+    tinha sido em 16/01/2026), fazendo a maioria das colunas sair NULL
+    silenciosamente no banco, sem nenhum erro (docs/claude.md, secao 18).
+    """
+    return {
+        "Exercício": "exercicio",
+        "Programa": "programa",
+        "Função": "funcao",
+        "Unidade Orçamentária": "unidade_orcamentaria",
+        "Ação (P/A/OE)": "acao_paoe",
+        "Subfunção": "subfuncao",
+        "Objetivo Específico": "objetivo_especifico",
+        "Esfera": "esfera",
+        "Responsável pela Ação": "responsavel_acao",
+        "Produto(s) da Ação": "produto_acao",
+        "Unidade de Medida do Produto": "unid_medida_produto",
+        "Região do Produto": "regiao_produto",
+        "Meta do Produto": "meta_produto",
+        "Saldo Meta do Produto": "saldo_meta_produto",
+        "Público Transversal": "publico_transversal",
+        "Subação/entrega": "subacao_entrega",
+        "Responsável": "responsavel",
+        "Prazo": "prazo",
+        "Unid. Gestora": "unid_gestora",
+        "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
+        "Produto da Subação": "produto_subacao",
+        "Unidade de Medida": "unidade_medida",
+        "Região da Subação": "regiao_subacao",
+        "Código": "codigo",
+        "Município(s) da entrega": "municipios_entrega",
+        "Meta da Subação": "meta_subacao",
+        "Detalhamento do produto": "detalhamento_produto",
+        "Etapa": "etapa",
+        "Responsável da Etapa": "responsavel_etapa",
+        "Prazo da Etapa": "prazo_etapa",
+        "Região da Etapa": "regiao_etapa",
+        "Natureza": "natureza",
+        "Fonte": "fonte",
+        "IDU": "idu",
+        "Descrição do Item de Despesa": "descricao_item_despesa",
+        "Unid. Medida": "unid_medida_item",
+        "Quantidade": "quantidade",
+        "Valor Unitário": "valor_unitario",
+        "Valor Total": "valor_total",
+        "Chave de Planejamento": "chave_planejamento",
+        "Região": "regiao",
+        "Subfunção + UG": "subfuncao_ug",
+        "ADJ": "adj",
+        "Macropolitica": "macropolitica",
+        "Pilar": "pilar",
+        "Eixo": "eixo",
+        "Politica_Decreto": "politica_decreto",
+        "Público Transversal (chave)": "publico_transversal_chave",
+        "Cat.Econ": "cat_econ",
+        "Grupo": "grupo",
+        "Modalidade": "modalidade",
+        "Elemento": "elemento",
+        "Subelemento": "subelemento",
+        # Colunas novas do layout 2027 (docs/claude.md, seções 15 e 18) -
+        # exigem as colunas correspondentes já criadas em plan20_seduc via
+        # ALTER TABLE (eixo_programa, objetivo_estrategico, publico_alvo,
+        # tipo, uo_responsavel, ods, codigo_meta_ods, metas_ods).
+        "Eixo do Programa": "eixo_programa",
+        "Objetivo Estratégico": "objetivo_estrategico",
+        "Público Alvo": "publico_alvo",
+        "Tipo": "tipo",
+        "UO Responsável": "uo_responsavel",
+        "ODS": "ods",
+        "Código Meta (ODS)": "codigo_meta_ods",
+        "Metas (ODS)": "metas_ods",
+    }
+
+
+# Fonte única de colunas do relatório "Plan20 - SEDUC" (tela + download) -
+# (rótulo exibido, coluna no banco, tipo). "tipo" controla a formatação:
+# "num" = Quantidade/Valor Unitário/Valor Total (2 casas decimais, tela e
+# Excel); "int" = Exercício (inteiro, só no Excel); "text" = as demais.
+# Unificada em 2026-09 porque a tela e o download tinham cada um o seu
+# proprio SELECT + lista de colunas, escritos de forma independente - o
+# mesmo tipo de duplicacao que causou o incidente do col_map corrompido do
+# upload (docs/claude.md, secao 18). O conjunto de colunas aqui precisa
+# bater exatamente com o de _plan20_seduc_col_map() - ha um teste
+# (tests/test_plan20_upload_mapping.py) que garante isso.
+PLAN20_RELATORIO_COLUNAS = [
+    ("Exercício", "exercicio", "int"),
+    ("Chave de Planejamento", "chave_planejamento", "text"),
+    ("Região", "regiao", "text"),
+    ("Subfunção + UG", "subfuncao_ug", "text"),
+    ("ADJ", "adj", "text"),
+    ("Macropolítica", "macropolitica", "text"),
+    ("Pilar", "pilar", "text"),
+    ("Eixo", "eixo", "text"),
+    ("Política_Decreto", "politica_decreto", "text"),
+    ("Público Transversal (chave)", "publico_transversal_chave", "text"),
+    ("Programa", "programa", "text"),
+    ("Eixo do Programa", "eixo_programa", "text"),
+    ("Objetivo Estratégico", "objetivo_estrategico", "text"),
+    ("Público Alvo", "publico_alvo", "text"),
+    ("Tipo", "tipo", "text"),
+    ("Função", "funcao", "text"),
+    ("Unidade Orçamentária", "unidade_orcamentaria", "text"),
+    ("UO Responsável", "uo_responsavel", "text"),
+    ("Ação (P/A/OE)", "acao_paoe", "text"),
+    ("Subfunção", "subfuncao", "text"),
+    ("Objetivo Específico", "objetivo_especifico", "text"),
+    ("Esfera", "esfera", "text"),
+    ("Responsável pela Ação", "responsavel_acao", "text"),
+    ("ODS", "ods", "text"),
+    ("Código Meta (ODS)", "codigo_meta_ods", "text"),
+    ("Metas (ODS)", "metas_ods", "text"),
+    ("Produto(s) da Ação", "produto_acao", "text"),
+    ("Unidade de Medida do Produto", "unid_medida_produto", "text"),
+    ("Região do Produto", "regiao_produto", "text"),
+    ("Meta do Produto", "meta_produto", "text"),
+    ("Saldo Meta do Produto", "saldo_meta_produto", "text"),
+    ("Público Transversal", "publico_transversal", "text"),
+    ("Subação/entrega", "subacao_entrega", "text"),
+    ("Responsável", "responsavel", "text"),
+    ("Prazo", "prazo", "text"),
+    ("Unid. Gestora", "unid_gestora", "text"),
+    ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento", "text"),
+    ("Produto da Subação", "produto_subacao", "text"),
+    ("Unidade de Medida", "unidade_medida", "text"),
+    ("Região da Subação", "regiao_subacao", "text"),
+    ("Código", "codigo", "text"),
+    ("Município(s) da entrega", "municipios_entrega", "text"),
+    ("Meta da Subação", "meta_subacao", "text"),
+    ("Detalhamento do produto", "detalhamento_produto", "text"),
+    ("Etapa", "etapa", "text"),
+    ("Responsável da Etapa", "responsavel_etapa", "text"),
+    ("Prazo da Etapa", "prazo_etapa", "text"),
+    ("Região da Etapa", "regiao_etapa", "text"),
+    ("Natureza", "natureza", "text"),
+    ("Cat.Econ", "cat_econ", "text"),
+    ("Grupo", "grupo", "text"),
+    ("Modalidade", "modalidade", "text"),
+    ("Elemento", "elemento", "text"),
+    ("Subelemento", "subelemento", "text"),
+    ("Fonte", "fonte", "text"),
+    ("IDU", "idu", "text"),
+    ("Descrição do Item de Despesa", "descricao_item_despesa", "text"),
+    ("Unid. Medida", "unid_medida_item", "text"),
+    ("Quantidade", "quantidade", "num"),
+    ("Valor Unitário", "valor_unitario", "num"),
+    ("Valor Total", "valor_total", "num"),
+]
+
+
+def _plan20_relatorio_rows():
+    """Executa o SELECT do relatório Plan20_SEDUC a partir da fonte única
+    de colunas (PLAN20_RELATORIO_COLUNAS) - usado tanto pela tela quanto
+    pelo download, pra não ter dois SELECTs escritos de forma independente."""
+    colunas_sql = ",\n                        ".join(col for _, col, _ in PLAN20_RELATORIO_COLUNAS)
+    return (
+        db.session.execute(
+            text(f"SELECT\n                        {colunas_sql}\n                    FROM plan20_seduc WHERE ativo = 1")
+        )
+        .mappings()
+        .all()
+    )
+
+
+def _plan20_seduc_norm_col(name: str) -> str:
+    base = unicodedata.normalize("NFKD", str(name or ""))
+    ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
+    return ascii_only.lower().replace(" ", "").replace("_", "").replace(".", "").replace("/", "")
+
+
+def _montar_dataframe_plan20_seduc(df_out, data_arquivo, user_email: str):
+    """Recebe o DataFrame lido direto da aba Plan20_SEDUC do arquivo de
+    saída do parser e devolve o DataFrame pronto para INSERT na tabela
+    plan20_seduc: colunas renomeadas para o nome usado no banco, colunas
+    numéricas convertidas (formato pt-BR), colunas de metadado
+    preenchidas. Extraída da rota de upload para dar pra testar sem
+    precisar simular uma requisição HTTP inteira (docs/claude.md, seção
+    18) - é justamente essa lógica de casamento de nomes que ficou
+    quebrada silenciosamente por meses (seção 18.1).
+    """
+    col_map = _plan20_seduc_col_map()
+    norm_map = {_plan20_seduc_norm_col(src): dst for src, dst in col_map.items()}
+    rename_dict = {}
+    for col in df_out.columns:
+        norm = _plan20_seduc_norm_col(col)
+        if norm in norm_map:
+            rename_dict[col] = norm_map[norm]
+    df_out = df_out.rename(columns=rename_dict)
+
+    meta_cols = {"data_atualizacao", "ano", "data_arquivo", "user_email", "ativo"}
+    keep_cols = list(col_map.values()) + list(meta_cols)
+    for col in keep_cols:
+        if col not in df_out.columns:
+            df_out[col] = None
+    df_out = df_out[[c for c in keep_cols if c in df_out.columns]]
+
+    def _to_numeric_br(series):
+        return pd.to_numeric(
+            series.astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False),
+            errors="coerce",
+        )
+
+    numeric_cols = ["exercicio", "quantidade", "valor_unitario", "valor_total"]
+    for col in numeric_cols:
+        if col in df_out.columns:
+            df_out[col] = _to_numeric_br(df_out[col])
+
+    df_out["data_atualizacao"] = datetime.utcnow()
+    df_out["data_arquivo"] = data_arquivo
+    df_out["user_email"] = user_email
+    df_out["ativo"] = True
+    if "exercicio" in df_out.columns:
+        df_out["ano"] = pd.to_numeric(df_out["exercicio"], errors="coerce")
+    else:
+        df_out["ano"] = None
+    return df_out
+
+
+def _combos_uo_exercicio_plan20(df_out) -> set:
+    """(unidade_orcamentaria em texto cru, exercicio) de cada linha do
+    DataFrame já montado por _montar_dataframe_plan20_seduc - usado pra
+    decidir quais combinações desativar antes de inserir a nova versão.
+    """
+    combos = set()
+    if "unidade_orcamentaria" in df_out.columns and "exercicio" in df_out.columns:
+        for _, uo, ex in df_out[["unidade_orcamentaria", "exercicio"]].dropna().itertuples():
+            try:
+                ex_int = int(ex)
+            except (TypeError, ValueError):
+                continue
+            combos.add((str(uo).strip(), ex_int))
+    return combos
+
+
 @home_bp.route("/api/plan20/status", methods=["GET"])
 @login_required
 @require_feature("atualizar/plan20-seduc")
@@ -18018,132 +18477,27 @@ def api_plan20_upload():
         try:
             df_out = pd.read_excel(output_path, sheet_name="Plan20_SEDUC")
             if not df_out.empty:
-                col_map = {
-                    "ExercÃƒÂ­cio": "exercicio",
-                    "Programa": "programa",
-                    "FunÃƒÂ§ÃƒÂ£o": "funcao",
-                    "Unidade OrÃƒÂ§amentÃƒÂ¡ria": "unidade_orcamentaria",
-                    "AÃƒÂ§ÃƒÂ£o (P/A/OE)": "acao_paoe",
-                    "SubfunÃƒÂ§ÃƒÂ£o": "subfuncao",
-                    "Objetivo EspecÃƒÂ­fico": "objetivo_especifico",
-                    "Esfera": "esfera",
-                    "ResponsÃƒÂ¡vel pela AÃƒÂ§ÃƒÂ£o": "responsavel_acao",
-                    "Produto(s) da AÃƒÂ§ÃƒÂ£o": "produto_acao",
-                    "Unidade de Medida do Produto": "unid_medida_produto",
-                    "RegiÃƒÂ£o do Produto": "regiao_produto",
-                    "Meta do Produto": "meta_produto",
-                    "Saldo Meta do Produto": "saldo_meta_produto",
-                    "PÃƒÂºblico Transversal": "publico_transversal",
-                    "SubAÃƒÂ§ÃƒÂ£o/entrega": "subacao_entrega",
-                    "ResponsÃƒÂ¡vel": "responsavel",
-                    "Prazo": "prazo",
-                    "Unid. Gestora": "unid_gestora",
-                    "Unidade Setorial de Planejamento": "unidade_setorial_planejamento",
-                    "Produto da SubAÃƒÂ§ÃƒÂ£o": "produto_subacao",
-                    "Unidade de Medida": "unidade_medida",
-                    "RegiÃƒÂ£o da SubAÃƒÂ§ÃƒÂ£o": "regiao_subacao",
-                    "CÃƒÂ³digo": "codigo",
-                    "MunicÃƒÂ­pio(s) da entrega": "municipios_entrega",
-                    "Meta da SubAÃƒÂ§ÃƒÂ£o": "meta_subacao",
-                    "Detalhamento do produto": "detalhamento_produto",
-                    "Etapa": "etapa",
-                    "ResponsÃƒÂ¡vel da Etapa": "responsavel_etapa",
-                    "Prazo da Etapa": "prazo_etapa",
-                    "RegiÃƒÂ£o da Etapa": "regiao_etapa",
-                    "Natureza": "natureza",
-                    "Fonte": "fonte",
-                    "IDU": "idu",
-                    "DescriÃƒÂ§ÃƒÂ£o do Item de Despesa": "descricao_item_despesa",
-                    "Unid. Medida": "unid_medida_item",
-                    "Quantidade": "quantidade",
-                    "Valor UnitÃƒÂ¡rio": "valor_unitario",
-                    "Valor Total": "valor_total",
-                    "Chave de Planejamento": "chave_planejamento",
-                    "RegiÃƒÂ£o": "regiao",
-                    "SubfunÃƒÂ§ÃƒÂ£o + UG": "subfuncao_ug",
-                    "ADJ": "adj",
-                    "Macropolitica": "macropolitica",
-                    "Pilar": "pilar",
-                    "Eixo": "eixo",
-                    "Politica_Decreto": "politica_decreto",
-                    "PÃƒÂºblico Transversal (chave)": "publico_transversal_chave",
-                    "Cat.Econ": "cat_econ",
-                    "Grupo": "grupo",
-                    "Modalidade": "modalidade",
-                    "Elemento": "elemento",
-                    "Subelemento": "subelemento",
-                }
+                df_out = _montar_dataframe_plan20_seduc(df_out, data_arquivo, user_email)
 
-                def _norm_col(name: str) -> str:
-                    base = unicodedata.normalize("NFKD", str(name or ""))
-                    ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
-                    return ascii_only.lower().replace(" ", "").replace("_", "").replace(".", "").replace("/", "")
-
-                norm_map = {_norm_col(src): dst for src, dst in col_map.items()}
-                rename_dict = {}
-                for col in df_out.columns:
-                    norm = _norm_col(col)
-                    if norm in norm_map:
-                        rename_dict[col] = norm_map[norm]
-                df_out = df_out.rename(columns=rename_dict)
-
-                meta_cols = {
-                    "data_atualizacao",
-                    "ano",
-                    "data_arquivo",
-                    "user_email",
-                    "ativo",
-                }
-                keep_cols = list(col_map.values()) + list(meta_cols)
-                for col in keep_cols:
-                    if col not in df_out.columns:
-                        df_out[col] = None
-                df_out = df_out[[c for c in keep_cols if c in df_out.columns]]
-
-                # Converte colunas numericas para evitar erro de cast (usa formato pt-BR)
-                def _to_numeric_br(series):
-                    return pd.to_numeric(
-                        series.astype(str)
-                        .str.replace(".", "", regex=False)
-                        .str.replace(",", ".", regex=False),
-                        errors="coerce",
-                    )
-
-                # Apenas colunas realmente numÃƒÂ©ricas no banco
-                numeric_cols = [
-                    "exercicio",
-                    "quantidade",
-                    "valor_unitario",
-                    "valor_total",
-                ]
-                for col in numeric_cols:
-                    if col in df_out.columns:
-                        df_out[col] = _to_numeric_br(df_out[col])
-
-                now = datetime.utcnow()
-                df_out["data_atualizacao"] = now
-                df_out["data_arquivo"] = data_arquivo
-                df_out["user_email"] = user_email
-                df_out["ativo"] = True
-                if "exercicio" in df_out.columns:
-                    df_out["ano"] = pd.to_numeric(df_out["exercicio"], errors="coerce")
-                else:
-                    df_out["ano"] = None
-                # Desativa somente registros do mesmo exercicio+unidade_orcamentaria
-                combos = set()
-                if "unidade_orcamentaria" in df_out.columns and "exercicio" in df_out.columns:
-                    for _, uo, ex in df_out[["unidade_orcamentaria", "exercicio"]].dropna().itertuples():
-                        try:
-                            ex_int = int(ex)
-                        except (TypeError, ValueError):
-                            continue
-                        combos.add((str(uo).strip(), ex_int))
+                # Desativa somente registros do mesmo exercicio+unidade
+                # orcamentaria - compara so o codigo numerico da UO (nao o
+                # texto completo), porque esse texto ja mudou de
+                # formatacao uma vez ("14.101" -> "14101") e pode mudar de
+                # novo; com igualdade de texto exato, um reenvio do mesmo
+                # exercicio/UO num formato novo deixaria a versao anterior
+                # ativa pra sempre, duplicando dado (docs/claude.md, secao
+                # 18 - mesma causa raiz da secao 14, aqui na desativacao
+                # em vez do filtro do parser).
+                combos = _combos_uo_exercicio_plan20(df_out)
                 for uo, ex in combos:
+                    uo_codigo = _plan20_uo_key(uo)
                     db.session.execute(
                         text(
-                            "UPDATE plan20_seduc SET ativo = 0 WHERE unidade_orcamentaria = :uo AND exercicio = :ex"
+                            "UPDATE plan20_seduc SET ativo = 0 "
+                            "WHERE REPLACE(SUBSTRING_INDEX(unidade_orcamentaria, ' - ', 1), '.', '') = :uo_codigo "
+                            "AND exercicio = :ex"
                         ),
-                        {"uo": uo, "ex": ex},
+                        {"uo_codigo": uo_codigo, "ex": ex},
                     )
                 db.session.commit()
                 df_out.to_sql("plan20_seduc", db.engine, if_exists="append", index=False)
@@ -18211,72 +18565,7 @@ def api_relatorio_plan20():
             return 0.0
 
     try:
-        rows = (
-            db.session.execute(
-                text(
-                    """
-                    SELECT
-                        exercicio,
-                        chave_planejamento,
-                        regiao,
-                        subfuncao_ug,
-                        adj,
-                        macropolitica,
-                        pilar,
-                        eixo,
-                        politica_decreto,
-                        publico_transversal_chave,
-                        programa,
-                        funcao,
-                        unidade_orcamentaria,
-                        acao_paoe,
-                        subfuncao,
-                        objetivo_especifico,
-                        esfera,
-                        responsavel_acao,
-                        produto_acao,
-                        unid_medida_produto,
-                        regiao_produto,
-                        meta_produto,
-                        saldo_meta_produto,
-                        publico_transversal,
-                        subacao_entrega,
-                        responsavel,
-                        prazo,
-                        unid_gestora,
-                        unidade_setorial_planejamento,
-                        produto_subacao,
-                        unidade_medida,
-                        regiao_subacao,
-                        codigo,
-                        municipios_entrega,
-                        meta_subacao,
-                        detalhamento_produto,
-                        etapa,
-                        responsavel_etapa,
-                        prazo_etapa,
-                        regiao_etapa,
-                        natureza,
-                        cat_econ,
-                        grupo,
-                        modalidade,
-                        elemento,
-                        subelemento,
-                        fonte,
-                        idu,
-                        descricao_item_despesa,
-                        unid_medida_item,
-                        quantidade,
-                        valor_unitario,
-                        valor_total
-                    FROM plan20_seduc
-                    WHERE ativo = 1
-                    """
-                )
-            )
-            .mappings()
-            .all()
-        )
+        rows = _plan20_relatorio_rows()
 
         last_upload = Plan20Upload.query.order_by(Plan20Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(getattr(last_upload, "data_arquivo", None)) if last_upload else None
@@ -18285,68 +18574,21 @@ def api_relatorio_plan20():
 
         data = []
         for r in rows:
-            data.append(
-                {
-                    "exercicio": r.get("exercicio"),
-                    "chave_planejamento": r.get("chave_planejamento"),
-                    "regiao": r.get("regiao"),
-                    "subfuncao_ug": r.get("subfuncao_ug"),
-                    "adj": r.get("adj"),
-                    "macropolitica": r.get("macropolitica"),
-                    "pilar": r.get("pilar"),
-                    "eixo": r.get("eixo"),
-                    "politica_decreto": r.get("politica_decreto"),
-                    "publico_transversal_chave": r.get("publico_transversal_chave"),
-                    "programa": r.get("programa"),
-                    "funcao": r.get("funcao"),
-                    "unidade_orcamentaria": r.get("unidade_orcamentaria"),
-                    "acao_paoe": r.get("acao_paoe"),
-                    "subfuncao": r.get("subfuncao"),
-                    "objetivo_especifico": r.get("objetivo_especifico"),
-                    "esfera": r.get("esfera"),
-                    "responsavel_acao": r.get("responsavel_acao"),
-                    "produto_acao": r.get("produto_acao"),
-                    "unid_medida_produto": r.get("unid_medida_produto"),
-                    "regiao_produto": r.get("regiao_produto"),
-                    "meta_produto": r.get("meta_produto"),
-                    "saldo_meta_produto": r.get("saldo_meta_produto"),
-                    "publico_transversal": r.get("publico_transversal"),
-                    "subacao_entrega": r.get("subacao_entrega"),
-                    "responsavel": r.get("responsavel"),
-                    "prazo": r.get("prazo"),
-                    "unid_gestora": r.get("unid_gestora"),
-                    "unidade_setorial_planejamento": r.get("unidade_setorial_planejamento"),
-                    "produto_subacao": r.get("produto_subacao"),
-                    "unidade_medida": r.get("unidade_medida"),
-                    "regiao_subacao": r.get("regiao_subacao"),
-                    "codigo": r.get("codigo"),
-                    "municipios_entrega": r.get("municipios_entrega"),
-                    "meta_subacao": r.get("meta_subacao"),
-                    "detalhamento_produto": r.get("detalhamento_produto"),
-                    "etapa": r.get("etapa"),
-                    "responsavel_etapa": r.get("responsavel_etapa"),
-                    "prazo_etapa": r.get("prazo_etapa"),
-                    "regiao_etapa": r.get("regiao_etapa"),
-                    "natureza": r.get("natureza"),
-                    "cat_econ": r.get("cat_econ"),
-                    "grupo": r.get("grupo"),
-                    "modalidade": r.get("modalidade"),
-                    "elemento": r.get("elemento"),
-                    "subelemento": r.get("subelemento"),
-                    "fonte": r.get("fonte"),
-                    "idu": r.get("idu"),
-                    "descricao_item_despesa": r.get("descricao_item_despesa"),
-                    "unid_medida_item": r.get("unid_medida_item"),
-                    "quantidade": _to_float(r.get("quantidade")),
-                    "valor_unitario": _to_float(r.get("valor_unitario")),
-                    "valor_total": _to_float(r.get("valor_total")),
-                }
-            )
+            item = {}
+            for _, col, tipo in PLAN20_RELATORIO_COLUNAS:
+                item[col] = _to_float(r.get(col)) if tipo == "num" else r.get(col)
+            data.append(item)
+
+        columns = [
+            {"key": col, "label": label, "numeric": tipo == "num"}
+            for label, col, tipo in PLAN20_RELATORIO_COLUNAS
+        ]
 
         return jsonify(
             {
                 "ok": True,
                 "data": data,
+                "columns": columns,
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
@@ -20317,138 +20559,20 @@ def api_relatorio_plan20_download():
             return 0.0
 
     try:
-        rows = (
-            db.session.execute(
-                text(
-                    """
-                    SELECT
-                        exercicio,
-                        chave_planejamento,
-                        regiao,
-                        subfuncao_ug,
-                        adj,
-                        macropolitica,
-                        pilar,
-                        eixo,
-                        politica_decreto,
-                        publico_transversal_chave,
-                        programa,
-                        funcao,
-                        unidade_orcamentaria,
-                        acao_paoe,
-                        subfuncao,
-                        objetivo_especifico,
-                        esfera,
-                        responsavel_acao,
-                        produto_acao,
-                        unid_medida_produto,
-                        regiao_produto,
-                        meta_produto,
-                        saldo_meta_produto,
-                        publico_transversal,
-                        subacao_entrega,
-                        responsavel,
-                        prazo,
-                        unid_gestora,
-                        unidade_setorial_planejamento,
-                        produto_subacao,
-                        unidade_medida,
-                        regiao_subacao,
-                        codigo,
-                        municipios_entrega,
-                        meta_subacao,
-                        detalhamento_produto,
-                        etapa,
-                        responsavel_etapa,
-                        prazo_etapa,
-                        regiao_etapa,
-                        natureza,
-                        cat_econ,
-                        grupo,
-                        modalidade,
-                        elemento,
-                        subelemento,
-                        fonte,
-                        idu,
-                        descricao_item_despesa,
-                        unid_medida_item,
-                        quantidade,
-                        valor_unitario,
-                        valor_total
-                    FROM plan20_seduc
-                    WHERE ativo = 1
-                    """
-                )
-            )
-            .mappings()
-            .all()
-        )
+        rows = _plan20_relatorio_rows()
         if not rows:
             return jsonify({"error": "Nenhum dado para exportar."}), 404
         db.session.close()
 
-        headers = [
-            ("Exercício", "exercicio"),
-            ("Chave de Planejamento", "chave_planejamento"),
-            ("Região", "regiao"),
-            ("Subfunção + UG", "subfuncao_ug"),
-            ("ADJ", "adj"),
-            ("Macropolitica", "macropolitica"),
-            ("Pilar", "pilar"),
-            ("Eixo", "eixo"),
-            ("Politica_Decreto", "politica_decreto"),
-            ("Público Transversal (chave)", "publico_transversal_chave"),
-            ("Programa", "programa"),
-            ("Função", "funcao"),
-            ("Unidade Orçamentária", "unidade_orcamentaria"),
-            ("Ação (P/A/OE)", "acao_paoe"),
-            ("Subfunção", "subfuncao"),
-            ("Objetivo Específico", "objetivo_especifico"),
-            ("Esfera", "esfera"),
-            ("Responsável pela Ação", "responsavel_acao"),
-            ("Produto(s) da Ação", "produto_acao"),
-            ("Unidade de Medida do Produto", "unid_medida_produto"),
-            ("Região do Produto", "regiao_produto"),
-            ("Meta do Produto", "meta_produto"),
-            ("Saldo Meta do Produto", "saldo_meta_produto"),
-            ("P\u00fablico Transversal", "publico_transversal"),
-            ("SubA\u00e7\u00e3o/entrega", "subacao_entrega"),
-            ("Respons\u00e1vel", "responsavel"),
-            ("Prazo", "prazo"),
-            ("Unid. Gestora", "unid_gestora"),
-            ("Unidade Setorial de Planejamento", "unidade_setorial_planejamento"),
-            ("Produto da SubA\u00e7\u00e3o", "produto_subacao"),
-            ("Unidade de Medida", "unidade_medida"),
-            ("Regi\u00e3o da SubA\u00e7\u00e3o", "regiao_subacao"),
-            ("C\u00f3digo", "codigo"),
-            ("Munic\u00edpio(s) da entrega", "municipios_entrega"),
-            ("Meta da SubA\u00e7\u00e3o", "meta_subacao"),
-            ("Detalhamento do produto", "detalhamento_produto"),
-            ("Etapa", "etapa"),
-            ("Respons\u00e1vel da Etapa", "responsavel_etapa"),
-            ("Prazo da Etapa", "prazo_etapa"),
-            ("Regi\u00e3o da Etapa", "regiao_etapa"),
-            ("Natureza", "natureza"),
-            ("Cat.Econ", "cat_econ"),
-            ("Grupo", "grupo"),
-            ("Modalidade", "modalidade"),
-            ("Elemento", "elemento"),
-            ("Subelemento", "subelemento"),
-            ("Fonte", "fonte"),
-            ("IDU", "idu"),
-            ("Descri\u00e7\u00e3o do Item de Despesa", "descricao_item_despesa"),
-            ("Unid. Medida", "unid_medida_item"),
-            ("Quantidade", "quantidade"),
-            ("Valor Unit\u00e1rio", "valor_unitario"),
-            ("Valor Total", "valor_total"),
-        ]
+        headers = [(label, col) for label, col, _ in PLAN20_RELATORIO_COLUNAS]
+        numeric_keys = {col for _, col, tipo in PLAN20_RELATORIO_COLUNAS if tipo == "num"}
 
         data = []
         for r in rows:
             row_dict = {}
             for label, key in headers:
                 val = r.get(key)
-                if key in {"quantidade", "valor_unitario", "valor_total"}:
+                if key in numeric_keys:
                     val = _to_float(val)
                 row_dict[label] = val
             data.append(row_dict)
@@ -20468,20 +20592,17 @@ def api_relatorio_plan20_download():
             wb = load_workbook(output)
             ws = wb.active
             font = Font(name="Helvetica", size=8)
-            idx_map = {label: i + 1 for i, (label, _) in enumerate(headers)}
-            numeric_cols = {
-                idx_map.get("Quantidade"),
-                idx_map.get("Valor Unit\u00e1rio"),
-                idx_map.get("Valor Total"),
-            }
-            numeric_cols = {c for c in numeric_cols if c}
+            key_idx_map = {key: i + 1 for i, (_, key) in enumerate(headers)}
+            numeric_cols = {key_idx_map[k] for k in numeric_keys if k in key_idx_map}
+            int_keys = {col for _, col, tipo in PLAN20_RELATORIO_COLUNAS if tipo == "int"}
+            int_cols = {key_idx_map[k] for k in int_keys if k in key_idx_map}
             number_format = "#,##0.00"
             for row in ws.iter_rows():
                 for cell in row:
                     cell.font = font
                     if cell.col_idx in numeric_cols and isinstance(cell.value, (int, float)):
                         cell.number_format = number_format
-                    if cell.col_idx == idx_map.get("Exerc\u00edcio") and isinstance(cell.value, (int, float, str)):
+                    if cell.col_idx in int_cols and isinstance(cell.value, (int, float, str)):
                         try:
                             cell.value = int(str(cell.value).split(".")[0])
                         except Exception:
@@ -21055,7 +21176,7 @@ def api_perfis():
         return jsonify({"error": "Nivel invalido."}), 400
     if nivel_int < 1 or nivel_int > 5:
         return jsonify({"error": "Nivel deve estar entre 1 e 5."}), 400
-    perfil = Perfil(id=_next_pk(Perfil), nome=nome, nivel=nivel_int, ativo=ativo)
+    perfil = Perfil(nome=nome, nivel=nivel_int, ativo=ativo)
     db.session.add(perfil)
     try:
         db.session.commit()
