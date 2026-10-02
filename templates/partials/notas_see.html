@@ -1,0 +1,73 @@
+<div class="see-page" id="see-page">
+  <header class="see-header">
+    <div>
+      <div class="see-eyebrow">Área UENs · SAGE</div>
+      <h1>Notas SEE</h1>
+      <p>Extraia dados de DANFEs, acompanhe o processamento e gere a planilha consolidada.</p>
+    </div>
+    <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+  </header>
+
+  <div class="see-grid">
+    <section class="see-card">
+      <div class="see-card-title"><i class="bi bi-box-seam"></i><div><h2>Catálogo de produtos</h2><p>Cadastre os códigos usados neste lote.</p></div></div>
+      <div class="form-grid">
+        <label class="field"><span>Catálogo</span><select id="see-catalog-select"><option value="">Selecione</option></select></label>
+        <div class="actions see-inline-actions">
+          <button class="btn sm" id="see-catalog-new" type="button"><i class="bi bi-plus"></i>Novo</button>
+          <button class="btn sm" id="see-catalog-edit" type="button" disabled><i class="bi bi-pencil"></i>Editar</button>
+          <button class="btn btn-danger sm" id="see-catalog-delete" type="button" disabled><i class="bi bi-trash"></i>Desativar</button>
+        </div>
+      </div>
+      <form id="see-catalog-form" class="form see-subform" hidden>
+        <input type="hidden" id="see-catalog-id">
+        <div class="form-grid">
+          <label class="field"><span>Nome</span><input id="see-catalog-name" required maxlength="150"></label>
+          <label class="field"><span>Descrição</span><input id="see-catalog-description" maxlength="500"></label>
+        </div>
+        <div class="actions"><button class="btn btn-primary sm" type="submit">Salvar catálogo</button><button class="btn sm" id="see-catalog-form-cancel" type="button">Cancelar</button></div>
+      </form>
+      <form id="see-product-form" class="form see-subform" hidden>
+        <input type="hidden" id="see-product-id">
+        <div class="form-grid see-product-grid">
+          <label class="field"><span>Código</span><input id="see-product-code" required maxlength="50"></label>
+          <label class="field"><span>Nome do produto</span><input id="see-product-name" required maxlength="255"></label>
+        </div>
+        <div class="actions"><button class="btn btn-primary sm" type="submit">Salvar produto</button><button class="btn sm" id="see-product-cancel" type="button">Limpar</button></div>
+      </form>
+      <div class="see-table-wrap" id="see-products-wrap" hidden>
+        <div class="see-list-toolbar"><strong>Produtos cadastrados</strong><button class="btn sm" id="see-product-add" type="button"><i class="bi bi-plus"></i>Adicionar</button></div>
+        <table class="table"><thead><tr><th>Código</th><th>Produto</th><th></th></tr></thead><tbody id="see-products-body"></tbody></table>
+      </div>
+      <div id="see-catalog-msg" class="muted"></div>
+    </section>
+
+    <section class="see-card">
+      <div class="see-card-title"><i class="bi bi-cloud-arrow-up"></i><div><h2>Selecionar DANFEs</h2><p>Envie uma pasta completa ou arquivos específicos.</p></div></div>
+      <form id="see-process-form" class="form">
+        <input type="hidden" name="catalogo_id" id="see-process-catalog-id">
+        <div class="see-upload-options">
+          <label class="see-upload-option"><i class="bi bi-folder2-open"></i><strong>Selecionar pasta</strong><span>Todos os PDFs da pasta</span><input id="see-folder-input" type="file" name="pdfs" accept="application/pdf,.pdf" webkitdirectory directory multiple></label>
+          <label class="see-upload-option"><i class="bi bi-files"></i><strong>Selecionar arquivos</strong><span>Um ou vários PDFs</span><input id="see-files-input" type="file" name="pdfs" accept="application/pdf,.pdf" multiple></label>
+        </div>
+        <div class="see-selection-summary" id="see-selection-summary">Nenhum PDF selecionado.</div>
+        <div class="see-append-choice" id="see-append-choice" hidden>
+          <strong>Deseja acrescentar novas notas ao catálogo já processado?</strong>
+          <label><input type="radio" name="see_append_mode" value="acrescentar" checked> Sim, manter as anteriores</label>
+          <label><input type="radio" name="see_append_mode" value="novo"> Não, iniciar uma nova lista</label>
+        </div>
+        <div class="actions"><button class="btn btn-primary" id="see-process-submit" type="submit" disabled><i class="bi bi-play-fill"></i>Iniciar processamento</button></div>
+        <div id="see-process-msg" class="muted"></div>
+      </form>
+    </section>
+  </div>
+
+  <section class="see-card see-progress-card" id="see-progress-card" hidden>
+    <div class="see-card-title"><i class="bi bi-activity"></i><div><h2>Processamento</h2><p id="see-progress-message">Preparando...</p></div><strong id="see-progress-percent">0%</strong></div>
+    <div class="see-processing-meta" id="see-processing-meta"></div>
+    <div class="see-progress-track"><div id="see-progress-bar"></div></div>
+    <div class="see-stats"><span><strong id="see-stat-processed">0</strong> processados</span><span><strong id="see-stat-success">0</strong> sem alertas</span><span><strong id="see-stat-warning">0</strong> com alertas</span><span><strong id="see-stat-error">0</strong> com erros</span><span><strong id="see-stat-duration">0s</strong> duração</span></div>
+    <div class="see-file-list" id="see-file-list"></div>
+    <div class="actions"><button class="btn btn-danger sm" id="see-cancel-job" type="button">Cancelar</button><button class="btn btn-primary" id="see-download" type="button" hidden><i class="bi bi-download"></i>Baixar Excel</button></div>
+  </section>
+</div>

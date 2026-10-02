@@ -1,5 +1,6 @@
 <div class="grid">
-  <div class="card">
+  <header class="module-header"><div class="module-header-copy"><div class="module-eyebrow">Administração · Usuários</div><h1>Cadastrar usuário</h1><p>Crie novos acessos e associe o perfil inicial.</p></div><i class="bi bi-person-plus" aria-hidden="true"></i></header>
+  <div class="card module-card">
     <div class="card-title">Cadastrar usuário</div>
     <form id="form-criar-usuario" class="form">
       <div class="form-grid">
@@ -41,8 +42,9 @@
     </form>
   </div>
 
-  <div class="card">
+  <div class="card users-list-card">
     <div class="card-title">Usuários</div>
+    <label class="users-search" for="usuarios-cadastrar-search"><i class="bi bi-search"></i><input id="usuarios-cadastrar-search" type="search" placeholder="Pesquisar por nome, e-mail ou perfil" autocomplete="off" /></label>
     <div class="table-responsive">
       <table class="table">
         <thead>
@@ -53,7 +55,7 @@
             <th>Ativo</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="usuarios-cadastrar-tbody">
           {% for u in usuarios %}
           <tr>
             <td>{{ u.email }}</td>

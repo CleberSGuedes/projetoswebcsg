@@ -1,6 +1,7 @@
 <div class="grid">
-  <div class="card">
-    <div class="card-title">FIP 613</div>
+  <header class="module-header"><div class="module-header-copy"><div class="module-eyebrow">Administrar SPO · Atualizar execução orçamentária</div><h1>Atualizar FIP 613</h1><p>Envie a base mais recente e acompanhe o processamento.</p></div><i class="bi bi-cloud-upload" aria-hidden="true"></i></header>
+  <div class="card module-card">
+    <div class="module-card-title"><i class="bi bi-file-earmark-spreadsheet"></i><div><h2>Arquivo para processamento</h2><p>Informe o arquivo e a data de referência.</p></div></div>
     <p class="muted">Envie o arquivo .xlsx e informe a data/hora do download do FIP 613.</p>
 
     <form id="form-fip613" class="form">
@@ -25,5 +26,9 @@
   <div class="card">
     <div class="card-title">Última atualização</div>
     <div id="fip613-status" class="muted">Carregando...</div>
+    <div class="actions upload-status-actions">
+      <button class="btn btn-secondary sm" type="button" id="fip613-reprocess">Reprocessar</button>
+      <button class="btn btn-danger sm" type="button" id="fip613-cancel">Cancelar</button>
+    </div>
   </div>
 </div>

@@ -452,7 +452,8 @@ def _enable_fast_executemany() -> None:
 
 
 def update_database(
-    df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int
+    df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int,
+    progress_callback=None, cancel_callback=None
 ) -> int:
     insert_sql = text(
         """
@@ -473,25 +474,24 @@ def update_database(
         """
     )
 
-    try:
-        db.session.execute(text("UPDATE est_emp SET ativo = 0 WHERE ativo = 1"))
-        db.session.commit()
-    except SQLAlchemyError:
-        db.session.rollback()
-        raise
-
     _enable_fast_executemany()
     registros = montar_registros_para_db(df, data_arquivo, user_email, upload_id)
+    for registro in registros:
+        registro["ativo"] = False
     total_registros = len(registros)
     print(f" Gravando {total_registros} registros no banco...")
     total = 0
     for start in range(0, len(registros), BATCH_SIZE):
         chunk = registros[start : start + BATCH_SIZE]
+        if cancel_callback:
+            cancel_callback()
         try:
             db.session.execute(insert_sql, chunk)
             db.session.commit()
             total += len(chunk)
             print(f" Inseridos {total}/{total_registros} registros...")
+            if progress_callback:
+                progress_callback(total, total_registros)
         except SQLAlchemyError:
             db.session.rollback()
             raise
@@ -499,9 +499,12 @@ def update_database(
 
 
 def run_est_emp(
-    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
+    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int,
+    progress_callback=None, cancel_callback=None
 ) -> tuple[int, Path]:
     ensure_dirs()
+    if progress_callback:
+        progress_callback("tratamento", 10, "Lendo e tratando a planilha EST EMP.")
     move_existing_to_tmp(OUTPUT_DIR)
     output_path = processar_est_emp(file_path)
 
@@ -514,5 +517,17 @@ def run_est_emp(
                 df_tratado[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=False)
             else:
                 df_tratado[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=True)
-    total = update_database(df_tratado, data_arquivo, user_email, upload_id)
+    if cancel_callback:
+        cancel_callback()
+    if progress_callback:
+        progress_callback("gravacao", 35, "Planilha tratada. Gravando registros.")
+    def _batch(done, total_rows):
+        if progress_callback:
+            progress_callback("gravacao", 35 + int((done / max(total_rows, 1)) * 55), f"Gravados {done} de {total_rows} registros.")
+    total = update_database(df_tratado, data_arquivo, user_email, upload_id, _batch, cancel_callback)
+    if cancel_callback:
+        cancel_callback()
+    db.session.execute(text("UPDATE est_emp SET ativo = 0 WHERE ativo = 1"))
+    db.session.execute(text("UPDATE est_emp SET ativo = 1 WHERE upload_id = :upload_id"), {"upload_id": upload_id})
+    db.session.commit()
     return total, output_path
