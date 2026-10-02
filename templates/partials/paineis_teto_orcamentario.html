@@ -4,6 +4,7 @@
       <div class="module-eyebrow">Painéis/Dashboards · Planejamento</div>
       <div class="card-title">Teto Orçamentário</div>
       <p class="muted">Análise consolidada dos tetos MOMP e das políticas orçamentárias.</p>
+      <p class="muted teto-dashboard-fonte">Fonte: FIPLAN – PLAN 23 (Teto Orçamentário PTA) e PLAN 134 (Emitir PTA Detalhado por UO, Programa, Ação, Subação e Etapa).</p>
     </div>
     <div class="teto-view-switch" role="tablist" aria-label="Visualização do painel">
       <button class="teto-view-btn active" type="button" data-view="graficos" role="tab" aria-selected="true">
@@ -27,22 +28,47 @@
         </button>
       </div>
     </div>
+    <!-- data-graph-filter controla quais campos ficam visiveis na aba
+         "Graficos" (ver static/css/style.css, regra
+         [data-active-view="graficos"] ... :not([data-graph-filter])).
+         Nao remova esse atributo sem checar o CSS - ele nao aparece em
+         nenhum JS, so tem efeito ali. -->
+    {% set teto_filters = [
+      ("exercicio", "Exercício", "Todos", true),
+      ("uo", "UO", "Todas", true),
+      ("regiao", "Região", "Todas", false),
+      ("subfuncao", "Subfunção", "Todas", false),
+      ("grupo", "Grupo de despesa", "Todos", true),
+      ("subgrupo", "Tipificação da despesa", "Todas", true),
+      ("paoe", "Ação/PAOE", "Todas", true),
+      ("fonte", "Fonte", "Todas", true),
+      ("adj", "ADJ", "Todas", false),
+      ("macropolitica", "Macropolítica", "Todas", false),
+      ("pilar", "Pilar", "Todos", false),
+      ("eixo", "Eixo", "Todos", false),
+      ("politica", "Política do decreto", "Todas", false),
+    ] %}
     <div class="teto-filter-grid form-grid">
-      <label class="field" data-graph-filter><span>Exercício</span><select data-filter="exercicio"><option value="">Todos</option></select></label>
-      <label class="field"><span>Região</span><select data-filter="regiao"><option value="">Todas</option></select></label>
-      <label class="field"><span>Subfunção</span><select data-filter="subfuncao"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Grupo de despesa</span><select data-filter="grupo"><option value="">Todos</option></select></label>
-      <label class="field" data-graph-filter><span>Tipificação da despesa</span><select data-filter="subgrupo"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Ação/PAOE</span><select data-filter="paoe"><option value="">Todas</option></select></label>
-      <label class="field" data-graph-filter><span>Fonte</span><select data-filter="fonte"><option value="">Todas</option></select></label>
-      <label class="field"><span>ADJ</span><select data-filter="adj"><option value="">Todas</option></select></label>
-      <label class="field"><span>Macropolítica</span><select data-filter="macropolitica"><option value="">Todas</option></select></label>
-      <label class="field"><span>Pilar</span><select data-filter="pilar"><option value="">Todos</option></select></label>
-      <label class="field"><span>Eixo</span><select data-filter="eixo"><option value="">Todos</option></select></label>
-      <label class="field"><span>Política do decreto</span><select data-filter="politica"><option value="">Todas</option></select></label>
+      {% for key, label, empty_label, is_graph in teto_filters %}
+      <label class="field"{{ ' data-graph-filter' if is_graph else '' }}>
+        <span>{{ label }}</span>
+        <div class="planning-action-checklist teto-multi-filter" data-filter="{{ key }}">
+          <button class="planning-action-checklist-toggle" type="button">{{ empty_label }}</button>
+          <div class="planning-action-checklist-panel" hidden>
+            <div class="teto-checklist-actions">
+              <button type="button" data-select-all>Selecionar todos</button>
+              <button type="button" data-select-none>Limpar</button>
+            </div>
+            <div class="planning-action-checklist-options"></div>
+          </div>
+        </div>
+      </label>
+      {% endfor %}
     </div>
     <div class="teto-active-filters" id="teto-active-filters" aria-live="polite"></div>
   </div>
+
+  <div class="alert-stack" id="teto-political-warning" hidden></div>
 
   <div class="teto-dashboard-view active" data-view-panel="graficos">
     <div class="teto-kpi-grid">
@@ -62,19 +88,39 @@
   </div>
 
   <div class="teto-dashboard-view" data-view-panel="tabelas" hidden>
-    <div class="teto-primary-tables">
-      <section class="teto-panel teto-table-panel">
-        <h2>Teto por fonte de recurso</h2>
-        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-fonte"><thead><tr><th>Fonte</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
-      </section>
-      <section class="teto-panel teto-table-panel">
-        <h2>Teto por grupo e tipificação da despesa</h2>
-        <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-grupo"><thead><tr><th>Descrição</th><th>Teto anual</th><th>Perc. (%)</th></tr></thead><tbody></tbody></table></div>
-      </section>
-    </div>
+    <section class="teto-panel teto-table-panel">
+      <h2>Por grupo de despesa</h2>
+      <div class="teto-group-legend" id="teto-group-legend"></div>
+      <div class="teto-group-stack" id="teto-group-stack"></div>
+      <div class="teto-group-cards" id="teto-group-cards"></div>
+    </section>
+    <section class="teto-panel teto-table-panel teto-panel-highlight">
+      <h2>Grupo 1 por Fontes</h2>
+      <p class="muted teto-qomp-sub">Teto do grupo "1 - Pessoal e Encargos Sociais", somando somente as fontes 15000000, 15001001, 15010100, 15400000 e 15401070, comparado entre os exercícios do filtro.</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid qomp-flat" id="teto-table-grupo1-fontes"></div></div>
+    </section>
+    <section class="teto-panel teto-table-panel teto-panel-highlight">
+      <h2>Grupo por Teto Total</h2>
+      <p class="muted teto-qomp-sub">Teto por grupo de despesa (somando todas as fontes), comparado entre os exercícios do filtro (todos, se nenhum for selecionado).</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid qomp-flat" id="teto-table-grupo-total"></div></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Teto por fonte de recurso</h2>
+      <div class="teto-fonte-rank" id="teto-fonte-rank"></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Teto por grupo e tipificação da despesa</h2>
+      <div class="teto-fonte-rank" id="teto-grupo-rank"></div>
+    </section>
+    <section class="teto-panel teto-table-panel">
+      <h2>Quadro comparativo de Fonte/Grupo</h2>
+      <p class="muted teto-qomp-sub">Teto por fonte e grupo de despesa, comparado entre os exercícios do filtro (todos, se nenhum for selecionado).</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid" id="teto-table-fonte-grupo"></div></div>
+    </section>
     <section class="teto-panel teto-table-panel">
       <h2>Quadro Orçamentário de Médio Prazo (QOMP)</h2>
-      <div class="table-responsive"><table class="table plan20-table teto-data-table" id="teto-table-qomp"><thead></thead><tbody></tbody></table></div>
+      <p class="muted teto-qomp-sub">Teto por fonte, grupo de despesa e tipificação, comparado entre os exercícios do filtro (todos, se nenhum for selecionado).</p>
+      <div class="teto-qomp-scroll"><div class="teto-qomp-grid" id="teto-table-qomp"></div></div>
     </section>
   </div>
 </section>
