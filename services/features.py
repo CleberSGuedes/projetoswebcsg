@@ -39,6 +39,7 @@ FEATURES = [
                     {"id": "atualizar/estrutura-planejamento/replicar-exercicio", "nome": "Replicar exercício"},
                 ]),
                 {"id": "atualizar/teto-seduc", "nome": "Teto Financeiro"},
+                {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA"},
             ]),
             _group("grupo/pta-gerencial-nger", "PTA-Gerencial NGER", [
                 {"id": "atualizar/plan20-seduc", "nome": "PLAN-20 FIPLAN"},
@@ -229,6 +230,12 @@ MENU_META = {
     "atualizar/estrutura-planejamento/catalogo-chave": {"icon": "key"},
     "atualizar/estrutura-planejamento/replicar-exercicio": {"icon": "arrow-repeat"},
     "atualizar/teto-seduc": {"icon": "cash-stack"},
+    # Link externo (sistema de programacao do PTA/LOA) - _menu.html abre em
+    # nova aba via data-external-url (tratado em static/js/main.js).
+    "cadastrar/planejamento/programar-pta-loa": {
+        "icon": "box-arrow-up-right",
+        "external_url": "https://pta2025.projetoswebcsg.life/",
+    },
     "atualizar/plan20-seduc": {"icon": "file-earmark-spreadsheet"},
     "atualizar/chave_planejamento_regra": {"icon": "tools"},
     "atualizar/chaves_planejamento_upload": {"icon": "cloud-upload"},
