@@ -659,7 +659,7 @@ Layout, menu e deploy ficam da branch; regras de negócio, correções e dashboa
 ### 21.4 Verificação
 - Linhas que a branch acrescentou desde 26/06 e não estão no resultado: só o CSS da tabela QOMP antiga (substituída pela grade da seção 12.10) e o release antigo. Linhas da `main` fora do resultado: só as decididas acima (deploy, Revista reduzida, layout/rodapé antigos).
 - `pytest` 44/44 num ambiente isolado com as dependências da branch (`pdfplumber`, das Notas SEE); `node --check`; render do menu dinâmico completo (Teto Financeiro, Programar PTA/LOA externo, Componentes da Revista, Plan20, Personalizar SPO, banner de ambiente, aviso de permissões, release) e das telas do Teto (13 filtros, filtro UO, linha de fonte), Estrutura do Planejamento e Plan20.
-- Banco: nada a fazer — o banco é compartilhado, então as mudanças de schema da `main` (`momp.uo`, 8 colunas do `plan20_seduc`) já valiam para todos os ambientes; o que faltava era o código. As tabelas próprias das branches (`usuario_permissoes`, `see_catalogos`, Notas SEE, Receita etc.) não foram tocadas.
+- Banco: **cada ambiente (homologação, dev/cleber, dev/jean) tem banco próprio** — o "banco compartilhado" da seção 8 vale só para produção × desenvolvimento local da `main`. As mudanças de schema da `main` precisam ser aplicadas em cada um: ver seção 21.7. As tabelas próprias das branches (`usuario_permissoes`, `see_catalogos`, Notas SEE, Receita etc.) não foram tocadas.
 - Fluxo: branch `sync/main-para-homologacao` + pull request para `homologacao` (aprovado pelo usuário no GitHub); depois `homologacao` → `dev/cleber` e `dev/jean`, também por PR.
 
 ### 21.5 `dev/cleber` (branch `sync/main-para-dev-cleber`, a partir do resultado já resolvido da homologação)
@@ -669,3 +669,18 @@ Só 3 arquivos em conflito, mais um problema que o merge automático criaria cal
 - `?v=` do CSS/JS: fica `20261002.sync-main.1` (mais novo que o `20261001.notas-see-exercicio` da branch).
 - `requirements.txt` mesclado sozinho e certo: `pdfplumber`/`xlrd` da branch + `pytest` da `main`, sem o `pyodbc` (removido na `main`, sem uso no código).
 - Verificação: nenhuma linha da `dev/cleber` perdida além do CSS da QOMP antiga, release e `?v=` antigos; `pytest` 44/44; render do menu com o PTA/LOA uma única vez e das telas do Teto/Estrutura/Plan20.
+### 21.7 Banco de cada ambiente: `scripts/atualizar_schema_sync_main.py`
+O código sincronizado exige três mudanças de schema que a `main` fez só no banco dela:
+1. `momp.uo` (`VARCHAR(5)`) + índice `ix_momp_exercicio_uo` + histórico marcado como `14101` (seção 20) — sem isso o Teto-SEDUC e o dashboard dão erro.
+2. `plan20_seduc`: as 8 colunas do layout 2027 (seção 18) — sem isso o upload do Plan20 falha.
+3. `AUTO_INCREMENT` em `logs_login.id`, `active_sessions.id` e `perfil.id` — o código não gera mais o `id` na mão (seção 9, item 5); se algum banco não tiver, **o login para de funcionar**. Em produção os três já eram `AUTO_INCREMENT`; nos outros bancos precisa ser conferido.
+
+Cada desenvolvedor roda no seu ambiente, depois de atualizar o código (usa a conexão do `.env` local):
+```
+python scripts/atualizar_schema_sync_main.py            # só mostra o que falta (não altera nada)
+python scripts/atualizar_schema_sync_main.py --aplicar  # aplica
+```
+Idempotente (o que já existe é pulado; pode rodar de novo sem efeito); tabela inexistente é pulada com aviso. Validado contra o banco de produção (já atualizado → "Nada a fazer") e por `tests/test_atualizar_schema_sync_main.py` (banco desatualizado simulado: lista as 13 pendências na ordem certa; banco atualizado: nenhuma). As tabelas novas (Revista etc.) já são criadas pelo `db.create_all()` ao subir a aplicação.
+
+### 21.8 Incidente: PRs abertos contra a `main` (2026-10-02)
+Os três PRs de sincronização foram abertos com destino `main` (padrão do GitHub — os links enviados não fixavam o destino). #13 e #14 foram mergeados na `main` antes de o erro ser notado (o #15 deu conflito e chamou atenção). Resultado: a `main` (produção) recebeu o layout de julho, o trabalho em andamento da `dev/cleber` e o `.cpanel.yml` da homologação — cujo `scripts/deploy_cpanel.sh` faz `rsync --delete` na pasta de produção (apagaria `upload/`/`outputs/`, fora do Git) e exige `pdfplumber` (que derrubaria a produção se não estiver instalado). Nenhum deploy foi feito. Correção: `main` volta a `df7a37e` por force push feito pelo próprio usuário (o modo automático da IA bloqueia force push, corretamente) (backup do estado errado na tag `backup/main-pos-merge-errado-2026-10-02`) e PRs reabertos com links que fixam o destino (`/compare/<destino>...<origem>`). Lição: **sempre enviar link de PR com o destino explícito** e conferir o campo "base" antes de aprovar.
