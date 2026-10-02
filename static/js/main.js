@@ -10731,6 +10731,8 @@
     const btnReset = document.getElementById("plan20-reset");
     const totExercicio = document.getElementById("plan20-tot-exercicio");
     const totValorTotal = document.getElementById("plan20-tot-valor-total");
+    const headerRow = document.getElementById("plan20-header-row");
+    const filterRow = document.getElementById("plan20-filter-row");
     if (!table || !tbody) return;
     if (table.dataset.bound === "1") return;
     table.dataset.bound = "1";
@@ -10748,6 +10750,13 @@
       if (Number.isNaN(n)) return v ?? "";
       return numFmt.format(n);
     };
+    const esc = (v) =>
+      String(v ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 
     const updateTotals = (rows) => {
       const exSet = new Set();
@@ -10816,61 +10825,9 @@
       tbody.innerHTML = "";
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${r.exercicio ?? ""}</td>
-          <td>${r.chave_planejamento ?? ""}</td>
-          <td>${r.regiao ?? ""}</td>
-          <td>${r.subfuncao_ug ?? ""}</td>
-          <td>${r.adj ?? ""}</td>
-          <td>${r.macropolitica ?? ""}</td>
-          <td>${r.pilar ?? ""}</td>
-          <td>${r.eixo ?? ""}</td>
-          <td>${r.politica_decreto ?? ""}</td>
-          <td>${r.publico_transversal_chave ?? ""}</td>
-          <td>${r.programa ?? ""}</td>
-          <td>${r.funcao ?? ""}</td>
-          <td>${r.unidade_orcamentaria ?? ""}</td>
-          <td>${r.acao_paoe ?? ""}</td>
-          <td>${r.subfuncao ?? ""}</td>
-          <td>${r.objetivo_especifico ?? ""}</td>
-          <td>${r.esfera ?? ""}</td>
-          <td>${r.responsavel_acao ?? ""}</td>
-          <td>${r.produto_acao ?? ""}</td>
-          <td>${r.unid_medida_produto ?? ""}</td>
-          <td>${r.regiao_produto ?? ""}</td>
-          <td>${r.meta_produto ?? ""}</td>
-          <td>${r.saldo_meta_produto ?? ""}</td>
-          <td>${r.publico_transversal ?? ""}</td>
-          <td>${r.subacao_entrega ?? ""}</td>
-          <td>${r.responsavel ?? ""}</td>
-          <td>${r.prazo ?? ""}</td>
-          <td>${r.unid_gestora ?? ""}</td>
-          <td>${r.unidade_setorial_planejamento ?? ""}</td>
-          <td>${r.produto_subacao ?? ""}</td>
-          <td>${r.unidade_medida ?? ""}</td>
-          <td>${r.regiao_subacao ?? ""}</td>
-          <td>${r.codigo ?? ""}</td>
-          <td>${r.municipios_entrega ?? ""}</td>
-          <td>${r.meta_subacao ?? ""}</td>
-          <td>${r.detalhamento_produto ?? ""}</td>
-          <td>${r.etapa ?? ""}</td>
-          <td>${r.responsavel_etapa ?? ""}</td>
-          <td>${r.prazo_etapa ?? ""}</td>
-          <td>${r.regiao_etapa ?? ""}</td>
-          <td>${r.natureza ?? ""}</td>
-          <td>${r.cat_econ ?? ""}</td>
-          <td>${r.grupo ?? ""}</td>
-          <td>${r.modalidade ?? ""}</td>
-          <td>${r.elemento ?? ""}</td>
-          <td>${r.subelemento ?? ""}</td>
-          <td>${r.fonte ?? ""}</td>
-          <td>${r.idu ?? ""}</td>
-          <td>${r.descricao_item_despesa ?? ""}</td>
-          <td>${r.unid_medida_item ?? ""}</td>
-          <td class="num">${fmtNum(r.quantidade)}</td>
-          <td class="num">${fmtNum(r.valor_unitario)}</td>
-          <td class="num">${fmtNum(r.valor_total)}</td>
-        `;
+        tr.innerHTML = columns
+          .map((c) => (c.numeric ? `<td class="num">${fmtNum(r[c.key])}</td>` : `<td>${esc(r[c.key])}</td>`))
+          .join("");
         tbody.appendChild(tr);
       });
 
@@ -10887,65 +10844,31 @@
 
     const allData = { rows: [] };
 
-    const colKeys = [
-      "exercicio",
-      "chave_planejamento",
-      "regiao",
-      "subfuncao_ug",
-      "adj",
-      "macropolitica",
-      "pilar",
-      "eixo",
-      "politica_decreto",
-      "publico_transversal_chave",
-      "programa",
-      "funcao",
-      "unidade_orcamentaria",
-      "acao_paoe",
-      "subfuncao",
-      "objetivo_especifico",
-      "esfera",
-      "responsavel_acao",
-      "produto_acao",
-      "unid_medida_produto",
-      "regiao_produto",
-      "meta_produto",
-      "saldo_meta_produto",
-      "publico_transversal",
-      "subacao_entrega",
-      "responsavel",
-      "prazo",
-      "unid_gestora",
-      "unidade_setorial_planejamento",
-      "produto_subacao",
-      "unidade_medida",
-      "regiao_subacao",
-      "codigo",
-      "municipios_entrega",
-      "meta_subacao",
-      "detalhamento_produto",
-      "etapa",
-      "responsavel_etapa",
-      "prazo_etapa",
-      "regiao_etapa",
-      "natureza",
-      "cat_econ",
-      "grupo",
-      "modalidade",
-      "elemento",
-      "subelemento",
-      "fonte",
-      "idu",
-      "descricao_item_despesa",
-      "unid_medida_item",
-      "quantidade",
-      "valor_unitario",
-      "valor_total",
-    ];
+    // Colunas vem da API (data.columns), nao ficam mais fixas aqui - ver
+    // PLAN20_RELATORIO_COLUNAS em rotas/home_routes.py (docs/claude.md,
+    // secao 19). initColumnsUI() preenche essas variaveis e o cabecalho
+    // da tabela assim que a resposta chega, antes do primeiro render().
+    let columns = [];
+    let colKeys = [];
+    let filterContainers = [];
+    let filters = {};
+    let filterControls = {};
 
-    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
-    const filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
-    const filterControls = {};
+    const initColumnsUI = (cols) => {
+      columns = Array.isArray(cols) ? cols : [];
+      colKeys = columns.map((c) => c.key);
+      if (headerRow) {
+        headerRow.innerHTML = columns.map((c) => `<th>${esc(c.label)}</th>`).join("");
+      }
+      if (filterRow) {
+        filterRow.innerHTML = columns
+          .map((c) => `<th><div class="multi-filter" data-col="${esc(c.key)}"></div></th>`)
+          .join("");
+      }
+      filterContainers = table.querySelectorAll(".filter-row [data-col]");
+      filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+      filterControls = {};
+    };
 
     const closeAllPanels = () => {
       Object.values(filterControls).forEach((ctrl) => {
@@ -11206,6 +11129,7 @@
         const res = await fetch("/api/relatorios/plan20-seduc");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        initColumnsUI(data.columns);
         allData.rows = data.data || [];
         setOptions(allData.rows);
         filteredRows = allData.rows;
@@ -17689,12 +17613,16 @@
 
     const state = { momp: [], politicas: [], filters: {} };
     let chartFilterTimer = null;
-    const filterEls = Array.from(root.querySelectorAll("[data-filter]"));
+    const filterWrappers = Array.from(root.querySelectorAll(".teto-multi-filter[data-filter]"));
     const filterEmptyLabels = Object.fromEntries(
-      filterEls.map((el) => [el.dataset.filter, el.options[0]?.textContent || "Todos"])
+      filterWrappers.map((el) => [
+        el.dataset.filter,
+        el.querySelector(".planning-action-checklist-toggle")?.textContent.trim() || "Todos",
+      ])
     );
     const statusEl = document.getElementById("teto-dashboard-status");
     const activeFiltersEl = document.getElementById("teto-active-filters");
+    const politicalWarningEl = document.getElementById("teto-political-warning");
     const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
     const number = new Intl.NumberFormat("pt-BR");
     const oldChartPalette = [
@@ -17749,6 +17677,11 @@
       return text.includes(" - ") ? text.split(" - ")[0].trim() : text;
     };
     const subfunctionOf = (value) => codeOf(value).split(".")[0].trim();
+    // Correcao apenas de exibicao: dados ja gravados no banco tem "Outras
+    // Despesas Corrente" (sem S, erro de digitacao no mapeamento de origem).
+    // So corrige o texto mostrado na tela - nunca usar pra comparar/filtrar
+    // (isso continua contra o valor cru de row.grupo).
+    const displayGrupo = (value) => clean(value).replace(/Despesas Corrente$/, "Despesas Correntes");
     const unique = (values) =>
       Array.from(new Set(values.map(clean).filter(Boolean))).sort((a, b) =>
         a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" })
@@ -17807,38 +17740,55 @@
       statusEl.classList.toggle("text-error", isError);
     };
 
+    const checkedValues = (wrapper) =>
+      Array.from(
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]:checked')
+      ).map((input) => input.value);
+
     const readFilters = () => {
-      filterEls.forEach((el) => {
-        state.filters[el.dataset.filter] = clean(el.value);
+      filterWrappers.forEach((el) => {
+        state.filters[el.dataset.filter] = checkedValues(el);
       });
       return state.filters;
     };
 
     const isPoliticalMode = (filters = state.filters) =>
-      politicalKeys.some((key) => Boolean(filters[key]));
+      politicalKeys.some((key) => (filters[key] || []).length > 0);
+
+    // Filtro de multipla selecao: sem valor marcado = sem restricao; com
+    // valores marcados = linha precisa bater com ALGUM deles (OR).
+    const matchesFilter = (value, selected) =>
+      !selected || !selected.length || selected.includes(value);
 
     const filteredData = (filtersInput = null) => {
       const filters = filtersInput || readFilters();
       let momp = state.momp.filter((row) =>
-        (!filters.exercicio || row.exercicio === filters.exercicio) &&
-        (!filters.fonte || row.fonte === filters.fonte) &&
-        (!filters.grupo || row.grupo === filters.grupo) &&
-        (!filters.subgrupo || row.subgrupo === filters.subgrupo)
+        matchesFilter(row.exercicio, filters.exercicio) &&
+        matchesFilter(row.uo, filters.uo) &&
+        matchesFilter(row.fonte, filters.fonte) &&
+        matchesFilter(row.grupo, filters.grupo) &&
+        matchesFilter(row.subgrupo, filters.subgrupo)
       );
       const validIds = new Set(momp.map((row) => row.id));
       let politicas = state.politicas.filter((row) => validIds.has(row.momp_id));
+      // Antes de aplicar os filtros de politica: existe ALGUM dado de Plan 134
+      // vinculado a este recorte de MOMP? Se nao, o modo politico vai zerar a
+      // tela nao porque o filtro escolhido nao bateu, mas porque o Plan 134
+      // nem foi carregado ainda para esses registros.
+      const existePoliticaNoEscopo = politicas.length > 0;
       politicas = politicas.filter((row) =>
-        (!filters.regiao || row.regiao === filters.regiao) &&
-        (!filters.subfuncao || subfunctionOf(row.subfuncao) === filters.subfuncao) &&
-        (!filters.paoe || row.paoe === filters.paoe) &&
-        (!filters.adj || row.adj === filters.adj) &&
-        (!filters.macropolitica || row.macropolitica === filters.macropolitica) &&
-        (!filters.pilar || row.pilar === filters.pilar) &&
-        (!filters.eixo || row.eixo === filters.eixo) &&
-        (!filters.politica || row.politica === filters.politica)
+        matchesFilter(row.regiao, filters.regiao) &&
+        matchesFilter(subfunctionOf(row.subfuncao), filters.subfuncao) &&
+        matchesFilter(row.paoe, filters.paoe) &&
+        matchesFilter(row.adj, filters.adj) &&
+        matchesFilter(row.macropolitica, filters.macropolitica) &&
+        matchesFilter(row.pilar, filters.pilar) &&
+        matchesFilter(row.eixo, filters.eixo) &&
+        matchesFilter(row.politica, filters.politica)
       );
 
-      if (isPoliticalMode(filters)) {
+      const political = isPoliticalMode(filters);
+      if (political) {
         const policyMompIds = new Set(politicas.map((row) => row.momp_id));
         momp = momp.filter((row) => policyMompIds.has(row.id));
       }
@@ -17846,12 +17796,19 @@
       const joined = politicas
         .map((row) => ({ ...mompById.get(row.momp_id), ...row, valor: Number(row.valor || 0) }))
         .filter((row) => row.id && mompById.has(row.momp_id));
-      return { momp, politicas, joined, policyMode: isPoliticalMode(filters) };
+      return {
+        momp,
+        politicas,
+        joined,
+        policyMode: political,
+        politicaIndisponivel: political && !existePoliticaNoEscopo,
+      };
     };
 
     const optionValuesFor = (key, data) => {
       const sources = {
         exercicio: () => data.momp.map((row) => row.exercicio),
+        uo: () => data.momp.map((row) => row.uo),
         fonte: () => data.momp.map((row) => row.fonte),
         grupo: () => data.momp.map((row) => row.grupo),
         subgrupo: () => data.momp.map((row) => row.subgrupo),
@@ -17867,44 +17824,75 @@
       return unique(sources[key]?.() || []);
     };
 
+    const setChecklistToggleText = (wrapper, key) => {
+      const toggle = wrapper.querySelector(".planning-action-checklist-toggle");
+      if (!toggle) return;
+      const selected = state.filters[key] || [];
+      if (!selected.length) toggle.textContent = filterEmptyLabels[key] || "Todos";
+      else if (selected.length === 1) toggle.textContent = "1 selecionado";
+      else toggle.textContent = `${selected.length} selecionados`;
+    };
+
     const refreshFilterOptions = () => {
       // Duas passagens estabilizam as listas quando uma combinação deixa
       // alguma seleção anterior sem correspondência.
       for (let pass = 0; pass < 2; pass += 1) {
-        filterEls.forEach((el) => {
+        filterWrappers.forEach((el) => {
           const key = el.dataset.filter;
-          const current = clean(state.filters[key] ?? el.value);
-          const candidateFilters = { ...state.filters, [key]: "" };
+          const current = state.filters[key] || [];
+          const candidateFilters = { ...state.filters, [key]: [] };
           const values = optionValuesFor(key, filteredData(candidateFilters));
-          el.innerHTML = `<option value="">${escapeHtml(filterEmptyLabels[key] || "Todos")}</option>`;
-          values.forEach((value) => {
-            const option = document.createElement("option");
-            option.value = value;
-            option.textContent = value;
-            el.appendChild(option);
-          });
-          if (current && values.includes(current)) {
-            el.value = current;
-            state.filters[key] = current;
-          } else {
-            el.value = "";
-            state.filters[key] = "";
+          const survivors = current.filter((value) => values.includes(value));
+          const optionsEl = el.querySelector(".planning-action-checklist-options");
+          if (optionsEl) {
+            optionsEl.innerHTML = values
+              .map(
+                (value) => `
+                  <label class="planning-action-checklist-option">
+                    <input type="checkbox" value="${escapeHtml(value)}" ${survivors.includes(value) ? "checked" : ""} />
+                    <span>${escapeHtml(value)}</span>
+                  </label>
+                `
+              )
+              .join("");
           }
+          state.filters[key] = survivors;
+          setChecklistToggleText(el, key);
         });
       }
+    };
+
+    const removeFilterValue = (key, value) => {
+      const wrapper = root.querySelector(`.teto-multi-filter[data-filter="${key}"]`);
+      if (!wrapper) return;
+      const checkbox = Array.from(
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]')
+      ).find((input) => input.value === value);
+      if (checkbox) checkbox.checked = false;
+      render();
     };
 
     const renderActiveFilters = () => {
       if (!activeFiltersEl) return;
       const labels = {
-        exercicio: "Exercício", regiao: "Região", subfuncao: "Subfunção", grupo: "Grupo",
+        exercicio: "Exercício", uo: "UO", regiao: "Região", subfuncao: "Subfunção", grupo: "Grupo",
         subgrupo: "Tipificação", paoe: "PAOE", fonte: "Fonte", adj: "ADJ",
         macropolitica: "Macropolítica", pilar: "Pilar", eixo: "Eixo", politica: "Política",
       };
-      activeFiltersEl.innerHTML = Object.entries(state.filters)
-        .filter(([, value]) => value)
-        .map(([key, value]) => `<span class="teto-filter-chip">${escapeHtml(labels[key])}: ${escapeHtml(value)}</span>`)
+      const chips = [];
+      Object.entries(state.filters).forEach(([key, values]) => {
+        (values || []).forEach((value) => chips.push({ key, value }));
+      });
+      activeFiltersEl.innerHTML = chips
+        .map(
+          ({ key, value }, index) =>
+            `<button type="button" class="teto-filter-chip" data-chip-index="${index}" title="Remover filtro">${escapeHtml(labels[key] || key)}: ${escapeHtml(value)} ✕</button>`
+        )
         .join("");
+      activeFiltersEl.querySelectorAll("[data-chip-index]").forEach((btn) => {
+        const chip = chips[Number(btn.dataset.chipIndex)];
+        if (chip) btn.addEventListener("click", () => removeFilterValue(chip.key, chip.value));
+      });
     };
 
     const emptyPlot = (id, message) => {
@@ -17924,14 +17912,15 @@
       el.on("plotly_click", (event) => {
         const point = event?.points?.[0];
         const value = clean(valueResolver(point));
-        const select = root.querySelector(`[data-filter="${key}"]`);
-        if (!value || !select) return;
-        const option = Array.from(select.options).find((item) => item.value === value);
-        if (!option) return;
-        readFilters();
-        const nextValue = state.filters[key] === value ? "" : value;
-        select.value = nextValue;
-        state.filters[key] = nextValue;
+        const wrapper = root.querySelector(`.teto-multi-filter[data-filter="${key}"]`);
+        if (!value || !wrapper) return;
+        const checkbox = Array.from(
+          wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]')
+        ).find((input) => input.value === value);
+        if (!checkbox) return;
+        // Clique no grafico adiciona/remove esse valor da selecao (mesma
+        // semantica de marcar/desmarcar o checkbox correspondente).
+        checkbox.checked = !checkbox.checked;
         window.clearTimeout(chartFilterTimer);
         chartFilterTimer = window.setTimeout(() => render(), 0);
       });
@@ -17965,7 +17954,7 @@
       } else {
         Plotly.react(groupEl, [{
           type: "pie",
-          labels: byGroup.map((row) => row.label),
+          labels: byGroup.map((row) => displayGrupo(row.label)),
           values: byGroup.map((row) => row.valor),
           customdata: byGroup.map((row) => row.label),
           hovertext: byGroup.map((row) => money.format(row.valor)),
@@ -18087,7 +18076,7 @@
           marker: {
             color: chartColors.groupColors[codeOf(group)] || chartColors.palette[index % chartColors.palette.length],
           },
-          hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(group)}<br>R$ %{y:,.2f}<extra></extra>`,
+          hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(displayGrupo(group))}<br>R$ %{y:,.2f}<extra></extra>`,
         }));
         traces.push({
           type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
@@ -18122,72 +18111,418 @@
       }).join("");
     };
 
+    const renderGroupSummary = (base, total) => {
+      const legendEl = document.getElementById("teto-group-legend");
+      const stackEl = document.getElementById("teto-group-stack");
+      const cardsEl = document.getElementById("teto-group-cards");
+      if (!legendEl || !stackEl || !cardsEl) return;
+      const groups = groupSum(base, "grupo");
+      if (!groups.length || !total) {
+        legendEl.innerHTML = "";
+        stackEl.innerHTML = "";
+        cardsEl.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      // Mesma paleta fixa de groupColors usada no grafico de pizza (aba
+      // Graficos) - o grupo de despesa tem sempre a mesma cor no app inteiro.
+      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+
+      legendEl.innerHTML = groups
+        .map(
+          (group, index) =>
+            `<span><i class="dot" style="background:${colorFor(group.label, index)}"></i>${escapeHtml(displayGrupo(group.label))}</span>`
+        )
+        .join("");
+
+      stackEl.innerHTML = groups
+        .map((group, index) => {
+          const pct = total ? (group.valor / total) * 100 : 0;
+          const gap = index > 0 ? '<div class="teto-group-gap"></div>' : "";
+          return `${gap}<div style="width:${pct}%;background:${colorFor(group.label, index)}" title="${escapeHtml(displayGrupo(group.label))}: ${money.format(group.valor)}"></div>`;
+        })
+        .join("");
+
+      cardsEl.innerHTML = groups
+        .map((group, index) => {
+          const color = colorFor(group.label, index);
+          return `
+            <div class="teto-group-card">
+              <div class="name"><i class="dot" style="background:${color}"></i>${escapeHtml(displayGrupo(group.label))}</div>
+              <div class="value">${money.format(group.valor)}</div>
+              <div class="pct">${percent(group.valor, total)} do teto geral</div>
+            </div>`;
+        })
+        .join("");
+    };
+
+    const renderFonteRank = (base, total) => {
+      const el = document.getElementById("teto-fonte-rank");
+      if (!el) return;
+      const rows = groupSum(base, "fonte");
+      if (!rows.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      const max = rows[0].valor;
+      const rowsHtml = rows
+        .map((row) => {
+          const name = row.label.includes(" - ") ? row.label.split(" - ").slice(1).join(" - ") : "";
+          const width = max ? Math.max(3, (row.valor / max) * 100) : 3;
+          return `
+            <div class="teto-rank-row" title="${escapeHtml(row.label)}">
+              <div class="teto-rank-id">
+                <div class="teto-rank-code">${escapeHtml(codeOf(row.label))}</div>
+                <div class="teto-rank-name">${escapeHtml(name)}</div>
+              </div>
+              <div class="teto-rank-track"><div class="teto-rank-fill" style="width:${width}%"></div></div>
+              <div class="teto-rank-val">${money.format(row.valor)}<span class="teto-rank-pct">${percent(row.valor, total)}</span></div>
+            </div>`;
+        })
+        .join("");
+      const totalHtml = `
+        <div class="teto-rank-row teto-rank-total">
+          <div class="teto-rank-id"><div class="teto-rank-name">Total</div></div>
+          <div class="teto-rank-track"><div class="teto-rank-fill teto-rank-fill-total" style="width:100%"></div></div>
+          <div class="teto-rank-val">${money.format(total)}<span class="teto-rank-pct">100,00%</span></div>
+        </div>`;
+      el.innerHTML = rowsHtml + totalHtml;
+    };
+
+    const renderGrupoRank = (base, total) => {
+      const el = document.getElementById("teto-grupo-rank");
+      if (!el) return;
+      const groups = groupSum(base, "grupo");
+      if (!groups.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      // Mesma escala (maior grupo) para grupo e tipificacao, e mesma cor de
+      // groupColors do grupo-pai nas sub-linhas (mais clara via opacidade) -
+      // reforca visualmente a hierarquia grupo -> tipificacao.
+      const max = groups[0].valor;
+      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const nameOf = (label) => (label.includes(" - ") ? label.split(" - ").slice(1).join(" - ") : label);
+
+      const rankRow = (label, valor, color, isChild) => {
+        const width = max ? Math.max(3, (valor / max) * 100) : 3;
+        const displayLabel = displayGrupo(label);
+        return `
+          <div class="teto-rank-row${isChild ? " teto-rank-child" : ""}" title="${escapeHtml(displayLabel)}">
+            <div class="teto-rank-id">
+              <div class="teto-rank-code">${escapeHtml(codeOf(displayLabel))}</div>
+              <div class="teto-rank-name">${escapeHtml(nameOf(displayLabel))}</div>
+            </div>
+            <div class="teto-rank-track"><div class="teto-rank-fill" style="width:${width}%;background:${color}"></div></div>
+            <div class="teto-rank-val">${money.format(valor)}<span class="teto-rank-pct">${percent(valor, total)}</span></div>
+          </div>`;
+      };
+
+      const rowsHtml = groups
+        .map((group, index) => {
+          const color = colorFor(group.label, index);
+          const groupRowHtml = rankRow(group.label, group.valor, color, false);
+          const subgroupsHtml = groupSum(base.filter((row) => clean(row.grupo) === group.label), "subgrupo")
+            .map((subgroup) => rankRow(subgroup.label, subgroup.valor, color, true))
+            .join("");
+          return groupRowHtml + subgroupsHtml;
+        })
+        .join("");
+
+      const totalHtml = `
+        <div class="teto-rank-row teto-rank-total">
+          <div class="teto-rank-id"><div class="teto-rank-name">Total</div></div>
+          <div class="teto-rank-track"><div class="teto-rank-fill teto-rank-fill-total" style="width:100%"></div></div>
+          <div class="teto-rank-val">${money.format(total)}<span class="teto-rank-pct">100,00%</span></div>
+        </div>`;
+      el.innerHTML = rowsHtml + totalHtml;
+    };
+
     const renderTables = (data) => {
       const base = data.policyMode ? data.joined : data.momp;
       const total = sum(base);
-      const sourceRows = groupSum(base, "fonte").map((row) => ({
-        cells: [codeOf(row.label), money.format(row.valor), percent(row.valor, total)],
-      }));
-      sourceRows.push({ total: true, cells: ["Total Geral", money.format(total), total ? "100,00%" : "-"] });
-      renderTable("teto-table-fonte", sourceRows);
+      renderGroupSummary(base, total);
+      renderGrupo1PorFontes();
+      renderGrupoTotal(base);
+      renderFonteRank(base, total);
+      renderGrupoRank(base, total);
 
-      const groupRows = [];
-      groupSum(base, "grupo").forEach((group) => {
-        groupRows.push({ cells: [group.label, money.format(group.valor), percent(group.valor, total)] });
-        groupSum(base.filter((row) => clean(row.grupo) === group.label), "subgrupo").forEach((subgroup) => {
-          groupRows.push({ child: true, cells: [`↳ ${subgroup.label}`, money.format(subgroup.valor), percent(subgroup.valor, total)] });
+      renderFonteGrupo(base, total);
+      renderQomp(base, total);
+    };
+
+    // Renderiza o card "Grupo x exercicio" (sem coluna Fonte) - mesmo
+    // esqueleto usado pelo "Grupo por Teto Total" (todas as fontes) e pelo
+    // "Grupo 1 por Fontes" (fontes fixas), num helper unico pra nao
+    // duplicar a logica entre os dois.
+    const renderGrupoOnlyCard = (elId, base) => {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const total = sum(base);
+      const years = unique(base.map((row) => row.exercicio));
+      if (!years.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
+      const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
+
+      const deltaChip = (curr, prevValue) => {
+        if (prevValue === null) return '<div class="teto-qomp-delta-placeholder"></div>';
+        if (!prevValue) return '<span class="teto-qomp-delta flat">—</span>';
+        const change = (curr - prevValue) / prevValue;
+        if (Math.abs(change) < 0.0005) return '<span class="teto-qomp-delta flat">= 0,00%</span>';
+        const cls = change > 0 ? "up" : "down";
+        const arrow = change > 0 ? "▲" : "▼";
+        return `<span class="teto-qomp-delta ${cls}">${arrow} ${pctChange(change)}</span>`;
+      };
+
+      const yearCell = (value, max, prevValue, tooltip) => {
+        const width = max ? Math.max(3, (value / max) * 100) : 3;
+        return `
+          <div class="teto-qomp-cell teto-qomp-year-cell" title="${escapeHtml(tooltip)}">
+            <div class="teto-qomp-value">${money.format(value)}</div>
+            <div class="teto-qomp-track"><div class="teto-qomp-fill" style="width:${width}%"></div></div>
+            <div class="teto-qomp-delta-row">${deltaChip(value, prevValue)}</div>
+          </div>`;
+      };
+
+      const totalsByYear = Object.fromEntries(years.map((year) => [year, sumByYear(base, year)]));
+      let html = `<div class="teto-qomp-row teto-qomp-head" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-head-label">Grupo de despesa</div>
+        ${years.map((year) => `
+          <div class="teto-qomp-cell teto-qomp-year-head" title="Total geral - ${escapeHtml(year)}">
+            <div class="yr">${escapeHtml(year)}</div>
+            <div class="yr-total">${money.format(totalsByYear[year])}</div>
+          </div>`).join("")}
+      </div>`;
+
+      const groups = groupSum(base, "grupo");
+      groups.forEach((group, gi) => {
+        const groupRows = base.filter((row) => clean(row.grupo) === group.label);
+        const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
+        const altClass = gi % 2 === 1 ? " fonte-alt" : "";
+        html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
+          <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
+          ${years.map((year, yi) => {
+            const prevYear = yi > 0 ? years[yi - 1] : null;
+            const value = sumByYear(groupRows, year);
+            const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
+            return yearCell(value, groupMax, prevValue, `${displayGrupo(group.label)} - ${year}`);
+          }).join("")}
+        </div>`;
+      });
+
+      // Com um so grupo, a linha "Total Geral" seria identica a unica
+      // linha de dado - so faz sentido mostrar o total quando ha mais de
+      // um grupo pra somar.
+      if (groups.length > 1) {
+        const totalMax = Math.max(0, ...years.map((year) => totalsByYear[year]));
+        html += `<div class="teto-qomp-row total" style="--qomp-n-anos:${years.length}">
+          <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">Total Geral</div>
+          ${years.map((year, yi) => {
+            const prevYear = yi > 0 ? years[yi - 1] : null;
+            const value = totalsByYear[year];
+            const prevValue = prevYear != null ? totalsByYear[prevYear] : null;
+            return yearCell(value, totalMax, prevValue, `Total geral - ${year}`);
+          }).join("")}
+        </div>`;
+      }
+
+      el.innerHTML = html;
+    };
+
+    const renderGrupoTotal = (base) => renderGrupoOnlyCard("teto-table-grupo-total", base);
+
+    // Card "Grupo 1 por Fontes": mesmo estilo/colunas do "Grupo por Teto
+    // Total", mas com um filtro de fonte FIXO (nao o filtro "Fonte" do
+    // dashboard) - sempre mostra so estas 5 fontes, quaisquer que sejam os
+    // demais filtros ativos (exercicio, regiao etc. continuam se aplicando
+    // normalmente) - e restrito so ao grupo "1 - Pessoal e Encargos
+    // Sociais" (sem 3 - Outras Despesas Correntes / 4 - Investimentos).
+    const GRUPO1_FONTES_FIXAS = ["15000000", "15001001", "15010100", "15400000", "15401070"];
+    const renderGrupo1PorFontes = () => {
+      const scopedData = filteredData({ ...state.filters, fonte: [] });
+      const scopedBase = (scopedData.policyMode ? scopedData.joined : scopedData.momp)
+        .filter((row) => GRUPO1_FONTES_FIXAS.includes(codeOf(row.fonte)) && codeOf(row.grupo) === "1");
+      renderGrupoOnlyCard("teto-table-grupo1-fontes", scopedBase);
+    };
+
+    // Card "Quadro comparativo de Fonte/Grupo": mesmo estilo/regra do QOMP
+    // (uma coluna por exercicio do filtro, sem limite de 3), mas so ate o
+    // nivel de Grupo de despesa - sem a linha de Tipificacao.
+    const renderFonteGrupo = (base, total) => {
+      const el = document.getElementById("teto-table-fonte-grupo");
+      if (!el) return;
+      const years = unique(base.map((row) => row.exercicio));
+      if (!years.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
+      const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
+
+      const deltaChip = (curr, prevValue) => {
+        if (prevValue === null) return '<div class="teto-qomp-delta-placeholder"></div>';
+        if (!prevValue) return '<span class="teto-qomp-delta flat">—</span>';
+        const change = (curr - prevValue) / prevValue;
+        if (Math.abs(change) < 0.0005) return '<span class="teto-qomp-delta flat">= 0,00%</span>';
+        const cls = change > 0 ? "up" : "down";
+        const arrow = change > 0 ? "▲" : "▼";
+        return `<span class="teto-qomp-delta ${cls}">${arrow} ${pctChange(change)}</span>`;
+      };
+
+      const yearCell = (value, max, prevValue, tooltip) => {
+        const width = max ? Math.max(3, (value / max) * 100) : 3;
+        return `
+          <div class="teto-qomp-cell teto-qomp-year-cell" title="${escapeHtml(tooltip)}">
+            <div class="teto-qomp-value">${money.format(value)}</div>
+            <div class="teto-qomp-track"><div class="teto-qomp-fill" style="width:${width}%"></div></div>
+            <div class="teto-qomp-delta-row">${deltaChip(value, prevValue)}</div>
+          </div>`;
+      };
+
+      const totalsByYear = Object.fromEntries(years.map((year) => [year, sumByYear(base, year)]));
+      let html = `<div class="teto-qomp-row teto-qomp-head" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-head-label">Fonte</div>
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-head-label">Grupo de despesa</div>
+        ${years.map((year) => `
+          <div class="teto-qomp-cell teto-qomp-year-head" title="Total geral - ${escapeHtml(year)}">
+            <div class="yr">${escapeHtml(year)}</div>
+            <div class="yr-total">${money.format(totalsByYear[year])}</div>
+          </div>`).join("")}
+      </div>`;
+
+      groupSum(base, "fonte").forEach((fonteRow, fi) => {
+        const fonteRows = base.filter((row) => clean(row.fonte) === fonteRow.label);
+        const fonteCode = codeOf(fonteRow.label);
+        const altClass = fi % 2 === 1 ? " fonte-alt" : "";
+        groupSum(fonteRows, "grupo").forEach((group, gi) => {
+          const groupRows = fonteRows.filter((row) => clean(row.grupo) === group.label);
+          const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
+          html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
+            <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-fonte-code">${gi === 0 ? escapeHtml(fonteCode) : ""}</div>
+            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
+            ${years.map((year, yi) => {
+              const prevYear = yi > 0 ? years[yi - 1] : null;
+              const value = sumByYear(groupRows, year);
+              const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
+              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} - ${year}`);
+            }).join("")}
+          </div>`;
         });
       });
-      groupRows.push({ total: true, cells: ["Total Geral", money.format(total), total ? "100,00%" : "-"] });
-      renderTable("teto-table-grupo", groupRows);
 
-      const years = unique(base.map((row) => row.exercicio)).slice(0, 3);
-      const qompHead = document.querySelector("#teto-table-qomp thead");
-      const qompBody = document.querySelector("#teto-table-qomp tbody");
-      if (!qompHead || !qompBody) return;
-      qompHead.innerHTML = `<tr><th>Fonte</th><th>Grupo de despesa / Tipificação</th>${years
-        .map((year) => `<th class="teto-qomp-value-col">Teto anual (${escapeHtml(year)})</th><th>Perc. (%) (${escapeHtml(year)})</th>`).join("")}</tr>`;
-      const totalsByYear = Object.fromEntries(years.map((year) => [year, sum(base.filter((row) => row.exercicio === year))]));
-      const qompRows = [];
-      unique(base.map((row) => row.fonte)).forEach((fonte) => {
-        const sourceBase = base.filter((row) => row.fonte === fonte);
-        unique(sourceBase.map((row) => row.grupo)).forEach((grupo) => {
-          const groupBase = sourceBase.filter((row) => row.grupo === grupo);
-          qompRows.push({
-            source: true,
-            cells: [codeOf(fonte), grupo, ...years.flatMap((year) => {
-              const value = sum(groupBase.filter((row) => row.exercicio === year));
-              return [money.format(value), percent(value, totalsByYear[year])];
-            })],
-          });
-          unique(groupBase.map((row) => row.subgrupo)).forEach((subgrupo) => {
-            const subgroupBase = groupBase.filter((row) => row.subgrupo === subgrupo);
-            qompRows.push({
-              child: true,
-              cells: ["", `↳ ${subgrupo}`, ...years.flatMap((year) => {
-                const value = sum(subgroupBase.filter((row) => row.exercicio === year));
-                return [money.format(value), percent(value, totalsByYear[year])];
-              })],
-            });
+      const totalMax = Math.max(0, ...years.map((year) => totalsByYear[year]));
+      html += `<div class="teto-qomp-row total" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-fonte"></div>
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">Total Geral</div>
+        ${years.map((year, yi) => {
+          const prevYear = yi > 0 ? years[yi - 1] : null;
+          const value = totalsByYear[year];
+          const prevValue = prevYear != null ? totalsByYear[prevYear] : null;
+          return yearCell(value, totalMax, prevValue, `Total geral - ${year}`);
+        }).join("")}
+      </div>`;
+
+      el.innerHTML = html;
+    };
+
+    // Card QOMP: uma coluna por exercicio presente no filtro (sem limite de
+    // 3 anos - se o usuario nao filtrar exercicio nenhum, mostra todos os
+    // exercicios existentes na base). Fonte -> Grupo -> Tipificacao, na
+    // mesma hierarquia/ordenacao (maior total primeiro) e mesmas cores de
+    // groupColors do card "Teto por grupo e tipificacao da despesa".
+    const renderQomp = (base, total) => {
+      const el = document.getElementById("teto-table-qomp");
+      if (!el) return;
+      const years = unique(base.map((row) => row.exercicio));
+      if (!years.length || !total) {
+        el.innerHTML = '<div class="muted">Sem dados para o período/filtro selecionado.</div>';
+        return;
+      }
+      const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
+      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
+
+      const deltaChip = (curr, prevValue) => {
+        if (prevValue === null) return '<div class="teto-qomp-delta-placeholder"></div>';
+        if (!prevValue) return '<span class="teto-qomp-delta flat">—</span>';
+        const change = (curr - prevValue) / prevValue;
+        if (Math.abs(change) < 0.0005) return '<span class="teto-qomp-delta flat">= 0,00%</span>';
+        const cls = change > 0 ? "up" : "down";
+        const arrow = change > 0 ? "▲" : "▼";
+        return `<span class="teto-qomp-delta ${cls}">${arrow} ${pctChange(change)}</span>`;
+      };
+
+      const yearCell = (value, max, prevValue, tooltip) => {
+        const width = max ? Math.max(3, (value / max) * 100) : 3;
+        return `
+          <div class="teto-qomp-cell teto-qomp-year-cell" title="${escapeHtml(tooltip)}">
+            <div class="teto-qomp-value">${money.format(value)}</div>
+            <div class="teto-qomp-track"><div class="teto-qomp-fill" style="width:${width}%"></div></div>
+            <div class="teto-qomp-delta-row">${deltaChip(value, prevValue)}</div>
+          </div>`;
+      };
+
+      const totalsByYear = Object.fromEntries(years.map((year) => [year, sumByYear(base, year)]));
+      let html = `<div class="teto-qomp-row teto-qomp-head" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-head-label">Fonte</div>
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-head-label">Grupo de despesa / Tipificação</div>
+        ${years.map((year) => `
+          <div class="teto-qomp-cell teto-qomp-year-head" title="Total geral - ${escapeHtml(year)}">
+            <div class="yr">${escapeHtml(year)}</div>
+            <div class="yr-total">${money.format(totalsByYear[year])}</div>
+          </div>`).join("")}
+      </div>`;
+
+      groupSum(base, "fonte").forEach((fonteRow, fi) => {
+        const fonteRows = base.filter((row) => clean(row.fonte) === fonteRow.label);
+        const fonteCode = codeOf(fonteRow.label);
+        const altClass = fi % 2 === 1 ? " fonte-alt" : "";
+        groupSum(fonteRows, "grupo").forEach((group, gi) => {
+          const groupRows = fonteRows.filter((row) => clean(row.grupo) === group.label);
+          const groupMax = Math.max(0, ...years.map((year) => sumByYear(groupRows, year)));
+          html += `<div class="teto-qomp-row${altClass}" style="--qomp-n-anos:${years.length}">
+            <div class="teto-qomp-cell teto-qomp-col-fonte teto-qomp-fonte-code">${gi === 0 ? escapeHtml(fonteCode) : ""}</div>
+            <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">${escapeHtml(displayGrupo(group.label))}</div>
+            ${years.map((year, yi) => {
+              const prevYear = yi > 0 ? years[yi - 1] : null;
+              const value = sumByYear(groupRows, year);
+              const prevValue = prevYear != null ? sumByYear(groupRows, prevYear) : null;
+              return yearCell(value, groupMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} - ${year}`);
+            }).join("")}
+          </div>`;
+
+          groupSum(groupRows, "subgrupo").forEach((subgroup) => {
+            const subRows = groupRows.filter((row) => clean(row.subgrupo) === subgroup.label);
+            const subMax = Math.max(0, ...years.map((year) => sumByYear(subRows, year)));
+            html += `<div class="teto-qomp-row child${altClass}" style="--qomp-n-anos:${years.length}">
+              <div class="teto-qomp-cell teto-qomp-col-fonte"></div>
+              <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">↳ ${escapeHtml(subgroup.label)}</div>
+              ${years.map((year, yi) => {
+                const prevYear = yi > 0 ? years[yi - 1] : null;
+                const value = sumByYear(subRows, year);
+                const prevValue = prevYear != null ? sumByYear(subRows, prevYear) : null;
+                return yearCell(value, subMax, prevValue, `${fonteCode} · ${displayGrupo(group.label)} · ${subgroup.label} - ${year}`);
+              }).join("")}
+            </div>`;
           });
         });
       });
-      qompRows.push({
-        total: true,
-        cells: ["", "Total Geral", ...years.flatMap((year) => [money.format(totalsByYear[year]), totalsByYear[year] ? "100,00%" : "-"])],
-      });
-      qompBody.innerHTML = qompRows.map((row) => {
-        const rowClass = row.total
-          ? "teto-row-total"
-          : row.child
-            ? "teto-row-child"
-            : row.source
-              ? "teto-row-source"
-              : "";
-        return `<tr class="${rowClass}">${row.cells.map((cell, index) =>
-          `<td${index >= 2 && index % 2 === 0 ? ' class="teto-qomp-value-col"' : ""}>${escapeHtml(cell)}</td>`
-        ).join("")}</tr>`;
-      }).join("");
+
+      const totalMax = Math.max(0, ...years.map((year) => totalsByYear[year]));
+      html += `<div class="teto-qomp-row total" style="--qomp-n-anos:${years.length}">
+        <div class="teto-qomp-cell teto-qomp-col-fonte"></div>
+        <div class="teto-qomp-cell teto-qomp-col-grupo teto-qomp-grupo-name">Total Geral</div>
+        ${years.map((year, yi) => {
+          const prevYear = yi > 0 ? years[yi - 1] : null;
+          const value = totalsByYear[year];
+          const prevValue = prevYear != null ? totalsByYear[prevYear] : null;
+          return yearCell(value, totalMax, prevValue, `Total geral - ${year}`);
+        }).join("")}
+      </div>`;
+
+      el.innerHTML = html;
     };
 
     const render = () => {
@@ -18198,6 +18533,18 @@
       renderKpis(data);
       renderCharts(data);
       renderTables(data);
+      if (politicalWarningEl) {
+        if (data.politicaIndisponivel) {
+          const exercicioTexto = state.filters.exercicio
+            ? `para o exercício ${escapeHtml(state.filters.exercicio)}`
+            : "para os registros selecionados";
+          politicalWarningEl.innerHTML = `<div class="alert alert-info">O relatório Plan 134 (política orçamentária) ainda não foi carregado ${exercicioTexto}. Os filtros de Região, Subfunção, ADJ, Macropolítica, Pilar, Eixo, Política do decreto e Ação/PAOE não têm dados para aplicar até esse relatório ser carregado em "Atualizar → Teto - SEDUC".</div>`;
+          politicalWarningEl.hidden = false;
+        } else {
+          politicalWarningEl.hidden = true;
+          politicalWarningEl.innerHTML = "";
+        }
+      }
       const valueRows = data.policyMode ? data.joined.length : data.momp.length;
       setStatus(`${number.format(valueRows)} registros considerados. Base monetária: ${data.policyMode ? "políticas orçamentárias" : "MOMP"}.`);
     };
@@ -18223,9 +18570,51 @@
       }
     };
 
-    filterEls.forEach((el) => el.addEventListener("change", render));
+    const closeAllChecklistPanels = () => {
+      filterWrappers.forEach((wrapper) => {
+        const panel = wrapper.querySelector(".planning-action-checklist-panel");
+        if (panel) panel.hidden = true;
+      });
+    };
+
+    const initTetoChecklistFilter = (wrapper) => {
+      const toggle = wrapper.querySelector(".planning-action-checklist-toggle");
+      const panel = wrapper.querySelector(".planning-action-checklist-panel");
+      const optionsEl = wrapper.querySelector(".planning-action-checklist-options");
+      if (!toggle || !panel || !optionsEl) return;
+
+      toggle.addEventListener("click", () => {
+        const willOpen = panel.hidden;
+        closeAllChecklistPanels();
+        panel.hidden = !willOpen;
+      });
+      optionsEl.addEventListener("change", (event) => {
+        if (event.target?.type !== "checkbox") return;
+        render();
+      });
+      wrapper.querySelector("[data-select-all]")?.addEventListener("click", () => {
+        optionsEl.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = true; });
+        render();
+      });
+      wrapper.querySelector("[data-select-none]")?.addEventListener("click", () => {
+        optionsEl.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = false; });
+        render();
+      });
+    };
+
+    filterWrappers.forEach(initTetoChecklistFilter);
+    document.addEventListener("click", (event) => {
+      const insideAnyWrapper = filterWrappers.some((wrapper) => wrapper.contains(event.target));
+      if (!insideAnyWrapper) closeAllChecklistPanels();
+    });
+
     document.getElementById("teto-dashboard-clear")?.addEventListener("click", () => {
-      filterEls.forEach((el) => { el.value = ""; });
+      filterWrappers.forEach((wrapper) => {
+        wrapper.querySelectorAll('.planning-action-checklist-options input[type="checkbox"]').forEach((input) => {
+          input.checked = false;
+        });
+      });
+      closeAllChecklistPanels();
       render();
     });
     document.getElementById("teto-dashboard-refresh")?.addEventListener("click", load);

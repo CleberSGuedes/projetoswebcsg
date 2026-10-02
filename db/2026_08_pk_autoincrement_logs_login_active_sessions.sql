@@ -1,0 +1,16 @@
+-- Contexto: o codigo Python (app.py, rotas/auth_routes.py, rotas/home_routes.py)
+-- gerava manualmente o id de logs_login, active_sessions e perfil via
+-- "SELECT MAX(id)+1", ignorando o AUTO_INCREMENT nativo do MySQL - o que
+-- causava uma condicao de corrida entre inserts concorrentes (ex.: dois
+-- logins quase simultaneos podiam calcular o mesmo proximo id).
+--
+-- Verificacao feita em 2026-08-31 (SHOW CREATE TABLE no banco remoto) mostrou
+-- que as tres colunas ja sao AUTO_INCREMENT nativamente:
+--   logs_login.id       -> bigint(20) AUTO_INCREMENT (AUTO_INCREMENT=1200)
+--   active_sessions.id  -> bigint(20) AUTO_INCREMENT (AUTO_INCREMENT=216)
+--   perfil.id           -> int(11)    AUTO_INCREMENT (AUTO_INCREMENT=12)
+--
+-- Ou seja, NENHUM ALTER TABLE foi necessario - o banco ja estava correto.
+-- A correcao foi inteiramente no codigo Python: parar de enviar "id="
+-- explicito nesses INSERTs e deixar o MySQL gerar o proximo valor sozinho.
+-- Este arquivo fica apenas como registro da investigacao/decisao.
