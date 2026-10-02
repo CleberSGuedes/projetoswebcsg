@@ -13,19 +13,37 @@ from typing import Any
 import pandas as pd
 from openpyxl.styles import Font
 
+from services.uo import UOS_ACEITAS, uo_key as _uo_key
+
 # ----------------------------
 # CONFIG / CONSTANTES
 # ----------------------------
 EXTR_HEADERS = [
     "Exercício",
+    # Bloco de capa do Programa (layout novo, a partir de 2027 - fica
+    # vazio/"-" em relatorios do layout antigo, que nao tem essas linhas).
+    # "Eixo do Programa" (nao "Eixo") de proposito - ja existe uma coluna
+    # "Eixo" mais abaixo (derivada da Chave de Planejamento, historica,
+    # usada em outras partes do app) e usar o mesmo nome gerava duas
+    # colunas "Eixo" na planilha de saida (docs/claude.md, secao 18).
+    "Eixo do Programa",
+    "Objetivo Estratégico",
     "Programa",
+    "Público Alvo",
+    "Tipo",
     "Função",
     "Unidade Orçamentária",
+    "UO Responsável",
     "Ação (P/A/OE)",
     "Subfunção",
     "Objetivo Específico",
     "Esfera",
     "Responsável pela Ação",
+    # Tabela ODS por Acao (layout novo, a partir de 2027) - fica vazia nas
+    # acoes padronizadas/administrativas (nao tem meta de ODS vinculada).
+    "ODS",
+    "Código Meta (ODS)",
+    "Metas (ODS)",
     "Produto(s) da Ação",
     "Unidade de Medida do Produto",
     "Região do Produto",
@@ -71,7 +89,38 @@ KEYS = {
     "SubacaoEntrega": r"^suba[cç][aã]o(?:\s*[/ ]?entrega)?\b",
     "Etapa": r"^etapa\b",
     "RegiaoPlanejamento": r"^regiao\s*de\s*planejamento\b|^regiao\s*planejamento\b",
+    # Bloco de capa do Programa (layout novo, a partir de 2027) - "Eixo:"
+    # e' o gatilho que sinaliza o inicio de um Programa novo (mais
+    # confiavel que "Programa:", que aparece duas vezes: uma na capa,
+    # outra no bloco real de sempre). Em processar_arquivo(), qualquer
+    # linha nao vazia dentro do estado "k_ativo" e' absorvida sem checar
+    # rotulo (so precisa saber onde comeca/termina a capa); os regex dos
+    # demais rotulos da capa servem pra extrair_dados() interpretar cada
+    # linha depois.
+    "Eixo": r"^eixo\b",
+    "ObjetivoEstrategico": r"^objetivo\s*estrategico\b",
+    "PublicoAlvo": r"^publico\s*alvo\b",
+    "Tipo": r"^tipo\b",
+    "UOResponsavel": r"^uo\s*responsavel\b",
+    "ObjetivoDesenvolvimentoSustentavel": r"^objetivo\s*de\s*desenvolvimento\s*sustentavel\b",
+    # Tabela "ODS | Codigo Meta | Metas" por Acao (layout novo, a partir
+    # de 2027) - fica vazia em acoes padronizadas/administrativas.
+    "ODSTabela": r"^ods\b",
+    # Rotulos do bloco C usados no casamento por texto em extrair_dados()
+    # (antes so por posicao - ver Fix B no docs/claude.md, secao 15).
+    "Funcao": r"^func[aã]o\b",
+    "UnidadeOrcamentaria": r"^unidade\s*or[cç]ament[aá]ria\b",
+    "Subfuncao": r"^subfun[cç][aã]o\b",
+    "ObjetivoEspecifico": r"^objetivo\s*espec[ií]fico\b",
+    "Esfera": r"^esfera\b",
+    "ResponsavelPelaAcao": r"^respons[aá]vel\s*pela\s*a[cç][aã]o\b",
 }
+
+# Unidades Orçamentárias da SEDUC aceitas na aba Plan20_SEDUC (e, por
+# extensão, no que é gravado no banco) - comparado só pelo código
+# numérico via _uo_key(), não pelo texto completo (ver docs/claude.md,
+# seção 14). A lista vive em services/uo.py, compartilhada com o
+# Teto-SEDUC - uma UO nova da secretaria precisa ser adicionada lá.
 
 NORMALIZA_MAP = {
     "á": "a",
@@ -203,6 +252,29 @@ def processar_arquivo(caminho_arquivo: Path, a_contador_inicial: int = 1) -> tup
         chave_G_atual = None
         chave_H_atual = None
 
+        # ---- Bloco de capa do Programa (layout novo, a partir de 2027) ----
+        # "Eixo:" e' o gatilho: sempre que aparece, um Programa novo esta
+        # comecando de verdade, entao e' o sinal mais confiavel pra fechar
+        # tudo que ainda estivesse pendurado do Programa anterior (D-I e o
+        # proprio C) - sem isso, linhas dessa capa "grudavam" na ultima
+        # Subacao/Produto do Programa anterior (ver docs/claude.md, secao
+        # 14/15). Enquanto k_ativo, toda linha nao-vazia e' absorvida em
+        # K_id, na ordem de chegada; a interpretacao por rotulo (Objetivo
+        # Estrategico/Publico Alvo/Tipo/UO Responsavel/nome do ODS) fica
+        # pra extrair_dados(), que ja tem acesso ao texto de cada linha.
+        contador_K = 0
+        K_id = None
+        k_ativo = False
+        k_programa_visto = False
+
+        # ---- Tabela "ODS | Codigo Meta | Metas" por Acao (layout novo) ----
+        # Fica vazia em acoes padronizadas/administrativas - confirmado
+        # comparando com o texto de "PLANO DE ACAO POR PRODUTO" (docs/
+        # claude.md, secao 15).
+        contador_L = 0
+        L_id = None
+        ods_ativo = False
+
         i = 0
         while i < n:
             row = df.iloc[i, :].tolist()
@@ -220,6 +292,13 @@ def processar_arquivo(caminho_arquivo: Path, a_contador_inicial: int = 1) -> tup
                 c_pend_indices = []
                 c_pend_base = None
                 c_pend_ativo = False
+                # encerra a tabela ODS da Ação, se houver (ela sempre
+                # termina com uma linha em branco - k_ativo/K_id NÃO são
+                # resetados aqui de propósito: o bloco de capa do
+                # Programa atravessa várias linhas em branco antes de
+                # terminar).
+                ods_ativo = False
+                L_id = None
                 i += 1
                 continue
 
@@ -251,6 +330,90 @@ def processar_arquivo(caminho_arquivo: Path, a_contador_inicial: int = 1) -> tup
             eh_subacao = acha(KEYS["SubacaoEntrega"], row_norm)
             eh_etapa = acha(KEYS["Etapa"], row_norm)
             eh_regiao = acha(KEYS["RegiaoPlanejamento"], row_norm)
+            eh_eixo = acha(KEYS["Eixo"], row_norm)
+            eh_ods_tabela = acha(KEYS["ODSTabela"], row_norm)
+
+            # -------------------------
+            # BLOCO DE CAPA DO PROGRAMA (layout novo, a partir de 2027)
+            # -------------------------
+            if eh_eixo:
+                contador_K += 1
+                K_id = f"{A_id}.{B_puro}.K{contador_K}"
+                k_ativo = True
+                k_programa_visto = False
+                sub_count[K_id] = 1
+                ident_col[i] = K_id
+                subid_col[i] = "1"
+                # Um Programa novo esta comecando de verdade - fecha tudo
+                # que ainda estivesse pendurado do Programa anterior, pra
+                # essa capa nunca grudar na ultima Subacao/Produto dele.
+                C_base = None
+                C_id = None
+                c_encerrado = True
+                D_id = E_id = F_id = G_id = H_id = I_id = None
+                N_id = None
+                n_ativo = False
+                cont_D = cont_E = cont_F = cont_G = cont_H = cont_I = 0
+                cont_N = 0
+                PAOE_num = None
+                chave_G_atual = None
+                chave_H_atual = None
+                c_pend_indices = []
+                c_pend_base = None
+                c_pend_ativo = False
+                ods_ativo = False
+                L_id = None
+                i += 1
+                continue
+
+            if k_ativo:
+                if eh_programa:
+                    if not k_programa_visto:
+                        # "Programa:" da propria capa - absorve em K, o
+                        # bloco C real so comeca na 2a ocorrencia.
+                        k_programa_visto = True
+                        sub_count[K_id] = sub_count.get(K_id, 0) + 1
+                        ident_col[i] = K_id
+                        subid_col[i] = str(sub_count[K_id])
+                        i += 1
+                        continue
+                    # 2a ocorrencia de "Programa:" com k_ativo=True: e' o
+                    # bloco real (aquele que sempre teve, com Funcao/UO/
+                    # Acao logo depois). Encerra a capa e cai pro
+                    # tratamento normal de eh_programa mais abaixo -
+                    # sem "continue" aqui, de proposito.
+                    k_ativo = False
+                else:
+                    # Objetivo Estrategico / Publico Alvo / Tipo / UO
+                    # Responsavel / titulo e nome do ODS - absorve em K
+                    # na ordem de chegada; extrair_dados() interpreta
+                    # cada linha pelo proprio rotulo depois.
+                    sub_count[K_id] = sub_count.get(K_id, 0) + 1
+                    ident_col[i] = K_id
+                    subid_col[i] = str(sub_count[K_id])
+                    i += 1
+                    continue
+
+            # -------------------------
+            # TABELA ODS POR AÇÃO (layout novo, a partir de 2027)
+            # -------------------------
+            if eh_ods_tabela:
+                if C_id is not None:
+                    contador_L += 1
+                    L_id = f"{C_id}.L{contador_L}"
+                    ods_ativo = True
+                    sub_count[L_id] = 1
+                    ident_col[i] = L_id
+                    subid_col[i] = "1"
+                i += 1
+                continue
+
+            if ods_ativo and L_id is not None:
+                sub_count[L_id] = sub_count.get(L_id, 0) + 1
+                ident_col[i] = L_id
+                subid_col[i] = str(sub_count[L_id])
+                i += 1
+                continue
 
             if n_ativo and (eh_publico or eh_plano):
                 n_ativo = False
@@ -671,6 +834,13 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         campos.clear()
         acoes.clear()
 
+    # Casamento por rotulo de texto (col_1), nao mais por posicao/sub-id -
+    # o layout 2027 muda a ordem/quantidade de linhas antes de "Ação
+    # (P/A/OE)" (bloco de capa novo intercalado), entao confiar em "a 2a
+    # linha e' Função, a 3a e' UO..." ficou fragil. Cada rotulo reconhecido
+    # vai pro campo certo independente de posicao; linha sem rotulo
+    # reconhecido (nao deveria sobrar nenhuma, mas por seguranca) e'
+    # simplesmente ignorada em vez de embaralhar os demais campos.
     for _, row in c_rows.iterrows():
         cid = row["id"]
         if current_c_id is None:
@@ -678,19 +848,17 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         elif cid != current_c_id:
             flush_current_c()
             current_c_id = cid
-        subid = row["sub-id"]
-        if subid not in {"1", "2", "3", "4", "5", "6", "7", "8"}:
-            continue
         col1 = str(row.get("col_1", "")).strip()
         col4 = str(row.get("col_4", "")).strip()
         val_or_rot = col4 if col4 else col1
-        if subid == "1":
+        col1_norm = normaliza(col1)
+        if acha(KEYS["Programa"], col1_norm):
             campos["Programa"] = val_or_rot
-        elif subid == "2":
+        elif acha(KEYS["Funcao"], col1_norm):
             campos["Função"] = val_or_rot
-        elif subid == "3":
+        elif acha(KEYS["UnidadeOrcamentaria"], col1_norm):
             campos["Unidade Orçamentária"] = val_or_rot
-        elif subid == "4":
+        elif acha(KEYS["Acao"], col1_norm):
             if val_or_rot:
                 digits = re.findall(r"(\d+)", val_or_rot)
                 paoe = None
@@ -703,15 +871,94 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
                 if paoe is None:
                     paoe = val_or_rot.strip()
                 acoes[paoe].append(val_or_rot)
-        elif subid == "5":
+        elif acha(KEYS["Subfuncao"], col1_norm):
             campos["Subfunção"] = val_or_rot
-        elif subid == "6":
+        elif acha(KEYS["ObjetivoEspecifico"], col1_norm):
             campos["Objetivo Específico"] = val_or_rot
-        elif subid == "7":
+        elif acha(KEYS["Esfera"], col1_norm):
             campos["Esfera"] = val_or_rot
-        elif subid == "8":
+        elif acha(KEYS["ResponsavelPelaAcao"], col1_norm):
             campos["Responsável pela Ação"] = val_or_rot
     flush_current_c()
+
+    # 2.1) Bloco de capa do Programa - K (Eixo/Objetivo Estratégico/
+    # Público Alvo/Tipo/UO Responsável). Casado pelo CÓDIGO do Programa
+    # (ex.: "036"), não por "ab" (A.B é o mesmo pra toda a aba/arquivo -
+    # usar "ab" como chave colapsava a capa de todos os Programas numa
+    # só, sempre sobrescrita pela última - bug pego só depois de
+    # conferir os dados reais, não nos testes de campo vazio/preenchido).
+    k_mask = ids_raw["id"].str.match(r"A\d+\.B\d+\.K\d+$")
+    k_rows = ids_raw[k_mask].copy()
+    k_rows["sub-id"] = k_rows["sub-id"].astype(str)
+    k_rows = k_rows.reset_index().sort_values(["id", "index"])
+    capa_por_programa: dict[str, dict[str, str]] = {}
+    for kid, group in k_rows.groupby("id"):
+        capa: dict[str, str] = {}
+        programa_codigo = None
+        for _, row in group.sort_values("index").iterrows():
+            col1 = str(row.get("col_1", "")).strip()
+            col4 = str(row.get("col_4", "")).strip()
+            col1_norm = normaliza(col1)
+            if acha(KEYS["Eixo"], col1_norm):
+                if col4:
+                    capa["Eixo do Programa"] = col4
+            elif acha(KEYS["ObjetivoEstrategico"], col1_norm):
+                if col4:
+                    capa["Objetivo Estratégico"] = col4
+            elif acha(KEYS["PublicoAlvo"], col1_norm):
+                if col4:
+                    capa["Público Alvo"] = col4
+            elif acha(KEYS["Tipo"], col1_norm):
+                if col4:
+                    capa["Tipo"] = col4
+            elif acha(KEYS["UOResponsavel"], col1_norm):
+                if col4:
+                    capa["UO Responsável"] = col4
+            elif acha(KEYS["Programa"], col1_norm):
+                # "Programa:" da própria capa - só serve pra extrair o
+                # código e casar com o mesmo código no bloco C real
+                # (capturado abaixo, item 2); o texto completo já vem do
+                # bloco C real (campos["Programa"]).
+                m_prog = re.search(r"(\d+)", col4)
+                if m_prog:
+                    programa_codigo = m_prog.group(1)
+            # A seção "Objetivo de Desenvolvimento Sustentável" + nome do
+            # ODS (ex.: "Educação de qualidade") é absorvida em K só pra
+            # não contaminar o Programa anterior - o nome do ODS já
+            # aparece de novo, com o detalhamento completo (Código Meta/
+            # Metas), na tabela ODS por Ação (item 2.2 abaixo), que é a
+            # fonte usada nas colunas de saída.
+        if programa_codigo:
+            capa_por_programa[programa_codigo] = capa
+
+    # 2.2) Tabela "ODS | Código Meta | Metas" por Ação - L (chave por
+    # CID = A.B.Cx.PAOE, mesmo nível de "campos"/"acoes" acima). Fica
+    # vazia em ações padronizadas/administrativas (confirmado: nenhuma
+    # ação com "PLANO DE AÇÃO POR PRODUTO: Produto exclusivo para ação
+    # padronizada" tem essa tabela preenchida - docs/claude.md, seção 15).
+    l_mask = ids_raw["id"].str.match(r"A\d+\.B\d+\.C\d+\.\d+\.L\d+$")
+    l_rows = ids_raw[l_mask].copy()
+    l_rows["sub-id"] = l_rows["sub-id"].astype(str)
+    l_rows = l_rows.reset_index()
+    ods_por_cid: dict[str, dict[str, Any]] = {}
+    for lid, group in l_rows.groupby("id"):
+        m = re.match(r"(A\d+\.B\d+\.C\d+\.\d+)\.L\d+$", lid)
+        if not m:
+            continue
+        cid = m.group(1)
+        entry = ods_por_cid.setdefault(cid, {"nome": "", "codigos": [], "metas": []})
+        for _, row in group.sort_values("index").iterrows():
+            if str(row["sub-id"]) == "1":
+                continue  # linha de cabeçalho ("ODS | | | Código Meta | Metas")
+            col1 = str(row.get("col_1", "")).strip()
+            col4 = str(row.get("col_4", "")).strip()
+            col5 = str(row.get("col_5", "")).strip()
+            if col1 and not entry["nome"]:
+                entry["nome"] = col1
+            if col4:
+                entry["codigos"].append(col4)
+            if col5:
+                entry["metas"].append(col5)
 
     # 3) Produtos D (agora D está em A.B.Cx.PAOE.Dn)
     d_mask = ids_raw["id"].str.match(r"A\d+\.B\d+\.C\d+\.\d+\.D\d+$")
@@ -785,9 +1032,23 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         fid = row["id"]
         if fid in produto_por_fid:
             continue
+        c1 = str(row.get("col_1", "")).strip()
         c5 = str(row.get("col_5", "")).strip()
         if c5:
+            # Layout antigo (2026): rótulo ("PLANO DE AÇÃO POR PRODUTO")
+            # numa célula, valor numa coluna separada (col_5).
             produto_por_fid[fid] = _produto_limpo(c5)
+        elif ":" in c1:
+            # Layout novo (2027): rótulo e valor na mesma célula
+            # ("PLANO DE AÇÃO POR PRODUTO: <produto>") - sem isso, o
+            # valor real nunca era lido (col_5 sempre vazia nesse
+            # layout), e produto_por_fid.get(fid, ...) caía sempre no
+            # default "Produto exclusivo para ação padronizada" mesmo
+            # pra ações com produto específico - quebrando o casamento
+            # Produto x Subação (docs/claude.md, seção 16).
+            valor_inline = c1.split(":", 1)[1].strip()
+            if valor_inline:
+                produto_por_fid[fid] = valor_inline
     for fid in f_rows["id"].unique():
         if fid not in produto_por_fid:
             produto_por_fid[fid] = "Produto exclusivo para ação padronizada"
@@ -1046,6 +1307,11 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         campos = info["campos"]
         acoes_dict = info["acoes"]
         exercicio = exercicio_por_ab.get(ab, "")
+        programa_codigo_m = re.match(r"(\d+)", campos.get("Programa", "").strip())
+        capa = capa_por_programa.get(programa_codigo_m.group(1), {}) if programa_codigo_m else {}
+        ods_info = ods_por_cid.get(cid, {})
+        ods_codigo_meta = " * ".join(ods_info.get("codigos", []))
+        ods_metas = " * ".join(ods_info.get("metas", []))
 
         for paoe, lista_textos in acoes_dict.items():
             ac_texto = lista_textos[0] if lista_textos else ""
@@ -1056,14 +1322,22 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
             def _base_from_d(d_escolhido: dict[str, Any] | None) -> dict[str, Any]:
                 base = {
                     "Exercício": exercicio,
+                    "Eixo do Programa": capa.get("Eixo do Programa", ""),
+                    "Objetivo Estratégico": capa.get("Objetivo Estratégico", ""),
                     "Programa": campos.get("Programa", ""),
+                    "Público Alvo": capa.get("Público Alvo", ""),
+                    "Tipo": capa.get("Tipo", ""),
                     "Função": campos.get("Função", ""),
                     "Unidade Orçamentária": campos.get("Unidade Orçamentária", ""),
+                    "UO Responsável": capa.get("UO Responsável", ""),
                     "Ação (P/A/OE)": ac_texto,
                     "Subfunção": campos.get("Subfunção", ""),
                     "Objetivo Específico": campos.get("Objetivo Específico", ""),
                     "Esfera": campos.get("Esfera", ""),
                     "Responsável pela Ação": campos.get("Responsável pela Ação", ""),
+                    "ODS": ods_info.get("nome", ""),
+                    "Código Meta (ODS)": ods_codigo_meta,
+                    "Metas (ODS)": ods_metas,
                     "Público Transversal": publico_str,
                 }
                 if d_escolhido is None:
@@ -1329,9 +1603,13 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
                 base["Valor Total"] = item.get("Valor Total", "")
                 finais.append(base)
 
-    for r in resultados_base:
-        if r.get("_gid") is None:
-            finais.append(dict(r))
+    # Produtos sem nenhuma Subação vinculada (_gid is None - nem "usado"
+    # por uma Subação, nem parte de uma Ação sem Subação nenhuma) ficam
+    # de fora do resultado final: confirmado que essas linhas sempre têm
+    # Valor Total = 0 (não têm Etapa/Item vinculado, então não carregam
+    # nenhuma informação orçamentária) - só poluíam a planilha com uma
+    # linha de metadado sem execução financeira (docs/claude.md, seção
+    # 16, por pedido do usuário conferindo o arquivo real).
 
     for r in finais:
         for k in list(r.keys()):
@@ -1344,6 +1622,14 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
     # PÓS-REGRA: preencher vazios padrão
     # ----------------------------------------
     cols_to_clean = [
+        "Eixo do Programa",
+        "Objetivo Estratégico",
+        "Público Alvo",
+        "Tipo",
+        "UO Responsável",
+        "ODS",
+        "Código Meta (ODS)",
+        "Metas (ODS)",
         "Produto(s) da Ação",
         "Unidade de Medida do Produto",
         "Meta do Produto",
@@ -1372,6 +1658,18 @@ def extrair_dados(ids_raw: pd.DataFrame) -> pd.DataFrame:
         extr_df[col] = extr_df[col].replace({"nan": pd.NA, "<NA>": pd.NA}).replace(r"^\s*$", pd.NA, regex=True)
 
     defaults_text = {
+        "Eixo do Programa": "-",
+        "Objetivo Estratégico": "-",
+        "Público Alvo": "-",
+        "Tipo": "-",
+        "UO Responsável": "-",
+        # Mesma ideia da regra já existente pra Produto (abaixo): confirmado
+        # que ações padronizadas/administrativas não têm ODS vinculado, então
+        # o texto padrão explica o motivo em vez de deixar um "-" seco
+        # (docs/claude.md, seção 15).
+        "ODS": "Ação padronizada - sem ODS vinculado",
+        "Código Meta (ODS)": "Ação padronizada - sem ODS vinculado",
+        "Metas (ODS)": "Ação padronizada - sem ODS vinculado",
         "Produto(s) da Ação": "Produto exclusivo para ação padronizada",
         "Unidade de Medida do Produto": "Percentual",
         "Meta do Produto": "100,00",
@@ -1540,12 +1838,11 @@ def run_plan20(input_file: Path, output_dir: Path) -> Path:
         df_tmp = extr_df_all.copy()
         exercicio_num = pd.to_numeric(df_tmp["Exercício"], errors="coerce")
 
-        mask_uo = (
-            df_tmp["Unidade Orçamentária"]
-            .astype(str)
-            .str.strip()
-            == "14.101 - SECRETARIA DE ESTADO DE EDUCAÇÃO"
-        )
+        # Compara só o código numérico da UO (ignora pontuação) - não o
+        # texto completo, que já mudou de formatação uma vez ("14.101"
+        # -> "14101") e pode mudar de novo (docs/claude.md, seção 14).
+        # Lista de UOs aceitas (não só 14101) - docs/claude.md, seção 17.
+        mask_uo = df_tmp["Unidade Orçamentária"].apply(_uo_key).isin(UOS_ACEITAS)
         mask_exercicio = exercicio_num >= 2025
         plan20_seduc_df = df_tmp[mask_uo & mask_exercicio].copy()
         dbg("Plan20_SEDUC", f"Linhas filtradas (UO+Exercício): {len(plan20_seduc_df)}")
