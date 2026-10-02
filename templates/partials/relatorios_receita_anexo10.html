@@ -1,0 +1,97 @@
+<div class="grid">
+  <header class="report-header"><div class="report-header-copy"><div class="report-eyebrow">Relatórios · Execução</div><h1>Receita Anexo 10</h1><p>Confira os registros extraídos do Anexo 10 e gravados no banco de dados.</p></div><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i></header>
+  <div class="card plan20-card report-data-card">
+    <div class="actions relatorio-top">
+      <div class="muted" id="receita-anexo10-relatorio-meta">Carregando...</div>
+      <div class="relatorio-top-right">
+        <div class="totais-box totais-two-col">
+          <div class="totais-title">Totais (filtros aplicados)</div>
+          <div class="totais-row"><span>Registros:</span> <strong id="receita-anexo10-tot-registros">0</strong></div>
+          <div class="totais-row"><span>Arquivos:</span> <strong id="receita-anexo10-tot-arquivos">0</strong></div>
+          <div class="totais-row"><span>Fontes:</span> <strong id="receita-anexo10-tot-fontes">0</strong></div>
+          <div class="totais-row"><span>Competências:</span> <strong id="receita-anexo10-tot-competencias">-</strong></div>
+          <div class="totais-row"><span>Orçado atualizado:</span> <strong id="receita-anexo10-tot-orcado">0</strong></div>
+          <div class="totais-row"><span>Arrecadada:</span> <strong id="receita-anexo10-tot-arrecadada">0</strong></div>
+          <div class="totais-row"><span>Dif. para mais:</span> <strong id="receita-anexo10-tot-mais">0</strong></div>
+          <div class="totais-row"><span>Dif. para menos:</span> <strong id="receita-anexo10-tot-menos">0</strong></div>
+        </div>
+        <div class="actions report-actions">
+          <button class="btn sm compact" id="receita-anexo10-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+          <button class="btn sm compact" id="receita-anexo10-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+        </div>
+      </div>
+    </div>
+    <div id="receita-anexo10-empty" class="report-empty-state" hidden>Consulta sem resultados.</div>
+    <div class="table-responsive">
+      <table class="table plan20-table" id="receita-anexo10-relatorio-tabela">
+        <thead>
+          <tr>
+            <th>Competência</th>
+            <th>Exercício</th>
+            <th>Mês</th>
+            <th>Fonte</th>
+            <th>Cod.UO</th>
+            <th>UO</th>
+            <th>Tipo Carga</th>
+            <th>Mês Fechado</th>
+            <th>Situação</th>
+            <th>Código Receita</th>
+            <th>Descrição Receita</th>
+            <th>Orçado Atualizado</th>
+            <th>Arrecadada</th>
+            <th>Dif. para Mais</th>
+            <th>Dif. para Menos</th>
+            <th>Arquivo Origem</th>
+            <th>Formato Real</th>
+            <th>Status Arquivo</th>
+            <th>Linha</th>
+            <th>Página</th>
+            <th>Upload</th>
+            <th>Usuário</th>
+            <th>Data do Download</th>
+            <th>Upload em</th>
+          </tr>
+          <tr class="filter-row">
+            <th><div class="multi-filter" data-col="competencia"></div></th>
+            <th><div class="multi-filter" data-col="exercicio"></div></th>
+            <th><div class="multi-filter" data-col="mes"></div></th>
+            <th><div class="multi-filter" data-col="fonte_recurso"></div></th>
+            <th><div class="multi-filter" data-col="cod_uo"></div></th>
+            <th><div class="multi-filter" data-col="uo"></div></th>
+            <th><div class="multi-filter" data-col="tipo_carga"></div></th>
+            <th><div class="multi-filter" data-col="mes_fechado_label"></div></th>
+            <th><div class="multi-filter" data-col="situacao_movimentacao"></div></th>
+            <th><div class="multi-filter" data-col="codigo_receita"></div></th>
+            <th><div class="multi-filter" data-col="descricao_receita"></div></th>
+            <th><div class="multi-filter" data-col="orcado_atualizado"></div></th>
+            <th><div class="multi-filter" data-col="arrecadada"></div></th>
+            <th><div class="multi-filter" data-col="diferenca_para_mais"></div></th>
+            <th><div class="multi-filter" data-col="diferenca_para_menos"></div></th>
+            <th><div class="multi-filter" data-col="original_filename"></div></th>
+            <th><div class="multi-filter" data-col="formato_detectado"></div></th>
+            <th><div class="multi-filter" data-col="arquivo_status"></div></th>
+            <th><div class="multi-filter" data-col="linha_origem"></div></th>
+            <th><div class="multi-filter" data-col="pagina_origem"></div></th>
+            <th><div class="multi-filter" data-col="upload_id"></div></th>
+            <th><div class="multi-filter" data-col="user_email"></div></th>
+            <th><div class="multi-filter" data-col="data_arquivo_fmt"></div></th>
+            <th><div class="multi-filter" data-col="uploaded_at_fmt"></div></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="page-size">
+        <label for="receita-anexo10-page-size">Itens por página</label>
+        <select id="receita-anexo10-page-size" class="input">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="receita-anexo10-pagination" class="pagination"></div>
+    </div>
+  </div>
+</div>

@@ -10,10 +10,11 @@ from datetime import datetime
 from pathlib import Path
 
 from app import create_app
-from models import db, EmpUpload, NobUpload, Fip613Upload, PedUpload, EstEmpUpload, ProcessamentoJob
+from models import db, EmpUpload, NobUpload, Fip613Upload, PedUpload, EstEmpUpload, ReceitaAnexo10Upload, ProcessamentoJob
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
+from services.fiplan_file_reader import prepare_fiplan_file
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
 
 EMP_INPUT_DIR = Path("upload/emp")
@@ -32,7 +33,7 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
     if not tmp_dir.exists():
         return None
     stem = Path(stored_filename).stem
-    matches = sorted(tmp_dir.glob(f"{stem}_*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
+    matches = sorted(tmp_dir.glob(f"{stem}_*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0] if matches else None
 
 
@@ -122,9 +123,20 @@ def _commit_upload_filename(model_cls, upload_id: int, output_filename: str | No
             raise
 
 
+def _prepare_upload_for_worker(upload, input_dir: Path) -> Path:
+    file_path = _find_upload_path(input_dir, upload.stored_filename)
+    if not file_path:
+        raise RuntimeError(f"Arquivo de entrada não encontrado: {upload.stored_filename}")
+    prepared = prepare_fiplan_file(file_path, input_dir.resolve(), file_path.stem)
+    if prepared.normalized and upload.stored_filename != prepared.processing_path.name:
+        upload.stored_filename = prepared.processing_path.name
+        db.session.commit()
+    return prepared.processing_path.resolve()
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Background worker for heavy uploads.")
-    parser.add_argument("--kind", choices=["fip613", "ped", "emp", "est_emp", "nob", "see"], required=True)
+    parser.add_argument("--kind", choices=["fip613", "ped", "emp", "est_emp", "nob", "see", "receita_anexo10"], required=True)
     parser.add_argument("--upload-id", type=int, required=True)
     return parser.parse_args()
 
@@ -133,9 +145,7 @@ def _run_emp(upload_id: int) -> None:
     upload = db.session.get(EmpUpload, upload_id)
     if not upload:
         raise RuntimeError(f"Upload EMP nao encontrado: {upload_id}")
-    file_path = _find_upload_path(Path(EMP_INPUT_DIR), upload.stored_filename)
-    if not file_path:
-        raise RuntimeError(f"Arquivo EMP nao encontrado: {Path(EMP_INPUT_DIR) / upload.stored_filename}")
+    file_path = _prepare_upload_for_worker(upload, Path(EMP_INPUT_DIR))
     payload = _run_node("emp", file_path, upload.user_email, upload.data_arquivo, upload.id)
     _commit_upload_filename(EmpUpload, upload_id, payload.get("output_filename"))
     update_status_fields(
@@ -156,9 +166,7 @@ def _run_nob(upload_id: int) -> None:
     upload = db.session.get(NobUpload, upload_id)
     if not upload:
         raise RuntimeError(f"Upload NOB nao encontrado: {upload_id}")
-    file_path = _find_upload_path(Path(NOB_INPUT_DIR), upload.stored_filename)
-    if not file_path:
-        raise RuntimeError(f"Arquivo NOB nao encontrado: {Path(NOB_INPUT_DIR) / upload.stored_filename}")
+    file_path = _prepare_upload_for_worker(upload, Path(NOB_INPUT_DIR))
     payload = _run_node("nob", file_path, upload.user_email, upload.data_arquivo, upload.id)
     _commit_upload_filename(NobUpload, upload_id, payload.get("output_filename"))
     write_status(
@@ -181,14 +189,15 @@ def _run_managed_job(job_id: int) -> None:
         "fip613": (Fip613Upload, Path("upload/fip_613"), "fip613"),
         "ped": (PedUpload, Path("upload/ped"), "ped"),
         "est_emp": (EstEmpUpload, Path("upload/est_emp"), "est_emp"),
+        "receita_anexo10": (ReceitaAnexo10Upload, Path("upload/receita_anexo10"), "receita_anexo10_registros"),
     }
     model_cls, input_dir, table_name = configs[job.tipo]
     upload = db.session.get(model_cls, job.upload_id)
     if not upload:
         raise RuntimeError(f"Upload {job.tipo.upper()} não encontrado: {job.upload_id}")
-    file_path = _find_upload_path(input_dir, upload.stored_filename)
-    if not file_path:
-        raise RuntimeError(f"Arquivo de entrada não encontrado: {upload.stored_filename}")
+    file_path = None
+    if job.tipo != "receita_anexo10":
+        file_path = _prepare_upload_for_worker(upload, input_dir)
 
     update_job(job, status="em_processamento", etapa="iniciando", mensagem="Worker iniciado.",
                progresso=1, iniciado_em=datetime.utcnow(), worker_pid=os.getpid())
@@ -212,25 +221,49 @@ def _run_managed_job(job_id: int) -> None:
                 file_path, upload.data_arquivo, upload.user_email, upload.id, progress, cancel_check
             )
             alerts = {"chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
-        else:
+        elif job.tipo == "est_emp":
             from services.est_emp_runner import run_est_emp
             total, output = run_est_emp(file_path, upload.data_arquivo, upload.user_email, upload.id,
                                         progress, cancel_check)
             alerts = None
+        else:
+            from services.receita_anexo10_runner import run_receita_anexo10
+            total, output, alerts = run_receita_anexo10(input_dir, upload.id, progress, cancel_check)
         cancel_check()
-        upload.output_filename = output.name
+        upload.output_filename = output.name if output else None
         alert_count = sum(len(v) for v in alerts.values()) if alerts else 0
-        job.detalhes_alertas = json.dumps(alerts, ensure_ascii=False) if alerts else None
+        detalhes_existentes = {}
+        if job.detalhes_alertas:
+            try:
+                parsed = json.loads(job.detalhes_alertas)
+                if isinstance(parsed, dict):
+                    detalhes_existentes = parsed
+            except Exception:
+                detalhes_existentes = {}
+        detalhes_finais = {}
+        if detalhes_existentes.get("formato_detectado"):
+            detalhes_finais["formato_detectado"] = detalhes_existentes.get("formato_detectado")
+        if alerts:
+            detalhes_finais.update(alerts)
+        job.detalhes_alertas = json.dumps(detalhes_finais, ensure_ascii=False) if detalhes_finais else None
         finish_job(job, "finalizado_com_alertas" if alert_count else "finalizado",
                    f"Processamento concluído. {total} registros inseridos.",
-                   arquivo_saida=output.name, caminho_saida=str(output), total_registros=total,
+                   arquivo_saida=output.name if output else None, caminho_saida=str(output) if output else None, total_registros=total,
                    registros_processados=total, total_alertas=alert_count)
         db.session.commit()
     except Exception:
         db.session.rollback()
-        # Remove somente a carga provisória; a carga ativa anterior permanece disponível.
-        db.session.execute(text(f"DELETE FROM {table_name} WHERE upload_id = :upload_id AND ativo = 0"),
-                           {"upload_id": upload.id})
+        if job.tipo == "receita_anexo10":
+            db.session.execute(
+                text("UPDATE receita_anexo10_registros SET ativo = 0 WHERE upload_id = :upload_id"),
+                {"upload_id": upload.id},
+            )
+        else:
+            # Remove somente a carga provisoria; a carga ativa anterior permanece disponivel.
+            db.session.execute(
+                text(f"DELETE FROM {table_name} WHERE upload_id = :upload_id AND ativo = 0"),
+                {"upload_id": upload.id},
+            )
         db.session.commit()
         raise
 
@@ -240,7 +273,7 @@ def main() -> int:
     app = create_app()
     with app.app_context():
         try:
-            if args.kind in {"fip613", "ped", "est_emp"}:
+            if args.kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
                 _run_managed_job(args.upload_id)
             else:
                 clear_cancel_flag(args.kind, args.upload_id)
@@ -255,7 +288,7 @@ def main() -> int:
                     _run_see_processamento(app, args.upload_id)
         except Exception as exc:
             msg = f"{type(exc).__name__}: {exc}"
-            if args.kind in {"fip613", "ped", "est_emp"}:
+            if args.kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
                 from services.processamento_jobs import finish_job
                 job = db.session.get(ProcessamentoJob, args.upload_id)
                 if job:

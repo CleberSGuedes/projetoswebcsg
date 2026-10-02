@@ -7,6 +7,26 @@ def _group(group_id, nome, children):
     return {"id": group_id, "nome": nome, "group": True, "children": children}
 
 
+FEATURE_ALIASES = {
+    "atualizar/analise-receita": "atualizar/receita-anexo10",
+}
+
+
+def normalize_feature_id(feature_id):
+    return FEATURE_ALIASES.get(feature_id, feature_id)
+
+
+def normalize_feature_list(features):
+    normalized = []
+    seen = set()
+    for feature in features or []:
+        feature_id = normalize_feature_id(feature)
+        if feature_id and feature_id not in seen:
+            normalized.append(feature_id)
+            seen.add(feature_id)
+    return normalized
+
+
 FEATURES = [
     {"id": "dashboard", "nome": "Início", "locked": True, "children": []},
     {
@@ -39,7 +59,6 @@ FEATURES = [
                     {"id": "atualizar/estrutura-planejamento/replicar-exercicio", "nome": "Replicar exercício"},
                 ]),
                 {"id": "atualizar/teto-seduc", "nome": "Teto Financeiro"},
-                {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA"},
             ]),
             _group("grupo/pta-gerencial-nger", "PTA-Gerencial NGER", [
                 {"id": "atualizar/plan20-seduc", "nome": "PLAN-20 FIPLAN"},
@@ -55,11 +74,13 @@ FEATURES = [
                 {"id": "atualizar/fip613", "nome": "FIP 613"},
                 {"id": "atualizar/ped", "nome": "PED"},
                 {"id": "atualizar/emp", "nome": "EMP"},
+                {"id": "atualizar/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "atualizar/est-emp", "nome": "EST EMP"},
                 {"id": "atualizar/nob", "nome": "NOB"},
             ]),
         ],
     },
+    {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA", "children": []},
     {
         "id": "cadastrar",
         "nome": "Emitir/Ajustar Dotação",
@@ -95,6 +116,7 @@ FEATURES = [
                 {"id": "relatorios/emp", "nome": "EMP"},
                 {"id": "relatorios/est-emp", "nome": "EST EMP"},
                 {"id": "relatorios/nob", "nome": "NOB"},
+                {"id": "relatorios/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "relatorios/dotacao", "nome": "DOTAÇÃO"},
                 {"id": "relatorios/est-dotacao", "nome": "ESTORNO DE DOTAÇÃO"},
             ]),
@@ -185,6 +207,10 @@ MENU_META = {
     "cadastrar": {"icon": "clipboard-plus"},
     "cadastrar/dotacao": {"icon": "clipboard-plus"},
     "cadastrar/est-dotacao": {"icon": "clipboard-minus"},
+    "cadastrar/planejamento/programar-pta-loa": {
+        "icon": "box-arrow-up-right",
+        "url": "https://pta2025.projetoswebcsg.life/",
+    },
     "cadastrar/plan_21-nger/meta_fisica": {"icon": "table"},
     "cadastrar/plan_21-nger/subacao": {"icon": "diagram-3-fill"},
     "cadastrar/plan_21-nger/etapa": {"icon": "list-task"},
@@ -205,6 +231,7 @@ MENU_META = {
     "relatorios/emp": {"icon": "clipboard-data"},
     "relatorios/est-emp": {"icon": "clipboard-check"},
     "relatorios/nob": {"icon": "clipboard-plus"},
+    "relatorios/receita-anexo10": {"icon": "file-earmark-spreadsheet"},
     "relatorios/dotacao": {"icon": "clipboard-data"},
     "relatorios/est-dotacao": {"icon": "clipboard-minus"},
     "paineis-dashboards": {"icon": "speedometer2"},
@@ -230,18 +257,13 @@ MENU_META = {
     "atualizar/estrutura-planejamento/catalogo-chave": {"icon": "key"},
     "atualizar/estrutura-planejamento/replicar-exercicio": {"icon": "arrow-repeat"},
     "atualizar/teto-seduc": {"icon": "cash-stack"},
-    # Link externo (sistema de programacao do PTA/LOA) - _menu.html abre em
-    # nova aba via data-external-url (tratado em static/js/main.js).
-    "cadastrar/planejamento/programar-pta-loa": {
-        "icon": "box-arrow-up-right",
-        "external_url": "https://pta2025.projetoswebcsg.life/",
-    },
     "atualizar/plan20-seduc": {"icon": "file-earmark-spreadsheet"},
     "atualizar/chave_planejamento_regra": {"icon": "tools"},
     "atualizar/chaves_planejamento_upload": {"icon": "cloud-upload"},
     "atualizar/fip613": {"icon": "cloud-upload"},
     "atualizar/ped": {"icon": "arrow-up-circle"},
     "atualizar/emp": {"icon": "cloud-arrow-up"},
+    "atualizar/receita-anexo10": {"icon": "file-spreadsheet"},
     "atualizar/est-emp": {"icon": "cloud-check"},
     "atualizar/nob": {"icon": "cloud-plus"},
     "area-uens/sage/notas-see": {"icon": "file-earmark-pdf"},

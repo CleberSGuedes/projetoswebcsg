@@ -8,6 +8,21 @@
     <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
   </header>
 
+  <section class="see-card see-history-card" id="see-history-card">
+    <div class="see-card-title"><i class="bi bi-clock-history"></i><div><h2>DANFEs Processados</h2><p>Baixe novamente a planilha de um catálogo já processado.</p></div></div>
+    <div class="see-history-filters">
+      <label class="field"><span>Exercício</span><select id="see-history-exercicio"><option value="">Todos os exercícios</option></select></label>
+      <label class="field"><span>Catálogo</span><select id="see-history-catalog"><option value="">Todos os catálogos</option></select></label>
+    </div>
+    <div class="see-history-wrap">
+      <table class="table">
+        <thead><tr><th>Exercício</th><th>Catálogo</th><th>Data e horário</th><th>Executado por</th><th>Notas</th><th>Com alertas</th><th>Com erros</th><th></th></tr></thead>
+        <tbody id="see-history-body"></tbody>
+      </table>
+    </div>
+    <div id="see-history-msg" class="muted"></div>
+  </section>
+
   <div class="see-grid">
     <section class="see-card">
       <div class="see-card-title"><i class="bi bi-box-seam"></i><div><h2>Catálogo de produtos</h2><p>Cadastre os códigos usados neste lote.</p></div></div>
@@ -22,7 +37,8 @@
       <form id="see-catalog-form" class="form see-subform" hidden>
         <input type="hidden" id="see-catalog-id">
         <div class="form-grid">
-          <label class="field"><span>Nome</span><input id="see-catalog-name" required maxlength="150"></label>
+          <label class="field"><span>Nome</span><input id="see-catalog-name" required maxlength="150" placeholder="Ex.: 3º Bimestre"></label>
+          <label class="field"><span>Exercício</span><input id="see-catalog-exercicio" type="number" required min="2000" max="2100" step="1"></label>
           <label class="field"><span>Descrição</span><input id="see-catalog-description" maxlength="500"></label>
         </div>
         <div class="actions"><button class="btn btn-primary sm" type="submit">Salvar catálogo</button><button class="btn sm" id="see-catalog-form-cancel" type="button">Cancelar</button></div>
@@ -46,6 +62,9 @@
       <div class="see-card-title"><i class="bi bi-cloud-arrow-up"></i><div><h2>Selecionar DANFEs</h2><p>Envie uma pasta completa ou arquivos específicos.</p></div></div>
       <form id="see-process-form" class="form">
         <input type="hidden" name="catalogo_id" id="see-process-catalog-id">
+        <label class="field see-process-catalog"><span>1. Catálogo a ser utilizado</span><select id="see-process-catalog-select" required><option value="">Selecione o catálogo</option></select></label>
+        <div class="see-process-catalog-info muted" id="see-process-catalog-info">Escolha o catálogo antes de selecionar os PDFs.</div>
+        <div class="see-upload-step muted">2. Selecione os PDFs</div>
         <div class="see-upload-options">
           <label class="see-upload-option"><i class="bi bi-folder2-open"></i><strong>Selecionar pasta</strong><span>Todos os PDFs da pasta</span><input id="see-folder-input" type="file" name="pdfs" accept="application/pdf,.pdf" webkitdirectory directory multiple></label>
           <label class="see-upload-option"><i class="bi bi-files"></i><strong>Selecionar arquivos</strong><span>Um ou vários PDFs</span><input id="see-files-input" type="file" name="pdfs" accept="application/pdf,.pdf" multiple></label>
