@@ -1,7 +1,11 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-02) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-14) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
+
+> **⚠ Ajustes pendentes: novas UOs (26101, 26201 e 26202).**
+> Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
+> **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
 
 ---
 
@@ -697,3 +701,24 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 - **Mantido de propósito:** as tags de backup no GitHub — `backup/homologacao-2026-10-02` (`c05dedd`), `backup/dev-cleber-2026-10-02` (`e72c14d`), `backup/dev-jean-2026-10-02` (`9db6021`) (estado das branches antes da sincronização) e `backup/main-pos-merge-errado-2026-10-02` (`03a490a`, a `main` com os merges errados). Servem para voltar atrás se algo aparecer nos testes da homologação; podem ser apagadas quando a homologação estiver validada. Também não foram tocadas as pastas antigas `projetoswebcsg_license_temp`/`projetoswebcsg_license_dev_cleber_temp` (de outro trabalho).
 - **Pendente (depende do deploy de cada ambiente):** rodar `scripts/atualizar_schema_sync_main.py` (o script existe só nas branches `homologacao`/`dev/*`, não na `main` — o banco de produção já estava atualizado) (primeiro sem e depois com `--aplicar`) no servidor de homologação e em cada `dev` (seção 21.7); até isso, não usar Teto-SEDUC nem upload do Plan20 nesses ambientes, e conferir o login logo depois de aplicar.
 - **Lições registradas:** (1) link de PR sempre com o destino fixo (`/compare/<destino>...<origem>`) e conferir o campo *base* antes de aprovar; (2) merge entre branches que divergiram muito: simular antes com `git merge-tree` e checar perdas silenciosas linha a linha nos dois sentidos — o pior risco aqui não estava nos conflitos, e sim no que o Git juntaria sozinho (o banner de ambiente apagado pelo revert antigo, o item de menu duplicado que apagava a `url` da `dev/cleber`); (3) o `scripts/deploy_cpanel.sh` das branches faz `rsync --delete` — nunca pode chegar à `main` sem antes excluir `upload/`/`outputs/` do rsync e instalar as dependências novas no servidor de produção; (4) o modo automático da IA bloqueia *force push* na `main` (corretamente) — esse tipo de passo fica com o usuário.
+
+## 22. Testes com as UOs 26101, 26201 e 26202 — aguardando confirmação oficial (2026-10-13 e 14)
+
+**O que é:** existe a possibilidade de o sistema passar a receber os relatórios de mais três UOs: **26101** (SECITECI), **26201** (UNEMAT) e **26202** (FAPEMAT). Antes de qualquer mudança, o usuário pediu testes com os relatórios reais dessas UOs em seis funcionalidades: Plan20, FIP 613, PED, EMP, NOB e EST EMP. A inclusão ainda depende de **confirmação oficial**.
+
+**Documento completo:** [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Leia antes de mexer em qualquer um desses módulos. Ele traz os resultados por módulo, os pontos de atenção e a lista de ajustes pendentes.
+
+**Resumo:**
+- **A leitura funciona.** Nas três UOs, todos os módulos leram e trataram os relatórios sem perder valor: as somas batem com o arquivo original e com os totais impressos pelo FIPLAN.
+- **A gravação não está pronta.** FIP 613, PED, EMP, NOB e EST EMP desativam a **tabela inteira** a cada upload (`UPDATE <tabela> SET ativo = 0 WHERE ativo = 1`). Enviar um arquivo de uma nova UO apagaria os dados da SEDUC, e o envio seguinte da SEDUC apagaria os da nova UO. PED e EMP também recalculam as dotações da SEDUC.
+- **O Plan20 está quase pronto.** Só falta incluir as UOs em `UOS_ACEITAS` (`services/uo.py`). Hoje ele mostra "processado com sucesso" sem gravar nenhuma linha dessas UOs.
+- **Regra do PAOE 8026 (Emendas Parlamentares):** atribui uma Chave de Planejamento da SEDUC a qualquer empenho/PED desse PAOE, de qualquer UO. É intencional, mas precisará ser restrita por UO. Fica a decidir se a restrição vale só para ela ou para todas as regras de chave.
+- **Ajuste já aprovado pelo usuário:** no PED, criar sempre as colunas da Dotação e da Chave de Planejamento. Hoje elas só aparecem quando alguma linha tem chave, e por isso os arquivos de saída variavam entre 50 e 67 colunas.
+- **A UO é identificada pelo conteúdo do relatório, nunca pelo nome do arquivo** (decisão do usuário). Nos testes, o EST da 26101 veio salvo com o nome "26201". Use sempre a coluna `UO` das linhas e/ou o filtro impresso no cabeçalho do FIPLAN, tanto ao conferir arquivos quanto nos ajustes futuros (seção 8.1 do documento de testes).
+
+**Como os testes foram feitos:** sem alterar o código e sem gravar no banco. As funções reais foram chamadas a partir de scripts descartáveis. As escritas no banco do EMP/NOB (Node) foram interceptadas e só registradas, e as saídas foram geradas fora da pasta `outputs/`. Os arquivos processados ficaram em `C:\workspace\Planilhas\*_SAIDA_TESTE.xlsx`, fora do repositório. Se for preciso repetir um teste, siga o mesmo cuidado: `run_fip613()`, `run_ped()`, `run_est_emp()` e os runners Node **gravam no banco** se forem chamados diretamente.
+
+**Regra para as próximas sessões:**
+1. No início da sessão, **pergunte ao usuário se a confirmação oficial já saiu** e se os ajustes pendentes (seção 9 do documento de testes) já podem ser feitos.
+2. Enquanto não houver essa autorização explícita, **não faça nenhum desses ajustes**, nem os que já foram aprovados em conceito.
+3. Quando for autorizado, comece pela desativação por UO/exercício nos módulos de execução. Sem ela, os outros ajustes não resolvem o problema.
