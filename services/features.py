@@ -36,6 +36,7 @@ FEATURES = [
             {"id": "atualizar/emp", "nome": "EMP"},
             {"id": "atualizar/est-emp", "nome": "EST EMP"},
             {"id": "atualizar/nob", "nome": "NOB"},
+            {"id": "atualizar/limpeza-historico", "nome": "Limpeza de Histórico"},
             {"id": "atualizar/plan20-seduc", "nome": "PLAN20 - SEDUC"},
             {"id": "atualizar/teto-seduc", "nome": "Teto - SEDUC"},
             {

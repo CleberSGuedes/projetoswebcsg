@@ -64,6 +64,7 @@ projetoswebcsg/
 ├── rotas/
 │   ├── __init__.py            # registra os blueprints
 │   ├── auth_routes.py         # login/logout/esqueci senha/reset senha
+│   ├── limpeza_historico_routes.py # Atualizar > Execução > Limpeza de Histórico (seção 23)
 │   └── home_routes.py         # TODAS as demais rotas HTML+API (19k+ linhas)
 ├── services/                  # regras de negócio / parsers de planilhas por módulo
 │   ├── auth.py                 # decorators login_required / role_required
@@ -71,6 +72,7 @@ projetoswebcsg/
 │   ├── job_status.py           # status de jobs assíncronos em arquivos JSON (outputs/status/*.json)
 │   ├── fip613_runner.py, ped_runner.py, plan20_runner.py, est_emp_runner.py, emp_record.py, teto_seduc.py
 │   ├── uo.py                   # UOs aceitas (14101/14601) + uo_key/uo_label — regra única do Plan20 e do Teto-SEDUC (seção 20)
+│   ├── limpeza_historico.py    # Limpeza de Histórico das cargas de execução (seção 23)
 ├── node_runners/               # workers Node.js p/ EMP e NOB (processamento pesado de planilhas)
 ├── db/                          # scripts .sql de schema (CREATE TABLE) por módulo — não são migrations versionadas (tipo Alembic)
 ├── tests/                       # suíte pytest (adicionada em 2026-08-31, ver seção 9 item 8)
@@ -722,3 +724,67 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 1. No início da sessão, **pergunte ao usuário se a confirmação oficial já saiu** e se os ajustes pendentes (seção 9 do documento de testes) já podem ser feitos.
 2. Enquanto não houver essa autorização explícita, **não faça nenhum desses ajustes**, nem os que já foram aprovados em conceito.
 3. Quando for autorizado, comece pela desativação por UO/exercício nos módulos de execução. Sem ela, os outros ajustes não resolvem o problema.
+
+## 23. Limpeza de Histórico (Atualizar → Execução) — nova funcionalidade (2026-10-14)
+
+### 23.1 Motivação
+FIP 613, PED, EMP, NOB e EST EMP são atualizados todo dia. Cada upload desativa a carga anterior (`ativo = 0`) e grava uma cópia completa do ano. A aplicação só lê registros ativos (conferido: telas, relatórios e o recálculo de dotação filtram `ativo = 1`), então as cargas desativadas só ocupam espaço. Em 14/10/2026, mais de 99% das linhas dessas tabelas estavam desativadas, e o banco tinha cerca de **35 GB**: EMP 19,1 GB e NOB 15,8 GB. Na primeira análise o banco parecia ter 10,5 GB, porque o `information_schema` estava com estatísticas antigas (ver 23.5).
+
+### 23.2 Regra (decisões do usuário)
+O usuário informa o **exercício** e o **mês/ano da carga a manter**, e marca quais das 5 tabelas limpar. Para cada tabela marcada:
+- **mantém a última carga** daquele exercício carregada no mês/ano escolhido;
+- **remove as demais cargas** do mesmo exercício carregadas até o fim desse mês;
+- **não toca** em cargas de outros exercícios, nem em cargas posteriores ao mês escolhido;
+- **nunca remove** uma carga com registro ativo, nem carga com mais de um exercício;
+- **se não houver carga** do exercício no mês escolhido, nada é removido daquela tabela.
+
+O mês/ano é separado do exercício porque **a carga final de um exercício pode chegar no ano seguinte**: a FIP 613 de 2025 foi carregada em 14/01/2026, e o EST EMP de 2025 também em janeiro/2026. O exercício de cada carga é lido dos próprios registros. A coluna tem formatos diferentes em cada tabela: `ano` int na FIP 613, `2026` no EMP/NOB e `26` no EST EMP (`normalizar_exercicio`). A remoção trabalha sempre com a **carga inteira** (`upload_id`), nunca com linhas soltas.
+
+### 23.3 Implementação
+- **`services/limpeza_historico.py`**
+  - `planejar_tabela()`: função pura que decide o que fica e o que sai.
+  - `carregar_cargas()`: uma passada `GROUP BY upload_id` por tabela; leva cerca de 1 minuto no EMP e no NOB.
+  - `remover_cargas()`: `DELETE` em lotes de 20.000 ids por faixa de chave primária (EMP e NOB não têm índice por `upload_id`), com `ativo = 0 AND upload_id IN (...)` em todo comando e commit a cada lote.
+  - `otimizar_tabela()`: `OPTIMIZE TABLE`.
+  - `espaco_mb()`: tamanho usado, livre e em disco.
+  - Trava `GET_LOCK('limpeza_historico')`: só uma limpeza ou otimização por vez.
+- **`rotas/limpeza_historico_routes.py`**
+  - Arquivo próprio (não em `home_routes.py`), para não aumentar o arquivo monolítico e facilitar a sincronização com as branches.
+  - Blueprint `limpeza_bp`, registrado em `rotas/__init__.py`.
+  - Rotas: `/partial/atualizar/limpeza-historico` e `/api/limpeza-historico/{info,simular,executar,otimizar,status/<id>}`.
+  - Simular, executar e otimizar rodam numa thread em segundo plano, com status em arquivo (`services/job_status.py`, tipo `limpeza_historico`), no mesmo padrão do Teto-SEDUC.
+  - A execução **reanalisa as cargas na hora** e não confia na simulação da tela.
+  - Executar e otimizar exigem `confirmado: true`.
+- **Permissão:** feature `atualizar/limpeza-historico` em `services/features.py`, com item no menu do `base.html`. Aparece no **painel de permissões** sem nenhum perfil marcado. Por enquanto só o administrador acessa, pela regra geral de `require_feature` (nível 1 passa em tudo). Não há regra "só admin" no código; para liberar a outro perfil, basta marcar no painel.
+- **Tela** (`templates/partials/atualizar_limpeza_historico.html` + `initLimpezaHistorico()` em `static/js/main.js`):
+  - Formulário com exercício, mês e ano da carga, e as 5 tabelas com caixas de seleção.
+  - **Simular** mostra o resultado por tabela. **Executar limpeza** só é liberado depois de uma simulação com os mesmos parâmetros e da confirmação.
+  - O card **Otimizar tabelas** tem seleção própria por tabela e mostra o tamanho em disco e o espaço recuperável.
+  - O card **Últimas execuções** mostra o log.
+  - Durante o processamento aparece o loading padrão (`showAppLoading`), com o andamento atualizado. No fim, um modal no padrão da aplicação traz o resumo (ou o erro).
+  - Se o usuário sair da tela e voltar, o acompanhamento é retomado (`sessionStorage`).
+- **Log:** tabela nova `limpeza_historico_log` (model `LimpezaHistoricoLog`), criada em 14/10/2026 com autorização do usuário. Guarda ação, situação, usuário, parâmetros, tabelas, registros removidos, detalhes em JSON, início e fim. Horários gravados com `_now_local()` (America/Manaus, o fuso da aplicação) e exibidos com `formatAmazonLocalTime()`. O relógio do banco está em UTC-3.
+
+### 23.4 Testes
+- `tests/test_limpeza_historico.py` (10 testes):
+  - a regra de seleção sem banco: carga final no ano seguinte, carga ativa protegida, outro exercício intocado, sem carga no mês, exercício misto, empate de data;
+  - a remoção de ponta a ponta numa **TEMPORARY TABLE** do MySQL, incluindo uma carga reativada entre a análise e a execução, que não é apagada.
+- Suíte completa: 54/54.
+- Teste real na tela pelo usuário, em 14/10/2026:
+  - PED: limpezas mantendo fev/2026 e mar/2026 (907 linhas).
+  - **NOB:** mantendo set/2026, **5.395.377 linhas removidas em 1 minuto e 19 segundos**. A otimização levou 13 segundos e o NOB caiu de **~15,4 GB para 1,89 GB**.
+
+### 23.5 Armadilhas do MariaDB (importante para quem mexer nisso)
+- **Estatísticas velhas no `information_schema`.** `TABLE_ROWS` e `DATA_LENGTH` podem estar muito desatualizados: o EST EMP aparecia com 22 mil linhas e tinha 84 mil, e o EMP com 6,4 GB e tinha 19,1 GB. Por isso, toda medição na tela roda antes `ANALYZE TABLE`, que só recalcula as estatísticas, não mexe nos dados e leva cerca de 0,1 segundo.
+- **O espaço não volta sozinho depois do `DELETE`.** O arquivo da tabela só diminui com `OPTIMIZE TABLE` (no InnoDB, "recreate + analyze"; `innodb_file_per_table` está ON). Logo após a limpeza, `DATA_LENGTH` passa a contar só as páginas em uso, e o espaço das linhas apagadas aparece como `DATA_FREE`. Por isso:
+  - o "antes/depois" da otimização usa **tamanho em disco = usado + livre**;
+  - a estimativa da simulação usa o tamanho usado.
+
+  No primeiro teste, o "antes" saiu 1,89 GB em vez de 15,4 GB; o registro foi corrigido no log.
+- **A otimização bloqueia as cargas da tabela enquanto roda.** Use fora do horário da carga automática (madrugada/início da manhã). Ela só compensa depois de uma limpeza que remova boa parte da tabela: com só 12% removido no PED, não houve redução.
+
+### 23.6 Pendências e próximos passos
+- **EMP (19,1 GB)** ainda não foi limpo. Mantendo set/2026, devem sair cerca de 5,6 milhões de linhas, e depois da otimização o EMP deve ficar perto de 2 GB. Esse teste também vai confirmar na prática o `DATA_FREE` logo após a limpeza (ver 23.5).
+- **Fazer backup do banco antes de limpezas grandes.** A remoção é definitiva, e o banco da `main` é o de produção.
+- **Sincronizar com `homologacao`, `dev/cleber` e `dev/jean`** quando o usuário pedir. Nas branches, o menu vem de `services/features.py` via `_menu.html`, então o item do `base.html` não é necessário lá. Cada ambiente tem banco próprio: a tabela `limpeza_historico_log` é criada pelo `db.create_all()` ao subir a aplicação.
+- **Quando as novas UOs entrarem (seção 22)**, a limpeza continua correta, porque trabalha por carga. Revisar se o exercício/UO de uma carga continua único.

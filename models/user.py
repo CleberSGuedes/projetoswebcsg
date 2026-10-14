@@ -1300,3 +1300,23 @@ class ApiKey(db.Model):
     revoked_at = db.Column(db.DateTime, nullable=True)
     last_used_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class LimpezaHistoricoLog(db.Model):
+    """Registro de cada limpeza/otimização feita em Atualizar > Limpeza de
+    Histórico (services/limpeza_historico.py)."""
+
+    __tablename__ = "limpeza_historico_log"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    acao = db.Column(db.String(20), nullable=False)  # "limpeza" | "otimizacao"
+    status = db.Column(db.String(20), nullable=False)  # "em andamento" | "concluida" | "falha"
+    user_email = db.Column(db.String(255), nullable=False)
+    exercicio = db.Column(db.Integer, nullable=True)
+    ref_mes = db.Column(db.SmallInteger, nullable=True)
+    ref_ano = db.Column(db.Integer, nullable=True)
+    tabelas = db.Column(db.String(255), nullable=False)
+    linhas_removidas = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    detalhes = db.Column(db.Text, nullable=True)  # JSON com o resultado por tabela
+    iniciado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    finalizado_em = db.Column(db.DateTime, nullable=True)
