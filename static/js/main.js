@@ -3779,31 +3779,48 @@
     }
 
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const aguardarJob = async (jobId, msgEl) => {
-      let falhasRede = 0;
-      for (let i = 0; i < 3600; i += 1) {
-        await wait(2000);
+    // Erro que pausa a execução (rede/servidor fora): pode ser continuada depois.
+    class ExecucaoPausada extends Error {}
+    // Etapas curtas conduzidas pela tela (docs/claude.md, seção 23.9): cada
+    // POST faz até ~10 s de trabalho no servidor e devolve o andamento.
+    const executarPassos = async (jobId, msgEl) => {
+      let falhas = 0;
+      let ultimoErro = "";
+      for (;;) {
+        let res;
+        let data = null;
         try {
-          const res = await fetch(`/api/limpeza-historico/status/${encodeURIComponent(jobId)}`, {
+          res = await fetch(`/api/limpeza-historico/passo/${encodeURIComponent(jobId)}`, {
+            method: "POST",
             headers: { "X-Requested-With": "fetch" },
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Falha ao consultar o processamento.");
-          falhasRede = 0;
-          setMsg(msgEl, data.message || "Processando...");
-          const subtitulo = document.getElementById("app-loading-subtitle");
-          if (subtitulo && data.state === "em processamento") {
-            const pct = Number.isFinite(Number(data.progress)) ? ` (${Number(data.progress)}%)` : "";
-            subtitulo.textContent = `${data.message || "Processando..."}${pct}`;
-          }
-          if (data.state === "processamento finalizado") return data;
-          if (data.state === "falha no processamento") throw new Error(data.message || "Falha no processamento.");
+          data = await res.json().catch(() => null);
         } catch (err) {
-          falhasRede += 1;
-          if (falhasRede >= 10 || !(err instanceof TypeError)) throw err;
+          res = null; // rede fora
         }
+        const definitivo = res && data && !res.ok && !data.transitorio && res.status < 500;
+        if (definitivo) throw new Error(data.error || "Falha no processamento.");
+        if (!res || !res.ok || !data) {
+          // Rede fora, servidor reiniciando (502/503) ou falha numa etapa:
+          // tenta de novo; persistindo, pausa (nada se perde).
+          falhas += 1;
+          ultimoErro = data?.error || (res ? `Servidor respondeu ${res.status}.` : "Sem conexão com o servidor.");
+          if (falhas >= 6) throw new ExecucaoPausada(ultimoErro);
+          setMsg(msgEl, `Instabilidade (${ultimoErro}). Tentando novamente...`);
+          await wait(3000 * falhas);
+          continue;
+        }
+        falhas = 0;
+        setMsg(msgEl, data.message || "Processando...");
+        const subtitulo = document.getElementById("app-loading-subtitle");
+        if (subtitulo && data.state === "em processamento") {
+          const pct = Number.isFinite(Number(data.progress)) ? ` (${Number(data.progress)}%)` : "";
+          subtitulo.textContent = `${data.message || "Processando..."}${pct}`;
+        }
+        if (data.state === "processamento finalizado") return data;
+        if (data.state === "falha no processamento") throw new Error(data.message || "Falha no processamento.");
+        if (data.ocupado) await wait(2000); // outra aba está fazendo esta etapa
       }
-      throw new Error("O processamento excedeu o tempo de acompanhamento. Confira em Últimas execuções.");
     };
 
     const iniciar = async (url, payload) => {
@@ -3866,11 +3883,39 @@
       return totLinhas;
     };
 
+    // Limpeza/otimização não concluída (tela fechada, conexão caiu): oferece
+    // "Continuar", que retoma do ponto gravado no servidor.
+    const pendenteEl = document.getElementById("limpeza-pendente");
+    const pendenteTextoEl = document.getElementById("limpeza-pendente-texto");
+    const continuarBtn = document.getElementById("limpeza-continuar");
+    let pendenteAtual = null;
+    const renderPendente = (p) => {
+      pendenteAtual = p && !emAndamento ? p : null;
+      if (!pendenteEl) return;
+      pendenteEl.hidden = !pendenteAtual;
+      if (!pendenteAtual || !pendenteTextoEl) return;
+      const nome = p.acao === "limpeza" ? "Limpeza" : "Otimização";
+      const situacao = p.pausada ? "pausada" : "em andamento em outra tela";
+      pendenteTextoEl.textContent =
+        `${nome} ${situacao} em ${fmtInt(p.progress)}% (iniciada por ${p.user_email} em ${fmtData(p.iniciado_em)}). ` +
+        `Último passo: ${p.message || "-"}`;
+    };
+    if (continuarBtn) {
+      continuarBtn.addEventListener("click", () => {
+        if (!pendenteAtual || emAndamento) return;
+        const job = { id: pendenteAtual.job_id, tipo: pendenteAtual.acao === "limpeza" ? "executar" : "otimizar" };
+        if (pendenteEl) pendenteEl.hidden = true;
+        guardarJob(job);
+        acompanhar(job);
+      });
+    }
+
     const carregarInfo = async () => {
       try {
         const res = await fetch("/api/limpeza-historico/info", { headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar informações.");
+        renderPendente(data.pendente);
         if (tamanhosEl) {
           const selecionadas = new Set(tabelasOtimizar());
           tamanhosEl.innerHTML = data.tabelas
@@ -3909,19 +3954,21 @@
     const TEXTOS = {
       simular: {
         loading: "Simulando a limpeza...",
-        aguarde: "Analisando as cargas de cada tabela. As tabelas grandes (EMP e NOB) levam cerca de 1 minuto cada.",
+        aguarde: "Analisando as cargas de cada tabela. Mantenha esta tela aberta até o fim.",
         sucesso: "Simulação concluída",
         falha: "Falha na simulação",
       },
       executar: {
         loading: "Executando a limpeza...",
-        aguarde: "Removendo as cargas antigas. Não feche esta página até a conclusão.",
+        aguarde:
+          "Removendo as cargas antigas. Mantenha esta tela aberta até o fim: se ela for fechada, a limpeza pausa e pode ser continuada depois.",
         sucesso: "Limpeza concluída com sucesso",
         falha: "Falha na limpeza",
       },
       otimizar: {
         loading: "Otimizando as tabelas...",
-        aguarde: "Reconstruindo as tabelas para liberar espaço. As tabelas grandes podem levar vários minutos.",
+        aguarde:
+          "Reconstruindo as tabelas para liberar espaço. Mantenha esta tela aberta: as tabelas grandes podem levar alguns minutos.",
         sucesso: "Otimização concluída com sucesso",
         falha: "Falha na otimização",
       },
@@ -3996,7 +4043,7 @@
       showAppLoading(textos.loading, textos.aguarde);
       let concluido = null;
       try {
-        const data = await aguardarJob(job.id, msgEl);
+        const data = await executarPassos(job.id, msgEl);
         if (job.tipo === "simular") {
           const planos = data.resultado || [];
           const total = renderPlanos(planos, false);
@@ -4024,8 +4071,14 @@
         }
       } catch (err) {
         console.error(err);
-        setMsg(msgEl, err.message, true);
-        concluido = { titulo: textos.falha, mensagem: err.message, erro: true };
+        if (err instanceof ExecucaoPausada && job.tipo !== "simular") {
+          const texto = `A execução foi pausada por instabilidade na conexão com o servidor (${err.message}). Nada foi perdido: use o botão Continuar para retomar de onde parou.`;
+          setMsg(msgEl, texto, true);
+          concluido = { titulo: "Execução pausada", mensagem: texto, erro: true };
+        } else {
+          setMsg(msgEl, err.message, true);
+          concluido = { titulo: textos.falha, mensagem: err.message, erro: true };
+        }
       } finally {
         limparJob();
         hideAppLoading();

@@ -117,19 +117,34 @@ def test_validar_parametros():
             validar_parametros(*args)
 
 
-def test_sem_sinal_de_vida():
-    """Processo reciclado pelo servidor no meio do processamento (seção 23.7)."""
+def test_pausada():
+    """Execução sem etapas (tela fechada, conexão caiu) - seção 23.9."""
     agora = datetime(2026, 10, 15, 10, 0, 0)
-    sinal = lambda seg: datetime(2026, 10, 15, 10, 0, 0) - timedelta(seconds=seg)  # noqa: E731
-    assert not lh.sem_sinal_de_vida("em andamento", sinal(lh.INTERVALO_SINAL * 3), agora)
-    assert not lh.sem_sinal_de_vida("em andamento", sinal(lh.LIMITE_SEM_SINAL), agora)
-    assert lh.sem_sinal_de_vida("em andamento", sinal(lh.LIMITE_SEM_SINAL + 1), agora)
-    assert lh.sem_sinal_de_vida("em andamento", None, agora)
-    # Só o que está em andamento pode ser dado como interrompido.
-    for status in ("concluida", "falha", "interrompida"):
-        assert not lh.sem_sinal_de_vida(status, sinal(3600), agora)
-    # O limite precisa de folga sobre o intervalo do sinal (atraso, banco lento).
-    assert lh.LIMITE_SEM_SINAL >= 4 * lh.INTERVALO_SINAL
+    ultima = lambda seg: agora - timedelta(seconds=seg)  # noqa: E731
+    assert not lh.pausada("em andamento", ultima(30), agora)
+    assert not lh.pausada("em andamento", ultima(lh.LIMITE_PAUSA), agora)
+    assert lh.pausada("em andamento", ultima(lh.LIMITE_PAUSA + 1), agora)
+    assert lh.pausada("em andamento", None, agora)
+    for status in ("concluida", "falha", "abandonada", "interrompida"):
+        assert not lh.pausada(status, ultima(3600), agora)
+    # Uma etapa normal (PRAZO_PASSO + folga do servidor) nunca parece pausa.
+    assert lh.LIMITE_PAUSA >= 10 * lh.PRAZO_PASSO
+
+
+def test_mesclar_cargas_soma_as_faixas():
+    acumulado = {}
+    lh.mesclar_cargas(acumulado, {7: ["2025-12-01T08:00:00", [2025], 10, 0, 100, 109]})
+    lh.mesclar_cargas(acumulado, {7: ["2025-12-02T08:00:00", [2025], 5, 2, 110, 114]})
+    lh.mesclar_cargas(acumulado, {8: [None, [2025, 2026], 1, 0, 200, 200]})
+    assert acumulado["7"] == ["2025-12-02T08:00:00", [2025], 15, 2, 100, 114]
+    cargas = {c.upload_id: c for c in lh.cargas_de_agregados(acumulado)}
+    assert cargas[7].exercicio == 2025 and cargas[7].ativos == 2 and cargas[7].linhas == 15
+    assert cargas[8].exercicio is None  # exercício misto: nunca removida
+    # Exercício diferente numa faixa posterior também torna a carga mista.
+    lh.mesclar_cargas(acumulado, {7: ["2025-11-30T08:00:00", [2026], 1, 0, 120, 120]})
+    assert {c.upload_id: c for c in lh.cargas_de_agregados(acumulado)}[7].exercicio is None
+    # Valor que não é exercício (-1) também.
+    assert lh.cargas_de_agregados({"9": [None, [-1], 1, 0, 1, 1]})[0].exercicio is None
 
 
 @pytest.fixture
@@ -190,3 +205,97 @@ def test_remocao_de_ponta_a_ponta_em_tabela_temporaria(conn_temporaria):
         conn.execute(text("SELECT upload_id, COUNT(*) FROM tmp_limpeza_teste GROUP BY upload_id")).fetchall()
     )
     assert restantes == {2: 5, 3: 10, 4: 10, 5: 10, 6: 10}
+
+
+def _popular_intercalado(conn):
+    """Mesmas cargas do teste acima, com as linhas intercaladas por id: cada
+    carga se espalha por várias faixas de análise e lotes de remoção."""
+    por_carga = [
+        [{"u": u, "d": d, "e": e, "a": a}] * 10
+        for u, d, e, a in [
+            (1, "2025-11-03", "25", 0),
+            (2, "2025-12-10", "25", 0),
+            (3, "2025-12-29", "25", 0),  # mantida
+            (4, "2026-01-14", "25", 0),  # posterior ao mês -> fica
+            (5, "2025-12-15", "26", 0),  # outro exercício -> fica
+            (6, "2026-10-14", "26", 1),  # carga ativa -> fica
+        ]
+    ]
+    linhas = [carga[i] for i in range(10) for carga in por_carga]
+    conn.execute(
+        text("INSERT INTO tmp_limpeza_teste (upload_id, data_arquivo, exercicio, ativo) VALUES (:u, :d, :e, :a)"),
+        linhas,
+    )
+    conn.commit()
+
+
+def _passos(conn, estado, ate=None, limite=500):
+    """Roda etapas com prazo já vencido (um pedaço de trabalho por etapa),
+    passando o estado por JSON como a rota faz entre requisições."""
+    import json
+    import time
+
+    passos, progressos = 0, []
+    while estado["fase"] != "fim" and (ate is None or estado["fase"] != ate):
+        lh.executar_passo(conn, estado, time.monotonic())
+        estado = json.loads(json.dumps(estado))
+        progressos.append(lh.progresso_estado(estado)[1])
+        passos += 1
+        assert passos < limite, "a execução não avançou"
+    return estado, passos, progressos
+
+
+@pytest.fixture
+def faixas_pequenas(monkeypatch):
+    monkeypatch.setattr(lh, "FAIXA_INICIAL", 5)
+    monkeypatch.setattr(lh, "FAIXA_MIN", 3)
+    monkeypatch.setattr(lh, "FAIXA_MAX", 8)
+
+
+def test_simulacao_em_etapas_igual_a_analise_unica(conn_temporaria, faixas_pequenas):
+    conn = conn_temporaria
+    _popular_intercalado(conn)
+    estado = lh.novo_estado("simulacao", ["tmp_limpeza_teste"], 2025, 12, 2025)
+    estado, passos, progressos = _passos(conn, estado)
+    assert passos > 5  # 60 linhas em faixas de 3 a 8 ids
+    assert progressos == sorted(progressos) and progressos[-1] == 100
+
+    esperado = lh.planejar_tabela(
+        "tmp_limpeza_teste", lh.carregar_cargas(conn, "tmp_limpeza_teste"), 2025, 12, 2025
+    ).resumo()
+    obtido = estado["resultado"][0]
+    for chave in ("tamanho_mb", "mb_estimado"):  # tamanho depende do information_schema
+        esperado.pop(chave), obtido.pop(chave)
+    assert obtido == esperado
+    assert obtido["mantida"]["upload_id"] == 3 and obtido["cargas_remover"] == 2
+    # Simulação não remove nada.
+    assert conn.execute(text("SELECT COUNT(*) FROM tmp_limpeza_teste")).scalar() == 60
+
+
+def test_limpeza_em_etapas_retomando_do_cursor(conn_temporaria, faixas_pequenas):
+    conn = conn_temporaria
+    _popular_intercalado(conn)
+    estado = lh.novo_estado("limpeza", ["tmp_limpeza_teste"], 2025, 12, 2025)
+    estado, _, _ = _passos(conn, estado, ate="remocao")
+    assert sorted(estado["rem"]["ids"]) == [1, 2]
+
+    # Uma parte da remoção, depois metade da carga 2 reativada no meio do
+    # caminho (entre duas etapas). Os ids da carga 2 são 6k+2; id % 4 = 0
+    # pega um sim, um não. A primeira etapa (lote de 7 ids) já apagou o id 2,
+    # que não seria reativado.
+    lh.executar_passo(conn, estado, 0)
+    conn.execute(text("UPDATE tmp_limpeza_teste SET ativo = 1 WHERE upload_id = 2 AND id % 4 = 0"))
+    conn.commit()
+    estado, passos, progressos = _passos(conn, estado)
+    assert passos >= 2  # lotes de 7 ids: várias etapas
+    assert progressos == sorted(progressos) and progressos[-1] == 100
+
+    restantes = dict(
+        conn.execute(text("SELECT upload_id, COUNT(*) FROM tmp_limpeza_teste GROUP BY upload_id")).fetchall()
+    )
+    assert restantes == {2: 5, 3: 10, 4: 10, 5: 10, 6: 10}  # carga 2: só as 5 reativadas
+    assert estado["linhas"] == 15 == estado["resultado"][0]["linhas_removidas"]
+
+    # Rodar de novo depois do fim não faz nada.
+    lh.executar_passo(conn, estado, 0)
+    assert estado["fase"] == "fim" and estado["linhas"] == 15

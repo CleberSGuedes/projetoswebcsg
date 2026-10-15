@@ -3068,3 +3068,8 @@ body.app-loading-active {
 .limpeza-modal .limpeza-tabela th.num,
 .limpeza-modal .limpeza-tabela td.num { text-align: right; white-space: nowrap; }
 .limpeza-historico .limpeza-col-check { width: 32px; text-align: center; }
+.limpeza-historico .limpeza-pendente {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  margin: 0 0 14px; font-size: 13px; border-color: #d97706; color: #92400e; background: rgba(245,158,11,0.10);
+}
+.theme-dark .limpeza-historico .limpeza-pendente { color: #fbbf24; }

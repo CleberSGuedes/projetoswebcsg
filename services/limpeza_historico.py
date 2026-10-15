@@ -21,6 +21,7 @@ exercício pode chegar no ano seguinte (ex.: FIP 613 de 2025 carregado em
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
@@ -43,22 +44,28 @@ TABELAS: dict[str, dict[str, str]] = {
 TAMANHO_LOTE = 20_000
 NOME_TRAVA = "limpeza_historico"
 
-# Sinal de vida do processamento (docs/claude.md, seção 23.7): uma thread
-# grava `atualizado_em` no log a cada INTERVALO_SINAL segundos, mesmo durante
-# um comando longo (GROUP BY do EMP, OPTIMIZE TABLE). Sem sinal por mais de
-# LIMITE_SEM_SINAL segundos, o processo da aplicação foi encerrado pelo
-# servidor (o LiteSpeed recicla os processos) e a thread morreu junto.
-INTERVALO_SINAL = 20
-LIMITE_SEM_SINAL = 120
+# Processamento em etapas curtas, conduzidas pela tela (docs/claude.md,
+# seção 23.9). No servidor online (LiteSpeed) uma thread em segundo plano
+# é reciclada/congelada com o processo; por isso cada requisição faz no
+# máximo PRAZO_PASSO segundos de trabalho, grava onde parou e responde.
+PRAZO_PASSO = 10.0
+# Sem etapa por mais de LIMITE_PAUSA segundos: a tela foi fechada ou a
+# conexão caiu. A execução fica "pausada" e pode ser continuada.
+LIMITE_PAUSA = 300
+# Análise por faixas de id: começa com FAIXA_INICIAL ids e ajusta a faixa
+# para cada GROUP BY levar cerca de ALVO_FAIXA segundos.
+FAIXA_INICIAL = 200_000
+FAIXA_MIN, FAIXA_MAX = 20_000, 5_000_000
+ALVO_FAIXA = 3.0
 
 
-def sem_sinal_de_vida(status: str, atualizado_em: datetime | None, agora: datetime) -> bool:
-    """True se um processamento "em andamento" parou de dar sinal de vida."""
+def pausada(status: str, atualizado_em: datetime | None, agora: datetime) -> bool:
+    """True se uma execução "em andamento" está sem etapas (tela fechada)."""
     if status != "em andamento":
         return False
     if atualizado_em is None:
         return True
-    return (agora - atualizado_em).total_seconds() > LIMITE_SEM_SINAL
+    return (agora - atualizado_em).total_seconds() > LIMITE_PAUSA
 
 
 @dataclass
@@ -275,20 +282,46 @@ def remover_cargas(
     ids = [c.upload_id for c in plano.remover]
     inicio = min(c.id_min for c in plano.remover)
     fim = max(c.id_max for c in plano.remover)
-    stmt = text(
-        f"DELETE FROM {plano.tabela} WHERE id >= :a AND id < :b "
-        "AND ativo = 0 AND upload_id IN :ids"
-    ).bindparams(bindparam("ids", expanding=True))
     total = 0
     atual = inicio
     while atual <= fim:
-        proximo = atual + TAMANHO_LOTE
-        total += conn.execute(stmt, {"a": atual, "b": proximo, "ids": ids}).rowcount or 0
-        conn.commit()
-        atual = proximo
+        atual, removidas = remover_lotes(conn, plano.tabela, ids, atual, fim, prazo=None, max_lotes=1)
+        total += removidas
         if progresso:
             progresso(int(100 * min(atual - inicio, fim - inicio + 1) / (fim - inicio + 1)))
     return total
+
+
+def remover_lotes(
+    conn,
+    tabela: str,
+    ids: list[int],
+    cursor: int,
+    fim: int,
+    prazo: float | None,
+    max_lotes: int | None = None,
+) -> tuple[int, int]:
+    """Apaga lotes de TAMANHO_LOTE ids a partir de `cursor` até `fim`.
+
+    Para quando passar do `prazo` (time.monotonic()) ou após `max_lotes`.
+    Devolve (novo cursor, linhas removidas). Mesmas garantias de
+    remover_cargas: `ativo = 0 AND upload_id IN (...)` e commit por lote -
+    retomar do cursor nunca apaga nada ativo nem repete trabalho.
+    """
+    stmt = text(
+        f"DELETE FROM {tabela} WHERE id >= :a AND id < :b "
+        "AND ativo = 0 AND upload_id IN :ids"
+    ).bindparams(bindparam("ids", expanding=True))
+    removidas = lotes = 0
+    while cursor <= fim:
+        proximo = cursor + TAMANHO_LOTE
+        removidas += conn.execute(stmt, {"a": cursor, "b": proximo, "ids": ids}).rowcount or 0
+        conn.commit()
+        cursor = proximo
+        lotes += 1
+        if (prazo is not None and time.monotonic() >= prazo) or (max_lotes and lotes >= max_lotes):
+            break
+    return cursor, removidas
 
 
 def otimizar_tabela(conn, tabela: str) -> str:
@@ -311,3 +344,242 @@ def obter_trava(conn) -> bool:
 
 def liberar_trava(conn) -> None:
     conn.execute(text("SELECT RELEASE_LOCK(:n)"), {"n": NOME_TRAVA})
+
+
+# ---------------------------------------------------------------- etapas
+#
+# O estado de uma execução é um dict serializável em JSON, guardado na
+# coluna `estado` do limpeza_historico_log entre uma etapa e outra - qualquer
+# processo da aplicação continua de onde o anterior parou.
+
+
+def analisar_faixa(conn, tabela: str, de: int, ate: int) -> dict[int, list]:
+    """Totais por carga das linhas com id em [de, ate).
+
+    Formato: {upload_id: [data_arquivo ISO, exercícios, linhas, ativos,
+    id_min, id_max]}. "exercícios" = valores normalizados encontrados
+    (-1 = valor que não é exercício); a carga só tem exercício se, somando
+    todas as faixas, houver exatamente um.
+    """
+    col_ex = TABELAS[tabela]["exercicio"]
+    rows = conn.execute(
+        text(
+            f"SELECT upload_id, MAX(data_arquivo), MIN({col_ex}), MAX({col_ex}), COUNT(*), "
+            f"SUM(CAST(ativo AS UNSIGNED)), MIN(id), MAX(id) FROM {tabela} "
+            "WHERE id >= :a AND id < :b GROUP BY upload_id"
+        ),
+        {"a": de, "b": ate},
+    ).fetchall()
+    parcial = {}
+    for upload_id, data_arquivo, ex_min, ex_max, linhas, ativos, id_min, id_max in rows:
+        exercicios = set()
+        for valor in (ex_min, ex_max):
+            if valor is not None:  # MIN/MAX ignoram NULL, como em carregar_cargas
+                normalizado = normalizar_exercicio(valor)
+                exercicios.add(normalizado if normalizado is not None else -1)
+        parcial[int(upload_id) if upload_id is not None else 0] = [
+            data_arquivo.isoformat() if data_arquivo else None,
+            sorted(exercicios),
+            int(linhas or 0),
+            int(ativos or 0),
+            int(id_min),
+            int(id_max),
+        ]
+    return parcial
+
+
+def mesclar_cargas(acumulado: dict[str, list], parcial: dict[int, list]) -> dict[str, list]:
+    """Soma os totais de uma faixa aos já acumulados (chaves em texto - JSON)."""
+    for upload_id, (data, exercicios, linhas, ativos, id_min, id_max) in parcial.items():
+        atual = acumulado.get(str(upload_id))
+        if atual is None:
+            acumulado[str(upload_id)] = [data, list(exercicios), linhas, ativos, id_min, id_max]
+            continue
+        datas = [d for d in (atual[0], data) if d]
+        atual[0] = max(datas, key=datetime.fromisoformat) if datas else None
+        atual[1] = sorted(set(atual[1]) | set(exercicios))
+        atual[2] += linhas
+        atual[3] += ativos
+        atual[4] = min(atual[4], id_min)
+        atual[5] = max(atual[5], id_max)
+    return acumulado
+
+
+def cargas_de_agregados(acumulado: dict[str, list]) -> list[Carga]:
+    cargas = []
+    for upload_id, (data, exercicios, linhas, ativos, id_min, id_max) in acumulado.items():
+        unico = len(exercicios) == 1 and exercicios[0] != -1
+        cargas.append(
+            Carga(
+                upload_id=int(upload_id),
+                data_arquivo=datetime.fromisoformat(data) if data else None,
+                exercicio=exercicios[0] if unico else None,
+                linhas=linhas,
+                ativos=ativos,
+                id_min=id_min,
+                id_max=id_max,
+            )
+        )
+    return cargas
+
+
+def faixa_ids(conn, tabela: str) -> tuple[int, int] | None:
+    mn, mx = conn.execute(text(f"SELECT MIN(id), MAX(id) FROM {tabela}")).fetchone()
+    return None if mn is None else (int(mn), int(mx))
+
+
+def novo_estado(acao: str, tabelas: list[str], exercicio=None, ref_mes=None, ref_ano=None) -> dict:
+    """acao: "simulacao" | "limpeza" | "otimizacao"."""
+    return {
+        "acao": acao,
+        "tabelas": list(tabelas),
+        "params": [exercicio, ref_mes, ref_ano],
+        "fase": "inicio",
+        "i": 0,
+        "resultado": [],
+        "linhas": 0,
+    }
+
+
+def executar_passo(conn, estado: dict, prazo: float) -> None:
+    """Avança `estado` até o `prazo` (time.monotonic()) ou até o fim.
+
+    A otimização faz uma tabela por etapa: o OPTIMIZE TABLE é um comando
+    único e não pode ser dividido nem interrompido no meio.
+    """
+    # Sempre ao menos um pedaço de trabalho por etapa: mesmo com o servidor
+    # lento (prazo estourado), cada chamada avança.
+    while estado["fase"] != "fim":
+        if _avancar(conn, estado, prazo) or time.monotonic() >= prazo:
+            break
+
+
+def _proxima_tabela(estado: dict) -> None:
+    estado["i"] += 1
+    estado.pop("an", None)
+    estado.pop("rem", None)
+    if estado["i"] >= len(estado["tabelas"]):
+        estado["fase"] = "fim"
+    else:
+        estado["fase"] = "otimizacao" if estado["acao"] == "otimizacao" else "analise"
+
+
+def _avancar(conn, estado: dict, prazo: float) -> bool:
+    """Um pedaço de trabalho. True = encerrar a etapa agora."""
+    tabelas = estado["tabelas"]
+    fase = estado["fase"]
+
+    if fase == "inicio":
+        espacos = espaco_mb(conn, tabelas)
+        if estado["acao"] == "otimizacao":
+            estado["antes"] = {t: e["disco"] for t, e in espacos.items()}
+            estado["fase"] = "otimizacao"
+        else:
+            estado["tamanhos"] = {t: e["usado"] for t, e in espacos.items()}
+            estado["fase"] = "analise"
+        return False
+
+    tabela = tabelas[estado["i"]]
+
+    if fase == "otimizacao":
+        otimizar_tabela(conn, tabela)
+        depois = espaco_mb(conn, [tabela]).get(tabela, {}).get("disco", 0.0)
+        estado["resultado"].append(
+            {
+                "tabela": tabela,
+                "label": TABELAS[tabela]["label"],
+                "antes_mb": round(estado["antes"].get(tabela, 0.0), 1),
+                "depois_mb": round(depois, 1),
+            }
+        )
+        _proxima_tabela(estado)
+        return True
+
+    if fase == "analise":
+        an = estado.get("an")
+        if an is None:
+            faixa = faixa_ids(conn, tabela)
+            inicio, fim = faixa if faixa else (0, -1)
+            an = estado["an"] = {"inicio": inicio, "cursor": inicio, "fim": fim, "faixa": FAIXA_INICIAL, "agg": {}}
+        while an["cursor"] <= an["fim"]:
+            t0 = time.monotonic()
+            ate = an["cursor"] + an["faixa"]
+            mesclar_cargas(an["agg"], analisar_faixa(conn, tabela, an["cursor"], ate))
+            an["cursor"] = ate
+            gasto = max(time.monotonic() - t0, 0.05)
+            nova = an["faixa"] * ALVO_FAIXA / gasto
+            an["faixa"] = int(min(max(nova, FAIXA_MIN), FAIXA_MAX, an["faixa"] * 4))
+            if time.monotonic() >= prazo:
+                break
+        if an["cursor"] <= an["fim"]:
+            return False
+        exercicio, ref_mes, ref_ano = estado["params"]
+        plano = planejar_tabela(tabela, cargas_de_agregados(an["agg"]), exercicio, ref_mes, ref_ano)
+        plano.tamanho_mb = estado["tamanhos"].get(tabela, 0.0)
+        resumo = plano.resumo()
+        estado.pop("an", None)
+        if estado["acao"] == "limpeza" and plano.remover:
+            inicio = min(c.id_min for c in plano.remover)
+            estado["rem"] = {
+                "ids": [c.upload_id for c in plano.remover],
+                "inicio": inicio,
+                "cursor": inicio,
+                "fim": max(c.id_max for c in plano.remover),
+                "removidas": 0,
+                "resumo": resumo,
+            }
+            estado["fase"] = "remocao"
+            return False
+        if estado["acao"] == "limpeza":
+            resumo["linhas_removidas"] = 0
+        estado["resultado"].append(resumo)
+        _proxima_tabela(estado)
+        return False
+
+    if fase == "remocao":
+        rem = estado["rem"]
+        rem["cursor"], removidas = remover_lotes(conn, tabela, rem["ids"], rem["cursor"], rem["fim"], prazo)
+        rem["removidas"] += removidas
+        estado["linhas"] += removidas
+        if rem["cursor"] > rem["fim"]:
+            resumo = rem["resumo"]
+            resumo["linhas_removidas"] = rem["removidas"]
+            estado["resultado"].append(resumo)
+            _proxima_tabela(estado)
+        return False
+
+    raise ValueError(f"Fase desconhecida: {fase}")
+
+
+def _fracao(inicio: int, cursor: int, fim: int) -> float:
+    if fim < inicio:
+        return 1.0
+    return min(max((cursor - inicio) / (fim - inicio + 1), 0.0), 1.0)
+
+
+def progresso_estado(estado: dict) -> tuple[str, int]:
+    """(mensagem do que está sendo feito agora, % de 0 a 100)."""
+    tabelas = estado["tabelas"]
+    fase, i, total = estado["fase"], estado["i"], len(tabelas)
+    if fase == "fim":
+        return "Concluído.", 100
+    if fase == "inicio":
+        return "Medindo as tabelas...", 0
+    label = f"{TABELAS[tabelas[i]]['label']} ({i + 1}/{total})"
+    if fase == "otimizacao":
+        return (
+            f"Otimizando {label}... As tabelas grandes podem levar vários minutos.",
+            int(100 * i / total),
+        )
+    limpeza = estado["acao"] == "limpeza"
+    if fase == "analise":
+        an = estado.get("an")
+        dentro = _fracao(an["inicio"], an["cursor"], an["fim"]) if an else 0.0
+        parte = dentro * (0.3 if limpeza else 1.0)
+        mensagem = f"Analisando {label}... {int(dentro * 100)}%"
+    else:  # remocao
+        rem = estado["rem"]
+        dentro = _fracao(rem["inicio"], rem["cursor"], rem["fim"])
+        parte = 0.3 + 0.7 * dentro
+        mensagem = f"Removendo cargas antigas de {label}... {int(dentro * 100)}%"
+    return mensagem, min(int(100 * (i + parte) / total), 99)

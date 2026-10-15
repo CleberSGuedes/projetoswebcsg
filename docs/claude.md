@@ -7,8 +7,8 @@
 > Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
 > **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
 
-> **⚠ Limpeza de Histórico no servidor online: correção implementada em 15/10/2026, aguardando publicação e teste online.**
-> O andamento passou do arquivo para o banco (`limpeza_historico_log`), com sinal de vida. O `ALTER TABLE` já foi executado. Falta: aprovação do usuário, commit/publicação e teste no servidor online (seção 23.8). Até o teste online passar, não usar a funcionalidade no servidor online.
+> **⚠ Limpeza de Histórico: processamento em etapas curtas implementado em 15/10/2026, aguardando aprovação, publicação e teste online (seção 23.9).**
+> A versão com thread (23.8) falhou online no EMP. Agora a tela conduz o processamento em etapas de até ~10 s. A coluna `estado` já foi criada no banco. Até o teste online passar, limpezas grandes (EMP/NOB) só pelo ambiente local.
 
 ---
 
@@ -837,3 +837,61 @@ Implementado o plano da 23.7.
 - **Pendente:**
   - aprovação do usuário, commit e publicação;
   - no servidor online: simulação do PED e do FIP 613, depois uma limpeza pequena, e só então o EMP, com backup antes.
+
+### 23.9 Teste online do EMP falhou → processamento em etapas curtas (2026-10-15)
+**O teste online** (com a versão da 23.8 publicada, commit `49daae9`):
+- **Tabelas pequenas funcionaram.** FIP 613, PED e EST EMP: simulação, limpeza (187.504 linhas em 91 s) e otimização (194,6 MB liberados).
+- **O EMP parou no meio** (log 22):
+  - removeu 2.920.000 das 5.624.176 linhas e parou às 16:52:59, com 66%;
+  - 2 minutos depois, a tela avisou "interrompido", como planejado;
+  - **mas a trava `GET_LOCK` continuou presa** pela conexão do processo online. A conexão não caiu sozinha, apesar do `wait_timeout` de 300 s. Ou seja, o processo não morreu: ficou **congelado**.
+- **O servidor online removeu cerca de 15 vezes mais devagar** que o ambiente local: 2,92 milhões em 11 min, contra 2,70 milhões em 45 s.
+- **Suspeita, não confirmada:** limites de recursos do CloudLinux (o MariaDB é `10.11.19-MariaDB-cll-lve`). A conta do banco não tem o privilégio PROCESS, por isso não dá para ver as conexões da aplicação online (`@localhost`).
+- **Destravado** com o Restart da aplicação no cPanel, feito pelo usuário. O resto do EMP (2.704.176 linhas) foi limpo e otimizado pelo ambiente local: o EMP caiu de 18,99 GB para 2,45 GB.
+- **Os dados ativos ficaram intactos o tempo todo.** As 56.693 linhas ativas eram exatamente a carga 224.
+
+**Decisão do usuário:** a limpeza de EMP e NOB **precisa funcionar online**, pela tela. Quem herdar o acesso de administrador não terá o ambiente local.
+
+**O Teto-SEDUC fica de fora.** Ele usa o mesmo status em arquivo, mas recebe 3 a 5 cargas por ano, com processamento curto. O usuário avaliou que não sofre o problema de volume. Se algum dia aparecer "Processamento não encontrado" no Teto, conferir o dashboard, porque a carga provavelmente gravou.
+
+**Implementação** (nenhuma thread; o trabalho só acontece enquanto uma requisição está aberta):
+- **Banco** (autorizado pelo usuário, executado pela IA): `ALTER TABLE limpeza_historico_log ADD COLUMN estado MEDIUMTEXT NULL`. A coluna guarda o JSON com o ponto de parada. As colunas da 23.8 continuam em uso: `progresso`, `mensagem` e `atualizado_em`.
+- **`services/limpeza_historico.py`**
+  - `executar_passo(conn, estado, prazo)` avança uma máquina de fases: `inicio` → `analise` → `remocao` → próxima tabela → `fim`. Na otimização: `inicio` → `otimizacao`, uma tabela por etapa.
+  - Toda etapa faz **ao menos um pedaço** de trabalho. Com o servidor lento, ela pode passar um pouco do prazo, mas nunca fica parada.
+  - **Análise por faixas de id** (`analisar_faixa` + `mesclar_cargas` + `cargas_de_agregados`). O tamanho da faixa se ajusta para ~3 s por `GROUP BY` (`FAIXA_INICIAL` = 200 mil ids, entre 20 mil e 5 milhões). O resultado é idêntico ao do `GROUP BY` único (`carregar_cargas`): conferido em teste e no banco real, no EMP e no NOB.
+  - **Remoção com prazo** (`remover_lotes`): continua por carga inteira, com `ativo = 0 AND upload_id IN (...)` e commit por lote. Retomar do cursor nunca apaga nada ativo nem repete trabalho. `remover_cargas` passou a usar `remover_lotes` e continua coberta pelos testes antigos.
+  - `PRAZO_PASSO` = 10 s e `LIMITE_PAUSA` = 300 s. `pausada()` substituiu `sem_sinal_de_vida()`.
+- **`rotas/limpeza_historico_routes.py`**
+  - `simular`/`executar`/`otimizar` só criam a linha do log (com `estado` inicial) e devolvem o `job_id`.
+  - **`POST /api/limpeza-historico/passo/<id>`** faz uma etapa e responde no mesmo formato do status. Uma trava curta por execução (`limpeza_passo_<id>`) faz com que duas abas não executem a mesma etapa; a segunda recebe `ocupado`.
+  - Se uma etapa der erro, a rota responde 500 com `transitorio` e **não grava o estado**: a próxima chamada refaz a etapa do último ponto gravado.
+  - **Uma limpeza ou otimização por vez** (`_iniciar_exclusivo`): checa a regra e cria a linha sob um `GET_LOCK` que dura só a requisição.
+    - Execução com etapa recente: responde 409.
+    - Execução pausada há mais de 5 min: vira `abandonada`, com o total removido até ali registrado, e a nova começa.
+  - `/info` devolve `pendente` (limpeza ou otimização não concluída), e "Últimas execuções" mostra `pausada`. Simulação parada vira `abandonada` sem aviso.
+  - Saíram a thread, a classe `Andamento` e o sinal de vida da 23.8.
+- **Tela**
+  - `executarPassos()` substituiu o acompanhamento do status: chama `/passo` em sequência.
+  - Rede fora ou erro 5xx: tenta de novo com espera crescente. Depois de 6 falhas seguidas, a execução **pausa** e aparece um modal "Execução pausada".
+  - Um aviso no topo da página (`#limpeza-pendente`) mostra a execução pendente, com o botão **Continuar**.
+  - Os textos de loading pedem para manter a tela aberta.
+  - CSS próprio `.limpeza-pendente` (não existia classe de alerta de aviso).
+- **Status novos no log:** `abandonada`. Também aparece `pausada`, calculado na hora (no banco continua `em andamento`). `interrompida` só existe nas execuções da versão com thread.
+
+**Testes:**
+- 58/58 na suíte. Novos testes:
+  - `test_pausada` e `test_mesclar_cargas_soma_as_faixas`;
+  - simulação em etapas igual à análise única;
+  - limpeza em etapas retomando do cursor, com metade de uma carga reativada no meio. Esses dois usam `TEMPORARY TABLE` com linhas intercaladas por id e passam o estado por JSON a cada etapa, como a rota.
+- No banco real, chamando as rotas:
+  - simulação de EMP e NOB, mantendo out/2026: 1 etapa de 8,9 s localmente. Com o prazo forçado a 1 s, 2 etapas e o resultado igual ao `carregar_cargas`;
+  - a regra de uma por vez: 409 com outra execução recente; a pausada vira `abandonada`; etapa em execução encerrada devolve a mensagem final.
+  - As linhas de teste dessa última verificação foram apagadas do log. Nenhuma etapa de remoção foi chamada.
+
+**Validação online pendente** (depois de aprovação, commit e publicação):
+1. Simulação de PED e FIP 613.
+2. **NOB, exercício 2026, mantendo out/2026.** Remove cerca de 741 mil linhas, das cargas de outubro anteriores à última (todas já desativadas). Fechar a aba no meio para testar o **Continuar**.
+3. Otimização do NOB.
+
+**Recomendação de uso:** limpeza **mensal**, fora do horário das cargas automáticas (por volta das 05h).
