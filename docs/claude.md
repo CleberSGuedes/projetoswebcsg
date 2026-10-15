@@ -7,8 +7,8 @@
 > Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
 > **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
 
-> **⚠ Limpeza de Histórico: processamento em etapas curtas implementado em 15/10/2026, aguardando aprovação, publicação e teste online (seção 23.9).**
-> A versão com thread (23.8) falhou online no EMP. Agora a tela conduz o processamento em etapas de até ~10 s. A coluna `estado` já foi criada no banco. Até o teste online passar, limpezas grandes (EMP/NOB) só pelo ambiente local.
+> **Limpeza de Histórico: em uso online desde 15/10/2026** (etapas curtas conduzidas pela tela, commit `97230e0`; seção 23.9).
+> Falta observar online uma remoção que precise de várias etapas e o botão "Continuar". Deve acontecer na primeira limpeza mensal grande; ver o fim da seção 23.9.
 
 ---
 
@@ -889,9 +889,40 @@ Implementado o plano da 23.7.
   - a regra de uma por vez: 409 com outra execução recente; a pausada vira `abandonada`; etapa em execução encerrada devolve a mensagem final.
   - As linhas de teste dessa última verificação foram apagadas do log. Nenhuma etapa de remoção foi chamada.
 
-**Validação online pendente** (depois de aprovação, commit e publicação):
-1. Simulação de PED e FIP 613.
-2. **NOB, exercício 2026, mantendo out/2026.** Remove cerca de 741 mil linhas, das cargas de outubro anteriores à última (todas já desativadas). Fechar a aba no meio para testar o **Continuar**.
-3. Otimização do NOB.
+**Validação online** (15/10/2026, commit `97230e0`, `RELEASE_2_2026_10_15.2`, feita pelo usuário):
+
+| Log | Ação | Resultado | Duração |
+|---|---|---|---|
+| 34 | Limpeza do NOB (2026, manter out/2026) | 741.095 linhas removidas | 5 s |
+| 35 | Otimização do NOB | 2.119 MB → 184,8 MB | 2 s |
+| 37 | Limpeza do EMP (2026, manter out/2026) | 774.839 linhas removidas | 6 s |
+| 38 | Otimização das 5 tabelas | EMP 2.479 MB → 174,8 MB | 3 s, em 5 etapas (uma por tabela) |
+
+- **Velocidade:** online, a remoção rodou a ~140 mil linhas/s, contra ~4.400/s à tarde com o EMP de 19 GB e a versão com thread. A causa da diferença não foi confirmada: pode ser o tamanho e a fragmentação da tabela, ou o processo congelado. Com as tabelas pequenas, cada limpeza coube numa etapa só.
+- **Resultado do dia:** EMP de **19,1 GB para 175 MB**; NOB de **15,8 GB para 185 MB**.
+- **Medição do banco inteiro depois da limpeza** (15/10/2026, ~18h10, com `ANALYZE TABLE` nas 95 tabelas antes):
+  - **438 MB em disco** (429 MB de dados e índices, mais 9 MB livres dentro dos arquivos), contra ~35 GB antes;
+  - `DATA_FREE` = 0 nas 5 tabelas otimizadas;
+  - contagens reais: EMP 56.693 e NOB 69.212, todas ativas (só a carga do dia); EST EMP 9.129 (967 ativas); FIP 613 6.150 (1.673 ativas); PED 66.
+- **Espaço livre no servidor:** não dá para saber pelo banco. O usuário do banco não tem privilégio para consultar o disco (nem `PROCESS` ou `INNODB_SYS_TABLESPACES`). O limite é a cota da conta no cPanel. Para ver a cota, rode no Terminal do cPanel (só leitura):
+  - `uapi --output=jsonpretty Quota get_quota_info` (cota);
+  - `uapi --output=jsonpretty Mysql list_databases` (tamanho de cada banco, em bytes, em cache).
+- **Medição da cota em 15/10/2026, ~18h30:**
+  - **cota de 100.000 MB (~100 GB); 59.348 MB usados e 40.652 MB livres.**
+  - Esse "usado" ainda contava o `proj5954_spo-csg` com **22,9 GB**, valor em cache do cPanel. O real é 438 MB. Depois do recálculo do cPanel, o esperado é **~38 GB usados e ~62 GB livres**.
+  - O que continua ocupando, pelo cache do cPanel:
+
+    | Item | Tamanho |
+    |---|---|
+    | `proj5954_spo_csg_amb_cleber` | 11,3 GB |
+    | `proj5954_spo_csg_amb_jean` | 11,0 GB |
+    | `proj5954_spo_csg_homolog` | 10,9 GB |
+    | Home: `projetoswebcsg_app` 1,8 GB, `repositories` 1,5 GB, `virtualenv` 1,1 GB, `db_backups` 549 MB e outros | 5,6 GB |
+    | Outros bancos | ~0,1 GB |
+
+  - O `df` mostra o disco inteiro do servidor (12 TB, compartilhado). Não é referência para a conta.
+- **Próximo ganho grande de espaço:** os três bancos de homologação e dev, ~33 GB juntos. Devem ter o mesmo acúmulo de cargas diárias desativadas. O caminho é sincronizar a Limpeza de Histórico com `homologacao`, `dev/cleber` e `dev/jean` e rodar a limpeza em cada ambiente. A sincronização ficou adiada por decisão do usuário (15/10/2026).
+- **Ainda não exercitado online:** a remoção em várias etapas e o botão **Continuar**. Estão cobertos pelos testes automáticos. A primeira limpeza mensal grande deve passar dos 10 s por etapa: são ~1,7 milhão de linhas por mês no EMP e no NOB. Nessa ocasião, conferir no log que a execução concluiu e, se possível, testar o Continuar fechando a aba no meio.
+- **Atenção na escolha do mês:** "manter out/2026" no EMP também removeu a carga de 30/09 que tinha sido mantida antes. Está dentro da regra (dados desativados), mas a escolha do mês define qual foto do exercício fica guardada.
 
 **Recomendação de uso:** limpeza **mensal**, fora do horário das cargas automáticas (por volta das 05h).
