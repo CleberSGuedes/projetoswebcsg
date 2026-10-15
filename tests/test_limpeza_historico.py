@@ -5,7 +5,7 @@ ponta a ponta numa TEMPORARY TABLE do MySQL: ela só existe na conexão do
 teste e some sozinha - nenhuma tabela real (emp, nob, ...) é tocada.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from flask import Flask
@@ -115,6 +115,21 @@ def test_validar_parametros():
     ]:
         with pytest.raises(ValueError):
             validar_parametros(*args)
+
+
+def test_sem_sinal_de_vida():
+    """Processo reciclado pelo servidor no meio do processamento (seção 23.7)."""
+    agora = datetime(2026, 10, 15, 10, 0, 0)
+    sinal = lambda seg: datetime(2026, 10, 15, 10, 0, 0) - timedelta(seconds=seg)  # noqa: E731
+    assert not lh.sem_sinal_de_vida("em andamento", sinal(lh.INTERVALO_SINAL * 3), agora)
+    assert not lh.sem_sinal_de_vida("em andamento", sinal(lh.LIMITE_SEM_SINAL), agora)
+    assert lh.sem_sinal_de_vida("em andamento", sinal(lh.LIMITE_SEM_SINAL + 1), agora)
+    assert lh.sem_sinal_de_vida("em andamento", None, agora)
+    # Só o que está em andamento pode ser dado como interrompido.
+    for status in ("concluida", "falha", "interrompida"):
+        assert not lh.sem_sinal_de_vida(status, sinal(3600), agora)
+    # O limite precisa de folga sobre o intervalo do sinal (atraso, banco lento).
+    assert lh.LIMITE_SEM_SINAL >= 4 * lh.INTERVALO_SINAL
 
 
 @pytest.fixture

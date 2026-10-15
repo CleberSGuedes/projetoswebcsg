@@ -7,6 +7,9 @@
 > Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
 > **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
 
+> **⚠ Limpeza de Histórico no servidor online: correção implementada em 15/10/2026, aguardando publicação e teste online.**
+> O andamento passou do arquivo para o banco (`limpeza_historico_log`), com sinal de vida. O `ALTER TABLE` já foi executado. Falta: aprovação do usuário, commit/publicação e teste no servidor online (seção 23.8). Até o teste online passar, não usar a funcionalidade no servidor online.
+
 ---
 
 ## 1. Visão geral
@@ -788,3 +791,49 @@ O mês/ano é separado do exercício porque **a carga final de um exercício pod
 - **Fazer backup do banco antes de limpezas grandes.** A remoção é definitiva, e o banco da `main` é o de produção.
 - **Sincronizar com `homologacao`, `dev/cleber` e `dev/jean`** quando o usuário pedir. Nas branches, o menu vem de `services/features.py` via `_menu.html`, então o item do `base.html` não é necessário lá. Cada ambiente tem banco próprio: a tabela `limpeza_historico_log` é criada pelo `db.create_all()` ao subir a aplicação.
 - **Quando as novas UOs entrarem (seção 22)**, a limpeza continua correta, porque trabalha por carga. Revisar se o exercício/UO de uma carga continua único.
+
+### 23.7 Problema no servidor online: "Processamento não encontrado" (2026-10-14) — corrigido na seção 23.8
+**Sintoma:** no servidor online (cPanel), a simulação do FIP 613 e do PED terminava com o modal "Falha na simulação — Processamento não encontrado". Localmente sempre funcionou.
+
+**Diagnóstico** (comandos de leitura no Terminal do cPanel, em `/home/proj5954/projetoswebcsg_app`):
+- **O processamento em si funcionou.** Os arquivos `outputs/status/limpeza_historico_*.json` das tentativas existem no servidor e estão como "Simulação concluída", com o resultado certo (ex.: PED mantendo 30/09, 132 cargas e 5.667 linhas a remover). Não há erro da limpeza em `logs/app.log` nem em `stderr.log`.
+- **O servidor não roda Passenger, e sim LiteSpeed (`lswsgi -m passenger_wsgi.py`), com vários processos da aplicação ao mesmo tempo** (4 no momento da análise). Esses processos são **reciclados em poucos minutos**: todos tinham cerca de 4 minutos de vida, e logo depois não havia nenhum rodando (`pgrep` vazio).
+- **Causa:** o andamento era guardado em **arquivo** (`services/job_status.py`). Cada consulta de status cai em qualquer um dos processos, e a leitura voltou "não encontrado". Uma possível origem é ler no instante em que outro processo reescrevia o arquivo: `write_text` trunca e reescreve, e `read_status` trata conteúdo vazio como inexistente. No ambiente local há um processo só, por isso o problema nunca apareceu.
+- **Risco adicional pelo mesmo motivo:** o processamento roda numa thread dentro de um desses processos. Se o LiteSpeed reciclar o processo no meio de uma limpeza demorada (EMP/NOB), a thread morre sem aviso e a tela fica esperando para sempre.
+  - **Nenhum dado se perde:** cada lote é commitado, e o que sobra continua desativado e intacto.
+  - **A trava `GET_LOCK` é liberada sozinha**, junto com a conexão.
+
+**Correção combinada com o usuário (a implementar em 15/10/2026):**
+1. **Guardar o andamento no banco**, na tabela `limpeza_historico_log`, em vez de arquivo. Todos os processos enxergam o mesmo dado, e o `UPDATE` é atômico. Isso resolve o "Processamento não encontrado". A simulação também passa a ter uma linha no log, só para o status. Ela não aparece em "Últimas execuções" (filtrar por `acao IN ('limpeza', 'otimizacao')`).
+2. **Sinal de vida:** o processamento atualiza um horário (ex.: `atualizado_em`) a cada passo. Se ficar mais de cerca de 2 minutos sem atualização, a tela mostra "Processamento interrompido pelo servidor — rode novamente", e o log fica com a situação "interrompida". Rodar de novo continua de onde parou, porque a remoção é em lotes e sempre com `ativo = 0`.
+3. Exige `ALTER TABLE limpeza_historico_log` para as colunas novas (progresso, mensagem, `atualizado_em`). Pedir autorização ao usuário antes de executar. Os outros ambientes (homologação/dev) recebem a tabela já completa pelo `db.create_all()` na sincronização.
+4. **Depois de publicar, testar no servidor online:** simulação do PED e do FIP 613, e uma limpeza pequena. Só então partir para o EMP.
+
+**Até a correção ser publicada:** não usar a Limpeza de Histórico no servidor online. No ambiente local ela funciona normalmente.
+
+**Atenção para outras funcionalidades:** o **Teto-SEDUC** usa o mesmo mecanismo (thread + status em arquivo). Ele é curto e não houve relato de erro, mas está sujeito ao mesmo problema. Se aparecer "Processamento não encontrado" no upload do Teto, a correção é a mesma.
+
+### 23.8 Correção: andamento no banco + sinal de vida (2026-10-15)
+Implementado o plano da 23.7.
+- **Banco** (autorizado pelo usuário, executado pela IA em 15/10/2026): `ALTER TABLE limpeza_historico_log ADD COLUMN progresso SMALLINT NULL, ADD COLUMN mensagem VARCHAR(500) NULL, ADD COLUMN atualizado_em DATETIME NULL`. As colunas aceitam vazio, então o código antigo publicado continuou funcionando. As 5 linhas existentes não foram alteradas. Os outros ambientes recebem a tabela completa pelo `db.create_all()` na sincronização.
+- **`rotas/limpeza_historico_routes.py`**
+  - O `job_id` da tela passa a ser o **id da linha do log**, criada na requisição antes de a thread começar. A simulação também ganha uma linha (`acao = 'simulacao'`), mas "Últimas execuções" mostra só `limpeza` e `otimizacao`.
+  - Classe `Andamento`: cada gravação é um `UPDATE` próprio com commit (`engine.begin()`), fora da sessão do ORM. O progresso só é gravado quando muda, porque a remoção chama o callback a cada lote.
+  - **Sinal de vida:** uma thread separada grava `atualizado_em` a cada `INTERVALO_SINAL` (20 s), inclusive durante comandos longos sem progresso (o `GROUP BY` de ~1 min do EMP, o `OPTIMIZE TABLE`). Sem sinal por mais de `LIMITE_SEM_SINAL` (120 s), o processo morreu. Essa regra fica em `sem_sinal_de_vida()`, em `services/limpeza_historico.py`.
+  - A rota de status e a de "Últimas execuções" marcam a linha como **`interrompida`** com um `UPDATE` condicional: só vale se a linha continuar em andamento e parada. A tela recebe "Processamento interrompido pelo servidor. Rode novamente.", e na limpeza a mensagem acrescenta que a nova execução continua de onde parou. Se ninguém estiver acompanhando na tela, a linha é marcada na próxima abertura da página.
+  - Na limpeza, `linhas_removidas` e `detalhes` são gravados ao fim de cada tabela. Se o processo morrer, o log mostra o que já saiu.
+  - Um erro inesperado grava `falha` com a mensagem e o resultado parcial.
+  - A resposta do status manteve o mesmo formato (`state`/`message`/`progress`/`resultado`), então o JS da tela não mudou.
+- **`services/job_status.py` não mudou:** continua sendo usado pelos outros módulos.
+- **Testes:**
+  - Novo `test_sem_sinal_de_vida`. Suíte completa: 55/55.
+  - Contra o banco, chamando as funções reais das rotas:
+    - simulação do PED: 132 cargas e 5.667 linhas, igual ao status do servidor online de 14/10;
+    - uma linha parada há 5 min virou "interrompida", e uma linha com sinal de 30 s continuou em andamento;
+    - id inexistente devolve 404;
+    - com intervalo de 1 s e um job parado por 5 s, `atualizado_em` avançou a cada segundo, e a linha fechou como `concluida`.
+  - Ficaram no log 4 linhas de teste com `acao = 'simulacao'` e `user_email = 'teste-claude@local'`. Elas não aparecem na tela.
+- **Atenção ao testar por script:** uma sessão SQLAlchemy reaproveitada mantém a transação aberta (REPEATABLE READ) e não enxerga as gravações das outras threads. Use `commit()` antes de cada leitura. As rotas não têm esse problema, porque cada requisição abre uma sessão nova.
+- **Pendente:**
+  - aprovação do usuário, commit e publicação;
+  - no servidor online: simulação do PED e do FIP 613, depois uma limpeza pequena, e só então o EMP, com backup antes.

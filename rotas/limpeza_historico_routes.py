@@ -4,29 +4,36 @@ Rotas num arquivo próprio (e não em home_routes.py) para não aumentar o
 arquivo monolítico e facilitar a sincronização com as outras branches.
 Acesso pela feature "atualizar/limpeza-historico" (painel de permissões);
 o administrador (nível 1) passa pela regra geral de require_feature.
+
+O andamento de cada processamento fica na linha do limpeza_historico_log
+(o id da linha é o job_id da tela), e não em arquivo: o servidor online
+roda vários processos da aplicação ao mesmo tempo e recicla esses processos
+em poucos minutos (seção 23.7).
 """
 
 from __future__ import annotations
 
 import json
 import threading
-import uuid
+from datetime import timedelta
 
 from flask import Blueprint, current_app, jsonify, render_template, request, session
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, or_, text
 
 from models import LimpezaHistoricoLog, db
 from rotas.home_routes import _now_local, require_feature
 from services import limpeza_historico as lh
 from services.auth import login_required
-from services.job_status import read_status, update_status_fields, write_status
 
 limpeza_bp = Blueprint("limpeza_historico", __name__)
 
 FEATURE = "atualizar/limpeza-historico"
-KIND = "limpeza_historico"
 ESTADO_FIM = "processamento finalizado"
 ESTADO_FALHA = "falha no processamento"
+ESTADO_ANDAMENTO = "em processamento"
+ACOES_HISTORICO = ("limpeza", "otimizacao")  # a simulação não aparece em "Últimas execuções"
+
+_LOG = LimpezaHistoricoLog.__table__
 
 
 def _user_email() -> str:
@@ -50,44 +57,78 @@ def _fmt_num(valor: float, casas: int = 0) -> str:
     return f"{valor:,.{casas}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _novo_job() -> int:
-    return (uuid.uuid4().int % 2_000_000_000) + 1
+def _json(valor) -> str:
+    return json.dumps(valor, ensure_ascii=False, default=str)
 
 
-def _iniciar(job_id: int, alvo, *args) -> None:
-    app = current_app._get_current_object()
-
-    def _runner():
-        with app.app_context():
-            try:
-                alvo(job_id, *args)
-            except Exception as exc:  # erro inesperado: registra e avisa a tela
-                app.logger.exception("Falha na Limpeza de Histórico (job %s).", job_id)
-                write_status(KIND, job_id, ESTADO_FALHA, f"Falha: {exc}", progress=100)
-            finally:
-                db.session.remove()
-
-    threading.Thread(target=_runner, daemon=True).start()
+# ---------------------------------------------------------------- andamento
 
 
-def _progresso(job_id: int):
-    def _cb(mensagem: str, pct: int) -> None:
-        write_status(KIND, job_id, "em processamento", mensagem, progress=pct)
+class Andamento:
+    """Andamento de um processamento, gravado na linha do log.
 
-    return _cb
+    Toda gravação é um UPDATE próprio, com commit (engine.begin), fora da
+    sessão do ORM - pode ser chamada da thread do processamento e da thread
+    do sinal de vida. Os horários usam _now_local() (fuso da aplicação).
+    """
 
+    def __init__(self, log_id: int):
+        self.log_id = log_id
+        self.engine = db.engine  # capturado no contexto da requisição
+        self.linhas = 0
+        self.resultado: list[dict] = []
+        self._ultimo = None
+        self._parar = threading.Event()
 
-# ---------------------------------------------------------------- jobs
+    def _gravar(self, onde_andamento: bool = False, **campos) -> None:
+        campos["atualizado_em"] = _now_local()
+        stmt = _LOG.update().where(_LOG.c.id == self.log_id)
+        if onde_andamento:
+            stmt = stmt.where(_LOG.c.status == "em andamento")
+        with self.engine.begin() as conn:
+            conn.execute(stmt.values(**campos))
 
+    def progresso(self, mensagem: str, pct: int) -> None:
+        if (mensagem, pct) == self._ultimo:
+            return  # a remoção chama a cada lote; só grava quando muda
+        self._ultimo = (mensagem, pct)
+        self._gravar(mensagem=mensagem[:500], progresso=pct)
 
-def _job_simular(job_id, exercicio, ref_mes, ref_ano, tabelas):
-    with db.engine.connect() as conn:
-        planos = lh.simular(conn, exercicio, ref_mes, ref_ano, tabelas, _progresso(job_id))
-    write_status(KIND, job_id, ESTADO_FIM, "Simulação concluída.", progress=100)
-    update_status_fields(KIND, job_id, resultado=[p.resumo() for p in planos])
+    def parcial(self, linhas: int, resultado: list[dict]) -> None:
+        """Guarda o que já foi feito - fica no log se o processo morrer."""
+        self.linhas, self.resultado = linhas, resultado
+        self._gravar(linhas_removidas=linhas, detalhes=_json(resultado))
+
+    def iniciar_sinal_de_vida(self) -> None:
+        def _loop():
+            while not self._parar.wait(lh.INTERVALO_SINAL):
+                try:
+                    self._gravar(onde_andamento=True)
+                except Exception:  # banco indisponível por um instante: tenta no próximo
+                    pass
+
+        threading.Thread(target=_loop, daemon=True).start()
+
+    def _fechar(self, status: str, mensagem: str, detalhes) -> None:
+        self._parar.set()
+        self._gravar(
+            status=status,
+            mensagem=mensagem[:500],
+            progresso=100,
+            linhas_removidas=self.linhas,
+            detalhes=_json(detalhes),
+            finalizado_em=_now_local(),
+        )
+
+    def concluir(self, mensagem: str, resultado) -> None:
+        self._fechar("concluida", mensagem, resultado)
+
+    def falhar(self, mensagem: str) -> None:
+        self._fechar("falha", mensagem, {"erro": mensagem, "parcial": self.resultado})
 
 
 def _novo_log(acao, exercicio, ref_mes, ref_ano, tabelas, email) -> int:
+    agora = _now_local()  # fuso da aplicação (America/Manaus), não o do banco
     log = LimpezaHistoricoLog(
         acao=acao,
         status="em andamento",
@@ -96,52 +137,103 @@ def _novo_log(acao, exercicio, ref_mes, ref_ano, tabelas, email) -> int:
         ref_mes=ref_mes,
         ref_ano=ref_ano,
         tabelas=",".join(tabelas),
-        iniciado_em=_now_local(),  # fuso da aplicação (America/Manaus), não o do banco
+        iniciado_em=agora,
+        atualizado_em=agora,
+        progresso=0,
+        mensagem="Iniciando...",
     )
     db.session.add(log)
     db.session.commit()
     return log.id
 
 
-def _fechar_log(log_id, status, linhas, detalhes) -> None:
-    log = db.session.get(LimpezaHistoricoLog, log_id)
-    if not log:
+def _mensagem_interrompido(acao: str) -> str:
+    mensagem = "Processamento interrompido pelo servidor. Rode novamente."
+    if acao == "limpeza":
+        mensagem += (
+            " O que já foi removido continua removido; o restante segue desativado e intacto,"
+            " e a nova execução continua de onde parou."
+        )
+    return mensagem
+
+
+def _verificar_sinal(log: LimpezaHistoricoLog) -> None:
+    """Marca como "interrompida" a linha em andamento sem sinal de vida.
+
+    O UPDATE só vale se a linha continuar em andamento e parada - se o
+    processamento gravou algo nesse meio tempo, nada muda.
+    """
+    agora = _now_local()
+    ultimo = log.atualizado_em or log.iniciado_em
+    if not lh.sem_sinal_de_vida(log.status, ultimo, agora):
         return
-    log.status = status
-    log.linhas_removidas = linhas
-    log.detalhes = json.dumps(detalhes, ensure_ascii=False, default=str)
-    log.finalizado_em = _now_local()
+    limite = agora - timedelta(seconds=lh.LIMITE_SEM_SINAL)
+    mensagem = _mensagem_interrompido(log.acao)
+    resultado = db.session.execute(
+        _LOG.update()
+        .where(_LOG.c.id == log.id)
+        .where(_LOG.c.status == "em andamento")
+        .where(or_(_LOG.c.atualizado_em.is_(None), _LOG.c.atualizado_em < limite))
+        .values(status="interrompida", mensagem=mensagem, finalizado_em=agora)
+    )
     db.session.commit()
+    if resultado.rowcount:
+        log.status, log.mensagem, log.finalizado_em = "interrompida", mensagem, agora
 
 
-def _job_executar(job_id, exercicio, ref_mes, ref_ano, tabelas, email):
+def _iniciar(log_id: int, alvo, *args) -> None:
+    app = current_app._get_current_object()
+    andamento = Andamento(log_id)
+
+    def _runner():
+        with app.app_context():
+            andamento.iniciar_sinal_de_vida()
+            try:
+                alvo(andamento, *args)
+            except Exception as exc:  # erro inesperado: registra e avisa a tela
+                app.logger.exception("Falha na Limpeza de Histórico (log %s).", log_id)
+                try:
+                    andamento.falhar(f"Falha: {exc}")
+                except Exception:
+                    app.logger.exception("Não foi possível registrar a falha (log %s).", log_id)
+            finally:
+                andamento._parar.set()
+                db.session.remove()
+
+    threading.Thread(target=_runner, daemon=True).start()
+
+
+# ---------------------------------------------------------------- jobs
+
+
+def _job_simular(andamento: Andamento, exercicio, ref_mes, ref_ano, tabelas):
+    with db.engine.connect() as conn:
+        planos = lh.simular(conn, exercicio, ref_mes, ref_ano, tabelas, andamento.progresso)
+    andamento.concluir("Simulação concluída.", [p.resumo() for p in planos])
+
+
+def _job_executar(andamento: Andamento, exercicio, ref_mes, ref_ano, tabelas):
     with db.engine.connect() as conn:
         if not lh.obter_trava(conn):
-            write_status(
-                KIND, job_id, ESTADO_FALHA,
-                "Já existe uma limpeza ou otimização em andamento. Aguarde a conclusão.",
-                progress=100,
-            )
+            andamento.falhar("Já existe uma limpeza ou otimização em andamento. Aguarde a conclusão.")
             return
-        log_id = _novo_log("limpeza", exercicio, ref_mes, ref_ano, tabelas, email)
-        resultado, total = [], 0
         try:
             # Reanalisa no momento da execução (não confia na simulação da
             # tela - pode ter entrado carga nova desde então).
             def _analise(msg, pct):
-                write_status(KIND, job_id, "em processamento", msg, progress=int(pct * 0.3))
+                andamento.progresso(msg, int(pct * 0.3))
 
             planos = lh.simular(conn, exercicio, ref_mes, ref_ano, tabelas, _analise)
+            resultado, total = [], 0
             for i, plano in enumerate(planos):
                 base = 30 + 70 * i / len(planos)
                 passo = 70 / len(planos)
                 label = lh.TABELAS[plano.tabela]["label"]
 
                 def _cb(pct, base=base, passo=passo, label=label):
-                    write_status(
-                        KIND, job_id, "em processamento",
+                    andamento.progresso(
                         f"Removendo cargas antigas de {label}... {pct}%",
-                        progress=int(base + passo * pct / 100),
+                        int(base + passo * pct / 100),
                     )
 
                 removidas = lh.remover_cargas(conn, plano, _cb)
@@ -149,39 +241,25 @@ def _job_executar(job_id, exercicio, ref_mes, ref_ano, tabelas, email):
                 resumo = plano.resumo()
                 resumo["linhas_removidas"] = removidas
                 resultado.append(resumo)
-            _fechar_log(log_id, "concluida", total, resultado)
-        except Exception as exc:
-            _fechar_log(log_id, "falha", total, {"erro": str(exc), "parcial": resultado})
-            raise
+                andamento.parcial(total, resultado)
         finally:
             lh.liberar_trava(conn)
-    write_status(
-        KIND, job_id, ESTADO_FIM,
-        f"Limpeza concluída: {_fmt_num(total)} registros removidos.",
-        progress=100,
-    )
-    update_status_fields(KIND, job_id, resultado=resultado)
+    andamento.concluir(f"Limpeza concluída: {_fmt_num(total)} registros removidos.", resultado)
 
 
-def _job_otimizar(job_id, tabelas, email):
+def _job_otimizar(andamento: Andamento, tabelas):
     with db.engine.connect() as conn:
         if not lh.obter_trava(conn):
-            write_status(
-                KIND, job_id, ESTADO_FALHA,
-                "Já existe uma limpeza ou otimização em andamento. Aguarde a conclusão.",
-                progress=100,
-            )
+            andamento.falhar("Já existe uma limpeza ou otimização em andamento. Aguarde a conclusão.")
             return
-        log_id = _novo_log("otimizacao", None, None, None, tabelas, email)
-        resultado = []
         try:
             antes = {t: e["disco"] for t, e in lh.espaco_mb(conn, tabelas).items()}
+            resultado = []
             for i, tabela in enumerate(tabelas):
-                write_status(
-                    KIND, job_id, "em processamento",
+                andamento.progresso(
                     f"Otimizando {lh.TABELAS[tabela]['label']} ({i + 1}/{len(tabelas)})... "
                     "As tabelas grandes podem levar vários minutos.",
-                    progress=int(5 + 90 * i / len(tabelas)),
+                    int(5 + 90 * i / len(tabelas)),
                 )
                 lh.otimizar_tabela(conn, tabela)
                 depois = lh.espaco_mb(conn, [tabela]).get(tabela, {}).get("disco", 0.0)
@@ -193,10 +271,7 @@ def _job_otimizar(job_id, tabelas, email):
                         "depois_mb": round(depois, 1),
                     }
                 )
-            _fechar_log(log_id, "concluida", 0, resultado)
-        except Exception as exc:
-            _fechar_log(log_id, "falha", 0, {"erro": str(exc), "parcial": resultado})
-            raise
+                andamento.parcial(0, resultado)
         finally:
             lh.liberar_trava(conn)
     liberado = sum(r["antes_mb"] - r["depois_mb"] for r in resultado)
@@ -206,12 +281,7 @@ def _job_otimizar(job_id, tabelas, email):
         else "Otimização concluída, sem redução de tamanho. A otimização só libera espaço "
         "depois de uma limpeza que remova boa parte da tabela."
     )
-    write_status(
-        KIND, job_id, ESTADO_FIM,
-        mensagem,
-        progress=100,
-    )
-    update_status_fields(KIND, job_id, resultado=resultado)
+    andamento.concluir(mensagem, resultado)
 
 
 # ---------------------------------------------------------------- rotas
@@ -243,8 +313,15 @@ def api_limpeza_info():
                 {"t": tabelas},
             ).fetchall()
         )
+    # Execução cujo processo morreu sem ninguém acompanhando na tela: sem
+    # isso ficaria "em andamento" para sempre em "Últimas execuções".
+    for log in LimpezaHistoricoLog.query.filter_by(status="em andamento").all():
+        _verificar_sinal(log)
     logs = (
-        LimpezaHistoricoLog.query.order_by(LimpezaHistoricoLog.id.desc()).limit(10).all()
+        LimpezaHistoricoLog.query.filter(LimpezaHistoricoLog.acao.in_(ACOES_HISTORICO))
+        .order_by(LimpezaHistoricoLog.id.desc())
+        .limit(10)
+        .all()
     )
     return jsonify(
         {
@@ -278,11 +355,10 @@ def api_limpeza_info():
     )
 
 
-def _disparar(alvo, payload_args):
-    job_id = _novo_job()
-    write_status(KIND, job_id, "em processamento", "Iniciando...", progress=0)
-    _iniciar(job_id, alvo, *payload_args)
-    return jsonify({"ok": True, "job_id": job_id})
+def _disparar(acao, alvo, exercicio, ref_mes, ref_ano, tabelas, *extra):
+    log_id = _novo_log(acao, exercicio, ref_mes, ref_ano, tabelas, _user_email())
+    _iniciar(log_id, alvo, *extra)
+    return jsonify({"ok": True, "job_id": log_id})
 
 
 @limpeza_bp.route("/api/limpeza-historico/simular", methods=["POST"])
@@ -293,7 +369,10 @@ def api_limpeza_simular():
         exercicio, ref_mes, ref_ano, tabelas = _parametros(request.get_json(silent=True) or {})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    return _disparar(_job_simular, (exercicio, ref_mes, ref_ano, tabelas))
+    return _disparar(
+        "simulacao", _job_simular, exercicio, ref_mes, ref_ano, tabelas,
+        exercicio, ref_mes, ref_ano, tabelas,
+    )
 
 
 @limpeza_bp.route("/api/limpeza-historico/executar", methods=["POST"])
@@ -307,7 +386,10 @@ def api_limpeza_executar():
         exercicio, ref_mes, ref_ano, tabelas = _parametros(payload)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    return _disparar(_job_executar, (exercicio, ref_mes, ref_ano, tabelas, _user_email()))
+    return _disparar(
+        "limpeza", _job_executar, exercicio, ref_mes, ref_ano, tabelas,
+        exercicio, ref_mes, ref_ano, tabelas,
+    )
 
 
 @limpeza_bp.route("/api/limpeza-historico/otimizar", methods=["POST"])
@@ -321,14 +403,30 @@ def api_limpeza_otimizar():
         _, _, _, tabelas = _parametros(payload, exigir_periodo=False)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    return _disparar(_job_otimizar, (tabelas, _user_email()))
+    return _disparar("otimizacao", _job_otimizar, None, None, None, tabelas, tabelas)
 
 
 @limpeza_bp.route("/api/limpeza-historico/status/<int:job_id>", methods=["GET"])
 @login_required
 @require_feature(FEATURE)
 def api_limpeza_status(job_id: int):
-    data = read_status(KIND, job_id)
-    if not data:
+    log = db.session.get(LimpezaHistoricoLog, job_id)
+    if not log:
         return jsonify({"error": "Processamento não encontrado."}), 404
-    return jsonify({"ok": True, **data})
+    _verificar_sinal(log)
+    if log.status == "em andamento":
+        return jsonify(
+            {"ok": True, "state": ESTADO_ANDAMENTO, "message": log.mensagem or "", "progress": log.progresso}
+        )
+    if log.status == "concluida":
+        try:
+            resultado = json.loads(log.detalhes) if log.detalhes else []
+        except ValueError:
+            resultado = []
+        return jsonify(
+            {"ok": True, "state": ESTADO_FIM, "message": log.mensagem or "", "progress": 100, "resultado": resultado}
+        )
+    # "falha" ou "interrompida"
+    return jsonify(
+        {"ok": True, "state": ESTADO_FALHA, "message": log.mensagem or "Falha no processamento.", "progress": 100}
+    )

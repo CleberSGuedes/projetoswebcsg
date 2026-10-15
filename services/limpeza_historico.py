@@ -43,6 +43,23 @@ TABELAS: dict[str, dict[str, str]] = {
 TAMANHO_LOTE = 20_000
 NOME_TRAVA = "limpeza_historico"
 
+# Sinal de vida do processamento (docs/claude.md, seção 23.7): uma thread
+# grava `atualizado_em` no log a cada INTERVALO_SINAL segundos, mesmo durante
+# um comando longo (GROUP BY do EMP, OPTIMIZE TABLE). Sem sinal por mais de
+# LIMITE_SEM_SINAL segundos, o processo da aplicação foi encerrado pelo
+# servidor (o LiteSpeed recicla os processos) e a thread morreu junto.
+INTERVALO_SINAL = 20
+LIMITE_SEM_SINAL = 120
+
+
+def sem_sinal_de_vida(status: str, atualizado_em: datetime | None, agora: datetime) -> bool:
+    """True se um processamento "em andamento" parou de dar sinal de vida."""
+    if status != "em andamento":
+        return False
+    if atualizado_em is None:
+        return True
+    return (agora - atualizado_em).total_seconds() > LIMITE_SEM_SINAL
+
 
 @dataclass
 class Carga:

@@ -1304,13 +1304,21 @@ class ApiKey(db.Model):
 
 class LimpezaHistoricoLog(db.Model):
     """Registro de cada limpeza/otimização feita em Atualizar > Limpeza de
-    Histórico (services/limpeza_historico.py)."""
+    Histórico (services/limpeza_historico.py).
+
+    Também guarda o andamento do processamento (a tela consulta pelo id da
+    linha). Não pode ficar em arquivo: o servidor online roda vários
+    processos da aplicação ao mesmo tempo (docs/claude.md, seção 23.7). A
+    simulação também ganha uma linha, só para o andamento - ela não aparece
+    em "Últimas execuções".
+    """
 
     __tablename__ = "limpeza_historico_log"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    acao = db.Column(db.String(20), nullable=False)  # "limpeza" | "otimizacao"
-    status = db.Column(db.String(20), nullable=False)  # "em andamento" | "concluida" | "falha"
+    acao = db.Column(db.String(20), nullable=False)  # "simulacao" | "limpeza" | "otimizacao"
+    # "em andamento" | "concluida" | "falha" | "interrompida"
+    status = db.Column(db.String(20), nullable=False)
     user_email = db.Column(db.String(255), nullable=False)
     exercicio = db.Column(db.Integer, nullable=True)
     ref_mes = db.Column(db.SmallInteger, nullable=True)
@@ -1320,3 +1328,8 @@ class LimpezaHistoricoLog(db.Model):
     detalhes = db.Column(db.Text, nullable=True)  # JSON com o resultado por tabela
     iniciado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     finalizado_em = db.Column(db.DateTime, nullable=True)
+    progresso = db.Column(db.SmallInteger, nullable=True)  # 0-100
+    mensagem = db.Column(db.String(500), nullable=True)  # andamento / motivo da falha
+    # Sinal de vida: atualizado durante todo o processamento. Parado há mais
+    # de lh.LIMITE_SEM_SINAL segundos = processo encerrado pelo servidor.
+    atualizado_em = db.Column(db.DateTime, nullable=True)
