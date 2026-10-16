@@ -7887,11 +7887,22 @@ def _start_teto_seduc_thread(
                 # gravar (REPEATABLE READ) e duplicar os registros ativos.
                 # UOs diferentes nao disputam registros, entao nao se bloqueiam.
                 lock_name = f"teto_seduc:{exercicio}:{uo}"
-                obtido_lock = db.session.execute(
-                    text("SELECT GET_LOCK(:name, :timeout)"),
-                    {"name": lock_name, "timeout": 30},
-                ).scalar()
+                # GET_LOCK pertence a CONEXAO que o adquiriu. A sessao do
+                # SQLAlchemy devolve a conexao ao pool a cada commit, entao o
+                # RELEASE_LOCK podia cair em outra conexao e o lock ficava
+                # preso. Por isso o lock usa uma conexao dedicada, liberada
+                # na mesma conexao.
+                lock_conn = db.engine.connect()
+                try:
+                    obtido_lock = lock_conn.execute(
+                        text("SELECT GET_LOCK(:name, :timeout)"),
+                        {"name": lock_name, "timeout": 30},
+                    ).scalar()
+                except Exception:
+                    lock_conn.close()
+                    raise
                 if not obtido_lock:
+                    lock_conn.close()
                     raise ValueError(
                         "Já existe um processamento do Teto - SEDUC em andamento "
                         "para este exercício e UO. Aguarde a conclusão e tente novamente."
@@ -7937,9 +7948,12 @@ def _start_teto_seduc_thread(
 
                     db.session.commit()
                 finally:
-                    db.session.execute(
-                        text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
-                    )
+                    try:
+                        lock_conn.execute(
+                            text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                        )
+                    finally:
+                        lock_conn.close()
                 write_status(
                     "teto_seduc",
                     upload_id,
