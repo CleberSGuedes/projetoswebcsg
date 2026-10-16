@@ -6578,6 +6578,501 @@
     });
   }
 
+  // Atualizar > Limpeza de Histórico (rotas/limpeza_historico_routes.py)
+  function initLimpezaHistorico() {
+    const root = document.getElementById("limpeza-historico-page");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+
+    const form = document.getElementById("form-limpeza-historico");
+    const exercicioEl = document.getElementById("limpeza-exercicio");
+    const refMesEl = document.getElementById("limpeza-ref-mes");
+    const refAnoEl = document.getElementById("limpeza-ref-ano");
+    const simularBtn = document.getElementById("limpeza-simular");
+    const msg = document.getElementById("limpeza-msg");
+    const resultadoCard = document.getElementById("limpeza-resultado-card");
+    const resultadoTitulo = document.getElementById("limpeza-resultado-titulo");
+    const corpo = document.getElementById("limpeza-resultado-corpo");
+    const rodape = document.getElementById("limpeza-resultado-total");
+    const confirmacao = document.getElementById("limpeza-confirmacao");
+    const confirmarEl = document.getElementById("limpeza-confirmar");
+    const executarBtn = document.getElementById("limpeza-executar");
+    const execMsg = document.getElementById("limpeza-exec-msg");
+    const tamanhosEl = document.getElementById("limpeza-tamanhos");
+    const otimizarConfirmarEl = document.getElementById("limpeza-otimizar-confirmar");
+    const otimizarBtn = document.getElementById("limpeza-otimizar");
+    const otimizarMsg = document.getElementById("limpeza-otimizar-msg");
+    const logEl = document.getElementById("limpeza-historico-log");
+    const JOB_KEY = "limpezaHistoricoJob";
+    const MESES = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    const esc = (v) =>
+      String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    const fmtInt = (n) => Number(n || 0).toLocaleString("pt-BR");
+    const fmtMb = (mb) => {
+      const v = Number(mb || 0);
+      return v >= 1024
+        ? `${(v / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} GB`
+        : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+    };
+    // Horários do log são gravados no fuso da aplicação (America/Manaus).
+    const fmtData = (iso) => formatAmazonLocalTime(iso);
+    const fmtDia = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "-");
+    const setMsg = (el, text, erro = false) => {
+      if (!el) return;
+      el.textContent = text || "";
+      el.classList.toggle("text-error", Boolean(erro));
+    };
+    const onlyDigits = (el) => {
+      if (!el) return;
+      el.addEventListener("input", () => {
+        el.value = el.value.replace(/\D/g, "").slice(0, 4);
+      });
+    };
+    onlyDigits(exercicioEl);
+    onlyDigits(refAnoEl);
+
+    // Ano da carga acompanha o exercício até o usuário mudar por conta própria.
+    let refAnoEditado = false;
+    if (refAnoEl) refAnoEl.addEventListener("input", () => { refAnoEditado = true; });
+    if (exercicioEl) {
+      exercicioEl.addEventListener("input", () => {
+        if (!refAnoEditado && refAnoEl) refAnoEl.value = exercicioEl.value;
+      });
+    }
+
+    const parametros = () => ({
+      exercicio: Number(exercicioEl?.value || 0),
+      ref_mes: Number(refMesEl?.value || 0),
+      ref_ano: Number(refAnoEl?.value || 0),
+      tabelas: Array.from(root.querySelectorAll("input[name='limpeza-tabela']:checked")).map((el) => el.value),
+    });
+    let simulados = null; // parâmetros (JSON) da última simulação concluída
+
+    const invalidarSimulacao = () => {
+      simulados = null;
+      if (confirmacao) confirmacao.hidden = true;
+      if (confirmarEl) confirmarEl.checked = false;
+      if (executarBtn) executarBtn.disabled = true;
+    };
+    if (form) {
+      form.addEventListener("input", invalidarSimulacao);
+      form.addEventListener("change", invalidarSimulacao);
+    }
+
+    const otimizarTodasEl = document.getElementById("limpeza-otimizar-todas");
+    const tabelasOtimizar = () =>
+      Array.from(root.querySelectorAll("input[name='limpeza-otimizar-tabela']:checked")).map((el) => el.value);
+    const sincronizarTodas = () => {
+      const caixas = root.querySelectorAll("input[name='limpeza-otimizar-tabela']");
+      if (!otimizarTodasEl) return;
+      const marcadas = tabelasOtimizar().length;
+      otimizarTodasEl.checked = caixas.length > 0 && marcadas === caixas.length;
+      otimizarTodasEl.indeterminate = marcadas > 0 && marcadas < caixas.length;
+    };
+
+    let emAndamento = false;
+    const atualizarBotoes = () => {
+      if (simularBtn) simularBtn.disabled = emAndamento;
+      if (executarBtn) executarBtn.disabled = emAndamento || !(confirmarEl?.checked && simulados);
+      if (otimizarBtn) otimizarBtn.disabled = emAndamento || !otimizarConfirmarEl?.checked || !tabelasOtimizar().length;
+    };
+    const ocupado = (sim) => {
+      emAndamento = sim;
+      atualizarBotoes();
+    };
+    if (confirmarEl) confirmarEl.addEventListener("change", atualizarBotoes);
+    if (otimizarConfirmarEl) otimizarConfirmarEl.addEventListener("change", atualizarBotoes);
+    if (tamanhosEl) {
+      tamanhosEl.addEventListener("change", (ev) => {
+        if (ev.target?.name !== "limpeza-otimizar-tabela") return;
+        sincronizarTodas();
+        atualizarBotoes();
+      });
+    }
+    if (otimizarTodasEl) {
+      otimizarTodasEl.addEventListener("change", () => {
+        root.querySelectorAll("input[name='limpeza-otimizar-tabela']").forEach((el) => {
+          el.checked = otimizarTodasEl.checked;
+        });
+        sincronizarTodas();
+        atualizarBotoes();
+      });
+    }
+
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Erro que pausa a execução (rede/servidor fora): pode ser continuada depois.
+    class ExecucaoPausada extends Error {}
+    // Etapas curtas conduzidas pela tela (docs/claude.md, seção 23.9): cada
+    // POST faz até ~10 s de trabalho no servidor e devolve o andamento.
+    const executarPassos = async (jobId, msgEl) => {
+      let falhas = 0;
+      let ultimoErro = "";
+      for (;;) {
+        let res;
+        let data = null;
+        try {
+          res = await fetch(`/api/limpeza-historico/passo/${encodeURIComponent(jobId)}`, {
+            method: "POST",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          data = await res.json().catch(() => null);
+        } catch (err) {
+          res = null; // rede fora
+        }
+        const definitivo = res && data && !res.ok && !data.transitorio && res.status < 500;
+        if (definitivo) throw new Error(data.error || "Falha no processamento.");
+        if (!res || !res.ok || !data) {
+          // Rede fora, servidor reiniciando (502/503) ou falha numa etapa:
+          // tenta de novo; persistindo, pausa (nada se perde).
+          falhas += 1;
+          ultimoErro = data?.error || (res ? `Servidor respondeu ${res.status}.` : "Sem conexão com o servidor.");
+          if (falhas >= 6) throw new ExecucaoPausada(ultimoErro);
+          setMsg(msgEl, `Instabilidade (${ultimoErro}). Tentando novamente...`);
+          await wait(3000 * falhas);
+          continue;
+        }
+        falhas = 0;
+        setMsg(msgEl, data.message || "Processando...");
+        const subtitulo = document.getElementById("app-loading-subtitle");
+        if (subtitulo && data.state === "em processamento") {
+          const pct = Number.isFinite(Number(data.progress)) ? ` (${Number(data.progress)}%)` : "";
+          subtitulo.textContent = `${data.message || "Processando..."}${pct}`;
+        }
+        if (data.state === "processamento finalizado") return data;
+        if (data.state === "falha no processamento") throw new Error(data.message || "Falha no processamento.");
+        if (data.ocupado) await wait(2000); // outra aba está fazendo esta etapa
+      }
+    };
+
+    const iniciar = async (url, payload) => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao iniciar o processamento.");
+      return data.job_id;
+    };
+
+    const guardarJob = (job) => {
+      try { sessionStorage.setItem(JOB_KEY, JSON.stringify(job)); } catch (e) { /* ignorado */ }
+    };
+    const limparJob = () => {
+      try { sessionStorage.removeItem(JOB_KEY); } catch (e) { /* ignorado */ }
+    };
+
+    const renderPlanos = (planos, executado) => {
+      if (!corpo || !resultadoCard) return 0;
+      resultadoCard.hidden = false;
+      if (resultadoTitulo) resultadoTitulo.textContent = executado ? "Resultado da limpeza" : "Resultado da simulação";
+      let totLinhas = 0;
+      let totMb = 0;
+      let totCargas = 0;
+      corpo.innerHTML = planos
+        .map((p) => {
+          const linhas = executado ? (p.linhas_removidas ?? p.linhas_remover) : p.linhas_remover;
+          totLinhas += linhas;
+          totMb += p.mb_estimado;
+          totCargas += p.cargas_remover;
+          const obs = [];
+          if (!p.mantida) {
+            obs.push('<span class="limpeza-aviso">Sem carga deste exercício no mês escolhido: nada é removido.</span>');
+          } else if (!p.cargas_remover) {
+            obs.push("Nada a remover.");
+          }
+          if (p.protegidas.length) {
+            obs.push(`<span class="limpeza-aviso">${p.protegidas.length} carga(s) ativa(s) preservada(s).</span>`);
+          }
+          const mantida = p.mantida
+            ? `${fmtDia(p.mantida.data_arquivo)} (carga ${esc(p.mantida.upload_id)}, ${fmtInt(p.mantida.linhas)} registros)`
+            : "-";
+          return `<tr>
+            <td>${esc(p.label)}</td>
+            <td>${mantida}</td>
+            <td class="num">${fmtInt(p.cargas_remover)}</td>
+            <td class="num">${fmtInt(linhas)}</td>
+            <td class="num">${fmtMb(p.mb_estimado)}</td>
+            <td>${obs.join(" ")}</td>
+          </tr>`;
+        })
+        .join("");
+      if (rodape) {
+        rodape.innerHTML = `<tr><td>Total</td><td></td><td class="num">${fmtInt(totCargas)}</td>
+          <td class="num">${fmtInt(totLinhas)}</td><td class="num">${fmtMb(totMb)}</td><td></td></tr>`;
+      }
+      return totLinhas;
+    };
+
+    // Limpeza/otimização não concluída (tela fechada, conexão caiu): oferece
+    // "Continuar", que retoma do ponto gravado no servidor.
+    const pendenteEl = document.getElementById("limpeza-pendente");
+    const pendenteTextoEl = document.getElementById("limpeza-pendente-texto");
+    const continuarBtn = document.getElementById("limpeza-continuar");
+    let pendenteAtual = null;
+    const renderPendente = (p) => {
+      pendenteAtual = p && !emAndamento ? p : null;
+      if (!pendenteEl) return;
+      pendenteEl.hidden = !pendenteAtual;
+      if (!pendenteAtual || !pendenteTextoEl) return;
+      const nome = p.acao === "limpeza" ? "Limpeza" : "Otimização";
+      const situacao = p.pausada ? "pausada" : "em andamento em outra tela";
+      pendenteTextoEl.textContent =
+        `${nome} ${situacao} em ${fmtInt(p.progress)}% (iniciada por ${p.user_email} em ${fmtData(p.iniciado_em)}). ` +
+        `Último passo: ${p.message || "-"}`;
+    };
+    if (continuarBtn) {
+      continuarBtn.addEventListener("click", () => {
+        if (!pendenteAtual || emAndamento) return;
+        const job = { id: pendenteAtual.job_id, tipo: pendenteAtual.acao === "limpeza" ? "executar" : "otimizar" };
+        if (pendenteEl) pendenteEl.hidden = true;
+        guardarJob(job);
+        acompanhar(job);
+      });
+    }
+
+    const carregarInfo = async () => {
+      try {
+        const res = await fetch("/api/limpeza-historico/info", { headers: { "X-Requested-With": "fetch" } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar informações.");
+        renderPendente(data.pendente);
+        if (tamanhosEl) {
+          const selecionadas = new Set(tabelasOtimizar());
+          tamanhosEl.innerHTML = data.tabelas
+            .map(
+              (t) =>
+                `<tr><td class="limpeza-col-check"><input type="checkbox" name="limpeza-otimizar-tabela" value="${esc(t.tabela)}"
+                  aria-label="Otimizar ${esc(t.label)}" ${selecionadas.has(t.tabela) ? "checked" : ""} /></td>
+                <td>${esc(t.label)}</td><td class="num">${fmtInt(t.linhas_aprox)}</td><td class="num">${fmtMb(t.tamanho_mb)}</td>
+                <td class="num ${t.livre_mb >= 100 ? "limpeza-aviso" : ""}">${fmtMb(t.livre_mb)}</td></tr>`
+            )
+            .join("");
+          sincronizarTodas();
+          atualizarBotoes();
+        }
+        if (logEl) {
+          logEl.innerHTML = data.historico.length
+            ? data.historico
+                .map((l) => {
+                  const limpeza = l.acao === "limpeza";
+                  const params = limpeza
+                    ? `Exercício ${esc(l.exercicio)}, manter ${MESES[l.ref_mes] || ""}/${esc(l.ref_ano)}`
+                    : "-";
+                  return `<tr><td>${fmtData(l.iniciado_em)}</td><td>${limpeza ? "Limpeza" : "Otimização"}</td>
+                    <td>${params}</td><td>${esc(l.tabelas)}</td>
+                    <td class="num">${limpeza ? fmtInt(l.linhas_removidas) : "-"}</td>
+                    <td>${esc(l.status)}</td><td>${esc(l.user_email)}</td></tr>`;
+                })
+                .join("")
+            : '<tr><td colspan="7" class="muted">Nenhuma execução registrada.</td></tr>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const TEXTOS = {
+      simular: {
+        loading: "Simulando a limpeza...",
+        aguarde: "Analisando as cargas de cada tabela. Mantenha esta tela aberta até o fim.",
+        sucesso: "Simulação concluída",
+        falha: "Falha na simulação",
+      },
+      executar: {
+        loading: "Executando a limpeza...",
+        aguarde:
+          "Removendo as cargas antigas. Mantenha esta tela aberta até o fim: se ela for fechada, a limpeza pausa e pode ser continuada depois.",
+        sucesso: "Limpeza concluída com sucesso",
+        falha: "Falha na limpeza",
+      },
+      otimizar: {
+        loading: "Otimizando as tabelas...",
+        aguarde:
+          "Reconstruindo as tabelas para liberar espaço. Mantenha esta tela aberta: as tabelas grandes podem levar alguns minutos.",
+        sucesso: "Otimização concluída com sucesso",
+        falha: "Falha na otimização",
+      },
+    };
+
+    // Modal no padrão da aplicação (mesmo cabeçalho dos demais modais).
+    const abrirModal = ({ titulo, mensagem, tabela, erro = false }) => {
+      document.getElementById("limpeza-modal-overlay")?.remove();
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "limpeza-modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-card limpeza-modal" role="dialog" aria-modal="true" aria-labelledby="limpeza-modal-titulo">
+          <div class="modal-header">
+            <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+            <div class="modal-header-text">
+              <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+              <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="modal-title ${erro ? "text-error" : ""}" id="limpeza-modal-titulo">
+              <i class="bi ${erro ? "bi-x-circle" : "bi-check-circle"}"></i> ${esc(titulo)}
+            </div>
+            <p>${esc(mensagem || "")}</p>
+            ${tabela || ""}
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary sm" data-limpeza-modal-ok>OK</button>
+          </div>
+        </div>`;
+      const fechar = () => {
+        document.removeEventListener("keydown", onKey, true);
+        overlay.remove();
+      };
+      const onKey = (ev) => {
+        if (ev.key === "Escape" || ev.key === "Enter") {
+          ev.preventDefault();
+          fechar();
+        }
+      };
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay) fechar(); });
+      overlay.querySelector("[data-limpeza-modal-ok]")?.addEventListener("click", fechar);
+      document.addEventListener("keydown", onKey, true);
+      document.body.appendChild(overlay);
+      overlay.querySelector("[data-limpeza-modal-ok]")?.focus();
+    };
+
+    const tabelaResumoPlanos = (planos, executado) => {
+      const linhas = planos
+        .map((p) => {
+          const qtd = executado ? (p.linhas_removidas ?? p.linhas_remover) : p.linhas_remover;
+          return `<tr><td>${esc(p.label)}</td><td class="num">${fmtInt(p.cargas_remover)}</td>
+            <td class="num">${fmtInt(qtd)}</td><td class="num">${fmtMb(p.mb_estimado)}</td></tr>`;
+        })
+        .join("");
+      return `<table class="table limpeza-tabela"><thead><tr><th>Tabela</th><th class="num">Cargas</th>
+        <th class="num">Registros ${executado ? "removidos" : "a remover"}</th><th class="num">Espaço ${executado ? "" : "estimado"}</th></tr></thead>
+        <tbody>${linhas}</tbody></table>`;
+    };
+
+    const tabelaResumoOtimizacao = (itens) =>
+      `<table class="table limpeza-tabela"><thead><tr><th>Tabela</th><th class="num">Antes</th><th class="num">Depois</th></tr></thead>
+        <tbody>${itens
+          .map((t) => `<tr><td>${esc(t.label)}</td><td class="num">${fmtMb(t.antes_mb)}</td><td class="num">${fmtMb(t.depois_mb)}</td></tr>`)
+          .join("")}</tbody></table>`;
+
+    const acompanhar = async (job) => {
+      const msgEl = job.tipo === "otimizar" ? otimizarMsg : job.tipo === "executar" ? execMsg : msg;
+      const textos = TEXTOS[job.tipo] || TEXTOS.simular;
+      ocupado(true);
+      showAppLoading(textos.loading, textos.aguarde);
+      let concluido = null;
+      try {
+        const data = await executarPassos(job.id, msgEl);
+        if (job.tipo === "simular") {
+          const planos = data.resultado || [];
+          const total = renderPlanos(planos, false);
+          simulados = job.params || null;
+          if (confirmacao) confirmacao.hidden = !total;
+          const texto = total
+            ? "Confira o resultado abaixo. Para remover, marque a confirmação e clique em Executar limpeza."
+            : "Não há cargas a remover com os parâmetros informados.";
+          setMsg(msg, `Simulação concluída. ${texto}`);
+          concluido = { titulo: textos.sucesso, mensagem: texto, tabela: tabelaResumoPlanos(planos, false) };
+        } else if (job.tipo === "executar") {
+          const planos = data.resultado || [];
+          renderPlanos(planos, true);
+          invalidarSimulacao();
+          setMsg(execMsg, data.message);
+          concluido = {
+            titulo: textos.sucesso,
+            mensagem: `${data.message} Para devolver o espaço ao servidor, use Otimizar tabelas.`,
+            tabela: tabelaResumoPlanos(planos, true),
+          };
+        } else {
+          if (otimizarConfirmarEl) otimizarConfirmarEl.checked = false;
+          setMsg(otimizarMsg, data.message);
+          concluido = { titulo: textos.sucesso, mensagem: data.message, tabela: tabelaResumoOtimizacao(data.resultado || []) };
+        }
+      } catch (err) {
+        console.error(err);
+        if (err instanceof ExecucaoPausada && job.tipo !== "simular") {
+          const texto = `A execução foi pausada por instabilidade na conexão com o servidor (${err.message}). Nada foi perdido: use o botão Continuar para retomar de onde parou.`;
+          setMsg(msgEl, texto, true);
+          concluido = { titulo: "Execução pausada", mensagem: texto, erro: true };
+        } else {
+          setMsg(msgEl, err.message, true);
+          concluido = { titulo: textos.falha, mensagem: err.message, erro: true };
+        }
+      } finally {
+        limparJob();
+        hideAppLoading();
+        ocupado(false);
+        carregarInfo();
+      }
+      if (concluido) abrirModal(concluido);
+    };
+
+    const disparar = async (tipo, url, payload, msgEl) => {
+      setMsg(msgEl, "Iniciando...");
+      ocupado(true);
+      let job;
+      try {
+        const id = await iniciar(url, payload);
+        job = { id, tipo, params: JSON.stringify(parametros()) };
+        guardarJob(job);
+      } catch (err) {
+        setMsg(msgEl, err.message, true);
+        ocupado(false);
+        abrirModal({ titulo: (TEXTOS[tipo] || TEXTOS.simular).falha, mensagem: err.message, erro: true });
+        return;
+      }
+      await acompanhar(job);
+    };
+
+    if (form) {
+      form.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        if (!form.reportValidity()) return;
+        const p = parametros();
+        if (!p.tabelas.length) {
+          setMsg(msg, "Selecione ao menos uma tabela.", true);
+          return;
+        }
+        if (resultadoCard) resultadoCard.hidden = true;
+        disparar("simular", "/api/limpeza-historico/simular", p, msg);
+      });
+    }
+
+    if (executarBtn) {
+      executarBtn.addEventListener("click", () => {
+        const p = parametros();
+        if (!simulados || JSON.stringify(p) !== simulados) {
+          setMsg(execMsg, "Os parâmetros mudaram desde a simulação. Simule novamente.", true);
+          return;
+        }
+        disparar("executar", "/api/limpeza-historico/executar", { ...p, confirmado: true }, execMsg);
+      });
+    }
+
+    if (otimizarBtn) {
+      otimizarBtn.addEventListener("click", () => {
+        const tabelas = tabelasOtimizar();
+        if (!tabelas.length) {
+          setMsg(otimizarMsg, "Selecione ao menos uma tabela para otimizar.", true);
+          return;
+        }
+        disparar("otimizar", "/api/limpeza-historico/otimizar", { tabelas, confirmado: true }, otimizarMsg);
+      });
+    }
+
+    carregarInfo();
+    // Retoma o acompanhamento se o usuário saiu da tela durante um processamento.
+    try {
+      const pendente = JSON.parse(sessionStorage.getItem(JOB_KEY) || "null");
+      if (pendente && pendente.id) acompanhar(pendente);
+    } catch (e) {
+      /* ignorado */
+    }
+  }
+
   function initChavePlanejamentoRegra() {
     const form = document.getElementById("form-chave-regra");
     const msg = document.getElementById("chave-regra-msg");
@@ -19296,6 +19791,9 @@
     }
     if (route === "atualizar/nob") {
       initNob();
+    }
+    if (route === "atualizar/limpeza-historico") {
+      initLimpezaHistorico();
     }
     if (route === "atualizar/plan20-seduc") {
       initPlan20();

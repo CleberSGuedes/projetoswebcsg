@@ -1,7 +1,14 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-09-29) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-14) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
+
+> **⚠ Ajustes pendentes: novas UOs (26101, 26201 e 26202).**
+> Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
+> **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
+
+> **Limpeza de Histórico: em uso online desde 15/10/2026** (etapas curtas conduzidas pela tela, commit `97230e0`; seção 23.9).
+> Falta observar online uma remoção que precise de várias etapas e o botão "Continuar". Deve acontecer na primeira limpeza mensal grande; ver o fim da seção 23.9.
 
 ---
 
@@ -60,6 +67,7 @@ projetoswebcsg/
 ├── rotas/
 │   ├── __init__.py            # registra os blueprints
 │   ├── auth_routes.py         # login/logout/esqueci senha/reset senha
+│   ├── limpeza_historico_routes.py # Atualizar > Execução > Limpeza de Histórico (seção 23)
 │   └── home_routes.py         # TODAS as demais rotas HTML+API (19k+ linhas)
 ├── services/                  # regras de negócio / parsers de planilhas por módulo
 │   ├── auth.py                 # decorators login_required / role_required
@@ -67,6 +75,7 @@ projetoswebcsg/
 │   ├── job_status.py           # status de jobs assíncronos em arquivos JSON (outputs/status/*.json)
 │   ├── fip613_runner.py, ped_runner.py, plan20_runner.py, est_emp_runner.py, emp_record.py, teto_seduc.py
 │   ├── uo.py                   # UOs aceitas (14101/14601) + uo_key/uo_label — regra única do Plan20 e do Teto-SEDUC (seção 20)
+│   ├── limpeza_historico.py    # Limpeza de Histórico das cargas de execução (seção 23)
 ├── node_runners/               # workers Node.js p/ EMP e NOB (processamento pesado de planilhas)
 ├── db/                          # scripts .sql de schema (CREATE TABLE) por módulo — não são migrations versionadas (tipo Alembic)
 ├── tests/                       # suíte pytest (adicionada em 2026-08-31, ver seção 9 item 8)
@@ -175,6 +184,7 @@ Variáveis suportadas pelo código mas **não presentes** no `.env` atual (usam 
   - Qualquer `db.create_all()`, script de migração manual (`db/*.sql`, `gerar_migracao_chaves.py`) ou teste local que grave dados **afeta diretamente o ambiente que está no ar**.
   - Não há, hoje, uma separação de schema/banco por ambiente (ex.: um `spo-dev` local vs. `spo-prod` remoto) — o único mecanismo de diferenciação seria o branch `homologacao` do próprio código-fonte, não do dado.
   - Isso deve ser tratado com cautela extra ao propor qualquer alteração de schema, migração de dados ou operação em massa.
+  - **Correção (2026-10-02):** o banco compartilhado vale para **produção (`main`) × desenvolvimento local da `main`**. Os ambientes de **homologação, `dev/cleber` e `dev/jean` têm banco próprio cada um** — mudança de schema feita na `main` precisa ser reaplicada em cada um (seção 21.4/21.7).
 
 ---
 
@@ -669,6 +679,10 @@ Só 3 arquivos em conflito, mais um problema que o merge automático criaria cal
 - `?v=` do CSS/JS: fica `20261002.sync-main.1` (mais novo que o `20261001.notas-see-exercicio` da branch).
 - `requirements.txt` mesclado sozinho e certo: `pdfplumber`/`xlrd` da branch + `pytest` da `main`, sem o `pyodbc` (removido na `main`, sem uso no código).
 - Verificação: nenhuma linha da `dev/cleber` perdida além do CSS da QOMP antiga, release e `?v=` antigos; `pytest` 44/44; render do menu com o PTA/LOA uma única vez e das telas do Teto/Estrutura/Plan20.
+
+### 21.6 `dev/jean` (branch `sync/main-para-dev-jean`, a partir do resultado já resolvido da homologação)
+Só o `templates/base.html` em conflito: `?v=` do CSS/JS (fica `20261002.sync-main.1`) e o rodapé — mantida a linha própria da branch (`PATCH_DEV_SPO_2026_07_01.1`) junto com o release `RELEASE_2_2026_09_29.3`. O selo de ambiente da `dev/jean` (`lab-badge`, "Integração DEV Jean", alimentado por `inject_spo_environment` no `app.py`) ficou idêntico. Verificação: nenhuma linha da branch perdida além do CSS da QOMP antiga, release e `?v=` antigos; `pytest` 44/44; `node --check`; render do menu e das telas do Teto/Estrutura/Plan20.
+
 ### 21.7 Banco de cada ambiente: `scripts/atualizar_schema_sync_main.py`
 O código sincronizado exige três mudanças de schema que a `main` fez só no banco dela:
 1. `momp.uo` (`VARCHAR(5)`) + índice `ix_momp_exercicio_uo` + histórico marcado como `14101` (seção 20) — sem isso o Teto-SEDUC e o dashboard dão erro.
@@ -684,3 +698,231 @@ Idempotente (o que já existe é pulado; pode rodar de novo sem efeito); tabela 
 
 ### 21.8 Incidente: PRs abertos contra a `main` (2026-10-02)
 Os três PRs de sincronização foram abertos com destino `main` (padrão do GitHub — os links enviados não fixavam o destino). #13 e #14 foram mergeados na `main` antes de o erro ser notado (o #15 deu conflito e chamou atenção). Resultado: a `main` (produção) recebeu o layout de julho, o trabalho em andamento da `dev/cleber` e o `.cpanel.yml` da homologação — cujo `scripts/deploy_cpanel.sh` faz `rsync --delete` na pasta de produção (apagaria `upload/`/`outputs/`, fora do Git) e exige `pdfplumber` (que derrubaria a produção se não estiver instalado). Nenhum deploy foi feito. Correção: `main` volta a `df7a37e` por force push feito pelo próprio usuário (o modo automático da IA bloqueia force push, corretamente) (backup do estado errado na tag `backup/main-pos-merge-errado-2026-10-02`) e PRs reabertos com links que fixam o destino (`/compare/<destino>...<origem>`). Lição: **sempre enviar link de PR com o destino explícito** e conferir o campo "base" antes de aprovar.
+
+### 21.9 Desfecho e limpeza (2026-10-02)
+- **Correção dos PRs:** o usuário fez o force push da `main` de volta para `df7a37e` (`git push --force-with-lease=main:03a490a origin main`), fechou o #15 sem merge e reabriu os três PRs com o destino certo — **#16** → `homologacao` (`ccb71eb`), **#17** → `dev/cleber` (`b4b7b03`), **#18** → `dev/jean` (`ebfeab8`), todos como *merge commit*. Conferido pelo Git depois: a `main` ficou idêntica ao estado de 29/09 (0 arquivos diferentes de `df7a37e`, nenhum commit de sincronização nela, `.cpanel.yml` de produção de volta à cópia simples) e cada branch ficou com conteúdo idêntico ao validado (0 arquivos diferentes da branch `sync/...` correspondente).
+- **Por que a `main` está "atrás" das branches:** de propósito. A `main` (produção) continua sem o layout de julho e sem o trabalho em andamento das `dev`; o caminho previsto é levar a `homologacao` para a `main` depois de validada no servidor de homologação, e daí em diante seguir dev → homologação → main (seção 21, Fase 4 do plano). Até lá, toda correção feita direto na `main` vai exigir uma nova sincronização como esta.
+- **Limpeza feita (não desfaz nada — as mudanças já estão gravadas nas branches de destino pelos merges #16/#17/#18; as `sync/...` eram só intermediárias):** antes de apagar, confirmado que cada `sync/...` (local e remota) estava inteiramente contida no seu destino e que as pastas de trabalho não tinham nada pendente. Removidos: as pastas de trabalho (`git worktree`) `C:\workspace\projetoswebcsg_sync`, `_sync_cleber` e `_sync_jean` (com as cópias locais do `.env`); as branches `sync/main-para-homologacao`, `sync/main-para-dev-cleber` e `sync/main-para-dev-jean`, locais e no GitHub; o ambiente Python temporário usado nos testes (com `pdfplumber`/`xlrd` das branches) e os scripts auxiliares de verificação (fora do repositório). Conferido depois da limpeza: as quatro branches seguem nos mesmos commits.
+- **Mantido de propósito:** as tags de backup no GitHub — `backup/homologacao-2026-10-02` (`c05dedd`), `backup/dev-cleber-2026-10-02` (`e72c14d`), `backup/dev-jean-2026-10-02` (`9db6021`) (estado das branches antes da sincronização) e `backup/main-pos-merge-errado-2026-10-02` (`03a490a`, a `main` com os merges errados). Servem para voltar atrás se algo aparecer nos testes da homologação; podem ser apagadas quando a homologação estiver validada. Também não foram tocadas as pastas antigas `projetoswebcsg_license_temp`/`projetoswebcsg_license_dev_cleber_temp` (de outro trabalho).
+- **Pendente (depende do deploy de cada ambiente):** rodar `scripts/atualizar_schema_sync_main.py` (o script existe só nas branches `homologacao`/`dev/*`, não na `main` — o banco de produção já estava atualizado) (primeiro sem e depois com `--aplicar`) no servidor de homologação e em cada `dev` (seção 21.7); até isso, não usar Teto-SEDUC nem upload do Plan20 nesses ambientes, e conferir o login logo depois de aplicar.
+- **Lições registradas:** (1) link de PR sempre com o destino fixo (`/compare/<destino>...<origem>`) e conferir o campo *base* antes de aprovar; (2) merge entre branches que divergiram muito: simular antes com `git merge-tree` e checar perdas silenciosas linha a linha nos dois sentidos — o pior risco aqui não estava nos conflitos, e sim no que o Git juntaria sozinho (o banner de ambiente apagado pelo revert antigo, o item de menu duplicado que apagava a `url` da `dev/cleber`); (3) o `scripts/deploy_cpanel.sh` das branches faz `rsync --delete` — nunca pode chegar à `main` sem antes excluir `upload/`/`outputs/` do rsync e instalar as dependências novas no servidor de produção; (4) o modo automático da IA bloqueia *force push* na `main` (corretamente) — esse tipo de passo fica com o usuário.
+
+## 22. Testes com as UOs 26101, 26201 e 26202 — aguardando confirmação oficial (2026-10-13 e 14)
+
+**O que é:** existe a possibilidade de o sistema passar a receber os relatórios de mais três UOs: **26101** (SECITECI), **26201** (UNEMAT) e **26202** (FAPEMAT). Antes de qualquer mudança, o usuário pediu testes com os relatórios reais dessas UOs em seis funcionalidades: Plan20, FIP 613, PED, EMP, NOB e EST EMP. A inclusão ainda depende de **confirmação oficial**.
+
+**Documento completo:** [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Leia antes de mexer em qualquer um desses módulos. Ele traz os resultados por módulo, os pontos de atenção e a lista de ajustes pendentes.
+
+**Resumo:**
+- **A leitura funciona.** Nas três UOs, todos os módulos leram e trataram os relatórios sem perder valor: as somas batem com o arquivo original e com os totais impressos pelo FIPLAN.
+- **A gravação não está pronta.** FIP 613, PED, EMP, NOB e EST EMP desativam a **tabela inteira** a cada upload (`UPDATE <tabela> SET ativo = 0 WHERE ativo = 1`). Enviar um arquivo de uma nova UO apagaria os dados da SEDUC, e o envio seguinte da SEDUC apagaria os da nova UO. PED e EMP também recalculam as dotações da SEDUC.
+- **O Plan20 está quase pronto.** Só falta incluir as UOs em `UOS_ACEITAS` (`services/uo.py`). Hoje ele mostra "processado com sucesso" sem gravar nenhuma linha dessas UOs.
+- **Regra do PAOE 8026 (Emendas Parlamentares):** atribui uma Chave de Planejamento da SEDUC a qualquer empenho/PED desse PAOE, de qualquer UO. É intencional, mas precisará ser restrita por UO. Fica a decidir se a restrição vale só para ela ou para todas as regras de chave.
+- **Ajuste já aprovado pelo usuário:** no PED, criar sempre as colunas da Dotação e da Chave de Planejamento. Hoje elas só aparecem quando alguma linha tem chave, e por isso os arquivos de saída variavam entre 50 e 67 colunas.
+- **A UO é identificada pelo conteúdo do relatório, nunca pelo nome do arquivo** (decisão do usuário). Nos testes, o EST da 26101 veio salvo com o nome "26201". Use sempre a coluna `UO` das linhas e/ou o filtro impresso no cabeçalho do FIPLAN, tanto ao conferir arquivos quanto nos ajustes futuros (seção 8.1 do documento de testes).
+
+**Como os testes foram feitos:** sem alterar o código e sem gravar no banco. As funções reais foram chamadas a partir de scripts descartáveis. As escritas no banco do EMP/NOB (Node) foram interceptadas e só registradas, e as saídas foram geradas fora da pasta `outputs/`. Os arquivos processados ficaram em `C:\workspace\Planilhas\*_SAIDA_TESTE.xlsx`, fora do repositório. Se for preciso repetir um teste, siga o mesmo cuidado: `run_fip613()`, `run_ped()`, `run_est_emp()` e os runners Node **gravam no banco** se forem chamados diretamente.
+
+**Regra para as próximas sessões:**
+1. No início da sessão, **pergunte ao usuário se a confirmação oficial já saiu** e se os ajustes pendentes (seção 9 do documento de testes) já podem ser feitos.
+2. Enquanto não houver essa autorização explícita, **não faça nenhum desses ajustes**, nem os que já foram aprovados em conceito.
+3. Quando for autorizado, comece pela desativação por UO/exercício nos módulos de execução. Sem ela, os outros ajustes não resolvem o problema.
+
+## 23. Limpeza de Histórico (Atualizar → Execução) — nova funcionalidade (2026-10-14)
+
+### 23.1 Motivação
+FIP 613, PED, EMP, NOB e EST EMP são atualizados todo dia. Cada upload desativa a carga anterior (`ativo = 0`) e grava uma cópia completa do ano. A aplicação só lê registros ativos (conferido: telas, relatórios e o recálculo de dotação filtram `ativo = 1`), então as cargas desativadas só ocupam espaço. Em 14/10/2026, mais de 99% das linhas dessas tabelas estavam desativadas, e o banco tinha cerca de **35 GB**: EMP 19,1 GB e NOB 15,8 GB. Na primeira análise o banco parecia ter 10,5 GB, porque o `information_schema` estava com estatísticas antigas (ver 23.5).
+
+### 23.2 Regra (decisões do usuário)
+O usuário informa o **exercício** e o **mês/ano da carga a manter**, e marca quais das 5 tabelas limpar. Para cada tabela marcada:
+- **mantém a última carga** daquele exercício carregada no mês/ano escolhido;
+- **remove as demais cargas** do mesmo exercício carregadas até o fim desse mês;
+- **não toca** em cargas de outros exercícios, nem em cargas posteriores ao mês escolhido;
+- **nunca remove** uma carga com registro ativo, nem carga com mais de um exercício;
+- **se não houver carga** do exercício no mês escolhido, nada é removido daquela tabela.
+
+O mês/ano é separado do exercício porque **a carga final de um exercício pode chegar no ano seguinte**: a FIP 613 de 2025 foi carregada em 14/01/2026, e o EST EMP de 2025 também em janeiro/2026. O exercício de cada carga é lido dos próprios registros. A coluna tem formatos diferentes em cada tabela: `ano` int na FIP 613, `2026` no EMP/NOB e `26` no EST EMP (`normalizar_exercicio`). A remoção trabalha sempre com a **carga inteira** (`upload_id`), nunca com linhas soltas.
+
+### 23.3 Implementação
+- **`services/limpeza_historico.py`**
+  - `planejar_tabela()`: função pura que decide o que fica e o que sai.
+  - `carregar_cargas()`: uma passada `GROUP BY upload_id` por tabela; leva cerca de 1 minuto no EMP e no NOB.
+  - `remover_cargas()`: `DELETE` em lotes de 20.000 ids por faixa de chave primária (EMP e NOB não têm índice por `upload_id`), com `ativo = 0 AND upload_id IN (...)` em todo comando e commit a cada lote.
+  - `otimizar_tabela()`: `OPTIMIZE TABLE`.
+  - `espaco_mb()`: tamanho usado, livre e em disco.
+  - Trava `GET_LOCK('limpeza_historico')`: só uma limpeza ou otimização por vez.
+- **`rotas/limpeza_historico_routes.py`**
+  - Arquivo próprio (não em `home_routes.py`), para não aumentar o arquivo monolítico e facilitar a sincronização com as branches.
+  - Blueprint `limpeza_bp`, registrado em `rotas/__init__.py`.
+  - Rotas: `/partial/atualizar/limpeza-historico` e `/api/limpeza-historico/{info,simular,executar,otimizar,status/<id>}`.
+  - Simular, executar e otimizar rodam numa thread em segundo plano, com status em arquivo (`services/job_status.py`, tipo `limpeza_historico`), no mesmo padrão do Teto-SEDUC.
+  - A execução **reanalisa as cargas na hora** e não confia na simulação da tela.
+  - Executar e otimizar exigem `confirmado: true`.
+- **Permissão:** feature `atualizar/limpeza-historico` em `services/features.py`, com item no menu do `base.html`. Aparece no **painel de permissões** sem nenhum perfil marcado. Por enquanto só o administrador acessa, pela regra geral de `require_feature` (nível 1 passa em tudo). Não há regra "só admin" no código; para liberar a outro perfil, basta marcar no painel.
+- **Tela** (`templates/partials/atualizar_limpeza_historico.html` + `initLimpezaHistorico()` em `static/js/main.js`):
+  - Formulário com exercício, mês e ano da carga, e as 5 tabelas com caixas de seleção.
+  - **Simular** mostra o resultado por tabela. **Executar limpeza** só é liberado depois de uma simulação com os mesmos parâmetros e da confirmação.
+  - O card **Otimizar tabelas** tem seleção própria por tabela e mostra o tamanho em disco e o espaço recuperável.
+  - O card **Últimas execuções** mostra o log.
+  - Durante o processamento aparece o loading padrão (`showAppLoading`), com o andamento atualizado. No fim, um modal no padrão da aplicação traz o resumo (ou o erro).
+  - Se o usuário sair da tela e voltar, o acompanhamento é retomado (`sessionStorage`).
+- **Log:** tabela nova `limpeza_historico_log` (model `LimpezaHistoricoLog`), criada em 14/10/2026 com autorização do usuário. Guarda ação, situação, usuário, parâmetros, tabelas, registros removidos, detalhes em JSON, início e fim. Horários gravados com `_now_local()` (America/Manaus, o fuso da aplicação) e exibidos com `formatAmazonLocalTime()`. O relógio do banco está em UTC-3.
+
+### 23.4 Testes
+- `tests/test_limpeza_historico.py` (10 testes):
+  - a regra de seleção sem banco: carga final no ano seguinte, carga ativa protegida, outro exercício intocado, sem carga no mês, exercício misto, empate de data;
+  - a remoção de ponta a ponta numa **TEMPORARY TABLE** do MySQL, incluindo uma carga reativada entre a análise e a execução, que não é apagada.
+- Suíte completa: 54/54.
+- Teste real na tela pelo usuário, em 14/10/2026:
+  - PED: limpezas mantendo fev/2026 e mar/2026 (907 linhas).
+  - **NOB:** mantendo set/2026, **5.395.377 linhas removidas em 1 minuto e 19 segundos**. A otimização levou 13 segundos e o NOB caiu de **~15,4 GB para 1,89 GB**.
+
+### 23.5 Armadilhas do MariaDB (importante para quem mexer nisso)
+- **Estatísticas velhas no `information_schema`.** `TABLE_ROWS` e `DATA_LENGTH` podem estar muito desatualizados: o EST EMP aparecia com 22 mil linhas e tinha 84 mil, e o EMP com 6,4 GB e tinha 19,1 GB. Por isso, toda medição na tela roda antes `ANALYZE TABLE`, que só recalcula as estatísticas, não mexe nos dados e leva cerca de 0,1 segundo.
+- **O espaço não volta sozinho depois do `DELETE`.** O arquivo da tabela só diminui com `OPTIMIZE TABLE` (no InnoDB, "recreate + analyze"; `innodb_file_per_table` está ON). Logo após a limpeza, `DATA_LENGTH` passa a contar só as páginas em uso, e o espaço das linhas apagadas aparece como `DATA_FREE`. Por isso:
+  - o "antes/depois" da otimização usa **tamanho em disco = usado + livre**;
+  - a estimativa da simulação usa o tamanho usado.
+
+  No primeiro teste, o "antes" saiu 1,89 GB em vez de 15,4 GB; o registro foi corrigido no log.
+- **A otimização bloqueia as cargas da tabela enquanto roda.** Use fora do horário da carga automática (madrugada/início da manhã). Ela só compensa depois de uma limpeza que remova boa parte da tabela: com só 12% removido no PED, não houve redução.
+
+### 23.6 Pendências e próximos passos
+- **EMP (19,1 GB)** ainda não foi limpo. Mantendo set/2026, devem sair cerca de 5,6 milhões de linhas, e depois da otimização o EMP deve ficar perto de 2 GB. Esse teste também vai confirmar na prática o `DATA_FREE` logo após a limpeza (ver 23.5).
+- **Fazer backup do banco antes de limpezas grandes.** A remoção é definitiva, e o banco da `main` é o de produção.
+- **Sincronizar com `homologacao`, `dev/cleber` e `dev/jean`** quando o usuário pedir. Nas branches, o menu vem de `services/features.py` via `_menu.html`, então o item do `base.html` não é necessário lá. Cada ambiente tem banco próprio: a tabela `limpeza_historico_log` é criada pelo `db.create_all()` ao subir a aplicação.
+- **Quando as novas UOs entrarem (seção 22)**, a limpeza continua correta, porque trabalha por carga. Revisar se o exercício/UO de uma carga continua único.
+
+### 23.7 Problema no servidor online: "Processamento não encontrado" (2026-10-14) — corrigido na seção 23.8
+**Sintoma:** no servidor online (cPanel), a simulação do FIP 613 e do PED terminava com o modal "Falha na simulação — Processamento não encontrado". Localmente sempre funcionou.
+
+**Diagnóstico** (comandos de leitura no Terminal do cPanel, em `/home/proj5954/projetoswebcsg_app`):
+- **O processamento em si funcionou.** Os arquivos `outputs/status/limpeza_historico_*.json` das tentativas existem no servidor e estão como "Simulação concluída", com o resultado certo (ex.: PED mantendo 30/09, 132 cargas e 5.667 linhas a remover). Não há erro da limpeza em `logs/app.log` nem em `stderr.log`.
+- **O servidor não roda Passenger, e sim LiteSpeed (`lswsgi -m passenger_wsgi.py`), com vários processos da aplicação ao mesmo tempo** (4 no momento da análise). Esses processos são **reciclados em poucos minutos**: todos tinham cerca de 4 minutos de vida, e logo depois não havia nenhum rodando (`pgrep` vazio).
+- **Causa:** o andamento era guardado em **arquivo** (`services/job_status.py`). Cada consulta de status cai em qualquer um dos processos, e a leitura voltou "não encontrado". Uma possível origem é ler no instante em que outro processo reescrevia o arquivo: `write_text` trunca e reescreve, e `read_status` trata conteúdo vazio como inexistente. No ambiente local há um processo só, por isso o problema nunca apareceu.
+- **Risco adicional pelo mesmo motivo:** o processamento roda numa thread dentro de um desses processos. Se o LiteSpeed reciclar o processo no meio de uma limpeza demorada (EMP/NOB), a thread morre sem aviso e a tela fica esperando para sempre.
+  - **Nenhum dado se perde:** cada lote é commitado, e o que sobra continua desativado e intacto.
+  - **A trava `GET_LOCK` é liberada sozinha**, junto com a conexão.
+
+**Correção combinada com o usuário (a implementar em 15/10/2026):**
+1. **Guardar o andamento no banco**, na tabela `limpeza_historico_log`, em vez de arquivo. Todos os processos enxergam o mesmo dado, e o `UPDATE` é atômico. Isso resolve o "Processamento não encontrado". A simulação também passa a ter uma linha no log, só para o status. Ela não aparece em "Últimas execuções" (filtrar por `acao IN ('limpeza', 'otimizacao')`).
+2. **Sinal de vida:** o processamento atualiza um horário (ex.: `atualizado_em`) a cada passo. Se ficar mais de cerca de 2 minutos sem atualização, a tela mostra "Processamento interrompido pelo servidor — rode novamente", e o log fica com a situação "interrompida". Rodar de novo continua de onde parou, porque a remoção é em lotes e sempre com `ativo = 0`.
+3. Exige `ALTER TABLE limpeza_historico_log` para as colunas novas (progresso, mensagem, `atualizado_em`). Pedir autorização ao usuário antes de executar. Os outros ambientes (homologação/dev) recebem a tabela já completa pelo `db.create_all()` na sincronização.
+4. **Depois de publicar, testar no servidor online:** simulação do PED e do FIP 613, e uma limpeza pequena. Só então partir para o EMP.
+
+**Até a correção ser publicada:** não usar a Limpeza de Histórico no servidor online. No ambiente local ela funciona normalmente.
+
+**Atenção para outras funcionalidades:** o **Teto-SEDUC** usa o mesmo mecanismo (thread + status em arquivo). Ele é curto e não houve relato de erro, mas está sujeito ao mesmo problema. Se aparecer "Processamento não encontrado" no upload do Teto, a correção é a mesma.
+
+### 23.8 Correção: andamento no banco + sinal de vida (2026-10-15)
+Implementado o plano da 23.7.
+- **Banco** (autorizado pelo usuário, executado pela IA em 15/10/2026): `ALTER TABLE limpeza_historico_log ADD COLUMN progresso SMALLINT NULL, ADD COLUMN mensagem VARCHAR(500) NULL, ADD COLUMN atualizado_em DATETIME NULL`. As colunas aceitam vazio, então o código antigo publicado continuou funcionando. As 5 linhas existentes não foram alteradas. Os outros ambientes recebem a tabela completa pelo `db.create_all()` na sincronização.
+- **`rotas/limpeza_historico_routes.py`**
+  - O `job_id` da tela passa a ser o **id da linha do log**, criada na requisição antes de a thread começar. A simulação também ganha uma linha (`acao = 'simulacao'`), mas "Últimas execuções" mostra só `limpeza` e `otimizacao`.
+  - Classe `Andamento`: cada gravação é um `UPDATE` próprio com commit (`engine.begin()`), fora da sessão do ORM. O progresso só é gravado quando muda, porque a remoção chama o callback a cada lote.
+  - **Sinal de vida:** uma thread separada grava `atualizado_em` a cada `INTERVALO_SINAL` (20 s), inclusive durante comandos longos sem progresso (o `GROUP BY` de ~1 min do EMP, o `OPTIMIZE TABLE`). Sem sinal por mais de `LIMITE_SEM_SINAL` (120 s), o processo morreu. Essa regra fica em `sem_sinal_de_vida()`, em `services/limpeza_historico.py`.
+  - A rota de status e a de "Últimas execuções" marcam a linha como **`interrompida`** com um `UPDATE` condicional: só vale se a linha continuar em andamento e parada. A tela recebe "Processamento interrompido pelo servidor. Rode novamente.", e na limpeza a mensagem acrescenta que a nova execução continua de onde parou. Se ninguém estiver acompanhando na tela, a linha é marcada na próxima abertura da página.
+  - Na limpeza, `linhas_removidas` e `detalhes` são gravados ao fim de cada tabela. Se o processo morrer, o log mostra o que já saiu.
+  - Um erro inesperado grava `falha` com a mensagem e o resultado parcial.
+  - A resposta do status manteve o mesmo formato (`state`/`message`/`progress`/`resultado`), então o JS da tela não mudou.
+- **`services/job_status.py` não mudou:** continua sendo usado pelos outros módulos.
+- **Testes:**
+  - Novo `test_sem_sinal_de_vida`. Suíte completa: 55/55.
+  - Contra o banco, chamando as funções reais das rotas:
+    - simulação do PED: 132 cargas e 5.667 linhas, igual ao status do servidor online de 14/10;
+    - uma linha parada há 5 min virou "interrompida", e uma linha com sinal de 30 s continuou em andamento;
+    - id inexistente devolve 404;
+    - com intervalo de 1 s e um job parado por 5 s, `atualizado_em` avançou a cada segundo, e a linha fechou como `concluida`.
+  - Ficaram no log 4 linhas de teste com `acao = 'simulacao'` e `user_email = 'teste-claude@local'`. Elas não aparecem na tela.
+- **Atenção ao testar por script:** uma sessão SQLAlchemy reaproveitada mantém a transação aberta (REPEATABLE READ) e não enxerga as gravações das outras threads. Use `commit()` antes de cada leitura. As rotas não têm esse problema, porque cada requisição abre uma sessão nova.
+- **Pendente:**
+  - aprovação do usuário, commit e publicação;
+  - no servidor online: simulação do PED e do FIP 613, depois uma limpeza pequena, e só então o EMP, com backup antes.
+
+### 23.9 Teste online do EMP falhou → processamento em etapas curtas (2026-10-15)
+**O teste online** (com a versão da 23.8 publicada, commit `49daae9`):
+- **Tabelas pequenas funcionaram.** FIP 613, PED e EST EMP: simulação, limpeza (187.504 linhas em 91 s) e otimização (194,6 MB liberados).
+- **O EMP parou no meio** (log 22):
+  - removeu 2.920.000 das 5.624.176 linhas e parou às 16:52:59, com 66%;
+  - 2 minutos depois, a tela avisou "interrompido", como planejado;
+  - **mas a trava `GET_LOCK` continuou presa** pela conexão do processo online. A conexão não caiu sozinha, apesar do `wait_timeout` de 300 s. Ou seja, o processo não morreu: ficou **congelado**.
+- **O servidor online removeu cerca de 15 vezes mais devagar** que o ambiente local: 2,92 milhões em 11 min, contra 2,70 milhões em 45 s.
+- **Suspeita, não confirmada:** limites de recursos do CloudLinux (o MariaDB é `10.11.19-MariaDB-cll-lve`). A conta do banco não tem o privilégio PROCESS, por isso não dá para ver as conexões da aplicação online (`@localhost`).
+- **Destravado** com o Restart da aplicação no cPanel, feito pelo usuário. O resto do EMP (2.704.176 linhas) foi limpo e otimizado pelo ambiente local: o EMP caiu de 18,99 GB para 2,45 GB.
+- **Os dados ativos ficaram intactos o tempo todo.** As 56.693 linhas ativas eram exatamente a carga 224.
+
+**Decisão do usuário:** a limpeza de EMP e NOB **precisa funcionar online**, pela tela. Quem herdar o acesso de administrador não terá o ambiente local.
+
+**O Teto-SEDUC fica de fora.** Ele usa o mesmo status em arquivo, mas recebe 3 a 5 cargas por ano, com processamento curto. O usuário avaliou que não sofre o problema de volume. Se algum dia aparecer "Processamento não encontrado" no Teto, conferir o dashboard, porque a carga provavelmente gravou.
+
+**Implementação** (nenhuma thread; o trabalho só acontece enquanto uma requisição está aberta):
+- **Banco** (autorizado pelo usuário, executado pela IA): `ALTER TABLE limpeza_historico_log ADD COLUMN estado MEDIUMTEXT NULL`. A coluna guarda o JSON com o ponto de parada. As colunas da 23.8 continuam em uso: `progresso`, `mensagem` e `atualizado_em`.
+- **`services/limpeza_historico.py`**
+  - `executar_passo(conn, estado, prazo)` avança uma máquina de fases: `inicio` → `analise` → `remocao` → próxima tabela → `fim`. Na otimização: `inicio` → `otimizacao`, uma tabela por etapa.
+  - Toda etapa faz **ao menos um pedaço** de trabalho. Com o servidor lento, ela pode passar um pouco do prazo, mas nunca fica parada.
+  - **Análise por faixas de id** (`analisar_faixa` + `mesclar_cargas` + `cargas_de_agregados`). O tamanho da faixa se ajusta para ~3 s por `GROUP BY` (`FAIXA_INICIAL` = 200 mil ids, entre 20 mil e 5 milhões). O resultado é idêntico ao do `GROUP BY` único (`carregar_cargas`): conferido em teste e no banco real, no EMP e no NOB.
+  - **Remoção com prazo** (`remover_lotes`): continua por carga inteira, com `ativo = 0 AND upload_id IN (...)` e commit por lote. Retomar do cursor nunca apaga nada ativo nem repete trabalho. `remover_cargas` passou a usar `remover_lotes` e continua coberta pelos testes antigos.
+  - `PRAZO_PASSO` = 10 s e `LIMITE_PAUSA` = 300 s. `pausada()` substituiu `sem_sinal_de_vida()`.
+- **`rotas/limpeza_historico_routes.py`**
+  - `simular`/`executar`/`otimizar` só criam a linha do log (com `estado` inicial) e devolvem o `job_id`.
+  - **`POST /api/limpeza-historico/passo/<id>`** faz uma etapa e responde no mesmo formato do status. Uma trava curta por execução (`limpeza_passo_<id>`) faz com que duas abas não executem a mesma etapa; a segunda recebe `ocupado`.
+  - Se uma etapa der erro, a rota responde 500 com `transitorio` e **não grava o estado**: a próxima chamada refaz a etapa do último ponto gravado.
+  - **Uma limpeza ou otimização por vez** (`_iniciar_exclusivo`): checa a regra e cria a linha sob um `GET_LOCK` que dura só a requisição.
+    - Execução com etapa recente: responde 409.
+    - Execução pausada há mais de 5 min: vira `abandonada`, com o total removido até ali registrado, e a nova começa.
+  - `/info` devolve `pendente` (limpeza ou otimização não concluída), e "Últimas execuções" mostra `pausada`. Simulação parada vira `abandonada` sem aviso.
+  - Saíram a thread, a classe `Andamento` e o sinal de vida da 23.8.
+- **Tela**
+  - `executarPassos()` substituiu o acompanhamento do status: chama `/passo` em sequência.
+  - Rede fora ou erro 5xx: tenta de novo com espera crescente. Depois de 6 falhas seguidas, a execução **pausa** e aparece um modal "Execução pausada".
+  - Um aviso no topo da página (`#limpeza-pendente`) mostra a execução pendente, com o botão **Continuar**.
+  - Os textos de loading pedem para manter a tela aberta.
+  - CSS próprio `.limpeza-pendente` (não existia classe de alerta de aviso).
+- **Status novos no log:** `abandonada`. Também aparece `pausada`, calculado na hora (no banco continua `em andamento`). `interrompida` só existe nas execuções da versão com thread.
+
+**Testes:**
+- 58/58 na suíte. Novos testes:
+  - `test_pausada` e `test_mesclar_cargas_soma_as_faixas`;
+  - simulação em etapas igual à análise única;
+  - limpeza em etapas retomando do cursor, com metade de uma carga reativada no meio. Esses dois usam `TEMPORARY TABLE` com linhas intercaladas por id e passam o estado por JSON a cada etapa, como a rota.
+- No banco real, chamando as rotas:
+  - simulação de EMP e NOB, mantendo out/2026: 1 etapa de 8,9 s localmente. Com o prazo forçado a 1 s, 2 etapas e o resultado igual ao `carregar_cargas`;
+  - a regra de uma por vez: 409 com outra execução recente; a pausada vira `abandonada`; etapa em execução encerrada devolve a mensagem final.
+  - As linhas de teste dessa última verificação foram apagadas do log. Nenhuma etapa de remoção foi chamada.
+
+**Validação online** (15/10/2026, commit `97230e0`, `RELEASE_2_2026_10_15.2`, feita pelo usuário):
+
+| Log | Ação | Resultado | Duração |
+|---|---|---|---|
+| 34 | Limpeza do NOB (2026, manter out/2026) | 741.095 linhas removidas | 5 s |
+| 35 | Otimização do NOB | 2.119 MB → 184,8 MB | 2 s |
+| 37 | Limpeza do EMP (2026, manter out/2026) | 774.839 linhas removidas | 6 s |
+| 38 | Otimização das 5 tabelas | EMP 2.479 MB → 174,8 MB | 3 s, em 5 etapas (uma por tabela) |
+
+- **Velocidade:** online, a remoção rodou a ~140 mil linhas/s, contra ~4.400/s à tarde com o EMP de 19 GB e a versão com thread. A causa da diferença não foi confirmada: pode ser o tamanho e a fragmentação da tabela, ou o processo congelado. Com as tabelas pequenas, cada limpeza coube numa etapa só.
+- **Resultado do dia:** EMP de **19,1 GB para 175 MB**; NOB de **15,8 GB para 185 MB**.
+- **Medição do banco inteiro depois da limpeza** (15/10/2026, ~18h10, com `ANALYZE TABLE` nas 95 tabelas antes):
+  - **438 MB em disco** (429 MB de dados e índices, mais 9 MB livres dentro dos arquivos), contra ~35 GB antes;
+  - `DATA_FREE` = 0 nas 5 tabelas otimizadas;
+  - contagens reais: EMP 56.693 e NOB 69.212, todas ativas (só a carga do dia); EST EMP 9.129 (967 ativas); FIP 613 6.150 (1.673 ativas); PED 66.
+- **Espaço livre no servidor:** não dá para saber pelo banco. O usuário do banco não tem privilégio para consultar o disco (nem `PROCESS` ou `INNODB_SYS_TABLESPACES`). O limite é a cota da conta no cPanel. Para ver a cota, rode no Terminal do cPanel (só leitura):
+  - `uapi --output=jsonpretty Quota get_quota_info` (cota);
+  - `uapi --output=jsonpretty Mysql list_databases` (tamanho de cada banco, em bytes, em cache).
+- **Medição da cota em 15/10/2026, ~18h30:**
+  - **cota de 100.000 MB (~100 GB); 59.348 MB usados e 40.652 MB livres.**
+  - Esse "usado" ainda contava o `proj5954_spo-csg` com **22,9 GB**, valor em cache do cPanel. O real é 438 MB. Depois do recálculo do cPanel, o esperado é **~38 GB usados e ~62 GB livres**.
+  - O que continua ocupando, pelo cache do cPanel:
+
+    | Item | Tamanho |
+    |---|---|
+    | `proj5954_spo_csg_amb_cleber` | 11,3 GB |
+    | `proj5954_spo_csg_amb_jean` | 11,0 GB |
+    | `proj5954_spo_csg_homolog` | 10,9 GB |
+    | Home: `projetoswebcsg_app` 1,8 GB, `repositories` 1,5 GB, `virtualenv` 1,1 GB, `db_backups` 549 MB e outros | 5,6 GB |
+    | Outros bancos | ~0,1 GB |
+
+  - O `df` mostra o disco inteiro do servidor (12 TB, compartilhado). Não é referência para a conta.
+- **Próximo ganho grande de espaço:** os três bancos de homologação e dev, ~33 GB juntos. Devem ter o mesmo acúmulo de cargas diárias desativadas. O caminho é sincronizar a Limpeza de Histórico com `homologacao`, `dev/cleber` e `dev/jean` e rodar a limpeza em cada ambiente. A sincronização ficou adiada por decisão do usuário (15/10/2026).
+- **Ainda não exercitado online:** a remoção em várias etapas e o botão **Continuar**. Estão cobertos pelos testes automáticos. A primeira limpeza mensal grande deve passar dos 10 s por etapa: são ~1,7 milhão de linhas por mês no EMP e no NOB. Nessa ocasião, conferir no log que a execução concluiu e, se possível, testar o Continuar fechando a aba no meio.
+- **Atenção na escolha do mês:** "manter out/2026" no EMP também removeu a carga de 30/09 que tinha sido mantida antes. Está dentro da regra (dados desativados), mas a escolha do mês define qual foto do exercício fica guardada.
+
+**Recomendação de uso:** limpeza **mensal**, fora do horário das cargas automáticas (por volta das 05h).
