@@ -926,3 +926,21 @@ Implementado o plano da 23.7.
 - **Atenção na escolha do mês:** "manter out/2026" no EMP também removeu a carga de 30/09 que tinha sido mantida antes. Está dentro da regra (dados desativados), mas a escolha do mês define qual foto do exercício fica guardada.
 
 **Recomendação de uso:** limpeza **mensal**, fora do horário das cargas automáticas (por volta das 05h).
+
+## 24. Sincronização `main` → `homologacao` aplicada no ambiente local + trava do Teto-SEDUC (2026-10-16)
+
+### 24.1 Ambiente local atualizado
+- Branch local `homologacao` levada por fast-forward até `origin/homologacao` (`3526551`, PR #19, 90 commits).
+- Dependências novas do `requirements.txt` instaladas no Python global: `pdfplumber==0.11.7` (usado por `services/see_notes.py`; sem ele o `app` nem importa) e `pytest==8.3.4`. O projeto local não tem venv (o `.gitignore` já ignora `.venv/`).
+- **Atenção:** o `.env` local aponta para o banco de homologação (`proj5954_spo_csg_homolog`). Testar localmente grava nos dados reais da homologação.
+
+### 24.2 Banco da homologação (autorizado pelo usuário, executado pela IA)
+- `python scripts/atualizar_schema_sync_main.py --aplicar` aplicou: `momp.uo` + índice `ix_momp_exercicio_uo` + 60 registros antigos marcados como UO 14101; 8 colunas novas em `plan20_seduc`. Segunda execução: "Nada a fazer".
+- O script **não cria tabelas**. Comparando `db.metadata` com o banco, faltava só `limpeza_historico_log`, criada com `checkfirst` (o `db.create_all()` do `app.py` também a criaria ao subir). Depois disso não faltou nenhuma tabela.
+
+### 24.3 Bug: trava do Teto-SEDUC ficava presa ("já existe um processamento em andamento")
+- **Sintoma:** depois de um upload da UO 14101 concluído com sucesso, o upload da UO 14601 (outro nome de trava) falhava com "Já existe um processamento do Teto - SEDUC em andamento para este exercício e UO", após ~30 s.
+- **Causa:** o `GET_LOCK` do MySQL pertence à **conexão** que o adquiriu. O código pegava e liberava o lock via `db.session`, mas o `db.session.commit()` devolve a conexão ao pool; o `RELEASE_LOCK` seguinte rodava em outra conexão e não liberava nada. O lock ficava preso numa conexão ociosa do pool (`IS_USED_LOCK` mostrou `teto_seduc:2027:14101` e `:14601` presos por conexões ociosas) até ela ser fechada.
+- **Correção** (`rotas/home_routes.py`, `_start_teto_seduc_thread`): o lock usa uma conexão dedicada (`db.engine.connect()`); o `RELEASE_LOCK` roda nessa mesma conexão, que é fechada em seguida. A trava da Limpeza de Histórico já era feita assim.
+- **Diagnóstico, se repetir:** `SELECT IS_USED_LOCK('teto_seduc:<exercicio>:<uo>')` (devolve o id da conexão dona) e `information_schema.processlist`. Reiniciar a aplicação fecha as conexões e solta o lock.
+- **Validação:** usuário reenviou os arquivos localmente e confirmou que funcionou; 61 testes passam.
