@@ -946,3 +946,11 @@ Os 6 commits da `main` posteriores à sincronização de 02/10 (`839afeb`, `9e29
   3. **Backup do banco** antes da primeira limpeza.
   4. Na tela, simular e só então executar a limpeza, depois otimizar. Nesses ambientes o acúmulo é de ~33 GB juntos (cache do cPanel); o esperado é voltar para perto de 0,5 GB cada.
 - Daqui em diante, correção feita direto na `main` volta a exigir nova sincronização (como na seção 21.9).
+
+## 24. Trava do Teto-SEDUC ficava presa no pool de conexões (2026-10-16)
+
+- **Sintoma:** depois de um upload bem-sucedido do Plan 23 ou Plan 134, um novo upload da mesma UO/exercício esperava 30 s e falhava com "Já existe um processamento do Teto - SEDUC em andamento para este exercício e UO".
+- **Causa:** o `GET_LOCK` do MySQL pertence à **conexão** que o adquiriu. `_start_teto_seduc_thread` (`rotas/home_routes.py`) pegava e soltava a trava por `db.session`, e o `db.session.commit()` devolve a conexão ao pool. O `RELEASE_LOCK` rodava em outra conexão, não liberava nada, e a trava ficava presa numa conexão ociosa do pool até ela ser reciclada.
+- **Correção:** a trava passou a usar uma conexão dedicada (`lock_conn = db.engine.connect()`), usada no `GET_LOCK` e no `RELEASE_LOCK` e fechada num `finally` interno. Se o `GET_LOCK` falhar ou a trava não for obtida, a conexão é fechada antes de propagar o erro. Nome da trava (`teto_seduc:{exercicio}:{uo}`), timeout de 30 s, mensagem de erro e o resto da lógica não mudaram.
+- **Validação:** `python -c "import app"` e uma prova do mecanismo com uma trava descartável (sem gravar dado): com a trava presa na conexão dedicada e um `commit()` na sessão no meio, `IS_FREE_LOCK` continuou 0; depois do `RELEASE_LOCK` na mesma conexão, passou a 1.
+- **Atenção:** conferido que nenhum outro ponto usa `GET_LOCK` por `db.session`; a Limpeza de Histórico (seção 23) já usava conexão própria. Se uma trava ficar presa em produção antes desta correção chegar, o Restart da aplicação no cPanel a libera (seção 23.9).
