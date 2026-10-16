@@ -57,6 +57,7 @@ FEATURES = [
                 {"id": "atualizar/emp", "nome": "EMP"},
                 {"id": "atualizar/est-emp", "nome": "EST EMP"},
                 {"id": "atualizar/nob", "nome": "NOB"},
+                {"id": "atualizar/limpeza-historico", "nome": "Limpeza de Histórico"},
             ]),
         ],
     },
@@ -244,6 +245,7 @@ MENU_META = {
     "atualizar/emp": {"icon": "cloud-arrow-up"},
     "atualizar/est-emp": {"icon": "cloud-check"},
     "atualizar/nob": {"icon": "cloud-plus"},
+    "atualizar/limpeza-historico": {"icon": "trash3"},
     "area-uens/sage/notas-see": {"icon": "file-earmark-pdf"},
 }
 
