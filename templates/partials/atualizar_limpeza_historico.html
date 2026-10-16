@@ -1,0 +1,172 @@
+<div class="limpeza-historico" id="limpeza-historico-page">
+  <div class="card">
+    <div class="card-title">Limpeza de Histórico</div>
+    <p class="muted">
+      Cada carga diária de FIP 613, PED, EMP, NOB e EST EMP desativa a anterior e grava uma cópia
+      completa. A aplicação usa somente os registros ativos, e as cargas desativadas apenas ocupam
+      espaço no banco. Esta tela mantém a última carga do mês escolhido e remove as cargas
+      desativadas anteriores do mesmo exercício.
+    </p>
+    <div class="alert alert-info limpeza-regras">
+      <strong>Regras de segurança:</strong> registros ativos nunca são removidos; cargas de outros
+      exercícios e cargas posteriores ao mês escolhido não são tocadas; se o exercício não tiver
+      carga no mês escolhido, nada é removido daquela tabela. A remoção é definitiva, então faça um
+      backup do banco antes da primeira limpeza.
+    </div>
+
+    <div class="alert limpeza-pendente" id="limpeza-pendente" role="status" hidden>
+      <span id="limpeza-pendente-texto"></span>
+      <button type="button" class="btn btn-primary sm" id="limpeza-continuar">
+        <i class="bi bi-play-fill"></i> Continuar
+      </button>
+    </div>
+
+    <form id="form-limpeza-historico" class="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>Exercício</span>
+          <input
+            type="text"
+            id="limpeza-exercicio"
+            inputmode="numeric"
+            maxlength="4"
+            pattern="[0-9]{4}"
+            placeholder="ex.: 2025"
+            required
+          />
+        </label>
+        <label class="field">
+          <span>Manter a última carga de (mês)</span>
+          <select id="limpeza-ref-mes" required>
+            {% for nome in ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"] %}
+            <option value="{{ loop.index }}" {% if loop.index == 12 %}selected{% endif %}>{{ nome }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Ano da carga</span>
+          <input
+            type="text"
+            id="limpeza-ref-ano"
+            inputmode="numeric"
+            maxlength="4"
+            pattern="[0-9]{4}"
+            placeholder="ex.: 2025"
+            required
+          />
+        </label>
+      </div>
+      <p class="muted limpeza-dica">
+        A carga final de um exercício pode chegar no ano seguinte (ex.: a FIP 613 de 2025 carregada
+        em 14/01/2026). Nesse caso, informe janeiro e o ano seguinte.
+      </p>
+
+      <fieldset class="limpeza-tabelas">
+        <legend>Tabelas</legend>
+        {% for chave, label in tabelas %}
+        <label class="field inline">
+          <input type="checkbox" name="limpeza-tabela" value="{{ chave }}" checked />
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="limpeza-simular">
+          <i class="bi bi-search"></i> Simular
+        </button>
+        <div id="limpeza-msg" class="muted" role="status"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" id="limpeza-resultado-card" hidden>
+    <div class="card-title" id="limpeza-resultado-titulo">Resultado da simulação</div>
+    <div class="table-responsive">
+      <table class="table limpeza-tabela">
+        <thead>
+          <tr>
+            <th>Tabela</th>
+            <th>Carga mantida</th>
+            <th class="num">Cargas a remover</th>
+            <th class="num">Registros a remover</th>
+            <th class="num">Espaço estimado</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody id="limpeza-resultado-corpo"></tbody>
+        <tfoot id="limpeza-resultado-total"></tfoot>
+      </table>
+    </div>
+
+    <div id="limpeza-confirmacao" hidden>
+      <label class="field inline limpeza-confirma">
+        <input type="checkbox" id="limpeza-confirmar" />
+        <span>Entendo que a remoção é definitiva e que um backup do banco foi feito.</span>
+      </label>
+      <div class="actions">
+        <button class="btn btn-danger sm" type="button" id="limpeza-executar" disabled>
+          <i class="bi bi-trash3"></i> Executar limpeza
+        </button>
+        <div id="limpeza-exec-msg" class="muted" role="status"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Otimizar tabelas</div>
+    <p class="muted">
+      A limpeza remove os registros, mas não diminui o arquivo da tabela no disco: até a otimização,
+      o tamanho exibido pode continuar igual ou até aumentar. A otimização (OPTIMIZE TABLE) reconstrói
+      as tabelas selecionadas abaixo e devolve o espaço ao servidor. Durante a otimização, as cargas
+      daquela tabela ficam bloqueadas, por isso evite o horário das cargas automáticas
+      (madrugada/início da manhã). Use depois de uma limpeza.
+    </p>
+    <div class="table-responsive">
+      <table class="table limpeza-tabela">
+        <thead>
+          <tr>
+            <th class="limpeza-col-check">
+              <input type="checkbox" id="limpeza-otimizar-todas" title="Selecionar todas" aria-label="Selecionar todas" />
+            </th>
+            <th>Tabela</th>
+            <th class="num">Registros (aprox.)</th>
+            <th class="num">Tamanho em disco</th>
+            <th class="num" title="Espaço de registros já removidos que a otimização devolve ao servidor">Espaço recuperável</th>
+          </tr>
+        </thead>
+        <tbody id="limpeza-tamanhos"></tbody>
+      </table>
+    </div>
+    <label class="field inline limpeza-confirma">
+      <input type="checkbox" id="limpeza-otimizar-confirmar" />
+      <span>Confirmo a otimização das tabelas selecionadas.</span>
+    </label>
+    <div class="actions">
+      <button class="btn btn-secondary sm" type="button" id="limpeza-otimizar" disabled>
+        <i class="bi bi-hdd"></i> Otimizar tabelas
+      </button>
+      <div id="limpeza-otimizar-msg" class="muted" role="status"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Últimas execuções</div>
+    <div class="table-responsive">
+      <table class="table limpeza-tabela">
+        <thead>
+          <tr>
+            <th>Início</th>
+            <th>Ação</th>
+            <th>Parâmetros</th>
+            <th>Tabelas</th>
+            <th class="num">Registros removidos</th>
+            <th>Situação</th>
+            <th>Usuário</th>
+          </tr>
+        </thead>
+        <tbody id="limpeza-historico-log"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
