@@ -1,3 +1,5 @@
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
+
 from .db import db
 
 
@@ -1663,3 +1665,40 @@ class ApiKey(db.Model):
     revoked_at = db.Column(db.DateTime, nullable=True)
     last_used_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class LimpezaHistoricoLog(db.Model):
+    """Registro de cada limpeza/otimização feita em Atualizar > Limpeza de
+    Histórico (services/limpeza_historico.py).
+
+    Também guarda o andamento do processamento, feito em etapas curtas
+    conduzidas pela tela (o id da linha é o job_id). Não pode ficar em
+    arquivo nem numa thread: o servidor online roda vários processos da
+    aplicação e recicla esses processos (docs/claude.md, seções 23.7 e
+    23.9). A simulação também ganha uma linha, só para o andamento - ela não
+    aparece em "Últimas execuções".
+    """
+
+    __tablename__ = "limpeza_historico_log"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    acao = db.Column(db.String(20), nullable=False)  # "simulacao" | "limpeza" | "otimizacao"
+    # "em andamento" | "concluida" | "falha" | "abandonada" |
+    # "interrompida" (só nas execuções antigas, da versão com thread)
+    status = db.Column(db.String(20), nullable=False)
+    user_email = db.Column(db.String(255), nullable=False)
+    exercicio = db.Column(db.Integer, nullable=True)
+    ref_mes = db.Column(db.SmallInteger, nullable=True)
+    ref_ano = db.Column(db.Integer, nullable=True)
+    tabelas = db.Column(db.String(255), nullable=False)
+    linhas_removidas = db.Column(db.BigInteger, nullable=False, default=0, server_default=db.text("0"))
+    detalhes = db.Column(db.Text, nullable=True)  # JSON com o resultado por tabela
+    iniciado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    finalizado_em = db.Column(db.DateTime, nullable=True)
+    progresso = db.Column(db.SmallInteger, nullable=True)  # 0-100
+    mensagem = db.Column(db.String(500), nullable=True)  # andamento / motivo da falha
+    # Atualizado a cada etapa. Parado há mais de lh.LIMITE_PAUSA segundos =
+    # execução pausada (tela fechada); pode ser continuada.
+    atualizado_em = db.Column(db.DateTime, nullable=True)
+    # JSON com o ponto de parada (fase, tabela, cursor de id, cargas a remover).
+    estado = db.Column(db.Text().with_variant(MEDIUMTEXT(), "mysql"), nullable=True)

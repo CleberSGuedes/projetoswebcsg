@@ -88,4 +88,5 @@ from .user import (
     ApiRefreshToken,
     ApiAccessLog,
     ApiKey,
+    LimpezaHistoricoLog,
 )
