@@ -959,3 +959,9 @@ A `homologacao` foi recriada no remoto com `git push origin homologacao`, a part
 - Link de PR sempre com o destino fixo: `/compare/<destino>...<temporaria>`; conferir o campo *base* antes de mergear (seção 21.9).
 - Em Settings → General → Pull Requests, manter "Automatically delete head branches" **desligado** (branches fixas nunca devem ser apagadas); ao mergear, não clicar em "Delete branch" se a origem for uma branch fixa.
 - Se uma branch fixa sumir do remoto: conferir que a cópia local está no commit certo (`git rev-parse <branch>`) e recriar com `git push origin <branch>`; nunca recriar a partir de outra branch que tenha funcionalidades diferentes.
+
+### 25.4 Desfecho do dia (2026-10-16)
+- Correção da trava do Teto-SEDUC presente em `homologacao`, `dev/cleber` (PR #22) e `dev/jean` (PR #23).
+- Correção também aplicada na `main` pelo usuário, diretamente no projeto dela, por prompt só com o trecho da trava (sem trazer nada da `homologacao`) — informado como concluído e executado.
+- Pendências de banco das `dev/*` (`scripts/atualizar_schema_sync_main.py`) informadas como concluídas pelo usuário.
+- Apagamento automático de branches do GitHub desativado pelo usuário.
