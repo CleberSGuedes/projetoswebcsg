@@ -944,3 +944,18 @@ Implementado o plano da 23.7.
 - **Correção** (`rotas/home_routes.py`, `_start_teto_seduc_thread`): o lock usa uma conexão dedicada (`db.engine.connect()`); o `RELEASE_LOCK` roda nessa mesma conexão, que é fechada em seguida. A trava da Limpeza de Histórico já era feita assim.
 - **Diagnóstico, se repetir:** `SELECT IS_USED_LOCK('teto_seduc:<exercicio>:<uo>')` (devolve o id da conexão dona) e `information_schema.processlist`. Reiniciar a aplicação fecha as conexões e solta o lock.
 - **Validação:** usuário reenviou os arquivos localmente e confirmou que funcionou; 61 testes passam.
+
+## 25. REGRA: merges entre branches fixas usam SEMPRE branch temporária (2026-10-16)
+
+### 25.1 O que aconteceu
+Ao levar a correção da trava (seção 24) para `dev/cleber` (PR #22) e `dev/jean` (PR #23), os PRs foram abertos com a própria `homologacao` como origem. Depois de cada merge o GitHub apagou a branch `homologacao` do remoto (apagamento automático de branches ou botão "Delete branch"). Nos syncs anteriores (seção 21) isso não aparecia porque a origem era uma branch temporária `sync/...`, que podia ser apagada sem prejuízo.
+
+### 25.2 Recuperação
+A `homologacao` foi recriada no remoto com `git push origin homologacao`, a partir da pasta local, que estava em `d0bec71` (mesma versão da homologação). Não foram usadas as versões de `dev/cleber` ou `dev/jean`, porque têm funcionalidades diferentes.
+
+### 25.3 Regra daqui em diante
+- **Nunca** abrir PR de/para `dev/cleber`, `dev/jean`, `homologacao` ou `main` usando uma delas como **origem** (head) de um merge.
+- Sempre criar uma branch temporária a partir da origem (ex.: `sync/homologacao-para-dev-jean`), abrir o PR dessa temporária para o destino e, depois do merge, apagar **só a temporária**.
+- Link de PR sempre com o destino fixo: `/compare/<destino>...<temporaria>`; conferir o campo *base* antes de mergear (seção 21.9).
+- Em Settings → General → Pull Requests, manter "Automatically delete head branches" **desligado** (branches fixas nunca devem ser apagadas); ao mergear, não clicar em "Delete branch" se a origem for uma branch fixa.
+- Se uma branch fixa sumir do remoto: conferir que a cópia local está no commit certo (`git rev-parse <branch>`) e recriar com `git push origin <branch>`; nunca recriar a partir de outra branch que tenha funcionalidades diferentes.
