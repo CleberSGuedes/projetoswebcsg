@@ -6891,11 +6891,22 @@ def _start_teto_seduc_thread(
                 # gravar (REPEATABLE READ) e duplicar os registros ativos.
                 # UOs diferentes nao disputam registros, entao nao se bloqueiam.
                 lock_name = f"teto_seduc:{exercicio}:{uo}"
-                obtido_lock = db.session.execute(
-                    text("SELECT GET_LOCK(:name, :timeout)"),
-                    {"name": lock_name, "timeout": 30},
-                ).scalar()
+                # O GET_LOCK pertence a CONEXAO que o adquiriu, e a sessao
+                # devolve a conexao ao pool a cada commit. Por isso a trava
+                # usa uma conexao dedicada, mantida ate o RELEASE_LOCK: em
+                # db.session ele rodaria em outra conexao, nao liberaria
+                # nada e a trava ficaria presa numa conexao ociosa do pool.
+                lock_conn = db.engine.connect()
+                try:
+                    obtido_lock = lock_conn.execute(
+                        text("SELECT GET_LOCK(:name, :timeout)"),
+                        {"name": lock_name, "timeout": 30},
+                    ).scalar()
+                except Exception:
+                    lock_conn.close()
+                    raise
                 if not obtido_lock:
+                    lock_conn.close()
                     raise ValueError(
                         "Já existe um processamento do Teto - SEDUC em andamento "
                         "para este exercício e UO. Aguarde a conclusão e tente novamente."
@@ -6941,9 +6952,12 @@ def _start_teto_seduc_thread(
 
                     db.session.commit()
                 finally:
-                    db.session.execute(
-                        text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
-                    )
+                    try:
+                        lock_conn.execute(
+                            text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                        )
+                    finally:
+                        lock_conn.close()
                 write_status(
                     "teto_seduc",
                     upload_id,
