@@ -105,7 +105,7 @@ from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
-from services.uo import uo_label
+from services.uo import UORecusada, uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
@@ -15113,7 +15113,18 @@ def api_fip613_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_fip613(save_path, data_arquivo, user_email, registro.id)
+        try:
+            total, output_path, conferencia = run_fip613(save_path, data_arquivo, user_email, registro.id)
+        except UORecusada as exc:
+            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
+            db.session.rollback()
+            db.session.delete(registro)
+            db.session.commit()
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": str(exc)}), 400
 
         registro.output_filename = str(output_path.name)
         db.session.commit()
@@ -15121,7 +15132,7 @@ def api_fip613_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
+                "message": f"Processado com sucesso. Registros inseridos: {total}. {conferencia}".strip(),
                 "output": output_path.name,
             }
         )
@@ -15900,7 +15911,18 @@ def api_est_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path = run_est_emp(save_path, data_arquivo, user_email, registro.id)
+        try:
+            total, output_path = run_est_emp(save_path, data_arquivo, user_email, registro.id)
+        except UORecusada as exc:
+            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
+            db.session.rollback()
+            db.session.delete(registro)
+            db.session.commit()
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": str(exc)}), 400
 
         registro.output_filename = str(output_path.name)
         db.session.commit()
