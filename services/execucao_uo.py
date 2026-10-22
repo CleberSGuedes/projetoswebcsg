@@ -20,6 +20,22 @@ from services.uo import exercicio_4d, uo_codigo
 SQL_UO_NUMERO = "CAST(REPLACE(SUBSTRING_INDEX(uo, ' - ', 1), '.', '') AS UNSIGNED)"
 
 
+def sql_uo_em(codigos, tabela: str | None = None) -> str:
+    """Condição SQL "UO está em <códigos>" (texto, só inteiros). `tabela`
+    qualifica a coluna quando há JOIN."""
+    numeros = ", ".join(str(int(uo_codigo(c))) for c in sorted(codigos))
+    coluna = f"{tabela}.uo" if tabela else "uo"
+    return SQL_UO_NUMERO.replace("uo,", f"{coluna},", 1) + f" IN ({numeros})"
+
+
+def cond_uo_em(modelo: Any, codigos):
+    """Mesma condição para consultas ORM (modelo com coluna `uo`)."""
+    from sqlalchemy import literal_column
+
+    expr = SQL_UO_NUMERO.replace("uo,", f"{modelo.__tablename__}.uo,", 1)
+    return literal_column(expr).in_([int(uo_codigo(c)) for c in sorted(codigos)])
+
+
 def desativar_versao_anterior(
     tabela: str,
     uo: str,

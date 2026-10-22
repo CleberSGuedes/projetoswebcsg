@@ -3,6 +3,23 @@
 > **Situação: PLANO APROVADO EM CONCEITO, AGUARDANDO CONFIRMAÇÃO OFICIAL.** Nenhuma linha de código foi alterada. Nada deste plano começa sem a confirmação oficial e a autorização explícita do usuário (ver `claude.md`, seção 22).
 > Base: [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Decisões tomadas com o usuário em 2026-10-22.
 
+## Estado da implementação (atualizado em 2026-10-22)
+
+Branch `feat/novas-uos-fase1` (nada publicado na `main` ainda). **Fase 1 concluída no código; as novas UOs continuam bloqueadas** (`UOS_EXECUCAO_LIBERADAS` em `services/uo.py` só tem a SEDUC).
+
+| Item | Situação |
+|---|---|
+| Helpers de UO (`services/uo.py`, `services/execucao_uo.py`, `node_runners/execucao_uo.js`) | feito |
+| EST EMP (exercício `2026`, desativação por UO/exercício, recusa de UO) | feito |
+| FIP 613 (corte genérico, conferência com o total, UG texto, desativação por UO/ano) | feito |
+| PED (desativação, colunas sempre, dotação por UO, chave só SEDUC) | feito |
+| NOB e EMP (desativação, dotação por UO, chave só SEDUC, listas vindas do Python) | feito |
+| Painéis, relatórios e API v1 fixos na SEDUC (`?uo=` na API) | feito |
+| Plan20 (UOs, recusa de UO não aceita, texto da tela) | **pendente (Fase 2)** |
+| Liberar as UOs novas, filtro de UO nas telas, sincronização com as outras branches | **pendente (Fases 3 e 4)** |
+
+API v1 (`/api/v1/dados/...`): sem `uo`, devolve só a secretaria (contrato atual); `?uo=26201` ou `?uo=26201,26202` escolhe; `?uo=all` devolve todas. A resposta traz o campo `uo` com o filtro aplicado.
+
 ## Decisões
 
 | # | Tema | Decisão |
