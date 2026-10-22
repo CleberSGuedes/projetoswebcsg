@@ -6,6 +6,7 @@
 > **⚠ Ajustes pendentes: novas UOs (26101, 26201 e 26202).**
 > Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
 > **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
+> **Atualização 22/10/2026:** os ajustes foram **implementados e estão na `homologacao`, com as UOs novas bloqueadas** (`UOS_EXECUCAO_LIBERADAS` e `UOS_PLAN20_LIBERADAS` em `services/uo.py`). Estado, roteiro de testes e como liberar: [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md). A `main` ainda não tem nada disso.
 
 > **Limpeza de Histórico: em uso online desde 15/10/2026** (etapas curtas conduzidas pela tela, commit `97230e0`; seção 23.9).
 > Falta observar online uma remoção que precise de várias etapas e o botão "Continuar". Deve acontecer na primeira limpeza mensal grande; ver o fim da seção 23.9.
@@ -723,6 +724,8 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 - **A UO é identificada pelo conteúdo do relatório, nunca pelo nome do arquivo** (decisão do usuário). Nos testes, o EST da 26101 veio salvo com o nome "26201". Use sempre a coluna `UO` das linhas e/ou o filtro impresso no cabeçalho do FIPLAN, tanto ao conferir arquivos quanto nos ajustes futuros (seção 8.1 do documento de testes).
 
 **Como os testes foram feitos:** sem alterar o código e sem gravar no banco. As funções reais foram chamadas a partir de scripts descartáveis. As escritas no banco do EMP/NOB (Node) foram interceptadas e só registradas, e as saídas foram geradas fora da pasta `outputs/`. Os arquivos processados ficaram em `C:\workspace\Planilhas\*_SAIDA_TESTE.xlsx`, fora do repositório. Se for preciso repetir um teste, siga o mesmo cuidado: `run_fip613()`, `run_ped()`, `run_est_emp()` e os runners Node **gravam no banco** se forem chamados diretamente.
+
+**Implementação (22/10/2026):** feita conforme [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md) (PR #25 na `homologacao`; commits `98bbe5d` a `82d05a0` mais o merge `2f259a7`). Resumo: desativação por UO e exercício nos 5 módulos de execução; UO sempre lida do conteúdo e arquivo recusado com o motivo; FIP 613 com corte "Total UO" genérico, conferência com o total e UG como texto (`0011`); EST EMP com exercício `2026`; PED com colunas sempre presentes; recálculo de dotação por UO; Chave de Planejamento só para UOs da SEDUC (`uo_usa_chave`); painéis, relatórios e API v1 fixos na SEDUC (`?uo=`); Plan20 recusa UO não liberada e a tela virou "PLAN20". Falta: testes do usuário em homologação, liberar as UOs (Fase 3), filtro de UO nas telas, sincronizar `main`/`dev/*`.
 
 **Regra para as próximas sessões:**
 1. No início da sessão, **pergunte ao usuário se a confirmação oficial já saiu** e se os ajustes pendentes (seção 9 do documento de testes) já podem ser feitos.

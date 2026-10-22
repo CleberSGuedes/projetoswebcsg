@@ -20,6 +20,24 @@ Branch `feat/novas-uos-fase1` (nada publicado na `main` ainda). **Fases 1 e 2 co
 
 API v1 (`/api/v1/dados/...`): sem `uo`, devolve só a secretaria (contrato atual); `?uo=26201` ou `?uo=26201,26202` escolhe; `?uo=all` devolve todas. A resposta traz o campo `uo` com o filtro aplicado.
 
+## Onde paramos (2026-10-22) e próximos passos
+
+- **Em homologação desde 22/10** (PR #25, merge `382dd2a`): Fases 1 e 2, com as UOs novas **bloqueadas**. `main` (produção), `dev/cleber` e `dev/jean` ainda **não** receberam. Na homologação, FIP 613/PED/EST EMP rodam como jobs em segundo plano (insere a carga inativa e troca no fim); a troca agora é só da mesma UO/exercício.
+- **23/10:** o usuário testa primeiro com as UOs novas **bloqueadas**; depois liberamos todas as UOs na homologação e fazemos o teste completo.
+- **Depois dos testes:** sincronizar `main` e `dev/*`, filtro de UO nas telas (Fase 4) e atualizar a seção 22 do `claude.md`. A liberação oficial em produção só com a confirmação oficial e autorização explícita do usuário.
+
+### Roteiro 1: UOs novas bloqueadas (homologação)
+1. Cargas da SEDUC (14101) de FIP 613, PED, EMP, NOB, EST EMP e Plan20: números iguais aos de antes. No FIP 613 a UG sai `0000`; no EST EMP o exercício sai `2026`; no FIP 613 a mensagem do job traz "Confere com o total do relatório".
+2. Um arquivo de cada UO nova (26101, 26201, 26202) em cada módulo deve ser **recusado** com o motivo ("ainda não está liberada"): FIP 613, PED e EST EMP como job em falha; NOB e EMP no status do processamento; Plan20 com erro 400. Nada pode ser gravado.
+3. Reenvio da mesma UO/exercício troca a carga anterior, sem duplicar.
+4. API `/api/v1/dados/emp` (e as outras): sem `uo` devolve só a SEDUC; `?uo=all` devolve todas.
+
+### Roteiro 2: todas as UOs liberadas (só homologação, branch descartável)
+- **Como liberar:** em `services/uo.py`, `UOS_EXECUCAO_LIBERADAS = set(UOS_EXECUCAO)` e `UOS_PLAN20_LIBERADAS = set(UOS_PLAN20)`. Fazer numa branch temporária a partir de `homologacao`; **nunca** levar isso à `main` antes da confirmação oficial.
+- **Arquivos de teste** (13/10, em `C:\workspace\Planilhas`): FIP 613 26201/26202 (`.xlsx`; o da 26101 vem `.xls` e precisa ser convertido), PED, EMP, NOB, EST (3 UOs; o `EST_26201 ... 1.25H` é da 26101) e Plan20 das 3 UOs (2026 e 2027). Valores esperados: seções 3 a 7 de `testes_uos_26101_26201_26202.md`.
+- **Conferir:** carregar uma UO não altera os dados das outras nem das dotações da SEDUC; a Chave de Planejamento das novas UOs fica "-"/NÃO IDENTIFICADO; os painéis e relatórios continuam mostrando só a SEDUC (filtro de UO por tela ainda não existe).
+- **Depois:** voltar as duas listas para só a SEDUC (ou descartar a branch).
+
 ## Decisões
 
 | # | Tema | Decisão |
