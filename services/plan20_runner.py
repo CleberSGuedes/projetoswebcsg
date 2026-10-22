@@ -13,7 +13,8 @@ from typing import Any
 import pandas as pd
 from openpyxl.styles import Font
 
-from services.uo import UOS_ACEITAS, uo_key as _uo_key
+from services import uo as _uo_mod
+from services.uo import UORecusada, uo_codigo, uo_key as _uo_key, validar_uo_execucao
 
 # ----------------------------
 # CONFIG / CONSTANTES
@@ -1842,7 +1843,7 @@ def run_plan20(input_file: Path, output_dir: Path) -> Path:
         # texto completo, que já mudou de formatação uma vez ("14.101"
         # -> "14101") e pode mudar de novo (docs/claude.md, seção 14).
         # Lista de UOs aceitas (não só 14101) - docs/claude.md, seção 17.
-        mask_uo = df_tmp["Unidade Orçamentária"].apply(_uo_key).isin(UOS_ACEITAS)
+        mask_uo = df_tmp["Unidade Orçamentária"].apply(_uo_key).isin(_uo_mod.UOS_PLAN20_LIBERADAS)
         mask_exercicio = exercicio_num >= 2025
         plan20_seduc_df = df_tmp[mask_uo & mask_exercicio].copy()
         dbg("Plan20_SEDUC", f"Linhas filtradas (UO+Exercício): {len(plan20_seduc_df)}")
@@ -1914,3 +1915,27 @@ def run_plan20(input_file: Path, output_dir: Path) -> Path:
         pass
 
     return out_path
+
+
+def verificar_uo_plan20(output_path: Path) -> str:
+    """Confere, no arquivo tratado, se alguma linha foi para o Plan20_SEDUC.
+
+    Sem isso, um relatório de UO não liberada mostrava "processado com
+    sucesso" sem gravar nada. Levanta UORecusada quando nenhuma linha passou
+    (com o motivo) e devolve um aviso quando só parte das UOs foi aceita.
+    """
+    gravaveis = pd.read_excel(output_path, sheet_name="Plan20_SEDUC", usecols=["Unidade Orçamentária"])
+    extraidas = pd.read_excel(output_path, sheet_name="Extrair_dados", usecols=["Unidade Orçamentária"])
+    uos_arquivo = sorted({c for c in (uo_codigo(v) for v in extraidas["Unidade Orçamentária"].dropna()) if c})
+    if len(gravaveis):
+        ignoradas = [u for u in uos_arquivo if u not in _uo_mod.UOS_PLAN20_LIBERADAS]
+        if ignoradas:
+            return "Atenção: linhas das UOs " + ", ".join(ignoradas) + " não foram gravadas (UO não liberada)."
+        return ""
+    if not uos_arquivo:
+        raise UORecusada("Não foi possível identificar a UO no relatório. Nada foi gravado.")
+    # nenhuma linha passou: explica pela UO (múltiplas, não cadastrada, não liberada)
+    validar_uo_execucao(uos_arquivo, liberadas=_uo_mod.UOS_PLAN20_LIBERADAS)
+    raise UORecusada(
+        "O relatório não tem linhas de exercício 2025 em diante para gravar. Nada foi gravado."
+    )

@@ -23,6 +23,9 @@ UOS_SEDUC = set(UOS_ACEITAS)
 # Teto-SEDUC continua com UOS_ACEITAS (decisao D3: duas listas).
 UOS_EXECUCAO = UOS_SEDUC | {"26101", "26201", "26202"}
 UOS_PLAN20 = set(UOS_EXECUCAO)
+# UOs LIBERADAS no Plan20. Enquanto a confirmacao oficial das novas UOs nao
+# sair, so a secretaria. Para liberar: `set(UOS_PLAN20)` (Fase 3 do plano).
+UOS_PLAN20_LIBERADAS = set(UOS_SEDUC)
 # UOs LIBERADAS para upload nos modulos de execucao. Enquanto a confirmacao
 # oficial das novas UOs nao sair, so a secretaria. Para liberar, trocar por
 # `set(UOS_EXECUCAO)` (Fase 3 do plano) - nao ha outro lugar a alterar.

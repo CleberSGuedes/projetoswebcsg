@@ -5,7 +5,7 @@
 
 ## Estado da implementação (atualizado em 2026-10-22)
 
-Branch `feat/novas-uos-fase1` (nada publicado na `main` ainda). **Fase 1 concluída no código; as novas UOs continuam bloqueadas** (`UOS_EXECUCAO_LIBERADAS` em `services/uo.py` só tem a SEDUC).
+Branch `feat/novas-uos-fase1` (nada publicado na `main` ainda). **Fases 1 e 2 concluídas no código; as novas UOs continuam bloqueadas** (`UOS_EXECUCAO_LIBERADAS` e `UOS_PLAN20_LIBERADAS` em `services/uo.py` só têm a SEDUC).
 
 | Item | Situação |
 |---|---|
@@ -15,8 +15,8 @@ Branch `feat/novas-uos-fase1` (nada publicado na `main` ainda). **Fase 1 conclu�
 | PED (desativação, colunas sempre, dotação por UO, chave só SEDUC) | feito |
 | NOB e EMP (desativação, dotação por UO, chave só SEDUC, listas vindas do Python) | feito |
 | Painéis, relatórios e API v1 fixos na SEDUC (`?uo=` na API) | feito |
-| Plan20 (UOs, recusa de UO não aceita, texto da tela) | **pendente (Fase 2)** |
-| Liberar as UOs novas, filtro de UO nas telas, sincronização com as outras branches | **pendente (Fases 3 e 4)** |
+| Plan20 (lista de UOs liberadas, recusa com motivo em vez de "processado com sucesso", texto da tela sem "SEDUC") | feito (`UOS_PLAN20_LIBERADAS` só com a SEDUC) |
+| Liberar as UOs novas (as duas listas `*_LIBERADAS`), filtro de UO nas telas, sincronização com as outras branches | **pendente (Fases 3 e 4)** |
 
 API v1 (`/api/v1/dados/...`): sem `uo`, devolve só a secretaria (contrato atual); `?uo=26201` ou `?uo=26201,26202` escolhe; `?uo=all` devolve todas. A resposta traz o campo `uo` com o filtro aplicado.
 

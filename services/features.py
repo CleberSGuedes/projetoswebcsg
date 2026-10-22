@@ -37,7 +37,7 @@ FEATURES = [
             {"id": "atualizar/est-emp", "nome": "EST EMP"},
             {"id": "atualizar/nob", "nome": "NOB"},
             {"id": "atualizar/limpeza-historico", "nome": "Limpeza de Histórico"},
-            {"id": "atualizar/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+            {"id": "atualizar/plan20-seduc", "nome": "PLAN20"},
             {"id": "atualizar/teto-seduc", "nome": "Teto - SEDUC"},
             {
                 "id": "atualizar/estrutura-planejamento/programas",
@@ -109,7 +109,7 @@ FEATURES = [
         "nome": "Relatórios",
         "children": [
             {"id": "relatorios/fip613", "nome": "FIP 613 (Relatório)"},
-            {"id": "relatorios/plan20-seduc", "nome": "Plan20 - SEDUC"},
+            {"id": "relatorios/plan20-seduc", "nome": "Plan20"},
             {"id": "relatorios/plan21-nger", "nome": "Plan21_NGER"},
             {
                 "id": "relatorios/estrutura-planejamento",

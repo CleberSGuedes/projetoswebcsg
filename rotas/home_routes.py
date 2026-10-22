@@ -104,7 +104,7 @@ from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
-from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
+from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
 from services.execucao_uo import cond_uo_em, sql_uo_em
 from services.uo import UOS_SEDUC, UORecusada, uo_codigo, uo_label
 from services.teto_seduc import (
@@ -16925,6 +16925,18 @@ def api_plan20_upload():
 
         output_path = run_plan20(save_path, PLAN20_OUTPUT_DIR)
 
+        # Confere se alguma linha vai para o banco: UO não liberada, sem linhas
+        # gravaveis etc. eram "processado com sucesso" sem gravar nada.
+        try:
+            aviso_uo = verificar_uo_plan20(output_path)
+        except UORecusada as exc:
+            for arq in (save_path, output_path):
+                try:
+                    arq.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            return jsonify({"error": str(exc)}), 400
+
         registro = Plan20Upload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -16971,7 +16983,7 @@ def api_plan20_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Plan20 processado com sucesso.",
+                "message": f"Plan20 processado com sucesso. {aviso_uo}".strip(),
                 "output": output_path.name,
                 "last": {
                     "user_email": user_email,
