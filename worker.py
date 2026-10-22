@@ -14,6 +14,7 @@ from models import db, EmpUpload, NobUpload
 from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
+from services.uo import UOS_EXECUCAO, UOS_EXECUCAO_LIBERADAS, UOS_SEDUC
 
 EMP_INPUT_DIR = Path("upload/emp")
 NOB_INPUT_DIR = Path("upload/nob")
@@ -43,6 +44,11 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
         existing_opts = str(node_env.get("NODE_OPTIONS") or "").strip()
         if extra_opt not in existing_opts:
             node_env["NODE_OPTIONS"] = f"{existing_opts} {extra_opt}".strip()
+
+    # Listas de UO do Python (services/uo.py): fonte única para os runners Node.
+    node_env["UOS_EXECUCAO"] = ",".join(sorted(UOS_EXECUCAO))
+    node_env["UOS_EXECUCAO_LIBERADAS"] = ",".join(sorted(UOS_EXECUCAO_LIBERADAS))
+    node_env["UOS_SEDUC"] = ",".join(sorted(UOS_SEDUC))
 
     args = [
         NODE_EXE,
