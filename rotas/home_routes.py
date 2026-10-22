@@ -15578,9 +15578,20 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
-            save_path, data_arquivo, user_email, registro.id
-        )
+        try:
+            total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
+                save_path, data_arquivo, user_email, registro.id
+            )
+        except UORecusada as exc:
+            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
+            db.session.rollback()
+            db.session.delete(registro)
+            db.session.commit()
+            try:
+                save_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": str(exc)}), 400
 
         if missing_dotacao_keys:
             session["ped_dotacao_missing"] = missing_dotacao_keys

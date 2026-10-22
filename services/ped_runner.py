@@ -16,6 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import db, Dotacao, EmpRegistro, ChavePlanejamentoRegra
+from services.execucao_uo import desativar_versao_anterior
+from services.uo import UORecusada, uo_codigo, uo_usa_chave, validar_uo_execucao
 
 # Evita warnings de downcasting silencioso em replace
 pd.set_option("future.no_silent_downcasting", True)
@@ -166,7 +168,23 @@ def _find_valor_ped_col(df: pd.DataFrame) -> str | None:
     return None
 
 
-def _update_dotacao_from_ped(df: pd.DataFrame) -> None:
+def identificar_uo_e_exercicios(ped_df: pd.DataFrame) -> tuple[str, list[int]]:
+    """UO única (validada) e exercícios do relatório BRUTO (antes do pré-filtro:
+    um dia sem PED pendente continua desativando a versão anterior). A UO vem
+    do conteúdo, nunca do nome do arquivo."""
+    col_uo = next((c for c in ped_df.columns if isinstance(c, str) and c.strip().upper() == "UO"), None)
+    if col_uo is None:
+        raise UORecusada("Coluna UO não encontrada no relatório PED. Nada foi gravado.")
+    uo = validar_uo_execucao(ped_df[col_uo].dropna().astype(str).unique())
+    col_ex = encontrar_coluna_prefixo(ped_df, "exerc")
+    exercicios = sorted({a for a in ped_df[col_ex].apply(extrair_ano).dropna()}) if col_ex else []
+    if not exercicios:
+        raise ValueError("Não foi possível identificar o exercício no relatório PED. Nada foi gravado.")
+    return uo, [int(a) for a in exercicios]
+
+
+def _update_dotacao_from_ped(df: pd.DataFrame, uo: str) -> None:
+    """Recalcula só as dotações da UO do arquivo (antes mexia em todas)."""
     if "Chave" not in df.columns:
         return
     valor_col = _find_valor_ped_col(df)
@@ -183,12 +201,14 @@ def _update_dotacao_from_ped(df: pd.DataFrame) -> None:
         ped_sums[key] = ped_sums.get(key, Decimal("0")) + _to_decimal(row.get(valor_col))
 
     emp_rows = (
-        EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave)
+        EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave, EmpRegistro.uo)
         .filter(EmpRegistro.ativo == True)  # noqa: E712
         .all()
     )
     emp_sums: dict[str, Decimal] = {}
     for row in emp_rows:
+        if uo_codigo(row.uo) != uo:
+            continue
         key = _normalize_dotacao_key(row.chave or "")
         if not key:
             continue
@@ -196,6 +216,8 @@ def _update_dotacao_from_ped(df: pd.DataFrame) -> None:
 
     dotacoes = Dotacao.query.filter(Dotacao.ativo == True).all()  # noqa: E712
     for dot in dotacoes:
+        if uo_codigo(dot.uo) != uo:
+            continue
         key = _normalize_dotacao_key(dot.chave_dotacao or "")
         ped_sum = ped_sums.get(key, Decimal("0"))
         emp_sum = emp_sums.get(key, Decimal("0"))
@@ -391,6 +413,13 @@ def identificar_chave_planejamento(df: pd.DataFrame, chaves_planejamento: list[s
         if (not _vazio_emp_ou_estorno(ped_estorno)) or (not _vazio_emp_ou_estorno(num_emp)):
             return "IGNORADO"
 
+        # Regras de Chave de Planejamento (histórico, casos específicos e
+        # 8026) são da secretaria: outra UO fica "NÃO IDENTIFICADO" (D2).
+        if any(_normalize_col_label(c) == "UO" for c in row.index) and not uo_usa_chave(
+            _get_row_value_by_aliases(row, {"UO"})
+        ):
+            return "NÃO IDENTIFICADO"
+
         chave_fallback_8026 = _build_fallback_chave_8026(row, partes_planejamento)
         if hist == "NÃO INFORMADO":
             return chave_fallback_8026 or "NÃO IDENTIFICADO"
@@ -449,6 +478,9 @@ def forcar_chaves_manualmente(df: pd.DataFrame, substituicoes: dict[str, str]) -
             df["_forcar_chave"] = False
         df["Nº PED"] = df["Nº PED"].astype(str).str.strip()
         mask = df["Nº PED"].isin(substituicoes.keys())
+        col_uo = next((c for c in df.columns if isinstance(c, str) and c.strip().upper() == "UO"), None)
+        if col_uo is not None:  # forçar chave só vale para UO da secretaria (D2)
+            mask = mask & df[col_uo].apply(uo_usa_chave)
         if mask.any():
             df.loc[mask, "Chave de Planejamento"] = df.loc[mask, "Nº PED"].map(substituicoes)
             df.loc[mask, "_forcar_chave"] = True
@@ -556,13 +588,14 @@ def adicionar_novas_colunas(df: pd.DataFrame) -> pd.DataFrame:
     hist_col = encontrar_coluna_prefixo(df, "hist")
     if hist_col:
         df[hist_col] = df[hist_col].apply(limpar_historico)
-        colunas = df.columns.tolist()
-        colunas.remove("Credor")
-        colunas.remove("Nome do Credor")
-        idx = colunas.index("Histórico")
-        colunas.insert(idx + 1, "Credor")
-        colunas.insert(idx + 2, "Nome do Credor")
-        df = df[colunas]
+        if all(c in df.columns for c in ("Credor", "Nome do Credor", "Histórico")):
+            colunas = df.columns.tolist()
+            colunas.remove("Credor")
+            colunas.remove("Nome do Credor")
+            idx = colunas.index("Histórico")
+            colunas.insert(idx + 1, "Credor")
+            colunas.insert(idx + 2, "Nome do Credor")
+            df = df[colunas]
 
     return df
 
@@ -871,12 +904,10 @@ def processar_planilha(
         if ano and ano >= 2026:
             partes_planejamento = 8
 
-        precisa_colunas_planejamento = False
-        if "Chave" in df.columns:
-            partes = df["Chave"].apply(contar_partes_chave)
-            precisa_colunas_planejamento = (partes >= 7).any()
-        if precisa_colunas_planejamento:
-            df = adicionar_novas_colunas(df)
+        # Sempre cria as colunas da Dotação e da Chave de Planejamento ("-"
+        # quando não há chave): antes só apareciam se alguma linha tivesse
+        # chave, e a saída variava entre 50 e 67 colunas.
+        df = adicionar_novas_colunas(df)
         df = preencher_novas_colunas(df)
 
         # Ajusta colunas "Chave" vs "Chave de Planejamento" conforme ano e formato da chave
@@ -1116,7 +1147,14 @@ def montar_registros_para_db(df: pd.DataFrame, data_arquivo: datetime, user_emai
         registros.append(payload)
     return registros
 
-def update_database(df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int) -> int:
+def update_database(
+    df: pd.DataFrame,
+    data_arquivo: datetime,
+    user_email: str,
+    upload_id: int,
+    uo: str,
+    exercicios: list[int],
+) -> int:
     insert_sql = text(
         """
         INSERT INTO ped (
@@ -1150,12 +1188,9 @@ def update_database(df: pd.DataFrame, data_arquivo: datetime, user_email: str, u
         """
     )
 
-    try:
-        db.session.execute(text("UPDATE ped SET ativo = 0 WHERE ativo = 1"))
-        db.session.commit()
-    except SQLAlchemyError:
-        db.session.rollback()
-        raise
+    # Desativa só a versão anterior da MESMA UO e dos MESMOS exercícios do
+    # arquivo (antes era a tabela inteira).
+    desativar_versao_anterior("ped", uo, exercicios)
 
     registros = montar_registros_para_db(df, data_arquivo, user_email, upload_id)
     total = 0
@@ -1231,6 +1266,9 @@ def run_ped(
     if ped_df is None:
         raise RuntimeError("Falha ao identificar cabeçalho ou ler a aba ped.")
 
+    # UO do CONTEÚDO do relatório; recusa antes de gerar saída ou gravar.
+    uo, exercicios = identificar_uo_e_exercicios(ped_df)
+
     tratado_df = processar_planilha(ped_df.copy(), chaves_planejamento, casos_especificos, forcar_map)
     if tratado_df is None:
         raise RuntimeError("Falha ao tratar a planilha PED.")
@@ -1240,7 +1278,7 @@ def run_ped(
     tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
     output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
     try:
-        total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+        total = update_database(tratado_df, data_arquivo, user_email, upload_id, uo, exercicios)
     except SQLAlchemyError as exc:
         if "Packet sequence number wrong" in str(exc):
             db.session.remove()
@@ -1248,8 +1286,8 @@ def run_ped(
                 db.engine.dispose()
             except Exception:
                 pass
-            total = update_database(tratado_df, data_arquivo, user_email, upload_id)
+            total = update_database(tratado_df, data_arquivo, user_email, upload_id, uo, exercicios)
         else:
             raise
-    _update_dotacao_from_ped(tratado_df)
+    _update_dotacao_from_ped(tratado_df, uo)
     return total, output_path, missing_dotacao_keys, missing_planejamento_lines
