@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-14) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-16) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 > **⚠ Ajustes pendentes: novas UOs (26101, 26201 e 26202).**
@@ -9,6 +9,7 @@
 
 > **Limpeza de Histórico: em uso online desde 15/10/2026** (etapas curtas conduzidas pela tela, commit `97230e0`; seção 23.9).
 > Falta observar online uma remoção que precise de várias etapas e o botão "Continuar". Deve acontecer na primeira limpeza mensal grande; ver o fim da seção 23.9.
+> **Sincronizada com `homologacao`, `dev/cleber` e `dev/jean` em 16/10/2026** (seção 23.10). Falta, em cada um desses ambientes, o `atualizar_schema_sync_main.py`, o backup e a primeira limpeza.
 
 ---
 
@@ -789,7 +790,7 @@ O mês/ano é separado do exercício porque **a carga final de um exercício pod
 ### 23.6 Pendências e próximos passos
 - **EMP (19,1 GB)** ainda não foi limpo. Mantendo set/2026, devem sair cerca de 5,6 milhões de linhas, e depois da otimização o EMP deve ficar perto de 2 GB. Esse teste também vai confirmar na prática o `DATA_FREE` logo após a limpeza (ver 23.5).
 - **Fazer backup do banco antes de limpezas grandes.** A remoção é definitiva, e o banco da `main` é o de produção.
-- **Sincronizar com `homologacao`, `dev/cleber` e `dev/jean`** quando o usuário pedir. Nas branches, o menu vem de `services/features.py` via `_menu.html`, então o item do `base.html` não é necessário lá. Cada ambiente tem banco próprio: a tabela `limpeza_historico_log` é criada pelo `db.create_all()` ao subir a aplicação.
+- ~~Sincronizar com `homologacao`, `dev/cleber` e `dev/jean`~~ — **feito em 16/10/2026**, ver 23.10.
 - **Quando as novas UOs entrarem (seção 22)**, a limpeza continua correta, porque trabalha por carga. Revisar se o exercício/UO de uma carga continua único.
 
 ### 23.7 Problema no servidor online: "Processamento não encontrado" (2026-10-14) — corrigido na seção 23.8
@@ -926,6 +927,25 @@ Implementado o plano da 23.7.
 - **Atenção na escolha do mês:** "manter out/2026" no EMP também removeu a carga de 30/09 que tinha sido mantida antes. Está dentro da regra (dados desativados), mas a escolha do mês define qual foto do exercício fica guardada.
 
 **Recomendação de uso:** limpeza **mensal**, fora do horário das cargas automáticas (por volta das 05h).
+
+### 23.10 Sincronização com `homologacao`, `dev/cleber` e `dev/jean` (2026-10-16)
+Os 6 commits da `main` posteriores à sincronização de 02/10 (`839afeb`, `9e29c4f`, `99a9e38`, `49daae9`, `97230e0`, `a0028cb`) chegaram às três branches — a Limpeza de Histórico completa e as seções 22 e 23 deste documento. Nada de regra de negócio estava pendente: tudo o que a `main` ganhou até 29/09 já tinha ido na seção 21.
+- **Fluxo:** `main` → `homologacao` (PR #19, merge `3526551`) e, a partir da `homologacao` já resolvida, → `dev/cleber` e `dev/jean` (um PR para cada, `sync/homologacao-para-dev-cleber` e `sync/homologacao-para-dev-jean`). Cada PR foi aberto com o destino fixo no link e mergeado como *merge commit*; o PR #19 foi liberado com *bypass* de revisão (a branch exige 1 aprovação e o autor não pode aprovar o próprio PR). Depois de simular tudo com `git merge-tree`.
+- **Conflitos e como foram resolvidos:**
+  - `homologacao`: `services/features.py` (a branch tem o menu reorganizado em grupos — mantida a árvore dela e acrescentado "Limpeza de Histórico" no grupo "Atualizar Execução Orçamentária", depois de NOB, mais o ícone `trash3` em `MENU_META`); `static/css/style.css` (ficaram os dois blocos); `templates/base.html` (rodapé em linhas da branch com o release `RELEASE_2_2026_10_15.2` e `?v=20261016.sync-main.2`); `docs/claude.md` (os dois lados só acrescentavam).
+  - `dev/cleber`: só `docs/claude.md`. `features.py` e CSS entraram sozinhos, sem duplicar o item de menu (conferido, ao contrário do "Programar PTA/LOA" de 02/10).
+  - `dev/jean`: `docs/claude.md` (o lado da `homologacao` já trazia a seção 21.6, então ficou só ele) e o rodapé do `base.html` (release novo + a linha própria `PATCH_DEV_SPO_2026_07_01.1`; o selo "Ambiente de integracao DEV Jean" não mudou).
+- **Armadilha de edição:** `services/features.py` e `docs/claude.md` usam final de linha **CRLF**, mas as ferramentas de leitura não mostram o ``. Um `replace` em Python com `
+` simples não casa e falha **sem erro** — foi o que aconteceu na primeira tentativa. Conferir com `repr()` antes de editar e usar `
+`.
+- **Cuidado com o banco nos testes:** a pasta de trabalho precisa de uma cópia do `.env`, então testes e `create_app()` rodados ali apontam para o banco de **produção**. Foram rodados só `tests/test_limpeza_historico.py` (14 testes, tabelas temporárias) e `node --check`; depois de subir o app uma vez, conferido que nenhuma tabela nova foi criada. A `.venv` local não tem o `pdfplumber` das branches, então a suíte completa não rodou lá.
+- **Limpeza:** as pastas de trabalho e as branches `sync/...` (locais e no GitHub) foram removidas. Conferido: as três branches não têm nenhum commit da `main` faltando.
+- **Pendente em cada ambiente** (homologação, `dev/cleber`, `dev/jean`):
+  1. Deploy + Restart da aplicação (`limpeza_historico_log` é criada completa pelo `db.create_all()`; não precisa de `ALTER`).
+  2. `python scripts/atualizar_schema_sync_main.py` (sem argumentos e depois com `--aplicar`; seção 21.7) e conferir o login.
+  3. **Backup do banco** antes da primeira limpeza.
+  4. Na tela, simular e só então executar a limpeza, depois otimizar. Nesses ambientes o acúmulo é de ~33 GB juntos (cache do cPanel); o esperado é voltar para perto de 0,5 GB cada.
+- Daqui em diante, correção feita direto na `main` volta a exigir nova sincronização (como na seção 21.9).
 
 ## 24. Sincronização `main` → `homologacao` aplicada no ambiente local + trava do Teto-SEDUC (2026-10-16)
 

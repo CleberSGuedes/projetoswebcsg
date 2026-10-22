@@ -13,6 +13,8 @@ from sqlalchemy import text, event
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import db
+from services.execucao_uo import desativar_versao_anterior as _desativar_por_uo
+from services.uo import exercicio_4d, validar_uo_execucao
 
 BATCH_SIZE = 1000
 INPUT_DIR = Path("upload/est_emp")
@@ -230,13 +232,17 @@ def adicionar_colunas_empenho(df: pd.DataFrame) -> pd.DataFrame:
         return None
 
     df["Ano Nº EMP"] = df["Nº EMP"].astype(str).apply(extrair_ano)
-    df["Exercício"] = df["Exercício"].astype(str).str[-2:]
+    # O Nº EMP traz o ano com 2 dígitos ("2026.xxx.26.xxx"), então a
+    # comparação Atual x RP usa os 2 últimos dígitos do exercício. O
+    # Exercício gravado fica completo ("2026"); até 15/10/2026 ficava "26".
+    df["Exercício"] = df["Exercício"].astype(str).apply(exercicio_4d).replace("", "NÃO INFORMADO")
+    exercicio_2d = df["Exercício"].str[-2:]
 
     df["Empenho Atual"] = df.apply(
-        lambda x: x["Nº EMP"] if x["Ano Nº EMP"] == x["Exercício"] else "", axis=1
+        lambda x: x["Nº EMP"] if x["Ano Nº EMP"] == exercicio_2d[x.name] else "", axis=1
     )
     df["Empenho RP"] = df.apply(
-        lambda x: x["Nº EMP"] if x["Ano Nº EMP"] != x["Exercício"] else "", axis=1
+        lambda x: x["Nº EMP"] if x["Ano Nº EMP"] != exercicio_2d[x.name] else "", axis=1
     )
 
     df["Empenho Atual"] = df["Empenho Atual"].replace("", "NÃO INFORMADO")
@@ -451,6 +457,30 @@ def _enable_fast_executemany() -> None:
     _FAST_EXEC_ENABLED = True
 
 
+def _coluna(df: pd.DataFrame, nome: str) -> pd.Series:
+    for col in df.columns:
+        if _normalize_col(col) == nome:
+            return df[col]
+    return pd.Series([], dtype=str)
+
+
+def identificar_uo_e_exercicios(df: pd.DataFrame) -> tuple[str, list[str]]:
+    """UO única (validada) e exercícios (4 dígitos) presentes no relatório."""
+    uo = validar_uo_execucao(_coluna(df, "uo").dropna().astype(str).unique())
+    exercicios = sorted({e for e in (exercicio_4d(v) for v in _coluna(df, "exercicio").dropna()) if e})
+    if not exercicios:
+        raise ValueError("Não foi possível identificar o exercício no relatório. Nada foi gravado.")
+    return uo, exercicios
+
+
+def desativar_versao_anterior(
+    uo: str, exercicios: list[str], conn: Any = None, tabela: str = "est_emp", commit: bool = True
+) -> int:
+    """Desativa só a UO e os exercícios do arquivo (services/execucao_uo.py).
+    Antes desativava a tabela inteira (uma UO apagaria a outra)."""
+    return _desativar_por_uo(tabela, uo, exercicios, conn=conn, commit=commit)
+
+
 def update_database(
     df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int,
     progress_callback=None, cancel_callback=None
@@ -517,6 +547,9 @@ def run_est_emp(
                 df_tratado[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=False)
             else:
                 df_tratado[col] = pd.to_datetime(serie_str, errors="coerce", dayfirst=True)
+    # UO e exercício do CONTEÚDO do relatório (nunca do nome do arquivo):
+    # recusa antes de gravar qualquer linha.
+    uo, exercicios = identificar_uo_e_exercicios(df_tratado)
     if cancel_callback:
         cancel_callback()
     if progress_callback:
@@ -527,7 +560,9 @@ def run_est_emp(
     total = update_database(df_tratado, data_arquivo, user_email, upload_id, _batch, cancel_callback)
     if cancel_callback:
         cancel_callback()
-    db.session.execute(text("UPDATE est_emp SET ativo = 0 WHERE ativo = 1"))
+    # Troca a carga só da MESMA UO e dos MESMOS exercícios (antes: a tabela
+    # inteira), na mesma transação que ativa a carga nova.
+    desativar_versao_anterior(uo, exercicios, commit=False)
     db.session.execute(text("UPDATE est_emp SET ativo = 1 WHERE upload_id = :upload_id"), {"upload_id": upload_id})
     db.session.commit()
     return total, output_path

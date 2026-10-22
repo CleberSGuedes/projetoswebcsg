@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
+from services.uo import UOS_EXECUCAO, UOS_EXECUCAO_LIBERADAS, UOS_SEDUC
 
 EMP_INPUT_DIR = Path("upload/emp")
 NOB_INPUT_DIR = Path("upload/nob")
@@ -44,6 +45,11 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
         existing_opts = str(node_env.get("NODE_OPTIONS") or "").strip()
         if extra_opt not in existing_opts:
             node_env["NODE_OPTIONS"] = f"{existing_opts} {extra_opt}".strip()
+
+    # Listas de UO do Python (services/uo.py): fonte única para os runners Node.
+    node_env["UOS_EXECUCAO"] = ",".join(sorted(UOS_EXECUCAO))
+    node_env["UOS_EXECUCAO_LIBERADAS"] = ",".join(sorted(UOS_EXECUCAO_LIBERADAS))
+    node_env["UOS_SEDUC"] = ",".join(sorted(UOS_SEDUC))
 
     args = [
         NODE_EXE,
@@ -203,26 +209,29 @@ def _run_managed_job(job_id: int) -> None:
     try:
         if job.tipo == "fip613":
             from services.fip613_runner import run_fip613
-            total, output = run_fip613(file_path, upload.data_arquivo, upload.user_email, upload.id,
-                                       progress, cancel_check)
+            total, output, conferencia = run_fip613(file_path, upload.data_arquivo, upload.user_email, upload.id,
+                                                    progress, cancel_check)
             alerts = None
+            nota_final = conferencia
         elif job.tipo == "ped":
             from services.ped_runner import run_ped
             total, output, missing_dotacao, missing_planejamento = run_ped(
                 file_path, upload.data_arquivo, upload.user_email, upload.id, progress, cancel_check
             )
             alerts = {"chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
+            nota_final = ""
         else:
             from services.est_emp_runner import run_est_emp
             total, output = run_est_emp(file_path, upload.data_arquivo, upload.user_email, upload.id,
                                         progress, cancel_check)
             alerts = None
+            nota_final = ""
         cancel_check()
         upload.output_filename = output.name
         alert_count = sum(len(v) for v in alerts.values()) if alerts else 0
         job.detalhes_alertas = json.dumps(alerts, ensure_ascii=False) if alerts else None
         finish_job(job, "finalizado_com_alertas" if alert_count else "finalizado",
-                   f"Processamento concluído. {total} registros inseridos.",
+                   f"Processamento concluído. {total} registros inseridos. {nota_final}".strip(),
                    arquivo_saida=output.name, caminho_saida=str(output), total_registros=total,
                    registros_processados=total, total_alertas=alert_count)
         db.session.commit()
@@ -261,6 +270,12 @@ def main() -> int:
                 if job:
                     if "PROCESSAMENTO_CANCELADO" in msg:
                         finish_job(job, "cancelado", "Processamento cancelado pelo usuário.")
+                    elif type(exc).__name__ == "UORecusada":
+                        # Arquivo recusado pela UO: a mensagem já explica o motivo
+                        # e nada foi gravado.
+                        job.erro_tecnico = msg
+                        job.total_erros = 1
+                        finish_job(job, "falha", str(exc))
                     else:
                         job.erro_tecnico = msg
                         job.total_erros = 1

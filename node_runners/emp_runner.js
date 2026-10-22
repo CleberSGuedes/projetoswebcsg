@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
 const { connect, bulkInsert } = require("./db");
+const { uoCodigo, uoUsaChave, uoExercicioDeLinhas, desativarVersaoAnterior } = require("./execucao_uo");
 const {
   ensureDir,
   readJsonWithBom,
@@ -961,7 +962,15 @@ function identificarChavePlanejamento(dataset, chavesPlanejamento, casosEspecifi
     });
   };
 
+  const temColunaUo = dataset.columns.includes("UO");
   for (const row of dataset.rows) {
+    // Regras de Chave de Planejamento (histórico, casos específicos, fuzzy e
+    // 8026) são da secretaria: outra UO fica "NÃO IDENTIFICADO" (D2).
+    if (temColunaUo && !uoUsaChave(row["UO"])) {
+      resultados.push("NÃO IDENTIFICADO");
+      maybeUpdateProgress();
+      continue;
+    }
     const anoLinha = obterExercicioLinha(row);
     const partesLinha = anoLinha && anoLinha >= 2026 ? 8 : partesChave;
     const chavesBase = chavesByPartes.get(partesLinha) || [];
@@ -1082,7 +1091,9 @@ function forcarChavesManualmente(dataset, keyColName, substituicoes) {
   const mapa = substituicoes || {};
   if (!Object.keys(mapa).length) return dataset;
   if (!dataset.columns.includes("N\u00ba EMP")) return dataset;
+  const temColunaUo = dataset.columns.includes("UO");
   for (const row of dataset.rows) {
+    if (temColunaUo && !uoUsaChave(row["UO"])) continue; // for\u00e7ar chave s\u00f3 vale para a secretaria (D2)
     const numEmp = String(row["N\u00ba EMP"] || "").trim();
     if (mapa[numEmp]) {
       row[keyColName] = canonicalizarChave(mapa[numEmp]);
@@ -1397,11 +1408,11 @@ async function carregarDotacoes(db) {
   if (db.kind === "mssql") {
     const result = await db.pool
       .request()
-      .query("SELECT chave_dotacao, valor_dotacao FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1");
+      .query("SELECT chave_dotacao, valor_dotacao, uo FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1");
     return result.recordset || [];
   }
   const [rows] = await db.pool.query(
-    "SELECT chave_dotacao, valor_dotacao FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1"
+    "SELECT chave_dotacao, valor_dotacao, uo FROM dotacao WHERE chave_dotacao IS NOT NULL AND ativo = 1"
   );
   return rows || [];
 }
@@ -1411,12 +1422,12 @@ async function carregarPedSums(db) {
     const result = await db.pool
       .request()
       .query(
-        "SELECT chave, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave"
+        "SELECT chave, uo, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave, uo"
       );
     return result.recordset || [];
   }
   const [rows] = await db.pool.query(
-    "SELECT chave, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave"
+    "SELECT chave, uo, SUM(valor_ped) AS total FROM ped WHERE ativo = 1 AND chave IS NOT NULL GROUP BY chave, uo"
   );
   return rows || [];
 }
@@ -1428,9 +1439,11 @@ function toNumber(value) {
   return parseValorDb(value) || 0;
 }
 
-async function atualizarDotacaoComEmp(db, empSums) {
-  const dotacoes = await carregarDotacoes(db);
-  const pedRows = await carregarPedSums(db);
+// Recalcula só as dotações da UO do arquivo, somando só os PEDs da mesma UO
+// (antes mexia em todas as dotações ativas).
+async function atualizarDotacaoComEmp(db, empSums, uo) {
+  const dotacoes = (await carregarDotacoes(db)).filter((dot) => uoCodigo(dot.uo) === uo);
+  const pedRows = (await carregarPedSums(db)).filter((row) => uoCodigo(row.uo) === uo);
   const pedSums = new Map();
   for (const row of pedRows) {
     const key = normalizeDotacaoKey(row.chave);
@@ -1591,6 +1604,9 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   });
 
   const raw = await carregarPlanilha(filePath);
+  // UO e exercício do CONTEÚDO do relatório (antes do tratamento, que remove
+  // empenhos estornados): recusa UO ausente, múltipla ou não liberada.
+  const { uo, exercicios } = uoExercicioDeLinhas(raw.rows);
   updateStatusFields("emp", uploadId, {
     progress: 10,
     message: "Tratando dados e identificando chaves.",
@@ -1627,6 +1643,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
 
   df = converterTipos(df);
 
+  const temColunaUoEmp = df.columns.includes("UO");
   const exercicioVal = obterExercicio(df);
   const partesPlanejamento = exercicioVal !== null && exercicioVal >= 2026 ? 8 : 7;
   const keyColName = "Chave de Planejamento";
@@ -1668,6 +1685,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   df = preencherNovasColunas(df, keyColName, planejamentoAtivo, partesPlanejamento);
 
   for (const row of df.rows) {
+    if (temColunaUoEmp && !uoUsaChave(row["UO"])) continue; // chave DOT.* \u00e9 da secretaria (D2)
     const chaveDot = extrairChaveDotDoHistorico(row["Hist\u00f3rico"] || "");
     if (chaveDot) {
       row.Chave = chaveDot;
@@ -1754,11 +1772,9 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     message: "Arquivo tratado gerado. Preparando gravação no banco.",
   });
 
-  if (db.kind === "mssql") {
-    await db.pool.request().query("UPDATE emp SET ativo = 0 WHERE ativo = 1");
-  } else {
-    await db.pool.query("UPDATE emp SET ativo = 0 WHERE ativo = 1");
-  }
+  // Desativa só a versão anterior da MESMA UO e dos MESMOS exercícios (antes:
+  // a tabela inteira - o arquivo de uma UO apagaria as outras).
+  await desativarVersaoAnterior(db, "emp", uo, exercicios);
 
   const registros = montarRegistrosParaDb(dfSaida, dataArquivo, userEmail, uploadId);
   let total = 0;
@@ -1789,7 +1805,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
     });
   }
 
-  const missingDotacaoKeys = await atualizarDotacaoComEmp(db, empDotSums);
+  const missingDotacaoKeys = await atualizarDotacaoComEmp(db, empDotSums, uo);
   updateStatusFields("emp", uploadId, {
     progress: 98,
     message: "Atualizando dotação com valores do EMP.",
@@ -1807,4 +1823,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
 
 module.exports = {
   processEmp,
+  carregarPlanilha,
+  identificarChavePlanejamento,
+  forcarChavesManualmente,
 };
