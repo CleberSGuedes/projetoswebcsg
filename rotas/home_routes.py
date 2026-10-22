@@ -115,8 +115,9 @@ from services.emp_record import get_emp_record_snapshot
 from services.features import FEATURES, build_menu_tree, flatten_features, build_parent_map
 from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
 from services.fip613_runner import run_fip613, UPLOAD_DIR
-from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
-from services.uo import uo_label
+from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
+from services.execucao_uo import cond_uo_em, sql_uo_em
+from services.uo import UOS_SEDUC, UORecusada, uo_codigo, uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
@@ -148,6 +149,16 @@ from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
 
 home_bp = Blueprint("home", __name__)
+
+# Painéis e relatórios de execução (fip613, ped, emp, nob, est_emp) ficam
+# fixos nas UOs da secretaria: os dados das demais UOs (docs/plano_implementacao
+# _novas_uos.md, D5) não podem ser somados aos da SEDUC. O filtro de UO por
+# tela vem depois.
+SQL_UO_SEDUC = sql_uo_em(UOS_SEDUC)
+
+
+def _uo_seduc(modelo):
+    return cond_uo_em(modelo, UOS_SEDUC)
 
 EMP_UPLOAD_DIR = Path("upload/emp")
 EMP_OUTPUT_DIR = Path("outputs/td_emp")
@@ -870,7 +881,7 @@ def partial_dashboard():
         try:
             t2 = datetime.utcnow()
             ped_keys = _fetch_scalars_all_with_retry(
-                select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
+                select(PedRegistro.chave).where(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
             )
             ped_keys = [
                 _normalize_dotacao_key(k)
@@ -1963,7 +1974,7 @@ def api_auth_token():
 
 
 def _api_query_model(model, table_name: str):
-    reserved = {"limit", "offset", "order_by", "order_dir", "fields"}
+    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo"}
     mapper = inspect(model)
     col_keys = [c.key for c in mapper.columns]
     if "ativo" not in col_keys:
@@ -1981,6 +1992,21 @@ def _api_query_model(model, table_name: str):
     offset = max(0, offset)
 
     query = db.session.query(model).filter(getattr(model, "ativo") == True)  # noqa: E712
+    # UO: sem parâmetro, só a secretaria (contrato atual da API); ?uo=26201 ou
+    # ?uo=26201,26202 escolhe; ?uo=all devolve todas as UOs.
+    uo_filtrada = "seduc"
+    if "uo" in col_keys:
+        uo_param = str(request.args.get("uo", "") or "").strip()
+        if not uo_param:
+            query = query.filter(_uo_seduc(model))
+        elif uo_param.lower() == "all":
+            uo_filtrada = "all"
+        else:
+            codigos = [c for c in (uo_codigo(v) for v in uo_param.split(",")) if c]
+            if not codigos:
+                return jsonify({"error": "Parâmetro uo inválido."}), 400
+            query = query.filter(cond_uo_em(model, codigos))
+            uo_filtrada = ",".join(sorted(set(codigos)))
     for key, val in request.args.items():
         if key in reserved:
             continue
@@ -2025,6 +2051,7 @@ def _api_query_model(model, table_name: str):
         {
             "ok": True,
             "table": table_name,
+            "uo": uo_filtrada,
             "total": int(total),
             "limit": int(limit),
             "offset": int(offset),
@@ -9885,7 +9912,7 @@ def _calc_ped_sum_for_dotacao(chave_dotacao: str) -> Decimal:
         return Decimal("0")
     rows = (
         PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -9901,7 +9928,7 @@ def _calc_emp_sum_for_dotacao(chave_dotacao: str) -> Decimal:
         return Decimal("0")
     rows = (
         EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave)
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10014,7 +10041,7 @@ def _calc_ped_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
         return Decimal("0"), 0
     rows = (
         PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10031,7 +10058,7 @@ def _collect_ped_rows_for_dotacao_keys(keys: set[str]) -> dict[int, Decimal]:
         return {}
     rows = (
         PedRegistro.query.with_entities(PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     matched: dict[int, Decimal] = {}
@@ -10053,7 +10080,7 @@ def _calc_emp_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
         EmpRegistro.query.with_entities(
             EmpRegistro.numero_emp, EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave
         )
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10077,7 +10104,7 @@ def _collect_emp_rows_for_dotacao_keys(keys: set[str]) -> dict[int, tuple[Decima
             EmpRegistro.valor_emp_devolucao_gcv,
             EmpRegistro.chave,
         )
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     matched: dict[int, tuple[Decimal, str]] = {}
@@ -15867,7 +15894,7 @@ def _calc_dotacao_saldo(
         chave_field = "chave"
     chave_norm = _normalize_chave(chave_planejamento)
 
-    ped_base_common = [PedRegistro.ativo == True]  # noqa: E712
+    ped_base_common = [PedRegistro.ativo == True, _uo_seduc(PedRegistro)]  # noqa: E712
     if exercicio:
         ped_base_common.append(PedRegistro.exercicio == exercicio)
     if programa_key:
@@ -15899,7 +15926,7 @@ def _calc_dotacao_saldo(
         else:
             ped_base_common.append(PedRegistro.regiao == regiao)
 
-    emp_base_common = [EmpRegistro.ativo == True]  # noqa: E712
+    emp_base_common = [EmpRegistro.ativo == True, _uo_seduc(EmpRegistro)]  # noqa: E712
     if exercicio:
         emp_base_common.append(EmpRegistro.exercicio == exercicio)
     if programa_key:
@@ -15978,7 +16005,7 @@ def _calc_dotacao_saldo(
     valor_ped = sum(merged.values(), Decimal("0"))
     ped_count = len(merged)
     if ped_count == 0 and chave_planejamento:
-        ped_fallback = [PedRegistro.ativo == True]  # noqa: E712
+        ped_fallback = [PedRegistro.ativo == True, _uo_seduc(PedRegistro)]  # noqa: E712
         if exercicio:
             ped_fallback.append(PedRegistro.exercicio == exercicio)
         ped_rows = (
@@ -16333,7 +16360,7 @@ def api_relatorio_fip613():
             return str(value)
 
     try:
-        rows = Fip613Registro.query.filter_by(ativo=True).all()
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_seduc(Fip613Registro)).all()  # noqa: E712
         last_upload = Fip613Upload.query.order_by(Fip613Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(last_upload.data_arquivo) if last_upload else None
         uploaded_at = _as_iso(last_upload.uploaded_at) if last_upload else None
@@ -16575,7 +16602,7 @@ def api_relatorio_plan21_nger():
 @require_feature("relatorios/fip613")
 def api_relatorio_fip613_download():
     try:
-        rows = Fip613Registro.query.filter_by(ativo=True).all()
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_seduc(Fip613Registro)).all()  # noqa: E712
         data = []
         for r in rows:
             data.append(
@@ -17249,7 +17276,7 @@ def api_relatorio_ped():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -17318,7 +17345,7 @@ def api_relatorio_ped():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -17436,7 +17463,7 @@ def api_relatorio_ped_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -17505,7 +17532,7 @@ def api_relatorio_ped_download():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -18048,6 +18075,18 @@ def api_plan20_upload():
 
         output_path = run_plan20(save_path, PLAN20_OUTPUT_DIR)
 
+        # Confere se alguma linha vai para o banco: UO não liberada, sem linhas
+        # gravaveis etc. eram "processado com sucesso" sem gravar nada.
+        try:
+            aviso_uo = verificar_uo_plan20(output_path)
+        except UORecusada as exc:
+            for arq in (save_path, output_path):
+                try:
+                    arq.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            return jsonify({"error": str(exc)}), 400
+
         registro = Plan20Upload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -18094,7 +18133,7 @@ def api_plan20_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Plan20 processado com sucesso.",
+                "message": f"Plan20 processado com sucesso. {aviso_uo}".strip(),
                 "output": output_path.name,
                 "last": {
                     "user_email": user_email,
@@ -18225,7 +18264,7 @@ def api_relatorio_emp():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -18271,7 +18310,7 @@ def api_relatorio_emp():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -18613,7 +18652,7 @@ def api_relatorio_est_emp():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_est,
@@ -18639,7 +18678,7 @@ def api_relatorio_est_emp():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -18740,7 +18779,7 @@ def api_relatorio_nob():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_nob,
@@ -18779,7 +18818,7 @@ def api_relatorio_nob():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -18878,7 +18917,7 @@ def api_relatorio_nob_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_nob,
@@ -18917,7 +18956,7 @@ def api_relatorio_nob_download():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -19065,7 +19104,7 @@ def api_relatorio_emp_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -19111,7 +19150,7 @@ def api_relatorio_emp_download():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )
@@ -19674,7 +19713,7 @@ def api_relatorio_est_emp_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_est,
@@ -19700,7 +19739,7 @@ def api_relatorio_est_emp_download():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
                     """
                 )
             )

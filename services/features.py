@@ -84,7 +84,7 @@ FEATURES = [
         "nome": "Relatórios",
         "children": [
             _group("grupo/relatorios-planejamento", "Planejamento", [
-                {"id": "relatorios/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+                {"id": "relatorios/plan20-seduc", "nome": "PLAN20"},
                 {"id": "relatorios/plan21-nger", "nome": "PLAN21_NGER"},
                 _group("grupo/relatorios-estrutura", "Estrutura do Planejamento", [
                     {"id": "relatorios/estrutura-planejamento", "nome": "Consultar Estrutura"},
