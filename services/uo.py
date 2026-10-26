@@ -25,11 +25,13 @@ UOS_EXECUCAO = UOS_SEDUC | {"26101", "26201", "26202"}
 UOS_PLAN20 = set(UOS_EXECUCAO)
 # UOs LIBERADAS no Plan20. Enquanto a confirmacao oficial das novas UOs nao
 # sair, so a secretaria. Para liberar: `set(UOS_PLAN20)` (Fase 3 do plano).
-UOS_PLAN20_LIBERADAS = set(UOS_SEDUC)
+# TESTE EM HOMOLOGACAO: 26101 liberada (reverter antes de ir para a main).
+UOS_PLAN20_LIBERADAS = set(UOS_SEDUC) | {"26101"}
 # UOs LIBERADAS para upload nos modulos de execucao. Enquanto a confirmacao
 # oficial das novas UOs nao sair, so a secretaria. Para liberar, trocar por
 # `set(UOS_EXECUCAO)` (Fase 3 do plano) - nao ha outro lugar a alterar.
-UOS_EXECUCAO_LIBERADAS = set(UOS_SEDUC)
+# TESTE EM HOMOLOGACAO: 26101 liberada (reverter antes de ir para a main).
+UOS_EXECUCAO_LIBERADAS = set(UOS_SEDUC) | {"26101"}
 
 # Rotulo curto para exibicao (filtros/dashboard) - mesmas siglas que o
 # FIPLAN usa na coluna "U.O" do Plan 134.
