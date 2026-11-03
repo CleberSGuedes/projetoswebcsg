@@ -1849,6 +1849,44 @@ body.special-context-focus .main {
 }
 .report-data-card .totais-row strong { color: var(--text); font-size: 12px; text-align: left; }
 .report-actions { justify-content: flex-end; gap: 8px; }
+
+/* Relatórios de execução (FIP 613, PED, EMP, EST EMP, NOB): "Última atualização"
+   por UO em colunas, à esquerda, e totais em duas colunas + botões, à direita.
+   As duas metades dividem a largura e têm altura parecida. */
+.report-data-card > .relatorio-top.relatorio-top-uo { padding: 8px 14px; align-items: stretch; gap: 8px; flex-wrap: nowrap; }
+.report-data-card .relatorio-top-uo > .muted { flex: 1 1 0; min-width: 0; min-height: 0; padding: 4px 8px; gap: 6px; }
+.report-data-card .relatorio-top-uo .relatorio-top-right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  padding-left: 14px;
+}
+.report-data-card .relatorio-top-uo .totais-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  row-gap: 3px;
+  padding: 4px 8px;
+}
+.report-data-card .relatorio-top-uo .totais-title { grid-column: 1 / -1; }
+.report-data-card .relatorio-top-uo .totais-row { grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: 8px; }
+.report-data-card .relatorio-top-uo .report-actions { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 4px; }
+.meta-uo-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.meta-uo-col { display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: 0 16px 0 0; border-right: 1px solid var(--border); font-size: 11px; }
+.meta-uo-col:last-child { border-right: 0; padding-right: 0; }
+.meta-uo-titulo { font-weight: 700; font-size: 12px; color: var(--text); }
+@media (max-width: 900px) {
+  .report-data-card > .relatorio-top.relatorio-top-uo { flex-wrap: wrap; }
+  .report-data-card .relatorio-top-uo > .muted,
+  .report-data-card .relatorio-top-uo .relatorio-top-right { flex: 1 1 100%; }
+  .report-data-card .relatorio-top-uo .relatorio-top-right { grid-template-columns: minmax(0, 1fr); }
+  .report-data-card .relatorio-top-uo .report-actions { flex-direction: row; }
+}
 .report-actions .btn {
   min-height: 38px;
   padding: 8px 13px;

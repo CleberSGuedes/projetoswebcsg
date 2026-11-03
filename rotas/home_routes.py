@@ -168,6 +168,42 @@ def _uo_liberadas(modelo):
     return cond_uo_em(modelo, UOS_EXECUCAO_LIBERADAS)
 
 
+def _ultimas_cargas_por_uo(tabela, modelo_upload):
+    """Última carga ativa de cada UO liberada (quem enviou, quando e a data do
+    download), para o painel "Última atualização" dos relatórios. A UO vem das
+    linhas gravadas, pois as tabelas de upload não guardam UO."""
+    try:
+        linhas = db.session.execute(
+            text(f"SELECT uo, MAX(upload_id) FROM {tabela} WHERE ativo = 1 AND {SQL_UO_LIBERADAS} GROUP BY uo")
+        ).fetchall()
+        por_uo: dict[str, int] = {}
+        for uo, upload_id in linhas:
+            codigo = uo_codigo(uo)
+            if codigo and upload_id is not None:
+                por_uo[codigo] = max(por_uo.get(codigo, 0), int(upload_id))
+        if not por_uo:
+            return []
+        uploads = {u.id: u for u in modelo_upload.query.filter(modelo_upload.id.in_(set(por_uo.values()))).all()}
+        out = []
+        for codigo in sorted(por_uo):
+            up = uploads.get(por_uo[codigo])
+            if not up:
+                continue
+            out.append(
+                {
+                    "uo": codigo,
+                    "rotulo": uo_label(codigo),
+                    "user_email": up.user_email,
+                    "uploaded_at": up.uploaded_at.isoformat() if up.uploaded_at else None,
+                    "data_arquivo": up.data_arquivo.isoformat() if up.data_arquivo else None,
+                }
+            )
+        return out
+    except Exception:
+        _safe_session_rollback()
+        return []
+
+
 def _uo_relatorio_download(modelo):
     """UOs do download (?uo=14101,26101): so as liberadas; sem parametro
     valido, a secretaria."""
@@ -16461,7 +16497,7 @@ def api_relatorio_fip613():
                     "valor_a_pagar": float(r.valor_a_pagar or 0),
                 }
             )
-        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email, "uos_padrao": sorted(UOS_SEDUC)})
+        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email, "uos_padrao": sorted(UOS_SEDUC), "ultimas_por_uo": _ultimas_cargas_por_uo("fip613", Fip613Upload)})
     except Exception as exc:
         return jsonify({"error": f"Falha ao buscar dados: {exc}"}), 500
 
@@ -17503,6 +17539,7 @@ def api_relatorio_ped():
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
                 "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("ped", PedUpload),
             }
         )
     except Exception as exc:
@@ -17957,6 +17994,40 @@ def _plan20_relatorio_rows():
     )
 
 
+def _plan20_ultimas_por_uo():
+    """Última carga ativa de cada UO no Plan20, para o painel "Última
+    atualização" do relatório. A tabela plan20_seduc não guarda o id do upload;
+    a UO vem do texto "14.101 - SECRETARIA ..." e a carga mais recente é a de
+    maior data_atualizacao."""
+    try:
+        linhas = db.session.execute(
+            text(
+                "SELECT unidade_orcamentaria, user_email, data_arquivo, MAX(data_atualizacao) AS atualizado "
+                "FROM plan20_seduc WHERE ativo = 1 GROUP BY unidade_orcamentaria, user_email, data_arquivo"
+            )
+        ).fetchall()
+    except Exception:
+        _safe_session_rollback()
+        return []
+    por_uo: dict[str, tuple] = {}
+    for unidade, email, data_arquivo, atualizado in linhas:
+        codigo = uo_codigo(str(unidade or "").split(" - ")[0])
+        if not codigo:
+            continue
+        if codigo not in por_uo or (atualizado and (por_uo[codigo][3] is None or atualizado > por_uo[codigo][3])):
+            por_uo[codigo] = (email, data_arquivo, unidade, atualizado)
+    return [
+        {
+            "uo": codigo,
+            "rotulo": uo_label(codigo),
+            "user_email": email,
+            "uploaded_at": atualizado.isoformat() if atualizado else None,
+            "data_arquivo": data_arquivo.isoformat() if data_arquivo else None,
+        }
+        for codigo, (email, data_arquivo, _unidade, atualizado) in sorted(por_uo.items())
+    ]
+
+
 def _plan20_seduc_norm_col(name: str) -> str:
     base = unicodedata.normalize("NFKD", str(name or ""))
     ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
@@ -18282,6 +18353,7 @@ def api_relatorio_plan20():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "ultimas_por_uo": _plan20_ultimas_por_uo(),
             }
         )
     except Exception as exc:
@@ -18443,6 +18515,7 @@ def api_relatorio_emp():
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
                 "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("emp", EmpUpload),
             }
         )
     except Exception as exc:
@@ -18792,6 +18865,7 @@ def api_relatorio_est_emp():
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
                 "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("est_emp", EstEmpUpload),
             }
         )
     except Exception as exc:
@@ -18946,6 +19020,7 @@ def api_relatorio_nob():
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
                 "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("nob", NobUpload),
             }
         )
     except Exception as exc:

@@ -3866,6 +3866,30 @@
     return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
   };
 
+  const escapeHtmlMeta = (value) =>
+    String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // "Última atualização" dos relatórios de execução: uma coluna por UO (a carga
+  // ativa de cada uma). Sem dados por UO, cai no último upload, como antes.
+  const renderUltimasAtualizacoes = (meta, data) => {
+    if (!meta) return;
+    const lista = Array.isArray(data.ultimas_por_uo) && data.ultimas_por_uo.length
+      ? data.ultimas_por_uo
+      : [{ rotulo: "", user_email: data.user_email, uploaded_at: data.uploaded_at, data_arquivo: data.data_arquivo }];
+    const colunas = lista
+      .map(
+        (c) => `
+          <div class="meta-uo-col">
+            ${c.rotulo ? `<div class="meta-uo-titulo">${escapeHtmlMeta(c.rotulo)}</div>` : ""}
+            <div>Enviado por: ${escapeHtmlMeta(c.user_email || "-")}</div>
+            <div>Upload em: ${formatAmazonTime(c.uploaded_at)}</div>
+            <div>Data do download: ${formatAmazonLocalTime(c.data_arquivo)}</div>
+          </div>`
+      )
+      .join("");
+    meta.innerHTML = `<div><strong>Última atualização${lista.length > 1 || lista[0].rotulo ? " por UO" : ""}</strong></div><div class="meta-uo-grid">${colunas}</div>`;
+  };
+
   async function loadManagedJobStatus(endpoint, target, submitBtn, viewLabel) {
     if (!target) return null;
     target.textContent = "Carregando...";
@@ -11011,17 +11035,7 @@
         uosPadrao = (data.uos_padrao || []).map(String);
         aplicarUoPadrao();
         renderFiltered();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -11468,17 +11482,7 @@
         setOptions(allData.rows);
         filteredRows = allData.rows;
         render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -12550,17 +12554,7 @@
         uosPadrao = (data.uos_padrao || []).map(String);
         aplicarUoPadrao();
         renderFiltered();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
         if (chaveHeader) {
           chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
@@ -13067,17 +13061,7 @@
         uosPadrao = (data.uos_padrao || []).map(String);
         aplicarUoPadrao();
         renderFiltered();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -13643,17 +13627,7 @@
         uosPadrao = (data.uos_padrao || []).map(String);
         aplicarUoPadrao();
         renderFiltered();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
         if (chaveHeader) {
           chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
@@ -14170,17 +14144,7 @@
         uosPadrao = (data.uos_padrao || []).map(String);
         aplicarUoPadrao();
         renderFiltered();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
