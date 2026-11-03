@@ -215,10 +215,12 @@ def _run_managed_job(job_id: int) -> None:
             nota_final = conferencia
         elif job.tipo == "ped":
             from services.ped_runner import run_ped
-            total, output, missing_dotacao, missing_planejamento = run_ped(
+            total, output, missing_dotacao, missing_planejamento, uo_arquivo = run_ped(
                 file_path, upload.data_arquivo, upload.user_email, upload.id, progress, cancel_check
             )
-            alerts = {"chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
+            # A UO vai junto (sempre, mesmo sem avisos) para o modal agrupar por UO
+            # e uma carga limpa de uma UO apagar só os avisos dela.
+            alerts = {"uo": uo_arquivo, "chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
             nota_final = ""
         else:
             from services.est_emp_runner import run_est_emp
@@ -228,7 +230,7 @@ def _run_managed_job(job_id: int) -> None:
             nota_final = ""
         cancel_check()
         upload.output_filename = output.name
-        alert_count = sum(len(v) for v in alerts.values()) if alerts else 0
+        alert_count = sum(len(v) for v in alerts.values() if isinstance(v, list)) if alerts else 0
         job.detalhes_alertas = json.dumps(alerts, ensure_ascii=False) if alerts else None
         finish_job(job, "finalizado_com_alertas" if alert_count else "finalizado",
                    f"Processamento concluído. {total} registros inseridos. {nota_final}".strip(),

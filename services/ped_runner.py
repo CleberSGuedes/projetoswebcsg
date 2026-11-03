@@ -1244,8 +1244,12 @@ def _find_missing_planejamento_lines(df: pd.DataFrame) -> list[int]:
     if "Chave" not in df.columns and "Chave de Planejamento" not in df.columns:
         return []
     df_norm = df.reset_index(drop=True)
+    col_uo = next((c for c in df_norm.columns if isinstance(c, str) and c.strip().upper() == "UO"), None)
     missing_lines: list[int] = []
     for idx, row in df_norm.iterrows():
+        # UO fora da secretaria nunca recebe chave (D2): não é falta a avisar.
+        if col_uo is not None and not uo_usa_chave(row.get(col_uo)):
+            continue
         chave = row.get("Chave")
         chave_planejamento = row.get("Chave de Planejamento")
         if _is_missing_chave(chave) and _is_missing_chave(chave_planejamento):
@@ -1256,7 +1260,8 @@ def _find_missing_planejamento_lines(df: pd.DataFrame) -> list[int]:
 def run_ped(
     file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int,
     progress_callback=None, cancel_callback=None
-) -> tuple[int, Path, list[str], list[int]]:
+    # devolve também a UO do arquivo (os avisos são por UO)
+) -> tuple[int, Path, list[str], list[int], str]:
     ensure_dirs()
     if progress_callback:
         progress_callback("regras", 5, "Carregando regras de planejamento.")
@@ -1310,4 +1315,4 @@ def run_ped(
     desativar_versao_anterior("ped", uo, exercicios, commit=False)
     db.session.execute(text("UPDATE ped SET ativo = 1 WHERE upload_id = :upload_id"), {"upload_id": upload_id})
     db.session.commit()
-    return total, output_path, missing_dotacao_keys, missing_planejamento_lines
+    return total, output_path, missing_dotacao_keys, missing_planejamento_lines, uo

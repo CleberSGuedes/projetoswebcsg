@@ -83,7 +83,7 @@
   </div>
 </div>
 
-<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or subacoes_aguardando or metas_aguardando or etapas_aguardando or ped_dotacao_missing or ped_planejamento_missing_lines or emp_planejamento_missing_lines or emp_dotacao_missing) else 0 }}" style="display:none;">
+<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or subacoes_aguardando or metas_aguardando or etapas_aguardando or avisos_uo) else 0 }}" style="display:none;">
   <div class="modal-card">
     <div class="modal-header">
       <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
@@ -93,21 +93,24 @@
       </div>
     </div>
     <div class="modal-body">
-      {% if ped_dotacao_missing or ped_planejamento_missing_lines or emp_planejamento_missing_lines or emp_dotacao_missing %}
+      {% if avisos_uo %}
         <div class="modal-title">Avisos</div>
         <div class="alert-stack" style="margin-top:8px;">
-          {% if ped_dotacao_missing %}
-            <div class="alert alert-error alert-error-strong">PED: Controle de Dotação não encontrado: {{ ped_dotacao_missing | join(', ') }}</div>
-          {% endif %}
-          {% if ped_planejamento_missing_lines %}
-            <div class="alert alert-error alert-error-strong">PED: Chave do Planejamento não identificada (nº da linha): {{ ped_planejamento_missing_lines | join(', ') }}</div>
-          {% endif %}
-          {% if emp_planejamento_missing_lines %}
-            <div class="alert alert-error alert-error-strong">EMP: Chave do Planejamento não identificada (nº da linha): {{ emp_planejamento_missing_lines | join(', ') }}</div>
-          {% endif %}
-          {% if emp_dotacao_missing %}
-            <div class="alert alert-error alert-error-strong">EMP: Controle de Dotação não encontrado: {{ emp_dotacao_missing | join(', ') }}</div>
-          {% endif %}
+          {% for aviso in avisos_uo %}
+            <div class="modal-title" style="font-size:0.95rem;margin-top:8px;">UO {{ aviso.rotulo }}</div>
+            {% if aviso.ped_dotacao %}
+              <div class="alert alert-error alert-error-strong">PED: Controle de Dotação não encontrado: {{ aviso.ped_dotacao | join(', ') }}</div>
+            {% endif %}
+            {% if aviso.ped_linhas %}
+              <div class="alert alert-error alert-error-strong">PED: Chave do Planejamento não identificada (nº da linha): {{ aviso.ped_linhas | join(', ') }}</div>
+            {% endif %}
+            {% if aviso.emp_linhas %}
+              <div class="alert alert-error alert-error-strong">EMP: Chave do Planejamento não identificada (nº da linha): {{ aviso.emp_linhas | join(', ') }}</div>
+            {% endif %}
+            {% if aviso.emp_dotacao %}
+              <div class="alert alert-error alert-error-strong">EMP: Controle de Dotação não encontrado: {{ aviso.emp_dotacao | join(', ') }}</div>
+            {% endif %}
+          {% endfor %}
         </div>
       {% endif %}
 
