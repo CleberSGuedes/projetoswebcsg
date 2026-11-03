@@ -1,11 +1,11 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-10-16) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-03) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
-> **⚠ Ajustes pendentes: novas UOs (26101, 26201 e 26202).**
-> Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Os testes mostraram que a leitura dos relatórios dessas UOs funciona, mas a gravação no banco apagaria os dados da SEDUC. Os ajustes já estão mapeados e aguardam a **confirmação oficial** de que essas UOs vão entrar no sistema.
-> **No início de cada sessão, pergunte ao usuário se a confirmação oficial já saiu e se os ajustes pendentes já podem ser feitos.** Não faça nenhum desses ajustes sem a autorização explícita do usuário. Detalhes na seção 22.
+> **⚠ Novas UOs (26101, 26201 e 26202): código pronto, em teste só na homologação.**
+> As Fases 1 e 2 do [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md) estão no código (PR #25, na `homologacao`). A UO **26101** foi liberada **só para teste na homologação** (commit `20494fc`, temporário: reverter antes de sincronizar com a `main`); 26201 e 26202 continuam bloqueadas. Resumo do que foi feito e testado: **seção 26**.
+> Antes de mexer em Plan20, FIP 613, PED, EMP, NOB ou EST EMP, leia [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md) e a seção 26. **Não leve nada disso para a `main` sem a confirmação oficial** de que as UOs entram no sistema e sem a autorização explícita do usuário (seção 22).
 
 > **Limpeza de Histórico: em uso online desde 15/10/2026** (etapas curtas conduzidas pela tela, commit `97230e0`; seção 23.9).
 > Falta observar online uma remoção que precise de várias etapas e o botão "Continuar". Deve acontecer na primeira limpeza mensal grande; ver o fim da seção 23.9.
@@ -710,6 +710,8 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 
 ## 22. Testes com as UOs 26101, 26201 e 26202 — aguardando confirmação oficial (2026-10-13 e 14)
 
+> **Atualização (2026-11-03):** o texto abaixo é o retrato de 13 e 14/10, antes dos ajustes. Os ajustes de gravação por UO, chave só da SEDUC e painéis foram feitos e estão na `homologacao`; o que mudou, o que foi testado e o que falta está na **seção 26**.
+
 **O que é:** existe a possibilidade de o sistema passar a receber os relatórios de mais três UOs: **26101** (SECITECI), **26201** (UNEMAT) e **26202** (FAPEMAT). Antes de qualquer mudança, o usuário pediu testes com os relatórios reais dessas UOs em seis funcionalidades: Plan20, FIP 613, PED, EMP, NOB e EST EMP. A inclusão ainda depende de **confirmação oficial**.
 
 **Documento completo:** [testes_uos_26101_26201_26202.md](testes_uos_26101_26201_26202.md). Leia antes de mexer em qualquer um desses módulos. Ele traz os resultados por módulo, os pontos de atenção e a lista de ajustes pendentes.
@@ -985,3 +987,59 @@ A `homologacao` foi recriada no remoto com `git push origin homologacao`, a part
 - Correção também aplicada na `main` pelo usuário, diretamente no projeto dela, por prompt só com o trecho da trava (sem trazer nada da `homologacao`) — informado como concluído e executado.
 - Pendências de banco das `dev/*` (`scripts/atualizar_schema_sync_main.py`) informadas como concluídas pelo usuário.
 - Apagamento automático de branches do GitHub desativado pelo usuário.
+
+## 26. Novas UOs na homologação: ajustes, teste da 26101 e correções (2026-10-26 a 2026-11-03)
+
+Tudo nesta seção foi feito e testado no ambiente de **homologação** (banco `proj5954_spo_csg_homolog`). Nada foi levado para a `main`. O plano e a lista de decisões (D1 a D8) estão em [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md).
+
+### 26.1 Estado do código
+- **Fases 1 e 2 do plano** entraram na `homologacao` pelo PR #25 (commit `382dd2a`): desativação da carga anterior só da **mesma UO e do mesmo exercício** em FIP 613, PED, EMP, NOB e EST EMP; validador de UO nos uploads (recusa arquivo com mais de uma UO, cabeçalho diferente das linhas ou UO não cadastrada); recálculo da dotação limitado à UO do arquivo; Plan20 com lista de UOs liberadas; painéis, relatórios e API v1 fixos na SEDUC.
+- **Duas listas de UO** em `services/uo.py`: `UOS_EXECUCAO` (possíveis: SEDUC + 26101/26201/26202) e `UOS_EXECUCAO_LIBERADAS` / `UOS_PLAN20_LIBERADAS` (as que aceitam upload). O Node recebe as listas do Python pelo `worker.py` (variáveis `UOS_EXECUCAO`, `UOS_EXECUCAO_LIBERADAS`, `UOS_SEDUC`), então só existe uma fonte.
+- **Liberação temporária da 26101** (commit `20494fc`): as duas listas `*_LIBERADAS` incluem `26101`, com o comentário "TESTE EM HOMOLOGACAO". **Reverter antes de sincronizar com a `main`**, a não ser que a confirmação oficial já tenha saído e o usuário decida liberar de vez (nesse caso, o plano manda trocar por `set(UOS_EXECUCAO)`).
+
+### 26.2 Como a aplicação sabe qual UO usa Chave de Planejamento
+- **Lista fixa:** `UOS_SEDUC = {"14101", "14601"}` em `services/uo.py`; a função `uo_usa_chave(uo)` só confere se o código (5 dígitos) está nela. O Node espelha com `uoUsaChave()` (`node_runners/execucao_uo.js`), alimentada pela variável `UOS_SEDUC`.
+- **Vale para todas as regras de chave** (decisão D2): `chaves_planejamento`, `chave_arrumar`, `forcar_chave` e o fallback do PAOE 8026. UO fora da lista fica "NÃO IDENTIFICADO" e **nunca** recebe chave.
+- **A decisão é pela UO da linha, não pelo preenchimento da chave.** Um EMP/PED da SEDUC sem chave continua gerando aviso.
+- **Limite:** a tabela `chave_planejamento_regra` não tem coluna de UO. Se outra UO passar a ter chave, ela entra em `UOS_SEDUC` ou (etapa 2 da decisão D2a) troca-se o interior de `uo_usa_chave` por um cadastro de UO com indicador "usa chave" e acrescenta-se a coluna `uo` às regras.
+
+### 26.3 Correção de chave (`chave_arrumar`) no EMP
+- **Sintoma:** empenho da SEDUC continuava "NÃO IDENTIFICADO" mesmo com regra cadastrada em "Correção de Erros de Chave".
+- **Causa:** a regra tinha a chave **correta** em origem e destino. A **origem** precisa ser o texto **errado**, como aparece no Histórico do empenho (o runner procura a origem dentro do Histórico, ignorando maiúsculas, acentos e espaços ao redor dos asteriscos); o destino é a chave certa, com o número de partes do exercício (8 em 2026 ou mais, 7 antes; regra com destino de outro tamanho é ignorada).
+- **Exemplo resolvido:** origem `* 122.6 * GAB * GESTÃO_INOVAÇÃO * P_GESTÃO_ * E_GESTÃO_INTEGRADA * _GESTÃO_INTEGR * XII *`, destino com `R9900` na frente. Depois de cadastrar, é preciso **reprocessar** (a regra só vale no processamento).
+- **Outras regras suspeitas vistas no banco:** a regra 678 tem origem `* 9900 * …` (sem o `R`) e não casa com nada; a 851 tinha origem igual ao destino (inútil).
+
+### 26.4 Erro "Cannot find module 'exceljs'" nos relatórios em Node (EMP e NOB)
+- **Causa:** as dependências Node (`node_runners/package.json`: `dotenv`, `exceljs`, `mysql2`, `mssql`) não são instaladas pelo deploy (o `.cpanel.yml` só copia arquivos; ver seção 8). Aconteceu no servidor da homologação e depois no ambiente local.
+- **Correção:** `cd node_runners && npm install --omit=dev`, no servidor e na máquina local. O `npm install` reescreve o `package-lock.json` inteiro (diferença de fim de linha): **não commitar essa alteração** (`git checkout -- node_runners/package-lock.json`). O `node_modules` é ignorado pelo git.
+- **Lembrete:** o app local usa o banco da homologação; um upload feito localmente grava nele.
+
+### 26.5 Teste real da 26101 na homologação
+- **FIP 613:** carga ok. Banco: 263 linhas ativas da 26101 e 1.670 da SEDUC; a carga da 26101 **não** desativou a da SEDUC; os zeros das UGs foram preservados (`0000`, `0001`). Dotação Inicial 135.070.428,00, igual ao teste de 13/10; Empenhado e Pago diferem do documento de testes porque o arquivo usado é mais novo (26/10).
+- **PED:** a 26101 carregou 29 registros e gerou 29 avisos de "chave não identificada" (ver 26.7), que eram esperados e não eram erro.
+- **EMP:** a 26101 carregou (3.214 linhas sem chave, também esperado) depois de resolvido o erro de `exceljs` (26.4).
+- **Ainda não testados com a 26101 na homologação:** EST EMP, NOB e Plan20.
+
+### 26.6 Filtro de UO nos relatórios (só visualização)
+- **Decisão do usuário:** em vez de um seletor separado (feito e desfeito), aproveitar a **coluna UO** que os relatórios já têm.
+- **Como ficou** (FIP 613, PED, EMP, EST EMP e NOB): o backend devolve os dados de **todas as UOs liberadas**; a tela abre com a coluna UO **pré-selecionada na SEDUC** (`uos_padrao` na resposta da API), então os totais continuam só da SEDUC (D5); marcar outra UO no filtro da coluna inclui os dados dela; "(Todos)" soma tudo. O filtro da coluna UO sempre lista todas as UOs carregadas. "Limpar Filtros" volta à SEDUC. Funções em `rotas/home_routes.py`: `_uo_liberadas`, `_uo_relatorio_download`, `_sql_uo_download`, constante `SQL_UO_LIBERADAS`.
+- **"Baixar Excel":** respeita as UOs marcadas na tela (parâmetro `?uo=14101,26101`); sem nenhuma marcada, leva todas as liberadas. **A ordem das colunas do Excel não mudou.**
+- **Coluna UO na primeira posição** (PED, EMP, EST EMP, NOB; no FIP 613 já era): só na tela (cabeçalho, linha de filtros e células).
+- **Coluna "Nome da Unidade Orçamentária" oculta** na tela de PED, EMP e EST EMP (continua no Excel e no banco).
+- **Painéis, dashboards, dotação e API v1** continuam fixos na SEDUC.
+
+### 26.7 Aviso de chave só para UO que usa chave
+- **PED** (`_find_missing_planejamento_lines` em `services/ped_runner.py`) e **EMP** (`node_runners/emp_runner.js`): linhas de UO que não usa chave deixam de entrar na lista "Chave do Planejamento não identificada". Teste novo em `tests/test_ped_uo.py`.
+
+### 26.8 Modal de Avisos do dashboard agrupado por UO
+- **Problema:** o modal lia só o **último** job de PED e o **último** upload de EMP, de qualquer UO. Um upload da 26101 apagava os avisos da SEDUC, e o contrário também.
+- **Como ficou** (`rotas/home_routes.py`, função do dashboard, e `templates/partials/dashboard.html`): vale a **última carga de cada UO** (até 50 jobs de PED e 50 uploads de EMP), e o modal mostra um bloco por UO ("UO 14101 - SEDUC", "UO 26101 - SECITECI") com os quatro avisos: dotação e chave, de PED e de EMP. UO sem aviso não aparece.
+- **UO gravada em cada carga:** PED passa a gravar `uo` em `detalhes_alertas` **sempre** (mesmo sem avisos, para uma carga limpa apagar só os avisos da própria UO); `run_ped` agora devolve 5 valores (o último é a UO); o EMP grava `uo` no arquivo de status (`services/job_status`). A contagem de alertas do `worker.py` só soma listas.
+- **Cargas antigas sem UO gravada:** a UO é lida das linhas que a carga inseriu (`ped`/`emp` por `upload_id`); se não houver linhas (por exemplo, removidas pela Limpeza de Histórico), vale a SEDUC.
+
+### 26.9 Pendências e cuidados
+1. **Commits:** os ajustes das seções 26.6 a 26.8 foram commitados e enviados para a `homologacao` em 2026-11-03, junto com o release `RELEASE_2_2026_11_03.1` do rodapé (`templates/base.html`). Como `rotas/home_routes.py` mistura os filtros de UO dos relatórios e o modal de avisos, o código foi em **um** commit; a documentação e o release, em outro. O `?v=` do `main.js`/`style.css` no `base.html` **não** foi trocado (continua `20261016.sync-main.2`): se alguém não vir as telas novas, limpar o cache do navegador ou trocar esse número.
+2. Testar EST EMP, NOB e Plan20 com a 26101 e depois as 26201/26202 (liberar na ordem do plano: EST EMP → FIP 613 → PED → NOB → EMP); conferir após cada carga que a SEDUC não mudou.
+3. Reverter a liberação temporária da 26101 (26.1) antes de qualquer sincronização com a `main`.
+4. A coluna `uo` nas regras de chave e o cadastro de UO com "usa chave" (26.2) só serão feitos quando alguma UO nova tiver chave.
+5. **Regra de trabalho confirmada nesta sessão:** commit e push só com autorização explícita do usuário para aquele conjunto de mudanças; a autorização de um não vale para o seguinte.
