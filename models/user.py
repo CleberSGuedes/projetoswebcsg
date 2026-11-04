@@ -142,6 +142,110 @@ class Fip613Registro(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
+class Plan51Upload(db.Model):
+    __tablename__ = "plan51_uploads"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_email = db.Column(db.String(255), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    output_filename = db.Column(db.String(255), nullable=True)
+    data_arquivo = db.Column(db.DateTime, nullable=True)
+    uploaded_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
+class Plan51Registro(db.Model):
+    """PLAN 51 - Relação Detalhada de Créditos Adicionais (estado inteiro).
+
+    As 66 colunas de dados são as da saída do script de tratamento
+    (services/plan51_runner.py, PLAN51_COLUNAS - tests/test_plan51.py confere
+    que as duas listas não se afastam). Nomes de coluna do banco sem acento.
+    """
+
+    __tablename__ = "plan51"
+    __table_args__ = (
+        db.Index("ix_plan51_exercicio_ativo", "exercicio", "ativo"),
+        db.Index("ix_plan51_upload_id", "upload_id"),
+    )
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    upload_id = db.Column(db.BigInteger, nullable=True)
+    exercicio = db.Column(db.Integer, nullable=False)
+    uo_s = db.Column(db.String(16))
+    uo_a = db.Column(db.String(16))
+    uo_def = db.Column(db.String(16))
+    funcao_s = db.Column(db.String(16))
+    funcao_a = db.Column(db.String(16))
+    funcao_def = db.Column(db.String(16))
+    subfuncao_s = db.Column(db.String(16))
+    subfuncao_a = db.Column(db.String(16))
+    subfuncao_def = db.Column(db.String(16))
+    programa_s = db.Column(db.String(16))
+    programa_a = db.Column(db.String(16))
+    programa_def = db.Column(db.String(16))
+    paoe_s = db.Column(db.String(16))
+    paoe_a = db.Column(db.String(16))
+    paoe_def = db.Column(db.String(16))
+    regiao_s = db.Column(db.String(16))
+    regiao_a = db.Column(db.String(16))
+    regiao_def = db.Column(db.String(16))
+    despesa_s = db.Column(db.String(16))
+    despesa_a = db.Column(db.String(16))
+    despesa_def = db.Column(db.String(16))
+    cat_e_s = db.Column(db.String(16))
+    cat_e_a = db.Column(db.String(16))
+    cat_e_def = db.Column(db.String(16))
+    gru_s = db.Column(db.String(16))
+    gru_a = db.Column(db.String(16))
+    gru_def = db.Column(db.String(16))
+    modalidade_s = db.Column(db.String(16))
+    modalidade_a = db.Column(db.String(16))
+    modalidade_def = db.Column(db.String(16))
+    elem_s = db.Column(db.String(16))
+    elem_a = db.Column(db.String(16))
+    elem_def = db.Column(db.String(16))
+    fonte_s = db.Column(db.String(16))
+    fonte_a = db.Column(db.String(16))
+    fonte_def = db.Column(db.String(16))
+    iduso_s = db.Column(db.String(16))
+    iduso_a = db.Column(db.String(16))
+    iduso_def = db.Column(db.String(16))
+    n_fiplan = db.Column(db.String(24))
+    decreto = db.Column(db.String(24))
+    data_contabil = db.Column(db.String(12))
+    n_doe = db.Column(db.String(24))
+    tipo_credito = db.Column(db.String(24))
+    uo_projeto_ativ_supl = db.Column(db.String(40))
+    uo_supl = db.Column(db.String(24))
+    funcao_supl = db.Column(db.String(24))
+    subfuncao_supl = db.Column(db.String(24))
+    programa_supl = db.Column(db.String(24))
+    paoe_supl = db.Column(db.String(24))
+    regiao_supl = db.Column(db.String(24))
+    elemento_suplementado = db.Column(db.String(24))
+    fonte_supl = db.Column(db.String(24))
+    iduso_supl = db.Column(db.String(24))
+    valor_supl = db.Column(db.Numeric(18, 2))
+    uo_projeto_ativ_anul = db.Column(db.String(40))
+    uo_anul = db.Column(db.String(24))
+    funcao_anul = db.Column(db.String(24))
+    subfuncao_anul = db.Column(db.String(24))
+    programa_anul = db.Column(db.String(24))
+    paoe_anul = db.Column(db.String(24))
+    regiao_anul = db.Column(db.String(24))
+    elemento_anulado = db.Column(db.String(24))
+    fonte_anul = db.Column(db.String(24))
+    iduso_anul = db.Column(db.String(24))
+    valor_anul = db.Column(db.Numeric(18, 2))
+    data_arquivo = db.Column(db.DateTime)
+    user_email = db.Column(db.String(255))
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    # Marcações de cor do script de tratamento, uma por linha (máscara de bits:
+    # services/plan51_runner.py, BIT_*). Sem elas o relatório não reproduz a planilha.
+    estilo = db.Column(db.BigInteger)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+
 class PedUpload(db.Model):
     __tablename__ = "ped_uploads"
 

@@ -1281,6 +1281,33 @@
     }
   }
 
+  async function loadPlan51Status(target) {
+    if (!target) return;
+    target.textContent = "Carregando...";
+    try {
+      const res = await fetch("/api/plan51/status");
+      if (!res.ok) throw new Error("Erro ao consultar status");
+      const data = await res.json();
+      if (!data.last) {
+        target.textContent = "Nenhuma atualização encontrada.";
+        return;
+      }
+      const last = data.last;
+      const uploaded = formatAmazonTime(last.uploaded_at);
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
+      target.innerHTML = `
+        <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
+        <div><strong>Upload em:</strong> ${uploaded}</div>
+        <div><strong>Data do download:</strong> ${dataArquivo}</div>
+        <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+      `;
+    } catch (err) {
+      target.textContent = "Falha ao carregar status.";
+      console.error(err);
+    }
+  }
+
   async function loadPedStatus(target, submitBtn, viewLabel) {
     if (!target) return;
     target.textContent = "Carregando...";
@@ -1559,6 +1586,95 @@
         form.reset();
         if (inputData) inputData.value = "";
         loadFipStatus(statusBox);
+        if (submitBtn) {
+          submitBtn.textContent = viewLabel;
+          submitBtn.dataset.mode = "view";
+        }
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        console.error(err);
+        if (submitBtn) {
+          submitBtn.textContent = defaultLabel;
+          submitBtn.dataset.mode = "upload";
+        }
+      } finally {
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  function initPlan51() {
+    const form = document.getElementById("form-plan51");
+    if (!form) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const msg = document.getElementById("plan51-msg");
+    const statusBox = document.getElementById("plan51-status");
+    const inputData = document.getElementById("plan51-data");
+    const fileInput = document.getElementById("plan51-file");
+    const loading = document.getElementById("plan51-loading");
+  const submitBtn = document.getElementById("plan51-submit");
+  const defaultLabel = "Upload e processar";
+  const viewLabel = "Ver Relatório";
+
+  if (inputData) {
+    setDefaultAmazonTime(inputData);
+  }
+
+    loadPlan51Status(statusBox);
+
+    if (submitBtn) {
+      submitBtn.dataset.mode = "upload";
+      submitBtn.textContent = defaultLabel;
+      submitBtn.addEventListener("click", (ev) => {
+        if (submitBtn.dataset.mode === "view") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setActive("relatorios/plan51");
+          loadPage("relatorios/plan51");
+        }
+      });
+    }
+
+    if (fileInput && submitBtn) {
+      fileInput.addEventListener("change", () => {
+        submitBtn.dataset.mode = "upload";
+        submitBtn.textContent = defaultLabel;
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (submitBtn?.dataset.mode === "view") {
+        setActive("relatorios/plan51");
+        loadPage("relatorios/plan51");
+        return;
+      }
+      if (!fileInput?.files?.length) {
+        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        return;
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/api/plan51/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
+        if (msg) {
+          msg.textContent = data.message || "Upload concluído.";
+          msg.classList.remove("text-error");
+        }
+        form.reset();
+        if (inputData) inputData.value = "";
+        loadPlan51Status(statusBox);
         if (submitBtn) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -8692,6 +8808,563 @@
     }
   }
 
+  function initRelatorioPlan51() {
+    const table = document.getElementById("plan51-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("plan51-empty");
+    const meta = document.getElementById("plan51-relatorio-meta");
+    const pager = document.getElementById("plan51-pagination");
+    const pageSizeSelect = document.getElementById("plan51-page-size");
+    const btnDownload = document.getElementById("plan51-download");
+    const btnReset = document.getElementById("plan51-reset");
+    const totExercicio = document.getElementById("plan51-tot-exercicio");
+    const totSupl = document.getElementById("plan51-tot-supl");
+    const totAnul = document.getElementById("plan51-tot-anul");
+    const totLiq = document.getElementById("plan51-tot-liquido");
+    const headerRow = document.getElementById("plan51-header-row");
+    const footEl = document.getElementById("plan51-foot");
+    const filterRow = document.getElementById("plan51-filter-row");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const fmtNum = (v) => {
+      const n = Number(v);
+      if (Number.isNaN(n)) return v ?? "";
+      return numFmt.format(n);
+    };
+    const esc = (v) =>
+      String(v ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    // Totais do que está na tela (filtros aplicados); sem filtro = estado inteiro.
+    let exerciciosCarga = [];
+    const updateTotals = (rows) => {
+      let sup = 0;
+      let anu = 0;
+      rows.forEach((r) => {
+        const vs = Number(r.valor_supl || 0);
+        const va = Number(r.valor_anul || 0);
+        if (!Number.isNaN(vs)) sup += vs;
+        if (!Number.isNaN(va)) anu += va;
+      });
+      if (totExercicio) {
+        totExercicio.textContent = exerciciosCarga.length ? exerciciosCarga.join(" * ") : "-";
+      }
+      const setVal = (el, val, sinal) => {
+        if (!el) return;
+        el.textContent = numFmt.format(val);
+        el.classList.remove("pos", "neg");
+        if (sinal && val > 0) el.classList.add("pos");
+        else if (sinal && val < 0) el.classList.add("neg");
+      };
+      setVal(totSupl, sup, false);
+      setVal(totAnul, anu, false);
+      setVal(totLiq, sup - anu, true);
+      renderRodape(sup, anu);
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderFiltered(false);
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p++) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        const m = r.__estilo || 0;
+        tr.innerHTML = columns
+          .map((c, i) => {
+            const cls = p51ClasseCelula(m, c.key, i);
+            return c.numeric
+              ? `<td class="num ${cls}">${fmtNum(r[c.key])}</td>`
+              : `<td${cls ? ` class="${cls}"` : ""}>${esc(r[c.key])}</td>`;
+          })
+          .join("");
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
+    };
+
+    const allData = { rows: [] };
+
+    // Cores da planilha tratada (td_plan51.py, salvar_saida). Cada linha traz uma
+    // máscara de bits (`estilo`, calculada no tratamento e gravada no banco -
+    // services/plan51_runner.py, BIT_*); aqui só se aplicam as mesmas regras,
+    // na mesma ordem do script (a última cor aplicada vence).
+    const P51_BIT = { FLAG15: 0, SUPL: 1, ANUL: 2, SPLIT_ANUL: 3, PROX_FLAG15: 4, SPLIT_BASE: 5, RED_DEF: 18 };
+    const P51_BASES = ["uo", "funcao", "subfuncao", "programa", "paoe", "regiao", "despesa", "cat_e", "gru", "modalidade", "elem", "fonte", "iduso"];
+    const P51_COLS_15 = new Set(["n_fiplan", "decreto", "data_contabil", "n_doe", "tipo_credito"]);
+    const P51_COLS_SUP = new Set(["uo_projeto_ativ_supl", "uo_supl", "funcao_supl", "subfuncao_supl", "programa_supl", "paoe_supl", "regiao_supl"]);
+    const P51_COLS_ANUL = new Set(["uo_projeto_ativ_anul", "uo_anul", "funcao_anul", "subfuncao_anul", "programa_anul", "paoe_anul", "regiao_anul"]);
+    const P51_CABECALHO_AMARELO = new Set([
+      "n_fiplan",
+      "uo_supl", "funcao_supl", "subfuncao_supl", "programa_supl", "paoe_supl", "regiao_supl",
+      "uo_anul", "funcao_anul", "subfuncao_anul", "programa_anul", "paoe_anul", "regiao_anul",
+    ]);
+    const P51_COLUNAS_CENTRALIZADAS = 39; // as colunas calculadas (S)/(A)/(DEF)
+    let p51Pos = { ini: -1, fim: -1, base: {} };
+
+    const p51CalcularPosicoes = () => {
+      const base = {};
+      P51_BASES.forEach((b) => {
+        base[b] = { s: colKeys.indexOf(`${b}_s`), def: colKeys.indexOf(`${b}_def`) };
+      });
+      p51Pos = { ini: colKeys.indexOf("uo_projeto_ativ_anul"), fim: colKeys.indexOf("valor_anul"), base };
+    };
+
+    const p51ClasseCabecalho = (c) => {
+      if (/_def$/.test(c.key) && /\(DEF\)$/.test(c.label)) return "p51-th-def";
+      if (P51_CABECALHO_AMARELO.has(c.key)) return "p51-th-amarelo";
+      if (/\((S|A)\)$/.test(c.label)) return "p51-th-negrito";
+      return "";
+    };
+
+    const p51ClasseCelula = (m, key, i) => {
+      const bit = (n) => (m >> n) & 1;
+      let fundo = "";
+      let fonte = "";
+      if (bit(P51_BIT.FLAG15) && P51_COLS_15.has(key)) {
+        fundo = "p51-f15";
+        fonte = "p51-mag";
+      }
+      if (bit(P51_BIT.PROX_FLAG15) && P51_COLS_15.has(key)) fonte = "p51-mag";
+      if (bit(P51_BIT.SUPL) && P51_COLS_SUP.has(key)) fundo = "p51-sup";
+      if (bit(P51_BIT.ANUL) && P51_COLS_ANUL.has(key)) fundo = "p51-anul";
+      if (bit(P51_BIT.SPLIT_ANUL) && i >= p51Pos.ini && i <= p51Pos.fim) fundo = "p51-cinza";
+      P51_BASES.forEach((b, k) => {
+        if (bit(P51_BIT.SPLIT_BASE + k) && i < p51Pos.base[b].s) fundo = "p51-cinza";
+        if (bit(P51_BIT.RED_DEF + k) && i === p51Pos.base[b].def) fonte = "p51-red";
+      });
+      return [i < P51_COLUNAS_CENTRALIZADAS ? "p51-c" : "", fundo, fonte].filter(Boolean).join(" ");
+    };
+
+    // Linhas de subtotal do rodapé da planilha (SUBTOTAL do Excel: soma só o que
+    // está filtrado), com os rótulos duas colunas antes dos valores, como no script.
+    const renderRodape = (sup, anu) => {
+      if (!footEl || !columns.length) return;
+      const iS = colKeys.indexOf("valor_supl");
+      const iA = colKeys.indexOf("valor_anul");
+      if (iS < 2 || iA < 2) return;
+      const monta = (itens) => {
+        const tds = [];
+        for (let i = 0; i < columns.length; i += 1) {
+          const it = itens[i];
+          if (it && it.rotulo) {
+            tds.push(`<td colspan="2" class="p51-rot">${esc(it.rotulo)}</td>`);
+            i += 1;
+          } else if (it) {
+            tds.push(`<td class="num p51-sub">${numFmt.format(it.valor)}</td>`);
+          } else {
+            tds.push("<td></td>");
+          }
+        }
+        return `<tr>${tds.join("")}</tr>`;
+      };
+      footEl.innerHTML =
+        monta({ [iS - 2]: { rotulo: "SUBTOTAL (SUPLEMENT)" }, [iS]: { valor: sup }, [iA - 2]: { rotulo: "SUBTOTAL (ANULAÇÕES)" }, [iA]: { valor: anu } }) +
+        monta({ [iA - 2]: { rotulo: "SUBTOTAL (LÍQUIDO)" }, [iA]: { valor: sup - anu } });
+    };
+
+    // Colunas vem da API (data.columns), nao ficam mais fixas aqui - ver
+    // PLAN20_RELATORIO_COLUNAS em rotas/home_routes.py (docs/claude.md,
+    // secao 19). initColumnsUI() preenche essas variaveis e o cabecalho
+    // da tabela assim que a resposta chega, antes do primeiro render().
+    let columns = [];
+    let colKeys = [];
+    let filterContainers = [];
+    let filters = {};
+    let filterControls = {};
+
+    const initColumnsUI = (cols) => {
+      columns = Array.isArray(cols) ? cols : [];
+      colKeys = columns.map((c) => c.key);
+      if (headerRow) {
+        headerRow.innerHTML = columns
+          .map((c) => {
+            const cls = p51ClasseCabecalho(c);
+            return `<th${cls ? ` class="${cls}"` : ""}>${esc(c.label)}</th>`;
+          })
+          .join("");
+      }
+      if (filterRow) {
+        filterRow.innerHTML = columns
+          .map((c) => `<th><div class="multi-filter" data-col="${esc(c.key)}"></div></th>`)
+          .join("");
+      }
+      p51CalcularPosicoes();
+      filterContainers = table.querySelectorAll(".filter-row [data-col]");
+      filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+      filterControls = {};
+    };
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((v) => map[v] || v)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      container.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allId = `${key}-all`;
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.id = allId;
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        const allVisibleSelected = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+        selectVisibleCb.checked = allVisibleSelected;
+      };
+
+      const applyTempToFilters = () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((v) => set.add(v));
+        updateDisplay(key);
+        renderFiltered();
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        allCb.checked = tempSelected.size === 0;
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+            allCb.checked = false;
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          const match = txt.textContent.toLowerCase().includes(term);
+          row.style.display = match ? "" : "none";
+        });
+        const allMatch = "(todos)".includes(term) || term === "";
+        allRow.style.display = allMatch ? "" : "none";
+        selectVisibleRow.style.display = "";
+        syncUIFromTemp();
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((v) => tempSelected.add(v));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        applyTempToFilters();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          panel.style.width = "";
+          panel.style.height = "";
+          tempSelected.clear();
+          filters[key].forEach((v) => tempSelected.add(v));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((c) => c.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((r) => {
+        colKeys.forEach((k, idx) => {
+          const v = r[k];
+          if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx]).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((r) =>
+        colKeys.every((k) => {
+          const set = filters[k];
+          if (!set || set.size === 0) return true;
+          const val = r[k];
+          const cmp = val === null || val === undefined ? "" : String(val).toLowerCase();
+          return set.has(cmp);
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/plan51");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        initColumnsUI(data.columns);
+        exerciciosCarga = data.exercicios || [];
+        const chaves = (data.columns || []).map((c) => c.key);
+        const estilos = data.estilos || [];
+        allData.rows = (data.rows || []).map((linha, idx) => {
+          const obj = { __estilo: Number(estilos[idx] || 0) };
+          chaves.forEach((k, i) => {
+            obj[k] = linha[i];
+          });
+          return obj;
+        });
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        render();
+        renderUltimasAtualizacoes(meta, data);
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    load();
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        Object.keys(filters).forEach((k) => filters[k].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        const val = parseInt(pageSizeSelect.value || "20", 10);
+        pageSize = Number.isNaN(val) ? 20 : val;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/plan51/download", "_blank");
+      });
+    }
+  }
+
   function initRelatorioPlan21Nger() {
     const table = document.getElementById("plan21-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
@@ -15617,6 +16290,9 @@
     if (route === "atualizar/fip613") {
       initFip613();
     }
+    if (route === "atualizar/plan51") {
+      initPlan51();
+    }
     if (route === "atualizar/ped") {
       initPed();
     }
@@ -15694,6 +16370,9 @@
     }
     if (route === "relatorios/plan20-seduc") {
       initRelatorioPlan20();
+    }
+    if (route === "relatorios/plan51") {
+      initRelatorioPlan51();
     }
     if (route === "relatorios/plan21-nger") {
       initRelatorioPlan21Nger();

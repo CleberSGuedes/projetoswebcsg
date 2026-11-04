@@ -946,7 +946,8 @@ Os 6 commits da `main` posteriores à sincronização de 02/10 (`839afeb`, `9e29
   - `homologacao`: `services/features.py` (a branch tem o menu reorganizado em grupos — mantida a árvore dela e acrescentado "Limpeza de Histórico" no grupo "Atualizar Execução Orçamentária", depois de NOB, mais o ícone `trash3` em `MENU_META`); `static/css/style.css` (ficaram os dois blocos); `templates/base.html` (rodapé em linhas da branch com o release `RELEASE_2_2026_10_15.2` e `?v=20261016.sync-main.2`); `docs/claude.md` (os dois lados só acrescentavam).
   - `dev/cleber`: só `docs/claude.md`. `features.py` e CSS entraram sozinhos, sem duplicar o item de menu (conferido, ao contrário do "Programar PTA/LOA" de 02/10).
   - `dev/jean`: `docs/claude.md` (o lado da `homologacao` já trazia a seção 21.6, então ficou só ele) e o rodapé do `base.html` (release novo + a linha própria `PATCH_DEV_SPO_2026_07_01.1`; o selo "Ambiente de integracao DEV Jean" não mudou).
-- **Armadilha de edição:** `services/features.py` e `docs/claude.md` usam final de linha **CRLF**, mas as ferramentas de leitura não mostram o ``. Um `replace` em Python com `
+- **Armadilha de edição:** `services/features.py` e `docs/claude.md` usam final de linha **CRLF**, mas as ferramentas de leitura não mostram o `
+`. Um `replace` em Python com `
 ` simples não casa e falha **sem erro** — foi o que aconteceu na primeira tentativa. Conferir com `repr()` antes de editar e usar `
 `.
 - **Cuidado com o banco nos testes:** a pasta de trabalho precisa de uma cópia do `.env`, então testes e `create_app()` rodados ali apontam para o banco de **produção**. Foram rodados só `tests/test_limpeza_historico.py` (14 testes, tabelas temporárias) e `node --check`; depois de subir o app uma vez, conferido que nenhuma tabela nova foi criada. A `.venv` local não tem o `pdfplumber` das branches, então a suíte completa não rodou lá.
@@ -965,3 +966,49 @@ Os 6 commits da `main` posteriores à sincronização de 02/10 (`839afeb`, `9e29
 - **Correção:** a trava passou a usar uma conexão dedicada (`lock_conn = db.engine.connect()`), usada no `GET_LOCK` e no `RELEASE_LOCK` e fechada num `finally` interno. Se o `GET_LOCK` falhar ou a trava não for obtida, a conexão é fechada antes de propagar o erro. Nome da trava (`teto_seduc:{exercicio}:{uo}`), timeout de 30 s, mensagem de erro e o resto da lógica não mudaram.
 - **Validação:** `python -c "import app"` e uma prova do mecanismo com uma trava descartável (sem gravar dado): com a trava presa na conexão dedicada e um `commit()` na sessão no meio, `IS_FREE_LOCK` continuou 0; depois do `RELEASE_LOCK` na mesma conexão, passou a 1.
 - **Atenção:** conferido que nenhum outro ponto usa `GET_LOCK` por `db.session`; a Limpeza de Histórico (seção 23) já usava conexão própria. Se uma trava ficar presa em produção antes desta correção chegar, o Restart da aplicação no cPanel a libera (seção 23.9).
+
+## 25. PLAN 51 — Relação Detalhada de Créditos Adicionais (2026-11-04)
+
+Nova funcionalidade, igual em fluxo ao FIP 613/PED: **Atualizar → Execução → PLAN 51** recebe o `.xlsx` do FIPLAN (carga diária) e **Relatórios → Execução → PLAN 51** mostra o resultado tratado.
+
+### 25.1 Como funciona
+- **Tratamento:** `services/plan51_runner.py`, portado do script `td_plan51.py` (pasta `C:\Workspace\Automacao_excel`, fora do repositório). As funções do script foram mantidas como estão; o que é do sistema fica no fim do arquivo (`run_plan51`, validação do cabeçalho, gravação). Só modo TODOS. A saída `.xlsx` formatada vai para `outputs/plan51/` (a anterior vai para `tmp/`).
+- **É do estado inteiro.** O relatório traz todas as UOs (o remanejamento entre UOs é o que ele mostra): não há UO única nem validação de UO, e a tela **abre sem nenhum filtro**. A UO de cada lado está em `UO SUPL`/`UO ANUL`.
+- **66 colunas** (as da saída do script, com os mesmos nomes no Excel): fonte única `PLAN51_COLUNAS` (rótulo, coluna do banco, tipo). O model, a gravação, o relatório e o Excel baixado saem dela; `tests/test_plan51.py` confere que lista e model não se afastam.
+- **Cabeçalho do arquivo:** `*Exercício igual a AAAA` (vira a coluna `exercicio`) e `FLAG_STATUS igual a ...`. Arquivo sem exercício, ou com status diferente de Efetivado, é **recusado antes de gravar** (`Plan51Recusado`; o envio não fica no histórico). **Atenção:** o FIPLAN imprime o status como nome (`Efetivado`, arquivos antigos) **ou como código (`5`, arquivo de 03/11/2026)**; os dois são aceitos (`STATUS_EFETIVADO`).
+- **Conferência:** a soma de `VALOR SUPL`/`VALOR ANUL` é comparada com "Total Suplementado"/"Total Anulado" impressos no rodapé (arquivo de 03/11: R$ 17.378.126.545,30 e R$ 9.557.324.441,15, conferem). Só informa na mensagem, não bloqueia. **Não usar o `resumo` do script:** ele reaplica `_as_money` em número que já é decimal e dá cerca de 34 vezes o valor real; a carga usa `_somar`.
+- **Versões antigas:** cada carga entra inativa e, no fim, **numa única transação**, desativa a versão anterior **do mesmo exercício** e ativa a nova (padrão do PED). Falha no meio apaga o que a carga inseriu e a versão anterior segue ativa. A remoção física das cargas desativadas é manual, pela **Limpeza de Histórico** (`plan51` está em `TABELAS`, coluna `exercicio`; o mês/ano escolhido vale para a data do download, `data_arquivo`). Não há cron de banco; o cron do cPanel (`cleanup_xlsx.js`) já varre `upload/plan51` e `outputs/plan51`.
+
+### 25.2 Banco
+- Tabelas novas `plan51_uploads` e `plan51` (73 colunas, índices `(exercicio, ativo)` e `upload_id`), criadas em 04/11/2026 com autorização do usuário; documentadas em `db/plan51_schema.sql`. Nenhuma tabela existente foi alterada.
+- **Limite de linha do InnoDB (8.126 bytes):** o primeiro DDL falhou ("Row size too large") com `VARCHAR(60)` em 64 colunas. Ficaram `VARCHAR(16)` nas 39 colunas calculadas, `24` nas fixas, `40` nas de UO/projeto e `12` na data (maior valor real: 26 caracteres).
+- **`db.create_all()` roda no `create_app()`**: um DDL inválido derruba a subida do app. Validar o DDL antes de qualquer deploy.
+- Cada carga real tem ~12,7 mil linhas (cerca de 4,6 milhões por ano com carga diária): usar a Limpeza de Histórico todo mês.
+
+### 25.3 Desempenho
+- A primeira versão levava 457 s só para montar o Excel formatado: `ws.max_column` do openpyxl varre todas as células a cada chamada e o script o chamava dentro do laço de cada linha. Calculado uma vez (único desvio do script, comentado no código): **36 s**, saída idêntica.
+- Outro problema: a transação aberta ao ler `upload_id` segurava uma conexão parada durante o tratamento e o servidor do banco a derrubava ("MySQL server has gone away"). `update_database` faz `rollback()` antes de gravar. Lotes de 100 linhas.
+- Total por carga: **~65 s** (leitura 0,5 s, tratamento 14 s, Excel 36 s, banco ~15 s). Acompanhar online (LiteSpeed): se passar do limite de tempo da requisição, mover o Excel formatado para depois da gravação.
+
+### 25.4 Telas e rotas
+- `rotas/plan51_routes.py` (blueprint próprio): `/partial/atualizar/plan51`, `/partial/relatorios/plan51`, `/api/plan51/status`, `/api/plan51/upload`, `/api/relatorios/plan51` e `/download`. Features `atualizar/plan51` e `relatorios/plan51` (`services/features.py`, menu em `templates/base.html`): aparecem no painel de permissões sem nenhum perfil marcado, só o administrador acessa até serem liberadas.
+- O relatório devolve as linhas como **listas** (não dicionários) para caber: 12,7 mil x 66 colunas. A tela (`initRelatorioPlan51`, derivada da do Plan20) monta os objetos. Totais do topo: Suplementado, Anulado e Líquido do que está filtrado; sem filtro, o estado inteiro.
+- Detecção de layout no upload (`_detect_upload_layouts`): cabeçalho com `TIPO CRÉDITO` + `ELEMENTO SUPLEMENTADO` + `ELEMENTO ANULADO`. Um PLAN 51 enviado em outro relatório é recusado e o contrário também.
+
+### 25.5 Testes
+`tests/test_plan51.py` (19 testes; os de banco usam exercícios descartáveis 9991/9990 e limpam ao final): cabeçalho, recusas, divisão de linha com elementos diferentes, conferência de totais, as 66 colunas x model, detecção de layout, menu/permissões/Limpeza, troca de versão só do mesmo exercício, falha no meio e Limpeza enxergando as cargas. Ponta a ponta com o arquivo real (12.667 linhas): totais idênticos aos impressos, segunda carga substitui a primeira sem duplicar; tudo removido depois.
+
+### 25.6 Cores e subtotais da planilha tratada (2026-11-04)
+O relatório e o Excel baixado **reproduzem a planilha do script** (`salvar_saida`): as cores vêm de marcações calculadas no tratamento, e por isso passaram a ser guardadas.
+- **Banco:** `plan51.estilo BIGINT` (autorizado pelo usuário; coluna nova na tabela nova), uma **máscara de bits por linha** (`BIT_*` em `services/plan51_runner.py`): FLAG15 (N. FIPLAN/DECRETO/DATA/DOE/TIPO repetidos: cinza + magenta), SUPL e ANUL (blocos repetidos: azul claro e lilás), SPLIT_ANUL e "split por dimensão" (cinza), PROX_FLAG15 (a linha de cima também em magenta) e DEF em vermelho por dimensão (13). Maior bit usado: 30, cabe nos 32 bits do JavaScript. `calcular_estilos` (style_info do script -> máscaras) e `style_info_das_mascaras` (inverso) são a ponte.
+- **Tela** (`initRelatorioPlan51`): `p51ClasseCelula`/`p51ClasseCabecalho` aplicam as regras **na mesma ordem do script** (a última cor vence); cabeçalho azul nas colunas (DEF) e amarelo nas de N. FIPLAN/UO/FUNÇÃO/.../REGIÃO (SUPL e ANUL); as 39 colunas calculadas centralizadas; CSS `p51-*` com texto escuro fixo nas células preenchidas (legível no tema escuro). Rodapé `<tfoot>` com **SUBTOTAL (SUPLEMENT)**, **(ANULAÇÕES)** e **(LÍQUIDO)**, que acompanham os filtros como o SUBTOTAL do Excel.
+- **Excel baixado:** é o **próprio arquivo gerado pelo script no upload** da versão ativa (cores, fórmulas `SUBTOTAL` e rodapé de origem). Se esse arquivo não existir mais, `gerar_excel_do_banco` refaz a planilha do banco com a mesma `salvar_saida` (~50 s).
+- **Verificação:** com o arquivo real (12.667 linhas, 836.022 células), as regras de cor extraídas do `main.js` e executadas em Node deram **0 divergências** contra a planilha do script (fundo, fonte, centralização e cabeçalhos). Teste automático equivalente: `test_planilha_regerada_do_banco_e_igual_a_do_script`.
+- **Cargas feitas antes da coluna `estilo`** ficam sem cor: refazer o upload (ou preencher a partir do arquivo guardado em `upload/plan51/`, como foi feito em 04/11/2026 para a carga de teste).
+- **Trava por exercício:** o teste do usuário teve dois envios quase simultâneos (um terminou sem saída gravada; o estado final ficou correto). A gravação passou a rodar sob `GET_LOCK('plan51:<exercicio>')` numa conexão dedicada (`_trava_exercicio`), como no Teto-SEDUC (seção 24): o segundo envio espera o primeiro.
+
+### 25.7 Formato contábil e fechamento (2026-11-04)
+- **Excel baixado:** VALOR SUPL, VALOR ANUL e os três subtotais (SUPLEMENT, ANULAÇÕES, LÍQUIDO) usam o formato **Contábil sem "R$"** (`_-* #,##0.00_-;-* #,##0.00_-;_-* "-"??_-;_-@_-`), definido em `salvar_saida` (vale para o arquivo do upload e para o regerado do banco). Só entra em planilhas geradas depois da mudança; o arquivo de um upload antigo continua no formato anterior até novo upload.
+- **Fonte do relatório HTML:** medido no navegador, igual ao PED (cabeçalho 10px, células 8px); a impressão de fonte maior vem do negrito (células magenta, cabeçalhos coloridos, rodapé) e da centralização das 39 primeiras colunas, como no script.
+- **Pendência de conferência:** `FLAG_STATUS = 5` é aceito como "Efetivado" (além do texto).
+

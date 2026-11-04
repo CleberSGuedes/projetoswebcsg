@@ -356,6 +356,11 @@ def _detect_upload_layouts(file_path: Path) -> set[str]:
         if nob_core and nob_aux:
             detected.add("nob")
 
+        # PLAN 51 (Créditos Adicionais): cabeçalho "TIPO CRÉDITO" com os elementos
+        # suplementado/anulado na mesma linha.
+        if _has(tokens, "TIPO CREDITO") and _has(tokens, "ELEMENTO SUPLEMENTADO") and _has(tokens, "ELEMENTO ANULADO"):
+            detected.add("plan51")
+
         has_exerc = any(t.startswith("EXERC") for t in tokens)
         if not has_exerc:
             # FIP613 costuma não ter "Exercício" no mesmo padrão.
@@ -405,6 +410,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
         "est_emp": {"est_emp", "emp"},
         "nob": {"nob"},
         "plan20": {"plan20"},
+        "plan51": {"plan51"},
     }
     allowed = allowed_sets.get(expected_kind, {expected_kind})
 
@@ -421,6 +427,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
             "nob": "NOB",
             "fip613": "FIP613",
             "plan20": "PLAN20",
+            "plan51": "PLAN51",
         }
         detected_text = ", ".join(display_map.get(k, k.upper()) for k in sorted(detected))
     if len(detected) > 1:

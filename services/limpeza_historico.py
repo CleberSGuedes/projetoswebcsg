@@ -36,6 +36,7 @@ TABELAS: dict[str, dict[str, str]] = {
     "emp": {"label": "EMP", "exercicio": "exercicio"},
     "nob": {"label": "NOB", "exercicio": "exercicio"},
     "est_emp": {"label": "EST EMP", "exercicio": "exercicio"},
+    "plan51": {"label": "PLAN 51", "exercicio": "exercicio"},
 }
 
 # Faixa de ids apagada por comando. EMP/NOB não têm índice por upload_id,

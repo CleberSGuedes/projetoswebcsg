@@ -9,6 +9,8 @@ from .user import (
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
+    Plan51Upload,
+    Plan51Registro,
     PedUpload,
     PedRegistro,
     EmpUpload,

@@ -3112,3 +3112,19 @@ body.app-loading-active {
   .relatorio-top-uo .relatorio-top-right { grid-template-columns: minmax(0, 1fr); }
   .relatorio-top-uo .relatorio-top-right > :last-child { flex-direction: row; }
 }
+
+/* PLAN 51: cores da planilha tratada (td_plan51.py, salvar_saida). Mesmas cores do
+   Excel; texto escuro fixo nas células preenchidas para continuar legível no tema escuro. */
+.plan20-table th.p51-th-def { background: #0070c0; color: #fff; font-weight: 700; }
+.plan20-table th.p51-th-amarelo { background: #ffff00; color: #1b1b1b; font-weight: 700; }
+.plan20-table th.p51-th-negrito { font-weight: 700; }
+.plan20-table td.p51-c { text-align: center; }
+.plan20-table td.p51-f15 { background: #e8e8e8; color: #1b1b1b; }
+.plan20-table td.p51-sup { background: #e3f6fd; color: #1b1b1b; }
+.plan20-table td.p51-anul { background: #eee2fa; color: #1b1b1b; }
+.plan20-table td.p51-cinza { background: #f2f2f2; color: #1b1b1b; }
+.plan20-table td.p51-mag { color: #a02b93; font-weight: 700; }
+.plan20-table td.p51-red { color: #ff0000; }
+.plan20-table tfoot td { font-weight: 700; border-top: 1px solid var(--border); }
+.plan20-table tfoot td.p51-rot { text-align: right; white-space: nowrap; }
+.plan20-table tfoot td.p51-sub { background: #ffff00; color: #1b1b1b; text-align: right; }
