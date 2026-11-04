@@ -3073,3 +3073,42 @@ body.app-loading-active {
   margin: 0 0 14px; font-size: 13px; border-color: #d97706; color: #92400e; background: rgba(245,158,11,0.10);
 }
 .theme-dark .limpeza-historico .limpeza-pendente { color: #fbbf24; }
+
+/* Relatórios de execução (FIP 613, PED, EMP, EST EMP, NOB) e Plan20: "Última
+   atualização" por UO em colunas, à esquerda, e totais em duas colunas + botões,
+   à direita. As duas metades dividem a largura e têm altura parecida. */
+.relatorio-top.relatorio-top-uo { padding: 8px 14px; align-items: stretch; gap: 8px; flex-wrap: nowrap; }
+.relatorio-top-uo > .muted { flex: 1 1 0; min-width: 0; min-height: 0; padding: 4px 8px; gap: 6px; }
+.relatorio-top-uo .relatorio-top-right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  padding-left: 14px;
+}
+.relatorio-top-uo .totais-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  row-gap: 3px;
+  padding: 4px 8px;
+  min-width: 0;
+}
+.relatorio-top-uo .totais-title { grid-column: 1 / -1; }
+.relatorio-top-uo .totais-row { display: grid; grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: 8px; }
+.relatorio-top-uo .relatorio-top-right > :last-child { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding-top: 4px; }
+.meta-uo-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.meta-uo-col { display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: 0 16px 0 0; border-right: 1px solid var(--border); font-size: 11px; }
+.meta-uo-col:last-child { border-right: 0; padding-right: 0; }
+.meta-uo-titulo { font-weight: 700; font-size: 12px; color: var(--text); }
+@media (max-width: 900px) {
+  .relatorio-top.relatorio-top-uo { flex-wrap: wrap; }
+  .relatorio-top-uo > .muted,
+  .relatorio-top-uo .relatorio-top-right { flex: 1 1 100%; }
+  .relatorio-top-uo .relatorio-top-right { grid-template-columns: minmax(0, 1fr); }
+  .relatorio-top-uo .relatorio-top-right > :last-child { flex-direction: row; }
+}

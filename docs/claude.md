@@ -732,6 +732,14 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 2. Enquanto não houver essa autorização explícita, **não faça nenhum desses ajustes**, nem os que já foram aprovados em conceito.
 3. Quando for autorizado, comece pela desativação por UO/exercício nos módulos de execução. Sem ela, os outros ajustes não resolvem o problema.
 
+**Ajustes aplicados à mão nesta base (2026-11-03), vindos dos testes da homologação:** a produção continua só com a SEDUC (`UOS_EXECUCAO_LIBERADAS`/`UOS_PLAN20_LIBERADAS` não mudaram; a liberação temporária da 26101 da homologação **não** foi trazida). Nada da `homologacao` foi mesclado; cada ajuste foi reescrito aqui, sem layout nem menu novos.
+- **Relatórios** (FIP 613, PED, EMP, EST EMP, NOB): a API devolve as UOs liberadas e a tela abre com a coluna UO pré-selecionada na SEDUC (`uos_padrao`); "(Todos)" soma tudo e "Limpar Filtros" volta à SEDUC. A coluna UO passou a ser a primeira (PED, EMP, EST EMP, NOB) e "Nome da Unidade Orçamentária" fica oculta na tela (continua no Excel e no banco). O "Baixar Excel" respeita `?uo=` e, sem parâmetro, leva só a SEDUC. Painéis, dotação e API v1 continuam fixos na SEDUC. Funções em `rotas/home_routes.py`: `_uo_liberadas`, `_uo_relatorio_download`, `_sql_uo_download`, `SQL_UO_LIBERADAS`.
+- **"Última atualização" por UO** nos seis relatórios (Plan20 incluído): `_ultimas_cargas_por_uo` e `_plan20_ultimas_por_uo`; renderizador único `renderUltimasAtualizacoes` (`static/js/main.js`); CSS `relatorio-top-uo` e `meta-uo-*` com seletores adaptados a esta base (que não tem `.report-data-card`).
+- **Aviso de chave só para UO que usa chave** no PED (`_find_missing_planejamento_lines`) e no EMP (`emp_runner.js`).
+- **Modal de Avisos do dashboard por UO.** Diferente da homologação, aqui o PED roda na rota (sem `ProcessamentoJob`), então os avisos ficam na sessão em `ped_avisos_uo`, por UO; `run_ped` devolve a UO como 5º valor. O EMP grava `uo` no status e o dashboard lê a última carga de cada UO.
+- **Operacional:** em cada ambiente, `cd node_runners && npm install --omit=dev` (erro "Cannot find module 'exceljs'"); não commitar o `package-lock.json`. Regra de correção de chave (`chave_arrumar`): a origem é o texto **errado** que aparece no Histórico do empenho.
+- O `?v=` do `main.js`/`style.css` no `base.html` e o `RELEASE` do rodapé são trocados pelo usuário na entrega.
+
 ## 23. Limpeza de Histórico (Atualizar → Execução) — nova funcionalidade (2026-10-14)
 
 ### 23.1 Motivação

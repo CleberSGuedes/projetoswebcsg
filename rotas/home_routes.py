@@ -106,7 +106,7 @@ from services.features import FEATURES, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
 from services.execucao_uo import cond_uo_em, sql_uo_em
-from services.uo import UOS_SEDUC, UORecusada, uo_codigo, uo_label
+from services.uo import UOS_EXECUCAO_LIBERADAS, UOS_SEDUC, UORecusada, uo_codigo, uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
@@ -143,10 +143,68 @@ home_bp = Blueprint("home", __name__)
 # _novas_uos.md, D5) não podem ser somados aos da SEDUC. O filtro de UO por
 # tela vem depois.
 SQL_UO_SEDUC = sql_uo_em(UOS_SEDUC)
+SQL_UO_LIBERADAS = sql_uo_em(UOS_EXECUCAO_LIBERADAS)
 
 
 def _uo_seduc(modelo):
     return cond_uo_em(modelo, UOS_SEDUC)
+
+
+def _uo_liberadas(modelo):
+    """Dados de todas as UOs liberadas: a tela filtra pela coluna UO e abre
+    pre-selecionada na secretaria (`uos_padrao`), sem somar as demais."""
+    return cond_uo_em(modelo, UOS_EXECUCAO_LIBERADAS)
+
+
+def _ultimas_cargas_por_uo(tabela, modelo_upload):
+    """Última carga ativa de cada UO liberada (quem enviou, quando e a data do
+    download), para o painel "Última atualização" dos relatórios. A UO vem das
+    linhas gravadas, pois as tabelas de upload não guardam UO."""
+    try:
+        linhas = db.session.execute(
+            text(f"SELECT uo, MAX(upload_id) FROM {tabela} WHERE ativo = 1 AND {SQL_UO_LIBERADAS} GROUP BY uo")
+        ).fetchall()
+        por_uo: dict[str, int] = {}
+        for uo, upload_id in linhas:
+            codigo = uo_codigo(uo)
+            if codigo and upload_id is not None:
+                por_uo[codigo] = max(por_uo.get(codigo, 0), int(upload_id))
+        if not por_uo:
+            return []
+        uploads = {u.id: u for u in modelo_upload.query.filter(modelo_upload.id.in_(set(por_uo.values()))).all()}
+        out = []
+        for codigo in sorted(por_uo):
+            up = uploads.get(por_uo[codigo])
+            if not up:
+                continue
+            out.append(
+                {
+                    "uo": codigo,
+                    "rotulo": uo_label(codigo),
+                    "user_email": up.user_email,
+                    "uploaded_at": up.uploaded_at.isoformat() if up.uploaded_at else None,
+                    "data_arquivo": up.data_arquivo.isoformat() if up.data_arquivo else None,
+                }
+            )
+        return out
+    except Exception:
+        _safe_session_rollback()
+        return []
+
+
+def _uo_relatorio_download(modelo):
+    """UOs do download (?uo=14101,26101): so as liberadas; sem parametro
+    valido, a secretaria."""
+    param = str(request.args.get("uo", "") or "")
+    codigos = {uo_codigo(v) for v in param.split(",")} & set(UOS_EXECUCAO_LIBERADAS)
+    return cond_uo_em(modelo, codigos) if codigos else _uo_seduc(modelo)
+
+
+def _sql_uo_download():
+    """Mesmo filtro de UO do download (?uo=...), em SQL puro."""
+    param = str(request.args.get("uo", "") or "")
+    codigos = {uo_codigo(v) for v in param.split(",")} & set(UOS_EXECUCAO_LIBERADAS)
+    return sql_uo_em(codigos or UOS_SEDUC)
 
 EMP_UPLOAD_DIR = Path("upload/emp")
 EMP_OUTPUT_DIR = Path("outputs/td_emp")
@@ -837,9 +895,37 @@ def partial_dashboard():
         except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError):
             _safe_session_rollback()
             active_sessions = []
-    ped_dotacao_missing = session.get("ped_dotacao_missing", [])
-    ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
-    if not ped_dotacao_missing:
+    # Avisos do modal, por UO: o PED guarda os da última carga de cada UO na sessão
+    # e o EMP no status da última carga de cada UO. Uma carga de outra UO não
+    # apaga nem sobrepõe os avisos da primeira.
+    uo_padrao_aviso = sorted(UOS_SEDUC)[0]
+    avisos_por_uo: dict[str, dict] = {}
+
+    def _aviso_uo(uo):
+        chave = uo_codigo(uo) or uo_padrao_aviso
+        return avisos_por_uo.setdefault(
+            chave, {"ped_dotacao": [], "ped_linhas": [], "emp_dotacao": [], "emp_linhas": []}
+        )
+
+    def _uo_da_carga(tabela, upload_id):
+        """UO de uma carga sem UO gravada no status, lida das linhas que ela
+        inseriu. Sem linhas (ex.: removidas pela Limpeza de Histórico), vale a
+        secretaria."""
+        try:
+            valor = db.session.execute(
+                text(f"SELECT uo FROM {tabela} WHERE upload_id = :id AND uo IS NOT NULL LIMIT 1"),
+                {"id": upload_id},
+            ).scalar()
+        except Exception:
+            _safe_session_rollback()
+            return ""
+        return uo_codigo(valor)
+
+    for uo_sessao, dados_sessao in (session.get("ped_avisos_uo") or {}).items():
+        aviso = _aviso_uo(uo_sessao)
+        aviso["ped_dotacao"] = list((dados_sessao or {}).get("dotacao") or [])
+        aviso["ped_linhas"] = list((dados_sessao or {}).get("linhas") or [])
+    if not any(a["ped_dotacao"] for a in avisos_por_uo.values()):
         try:
             t2 = datetime.utcnow()
             ped_keys = _fetch_scalars_all_with_retry(
@@ -857,31 +943,38 @@ def partial_dashboard():
                 )
                 dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
                 missing = sorted([k for k in ped_keys if k not in dotacao_keys])
-                ped_dotacao_missing = missing
-            _log_timing("ped_dotacao_missing", t2, len(ped_dotacao_missing))
+                if missing:
+                    _aviso_uo(uo_padrao_aviso)["ped_dotacao"] = missing
+            _log_timing("ped_dotacao_missing", t2, len(missing) if ped_keys else 0)
         except Exception:
             _safe_session_rollback()
-            ped_dotacao_missing = []
-    emp_planejamento_missing_lines: list[int] = []
-    emp_dotacao_missing: list[str] = []
     try:
-        last_emp = (
-            _fetch_scalars_all_with_retry(
-                select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(1)
-            )
-            or [None]
-        )[0]
-        if last_emp:
-            status_data = read_status("emp", last_emp.id) or {}
+        vistas_emp: set[str] = set()
+        uploads_emp = _fetch_scalars_all_with_retry(
+            select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(50)
+        )
+        for upload_emp in uploads_emp:
+            status_data = read_status("emp", upload_emp.id) or {}
+            if "planejamento_missing_lines" not in status_data and "dotacao_missing_keys" not in status_data:
+                continue  # carga que falhou ou ainda não chegou nessa etapa
+            uo_emp = uo_codigo(status_data.get("uo")) or _uo_da_carga("emp", upload_emp.id) or uo_padrao_aviso
+            if uo_emp in vistas_emp:
+                continue
+            vistas_emp.add(uo_emp)
+            aviso = _aviso_uo(uo_emp)
             raw_lines = status_data.get("planejamento_missing_lines") or []
             if isinstance(raw_lines, list):
-                emp_planejamento_missing_lines = [int(v) for v in raw_lines if str(v).isdigit()]
+                aviso["emp_linhas"] = [int(v) for v in raw_lines if str(v).isdigit()]
             raw_dot = status_data.get("dotacao_missing_keys") or []
             if isinstance(raw_dot, list):
-                emp_dotacao_missing = [str(v) for v in raw_dot if str(v).strip()]
+                aviso["emp_dotacao"] = [str(v) for v in raw_dot if str(v).strip()]
     except Exception:
-        emp_planejamento_missing_lines = []
-        emp_dotacao_missing = []
+        pass
+    avisos_uo = [
+        {"uo": uo, "rotulo": uo_label(uo), **dados}
+        for uo, dados in sorted(avisos_por_uo.items())
+        if any(dados.values())
+    ]
 
     aprovar_por_nivel2 = ""
     try:
@@ -1115,10 +1208,7 @@ def partial_dashboard():
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
-        ped_dotacao_missing=ped_dotacao_missing,
-        ped_planejamento_missing_lines=ped_planejamento_missing_lines,
-        emp_planejamento_missing_lines=emp_planejamento_missing_lines,
-        emp_dotacao_missing=emp_dotacao_missing,
+        avisos_uo=avisos_uo,
         dotacoes_aguardando=pendentes,
         estornos_aguardando=estornos_aguardando,
         subacoes_aguardando=subacoes_aguardando,
@@ -15185,7 +15275,7 @@ def api_relatorio_fip613():
             return str(value)
 
     try:
-        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_seduc(Fip613Registro)).all()  # noqa: E712
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_liberadas(Fip613Registro)).all()  # noqa: E712
         last_upload = Fip613Upload.query.order_by(Fip613Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(last_upload.data_arquivo) if last_upload else None
         uploaded_at = _as_iso(last_upload.uploaded_at) if last_upload else None
@@ -15222,7 +15312,7 @@ def api_relatorio_fip613():
                     "valor_a_pagar": float(r.valor_a_pagar or 0),
                 }
             )
-        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email})
+        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email, "uos_padrao": sorted(UOS_SEDUC), "ultimas_por_uo": _ultimas_cargas_por_uo("fip613", Fip613Upload)})
     except Exception as exc:
         return jsonify({"error": f"Falha ao buscar dados: {exc}"}), 500
 
@@ -15427,7 +15517,7 @@ def api_relatorio_plan21_nger():
 @require_feature("relatorios/fip613")
 def api_relatorio_fip613_download():
     try:
-        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_seduc(Fip613Registro)).all()  # noqa: E712
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_relatorio_download(Fip613Registro)).all()  # noqa: E712
         data = []
         for r in rows:
             data.append(
@@ -15606,7 +15696,7 @@ def api_ped_upload():
         db.session.commit()
 
         try:
-            total, output_path, missing_dotacao_keys, missing_planejamento_lines = run_ped(
+            total, output_path, missing_dotacao_keys, missing_planejamento_lines, uo_arquivo = run_ped(
                 save_path, data_arquivo, user_email, registro.id
             )
         except UORecusada as exc:
@@ -15620,20 +15710,21 @@ def api_ped_upload():
                 pass
             return jsonify({"error": str(exc)}), 400
 
-        if missing_dotacao_keys:
-            session["ped_dotacao_missing"] = missing_dotacao_keys
-            session.modified = True
+        # Avisos do dashboard por UO: uma carga limpa apaga só os avisos da própria UO,
+        # e uma carga de outra UO não sobrepõe os da primeira.
+        avisos_ped = dict(session.get("ped_avisos_uo") or {})
+        chave_uo = uo_codigo(uo_arquivo) or sorted(UOS_SEDUC)[0]
+        if missing_dotacao_keys or missing_planejamento_lines:
+            avisos_ped[chave_uo] = {
+                "dotacao": list(missing_dotacao_keys or []),
+                "linhas": list(missing_planejamento_lines or []),
+            }
         else:
-            if "ped_dotacao_missing" in session:
-                session["ped_dotacao_missing"] = []
-                session.modified = True
-        if missing_planejamento_lines:
-            session["ped_planejamento_missing_lines"] = missing_planejamento_lines
-            session.modified = True
-        else:
-            if "ped_planejamento_missing_lines" in session:
-                session["ped_planejamento_missing_lines"] = []
-                session.modified = True
+            avisos_ped.pop(chave_uo, None)
+        session["ped_avisos_uo"] = avisos_ped
+        session.pop("ped_dotacao_missing", None)
+        session.pop("ped_planejamento_missing_lines", None)
+        session.modified = True
 
         registro.output_filename = str(output_path.name)
         db.session.commit()
@@ -16195,7 +16286,7 @@ def api_relatorio_ped():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -16288,6 +16379,8 @@ def api_relatorio_ped():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("ped", PedUpload),
             }
         )
     except Exception as exc:
@@ -16382,7 +16475,7 @@ def api_relatorio_ped_download():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -16742,6 +16835,40 @@ def _plan20_relatorio_rows():
     )
 
 
+def _plan20_ultimas_por_uo():
+    """Última carga ativa de cada UO no Plan20, para o painel "Última
+    atualização" do relatório. A tabela plan20_seduc não guarda o id do upload;
+    a UO vem do texto "14.101 - SECRETARIA ..." e a carga mais recente é a de
+    maior data_atualizacao."""
+    try:
+        linhas = db.session.execute(
+            text(
+                "SELECT unidade_orcamentaria, user_email, data_arquivo, MAX(data_atualizacao) AS atualizado "
+                "FROM plan20_seduc WHERE ativo = 1 GROUP BY unidade_orcamentaria, user_email, data_arquivo"
+            )
+        ).fetchall()
+    except Exception:
+        _safe_session_rollback()
+        return []
+    por_uo: dict[str, tuple] = {}
+    for unidade, email, data_arquivo, atualizado in linhas:
+        codigo = uo_codigo(str(unidade or "").split(" - ")[0])
+        if not codigo:
+            continue
+        if codigo not in por_uo or (atualizado and (por_uo[codigo][3] is None or atualizado > por_uo[codigo][3])):
+            por_uo[codigo] = (email, data_arquivo, unidade, atualizado)
+    return [
+        {
+            "uo": codigo,
+            "rotulo": uo_label(codigo),
+            "user_email": email,
+            "uploaded_at": atualizado.isoformat() if atualizado else None,
+            "data_arquivo": data_arquivo.isoformat() if data_arquivo else None,
+        }
+        for codigo, (email, data_arquivo, _unidade, atualizado) in sorted(por_uo.items())
+    ]
+
+
 def _plan20_seduc_norm_col(name: str) -> str:
     base = unicodedata.normalize("NFKD", str(name or ""))
     ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
@@ -17067,6 +17194,7 @@ def api_relatorio_plan20():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "ultimas_por_uo": _plan20_ultimas_por_uo(),
             }
         )
     except Exception as exc:
@@ -17160,7 +17288,7 @@ def api_relatorio_emp():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -17227,6 +17355,8 @@ def api_relatorio_emp():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("emp", EmpUpload),
             }
         )
     except Exception as exc:
@@ -17528,7 +17658,7 @@ def api_relatorio_est_emp():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -17575,6 +17705,8 @@ def api_relatorio_est_emp():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("est_emp", EstEmpUpload),
             }
         )
     except Exception as exc:
@@ -17668,7 +17800,7 @@ def api_relatorio_nob():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -17728,6 +17860,8 @@ def api_relatorio_nob():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("nob", NobUpload),
             }
         )
     except Exception as exc:
@@ -17806,7 +17940,7 @@ def api_relatorio_nob_download():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -18000,7 +18134,7 @@ def api_relatorio_emp_download():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -18589,7 +18723,7 @@ def api_relatorio_est_emp_download():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1 AND {SQL_UO_SEDUC}
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )

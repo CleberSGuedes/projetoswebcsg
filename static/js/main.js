@@ -1230,6 +1230,30 @@
     return date ? date.toLocaleString("pt-BR", { timeZone: AMAZON_TZ }) : "-";
   };
 
+  const escapeHtmlMeta = (value) =>
+    String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // "Última atualização" dos relatórios de execução: uma coluna por UO (a carga
+  // ativa de cada uma). Sem dados por UO, cai no último upload, como antes.
+  const renderUltimasAtualizacoes = (meta, data) => {
+    if (!meta) return;
+    const lista = Array.isArray(data.ultimas_por_uo) && data.ultimas_por_uo.length
+      ? data.ultimas_por_uo
+      : [{ rotulo: "", user_email: data.user_email, uploaded_at: data.uploaded_at, data_arquivo: data.data_arquivo }];
+    const colunas = lista
+      .map(
+        (c) => `
+          <div class="meta-uo-col">
+            ${c.rotulo ? `<div class="meta-uo-titulo">${escapeHtmlMeta(c.rotulo)}</div>` : ""}
+            <div>Enviado por: ${escapeHtmlMeta(c.user_email || "-")}</div>
+            <div>Upload em: ${formatAmazonTime(c.uploaded_at)}</div>
+            <div>Data do download: ${formatAmazonLocalTime(c.data_arquivo)}</div>
+          </div>`
+      )
+      .join("");
+    meta.innerHTML = `<div><strong>Última atualização${lista.length > 1 || lista[0].rotulo ? " por UO" : ""}</strong></div><div class="meta-uo-grid">${colunas}</div>`;
+  };
+
   async function loadFipStatus(target) {
     if (!target) return;
     target.textContent = "Carregando...";
@@ -8121,8 +8145,15 @@
     const setOptions = (rows = allData.rows) => {
       closeAllPanels();
       const uniques = colKeys.map(() => new Set());
+      // A coluna UO oferece sempre todas as UOs carregadas (senão, com a SEDUC
+      // pré-selecionada, não haveria como incluir outra).
+      (allData.rows || []).forEach((r) => {
+        const v = r.uo;
+        if (v !== undefined && v !== null && v !== "") uniques[colKeys.indexOf("uo")].add(String(v));
+      });
       (rows || []).forEach((r) => {
         colKeys.forEach((k, idx) => {
+          if (k === "uo") return;
           const v = r[k];
           if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
         });
@@ -8161,6 +8192,14 @@
       multiFilterClickBound = true;
     }
 
+    let uosPadrao = [];
+    // Abre só com a secretaria (D5): as demais UOs entram marcando-as na coluna UO.
+    const aplicarUoPadrao = () => {
+      Object.keys(filters).forEach((k) => filters[k].clear());
+      const presentes = new Set((allData.rows || []).map((r) => String(r.uo)));
+      uosPadrao.filter((u) => presentes.has(u)).forEach((u) => filters.uo.add(u));
+    };
+
     const load = async () => {
       if (meta) meta.textContent = "Carregando...";
       try {
@@ -8168,20 +8207,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
         allData.rows = data.data || [];
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        uosPadrao = (data.uos_padrao || []).map(String);
+        aplicarUoPadrao();
+        renderFiltered();
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -8192,11 +8221,8 @@
 
     if (btnReset) {
       btnReset.addEventListener("click", () => {
-        Object.keys(filters).forEach((k) => filters[k].clear());
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        currentPage = 1;
-        render();
+        aplicarUoPadrao();
+        renderFiltered();
       });
     }
 
@@ -8211,7 +8237,8 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
-        window.open("/api/relatorios/fip613/download", "_blank");
+        const uosSel = filters.uo.size ? Array.from(filters.uo) : Array.from(new Set(allData.rows.map((r) => String(r.uo))));
+        window.open("/api/relatorios/fip613/download" + (uosSel.length ? "?uo=" + encodeURIComponent(uosSel.join(",")) : ""), "_blank");
       });
     }
   }
@@ -8630,17 +8657,7 @@
         setOptions(allData.rows);
         filteredRows = allData.rows;
         render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -9270,7 +9287,6 @@
       "devolucao_gcv",
       "valor_emp_devolucao_gcv",
       "uo",
-      "nome_unidade_orcamentaria",
       "ug",
       "nome_unidade_gestora",
       "dotacao_orcamentaria",
@@ -9519,8 +9535,15 @@
     const setOptions = (rows = allData.rows) => {
       closeAllPanels();
       const uniques = colKeys.map(() => new Set());
+      // A coluna UO oferece sempre todas as UOs carregadas (senão, com a SEDUC
+      // pré-selecionada, não haveria como incluir outra).
+      (allData.rows || []).forEach((r) => {
+        const v = r.uo;
+        if (v !== undefined && v !== null && v !== "") uniques[colKeys.indexOf("uo")].add(String(v));
+      });
       (rows || []).forEach((r) => {
         colKeys.forEach((k, idx) => {
+          if (k === "uo") return;
           uniques[idx].add((r[k] ?? "").toString());
         });
       });
@@ -9629,6 +9652,7 @@
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+          <td>${r.uo ?? ""}</td>
           <td>${r.chave_display ?? ""}</td>
           <td>${r.regiao ?? ""}</td>
           <td>${r.subfuncao_ug ?? ""}</td>
@@ -9643,8 +9667,6 @@
           <td class="num">${fmtNum(r.valor_emp)}</td>
           <td class="num">${fmtNum(r.devolucao_gcv)}</td>
           <td class="num">${fmtNum(r.valor_emp_devolucao_gcv)}</td>
-          <td>${r.uo ?? ""}</td>
-          <td>${r.nome_unidade_orcamentaria ?? ""}</td>
           <td>${r.ug ?? ""}</td>
           <td>${r.nome_unidade_gestora ?? ""}</td>
           <td>${r.dotacao_orcamentaria ?? ""}</td>
@@ -9686,6 +9708,14 @@
       });
     };
 
+    let uosPadrao = [];
+    // Abre só com a secretaria (D5): as demais UOs entram marcando-as na coluna UO.
+    const aplicarUoPadrao = () => {
+      Object.keys(filters).forEach((k) => filters[k].clear());
+      const presentes = new Set((allData.rows || []).map((r) => String(r.uo)));
+      uosPadrao.filter((u) => presentes.has(u)).forEach((u) => filters.uo.add(u));
+    };
+
     const load = async () => {
       if (meta) meta.textContent = "Carregando...";
       try {
@@ -9696,20 +9726,10 @@
             const chaveDisplay = r.chave || r.chave_planejamento || "";
             return { ...r, chave_display: chaveDisplay };
           });
-        filteredRows = allData.rows;
-        setOptions(allData.rows);
-        render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        uosPadrao = (data.uos_padrao || []).map(String);
+        aplicarUoPadrao();
+        renderFiltered();
+        renderUltimasAtualizacoes(meta, data);
         if (chaveHeader) {
           chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
@@ -9729,18 +9749,16 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
-        window.open("/api/relatorios/emp/download", "_blank");
+        const uosSel = filters.uo.size ? Array.from(filters.uo) : Array.from(new Set(allData.rows.map((r) => String(r.uo))));
+        window.open("/api/relatorios/emp/download" + (uosSel.length ? "?uo=" + encodeURIComponent(uosSel.join(",")) : ""), "_blank");
       });
     }
 
     if (btnReset) {
       btnReset.addEventListener("click", () => {
         closeAllPanels();
-        Object.keys(filters).forEach((k) => filters[k].clear());
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        currentPage = 1;
-        render();
+        aplicarUoPadrao();
+        renderFiltered();
       });
     }
 
@@ -9797,7 +9815,6 @@
       "valor_est_emp_com_aqs",
       "valor_emp_liquido",
       "uo",
-      "nome_unidade_orcamentaria",
       "ug",
       "nome_unidade_gestora",
       "dotacao_orcamentaria",
@@ -10029,8 +10046,15 @@
     const setOptions = (rows = allData.rows) => {
       closeAllPanels();
       const uniques = colKeys.map(() => new Set());
+      // A coluna UO oferece sempre todas as UOs carregadas (senão, com a SEDUC
+      // pré-selecionada, não haveria como incluir outra).
+      (allData.rows || []).forEach((r) => {
+        const v = r.uo;
+        if (v !== undefined && v !== null && v !== "") uniques[colKeys.indexOf("uo")].add(String(v));
+      });
       (rows || []).forEach((r) => {
         colKeys.forEach((k, idx) => {
+          if (k === "uo") return;
           const v = r[k];
           if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
         });
@@ -10132,6 +10156,7 @@
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+          <td>${r.uo ?? ""}</td>
           <td>${r.exercicio ?? ""}</td>
           <td>${r.numero_est ?? ""}</td>
           <td>${r.numero_emp ?? ""}</td>
@@ -10142,8 +10167,6 @@
           <td class="num">${fmtNum(r.valor_est_emp_sem_aqs)}</td>
           <td class="num">${fmtNum(r.valor_est_emp_com_aqs)}</td>
           <td class="num">${fmtNum(r.valor_emp_liquido)}</td>
-          <td>${r.uo ?? ""}</td>
-          <td>${r.nome_unidade_orcamentaria ?? ""}</td>
           <td>${r.ug ?? ""}</td>
           <td>${r.nome_unidade_gestora ?? ""}</td>
           <td>${r.dotacao_orcamentaria ?? ""}</td>
@@ -10195,6 +10218,14 @@
       multiFilterClickBound = true;
     }
 
+    let uosPadrao = [];
+    // Abre só com a secretaria (D5): as demais UOs entram marcando-as na coluna UO.
+    const aplicarUoPadrao = () => {
+      Object.keys(filters).forEach((k) => filters[k].clear());
+      const presentes = new Set((allData.rows || []).map((r) => String(r.uo)));
+      uosPadrao.filter((u) => presentes.has(u)).forEach((u) => filters.uo.add(u));
+    };
+
     const load = async () => {
       if (meta) meta.textContent = "Carregando...";
       try {
@@ -10202,20 +10233,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
         allData.rows = data.data || [];
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        uosPadrao = (data.uos_padrao || []).map(String);
+        aplicarUoPadrao();
+        renderFiltered();
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -10226,11 +10247,8 @@
 
     if (btnReset) {
       btnReset.addEventListener("click", () => {
-        Object.keys(filters).forEach((k) => filters[k].clear());
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        currentPage = 1;
-        render();
+        aplicarUoPadrao();
+        renderFiltered();
       });
     }
 
@@ -10245,7 +10263,8 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
-        window.open("/api/relatorios/est-emp/download", "_blank");
+        const uosSel = filters.uo.size ? Array.from(filters.uo) : Array.from(new Set(allData.rows.map((r) => String(r.uo))));
+        window.open("/api/relatorios/est-emp/download" + (uosSel.length ? "?uo=" + encodeURIComponent(uosSel.join(",")) : ""), "_blank");
       });
     }
   }
@@ -10305,7 +10324,6 @@
       "liberado_fisco_estadual",
       "situacao",
       "uo",
-      "nome_unidade_orcamentaria",
       "ug",
       "nome_unidade_gestora",
       "data_solicitacao",
@@ -10568,8 +10586,15 @@
     const setOptions = (rows = allData.rows) => {
       closeAllPanels();
       const uniques = colKeys.map(() => new Set());
+      // A coluna UO oferece sempre todas as UOs carregadas (senão, com a SEDUC
+      // pré-selecionada, não haveria como incluir outra).
+      (allData.rows || []).forEach((r) => {
+        const v = r.uo;
+        if (v !== undefined && v !== null && v !== "") uniques[colKeys.indexOf("uo")].add(String(v));
+      });
       (rows || []).forEach((r) => {
         colKeys.forEach((k, idx) => {
+          if (k === "uo") return;
           uniques[idx].add((r[k] ?? "").toString());
         });
       });
@@ -10678,6 +10703,7 @@
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+          <td>${r.uo ?? ""}</td>
           <td>${r.chave_display ?? ""}</td>
           <td>${r.regiao ?? ""}</td>
           <td>${r.subfuncao_ug ?? ""}</td>
@@ -10701,8 +10727,6 @@
           <td>${r.data_licitacao ?? ""}</td>
           <td>${r.liberado_fisco_estadual ?? ""}</td>
           <td>${r.situacao ?? ""}</td>
-          <td>${r.uo ?? ""}</td>
-          <td>${r.nome_unidade_orcamentaria ?? ""}</td>
           <td>${r.ug ?? ""}</td>
           <td>${r.nome_unidade_gestora ?? ""}</td>
           <td>${r.data_solicitacao ?? ""}</td>
@@ -10757,6 +10781,14 @@
       });
     };
 
+    let uosPadrao = [];
+    // Abre só com a secretaria (D5): as demais UOs entram marcando-as na coluna UO.
+    const aplicarUoPadrao = () => {
+      Object.keys(filters).forEach((k) => filters[k].clear());
+      const presentes = new Set((allData.rows || []).map((r) => String(r.uo)));
+      uosPadrao.filter((u) => presentes.has(u)).forEach((u) => filters.uo.add(u));
+    };
+
     const load = async () => {
       if (meta) meta.textContent = "Carregando...";
       try {
@@ -10767,20 +10799,10 @@
           const chaveDisplay = r.chave || r.chave_planejamento || "";
           return { ...r, chave_display: chaveDisplay };
         });
-        filteredRows = allData.rows;
-        setOptions(allData.rows);
-        render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        uosPadrao = (data.uos_padrao || []).map(String);
+        aplicarUoPadrao();
+        renderFiltered();
+        renderUltimasAtualizacoes(meta, data);
         if (chaveHeader) {
           chaveHeader.textContent = "Chave de Planejamento/Chave";
         }
@@ -10799,18 +10821,16 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
-        window.open("/api/relatorios/ped/download", "_blank");
+        const uosSel = filters.uo.size ? Array.from(filters.uo) : Array.from(new Set(allData.rows.map((r) => String(r.uo))));
+        window.open("/api/relatorios/ped/download" + (uosSel.length ? "?uo=" + encodeURIComponent(uosSel.join(",")) : ""), "_blank");
       });
     }
 
     if (btnReset) {
       btnReset.addEventListener("click", () => {
         closeAllPanels();
-        Object.keys(filters).forEach((k) => filters[k].clear());
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        currentPage = 1;
-        render();
+        aplicarUoPadrao();
+        renderFiltered();
       });
     }
 
@@ -11113,8 +11133,15 @@
     const setOptions = (rows = allData.rows) => {
       closeAllPanels();
       const uniques = colKeys.map(() => new Set());
+      // A coluna UO oferece sempre todas as UOs carregadas (senão, com a SEDUC
+      // pré-selecionada, não haveria como incluir outra).
+      (allData.rows || []).forEach((r) => {
+        const v = r.uo;
+        if (v !== undefined && v !== null && v !== "") uniques[colKeys.indexOf("uo")].add(String(v));
+      });
       (rows || []).forEach((r) => {
         colKeys.forEach((k, idx) => {
+          if (k === "uo") return;
           uniques[idx].add((r[k] ?? "").toString());
         });
       });
@@ -11223,6 +11250,7 @@
       pageRows.forEach((r) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+          <td>${r.uo ?? ""}</td>
           <td>${r.exercicio ?? ""}</td>
           <td>${r.numero_nob ?? ""}</td>
           <td>${r.numero_nob_estorno ?? ""}</td>
@@ -11234,7 +11262,6 @@
           <td class="num">${fmtNum(r.valor_nob)}</td>
           <td class="num">${fmtNum(r.devolucao_gcv)}</td>
           <td class="num">${fmtNum(r.valor_nob_gcv)}</td>
-          <td>${r.uo ?? ""}</td>
           <td>${r.ug ?? ""}</td>
           <td>${r.dotacao_orcamentaria ?? ""}</td>
           <td>${r.funcao ?? ""}</td>
@@ -11274,6 +11301,14 @@
       });
     };
 
+    let uosPadrao = [];
+    // Abre só com a secretaria (D5): as demais UOs entram marcando-as na coluna UO.
+    const aplicarUoPadrao = () => {
+      Object.keys(filters).forEach((k) => filters[k].clear());
+      const presentes = new Set((allData.rows || []).map((r) => String(r.uo)));
+      uosPadrao.filter((u) => presentes.has(u)).forEach((u) => filters.uo.add(u));
+    };
+
     const load = async () => {
       if (meta) meta.textContent = "Carregando...";
       try {
@@ -11281,20 +11316,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
         allData.rows = data.data || [];
-        filteredRows = allData.rows;
-        setOptions(allData.rows);
-        render();
-        if (meta) {
-          const dt = formatAmazonLocalTime(data.data_arquivo);
-          const user = data.user_email || "-";
-          const uploaded = formatAmazonTime(data.uploaded_at);
-          meta.innerHTML = `
-            <div><strong>Última atualização</strong></div>
-            <div>Enviado por: ${user}</div>
-            <div>Upload em: ${uploaded}</div>
-            <div>Data do download: ${dt}</div>
-          `;
-        }
+        uosPadrao = (data.uos_padrao || []).map(String);
+        aplicarUoPadrao();
+        renderFiltered();
+        renderUltimasAtualizacoes(meta, data);
       } catch (err) {
         if (meta) meta.textContent = err.message;
         console.error(err);
@@ -11310,18 +11335,16 @@
 
     if (btnDownload) {
       btnDownload.addEventListener("click", () => {
-        window.open("/api/relatorios/nob/download", "_blank");
+        const uosSel = filters.uo.size ? Array.from(filters.uo) : Array.from(new Set(allData.rows.map((r) => String(r.uo))));
+        window.open("/api/relatorios/nob/download" + (uosSel.length ? "?uo=" + encodeURIComponent(uosSel.join(",")) : ""), "_blank");
       });
     }
 
     if (btnReset) {
       btnReset.addEventListener("click", () => {
         closeAllPanels();
-        Object.keys(filters).forEach((k) => filters[k].clear());
-        setOptions(allData.rows);
-        filteredRows = allData.rows;
-        currentPage = 1;
-        render();
+        aplicarUoPadrao();
+        renderFiltered();
       });
     }
 

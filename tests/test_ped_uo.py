@@ -128,3 +128,15 @@ def test_recalculo_de_dotacao_so_da_uo_do_arquivo(monkeypatch):
     assert float(dot_sed.valor_ped_emp) == 150.0  # 50 do PED + 100 do EMP da própria UO
     assert float(dot_sed.valor_atual) == 850.0
     assert (dot_outra.valor_ped_emp, dot_outra.valor_atual) == ("999", "999")  # outra UO intacta
+
+
+def test_alerta_de_chave_ausente_so_para_a_secretaria():
+    df = pd.DataFrame(
+        {
+            "UO": ["14101", "26101", "14101"],
+            "Chave": ["NÃO IDENTIFICADO", "NÃO IDENTIFICADO", "* 1 * 2 *"],
+            "Chave de Planejamento": ["NÃO IDENTIFICADO", "NÃO IDENTIFICADO", "* 1 * 2 *"],
+        }
+    )
+    # só a linha 2 do arquivo (SEDUC sem chave); a da 26101 nunca recebe chave
+    assert pr._find_missing_planejamento_lines(df) == [2]
