@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>Manual — Atualizar planilhas Google com a API do SPO</title>
+<style>
+@page { size: A4; margin: 13mm 14mm 14mm 14mm; }
+:root { --verde:#0b6b4f; --verde2:#e6f4ee; --cinza:#5b6670; --linha:#d9dee3; --alerta:#fff4d6; --vermelho:#d93025; --azul:#1a73e8; }
+* { box-sizing:border-box; }
+body { font-family:"Segoe UI",Arial,sans-serif; font-size:10.5pt; color:#1f2933; line-height:1.42; margin:0; }
+h1 { font-size:21pt; color:var(--verde); margin:0 0 2px; }
+h2 { font-size:13.5pt; margin:0 0 6px; color:#fff; background:var(--verde); padding:5px 10px; border-radius:6px; }
+h2 .n { display:inline-block; background:#fff; color:var(--verde); width:22px; height:22px; line-height:22px; border-radius:50%; text-align:center; font-weight:700; margin-right:8px; font-size:11pt; }
+h3 { font-size:11.5pt; margin:12px 0 4px; color:var(--verde); }
+.sub { color:var(--cinza); margin:0 0 10px; }
+.page { page-break-after:always; }
+.page:last-child { page-break-after:auto; }
+.passo { break-inside:avoid; margin:0 0 14px; }
+.passo p { margin:5px 0; }
+.box { border:1px solid var(--linha); border-radius:6px; padding:8px 11px; margin:8px 0; background:#f8fafb; }
+.aviso { background:var(--alerta); border-color:#f0d98a; }
+.ok { background:var(--verde2); border-color:#b6dccb; }
+table.t { width:100%; border-collapse:collapse; font-size:9.6pt; margin:6px 0; }
+table.t th, table.t td { border:1px solid var(--linha); padding:4px 7px; text-align:left; vertical-align:top; }
+table.t th { background:#eef2f5; }
+code, .code { font-family:Consolas,"Courier New",monospace; }
+code { background:#eef2f5; padding:0 4px; border-radius:3px; font-size:9.5pt; }
+pre.code { background:#1e2530; color:#e6edf3; padding:9px 11px; border-radius:6px; font-size:7.6pt; line-height:1.38; margin:6px 0; white-space:pre-wrap; word-break:break-word; }
+pre.code .c { color:#8b98a5; } pre.code .k { color:#ffb86c; } pre.code .s { color:#a5e075; }
+.cap { font-size:8.6pt; color:var(--cinza); text-align:center; margin:3px 0 0; }
+
+/* ---------- ilustrações ---------- */
+.ill { border:1px solid var(--linha); border-radius:8px; background:#fff; padding:8px; margin:6px 0 2px; position:relative; }
+.win { border:1px solid #c7cdd3; border-radius:6px; overflow:hidden; background:#fff; font-family:Arial,sans-serif; font-size:8.6pt; color:#202124; }
+.win .bar { background:#f1f3f4; padding:4px 8px; border-bottom:1px solid #dadce0; display:flex; align-items:center; gap:6px; }
+.dot { width:8px; height:8px; border-radius:50%; background:#c5c8cc; display:inline-block; }
+.menu { display:flex; gap:11px; padding:4px 8px; background:#fff; border-bottom:1px solid #dadce0; position:relative; }
+.menu span.m { padding:2px 5px; border-radius:3px; position:relative; }
+.menu span.sel { background:#d3e3fd; font-weight:700; outline:2px solid var(--vermelho); }
+.drop { position:absolute; left:278px; top:25px; background:#fff; border:1px solid #c7cdd3; box-shadow:0 3px 10px rgba(0,0,0,.18); width:180px; z-index:2; }
+.drop div { padding:4px 10px; position:relative; } .drop .hl { background:#e8f0fe; font-weight:700; outline:2px solid var(--vermelho); }
+.grid { display:grid; grid-template-columns:28px repeat(5,1fr); }
+.grid div { border:1px solid #e1e3e6; padding:2px 5px; height:19px; overflow:hidden; white-space:nowrap; font-size:8pt; }
+.grid .hd { background:#f8f9fa; text-align:center; color:#5f6368; } .grid .th { background:#e6f4ee; font-weight:700; }
+.tabs { display:flex; gap:2px; background:#f1f3f4; padding:3px 6px 0; border-top:1px solid #dadce0; }
+.tabs span { padding:3px 10px; border-radius:0 0 4px 4px; } .tabs .on { background:#fff; font-weight:700; color:#0b6b4f; border:1px solid #dadce0; border-top:none; }
+.badge.a { top:-10px; right:-9px; }
+.badge { position:absolute; background:var(--vermelho); color:#fff; font-weight:700; border-radius:50%; width:20px; height:20px; text-align:center; line-height:20px; font-size:9.5pt; z-index:5; font-family:Arial,sans-serif; }
+.nota { position:absolute; background:#fff; color:var(--vermelho); border:1.5px solid var(--vermelho); border-radius:5px; font-size:8.3pt; font-weight:700; padding:2px 6px; z-index:5; font-family:Arial,sans-serif; }
+.editor { display:flex; height:150px; }
+.side { width:118px; background:#f8f9fa; border-right:1px solid #dadce0; padding:6px 0; }
+.side div { padding:4px 10px; position:relative; } .side .on { background:#e8f0fe; font-weight:700; }
+.side .hl { outline:2px solid var(--vermelho); outline-offset:-2px; }
+.codeview { flex:1; padding:6px 9px; font-family:Consolas,monospace; font-size:7.3pt; color:#37474f; background:#fff; line-height:1.4; }
+.btnrow { display:flex; gap:6px; align-items:center; padding:4px 8px; border-bottom:1px solid #dadce0; background:#fff; }
+.bt { position:relative; border:1px solid #c7cdd3; border-radius:4px; padding:2px 8px; background:#fff; }
+.bt.azul { background:var(--azul); color:#fff; border-color:var(--azul); font-weight:700; }
+.bt.hl { outline:2px solid var(--vermelho); }
+.props { margin:8px 12px; border:1px solid #dadce0; border-radius:6px; }
+.props .l { display:flex; border-bottom:1px solid #eceff1; } .props .l:last-child { border:none; }
+.props .l div { padding:4px 8px; flex:1; } .props .l .k { font-weight:700; flex:0 0 38%; }
+.dlg { margin:10px auto; width:78%; border:1px solid #c7cdd3; box-shadow:0 3px 12px rgba(0,0,0,.18); border-radius:8px; padding:10px 14px; background:#fff; font-family:Arial,sans-serif; }
+.dlg .t { font-size:10.5pt; font-weight:700; margin-bottom:5px; }
+.sidebyside { display:flex; gap:10px; } .sidebyside > div { flex:1; }
+.form { padding:8px 14px; } .form .row { display:flex; align-items:center; margin:5px 0; gap:8px; } .form .row b { flex:0 0 46%; font-weight:600; }
+.sel2 { flex:1; border:1px solid #c7cdd3; border-radius:4px; padding:3px 7px; background:#fff; }
+.foot { margin-top:8px; font-size:8.4pt; color:var(--cinza); border-top:1px solid var(--linha); padding-top:5px; }
+</style></head>
+<body>
+
+<!-- ============ PÁGINA 1 ============ -->
+<section class="page">
+  <h1>Atualize suas planilhas do Google<br>com os dados do SPO</h1>
+  <p class="sub">Manual passo a passo — Sistema de Planejamento e Orçamento (SPO) · NGER/SEDUC-MT</p>
+
+  <div class="box ok">
+    <b>Para que serve.</b> Com a chave de acesso (API) que o NGER entrega para a sua equipe, a planilha do Google busca sozinha os relatórios do SPO (EMP, NOB, PED, EST EMP, FIP613 e PLAN 51). Você deixa de baixar o Excel à mão: a planilha se atualiza no horário que você escolher.
+  </div>
+
+  <h3>O que você precisa antes de começar</h3>
+  <table class="t">
+    <tr><th style="width:26%">Item</th><th>Como obter</th></tr>
+    <tr><td><b>client_id</b></td><td>Código da sua chave, começa com <code>cli_</code>. Entregue pelo NGER.</td></tr>
+    <tr><td><b>client_secret</b></td><td>A “senha” da chave, começa com <code>sec_</code>. É mostrada uma única vez. <b>Guarde em local seguro e não compartilhe.</b></td></tr>
+    <tr><td><b>Relatório liberado</b></td><td>O NGER informa quais relatórios a sua chave enxerga. Se pedir um não liberado, o sistema responde “Escopo insuficiente” (erro 403).</td></tr>
+    <tr><td><b>Conta Google</b></td><td>Qualquer conta que consiga criar uma planilha no Google Planilhas.</td></tr>
+  </table>
+
+  <h3>Visão geral — são 7 passos</h3>
+  <table class="t">
+    <tr><td style="width:7%"><b>1</b></td><td>Criar a planilha e a aba que vai receber os dados</td></tr>
+    <tr><td><b>2</b></td><td>Abrir o Apps Script (o “automatizador” do Google)</td></tr>
+    <tr><td><b>3</b></td><td>Colar o código pronto e escolher o relatório</td></tr>
+    <tr><td><b>4</b></td><td>Guardar a chave (client_id e client_secret) com segurança</td></tr>
+    <tr><td><b>5</b></td><td>Executar e autorizar pela primeira vez</td></tr>
+    <tr><td><b>6</b></td><td>Conferir os dados na planilha</td></tr>
+    <tr><td><b>7</b></td><td>Agendar a atualização automática</td></tr>
+  </table>
+
+  <div class="box aviso">
+    <b>Antes de agendar, saiba:</b> o Google limita a resposta a <b>50 MB</b> e o tempo de execução a <b>6 minutos</b>. A NOB e a EMP inteiras são muito grandes (≈ 55 MB e 46 MB). Para elas, <b>use um filtro de exercício</b> (por exemplo <code>exercicio=2026</code>, explicado no passo 3). PED, EST EMP, FIP613 e PLAN 51 cabem inteiros.
+  </div>
+
+  <div class="foot">As telas deste manual são ilustrações esquemáticas. O desenho do Google pode mudar um pouco de posição, mas os nomes dos botões e menus são os mesmos.</div>
+</section>
+
+<!-- ============ PÁGINA 2 ============ -->
+<section>
+  <div class="passo">
+    <h2><span class="n">1</span>Criar a planilha e a aba</h2>
+    <p>Abra <b>sheets.google.com</b> e crie uma <b>Planilha em branco</b>. Na parte de baixo, clique com o botão direito na aba “Página1”, escolha <b>Renomear</b> e dê o nome que quiser (exemplo: <code>EST EMP</code>). Anote esse nome: ele vai no passo 3.</p>
+    <div class="ill">
+      <div class="win">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b style="margin-left:8px">Controle de Empenhos — Google Planilhas</b></div>
+        <div class="menu"><span class="m">Arquivo</span><span class="m">Editar</span><span class="m">Ver</span><span class="m">Inserir</span><span class="m">Formatar</span><span class="m">Dados</span><span class="m">Ferramentas</span><span class="m">Extensões</span><span class="m">Ajuda</span></div>
+        <div class="grid"><div class="hd"></div><div class="hd">A</div><div class="hd">B</div><div class="hd">C</div><div class="hd">D</div><div class="hd">E</div>
+          <div class="hd">1</div><div></div><div></div><div></div><div></div><div></div>
+          <div class="hd">2</div><div></div><div></div><div></div><div></div><div></div>
+          <div class="hd">3</div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="tabs"><span class="on" style="outline:2px solid #d93025">EST EMP</span><span>Página2</span></div>
+      </div>
+      <span class="nota" style="left:200px; bottom:34px">nome da aba</span>
+    </div>
+    <p class="cap">Ilustração 1 — a aba que vai receber os dados (aqui chamada “EST EMP”).</p>
+  </div>
+
+  <div class="passo">
+    <h2><span class="n">2</span>Abrir o Apps Script</h2>
+    <p>No menu da planilha, clique em <b>Extensões</b> e depois em <b>Apps Script</b>. Abre uma nova janela do navegador com o editor.</p>
+    <div class="ill">
+      <div class="win">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b style="margin-left:8px">Controle de Empenhos — Google Planilhas</b></div>
+        <div class="menu"><span class="m">Arquivo</span><span class="m">Editar</span><span class="m">Ver</span><span class="m">Inserir</span><span class="m">Formatar</span><span class="m">Dados</span><span class="m">Ferramentas</span><span class="m sel">Extensões<span class="badge a">1</span></span><span class="m">Ajuda</span>
+          <div class="drop"><div>Suplementos</div><div class="hl">Apps Script<span class="badge a" style="right:-24px;top:2px">2</span></div><div>Macros</div></div></div>
+        <div class="grid" style="height:74px;overflow:hidden"><div class="hd"></div><div class="hd">A</div><div class="hd">B</div><div class="hd">C</div><div class="hd">D</div><div class="hd">E</div>
+          <div class="hd">1</div><div></div><div></div><div></div><div></div><div></div><div class="hd">2</div><div></div><div></div><div></div><div></div><div></div></div>
+      </div>
+      
+    </div>
+    <p class="cap">Ilustração 2 — Extensões ➜ Apps Script.</p>
+  </div>
+
+  <div class="passo">
+    <h2><span class="n">3</span>Colar o código e escolher o relatório</h2>
+    <p>No editor, apague o código que já vem (<code>function myFunction() {}</code>), cole o código pronto da <b>última página deste manual</b> e clique no ícone de <b>disquete</b> (Salvar projeto).</p>
+    <div class="ill">
+      <div class="win">
+        <div class="btnrow"><span class="bt">💾</span><span class="bt">↶</span><span class="bt">↷</span><span class="bt azul">▶ Executar</span><span class="bt">atualizarDados ▾</span></div>
+        <div class="editor"><div class="side"><div>Visão geral</div><div class="on">Editor</div><div>Acionadores</div><div>Execuções</div><div>Configurações do projeto</div></div>
+          <div class="codeview"><span style="color:#8b98a5">// ===== CONFIGURE AQUI =====</span><br>const BASE = "https://projetoswebcsg.life";<br><span style="background:#fff3b0">const RELATORIO = "est-emp";</span> <span style="color:#d93025">◀ relatório</span><br><span style="background:#fff3b0">const ABA = "EST EMP";</span> <span style="color:#d93025">◀ nome da aba (passo 1)</span><br><span style="background:#fff3b0">const FILTROS = "";</span> <span style="color:#d93025">◀ filtro</span><br><span style="color:#8b98a5">// ==========================</span><br>function atualizarDados() { ... }</div></div>
+      </div>
+    </div>
+    <p class="cap">Ilustração 3 — as 3 linhas amarelas são as únicas que você altera.</p>
+    <table class="t">
+      <tr><th style="width:20%">Linha</th><th>O que colocar</th></tr>
+      <tr><td><code>RELATORIO</code></td><td><code>emp</code>, <code>nob</code>, <code>ped</code>, <code>est-emp</code>, <code>fip613</code> ou <code>plan51</code></td></tr>
+      <tr><td><code>ABA</code></td><td>O nome exato da aba criada no passo 1</td></tr>
+      <tr><td><code>FILTROS</code></td><td>Vazio traz tudo o que sua chave enxerga. Para limitar: <code>"exercicio=2026"</code>. Para mais de um filtro, junte com <code>&amp;</code>: <code>"exercicio=2026&amp;uo=26201"</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============ PÁGINA 3 ============ -->
+<section>
+  <div class="passo">
+    <h2><span class="n">4</span>Guardar a chave com segurança</h2>
+    <p>Nunca escreva o <code>client_id</code> e o <code>client_secret</code> dentro do código. Guarde-os nas <b>Propriedades do script</b>:</p>
+    <p>① No menu da esquerda, clique em <b>Configurações do projeto</b> (ícone de engrenagem).<br>② Role até <b>Propriedades do script</b> e clique em <b>Adicionar propriedade de script</b>.<br>③ Crie duas propriedades, <b>com estes nomes exatos</b> (maiúsculas), e clique em <b>Salvar propriedades do script</b>.</p>
+    <div class="ill">
+      <div class="win">
+        <div class="editor" style="height:auto"><div class="side"><div>Visão geral</div><div>Editor</div><div>Acionadores</div><div>Execuções</div><div class="on hl">⚙ Configurações do projeto<span class="badge a" style="right:-12px;top:-8px">1</span></div></div>
+          <div style="flex:1;padding:6px 8px"><b style="font-size:10pt">Propriedades do script</b>
+            <div class="props"><div class="l" style="background:#f8f9fa;font-weight:700"><div class="k">Propriedade</div><div>Valor</div></div>
+              <div class="l"><div class="k">CLIENT_ID</div><div>cli_xxxxxxxxxxxxxxxx</div></div>
+              <div class="l"><div class="k">CLIENT_SECRET</div><div>sec_xxxxxxxxxxxxxxxxxxxxxxx</div></div></div>
+            <span class="bt" style="display:inline-block;margin:6px 12px 2px">+ Adicionar propriedade de script<span class="badge a">2</span></span> <span class="bt azul">Salvar propriedades do script<span class="badge a">3</span></span></div></div>
+      </div>
+      
+    </div>
+    <p class="cap">Ilustração 4 — as duas propriedades: <code>CLIENT_ID</code> e <code>CLIENT_SECRET</code> (valores de exemplo).</p>
+  </div>
+
+  <div class="passo">
+    <h2><span class="n">5</span>Executar e autorizar (só na primeira vez)</h2>
+    <p>Volte ao <b>Editor</b>, confira se a função <code>atualizarDados</code> está selecionada e clique em <b>▶ Executar</b>. O Google vai pedir autorização, porque o script acessa a internet e a sua planilha:</p>
+    <p>① <b>Revisar permissões</b> ➜ ② escolha a sua conta ➜ ③ se aparecer “O Google não verificou este app”, clique em <b>Avançado</b> e em <b>Acessar … (não seguro)</b> ➜ ④ <b>Permitir</b>.</p>
+    <div class="sidebyside">
+      <div><div class="ill" style="min-height:112px"><div class="win"><div class="btnrow"><span class="bt">💾</span><span class="bt hl azul">▶ Executar</span><span class="bt">atualizarDados ▾</span></div>
+        <div style="padding:8px;font-size:8pt;color:#5f6368">Execução iniciada…<br>Registro de execução<br><span style="color:#188038">✔ Atualizado: 986 linhas.</span></div></div></div><p class="cap">Ilustração 5a — Executar</p></div>
+      <div><div class="ill" style="min-height:112px"><div class="dlg" style="width:92%;margin:2px auto"><div class="t">Autorização necessária</div><div style="font-size:8pt;color:#5f6368">Este projeto precisa de permissão para acessar seus dados.</div><div style="text-align:right;margin-top:7px"><span class="bt">Cancelar</span> <span class="bt azul" style="outline:2px solid #d93025">Revisar permissões</span></div></div></div><p class="cap">Ilustração 5b — autorização</p></div>
+    </div>
+    <div class="box aviso">A autorização é pedida <b>uma vez</b>. Se o aviso disser “Falha no login”, confira os nomes e valores das propriedades do passo 4 (sem espaços sobrando).</div>
+  </div>
+</section>
+
+<!-- ============ PÁGINA 4 ============ -->
+<section>
+  <div class="passo">
+    <h2><span class="n">6</span>Conferir os dados</h2>
+    <p>Volte para a planilha. A aba escolhida deve estar preenchida, com a <b>primeira linha como cabeçalho</b> (os mesmos nomes de coluna do Excel do SPO) e os dados logo abaixo. Se você executar de novo sem que o SPO tenha recebido carga nova, nada muda: o script avisa “Sem dados novos” e não baixa de novo.</p>
+    <div class="ill">
+      <div class="win"><div class="grid" style="grid-template-columns:28px 0.6fr 0.7fr 1.3fr 1fr 1fr">
+        <div class="hd"></div><div class="hd">A</div><div class="hd">B</div><div class="hd">C</div><div class="hd">D</div><div class="hd">E</div>
+        <div class="hd">1</div><div class="th">Exercício</div><div class="th">Nº EST</div><div class="th">Nº EMP</div><div class="th">Empenho Atual</div><div class="th">Valor EMP</div>
+        <div class="hd">2</div><div>2026</div><div>1</div><div>2026NE000123</div><div>2026NE000123</div><div style="text-align:right">10.500,00</div>
+        <div class="hd">3</div><div>2026</div><div>2</div><div>2026NE000456</div><div>2026NE000456</div><div style="text-align:right">1.250,75</div>
+        <div class="hd">4</div><div>2026</div><div>3</div><div>2026NE000789</div><div>2026NE000789</div><div style="text-align:right">87,40</div></div>
+        <div class="tabs"><span class="on">EST EMP</span></div></div>
+    </div>
+    <p class="cap">Ilustração 6 — dados no padrão do Excel do SPO (exemplo com valores fictícios).</p>
+    <p>Os valores numéricos chegam como número, então você pode somar, filtrar e criar tabelas dinâmicas normalmente.</p>
+  </div>
+
+  <div class="passo">
+    <h2><span class="n">7</span>Agendar a atualização automática</h2>
+    <p>① No menu da esquerda, clique em <b>Acionadores</b> (ícone de relógio) ➜ ② <b>Adicionar acionador</b> (botão no canto inferior direito) ➜ configure como abaixo ➜ ③ <b>Salvar</b>.</p>
+    <div class="ill">
+      <div class="win"><div class="editor" style="height:auto"><div class="side" style="min-height:150px"><div>Visão geral</div><div>Editor</div><div class="on hl">⏰ Acionadores<span class="badge a" style="right:-12px;top:-8px">1</span></div><div>Execuções</div><div>Configurações do projeto</div></div>
+        <div class="form" style="flex:1"><b style="position:relative;display:inline-block">Adicionar acionador<span class="badge a" style="right:-26px">2</span></b>
+          <div class="row"><b>Função a ser executada</b><span class="sel2">atualizarDados</span></div>
+          <div class="row"><b>Fonte do evento</b><span class="sel2">Baseado no tempo</span></div>
+          <div class="row"><b>Tipo de acionador</b><span class="sel2">Timer de hora em hora</span></div>
+          <div class="row"><b>Intervalo</b><span class="sel2">A cada hora</span></div>
+          <div style="text-align:right"><span class="bt">Cancelar</span> <span class="bt azul">Salvar<span class="badge a">3</span></span></div></div></div></div>
+      
+    </div>
+    <p class="cap">Ilustração 7 — acionador de hora em hora (você pode escolher “Timer diário” e o horário).</p>
+    <div class="box ok"><b>Dica:</b> o SPO só muda quando o NGER envia relatórios novos. Atualizar a cada hora é suficiente; mais que isso não traz dado novo. O script só baixa de verdade quando o SPO recebeu uma carga nova.</div>
+  </div>
+</section>
+
+<!-- ============ PÁGINA 5 ============ -->
+<section class="page" style="break-before:page">
+  <h2 style="margin-bottom:8px">Consulta rápida</h2>
+  <h3>Relatórios e filtros úteis</h3>
+  <table class="t">
+    <tr><th style="width:17%"><code>RELATORIO</code></th><th>Conteúdo</th><th style="width:32%">Observação</th></tr>
+    <tr><td><code>est-emp</code></td><td>Estorno de empenho</td><td>Cabe inteiro</td></tr>
+    <tr><td><code>ped</code></td><td>Pedidos (PED)</td><td>Cabe inteiro</td></tr>
+    <tr><td><code>fip613</code></td><td>FIP 613</td><td>Cabe inteiro. O ano é <code>ano=2026</code></td></tr>
+    <tr><td><code>plan51</code></td><td>Créditos adicionais (PLAN 51)</td><td>Cabe inteiro. Estado inteiro, sem filtro de UO</td></tr>
+    <tr><td><code>emp</code></td><td>Empenhos</td><td><b>Use <code>exercicio=2026</code></b> (≈ 46 MB inteira)</td></tr>
+    <tr><td><code>nob</code></td><td>Notas de ordem bancária</td><td><b>Use <code>exercicio=2026</code></b> (≈ 55 MB inteira)</td></tr>
+  </table>
+  <table class="t">
+    <tr><th style="width:36%">Em <code>FILTROS</code></th><th>Efeito</th></tr>
+    <tr><td><code>""</code></td><td>Tudo o que a chave enxerga. Sem indicar a UO, vêm só os dados da SEDUC.</td></tr>
+    <tr><td><code>"exercicio=2026"</code></td><td>Só o exercício de 2026 (vários: <code>exercicio=2025,2026</code>)</td></tr>
+    <tr><td><code>"uo=26201"</code> / <code>"uo=all"</code></td><td>Escolhe a UO / traz todas as UOs liberadas</td></tr>
+    <tr><td><code>"exercicio=2026&amp;uo=all"</code></td><td>Combina filtros com <code>&amp;</code></td></tr>
+  </table>
+
+  <h3>Se algo der errado</h3>
+  <table class="t">
+    <tr><th style="width:30%">Mensagem</th><th>O que fazer</th></tr>
+    <tr><td>Falha no login … 401 “Credenciais invalidas”</td><td>Confira <code>CLIENT_ID</code> e <code>CLIENT_SECRET</code> no passo 4 (sem espaços, copiados inteiros). Se perdeu o secret, peça ao NGER para gerar outro.</td></tr>
+    <tr><td>… 403 “Escopo insuficiente”</td><td>Sua chave não tem esse relatório. Peça ao NGER para liberar.</td></tr>
+    <tr><td>… 403 “Acesso expirado” ou “revogado”</td><td>A chave venceu ou foi desativada. Peça renovação ao NGER.</td></tr>
+    <tr><td>“Exceeded maximum execution time”</td><td>Relatório grande demais. Use <code>FILTROS = "exercicio=2026"</code>.</td></tr>
+    <tr><td>“Response too large” / limite de 50 MB</td><td>Mesmo caso: filtre por exercício.</td></tr>
+    <tr><td>Aba com outro nome / dados em lugar errado</td><td>O script cria uma aba nova com o nome de <code>ABA</code> se ela não existir. Confira a grafia.</td></tr>
+  </table>
+  <div class="box aviso"><b>Segurança.</b> A chave dá acesso aos dados do SPO. Não envie o secret por e-mail ou chat, não o coloque em planilha compartilhada e quem sair da equipe deve ter a chave revogada (peça ao NGER).</div>
+  <p><b>Dúvidas, novos relatórios ou renovação de acesso:</b> NGER/SEDUC-MT. Endereço do sistema: <b>https://projetoswebcsg.life</b></p>
+</section>
+
+<!-- ============ PÁGINA 6: CÓDIGO ============ -->
+<section class="page">
+  <h2 style="margin-bottom:8px">Código pronto para colar (passo 3)</h2>
+  <p>Copie tudo, cole no Apps Script e altere somente as 3 linhas marcadas (<code>RELATORIO</code>, <code>ABA</code>, <code>FILTROS</code>). O arquivo <code>google_planilhas.gs</code>, entregue junto com este manual, tem o mesmo código para copiar sem erros de formatação do PDF.</p>
+  <pre class="code">// ============ CONFIGURE AQUI ============
+const BASE = &quot;https://projetoswebcsg.life&quot;;
+const RELATORIO = &quot;est-emp&quot;;   // emp | nob | ped | est-emp | fip613 | plan51
+const ABA = &quot;EST EMP&quot;;         // nome da aba onde os dados serão gravados
+const FILTROS = &quot;&quot;;            // ex.: &quot;exercicio=2026&quot;  (vazio = tudo que a sua chave enxerga)
+// ========================================
+
+function atualizarDados() {
+  const p = PropertiesService.getScriptProperties();
+
+  // 1) login: gera um token de 60 minutos
+  const login = UrlFetchApp.fetch(BASE + &quot;/api/auth/token&quot;, {
+    method: &quot;post&quot;, contentType: &quot;application/json&quot;, muteHttpExceptions: true,
+    payload: JSON.stringify({ client_id: p.getProperty(&quot;CLIENT_ID&quot;), client_secret: p.getProperty(&quot;CLIENT_SECRET&quot;) }),
+  });
+  if (login.getResponseCode() !== 200) throw new Error(&quot;Falha no login: &quot; + login.getContentText());
+  const h = { headers: { Authorization: &quot;Bearer &quot; + JSON.parse(login.getContentText()).access_token }, muteHttpExceptions: true };
+  const q = FILTROS ? &quot;?&quot; + FILTROS : &quot;&quot;;
+
+  // 2) só baixa se o SPO recebeu carga nova
+  const meta = UrlFetchApp.fetch(BASE + &quot;/api/v1/dados/&quot; + RELATORIO + &quot;/meta&quot; + q, h);
+  if (meta.getResponseCode() !== 200) throw new Error(&quot;Falha ao consultar: &quot; + meta.getContentText());
+  const carga = JSON.parse(meta.getContentText()).upload_id.join(&quot;,&quot;) + &quot;|&quot; + FILTROS;
+  if (p.getProperty(&quot;CARGA_&quot; + RELATORIO) === carga) { Logger.log(&quot;Sem dados novos.&quot;); return; }
+
+  // 3) baixa o CSV e grava na aba
+  const csv = UrlFetchApp.fetch(BASE + &quot;/api/v1/dados/&quot; + RELATORIO + &quot;/export&quot; + q, h);
+  if (csv.getResponseCode() !== 200) throw new Error(&quot;Falha ao baixar: &quot; + csv.getContentText());
+  const dados = Utilities.parseCsv(csv.getContentText()).map((linha, i) =&gt;
+    i === 0 ? linha : linha.map((v) =&gt; (/^-?(0|[1-9]\d{0,14})(\.\d+)?$/.test(v) ? Number(v) : v))
+  );
+  const planilha = SpreadsheetApp.getActive();
+  const aba = planilha.getSheetByName(ABA) || planilha.insertSheet(ABA);
+  aba.clearContents();
+  aba.getRange(1, 1, dados.length, dados[0].length).setValues(dados);
+  p.setProperty(&quot;CARGA_&quot; + RELATORIO, carga);
+  Logger.log(&quot;Atualizado: &quot; + (dados.length - 1) + &quot; linhas.&quot;);
+}
+</pre>
+</section>
+</body></html>

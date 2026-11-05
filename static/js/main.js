@@ -514,11 +514,14 @@
             <td>${esc(r.acesso_fim_em ? formatDateTime(r.acesso_fim_em) : "Permanente")}</td>
             <td>${esc((r.scopes_label || []).join(" | "))}</td>
             <td>${esc(formatDateTime(r.last_used_at))}</td>
-            <td class="actions" style="display:flex; gap:6px;">
-              <button class="icon-btn sm api-select" data-id="${esc(r.id)}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
-              <button class="icon-btn sm api-rotate" data-id="${esc(r.id)}" type="button" title="Rotacionar segredo"><i class="bi bi-arrow-repeat"></i></button>
-              <button class="icon-btn sm api-revoke" data-id="${esc(r.id)}" type="button" title="Revogar"><i class="bi bi-slash-circle"></i></button>
-              <button class="icon-btn sm api-delete" data-id="${esc(r.id)}" type="button" title="Excluir"><i class="bi bi-trash"></i></button>
+            <td class="actions">
+              <div style="display:flex; gap:6px; flex-wrap:nowrap;">
+                <button class="icon-btn sm api-select" data-id="${esc(r.id)}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
+                ${r.status === "revogado"
+                  ? `<button class="icon-btn sm api-delete" data-id="${esc(r.id)}" type="button" title="Excluir (somente chaves revogadas)"><i class="bi bi-trash"></i></button>`
+                  : `<button class="icon-btn sm api-rotate" data-id="${esc(r.id)}" type="button" title="Rotacionar segredo"><i class="bi bi-arrow-repeat"></i></button>
+                <button class="icon-btn sm api-revoke" data-id="${esc(r.id)}" type="button" title="Revogar"><i class="bi bi-slash-circle"></i></button>`}
+              </div>
             </td>
           </tr>`
         )
@@ -593,7 +596,7 @@
         btn.addEventListener("click", async () => {
           const id = btn.dataset.id;
           if (!id) return;
-          if (!window.confirm("Deseja realmente excluir este servidor de API?")) return;
+          if (!window.confirm("Excluir definitivamente este servidor de API? A chave revogada e o histórico de tokens serão apagados.")) return;
           setMsg("Excluindo servidor...");
           try {
             const res = await fetch(`/api/api-clients/${encodeURIComponent(id)}`, {

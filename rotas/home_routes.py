@@ -1448,6 +1448,7 @@ API_SCOPE_OPTIONS = [
     {"scope": "dados.ped.read", "label": "PED (somente leitura)"},
     {"scope": "dados.est_emp.read", "label": "EST_EMP (somente leitura)"},
     {"scope": "dados.fip613.read", "label": "FIP613 (somente leitura)"},
+    {"scope": "dados.plan51.read", "label": "PLAN 51 (somente leitura)"},
 ]
 API_SCOPE_SET = {item["scope"] for item in API_SCOPE_OPTIONS}
 API_SCOPE_LABEL = {item["scope"]: item["label"] for item in API_SCOPE_OPTIONS}
@@ -1870,6 +1871,8 @@ def api_clients_delete(client_id: int):
     row = db.session.get(ApiClient, client_id)
     if not row:
         return jsonify({"error": "Servidor nao encontrado."}), 404
+    if (row.status or "").lower() != "revogado":
+        return jsonify({"error": "Revogue o servidor antes de excluir."}), 400
     try:
         ApiClientScope.query.filter_by(client_id=row.id).delete(synchronize_session=False)
         ApiKey.query.filter_by(client_id=row.id).delete(synchronize_session=False)
@@ -1958,7 +1961,7 @@ def api_auth_token():
 
 
 def _api_query_model(model, table_name: str):
-    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo"}
+    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo", "after_id"}
     mapper = inspect(model)
     col_keys = [c.key for c in mapper.columns]
     if "ativo" not in col_keys:
@@ -2011,6 +2014,17 @@ def _api_query_model(model, table_name: str):
     if order_by not in col_keys:
         order_by = "id" if "id" in col_keys else col_keys[0]
     order_col = getattr(model, order_by)
+    # Paginação por id (`after_id` = `next_after_id` da página anterior): estável durante
+    # uma carga e sem a lentidão do OFFSET em tabelas grandes. Só vale ordenando por id.
+    after_id = None
+    if request.args.get("after_id") not in (None, ""):
+        try:
+            after_id = int(str(request.args.get("after_id")))
+        except Exception:
+            return jsonify({"error": "Parâmetro after_id inválido."}), 400
+        if order_by != "id":
+            return jsonify({"error": "after_id exige order_by=id."}), 400
+        query = query.filter(order_col > after_id if order_dir == "asc" else order_col < after_id)
     query = query.order_by(order_col.asc() if order_dir == "asc" else order_col.desc())
 
     fields_param = str(request.args.get("fields") or "").strip()
@@ -2018,12 +2032,12 @@ def _api_query_model(model, table_name: str):
         asked = [f.strip() for f in fields_param.split(",") if f.strip()]
         fields = [f for f in asked if f in col_keys]
     else:
-        fields = [f for f in col_keys if f != "raw_payload"]
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")]
     if not fields:
-        fields = [f for f in col_keys if f != "raw_payload"] or col_keys
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")] or col_keys
 
-    total = query.count()
-    rows = query.offset(offset).limit(limit).all()
+    total = query.count() if after_id is None else None
+    rows = query.offset(0 if after_id is not None else offset).limit(limit).all()
     data = []
     for row in rows:
         item = {}
@@ -2036,10 +2050,12 @@ def _api_query_model(model, table_name: str):
             "ok": True,
             "table": table_name,
             "uo": uo_filtrada,
-            "total": int(total),
+            "total": int(total) if total is not None else None,
             "limit": int(limit),
             "offset": int(offset),
             "count": len(data),
+            "next_after_id": int(getattr(rows[-1], "id")) if rows and "id" in col_keys and order_by == "id" and len(rows) == limit else None,
+            "upload_id": sorted({int(getattr(r, "upload_id")) for r in rows if getattr(r, "upload_id", None) is not None}),
             "data": data,
         }
     )

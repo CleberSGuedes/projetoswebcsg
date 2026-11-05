@@ -1012,3 +1012,27 @@ O relatório e o Excel baixado **reproduzem a planilha do script** (`salvar_said
 - **Fonte do relatório HTML:** medido no navegador, igual ao PED (cabeçalho 10px, células 8px); a impressão de fonte maior vem do negrito (células magenta, cabeçalhos coloridos, rodapé) e da centralização das 39 primeiras colunas, como no script.
 - **Pendência de conferência:** `FLAG_STATUS = 5` é aceito como "Efetivado" (além do texto).
 
+## 26. API de dados para as equipes (2026-11-04)
+
+Objetivo: quem consome a API (Google Planilhas, Power Query, Python) atualiza as planilhas sozinho, sem baixar Excel. Antes só existiam as rotas paginadas `/api/v1/dados/<rel>` (máx. 5.000 linhas, `offset`); o log mostrou só testes com `limit=20`.
+
+### 26.1 O que existe agora (`rotas/api_dados_routes.py`, `services/api_dados_rotulos.py`)
+- Relatórios: `emp`, `nob`, `ped`, `est-emp`, `fip613` e **`plan51`** (novo escopo `dados.plan51.read`, aparece na tela Usuários > API de Acessos; o PLAN 51 é do estado inteiro, sem filtro de UO).
+- `GET /api/v1/dados/<rel>/export` — carga completa, CSV (padrão) ou `formato=json`. **Cabeçalho do Excel por padrão** (mesmos `rename_map` dos downloads; PLAN 51 usa `PLAN51_COLUNAS`); `colunas=banco` dá os nomes técnicos + `id`/`upload_id`. Aceita `uo`, `fields` e filtros por coluna (nome do banco **ou** rótulo). CSV UTF-8, vírgula, decimal com ponto, datas ISO. Cabeçalhos `X-Total`, `X-Upload-Id`, `X-Gerado-Em`, `X-UO`. Lê em lotes de 5.000 por `id` (sem OFFSET).
+- `GET /api/v1/dados/<rel>/meta` — última atualização: `total`, `atualizado_em`, `upload_id`, `cargas[]` (linhas, `data_arquivo`, `enviado_em`). Não expõe e-mail de quem enviou.
+- `GET /api/v1/dados/<rel>/schema` — coluna, rótulo e tipo.
+- Rotas paginadas antigas **mantidas** e agora com `after_id` (use o `next_after_id` da resposta; exige `order_by=id`), `upload_id` e `next_after_id` na resposta; `total` vem vazio quando se usa `after_id`. `estilo` (PLAN 51) nunca é exposto.
+- UO: sem `uo`, só a SEDUC (contrato anterior); `uo=all` ou `uo=26201,26202`.
+
+### 26.2 Correção encontrada
+`NobRegistro` não tinha `elemento`, `nome_elemento_despesa` e `fonte`, que **existem na tabela `nob`** (o runner Node as grava). Por isso a API antiga nunca devolveu essas colunas. Colunas adicionadas ao model (sem ALTER: já existiam no banco).
+
+### 26.3 Medições (banco remoto, a partir do desenvolvimento)
+Export completo: NOB 71.241 linhas ~8 s (~55 MB); EMP 57.180 ~7 s (~46 MB); FIP613 e PED < 1 s. Meta: ~1 s. Para tabelas grandes o manual manda filtrar por `exercicio` e escolher `fields`. Conferir o tempo online (LiteSpeed).
+
+### 26.4 Testes e material
+`tests/test_api_dados.py` (18 testes; cliente de API e carga do PLAN 51 descartáveis, removidos ao final; os demais relatórios só são lidos). `docs/api/manual_api_google_planilhas.pdf` (manual ilustrado passo a passo para Google Planilhas; fonte em `manual_google_planilhas.html`, código para colar em `google_planilhas.gs`), `docs/api/manual_api_dados.md` (referência técnica) e `docs/api/testar_api.py` (teste de ponta a ponta contra o ambiente: token, meta, schema, CSV x meta, paginação).
+
+### 26.5 Limites conhecidos
+Os valores saem como estão no banco (o Excel de FIP613 inverte o sinal de algumas colunas; a API não). A carga completa é montada em memória antes de responder (~55 MB na NOB).
+

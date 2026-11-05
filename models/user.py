@@ -503,6 +503,11 @@ class NobRegistro(db.Model):
     data_hora_cadastro_liq = db.Column(db.DateTime)
     dotacao_orcamentaria = db.Column(db.String(255))
     natureza_despesa = db.Column(db.String(255))
+    # colunas que já existem na tabela `nob` (o runner Node as grava) e faltavam no model;
+    # sem elas a API de dados e as consultas pelo model não devolviam Elemento/Fonte.
+    elemento = db.Column(db.String(100))
+    nome_elemento_despesa = db.Column(db.String(255))
+    fonte = db.Column(db.String(100))
     nome_fonte_recurso = db.Column(db.String(255))
     ug = db.Column(db.String(50))
     uo = db.Column(db.String(50))
