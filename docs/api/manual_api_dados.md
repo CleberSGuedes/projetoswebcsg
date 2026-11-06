@@ -42,6 +42,7 @@ A resposta traz os cabeçalhos HTTP `X-Total` (linhas), `X-Upload-Id` (carga) e 
 | `fields` | Escolhe as colunas: `fields=Exercicio,UO,Valor NOB`. Deixa o arquivo menor e mais rápido. |
 | `formato` | `csv` (padrão) ou `json`. |
 | `colunas` | `rotulo` (padrão, nomes do Excel) ou `banco` (nomes técnicos, mais `id` e `upload_id`). |
+| `limit` e `after_id` | **Carga em partes.** `limit=10000` devolve até 10 mil linhas; a resposta traz o cabeçalho HTTP `X-Next-After-Id`. Para a parte seguinte, repita a chamada com `after_id=<esse valor>`, até ele vir vazio. `X-Total` (total do filtro) vem só na primeira parte e `X-Linhas` diz quantas linhas vieram. É o que o script do Google Planilhas usa para EMP e NOB. |
 
 > **Atenção ao tamanho.** A NOB inteira tem ~71 mil linhas (~55 MB) e a EMP ~57 mil. Prefira filtrar por `Exercicio` e escolher só as colunas de que precisa.
 

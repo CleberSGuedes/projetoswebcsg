@@ -50,7 +50,8 @@ api_dados_bp = Blueprint("api_dados", __name__)
 _TECNICAS = {"raw_payload", "estilo"}
 # Colunas que só aparecem no modo `colunas=banco`.
 _META = {"id", "upload_id", "chave", "chave_planejamento", "data_atualizacao", "data_arquivo", "user_email", "ativo", "created_at"}
-_RESERVADOS = {"formato", "colunas", "fields", "uo"}
+_RESERVADOS = {"formato", "colunas", "fields", "uo", "limit", "after_id"}
+_LIMITE_MAX = 100000
 _LOTE = 5000
 
 RELATORIOS = {
@@ -167,21 +168,42 @@ def _json(valor):
     return valor
 
 
-def _linhas(cfg: dict, query, colunas: list[tuple[str, str]]):
-    """Percorre a consulta em lotes por `id` (sem OFFSET, que degrada com 70 mil linhas)."""
+def _linhas(cfg: dict, query, colunas: list[tuple[str, str]], after_id: int = 0, limite: int | None = None):
+    """Percorre a consulta em lotes por `id` (sem OFFSET, que degrada com 70 mil linhas).
+
+    Devolve (id, upload_id, valores). Com `limite`, para depois de tantas linhas
+    (carga em partes: o cliente continua de `after_id` = último id recebido)."""
     modelo = cfg["modelo"]
     attrs = [getattr(modelo, k) for k, _ in colunas]
     base = query.with_entities(modelo.id, modelo.upload_id, *attrs).order_by(modelo.id.asc())
-    ultimo = 0
-    while True:
-        lote = base.filter(modelo.id > ultimo).limit(_LOTE).all()
+    ultimo = after_id
+    restante = limite
+    while restante is None or restante > 0:
+        tam = _LOTE if restante is None else min(_LOTE, restante)
+        lote = base.filter(modelo.id > ultimo).limit(tam).all()
         if not lote:
             return
         for r in lote:
-            yield r[1], r[2:]
+            yield r[0], r[1], r[2:]
         ultimo = lote[-1][0]
-        if len(lote) < _LOTE:
+        if restante is not None:
+            restante -= len(lote)
+        if len(lote) < tam:
             return
+
+
+def _inteiro_param(nome: str, minimo: int, maximo: int | None = None):
+    """Lê um parâmetro inteiro opcional. Devolve (valor|None, erro|None)."""
+    bruto = request.args.get(nome)
+    if bruto in (None, ""):
+        return None, None
+    try:
+        valor = int(str(bruto))
+    except Exception:
+        return None, f"Parâmetro {nome} inválido."
+    if valor < minimo or (maximo is not None and valor > maximo):
+        return None, f"Parâmetro {nome} fora do intervalo."
+    return valor, None
 
 
 def _exportar(rel: str):
@@ -193,21 +215,37 @@ def _exportar(rel: str):
     if modo not in ("rotulo", "banco"):
         return jsonify({"error": "colunas deve ser rotulo ou banco."}), 400
 
+    # Carga em partes (opcional): `limit` linhas por chamada, continuando de `after_id`.
+    limite, erro = _inteiro_param("limit", 1, _LIMITE_MAX)
+    if erro:
+        return jsonify({"error": erro}), 400
+    after_id, erro = _inteiro_param("after_id", 0)
+    if erro:
+        return jsonify({"error": erro}), 400
+    if after_id is not None and limite is None:
+        return jsonify({"error": "after_id exige limit."}), 400
+    em_partes = limite is not None
+    after_id = after_id or 0
+
     query, uo = _filtro_base(cfg)
     if query is None:
         return uo
     colunas = _colunas_pedidas(cfg, modo)
     cabecalho = [cab for _, cab in colunas]
     uploads: set[int] = set()
+    ultimo_id = 0
     gerado_em = _agora().isoformat(timespec="seconds")
+    # total do filtro só na primeira parte (o cliente guarda); evita um COUNT por parte
+    total_filtro = query.count() if em_partes and after_id == 0 else None
 
     if formato == "csv":
         buf = io.StringIO(newline="")
         w = csv.writer(buf, lineterminator="\r\n")
         w.writerow(cabecalho)
         total = 0
-        for upload_id, valores in _linhas(cfg, query, colunas):
+        for id_, upload_id, valores in _linhas(cfg, query, colunas, after_id, limite):
             uploads.add(int(upload_id))
+            ultimo_id = int(id_)
             w.writerow([_texto(v) for v in valores])
             total += 1
         resp = Response(buf.getvalue().encode("utf-8"), mimetype="text/csv")
@@ -215,8 +253,9 @@ def _exportar(rel: str):
         resp.headers["Content-Disposition"] = f'attachment; filename="{rel}.csv"'
     else:
         dados = []
-        for upload_id, valores in _linhas(cfg, query, colunas):
+        for id_, upload_id, valores in _linhas(cfg, query, colunas, after_id, limite):
             uploads.add(int(upload_id))
+            ultimo_id = int(id_)
             dados.append({cab: _json(v) for (_, cab), v in zip(colunas, valores)})
         total = len(dados)
         resp = jsonify(
@@ -225,13 +264,18 @@ def _exportar(rel: str):
                 "relatorio": rel,
                 "uo": uo,
                 "upload_id": sorted(uploads),
-                "total": total,
+                "total": total_filtro if total_filtro is not None else (None if em_partes else total),
+                "linhas": total,
+                "next_after_id": ultimo_id if em_partes and total == limite else None,
                 "gerado_em": gerado_em,
                 "colunas": cabecalho,
                 "data": dados,
             }
         )
-    resp.headers["X-Total"] = str(total)
+    # X-Total: total do filtro (resposta inteira ou 1ª parte; vazio nas demais partes). X-Linhas: linhas desta resposta.
+    resp.headers["X-Total"] = str(total_filtro) if total_filtro is not None else ("" if em_partes else str(total))
+    resp.headers["X-Linhas"] = str(total)
+    resp.headers["X-Next-After-Id"] = str(ultimo_id) if em_partes and total == limite else ""
     resp.headers["X-Upload-Id"] = ",".join(str(u) for u in sorted(uploads))
     resp.headers["X-Gerado-Em"] = gerado_em
     resp.headers["X-UO"] = uo

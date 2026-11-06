@@ -186,3 +186,43 @@ def test_est_emp_export_bate_com_meta(http):
     assert len(linhas) - 1 == meta["total"] == int(r.headers["X-Total"])
     assert linhas[0][0].startswith("Exerc")
     assert r.headers["X-UO"] == "seduc"
+
+
+def test_export_em_partes_csv(http):
+    c, h = http
+    base = f"/api/v1/dados/plan51/export?exercicio={EX}&limit=2"
+    r1 = c.get(base, headers=h)
+    l1 = _csv(r1)
+    assert r1.status_code == 200 and len(l1) - 1 == 2 == int(r1.headers["X-Linhas"])
+    assert r1.headers["X-Total"] == "3", "total do filtro vem na 1ª parte"
+    nxt = r1.headers["X-Next-After-Id"]
+    assert nxt.isdigit()
+    r2 = c.get(base + f"&after_id={nxt}", headers=h)
+    l2 = _csv(r2)
+    assert len(l2) - 1 == 1 and r2.headers["X-Next-After-Id"] == "" and r2.headers["X-Total"] == ""
+    assert l1[0] == l2[0], "cada parte traz o cabeçalho"
+    i = l1[0].index("VALOR SUPL")
+    assert [x[i] for x in l1[1:] + l2[1:]] == ["10.50", "", "1.00"], "partes seguem a ordem e não repetem"
+    assert r1.headers["X-Upload-Id"] == str(UPLOAD)
+
+
+def test_export_em_partes_termina_com_lote_exato(http):
+    c, h = http
+    r = c.get(f"/api/v1/dados/plan51/export?exercicio={EX}&limit=3", headers=h)
+    nxt = r.headers["X-Next-After-Id"]
+    assert len(_csv(r)) - 1 == 3 and nxt, "lote cheio: o cliente ainda confere a próxima parte"
+    r = c.get(f"/api/v1/dados/plan51/export?exercicio={EX}&limit=3&after_id={nxt}", headers=h)
+    assert len(_csv(r)) == 1 and r.headers["X-Linhas"] == "0" and r.headers["X-Next-After-Id"] == ""
+
+
+def test_export_em_partes_json_e_parametros(http):
+    c, h = http
+    j = c.get(f"/api/v1/dados/plan51/export?exercicio={EX}&formato=json&limit=2", headers=h).get_json()
+    assert j["linhas"] == 2 and j["total"] == 3 and j["next_after_id"]
+    assert c.get(f"/api/v1/dados/plan51/export?exercicio={EX}&after_id=1", headers=h).status_code == 400
+    assert c.get("/api/v1/dados/plan51/export?limit=0", headers=h).status_code == 400
+    assert c.get("/api/v1/dados/plan51/export?limit=x", headers=h).status_code == 400
+    assert c.get("/api/v1/dados/plan51/export?limit=5&after_id=-1", headers=h).status_code == 400
+    # sem limit continua entregando tudo de uma vez
+    r = c.get(f"/api/v1/dados/plan51/export?exercicio={EX}", headers=h)
+    assert r.headers["X-Total"] == "3" and r.headers["X-Next-After-Id"] == ""
