@@ -1610,6 +1610,491 @@
     });
   }
 
+  // ---- Área UENs > SAGE > Notas SEE (partials/notas_see.html) ----
+  function initNotasSee() {
+    const root = document.getElementById("see-page");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+    const catalogSelect = document.getElementById("see-catalog-select");
+    const catalogForm = document.getElementById("see-catalog-form");
+    const productForm = document.getElementById("see-product-form");
+    const productsWrap = document.getElementById("see-products-wrap");
+    const productsBody = document.getElementById("see-products-body");
+    const processForm = document.getElementById("see-process-form");
+    const processCatalogId = document.getElementById("see-process-catalog-id");
+    const processCatalogSelect = document.getElementById("see-process-catalog-select");
+    const processCatalogInfo = document.getElementById("see-process-catalog-info");
+    const folderInput = document.getElementById("see-folder-input");
+    const filesInput = document.getElementById("see-files-input");
+    const submit = document.getElementById("see-process-submit");
+    const catalogMsg = document.getElementById("see-catalog-msg");
+    const processMsg = document.getElementById("see-process-msg");
+    const progressCard = document.getElementById("see-progress-card");
+    const appendChoice = document.getElementById("see-append-choice");
+    const processingMeta = document.getElementById("see-processing-meta");
+    const seeGrid = root.querySelector(".see-grid");
+    const uploadCard = processForm.closest(".see-card");
+    if (seeGrid && uploadCard && progressCard) {
+      const processColumn = document.createElement("div");
+      processColumn.className = "see-process-column";
+      seeGrid.insertBefore(processColumn, uploadCard);
+      processColumn.append(uploadCard, progressCard);
+    }
+    let catalogs = [];
+    let jobId = null;
+    let pollTimer = null;
+    let lastProcessing = null;
+    let watchingJobId = null;
+    const historyCatalog = document.getElementById("see-history-catalog");
+    const historyExercicio = document.getElementById("see-history-exercicio");
+    const catalogLabel = (item) => `${item.exercicio} · ${escapeHtml(item.nome)}`;
+    const historyBody = document.getElementById("see-history-body");
+    const historyMsg = document.getElementById("see-history-msg");
+    const SEE_BATCH_MAX_FILES = 50;
+    const SEE_BATCH_MAX_BYTES = 20 * 1024 * 1024;
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const selectedCatalog = () => catalogs.find((item) => String(item.id) === String(catalogSelect.value));
+    const setMessage = (el, message, error = false) => {
+      if (!el) return;
+      el.textContent = message || "";
+      el.classList.toggle("text-error", error);
+    };
+    const clearVisibleErrors = () => {
+      [catalogMsg, processMsg].forEach((el) => {
+        if (el?.classList.contains("text-error")) setMessage(el, "");
+      });
+    };
+    root.addEventListener("input", clearVisibleErrors);
+    root.addEventListener("change", clearVisibleErrors);
+    root.addEventListener("click", clearVisibleErrors);
+    const requestJson = async (url, options = {}) => {
+      const { headers = {}, ...rest } = options;
+      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+      return data;
+    };
+    const renderProducts = () => {
+      const catalog = selectedCatalog();
+      processCatalogId.value = catalog ? catalog.id : "";
+      processCatalogSelect.value = catalog ? String(catalog.id) : "";
+      processCatalogInfo.textContent = !catalog
+        ? "Escolha o catálogo antes de selecionar os PDFs."
+        : catalog.produtos.length
+          ? `As notas serão conferidas com os ${catalog.produtos.length} produto(s) de "${catalog.nome}" (exercício ${catalog.exercicio}).`
+          : `O catálogo "${catalog.nome}" ainda não tem produtos. Cadastre ao menos um em "Catálogo de produtos" para liberar o envio dos PDFs.`;
+      processCatalogInfo.classList.remove("text-error");
+      [folderInput, filesInput].forEach((input) => {
+        input.disabled = !catalog || !catalog.produtos.length;
+        input.closest(".see-upload-option")?.classList.toggle("is-disabled", input.disabled);
+      });
+      document.getElementById("see-catalog-edit").disabled = !catalog;
+      document.getElementById("see-catalog-delete").disabled = !catalog;
+      productsWrap.hidden = !catalog;
+      productForm.hidden = true;
+      productsBody.innerHTML = catalog ? catalog.produtos.map((product) => `
+        <tr>
+          <td>${escapeHtml(product.codigo)}</td><td>${escapeHtml(product.nome)}</td>
+          <td class="see-row-actions"><button class="icon-btn sm see-product-edit" data-id="${product.id}" title="Editar"><i class="bi bi-pencil"></i></button><button class="icon-btn sm see-product-delete" data-id="${product.id}" title="Remover"><i class="bi bi-trash"></i></button></td>
+        </tr>`).join("") : "";
+      updateSelection();
+    };
+    const loadCatalogs = async (keepId = "") => {
+      const data = await requestJson("/api/notas-see/catalogos");
+      catalogs = data.catalogos || [];
+      const options = catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${catalogLabel(item)} (${item.produtos.length})</option>`).join("");
+      catalogSelect.innerHTML = '<option value="">Selecione</option>' + options;
+      processCatalogSelect.innerHTML = '<option value="">Selecione o catálogo</option>' + options;
+      const exercicioValue = historyExercicio.value;
+      const exercicios = [...new Set(catalogs.filter((item) => item.ativo).map((item) => String(item.exercicio)))].sort().reverse();
+      historyExercicio.innerHTML = '<option value="">Todos os exercícios</option>' + exercicios.map((ano) => `<option value="${ano}">${ano}</option>`).join("");
+      historyExercicio.value = exercicios.includes(exercicioValue) ? exercicioValue : "";
+      renderHistoryCatalogs();
+      if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
+      renderProducts();
+    };
+    const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    function updateSelection() {
+      const files = selectedFiles();
+      const size = files.reduce((total, file) => total + file.size, 0);
+      document.getElementById("see-selection-summary").textContent = files.length
+        ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
+        : "Nenhum PDF selecionado.";
+      const catalog = selectedCatalog();
+      const processingActive = lastProcessing
+        && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
+      const canAppend = lastProcessing
+        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
+        && String(lastProcessing.catalog_id) === String(catalog?.id);
+      // A pergunta só faz sentido quando há novos PDFs para um catálogo que já foi processado.
+      appendChoice.hidden = !canAppend || !files.length;
+    }
+    const resetUploadCard = () => {
+      folderInput.value = "";
+      filesInput.value = "";
+      const defaultMode = processForm.querySelector('input[name="see_append_mode"][value="acrescentar"]');
+      if (defaultMode) defaultMode.checked = true;
+      setMessage(processMsg, "");
+      updateSelection();
+    };
+
+    catalogSelect.addEventListener("change", async () => {
+      renderProducts();
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      jobId = null;
+      lastProcessing = null;
+      progressCard.hidden = true;
+      appendChoice.hidden = true;
+      processingMeta.innerHTML = "";
+      if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
+    });
+    processCatalogSelect.addEventListener("change", () => {
+      catalogSelect.value = processCatalogSelect.value;
+      catalogSelect.dispatchEvent(new Event("change"));
+    });
+    folderInput.addEventListener("click", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("click", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    folderInput.addEventListener("change", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("change", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    document.getElementById("see-catalog-new").addEventListener("click", () => {
+      catalogForm.reset();
+      document.getElementById("see-catalog-id").value = "";
+      document.getElementById("see-catalog-exercicio").value = new Date().getFullYear();
+      catalogForm.hidden = false;
+      document.getElementById("see-catalog-name").focus();
+    });
+    document.getElementById("see-catalog-form-cancel").addEventListener("click", () => { catalogForm.reset(); catalogForm.hidden = true; });
+    document.getElementById("see-catalog-edit").addEventListener("click", () => {
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      document.getElementById("see-catalog-id").value = catalog.id;
+      document.getElementById("see-catalog-name").value = catalog.nome;
+      document.getElementById("see-catalog-exercicio").value = catalog.exercicio || "";
+      document.getElementById("see-catalog-description").value = catalog.descricao || "";
+      catalogForm.hidden = false;
+    });
+    document.getElementById("see-catalog-delete").addEventListener("click", async () => {
+      const catalog = selectedCatalog();
+      if (!catalog || !confirm(`Desativar o catálogo ${catalog.nome}?`)) return;
+      try { await requestJson(`/api/notas-see/catalogos/${catalog.id}`, { method: "DELETE" }); await loadCatalogs(); setMessage(catalogMsg, "Catálogo desativado."); }
+      catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    catalogForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const catalogId = document.getElementById("see-catalog-id").value;
+        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, exercicio: document.getElementById("see-catalog-exercicio").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
+        catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    document.getElementById("see-product-add").addEventListener("click", () => { productForm.reset(); document.getElementById("see-product-id").value = ""; productForm.hidden = false; document.getElementById("see-product-code").focus(); });
+    document.getElementById("see-product-cancel").addEventListener("click", () => { productForm.reset(); productForm.hidden = true; });
+    productForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      const productId = document.getElementById("see-product-id").value;
+      const payload = { codigo: document.getElementById("see-product-code").value, nome: document.getElementById("see-product-name").value };
+      try {
+        await requestJson(productId ? `/api/notas-see/produtos/${productId}` : `/api/notas-see/catalogos/${catalog.id}/produtos`, { method: productId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        productForm.reset(); productForm.hidden = true; await loadCatalogs(catalog.id); setMessage(catalogMsg, "Produto salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    productsBody.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".see-product-edit");
+      const remove = event.target.closest(".see-product-delete");
+      const catalog = selectedCatalog();
+      if (edit && catalog) {
+        const product = catalog.produtos.find((item) => String(item.id) === edit.dataset.id);
+        if (!product) return;
+        document.getElementById("see-product-id").value = product.id;
+        document.getElementById("see-product-code").value = product.codigo;
+        document.getElementById("see-product-name").value = product.nome;
+        productForm.hidden = false;
+      }
+      if (remove && catalog && confirm("Remover este produto do catálogo?")) {
+        try { await requestJson(`/api/notas-see/produtos/${remove.dataset.id}`, { method: "DELETE" }); await loadCatalogs(catalog.id); }
+        catch (error) { setMessage(catalogMsg, error.message, true); }
+      }
+    });
+
+    const renderStatus = (data) => {
+      lastProcessing = data;
+      progressCard.hidden = false;
+      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
+      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
+      document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
+      document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
+      document.getElementById("see-stat-success").textContent = data.success;
+      document.getElementById("see-stat-warning").textContent = data.warnings;
+      document.getElementById("see-stat-error").textContent = data.errors;
+      document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
+      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
+      document.getElementById("see-download").hidden = !data.download_ready;
+      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
+      const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
+      const updateSummary = data.initial_count
+        ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
+        : `<span><strong>${data.total ?? 0}</strong>Total do processamento</span>`;
+      const ignoredSummary = data.ignored_count
+        ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
+        : "";
+      processingMeta.innerHTML = `
+        <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
+        <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
+        <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
+        ${updateSummary}
+        ${ignoredSummary}`;
+      updateSelection();
+    };
+    const poll = async () => {
+      if (!jobId) return;
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
+        renderStatus(data);
+        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
+          pollTimer = setTimeout(poll, 1000);
+        } else if (String(watchingJobId) === String(data.id)) {
+          // Concluiu um processamento iniciado nesta tela: limpa o envio e avisa o usuário.
+          watchingJobId = null;
+          resetUploadCard();
+          openDoneModal(data);
+          loadHistory();
+        } else {
+          updateSelection();
+        }
+      } catch (error) { setMessage(processMsg, error.message, true); }
+    };
+    const openDoneModal = (data) => {
+      document.getElementById("see-done-overlay")?.remove();
+      const success = ["finalizado", "finalizado_com_alertas"].includes(data.status);
+      const title = success
+        ? `Catálogo "${data.catalog_name}" processado com sucesso!`
+        : data.status === "cancelado"
+          ? `Processamento do catálogo "${data.catalog_name}" cancelado.`
+          : `Falha no processamento do catálogo "${data.catalog_name}".`;
+      const note = data.status === "finalizado_com_alertas"
+        ? `<p class="see-done-note">Há notas com alertas ou erros. Confira a aba "Ocorrências" da planilha.</p>`
+        : !success ? `<p class="see-done-note">${escapeHtml(data.message || "")}</p>` : "";
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "see-done-overlay";
+      overlay.innerHTML = `
+        <div class="modal-card see-done-modal" role="dialog" aria-modal="true" aria-labelledby="see-done-title">
+          <div class="modal-header">
+            <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+            <div class="modal-header-text">
+              <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+              <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="modal-title" id="see-done-title">${escapeHtml(title)}</div>
+            <div class="see-done-summary">
+              <span><strong>${data.processed}/${data.total}</strong>Notas processadas</span>
+              <span><strong>${data.success}</strong>Sem alertas</span>
+              <span><strong>${data.warnings}</strong>Com alertas</span>
+              <span><strong>${data.errors}</strong>Com erros</span>
+              ${data.ignored_count ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>` : ""}
+              <span><strong>${data.duration ? `${data.duration.toFixed(1)}s` : "-"}</strong>Duração</span>
+            </div>
+            ${note}
+          </div>
+          <div class="see-done-footer">
+            ${data.download_ready ? '<button type="button" class="btn sm" data-see-done="download"><i class="bi bi-download"></i>Baixar Excel</button>' : ""}
+            <button type="button" class="btn btn-primary sm" data-see-done="close">Fechar</button>
+          </div>
+        </div>`;
+      const close = () => {
+        document.removeEventListener("keydown", onKeyDown, true);
+        overlay.remove();
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      const onKeyDown = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(); } };
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
+      overlay.querySelector('[data-see-done="close"]').addEventListener("click", close);
+      overlay.querySelector('[data-see-done="download"]')?.addEventListener("click", () => downloadJob(data.id));
+      document.addEventListener("keydown", onKeyDown, true);
+      document.body.appendChild(overlay);
+      overlay.querySelector('[data-see-done="close"]').focus();
+    };
+    function renderHistoryCatalogs() {
+      // O filtro de catálogo mostra só os catálogos ativos do exercício escolhido.
+      const current = historyCatalog.value;
+      const options = catalogs.filter((item) => item.ativo && (!historyExercicio.value || String(item.exercicio) === historyExercicio.value));
+      historyCatalog.innerHTML = '<option value="">Todos os catálogos</option>' + options.map((item) => `<option value="${item.id}">${catalogLabel(item)}</option>`).join("");
+      historyCatalog.value = options.some((item) => String(item.id) === current) ? current : "";
+    }
+    const loadHistory = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (historyExercicio.value) params.set("exercicio", historyExercicio.value);
+        if (historyCatalog.value) params.set("catalogo_id", historyCatalog.value);
+        const query = params.toString() ? `?${params}` : "";
+        const data = await requestJson(`/api/notas-see/processamentos/historico${query}`);
+        const items = data.processamentos || [];
+        historyBody.innerHTML = items.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.exercicio ?? "-")}</td>
+            <td>${escapeHtml(item.catalog_name)}</td>
+            <td>${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString("pt-BR") : "-")}</td>
+            <td>${escapeHtml(item.executed_by || "-")}</td>
+            <td>${item.total}</td>
+            <td>${item.warnings}</td>
+            <td>${item.errors}</td>
+            <td class="see-row-actions"><button class="btn sm see-history-download" type="button" data-id="${item.id}"><i class="bi bi-download"></i>Baixar</button></td>
+          </tr>`).join("");
+        setMessage(historyMsg, items.length ? "" : "Nenhum processamento concluído.");
+      } catch (error) { setMessage(historyMsg, error.message, true); }
+    };
+    historyCatalog.addEventListener("change", loadHistory);
+    historyExercicio.addEventListener("change", () => {
+      renderHistoryCatalogs();
+      loadHistory();
+    });
+    historyBody.addEventListener("click", (event) => {
+      const button = event.target.closest(".see-history-download");
+      if (button) downloadJob(button.dataset.id);
+    });
+    const restoreLastProcessing = async (catalogId) => {
+      if (!catalogId) return;
+      const requestedCatalogId = String(catalogId);
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
+        if (String(catalogSelect.value) !== requestedCatalogId) return;
+        if (!data.job_id) return;
+        jobId = data.job_id;
+        await poll();
+      } catch (error) {
+        setMessage(processMsg, error.message, true);
+      }
+    };
+    processForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!processForm.reportValidity() || submit.disabled) return;
+      submit.disabled = true; setMessage(processMsg, "Preparando envio...");
+      let uploadJobId = null;
+      try {
+        const files = selectedFiles();
+        const createData = new FormData();
+        createData.append("catalogo_id", catalogSelect.value);
+        const appendMode = appendChoice.hidden
+          ? "novo"
+          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
+        createData.append("append_mode", appendMode);
+        if (appendMode === "acrescentar" && lastProcessing?.id) createData.append("base_job_id", lastProcessing.id);
+        const created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData });
+        uploadJobId = created.job_id;
+
+        // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
+        const batches = [];
+        let current = [];
+        let currentSize = 0;
+        files.forEach((file) => {
+          if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) {
+            batches.push(current);
+            current = [];
+            currentSize = 0;
+          }
+          current.push(file);
+          currentSize += file.size;
+        });
+        if (current.length) batches.push(current);
+        const accepted = [];
+        const ignored = [];
+        let sent = 0;
+        for (const batch of batches) {
+          setMessage(processMsg, `Enviando PDFs: ${sent} de ${files.length} (${Math.round((sent / files.length) * 100)}%)...`);
+          const batchData = new FormData();
+          batch.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
+          const result = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/arquivos`, { method: "POST", body: batchData });
+          accepted.push(...(result.accepted || []));
+          ignored.push(...(result.ignored || []));
+          sent += batch.length;
+        }
+        setMessage(processMsg, "Iniciando processamento...");
+        const data = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/iniciar`, { method: "POST" });
+        uploadJobId = null;
+        data.accepted = accepted;
+        data.ignored = ignored;
+        jobId = data.job_id;
+        watchingJobId = data.job_id;
+        setMessage(processMsg, data.message);
+        progressCard.hidden = false;
+        renderStatus({
+          id: data.job_id,
+          status: "na_fila",
+          message: data.message || "Processamento colocado na fila.",
+          progress: 0,
+          processed: 0,
+          total: data.total || selectedFiles().length,
+          success: 0,
+          warnings: 0,
+          errors: 0,
+          duration: 0,
+          files: [
+            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
+            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+          ],
+          catalog_id: Number(catalogSelect.value),
+          catalog_name: selectedCatalog()?.nome,
+          executed_by: lastProcessing?.executed_by,
+          created_at: new Date().toISOString(),
+          initial_count: data.initial || 0,
+          added_count: data.added || selectedFiles().length,
+          ignored_count: data.ignored_count || 0,
+        });
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        poll();
+      } catch (error) {
+        // Envio interrompido: descarta o processamento parcial para não deixá-lo pendente.
+        if (uploadJobId) {
+          requestJson(`/api/notas-see/processamentos/${uploadJobId}/cancelar`, { method: "POST" }).catch(() => {});
+        }
+        setMessage(processMsg, error.message, true);
+        submit.disabled = false;
+      }
+    });
+    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
+    async function downloadJob(id) {
+      if (!id) return;
+      const url = `/api/notas-see/processamentos/${id}/download`;
+      if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
+      try {
+        const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
+        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${id}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        const writable = await handle.createWritable();
+        await writable.write(await response.blob());
+        await writable.close();
+      } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
+    }
+    document.getElementById("see-download").addEventListener("click", () => downloadJob(jobId));
+    loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
+    loadHistory();
+  }
+
   function initPlan51() {
     const form = document.getElementById("form-plan51");
     if (!form) return;
@@ -16295,6 +16780,9 @@
     }
     if (route === "atualizar/plan51") {
       initPlan51();
+    }
+    if (route === "area-uens/sage/notas-see") {
+      initNotasSee();
     }
     if (route === "atualizar/ped") {
       initPed();

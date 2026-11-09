@@ -1083,3 +1083,57 @@ Script `db/indices_upload_id_ativo.sql` (com desfazer). Aplicados com `ALGORITHM
 - A tabela `emp` tem 1,14 mi de linhas inativas (histórico): a Limpeza de Histórico reduziria o tamanho e o custo de qualquer varredura.
 - Conferir no log após o deploy: `grep "path=/partial/dashboard" <log> | tail -5` (o `elapsed_ms` deve cair de ~30000 para poucos milhares).
 
+## 28. Notas SEE (Área UENs > SAGE) (2026-11-09)
+
+Funcionalidade portada da branch `dev/cleber` **sem merge**: código reescrito no padrão desta base (blueprint próprio, importação tardia do pdfplumber, permissões pelo Painel). Nada de dados do dev foi trazido (catálogos e produtos nascem vazios).
+
+### 28.1 O que faz
+Lê DANFEs em PDF, extrai nº da DANFE, DRE, escola e a **quantidade de cada produto de um catálogo** (por exercício) e gera um Excel consolidado (aba *Planilha Consolidada* com cores e legenda de conferência, *Dados_Extraídos* e *Auditoria_Arquivos*). Dois layouts de fornecedor: Somos (escola/DRE/COD nas Informações Complementares) e Athos (escola = destinatário, DRE em linha própria, sem código). A quantidade é montada pela distância ao código do produto na linha (`_row_around`, tolerância 1,5 pt) e conferida: quantidade x valor unitário deve bater com o total da linha, senão `QUANTIDADE_INCONSISTENTE`.
+
+### 28.2 Arquivos
+- `rotas/notas_see_routes.py` (blueprint `notas_see_bp`): catálogo/produtos, envio em lotes, iniciar, status, último, histórico, cancelar, download e `_run_see_processamento` (o que o worker executa).
+- `services/see_notes.py` (extração e Excel; `pdfplumber` é importado **dentro** de `extract_pdf`) e `services/see_escolas.py` (cadastro e identificação da escola).
+- `worker.py --kind see` (novo tipo; chama `_run_see_processamento`, que grava status e falha nas tabelas `see_*`). `scripts/importar_escolas_see.py`.
+- Tela: `templates/partials/notas_see.html`, `initNotasSee` em `static/js/main.js`, estilos `.see-*` no fim de `static/css/style.css` (definem `--accent-rgb` e `.see-page [hidden]`).
+- Menu **Área UENs > SAGE > Notas SEE**; feature `area-uens/sage/notas-see` (grupo SAGE só visual, como o *Planejamento* dos painéis). **Só o admin (nível 1) acessa**: aparece no Painel de permissões para liberar aos demais perfis depois.
+- `requirements.txt`: `pdfplumber==0.11.7` (traz `pdfminer.six`, `Pillow`, `pypdfium2`).
+
+### 28.3 Fluxo de envio (limite de 1000 partes do Werkzeug)
+`POST /api/notas-see/processamentos` (cria, status `enviando`; modo *acrescentar* copia as notas do processamento anterior) -> `POST .../<id>/arquivos` (lotes de até 50 arquivos ou 20 MB; duplicados por SHA-256 também entre lotes; não-PDF e conteúdo sem `%PDF` são ignorados e listados) -> `POST .../<id>/iniciar` (status `na_fila`, dispara o worker). Envio interrompido ou sem arquivos válidos: `descartado` e os PDFs são apagados. Sem a biblioteca pdfplumber, `iniciar` responde **503** com mensagem clara e o resto do sistema segue normal (no dev o `import` no topo derrubava o app inteiro).
+
+### 28.4 Banco
+- Oito tabelas `see_*`. **Já existiam, vazias, desde 02/10/2026** (criadas por uma versão antiga do modelo), e `db.create_all()` não altera tabela existente. `db/notas_see_schema.sql` (aplicado em 09/11/2026, tabelas vazias, conferido antes): coluna `see_catalogos.exercicio`, unicidade `uq_see_catalogo_exercicio_nome (exercicio, nome)` no lugar de `nome`, e índices `ix_see_processamentos_catalogo_status`, `ix_see_proc_arq_proc_sha`, `ix_see_ocorr_proc_codigo`. Os demais já têm índice nas colunas de ligação (chaves estrangeiras).
+- Aprendizado: o primeiro `ALTER` deu *Lock wait timeout* porque a própria sessão da ferramenta havia feito `SELECT COUNT(*)` nessas tabelas e ainda segurava o lock de metadados. Antes de DDL: `db.session.rollback()`/`close()`.
+- Cadastro de escolas: `scripts/importar_escolas_see.py` rodado com a aba `2026` de `C:\workspace\Planilhas\Antigos\RELATÓRIO_2023_A_2026 MATRÍCULAS_2026.05.12==2026.08.24.xlsx` -> **643 registros** (630 escolas + 13 códigos de DRE). Reimportar a cada ano; o que sair da planilha fica inativo (não é apagado).
+
+### 28.5 Verificação com as 641 DANFEs reais do 3º bimestre/2026
+Extração + identificação de escola em todas as notas, com catálogo sintético de 40 códigos: **0 falhas, 8.814 itens, 551 códigos conferidos na nota, 79 preenchidos pelo cadastro, 11 notas com alerta** (9 `ESCOLA_SUGESTAO`, 1 `ESCOLA_NAO_ENCONTRADA`, 1 `ESCOLA_MUNICIPIO_DRE_INCONSISTENTE`) — **idêntico ao resultado documentado no dev**. Tempo: **177 s para 641 PDFs (0,28 s por PDF)** no computador de desenvolvimento; no servidor compartilhado deve ser maior (medir no primeiro uso).
+
+**Investigação dos 11 alertas (09/11/2026): nenhum é falha de leitura; todos são dados da própria nota** (DANFEs 439xx/440xx, layout Athos, sem código de escola):
+- 9 `ESCOLA_SUGESTAO`: o destinatário vem sem o título que o cadastro tem (PROFESSORA, DESEMBARGADOR, PREFEITO, VEREADOR...) ou com variação (sobrenome a mais em 44024; grafia CAVALCANTI/CAVALCANTE em 44031). A sugestão do sistema estava correta nos 9.
+- 44021 (EE POXOREO): a nota traz o município GUARANTÃ DO NORTE, mas a escola e a DRE são de Poxoréu/Primavera do Leste (erro do fornecedor) -> `ESCOLA_MUNICIPIO_DRE_INCONSISTENTE`.
+- 44001 (EE SAGRADO CORAÇÃO DE JESUS, CNPJ 02.042.787/0001-80, município DENISE): o cadastro não tem essa escola em Denise (existe em Sapezal, na mesma DRE) -> `ESCOLA_NAO_ENCONTRADA`; conferir o cadastro de matrículas ou a nota.
+- **Decisão: não alterar a regra.** Os alertas são erros de digitação do fornecedor e **devem** ser vistos pelo fiscal; o aviso na planilha já cumpre o papel. Mantida a regra herdada do dev: nome apenas parecido nunca preenche, só sugere. Ideias descartadas por ora: ignorar título na comparação, fallback por DRE e tabela de apelidos confirmados.
+
+### 28.6 Testes (`tests/test_notas_see.py`, 16)
+Cadastro DRE/Escola (código válido, DRE divergente, sem código só com uma escola de mesmo nome, nome parecido = sugestão, inativa), Excel (abas, cores, legenda), PDFs reais (`SEE_PDFS_DIR`; pulados se a pasta não existir), fluxo de lotes/duplicados/descarte/503 e um **processamento completo** (3 PDFs reais -> Excel -> PDFs apagados). Usam o catálogo descartável do exercício 2099 e removem tudo ao final.
+
+### 28.7 Decisões e cuidados
+- **PDFs apagados ao concluir** (`_see_limpar_pdfs`): ficam o Excel e os dados extraídos. O *acrescentar* herda as linhas já extraídas e não relê PDFs; o cron de limpeza só varre `.xlsx`. Para manter: `SEE_MANTER_PDFS=1`.
+- *Acrescentar* ainda cria uma versão nova com **cópia completa** das notas anteriores (no dev: 19 versões no 2º bimestre, ~86% duplicado). Mantido igual; limpeza de versões antigas fica para depois.
+- Não há tela de cadastro DRE/Escola (decisão herdada do dev: aguardar o cadastro de matrículas do outro projeto).
+- Sem filtro de UO: é uma funcionalidade da SEDUC (escolas), independente das UOs de execução.
+
+- **Código do produto só com dígitos**: o cadastro (criar/editar) remove tudo que não é número (`936.360` -> `936360`) e a extração compara só dígitos. Antes, um código com ponto nunca casava com o da nota e saía "produto não encontrado" sem erro.
+- **Ordem dos produtos** (`_see_produto_ordem`, em `rotas/notas_see_routes.py`): alunos (`_al`) antes de professores (`_pr`); em cada grupo, reg, eja, esp e art; em cada tipo, pela série numérica (1º, 2º... 12º). Nomes fora do padrão `série_tipo_al/pr` vão ao fim, por código. Vale para a lista do catálogo, para as colunas da aba *Planilha Consolidada* e para a aba *Catálogo_Produtos* do Excel (planilhas antigas não mudam; reprocessar).
+- **Catálogo vazio**: o aviso "ainda não tem produtos..." é neutro (não é erro) e os botões de envio ficam desabilitados até haver um produto; a rota de envio também recusa catálogo sem produtos ativos.
+- **Catálogo do 3º bimestre/2026 importado** do dev em 09/11/2026 (33 produtos ativos, códigos só com dígitos) para o catálogo "3º Bimistres 2026" (id 13). Teste real: 27 notas, 0 alertas, 0 erros, 26 s.
+- **Layout (menu expandido/recolhido)**: seletor de catálogo e botões Novo/Editar/Desativar empilhados (`.see-catalog-pick`, botões com quebra de linha) e quadros de números do Processamento em `auto-fit` (`.see-stats`), para não passarem da margem do card. `?v=` de `main.js`/`style.css` trocado para `20261109.notas-see.1`.
+
+### 28.8 Deploy (checklist)
+1. `pip install -r requirements.txt` no Python do cPanel (instala `pdfplumber`, `pdfminer.six`, `Pillow`, `pypdfium2`); conferir `python -c "import pdfplumber"` **antes** de usar a tela.
+2. Os ajustes de banco (`db/notas_see_schema.sql`) e a carga das escolas **já foram aplicados** no banco de produção (compartilhado com o local); em outro banco, rodar o SQL e o importador.
+3. Update from Remote + Deploy HEAD + Restart. Trocar o `?v=` de `main.js`/`style.css`.
+4. Painel de permissões: liberar *SAGE - Notas SEE* aos perfis desejados (por enquanto só admin).
+5. Primeiro uso: cadastrar o catálogo (exercício + produtos), enviar uma pasta pequena e conferir 5 a 10 notas contra o PDF. Fornecedor com layout novo: processar amostra antes de confiar em DRE/escola.
+
