@@ -132,6 +132,15 @@ FEATURES = [
             {"id": "paineis-dashboards/teto-orcamentario", "nome": "Teto Orçamentário"},
         ],
     },
+    {
+        # Área UENs > SAGE > Notas SEE. O grupo "SAGE" é só visual no menu (base.html), como o
+        # "Planejamento" dos painéis: o id fica em dois níveis para o Painel de permissões.
+        "id": "area-uens",
+        "nome": "Área UENs",
+        "children": [
+            {"id": "area-uens/sage/notas-see", "nome": "SAGE - Notas SEE"},
+        ],
+    },
 ]
 
 

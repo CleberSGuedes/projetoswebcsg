@@ -129,7 +129,7 @@ def _commit_upload_filename(model_cls, upload_id: int, output_filename: str | No
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Background worker for heavy uploads.")
-    parser.add_argument("--kind", choices=["emp", "nob"], required=True)
+    parser.add_argument("--kind", choices=["emp", "nob", "see"], required=True)
     parser.add_argument("--upload-id", type=int, required=True)
     return parser.parse_args()
 
@@ -179,6 +179,12 @@ def _run_nob(upload_id: int) -> None:
 def main() -> int:
     args = _parse_args()
     app = create_app()
+    if args.kind == "see":
+        # Notas SEE: o próprio processamento grava status/falha nas tabelas see_*.
+        from rotas.notas_see_routes import _run_see_processamento
+
+        _run_see_processamento(app, args.upload_id)
+        return 0
     with app.app_context():
         try:
             clear_cancel_flag(args.kind, args.upload_id)
