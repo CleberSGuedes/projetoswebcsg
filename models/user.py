@@ -105,6 +105,8 @@ class Plan20Upload(db.Model):
 
 class Fip613Registro(db.Model):
     __tablename__ = "fip613"
+    # índices criados por db/indices_upload_id_ativo.sql (create_all não altera tabela existente)
+    __table_args__ = (db.Index("ix_fip613_upload_id", "upload_id"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     upload_id = db.Column(db.BigInteger, nullable=True)
@@ -260,6 +262,8 @@ class PedUpload(db.Model):
 
 class PedRegistro(db.Model):
     __tablename__ = "ped"
+    # índices criados por db/indices_upload_id_ativo.sql (create_all não altera tabela existente)
+    __table_args__ = (db.Index("ix_ped_upload_id", "upload_id"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     upload_id = db.Column(db.BigInteger, nullable=True)
@@ -370,6 +374,8 @@ class EmpStatusDiario(db.Model):
 
 class EmpRegistro(db.Model):
     __tablename__ = "emp"
+    # índices criados por db/indices_upload_id_ativo.sql (create_all não altera tabela existente)
+    __table_args__ = (db.Index("ix_emp_upload_id", "upload_id"),db.Index("ix_emp_ativo", "ativo"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     upload_id = db.Column(db.BigInteger, nullable=True)
@@ -438,6 +444,8 @@ class EstEmpUpload(db.Model):
 
 class EstEmpRegistro(db.Model):
     __tablename__ = "est_emp"
+    # índices criados por db/indices_upload_id_ativo.sql (create_all não altera tabela existente)
+    __table_args__ = (db.Index("ix_est_emp_upload_id", "upload_id"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     upload_id = db.Column(db.BigInteger, nullable=True)
@@ -486,6 +494,8 @@ class NobUpload(db.Model):
 
 class NobRegistro(db.Model):
     __tablename__ = "nob"
+    # índices criados por db/indices_upload_id_ativo.sql (create_all não altera tabela existente)
+    __table_args__ = (db.Index("ix_nob_upload_id", "upload_id"),db.Index("ix_nob_ativo", "ativo"),)
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     upload_id = db.Column(db.BigInteger, nullable=True)

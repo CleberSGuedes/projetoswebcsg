@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 import os
+import time
 from io import BytesIO
 import json
 import unicodedata
@@ -592,6 +593,59 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
     return None
 
 
+# UO de cada carga (tabela, upload_id): não muda depois de gravada, então fica em memória.
+_UO_CARGA_CACHE: dict[tuple[str, int], str] = {}
+# Cargas sem linhas (ex.: removidas pela Limpeza de Histórico) só são reconsultadas
+# depois deste tempo: a consulta varre a tabela inteira e as linhas podem ainda estar
+# sendo gravadas por uma carga em andamento.
+_UO_CARGA_SEM_LINHAS: dict[tuple[str, int], float] = {}
+_UO_CARGA_SEM_LINHAS_TTL_S = 120.0
+
+
+def _uos_das_cargas(tabela: str, upload_ids) -> dict[int, str]:
+    """UO de várias cargas numa única ida ao banco, com cache em memória.
+
+    Cada carga é um `SELECT ... LIMIT 1` (UNION ALL), que com o índice em
+    `upload_id` (db/indices_upload_id_ativo.sql) para na primeira linha da carga.
+    Sem o índice a consulta varre a tabela inteira (~0,7 s na EMP com 1,2 mi de
+    linhas): o painel fazia uma por carga (até 50) e levava ~30 s para abrir.
+    O que já foi descoberto não é consultado de novo. Carga sem linhas (ex.:
+    removidas pela Limpeza de Histórico) fica de fora do resultado e só é
+    reconsultada depois de um prazo, porque as linhas podem ainda estar sendo
+    gravadas."""
+    ids = sorted({int(i) for i in upload_ids})
+    achadas = {i: _UO_CARGA_CACHE[(tabela, i)] for i in ids if (tabela, i) in _UO_CARGA_CACHE}
+    agora = time.monotonic()
+    faltam = [
+        i
+        for i in ids
+        if i not in achadas and agora - _UO_CARGA_SEM_LINHAS.get((tabela, i), -1e9) >= _UO_CARGA_SEM_LINHAS_TTL_S
+    ]
+    if not faltam:
+        return achadas
+    try:
+        rows = db.session.execute(
+            text(
+                " UNION ALL ".join(
+                    f"(SELECT upload_id, uo FROM {tabela} WHERE upload_id = {i} AND uo IS NOT NULL LIMIT 1)"
+                    for i in faltam
+                )
+            )
+        ).all()
+    except Exception:
+        _safe_session_rollback()
+        return achadas
+    for upload_id, valor in rows:
+        uo = uo_codigo(valor)
+        if uo:
+            achadas[int(upload_id)] = uo
+            _UO_CARGA_CACHE[(tabela, int(upload_id))] = uo
+    for i in faltam:
+        if i not in achadas:
+            _UO_CARGA_SEM_LINHAS[(tabela, i)] = agora
+    return achadas
+
+
 def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
     attempts = attempts or int(os.getenv("DB_RETRY_ATTEMPTS", "4"))
     backoff_s = backoff_s if backoff_s is not None else float(os.getenv("DB_RETRY_BACKOFF", "0.35"))
@@ -914,20 +968,6 @@ def partial_dashboard():
             chave, {"ped_dotacao": [], "ped_linhas": [], "emp_dotacao": [], "emp_linhas": []}
         )
 
-    def _uo_da_carga(tabela, upload_id):
-        """UO de uma carga sem UO gravada no status, lida das linhas que ela
-        inseriu. Sem linhas (ex.: removidas pela Limpeza de Histórico), vale a
-        secretaria."""
-        try:
-            valor = db.session.execute(
-                text(f"SELECT uo FROM {tabela} WHERE upload_id = :id AND uo IS NOT NULL LIMIT 1"),
-                {"id": upload_id},
-            ).scalar()
-        except Exception:
-            _safe_session_rollback()
-            return ""
-        return uo_codigo(valor)
-
     for uo_sessao, dados_sessao in (session.get("ped_avisos_uo") or {}).items():
         aviso = _aviso_uo(uo_sessao)
         aviso["ped_dotacao"] = list((dados_sessao or {}).get("dotacao") or [])
@@ -960,11 +1000,20 @@ def partial_dashboard():
         uploads_emp = _fetch_scalars_all_with_retry(
             select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(50)
         )
+        status_por_carga: dict[int, dict] = {}
         for upload_emp in uploads_emp:
             status_data = read_status("emp", upload_emp.id) or {}
             if "planejamento_missing_lines" not in status_data and "dotacao_missing_keys" not in status_data:
                 continue  # carga que falhou ou ainda não chegou nessa etapa
-            uo_emp = uo_codigo(status_data.get("uo")) or _uo_da_carga("emp", upload_emp.id) or uo_padrao_aviso
+            status_por_carga[upload_emp.id] = status_data
+        uos_das_cargas = _uos_das_cargas(
+            "emp", [i for i, st in status_por_carga.items() if not uo_codigo(st.get("uo"))]
+        )
+        for upload_emp in uploads_emp:
+            status_data = status_por_carga.get(upload_emp.id)
+            if status_data is None:
+                continue
+            uo_emp = uo_codigo(status_data.get("uo")) or uos_das_cargas.get(upload_emp.id) or uo_padrao_aviso
             if uo_emp in vistas_emp:
                 continue
             vistas_emp.add(uo_emp)

@@ -1043,3 +1043,43 @@ Os valores saem como estão no banco (o Excel de FIP613 inverte o sinal de algum
 - **Testes do script:** `node tests/apps_script/teste_gs.js` simula os serviços do Apps Script (planilha, UrlFetch, Properties, Lock, gatilhos, relógio) e cobre cascata em várias execuções, ordem, conferência de dados, nenhuma baixa sem carga nova, só o relatório alterado, carga mudando no meio, falha isolada, aba temporária apagada e ciclo em andamento. **Não foi executado no Google**: limites reais (tempo de gravação por lote, cota diária de gatilhos, 10 milhões de células) dependem de teste na conta da SEDUC.
 - **Limites conhecidos:** durante a carga a aba temporária e a final somam o dobro de células (limite de 10 milhões por planilha): usar `exercicio=2026` na EMP e na NOB.
 
+## 27. Painel inicial lento (menus sem carregar) e índices nas tabelas de relatório (2026-11-09)
+
+### 27.1 Sintoma e causa
+- **Sintoma:** ao logar, os menus não carregavam. No log, `/partial/dashboard` levava **28 a 33 s** em todos os acessos (as consultas individuais somavam milissegundos) e `/api/permissoes/current` chegou a 4,7 s. Cada reabertura da tela disparava outro painel de 30 s e as requisições se acumulavam.
+- **Causa:** o trecho dos avisos da EMP (`partial_dashboard`, entre `ped_dotacao_missing` e `pendentes_raw`) chamava, para cada uma das 50 últimas cargas, `SELECT uo FROM emp WHERE upload_id = :id AND uo IS NOT NULL LIMIT 1` (`_uo_da_carga`, do ajuste das novas UOs de 04/11). A tabela `emp` tem 1,2 mi de linhas (só 60 mil ativas) e **só tinha a chave primária**: cada consulta varria a tabela (~0,7 s). 50 x 0,7 s = ~30 s. Reproduzido localmente: 32,3 s.
+
+### 27.2 Correção no código (`rotas/home_routes.py`)
+- `_uos_das_cargas(tabela, upload_ids)` substitui `_uo_da_carga`: uma ida ao banco para todas as cargas (`UNION ALL` de `SELECT ... LIMIT 1`, que com o índice para na primeira linha da carga) e **cache em memória** do que já foi descoberto (a UO de uma carga não muda). Carga sem linhas (removidas pela Limpeza de Histórico) não entra no cache e só é reconsultada após 120 s (`_UO_CARGA_SEM_LINHAS_TTL_S`), porque as linhas podem ainda estar sendo gravadas.
+- O laço do EMP no painel lê os status das cargas primeiro e consulta a UO só das que não têm `uo` no status.
+- **Lição de medição:** a primeira versão agrupava (`GROUP BY upload_id`, ótima sem índice: 1,1 s) e ficou **pior com o índice** (3,65 s, lê todas as linhas de cada carga). A versão final (`LIMIT 1` por carga) leva 0,03 s com o índice. **Ela depende do índice**: em ambiente sem ele (homologação, dev) o painel continua lento até criar os índices.
+- Testes: `tests/test_dashboard_uo_carga.py` (4).
+
+### 27.3 Índices criados no banco de produção (autorizados pelo usuário, 09/11/2026)
+Script `db/indices_upload_id_ativo.sql` (com desfazer). Aplicados com `ALGORITHM=INPLACE, LOCK=NONE` e `lock_wait_timeout=60`:
+
+| Tabela | Índices | Tempo |
+|---|---|---|
+| `est_emp` | `ix_est_emp_upload_id` | **300 s** (ver abaixo) |
+| `ped`, `fip613` | `ix_<t>_upload_id` | 0,3 s cada |
+| `emp` (1,2 mi, 3,5 GB) | `ix_emp_upload_id`, `ix_emp_ativo` | 4 s e 3 s |
+| `nob` (1,5 mi, 3,8 GB) | `ix_nob_upload_id`, `ix_nob_ativo` | 5 s e 4 s |
+
+- `plan51` já tinha `ix_plan51_upload_id` e `ix_plan51_exercicio_ativo`. `ativo` só foi indexado em `emp` e `nob` (só ~5% das linhas ativas; os relatórios filtram `ativo = 1`). Nas demais não compensa.
+- **Episódio:** o índice da `est_emp` (86 MB) levou 300 s contra 0,3 s de `ped` e `fip613`. Provável espera por trava de metadados (outra consulta/transação usando a tabela); nesse tipo de espera, consultas novas podem ficar enfileiradas. Não foi identificado impacto, mas por isso as tabelas grandes foram feitas com aviso prévio aos usuários, uma por vez e com `lock_wait_timeout`.
+- Os modelos (`EmpRegistro`, `NobRegistro`, `EstEmpRegistro`, `PedRegistro`, `Fip613Registro`) declaram os índices em `__table_args__` só para documentar o esquema: **`db.create_all()` não altera tabela já existente**. Em outro banco (homologação, dev) é preciso rodar o SQL.
+
+### 27.4 Medições (do desenvolvimento, banco remoto)
+| Consulta | Antes | Depois |
+|---|---|---|
+| UO das 50 cargas da EMP (painel) | 32,3 s | 0,03 s |
+| contar linhas de uma carga (`upload_id`) | 0,7 a 0,8 s | 0,03 s |
+| contar linhas ativas (`ativo = 1`) | 0,8 a 0,9 s | 0,03 s |
+| API `/meta` EMP e NOB | 1,2 a 1,4 s | 0,5 a 0,6 s |
+| API `/export` completo EMP e NOB | 7,4 a 8,4 s | 4,1 s |
+
+### 27.5 Observações (não alteradas)
+- `_fetch_all_with_retry` chama `db.engine.dispose()` a cada falha: com vários painéis concorrentes isso derruba conexões de outras requisições (no log apareceu `DB fetch retry 1/4 failed: tuple index out of range`). Candidato a ajuste futuro.
+- A tabela `emp` tem 1,14 mi de linhas inativas (histórico): a Limpeza de Histórico reduziria o tamanho e o custo de qualquer varredura.
+- Conferir no log após o deploy: `grep "path=/partial/dashboard" <log> | tail -5` (o `elapsed_ms` deve cair de ~30000 para poucos milhares).
+
