@@ -1231,3 +1231,21 @@ Tudo nesta seção foi feito e testado no ambiente de **homologação** (banco `
 3. Reverter a liberação temporária da 26101 (26.1) antes de qualquer sincronização com a `main`.
 4. A coluna `uo` nas regras de chave e o cadastro de UO com "usa chave" (26.2) só serão feitos quando alguma UO nova tiver chave.
 5. **Regra de trabalho confirmada nesta sessão:** commit e push só com autorização explícita do usuário para aquele conjunto de mudanças; a autorização de um não vale para o seguinte.
+
+## 32. Integração do layout novo, da homologação e da dev/cleber na main (2026-11-10)
+
+Plano e decisões: `docs/plano_migracao_branches.md`. Feito na branch temporária `integracao/layout-novo` (merge de `origin/homologacao` e depois de `origin/dev/cleber`; tags de backup `backup/*-2026-11-10` no GitHub). A dev/jean fica para o fim, sem entrar na main.
+
+### 32.1 Veio da homologação / dev/cleber
+Layout novo (casca, cores de destaque, temas claro/escuro/automático, responsivo, `login-theme.js`), **menu gerado de `services/features.py`** (`templates/_menu.html`, `MENU_META`; nomes e posições novos: Administrar SPO, Emitir/Ajustar Dotação, grupos Planejamento/Execução), Personalizar SPO, Governança e Resultados, PTA 2027, **permissão por usuário** (`usuario_permissoes`, painel novo), jobs com cancelar/reprocessar (`processamento_jobs`) para PED, EST EMP e FIP 613, rótulo de ambiente (`APP_ENV_LABEL`, vazio em produção), `scripts/atualizar_schema_sync_main.py`, **Receita Anexo 10** e `fiplan_file_reader`. O que é novo fica **só para o admin** (nível 1) até ser liberado no Painel - Permissões.
+
+### 32.2 Mantido da main (não substituído)
+PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados + Google Planilhas, painel inicial rápido (`_uos_das_cargas`) e índices (`db/indices_upload_id_ativo.sql`), **Notas SEE em blueprint próprio** (`rotas/notas_see_routes.py`, DRE/Escola, catálogo por exercício; as versões antigas dentro do `home_routes.py` e do `main.js` foram removidas), modelos `see_*` da main, atalho do admin e `.cpanel.yml` simples.
+
+### 32.3 Decisões e cuidados da integração
+- **Atalho do admin (nível 1)** mantido: `has_permission`, `require_feature` e `_permissoes_with_parents` (admin recebe todas as funcionalidades, inclusive as novas ainda não marcadas). `has_permission` filtra `ativo = 1`.
+- **UO 26101**: a liberação temporária da homologação (`services/uo.py`) **foi revertida**; produção continua só com a SEDUC (seção 22).
+- `scripts/deploy_cpanel.sh` (rsync `--delete` sem excluir `upload/`, `outputs/`) e o `.cpanel.yml` da homologação **não vieram**; o `CLAUDE.md` da dev/cleber também não.
+- Conflitos resolvidos: `home_routes.py` (jobs/avisos por UO da homologação + versão rápida do dashboard da main), `worker.py` (`--kind` fip613/ped/est_emp/receita_anexo10/see), `features.py` (PLAN 51 e Receita Anexo 10 no menu novo), `base.html` (release da main no rodapé novo; `?v=` novo), relatórios (cabeçalho novo), `claude.md` (seções da homologação renumeradas para 30 e 31).
+- Visual conferido em Chrome headless com o servidor local (admin e perfil SAGE): Início, Notas SEE, PLAN 51 (atualizar e relatório), Painel de permissões, Relatório EMP.
+- Correção visual: quadro de totais do relatório PLAN 51 (valores em bilhões) cresce em vez de quebrar os números.
