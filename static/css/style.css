@@ -666,15 +666,15 @@ body.special-context-focus .main {
 }
 .theme-dark .menu-admin-spo > .submenu,
 .theme-dark .menu-admin-spo.open > .submenu {
-  border-left-color: rgba(139, 225, 255, 0.42);
+  border-left-color: rgba(var(--accent-rgb), 0.42);
 }
 .theme-dark .menu-admin-spo .submenu .menu-item:hover {
-  background: rgba(82, 177, 210, 0.13);
-  border-color: rgba(139, 225, 255, 0.34);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.34);
 }
 .theme-dark .menu-admin-spo .submenu .menu-item.active {
-  background: rgba(82, 177, 210, 0.16);
-  border-color: rgba(139, 225, 255, 0.48);
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: rgba(var(--accent-rgb), 0.48);
 }
 .theme-dark .subtitle { color: var(--accent); text-shadow: 0 1px 0 rgba(255,255,255,0.45); }
 .theme-dark input,
