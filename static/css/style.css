@@ -20,19 +20,19 @@
   --spo-layout-page-gutter: 24px;
   --spo-layout-panel-gap: 24px;
   --spo-operational-min-width: 560px;
-  --color-50: #f0f7ff;
-  --color-100: #d9ecff;
-  --color-200: #99c1f1;
-  --color-300: #62a0ea;
-  --color-400: #3584e4;
-  --color-500: #1c71d8;
-  --color-600: #1a5fb4;
-  --color-700: #1a4f91;
-  --color-800: #173f73;
-  --color-900: #12345c;
+  --color-50: #eefaf8;
+  --color-100: #d7f1eb;
+  --color-200: #a9e0d2;
+  --color-300: #5fc3aa;
+  --color-400: #1f9b7e;
+  --color-500: #0f7c68;
+  --color-600: #0d6154;
+  --color-700: #0b4c44;
+  --color-800: #083b36;
+  --color-900: #062b28;
 
-  --accent-rgb: 53, 132, 228;
-  --accent-soft-rgb: 153, 193, 241;
+  --accent-rgb: 15, 124, 104;
+  --accent-soft-rgb: 127, 207, 187;
   --bg: #f6f5f4;
   --surface: #ffffff;
   --border: #deddda;
@@ -57,17 +57,17 @@
 }
 
 .theme-dark {
-  --accent-rgb: 120, 174, 237;
-  --accent-soft-rgb: 53, 132, 228;
+  --accent-rgb: 61, 214, 183;
+  --accent-soft-rgb: 15, 124, 104;
   --bg: #1e1e1e;
   --surface: #242424;
   --border: #3d3d3d;
   --text: #f6f5f4;
   --muted: #c0bfbc;
   --card: #242424;
-  --accent: #78aeed;
-  --accent-strong: #99c1f1;
-  --lab-accent: #78aeed;
+  --accent: #3dd6b7;
+  --accent-strong: #22b58f;
+  --lab-accent: #3dd6b7;
   --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
   --body-bg: linear-gradient(180deg, #1e1e1e, #1e1e1e);
   --sidebar-bg: rgba(36,36,36,0.92);

@@ -1,5 +1,6 @@
 (function () {
   const palettes = {
+    classic: { light: ["#0f7c68", "#1f9b7e", "15, 124, 104", "127, 207, 187", "#0d6154"], dark: ["#3dd6b7", "#22b58f", "61, 214, 183", "15, 124, 104", "#1f9b7e"] },
     blue: { light: ["#1c71d8", "#3584e4", "53, 132, 228", "153, 193, 241", "#1a5fb4"], dark: ["#78aeed", "#99c1f1", "120, 174, 237", "53, 132, 228", "#3584e4"] },
     teal: { light: ["#15828e", "#2190a4", "33, 144, 164", "147, 221, 223", "#0e6f7d"], dark: ["#6ed4de", "#93dddf", "110, 212, 222", "33, 144, 164", "#2190a4"] },
     green: { light: ["#009879", "#25a98e", "0, 152, 121", "150, 221, 203", "#007f68"], dark: ["#42dfc0", "#6ee7cf", "66, 223, 192", "0, 152, 121", "#25a98e"] },
@@ -13,14 +14,14 @@
   const systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themePreference = localStorage.getItem("app-theme") || "auto";
   const dark = themePreference === "dark" || (themePreference === "auto" && systemDark);
-  const storedAccent = localStorage.getItem("app-accent") || "blue";
+  const storedAccent = localStorage.getItem("app-accent") || "classic";
   const accent = storedAccent === "spo" ? "green" : storedAccent;
-  const palette = palettes[accent] || palettes.blue;
+  const palette = palettes[accent] || palettes.classic;
   const values = dark ? palette.dark : palette.light;
 
   body.classList.toggle("theme-dark", dark);
   body.dataset.themePreference = themePreference;
-  body.dataset.accentPreference = palettes[accent] ? accent : "blue";
+  body.dataset.accentPreference = palettes[accent] ? accent : "classic";
   body.style.setProperty("--accent", values[0]);
   body.style.setProperty("--accent-strong", values[1]);
   body.style.setProperty("--lab-accent", values[1]);

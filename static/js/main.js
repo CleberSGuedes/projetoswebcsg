@@ -261,7 +261,28 @@
       ],
     },
   });
+  // Cor de destaque padrão no primeiro acesso: a do layout antigo, para reduzir o impacto da troca de visual.
+  const DEFAULT_ACCENT = "classic";
   const ACCENT_COLORS = {
+    classic: {
+      label: "Clássico (padrão SPO)",
+      // Cor do layout antigo (verde-azulado): accent = #0f7c68, destaque forte = #1f9b7e; escuro = #3dd6b7.
+      vars: {
+        "--color-50": "#eefaf8",
+        "--color-100": "#d7f1eb",
+        "--color-200": "#a9e0d2",
+        "--color-300": "#5fc3aa",
+        "--color-400": "#1f9b7e",
+        "--color-500": "#0f7c68",
+        "--color-600": "#0d6154",
+        "--color-700": "#0b4c44",
+        "--color-800": "#083b36",
+        "--color-900": "#062b28",
+        "--accent-rgb": "15, 124, 104",
+        "--accent-soft-rgb": "127, 207, 187",
+      },
+      dark: { "--accent": "#3dd6b7", "--accent-strong": "#22b58f", "--lab-accent": "#3dd6b7", "--accent-rgb": "61, 214, 183" },
+    },
     blue: {
       label: "Azul",
       vars: {
@@ -299,7 +320,7 @@
       dark: { "--accent": "#6ed4de", "--accent-strong": "#93dddf", "--lab-accent": "#6ed4de", "--accent-rgb": "110, 212, 222" },
     },
     green: {
-      label: "Verde padrão SPO",
+      label: "Verde",
       vars: {
         "--color-50": "#e9f8f4",
         "--color-100": "#ccefe6",
@@ -512,9 +533,9 @@
   }
 
   function getStoredAccent() {
-    const saved = localStorage.getItem("app-accent") || "blue";
+    const saved = localStorage.getItem("app-accent") || DEFAULT_ACCENT;
     if (saved === "spo") return "green";
-    return ACCENT_COLORS[saved] ? saved : "blue";
+    return ACCENT_COLORS[saved] ? saved : DEFAULT_ACCENT;
   }
 
   function clampColorChannel(value) {
@@ -614,7 +635,7 @@
   });
 
   function applyAccentColor(accent, persist = true) {
-    const key = ACCENT_COLORS[accent] ? accent : "blue";
+    const key = ACCENT_COLORS[accent] ? accent : DEFAULT_ACCENT;
     const palette = ACCENT_COLORS[key];
     const root = document.documentElement;
     const targets = [root, document.body].filter(Boolean);
@@ -2004,14 +2025,14 @@
     });
     panel.querySelectorAll("[data-accent-choice]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        applyAccentColor(btn.dataset.accentChoice || "blue");
+        applyAccentColor(btn.dataset.accentChoice || DEFAULT_ACCENT);
         syncThemeControls(panel);
       });
     });
     const reset = document.getElementById("spo-theme-reset");
     if (reset) {
       reset.addEventListener("click", () => {
-        applyAccentColor("blue");
+        applyAccentColor(DEFAULT_ACCENT);
         applyTheme("auto");
         localStorage.removeItem(COMMON_VISUAL_STORAGE_KEY);
         applyCommonVisualPreferences(COMMON_VISUAL_DEFAULTS, false);
