@@ -7524,3 +7524,12 @@ html.spo-split-pressure .governanca-grid {
 .see-done-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 @media (max-width: 980px) { .see-grid { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { .see-history-filters,.see-upload-options,.see-product-grid,.see-processing-meta { grid-template-columns: 1fr; } .see-stats { grid-template-columns: repeat(2,1fr); } .see-header > i { display:none; } }
+
+/* Menu "Administrar SPO": o item pai também ganha destaque ao passar o mouse, como os demais.
+   (As regras .menu-admin-spo > .menu-parent deixam fundo e borda transparentes e anulavam o :hover.) */
+.menu-admin-spo > .menu-parent:hover,
+.theme-dark .menu-admin-spo > .menu-parent:hover {
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: var(--border);
+}
