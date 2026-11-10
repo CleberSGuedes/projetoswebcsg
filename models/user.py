@@ -57,6 +57,17 @@ class ActiveSession(db.Model):
     last_activity = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
 
+class ConfiguracaoSistema(db.Model):
+    """Parametros do sistema editaveis pelo Admin (chave/valor)."""
+
+    __tablename__ = "configuracoes_sistema"
+
+    chave = db.Column(db.String(80), primary_key=True)
+    valor = db.Column(db.String(255), nullable=False)
+    atualizado_em = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    atualizado_por = db.Column(db.String(255), nullable=True)
+
+
 class PerfilPermissao(db.Model):
     __tablename__ = "perfil_permissoes"
 

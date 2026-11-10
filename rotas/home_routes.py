@@ -120,6 +120,8 @@ from services.features import (
     normalize_feature_list,
 )
 from services.fip613_runner import run_fip613, UPLOAD_DIR
+from services import session_config
+from services.session_config import get_session_timeout
 from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
 from services.execucao_uo import cond_uo_em, sql_uo_em
 from services.uo import UOS_EXECUCAO_LIBERADAS, UOS_SEDUC, UORecusada, uo_codigo, uo_label
@@ -998,10 +1000,11 @@ def partial_dashboard():
                 )
         except Exception:
             pass
-    can_view_sessions = nivel_int in (1, 2)
+    # Card Status da Início: controlado pela permissão "dashboard/card-status" (Painel de Permissões).
+    can_view_sessions = has_permission("dashboard/card-status")
     active_sessions = []
     if can_view_sessions:
-        cutoff = datetime.utcnow() - timedelta(hours=2)
+        cutoff = datetime.utcnow() - get_session_timeout()
         try:
             t0 = datetime.utcnow()
             rows = _fetch_all_with_retry(
@@ -2401,6 +2404,33 @@ def partial_atualizar_contrato_visual_protegido():
         mostrar_temas=False,
         mostrar_contrato=True,
     )
+
+
+@home_bp.route("/partial/atualizar/seguranca-sessao")
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def partial_atualizar_seguranca_sessao():
+    return render_template("partials/atualizar_seguranca_sessao.html", info=session_config.get_info())
+
+
+@home_bp.route("/api/configuracoes/sessao", methods=["GET", "POST"])
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def api_configuracoes_sessao():
+    if request.method == "GET":
+        return jsonify(session_config.get_info())
+    data = request.get_json(silent=True) or {}
+    try:
+        session_config.set_timeout_minutos(
+            data.get("minutos"), (getattr(g, "user", None) or {}).get("email")
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.error("Falha ao gravar tempo de sessao", exc_info=True)
+        return jsonify({"error": "Falha ao gravar a configuração."}), 500
+    return jsonify({"ok": True, **session_config.get_info()})
 
 
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")

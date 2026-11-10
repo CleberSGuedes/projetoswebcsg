@@ -28,7 +28,16 @@ def normalize_feature_list(features):
 
 
 FEATURES = [
-    {"id": "dashboard", "nome": "Início", "locked": True, "children": []},
+    {
+        "id": "dashboard",
+        "nome": "Início",
+        "locked": True,
+        # Cards da tela inicial: liberados no Painel de Permissões, mas fora do menu ("menu": False).
+        # O card "Bem-vindo" é fixo (sem permissão). Novo card = nova linha aqui + bloco no dashboard.html.
+        "children": [
+            {"id": "dashboard/card-status", "nome": "Card Status (usuários logados)", "menu": False},
+        ],
+    },
     {
         "id": "atualizar",
         "nome": "Administrar SPO",
@@ -37,6 +46,7 @@ FEATURES = [
                 {"id": "atualizar/personalizar-spo/temas", "nome": "Personalizar Temas SPO"},
                 {"id": "atualizar/personalizar-spo/contrato-visual-protegido", "nome": "Contrato Visual Protegido"},
             ]),
+            {"id": "atualizar/seguranca-sessao", "nome": "Sessão e Login"},
             _group("grupo/governanca-resultados", "Governança e Resultados", [
                 {"id": "atualizar/governanca-resultados/mapa", "nome": "Mapa Conceitual"},
                 {"id": "atualizar/governanca-resultados/programacao-pta2027", "nome": "Programação PTA 2027"},
@@ -194,6 +204,7 @@ MENU_META = {
     "grupo/personalizar-spo": {"icon": "palette"},
     "atualizar/personalizar-spo/temas": {"icon": "brush"},
     "atualizar/personalizar-spo/contrato-visual-protegido": {"icon": "shield-lock"},
+    "atualizar/seguranca-sessao": {"icon": "clock-history"},
     "grupo/governanca-resultados": {"icon": "compass"},
     "atualizar/governanca-resultados/mapa": {"icon": "diagram-3"},
     "atualizar/governanca-resultados/programacao-pta2027": {"icon": "map"},
@@ -305,6 +316,7 @@ def build_menu_tree(features=None):
     items = deepcopy(FEATURES if features is None else features)
 
     def enrich(nodes):
+        nodes[:] = [node for node in nodes if node.get("menu", True)]
         for node in nodes:
             meta = MENU_META.get(node["id"], {})
             node.update(meta)

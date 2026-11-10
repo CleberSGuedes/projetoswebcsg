@@ -1253,3 +1253,42 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 - **Seletor de cores em degradê** a partir do Clássico: Clássico, Ciano, Azul, Roxo, Vermelho, Laranja, Amarelo, Verde (fecha o círculo, o Verde termina ao lado do Clássico). E o trilho vertical do submenu "Administrar SPO" no tema escuro era um ciano fixo (`rgba(139,225,255,..)`, mais hover/ativo `82,177,210`) que ignorava a cor escolhida; agora usa `--accent-rgb`, como no tema claro.
 - **"Administrar SPO" sem destaque ao passar o mouse**: as regras `.menu-admin-spo > .menu-parent` (fundo e borda transparentes, mesma especificidade do `.menu-item:hover` e declaradas depois) anulavam o `:hover` só desse item. Acrescentada regra de hover (claro e escuro) no fim do `style.css`.
 - Correção visual: quadro de totais do relatório PLAN 51 (valores em bilhões) cresce em vez de quebrar os números.
+
+## 33. Tempo de inatividade configurável e sessão derrubada por login em outro local (2026-11-10)
+
+### 33.1 Situação anterior
+- O prazo de 2 horas estava fixo em dois lugares (`app.py` e `rotas/auth_routes.py`) e ainda em `home_routes.py` (lista de sessões ativas do painel).
+- Login forçado em outro local troca o token em `active_sessions`, mas o navegador antigo só era derrubado quando fazia uma requisição que chegasse ao banco. Casos em que parecia "funcionar normalmente":
+  1. cache de 15 s da verificação (`ACTIVE_SESSION_CHECK_TTL_S`);
+  2. só `loadPage` (troca de página) tratava o 401; as outras ~116 chamadas `fetch` do `main.js` falhavam sem redirecionar;
+  3. telas já carregadas que não chamam o servidor (dashboards, iframe do PTA 2027);
+  4. tolerância a falhas do banco (`keeping cached session`);
+  5. `_ensure_active_session` **recriava** a linha de `active_sessions` com o token do navegador antigo quando ela não existia (por exemplo, após logout em outro local).
+
+### 33.2 Prazo configurável
+- Tabela `configuracoes_sistema` (chave/valor; modelo `ConfiguracaoSistema`; `db/configuracoes_sistema.sql`, e o `db.create_all()` também cria). Chave `sessao_timeout_minutos`; sem linha vale o padrão de **120 min**. Limites: **15 a 720 min** (12 h).
+- `services/session_config.py`: `get_session_timeout()` / `get_timeout_minutos()` com cache de 30 s (outros processos do servidor enxergam a mudança em até 30 s; em falha do banco mantém o último valor), `set_timeout_minutos()` (valida, grava quem/quando alterou), `get_info()`. É a **única fonte** do prazo: `app.py`, `auth_routes.py` (conflito de login) e `home_routes.py` (painel de sessões) usam ela.
+- Datas gravadas em UTC; a tela exibe no horário de Mato Grosso (`America/Cuiaba`, `_formatar_local`).
+- Tela **Administrar SPO > Sessão e Login** (`atualizar/seguranca-sessao`, `templates/partials/atualizar_seguranca_sessao.html`, `initSegurancaSessao` no `main.js`); API `GET/POST /api/configuracoes/sessao` com `require_feature`. Nova funcionalidade: o admin (nível 1) vê sempre; outros perfis só se liberada no Painel de Permissões.
+
+### 33.3 Detecção de sessão encerrada
+- Endpoint `GET /api/sessao/status` (`auth_routes.py`): 200 `{ok, timeout_minutos}` ou 401 `{ok:false, reason}` com `reason` = `outro_local` (token diferente), `expirada` (inatividade), `encerrada` (linha de sessão inexistente) ou `sem_sessao`.
+- No `before_request` (`app.py`), esse caminho (`HEARTBEAT_PATH`) **não usa o cache de 15 s** e **não renova `last_activity`** (a verificação automática não pode contar como atividade, senão a sessão nunca expiraria).
+- `main.js` (`sessionGuard`, no topo): verificação a cada 45 s, ao voltar para a aba e ao focar a janela; e um `window.fetch` global que, ao receber 401 de uma chamada interna, confirma no servidor e redireciona. Redireciona para `/login?motivo=...`, e a tela de login mostra a mensagem (`MOTIVOS_SESSAO`). Falha de rede não derruba o usuário.
+- **Mudança de comportamento:** linha de `active_sessions` inexistente (consulta bem-sucedida) agora **encerra** a sessão em vez de recriá-la. Falha da consulta (`_FETCH_ERROR`) continua mantendo a sessão do cache por tolerância.
+
+### 33.4 Testes e implantação
+- `tests/test_sessao_login.py` (linhas descartáveis em `active_sessions`; não grava em `configuracoes_sistema`).
+- Produção: nenhum SQL obrigatório (a tabela é criada pelo `create_all`; o script é opcional). `?v=` do `base.html` passou para `20261110.layout-novo.2`.
+- Fora do escopo: expirar a sessão enquanto o usuário só olha uma tela parada é feito pela mesma verificação de 45 s (a sessão expirada é detectada em até ~1 min).
+
+## 34. Cards da tela Início controlados pelo Painel de Permissões (2026-11-10)
+- Removido o card "Próximos passos" (`templates/partials/dashboard.html`).
+- **Bem-vindo** é fixo para todos. **Status** (usuários logados) agora é a funcionalidade `dashboard/card-status` ("Card Status (usuários logados)"), filha de "Início" em `services/features.py`: aparece no Painel - Permissões e pode ser liberada por perfil, nível ou usuário (exceção individual). O admin (nível 1) vê sempre. A regra fixa antiga (`nivel in (1, 2)`) saiu; `can_view_sessions` agora é `has_permission("dashboard/card-status")` e o card inteiro some sem a permissão (a consulta de sessões só roda quando há permissão).
+- Itens de catálogo com `"menu": False` não entram no menu (`build_menu_tree` os descarta), só no painel; "Início" continua um item simples.
+- **Card novo no futuro:** acrescentar uma linha em `children` de `dashboard` (`{"id": "dashboard/card-<nome>", "nome": "...", "menu": False}`), proteger o bloco no `dashboard.html` com `has_permission(...)` calculado na rota `partial_dashboard`. Nasce liberado só ao admin.
+- **Para manter o que o nível 2 via antes:** `db/card_status_inicio.sql` (insere `dashboard/card-status` em `nivel_permissoes` para o nível 2; idempotente). Rodar no banco de cada ambiente após o deploy; depois ajustar pelo painel. Sem rodar, só o admin (e quem receber a permissão) vê o card.
+- Rodapé no celular (até 640px): fonte 11px (era 8,8px, ilegível), mais contraste, linha separadora no topo e "(c) 2025-2026 SEDUC-MT" em destaque; alinhado à esquerda, na mesma margem dos cards.
+- Texto do Bem-vindo: resumo curto (2 a 3 linhas no desktop, largura até 140ch, fonte responsiva) do que é o SPO; a frase "Use o menu ao lado..." ficou no fim, em fonte pequena (`.home-welcome-hint`). Para mudar o texto: `templates/partials/dashboard.html`.
+- Layout da Início (`.home-grid`): o Bem-vindo ocupa a largura toda, centralizado, como destaque; os demais cards entram em grade automática abaixo (`minmax(320px, 1fr)`), então 1, 2 ou 3 cards se reorganizam sozinhos.
+- Testes: `tests/test_cards_inicio.py`.

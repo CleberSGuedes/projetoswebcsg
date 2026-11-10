@@ -4,6 +4,7 @@ from .user import (
     LogLogin,
     Perfil,
     ActiveSession,
+    ConfiguracaoSistema,
     PerfilPermissao,
     NivelPermissao,
     UsuarioPermissao,

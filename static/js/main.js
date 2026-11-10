@@ -1,4 +1,61 @@
 ﻿(function () {
+  // --- Guarda de sessão: detecta sessão encerrada (outro login/expiração) sem depender de F5 ---
+  (function sessionGuard() {
+    if (!document.getElementById("content-area") || !document.getElementById("user-meta")) return;
+    const STATUS_URL = "/api/sessao/status";
+    const HEARTBEAT_MS = 45000;
+    const nativeFetch = window.fetch.bind(window);
+    let ended = false;
+    let checking = false;
+
+    function goToLogin(reason) {
+      if (ended) return;
+      ended = true;
+      const motivo = ["outro_local", "expirada", "encerrada"].includes(reason) ? reason : "encerrada";
+      window.location.href = "/login?motivo=" + motivo;
+    }
+
+    async function checkSession() {
+      if (ended || checking) return;
+      checking = true;
+      try {
+        const res = await nativeFetch(STATUS_URL, {
+          headers: { "X-Requested-With": "fetch" },
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (res.status === 401) {
+          const data = await res.json().catch(() => ({}));
+          goToLogin(data.reason);
+        }
+      } catch (err) {
+        // Falha de rede: não derruba o usuário.
+      } finally {
+        checking = false;
+      }
+    }
+
+    // Qualquer chamada interna que volte 401 é confirmada pelo servidor antes de redirecionar.
+    window.fetch = async function (input, init) {
+      const res = await nativeFetch(input, init);
+      if (res.status === 401 && !ended) {
+        try {
+          const target = new URL(typeof input === "string" ? input : input.url, window.location.href);
+          if (target.origin === window.location.origin && target.pathname !== STATUS_URL && target.pathname !== "/login") {
+            checkSession();
+          }
+        } catch (err) { /* ignora */ }
+      }
+      return res;
+    };
+
+    window.setInterval(checkSession, HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkSession();
+    });
+    window.addEventListener("focus", checkSession);
+  })();
+
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
@@ -20454,9 +20511,76 @@
     });
   }
 
+  function initSegurancaSessao() {
+    const form = document.getElementById("form-sessao");
+    if (!form) return;
+    const input = document.getElementById("sessao-minutos");
+    const equivale = document.getElementById("sessao-equivale");
+    const msg = document.getElementById("sessao-msg");
+    const btn = document.getElementById("sessao-salvar");
+    const auditoria = document.getElementById("sessao-auditoria");
+    const min = Number(form.dataset.min);
+    const max = Number(form.dataset.max);
+    const padrao = Number(form.dataset.padrao);
+
+    function formatar(minutos) {
+      if (!Number.isFinite(minutos) || minutos <= 0) return "";
+      const h = Math.floor(minutos / 60);
+      const m = minutos % 60;
+      if (!h) return `${m} minuto(s)`;
+      return m ? `${h} hora(s) e ${m} minuto(s)` : `${h} hora(s)`;
+    }
+    function atualizarEquivale() {
+      equivale.textContent = formatar(Number(input.value));
+    }
+    input.addEventListener("input", atualizarEquivale);
+    atualizarEquivale();
+
+    document.getElementById("sessao-padrao")?.addEventListener("click", () => {
+      input.value = padrao;
+      atualizarEquivale();
+    });
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const minutos = Number(input.value);
+      if (!Number.isInteger(minutos) || minutos < min || minutos > max) {
+        msg.textContent = `Informe um valor entre ${min} e ${max} minutos.`;
+        return;
+      }
+      btn.disabled = true;
+      msg.textContent = "Salvando...";
+      try {
+        const res = await fetch("/api/configuracoes/sessao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify({ minutos }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          msg.textContent = data.error || "Não foi possível salvar.";
+          return;
+        }
+        input.value = data.minutos;
+        atualizarEquivale();
+        msg.textContent = "Salvo. Tempo de inatividade: " + formatar(data.minutos) + ".";
+        if (auditoria && data.atualizado_em) {
+          auditoria.textContent = `Última alteração: ${data.atualizado_em}${data.atualizado_por ? " por " + data.atualizado_por : ""}.`;
+        }
+      } catch (err) {
+        msg.textContent = "Falha de comunicação ao salvar.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
+    }
+    if (route === "atualizar/seguranca-sessao") {
+      initSegurancaSessao();
     }
     if (
       route === "atualizar/personalizar-spo/temas" ||
