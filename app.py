@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from datetime import datetime, timedelta
-import json
 import secrets
 import logging
 import os
@@ -38,19 +37,6 @@ ACTIVE_SESSION_CHECK_TTL_S = max(
 REQUEST_SLOW_MS = max(0, int(os.getenv("REQUEST_SLOW_MS", "800") or "800"))
 _active_sessions_count_cache_lock = threading.Lock()
 _active_sessions_count_cache = {"expires_at": 0.0, "value": 0}
-
-
-def _environment_short_badge(base_label: str, detail: str, port: str, commit: str, dirty: bool) -> str:
-    base = "DEV" if base_label.lower().startswith("integracao dev") else base_label.strip()
-    branch = detail.strip()
-    if "/" in branch:
-        branch = branch.rsplit("/", 1)[-1]
-    branch = branch.replace("-", "/").upper()
-    if branch and dirty:
-        branch = f"{branch}*"
-    port_label = f":{port.lstrip(':')}" if port else ""
-    parts = [part for part in (base.upper(), branch, port_label, commit.upper()) if part]
-    return " - ".join(parts)
 
 
 def _setup_logging(app: Flask) -> None:
@@ -274,70 +260,6 @@ def create_app():
             db.engine.url.host,
             db.engine.url.database,
         )
-
-
-    @app.context_processor
-    def inject_spo_environment():
-        base_label = (os.getenv("SPO_ENV_LABEL") or "Integracao DEV Jean").strip()
-        detail = (os.getenv("SPO_ENV_DETAIL") or "").strip()
-        port = (os.getenv("SPO_INSTANCE_PORT") or "").strip()
-        commit = (os.getenv("SPO_ENV_GIT_COMMIT") or "").strip()
-        dirty = (os.getenv("SPO_ENV_GIT_DIRTY") or "").strip() in {"1", "true", "sim", "yes"}
-        upstream = (os.getenv("SPO_ENV_GIT_UPSTREAM") or "").strip()
-        checkpoint = (os.getenv("SPO_ENV_GIT_CHECKPOINT") or "").strip()
-        delta_summary = (os.getenv("SPO_ENV_GIT_DELTA_SUMMARY") or "").strip()
-        front_status_raw = (os.getenv("SPO_ENV_GIT_FRONT_STATUS") or "").strip()
-        git_title = (os.getenv("SPO_ENV_GIT_TITLE") or "").strip()
-        front_status = []
-        if front_status_raw:
-            try:
-                parsed_status = json.loads(front_status_raw)
-                if isinstance(parsed_status, dict):
-                    front_status = [parsed_status]
-                elif isinstance(parsed_status, list):
-                    front_status = [item for item in parsed_status if isinstance(item, dict)]
-            except Exception:
-                front_status = []
-        parts = [base_label]
-        if detail:
-            parts.append(f"{detail}{'*' if dirty else ''}")
-        if port:
-            parts.append(f":{port}")
-        if commit:
-            parts.append(commit)
-        badge = " · ".join(parts)
-        title_parts = [f"Ambiente ativo: {badge}"]
-        if git_title:
-            title_parts.append(git_title)
-        else:
-            if upstream:
-                title_parts.append(f"Remoto: {upstream}")
-            if checkpoint:
-                title_parts.append(f"Checkpoint: {checkpoint}")
-            if dirty:
-                title_parts.append("Worktree com alteracoes locais")
-        return {
-            "spo_environment_badge": badge,
-            "spo_environment_badge_short": _environment_short_badge(
-                base_label,
-                detail,
-                port,
-                commit,
-                dirty,
-            ),
-            "spo_environment_title": " | ".join(title_parts),
-            "spo_environment_git": {
-                "label": base_label,
-                "branch": detail,
-                "port": port,
-                "commit": commit,
-                "dirty": dirty,
-                "upstream": upstream,
-                "checkpoint": checkpoint,
-                "delta_summary": delta_summary,
-                "front_status": front_status,
-            },
-        }
 
 
     @app.errorhandler(Exception)
