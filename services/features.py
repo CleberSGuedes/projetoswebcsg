@@ -28,7 +28,16 @@ def normalize_feature_list(features):
 
 
 FEATURES = [
-    {"id": "dashboard", "nome": "Início", "locked": True, "children": []},
+    {
+        "id": "dashboard",
+        "nome": "Início",
+        "locked": True,
+        # Cards da tela inicial: liberados no Painel de Permissões, mas fora do menu ("menu": False).
+        # O card "Bem-vindo" é fixo (sem permissão). Novo card = nova linha aqui + bloco no dashboard.html.
+        "children": [
+            {"id": "dashboard/card-status", "nome": "Card Status (usuários logados)", "menu": False},
+        ],
+    },
     {
         "id": "atualizar",
         "nome": "Administrar SPO",
@@ -37,6 +46,7 @@ FEATURES = [
                 {"id": "atualizar/personalizar-spo/temas", "nome": "Personalizar Temas SPO"},
                 {"id": "atualizar/personalizar-spo/contrato-visual-protegido", "nome": "Contrato Visual Protegido"},
             ]),
+            {"id": "atualizar/seguranca-sessao", "nome": "Sessão e Login"},
             _group("grupo/governanca-resultados", "Governança e Resultados", [
                 {"id": "atualizar/governanca-resultados/mapa", "nome": "Mapa Conceitual"},
                 {"id": "atualizar/governanca-resultados/programacao-pta2027", "nome": "Programação PTA 2027"},
@@ -77,6 +87,7 @@ FEATURES = [
                 {"id": "atualizar/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "atualizar/est-emp", "nome": "EST EMP"},
                 {"id": "atualizar/nob", "nome": "NOB"},
+                {"id": "atualizar/plan51", "nome": "PLAN 51"},
                 {"id": "atualizar/limpeza-historico", "nome": "Limpeza de Histórico"},
             ]),
         ],
@@ -105,7 +116,7 @@ FEATURES = [
         "nome": "Relatórios",
         "children": [
             _group("grupo/relatorios-planejamento", "Planejamento", [
-                {"id": "relatorios/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+                {"id": "relatorios/plan20-seduc", "nome": "PLAN20"},
                 {"id": "relatorios/plan21-nger", "nome": "PLAN21_NGER"},
                 _group("grupo/relatorios-estrutura", "Estrutura do Planejamento", [
                     {"id": "relatorios/estrutura-planejamento", "nome": "Consultar Estrutura"},
@@ -117,6 +128,7 @@ FEATURES = [
                 {"id": "relatorios/emp", "nome": "EMP"},
                 {"id": "relatorios/est-emp", "nome": "EST EMP"},
                 {"id": "relatorios/nob", "nome": "NOB"},
+                {"id": "relatorios/plan51", "nome": "PLAN 51"},
                 {"id": "relatorios/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "relatorios/dotacao", "nome": "DOTAÇÃO"},
                 {"id": "relatorios/est-dotacao", "nome": "ESTORNO DE DOTAÇÃO"},
@@ -192,6 +204,7 @@ MENU_META = {
     "grupo/personalizar-spo": {"icon": "palette"},
     "atualizar/personalizar-spo/temas": {"icon": "brush"},
     "atualizar/personalizar-spo/contrato-visual-protegido": {"icon": "shield-lock"},
+    "atualizar/seguranca-sessao": {"icon": "clock-history"},
     "grupo/governanca-resultados": {"icon": "compass"},
     "atualizar/governanca-resultados/mapa": {"icon": "diagram-3"},
     "atualizar/governanca-resultados/programacao-pta2027": {"icon": "map"},
@@ -232,6 +245,7 @@ MENU_META = {
     "relatorios/emp": {"icon": "clipboard-data"},
     "relatorios/est-emp": {"icon": "clipboard-check"},
     "relatorios/nob": {"icon": "clipboard-plus"},
+    "relatorios/plan51": {"icon": "file-earmark-bar-graph"},
     "relatorios/receita-anexo10": {"icon": "file-earmark-spreadsheet"},
     "relatorios/dotacao": {"icon": "clipboard-data"},
     "relatorios/est-dotacao": {"icon": "clipboard-minus"},
@@ -267,6 +281,7 @@ MENU_META = {
     "atualizar/receita-anexo10": {"icon": "file-spreadsheet"},
     "atualizar/est-emp": {"icon": "cloud-check"},
     "atualizar/nob": {"icon": "cloud-plus"},
+    "atualizar/plan51": {"icon": "cloud-upload"},
     "atualizar/limpeza-historico": {"icon": "trash3"},
     "area-uens/sage/notas-see": {"icon": "file-earmark-pdf"},
 }
@@ -301,6 +316,7 @@ def build_menu_tree(features=None):
     items = deepcopy(FEATURES if features is None else features)
 
     def enrich(nodes):
+        nodes[:] = [node for node in nodes if node.get("menu", True)]
         for node in nodes:
             meta = MENU_META.get(node["id"], {})
             node.update(meta)

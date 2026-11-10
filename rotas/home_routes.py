@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 import os
+import time
 from io import BytesIO
 import json
 import unicodedata
@@ -24,14 +25,6 @@ from models import (
     PerfilPermissao,
     NivelPermissao,
     UsuarioPermissao,
-    SeeCatalogo,
-    SeeCatalogoProduto,
-    SeeProcessamento,
-    SeeProcessamentoArquivo,
-    SeeItemExtraido,
-    SeeOcorrencia,
-    SeeProcessamentoEvento,
-    SeeEscola,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -126,11 +119,12 @@ from services.features import (
     normalize_feature_id,
     normalize_feature_list,
 )
-from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
-from services.see_escolas import Escola, EscolaIndex, identificar_escola
 from services.fip613_runner import run_fip613, UPLOAD_DIR
-from services.plan20_runner import run_plan20, _uo_key as _plan20_uo_key
-from services.uo import uo_label
+from services import session_config
+from services.session_config import get_session_timeout
+from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
+from services.execucao_uo import cond_uo_em, sql_uo_em
+from services.uo import UOS_EXECUCAO_LIBERADAS, UOS_SEDUC, UORecusada, uo_codigo, uo_label
 from services.teto_seduc import (
     detectar_tipo_relatorio,
     fonte_key,
@@ -163,6 +157,74 @@ from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
 
 home_bp = Blueprint("home", __name__)
+
+# Painéis e relatórios de execução (fip613, ped, emp, nob, est_emp) ficam
+# fixos nas UOs da secretaria: os dados das demais UOs (docs/plano_implementacao
+# _novas_uos.md, D5) não podem ser somados aos da SEDUC. O filtro de UO por
+# tela vem depois.
+SQL_UO_SEDUC = sql_uo_em(UOS_SEDUC)
+SQL_UO_LIBERADAS = sql_uo_em(UOS_EXECUCAO_LIBERADAS)
+
+
+def _uo_seduc(modelo):
+    return cond_uo_em(modelo, UOS_SEDUC)
+
+
+def _uo_liberadas(modelo):
+    """Dados de todas as UOs liberadas: a tela filtra pela coluna UO e abre
+    pre-selecionada na secretaria (`uos_padrao`), sem somar as demais."""
+    return cond_uo_em(modelo, UOS_EXECUCAO_LIBERADAS)
+
+
+def _ultimas_cargas_por_uo(tabela, modelo_upload):
+    """Última carga ativa de cada UO liberada (quem enviou, quando e a data do
+    download), para o painel "Última atualização" dos relatórios. A UO vem das
+    linhas gravadas, pois as tabelas de upload não guardam UO."""
+    try:
+        linhas = db.session.execute(
+            text(f"SELECT uo, MAX(upload_id) FROM {tabela} WHERE ativo = 1 AND {SQL_UO_LIBERADAS} GROUP BY uo")
+        ).fetchall()
+        por_uo: dict[str, int] = {}
+        for uo, upload_id in linhas:
+            codigo = uo_codigo(uo)
+            if codigo and upload_id is not None:
+                por_uo[codigo] = max(por_uo.get(codigo, 0), int(upload_id))
+        if not por_uo:
+            return []
+        uploads = {u.id: u for u in modelo_upload.query.filter(modelo_upload.id.in_(set(por_uo.values()))).all()}
+        out = []
+        for codigo in sorted(por_uo):
+            up = uploads.get(por_uo[codigo])
+            if not up:
+                continue
+            out.append(
+                {
+                    "uo": codigo,
+                    "rotulo": uo_label(codigo),
+                    "user_email": up.user_email,
+                    "uploaded_at": up.uploaded_at.isoformat() if up.uploaded_at else None,
+                    "data_arquivo": up.data_arquivo.isoformat() if up.data_arquivo else None,
+                }
+            )
+        return out
+    except Exception:
+        _safe_session_rollback()
+        return []
+
+
+def _uo_relatorio_download(modelo):
+    """UOs do download (?uo=14101,26101): so as liberadas; sem parametro
+    valido, a secretaria."""
+    param = str(request.args.get("uo", "") or "")
+    codigos = {uo_codigo(v) for v in param.split(",")} & set(UOS_EXECUCAO_LIBERADAS)
+    return cond_uo_em(modelo, codigos) if codigos else _uo_seduc(modelo)
+
+
+def _sql_uo_download():
+    """Mesmo filtro de UO do download (?uo=...), em SQL puro."""
+    param = str(request.args.get("uo", "") or "")
+    codigos = {uo_codigo(v) for v in param.split(",")} & set(UOS_EXECUCAO_LIBERADAS)
+    return sql_uo_em(codigos or UOS_SEDUC)
 
 EMP_UPLOAD_DIR = Path("upload/emp")
 EMP_OUTPUT_DIR = Path("outputs/td_emp")
@@ -315,6 +377,11 @@ def _detect_upload_layouts(file_path: Path) -> set[str]:
         if nob_core and nob_aux:
             detected.add("nob")
 
+        # PLAN 51 (Créditos Adicionais): cabeçalho "TIPO CRÉDITO" com os elementos
+        # suplementado/anulado na mesma linha.
+        if _has(tokens, "TIPO CREDITO") and _has(tokens, "ELEMENTO SUPLEMENTADO") and _has(tokens, "ELEMENTO ANULADO"):
+            detected.add("plan51")
+
         has_exerc = any(t.startswith("EXERC") for t in tokens)
         if not has_exerc:
             # FIP613 costuma não ter "Exercício" no mesmo padrão.
@@ -364,6 +431,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
         "est_emp": {"est_emp", "emp"},
         "nob": {"nob"},
         "plan20": {"plan20"},
+        "plan51": {"plan51"},
     }
     allowed = allowed_sets.get(expected_kind, {expected_kind})
 
@@ -380,6 +448,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
             "nob": "NOB",
             "fip613": "FIP613",
             "plan20": "PLAN20",
+            "plan51": "PLAN51",
         }
         detected_text = ", ".join(display_map.get(k, k.upper()) for k in sorted(detected))
     if len(detected) > 1:
@@ -590,6 +659,59 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
                         pass
                 continue
     return None
+
+
+# UO de cada carga (tabela, upload_id): não muda depois de gravada, então fica em memória.
+_UO_CARGA_CACHE: dict[tuple[str, int], str] = {}
+# Cargas sem linhas (ex.: removidas pela Limpeza de Histórico) só são reconsultadas
+# depois deste tempo: a consulta varre a tabela inteira e as linhas podem ainda estar
+# sendo gravadas por uma carga em andamento.
+_UO_CARGA_SEM_LINHAS: dict[tuple[str, int], float] = {}
+_UO_CARGA_SEM_LINHAS_TTL_S = 120.0
+
+
+def _uos_das_cargas(tabela: str, upload_ids) -> dict[int, str]:
+    """UO de várias cargas numa única ida ao banco, com cache em memória.
+
+    Cada carga é um `SELECT ... LIMIT 1` (UNION ALL), que com o índice em
+    `upload_id` (db/indices_upload_id_ativo.sql) para na primeira linha da carga.
+    Sem o índice a consulta varre a tabela inteira (~0,7 s na EMP com 1,2 mi de
+    linhas): o painel fazia uma por carga (até 50) e levava ~30 s para abrir.
+    O que já foi descoberto não é consultado de novo. Carga sem linhas (ex.:
+    removidas pela Limpeza de Histórico) fica de fora do resultado e só é
+    reconsultada depois de um prazo, porque as linhas podem ainda estar sendo
+    gravadas."""
+    ids = sorted({int(i) for i in upload_ids})
+    achadas = {i: _UO_CARGA_CACHE[(tabela, i)] for i in ids if (tabela, i) in _UO_CARGA_CACHE}
+    agora = time.monotonic()
+    faltam = [
+        i
+        for i in ids
+        if i not in achadas and agora - _UO_CARGA_SEM_LINHAS.get((tabela, i), -1e9) >= _UO_CARGA_SEM_LINHAS_TTL_S
+    ]
+    if not faltam:
+        return achadas
+    try:
+        rows = db.session.execute(
+            text(
+                " UNION ALL ".join(
+                    f"(SELECT upload_id, uo FROM {tabela} WHERE upload_id = {i} AND uo IS NOT NULL LIMIT 1)"
+                    for i in faltam
+                )
+            )
+        ).all()
+    except Exception:
+        _safe_session_rollback()
+        return achadas
+    for upload_id, valor in rows:
+        uo = uo_codigo(valor)
+        if uo:
+            achadas[int(upload_id)] = uo
+            _UO_CARGA_CACHE[(tabela, int(upload_id))] = uo
+    for i in faltam:
+        if i not in achadas:
+            _UO_CARGA_SEM_LINHAS[(tabela, i)] = agora
+    return achadas
 
 
 def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
@@ -878,10 +1000,17 @@ def partial_dashboard():
                 )
         except Exception:
             pass
-    can_view_sessions = nivel_int in (1, 2)
+    # Card Status da Início: controlado pela permissão "dashboard/card-status" (Painel de Permissões).
+    try:
+        can_view_sessions = has_permission("dashboard/card-status")
+    except Exception:
+        # Um card opcional nunca pode derrubar a tela Início (falha de conexao esgotou o retry).
+        db.session.rollback()
+        can_view_sessions = False
+        current_app.logger.warning("card-status: falha ao checar permissao, card oculto", exc_info=True)
     active_sessions = []
     if can_view_sessions:
-        cutoff = datetime.utcnow() - timedelta(hours=2)
+        cutoff = datetime.utcnow() - get_session_timeout()
         try:
             t0 = datetime.utcnow()
             rows = _fetch_all_with_retry(
@@ -920,21 +1049,59 @@ def partial_dashboard():
         except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError):
             _safe_session_rollback()
             active_sessions = []
-    ped_dotacao_missing = session.get("ped_dotacao_missing", [])
-    ped_planejamento_missing_lines = session.get("ped_planejamento_missing_lines", [])
+    # Avisos do modal, por UO: vale a última carga de cada UO (uma carga de outra
+    # UO não apaga nem sobrepõe os avisos da primeira). Cargas antigas, sem UO
+    # gravada, são da secretaria.
+    uo_padrao_aviso = sorted(UOS_SEDUC)[0]
+    avisos_por_uo: dict[str, dict] = {}
+
+    def _uo_da_carga(tabela, upload_id):
+        """UO de uma carga antiga (sem UO gravada no aviso), lida das linhas que
+        ela inseriu. Sem linhas (ex.: removidas pela Limpeza de Histórico), vale
+        a secretaria."""
+        try:
+            valor = db.session.execute(
+                text(f"SELECT uo FROM {tabela} WHERE upload_id = :id AND uo IS NOT NULL LIMIT 1"),
+                {"id": upload_id},
+            ).scalar()
+        except Exception:
+            _safe_session_rollback()
+            return ""
+        return uo_codigo(valor)
+
+    def _aviso_uo(uo):
+        chave = uo_codigo(uo) or uo_padrao_aviso
+        return avisos_por_uo.setdefault(
+            chave, {"ped_dotacao": [], "ped_linhas": [], "emp_dotacao": [], "emp_linhas": []}
+        )
+
     try:
-        last_ped_job = ProcessamentoJob.query.filter_by(tipo="ped").order_by(ProcessamentoJob.id.desc()).first()
-        if last_ped_job and last_ped_job.detalhes_alertas:
-            ped_alerts = json.loads(last_ped_job.detalhes_alertas)
-            ped_dotacao_missing = ped_alerts.get("chaves_dotacao") or ped_dotacao_missing
-            ped_planejamento_missing_lines = ped_alerts.get("linhas_planejamento") or ped_planejamento_missing_lines
+        vistas_ped: set[str] = set()
+        jobs_ped = (
+            ProcessamentoJob.query.filter(
+                ProcessamentoJob.tipo == "ped",
+                ProcessamentoJob.status.in_(["finalizado", "finalizado_com_alertas"]),
+            )
+            .order_by(ProcessamentoJob.id.desc())
+            .limit(50)
+            .all()
+        )
+        for job in jobs_ped:
+            alertas = json.loads(job.detalhes_alertas) if job.detalhes_alertas else {}
+            uo_job = uo_codigo(alertas.get("uo")) or _uo_da_carga("ped", job.upload_id) or uo_padrao_aviso
+            if uo_job in vistas_ped:
+                continue
+            vistas_ped.add(uo_job)
+            aviso = _aviso_uo(uo_job)
+            aviso["ped_dotacao"] = list(alertas.get("chaves_dotacao") or [])
+            aviso["ped_linhas"] = list(alertas.get("linhas_planejamento") or [])
     except Exception:
         _safe_session_rollback()
-    if not ped_dotacao_missing:
+    if not any(a["ped_dotacao"] for a in avisos_por_uo.values()):
         try:
             t2 = datetime.utcnow()
             ped_keys = _fetch_scalars_all_with_retry(
-                select(PedRegistro.chave).where(PedRegistro.ativo == True)  # noqa: E712
+                select(PedRegistro.chave).where(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
             )
             ped_keys = [
                 _normalize_dotacao_key(k)
@@ -948,31 +1115,47 @@ def partial_dashboard():
                 )
                 dotacao_keys = {_normalize_dotacao_key(k[0]) for k in dotacao_keys if k and k[0]}
                 missing = sorted([k for k in ped_keys if k not in dotacao_keys])
-                ped_dotacao_missing = missing
-            _log_timing("ped_dotacao_missing", t2, len(ped_dotacao_missing))
+                if missing:
+                    _aviso_uo(uo_padrao_aviso)["ped_dotacao"] = missing
+            _log_timing("ped_dotacao_missing", t2, len(missing) if ped_keys else 0)
         except Exception:
             _safe_session_rollback()
-            ped_dotacao_missing = []
-    emp_planejamento_missing_lines: list[int] = []
-    emp_dotacao_missing: list[str] = []
     try:
-        last_emp = (
-            _fetch_scalars_all_with_retry(
-                select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(1)
-            )
-            or [None]
-        )[0]
-        if last_emp:
-            status_data = read_status("emp", last_emp.id) or {}
+        vistas_emp: set[str] = set()
+        uploads_emp = _fetch_scalars_all_with_retry(
+            select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(50)
+        )
+        status_por_carga: dict[int, dict] = {}
+        for upload_emp in uploads_emp:
+            status_data = read_status("emp", upload_emp.id) or {}
+            if "planejamento_missing_lines" not in status_data and "dotacao_missing_keys" not in status_data:
+                continue  # carga que falhou ou ainda não chegou nessa etapa
+            status_por_carga[upload_emp.id] = status_data
+        uos_das_cargas = _uos_das_cargas(
+            "emp", [i for i, st in status_por_carga.items() if not uo_codigo(st.get("uo"))]
+        )
+        for upload_emp in uploads_emp:
+            status_data = status_por_carga.get(upload_emp.id)
+            if status_data is None:
+                continue
+            uo_emp = uo_codigo(status_data.get("uo")) or uos_das_cargas.get(upload_emp.id) or uo_padrao_aviso
+            if uo_emp in vistas_emp:
+                continue
+            vistas_emp.add(uo_emp)
+            aviso = _aviso_uo(uo_emp)
             raw_lines = status_data.get("planejamento_missing_lines") or []
             if isinstance(raw_lines, list):
-                emp_planejamento_missing_lines = [int(v) for v in raw_lines if str(v).isdigit()]
+                aviso["emp_linhas"] = [int(v) for v in raw_lines if str(v).isdigit()]
             raw_dot = status_data.get("dotacao_missing_keys") or []
             if isinstance(raw_dot, list):
-                emp_dotacao_missing = [str(v) for v in raw_dot if str(v).strip()]
+                aviso["emp_dotacao"] = [str(v) for v in raw_dot if str(v).strip()]
     except Exception:
-        emp_planejamento_missing_lines = []
-        emp_dotacao_missing = []
+        pass
+    avisos_uo = [
+        {"uo": uo, "rotulo": uo_label(uo), **dados}
+        for uo, dados in sorted(avisos_por_uo.items())
+        if any(dados.values())
+    ]
 
     aprovar_por_nivel2 = ""
     try:
@@ -1206,10 +1389,7 @@ def partial_dashboard():
         "partials/dashboard.html",
         can_view_sessions=can_view_sessions,
         active_sessions=active_sessions,
-        ped_dotacao_missing=ped_dotacao_missing,
-        ped_planejamento_missing_lines=ped_planejamento_missing_lines,
-        emp_planejamento_missing_lines=emp_planejamento_missing_lines,
-        emp_dotacao_missing=emp_dotacao_missing,
+        avisos_uo=avisos_uo,
         dotacoes_aguardando=pendentes,
         estornos_aguardando=estornos_aguardando,
         subacoes_aguardando=subacoes_aguardando,
@@ -1250,7 +1430,31 @@ def _current_usuario_id() -> int | None:
         session["user"] = user_session
         return int(usuario_id)
     return None
+def _db_retry(fn, attempts: int = 3, backoff_s: float = 0.2):
+    """Repete uma consulta que falhou por instabilidade de conexao (ver docs/claude.md, secao 13).
+
+    Logo apos reiniciar o servidor, a primeira consulta numa conexao recem-aberta pode
+    falhar com ResourceClosedError/OperationalError e funciona na tentativa seguinte.
+    """
+    import time as _time
+
+    for idx in range(max(1, attempts)):
+        try:
+            return fn()
+        except (ResourceClosedError, OperationalError, NoSuchColumnError, IndexError):
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            if idx >= attempts - 1:
+                raise
+            _time.sleep(backoff_s * (idx + 1))
+
+
 def has_permission(feature: str) -> bool:
+    # Administrador (nível 1) passa em tudo: telas novas não dependem de marcar no painel.
+    if getattr(g, "user_nivel", None) == 1:
+        return True
     feature = normalize_feature_id(feature)
     equivalent_features = [feature] + [old for old, new in FEATURE_ALIASES.items() if new == feature]
     perfil_id = getattr(g, "user_perfil_id", None)
@@ -1262,13 +1466,15 @@ def has_permission(feature: str) -> bool:
         try:
             overrides = [
                 row[0]
-                for row in db.session.query(UsuarioPermissao.permitido)
-                .filter(
-                    UsuarioPermissao.usuario_id == usuario_id,
-                    UsuarioPermissao.feature.in_(equivalent_features),
-                    UsuarioPermissao.ativo == True,  # noqa: E712
+                for row in _db_retry(
+                    lambda: db.session.query(UsuarioPermissao.permitido)
+                    .filter(
+                        UsuarioPermissao.usuario_id == usuario_id,
+                        UsuarioPermissao.feature.in_(equivalent_features),
+                        UsuarioPermissao.ativo == True,  # noqa: E712
+                    )
+                    .all()
                 )
-                .all()
             ]
             if overrides:
                 return any(bool(item) for item in overrides)
@@ -1276,8 +1482,8 @@ def has_permission(feature: str) -> bool:
             db.session.rollback()
     try:
         if perfil_id:
-            exists = (
-                db.session.query(PerfilPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(PerfilPermissao.id)
                 .filter(
                     PerfilPermissao.perfil_id == perfil_id,
                     PerfilPermissao.feature.in_(equivalent_features),
@@ -1291,8 +1497,8 @@ def has_permission(feature: str) -> bool:
         db.session.rollback()
     try:
         if nivel is not None:
-            exists = (
-                db.session.query(NivelPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(NivelPermissao.id)
                 .filter(
                     NivelPermissao.nivel == nivel,
                     NivelPermissao.feature.in_(equivalent_features),
@@ -1408,7 +1614,9 @@ def _permissoes_with_parents(
     usuario_id: int | None = None,
 ):
     locked = [f["id"] for f in FEATURES if f.get("locked")]
-    parent_map = build_parent_map()
+    if nivel == 1:
+        # Administrador vê todo o menu, inclusive telas novas ainda não marcadas no painel.
+        return list(flatten_features())
     feats = _load_permissoes_perfil(perfil_id) + _load_permissoes_nivel(nivel)
     user_allowed, user_denied = _load_permissoes_usuario(usuario_id)
     feats.extend(user_allowed)
@@ -1427,6 +1635,8 @@ def require_feature(feature_id):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
+            if getattr(g, "user_nivel", None) == 1:
+                return view(*args, **kwargs)
             if has_permission(feature_id):
                 return view(*args, **kwargs)
             abort(403)
@@ -1522,6 +1732,7 @@ API_SCOPE_OPTIONS = [
     {"scope": "dados.ped.read", "label": "PED (somente leitura)"},
     {"scope": "dados.est_emp.read", "label": "EST_EMP (somente leitura)"},
     {"scope": "dados.fip613.read", "label": "FIP613 (somente leitura)"},
+    {"scope": "dados.plan51.read", "label": "PLAN 51 (somente leitura)"},
 ]
 API_SCOPE_SET = {item["scope"] for item in API_SCOPE_OPTIONS}
 API_SCOPE_LABEL = {item["scope"]: item["label"] for item in API_SCOPE_OPTIONS}
@@ -1944,6 +2155,8 @@ def api_clients_delete(client_id: int):
     row = db.session.get(ApiClient, client_id)
     if not row:
         return jsonify({"error": "Servidor nao encontrado."}), 404
+    if (row.status or "").lower() != "revogado":
+        return jsonify({"error": "Revogue o servidor antes de excluir."}), 400
     try:
         ApiClientScope.query.filter_by(client_id=row.id).delete(synchronize_session=False)
         ApiKey.query.filter_by(client_id=row.id).delete(synchronize_session=False)
@@ -2032,7 +2245,7 @@ def api_auth_token():
 
 
 def _api_query_model(model, table_name: str):
-    reserved = {"limit", "offset", "order_by", "order_dir", "fields"}
+    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo", "after_id"}
     mapper = inspect(model)
     col_keys = [c.key for c in mapper.columns]
     if "ativo" not in col_keys:
@@ -2050,6 +2263,21 @@ def _api_query_model(model, table_name: str):
     offset = max(0, offset)
 
     query = db.session.query(model).filter(getattr(model, "ativo") == True)  # noqa: E712
+    # UO: sem parâmetro, só a secretaria (contrato atual da API); ?uo=26201 ou
+    # ?uo=26201,26202 escolhe; ?uo=all devolve todas as UOs.
+    uo_filtrada = "seduc"
+    if "uo" in col_keys:
+        uo_param = str(request.args.get("uo", "") or "").strip()
+        if not uo_param:
+            query = query.filter(_uo_seduc(model))
+        elif uo_param.lower() == "all":
+            uo_filtrada = "all"
+        else:
+            codigos = [c for c in (uo_codigo(v) for v in uo_param.split(",")) if c]
+            if not codigos:
+                return jsonify({"error": "Parâmetro uo inválido."}), 400
+            query = query.filter(cond_uo_em(model, codigos))
+            uo_filtrada = ",".join(sorted(set(codigos)))
     for key, val in request.args.items():
         if key in reserved:
             continue
@@ -2070,6 +2298,17 @@ def _api_query_model(model, table_name: str):
     if order_by not in col_keys:
         order_by = "id" if "id" in col_keys else col_keys[0]
     order_col = getattr(model, order_by)
+    # Paginação por id (`after_id` = `next_after_id` da página anterior): estável durante
+    # uma carga e sem a lentidão do OFFSET em tabelas grandes. Só vale ordenando por id.
+    after_id = None
+    if request.args.get("after_id") not in (None, ""):
+        try:
+            after_id = int(str(request.args.get("after_id")))
+        except Exception:
+            return jsonify({"error": "Parâmetro after_id inválido."}), 400
+        if order_by != "id":
+            return jsonify({"error": "after_id exige order_by=id."}), 400
+        query = query.filter(order_col > after_id if order_dir == "asc" else order_col < after_id)
     query = query.order_by(order_col.asc() if order_dir == "asc" else order_col.desc())
 
     fields_param = str(request.args.get("fields") or "").strip()
@@ -2077,12 +2316,12 @@ def _api_query_model(model, table_name: str):
         asked = [f.strip() for f in fields_param.split(",") if f.strip()]
         fields = [f for f in asked if f in col_keys]
     else:
-        fields = [f for f in col_keys if f != "raw_payload"]
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")]
     if not fields:
-        fields = [f for f in col_keys if f != "raw_payload"] or col_keys
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")] or col_keys
 
-    total = query.count()
-    rows = query.offset(offset).limit(limit).all()
+    total = query.count() if after_id is None else None
+    rows = query.offset(0 if after_id is not None else offset).limit(limit).all()
     data = []
     for row in rows:
         item = {}
@@ -2094,10 +2333,13 @@ def _api_query_model(model, table_name: str):
         {
             "ok": True,
             "table": table_name,
-            "total": int(total),
+            "uo": uo_filtrada,
+            "total": int(total) if total is not None else None,
             "limit": int(limit),
             "offset": int(offset),
             "count": len(data),
+            "next_after_id": int(getattr(rows[-1], "id")) if rows and "id" in col_keys and order_by == "id" and len(rows) == limit else None,
+            "upload_id": sorted({int(getattr(r, "upload_id")) for r in rows if getattr(r, "upload_id", None) is not None}),
             "data": data,
         }
     )
@@ -2164,827 +2406,6 @@ def partial_painel():
     )
 
 
-SEE_UPLOAD_DIR = Path("upload") / "notas_see"
-SEE_OUTPUT_DIR = Path("outputs") / "notas_see"
-
-
-def _see_catalog_payload(catalogo: SeeCatalogo) -> dict:
-    produtos = (
-        SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo.id, ativo=True)
-        .order_by(SeeCatalogoProduto.codigo)
-        .all()
-    )
-    return {
-        "id": catalogo.id,
-        "nome": catalogo.nome,
-        "exercicio": catalogo.exercicio,
-        "descricao": catalogo.descricao or "",
-        "ativo": bool(catalogo.ativo),
-        "produtos": [
-            {
-                "id": produto.id,
-                "codigo": produto.codigo,
-                "nome": produto.nome,
-                "observacao": produto.observacao or "",
-            }
-            for produto in produtos
-        ],
-    }
-
-
-def _see_parse_exercicio(value) -> int | None:
-    try:
-        exercicio = int(str(value or "").strip())
-    except ValueError:
-        return None
-    return exercicio if 2000 <= exercicio <= 2100 else None
-
-
-def _see_catalogo_duplicado(nome: str, exercicio: int, ignorar_id: int | None = None) -> bool:
-    query = SeeCatalogo.query.filter(
-        func.lower(SeeCatalogo.nome) == nome.lower(),
-        SeeCatalogo.exercicio == exercicio,
-    )
-    if ignorar_id:
-        query = query.filter(SeeCatalogo.id != ignorar_id)
-    return query.first() is not None
-
-
-@home_bp.route("/partial/area-uens/sage/notas-see")
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def partial_notas_see():
-    return render_template("partials/notas_see.html")
-
-
-@home_bp.route("/api/notas-see/catalogos", methods=["GET", "POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_catalogos():
-    if request.method == "GET":
-        catalogos = SeeCatalogo.query.order_by(
-            SeeCatalogo.ativo.desc(), SeeCatalogo.exercicio.desc(), SeeCatalogo.nome
-        ).all()
-        return jsonify({"catalogos": [_see_catalog_payload(catalogo) for catalogo in catalogos]})
-    data = request.get_json() or {}
-    nome = (data.get("nome") or "").strip()
-    exercicio = _see_parse_exercicio(data.get("exercicio"))
-    if not nome:
-        return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-    if not exercicio:
-        return jsonify({"error": "Informe um exercício válido (ex.: 2026)."}), 400
-    if _see_catalogo_duplicado(nome, exercicio):
-        return jsonify({"error": f"Já existe um catálogo com esse nome no exercício {exercicio}."}), 400
-    catalogo = SeeCatalogo(
-        nome=nome,
-        exercicio=exercicio,
-        descricao=(data.get("descricao") or "").strip() or None,
-        ativo=True,
-        criado_por=_current_usuario_id(),
-        atualizado_por=_current_usuario_id(),
-    )
-    db.session.add(catalogo)
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
-
-
-@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>", methods=["PUT", "DELETE"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_catalogo(catalogo_id: int):
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo:
-        return jsonify({"error": "Catálogo não encontrado."}), 404
-    if request.method == "DELETE":
-        catalogo.ativo = False
-    else:
-        data = request.get_json() or {}
-        nome = (data.get("nome") or "").strip()
-        exercicio = _see_parse_exercicio(data.get("exercicio"))
-        if not nome:
-            return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-        if not exercicio:
-            return jsonify({"error": "Informe um exercício válido (ex.: 2026)."}), 400
-        if _see_catalogo_duplicado(nome, exercicio, catalogo.id):
-            return jsonify({"error": f"Já existe um catálogo com esse nome no exercício {exercicio}."}), 400
-        catalogo.nome = nome
-        catalogo.exercicio = exercicio
-        catalogo.descricao = (data.get("descricao") or "").strip() or None
-        catalogo.ativo = bool(data.get("ativo", catalogo.ativo))
-    catalogo.atualizado_por = _current_usuario_id()
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
-
-
-@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>/produtos", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_produto_criar(catalogo_id: int):
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo or not catalogo.ativo:
-        return jsonify({"error": "Catálogo não encontrado ou inativo."}), 404
-    data = request.get_json() or {}
-    codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
-    nome = (data.get("nome") or "").strip()
-    if not codigo or not nome:
-        return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
-    existing = SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, codigo=codigo).first()
-    if existing:
-        if existing.ativo:
-            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
-        existing.nome = nome
-        existing.observacao = (data.get("observacao") or "").strip() or None
-        existing.ativo = True
-        produto = existing
-    else:
-        produto = SeeCatalogoProduto(
-            catalogo_id=catalogo_id,
-            codigo=codigo,
-            nome=nome,
-            observacao=(data.get("observacao") or "").strip() or None,
-            ativo=True,
-        )
-        db.session.add(produto)
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
-
-
-@home_bp.route("/api/notas-see/produtos/<int:produto_id>", methods=["PUT", "DELETE"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_produto(produto_id: int):
-    produto = db.session.get(SeeCatalogoProduto, produto_id)
-    if not produto:
-        return jsonify({"error": "Produto não encontrado."}), 404
-    if request.method == "DELETE":
-        produto.ativo = False
-    else:
-        data = request.get_json() or {}
-        codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
-        nome = (data.get("nome") or "").strip()
-        if not codigo or not nome:
-            return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
-        duplicate = SeeCatalogoProduto.query.filter(
-            SeeCatalogoProduto.catalogo_id == produto.catalogo_id,
-            SeeCatalogoProduto.codigo == codigo,
-            SeeCatalogoProduto.id != produto.id,
-            SeeCatalogoProduto.ativo == True,  # noqa: E712
-        ).first()
-        if duplicate:
-            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
-        produto.codigo = codigo
-        produto.nome = nome
-        produto.observacao = (data.get("observacao") or "").strip() or None
-    db.session.commit()
-    catalogo = db.session.get(SeeCatalogo, produto.catalogo_id)
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
-
-
-def _see_add_event(job: SeeProcessamento, message: str, arquivo_id: int | None = None) -> None:
-    db.session.add(
-        SeeProcessamentoEvento(
-            processamento_id=job.id,
-            arquivo_id=arquivo_id,
-            tipo="progresso",
-            estado=job.status,
-            mensagem=message,
-            progresso=job.progresso,
-            arquivos_processados=job.arquivos_processados,
-            arquivos_sucesso=job.arquivos_sucesso,
-            arquivos_alerta=job.arquivos_alerta,
-            arquivos_erro=job.arquivos_erro,
-        )
-    )
-
-
-def _see_server_datetime_iso(value):
-    """Serializa datas sem fuso do MySQL como horário do servidor."""
-    if not value:
-        return None
-    if value.tzinfo is not None:
-        return value.isoformat()
-    timezone_name = os.getenv("SEE_SERVER_TIMEZONE", "America/Sao_Paulo")
-    try:
-        return pytz.timezone(timezone_name).localize(value).isoformat()
-    except (pytz.UnknownTimeZoneError, ValueError):
-        current_app.logger.warning("Fuso SEE_SERVER_TIMEZONE inválido: %s", timezone_name)
-        return pytz.timezone("America/Sao_Paulo").localize(value).isoformat()
-
-
-def _run_see_processamento(app, processamento_id: int) -> None:
-    with app.app_context():
-        started = datetime.utcnow()
-        try:
-            job = db.session.get(SeeProcessamento, processamento_id)
-            if not job:
-                return
-            job.status = "processando"
-            job.etapa_atual = "extração"
-            job.mensagem_atual = "Processamento dos PDFs iniciado."
-            job.iniciado_em = started
-            job.progresso = 1
-            _see_add_event(job, job.mensagem_atual)
-            db.session.commit()
-            product_rows = SeeCatalogoProduto.query.filter_by(catalogo_id=job.catalogo_id, ativo=True).all()
-            products = [
-                {"id": row.id, "codigo": row.codigo, "nome": row.nome}
-                for row in product_rows
-            ]
-            escola_index = EscolaIndex.build([
-                Escola(codigo=row.codigo, nome=row.nome, municipio=row.municipio, dre=row.dre, tipo=row.tipo, ativo=bool(row.ativo))
-                for row in SeeEscola.query.all()
-            ])
-            files = (
-                SeeProcessamentoArquivo.query
-                .filter_by(processamento_id=job.id, status="enviado")
-                .order_by(SeeProcessamentoArquivo.ordem)
-                .all()
-            )
-            for index, file_row in enumerate(files, start=1):
-                db.session.refresh(job)
-                if job.cancelamento_solicitado:
-                    job.status = "cancelado"
-                    job.mensagem_atual = "Processamento cancelado pelo usuário."
-                    break
-                file_started = datetime.utcnow()
-                file_row.status = "processando"
-                file_row.etapa_atual = "extração do PDF"
-                file_row.iniciado_em = file_started
-                job.mensagem_atual = f"Processando {index} de {len(files)}: {file_row.nome_original}"
-                db.session.commit()
-
-                def page_progress(page: int, total: int) -> None:
-                    file_row.pagina_atual = page
-                    file_row.total_paginas = total
-                    file_row.progresso = round((page / max(total, 1)) * 100, 2)
-                    db.session.commit()
-
-                try:
-                    result = extract_see_pdf(Path(file_row.caminho_armazenado), products, page_progress)
-                    metadata = result["metadata"]
-                    warnings = list(result["warnings"])
-                    cadastro = identificar_escola(metadata, escola_index)
-                    if cadastro["codigo"] and not metadata.get("codigo_escola"):
-                        # Código completado pelo cadastro: deixa de ser um campo ausente.
-                        warnings = [item for item in warnings if item["codigo"] != "CAMPO_CODIGO_ESCOLA_AUSENTE"]
-                    warnings += cadastro["warnings"]
-                    metadata["cadastro"] = {
-                        "origem_codigo": cadastro["origem_codigo"],
-                        "destaque": cadastro["destaque"],
-                        "conferencia": cadastro["conferencia"],
-                    }
-                    file_row.total_paginas = result["total_pages"]
-                    file_row.metodo_extracao = result["method"]
-                    file_row.chave_acesso = metadata.get("chave_acesso")
-                    file_row.numero_danfe = metadata.get("numero_danfe")
-                    file_row.dre = cadastro["dre"]
-                    file_row.codigo_escola = cadastro["codigo"]
-                    file_row.nome_escola = cadastro["nome"]
-                    file_row.confianca_metadados = metadata.get("confianca")
-                    file_row.dados_extraidos_json = metadata
-                    for item in result["items"]:
-                        db.session.add(
-                            SeeItemExtraido(
-                                processamento_id=job.id,
-                                arquivo_id=file_row.id,
-                                catalogo_produto_id=item.get("catalogo_produto_id"),
-                                codigo_produto=item["codigo"],
-                                nome_produto=item["nome"],
-                                unidade=item.get("unidade"),
-                                quantidade=item["quantidade"],
-                                pagina=item.get("pagina"),
-                                estrategia_extracao=item.get("estrategia"),
-                                confianca=item.get("confianca"),
-                                texto_origem=item.get("texto_origem"),
-                            )
-                        )
-                    for warning in warnings:
-                        db.session.add(
-                            SeeOcorrencia(
-                                processamento_id=job.id,
-                                arquivo_id=file_row.id,
-                                severidade="alerta",
-                                fase="extração",
-                                codigo=warning["codigo"],
-                                mensagem=warning["mensagem"],
-                            )
-                        )
-                    file_row.total_produtos = len(result["items"])
-                    file_row.total_alertas = len(warnings)
-                    file_row.status = "finalizado_com_alerta" if warnings else "finalizado"
-                    file_row.progresso = 100
-                    if warnings:
-                        job.arquivos_alerta += 1
-                    else:
-                        job.arquivos_sucesso += 1
-                except Exception as exc:
-                    file_row.status = "falha"
-                    file_row.total_erros = 1
-                    file_row.erro_resumido = f"{type(exc).__name__}: {exc}"[:2000]
-                    job.arquivos_erro += 1
-                    db.session.add(
-                        SeeOcorrencia(
-                            processamento_id=job.id,
-                            arquivo_id=file_row.id,
-                            severidade="erro",
-                            fase="extração",
-                            codigo=type(exc).__name__,
-                            mensagem=f"Falha ao processar {file_row.nome_original}.",
-                            detalhe_tecnico=str(exc),
-                        )
-                    )
-                file_row.finalizado_em = datetime.utcnow()
-                file_row.duracao_segundos = (file_row.finalizado_em - file_started).total_seconds()
-                job.arquivos_processados += 1
-                job.progresso = round(5 + (job.arquivos_processados / max(job.total_arquivos, 1)) * 85, 2)
-                _see_add_event(job, job.mensagem_atual, file_row.id)
-                db.session.commit()
-
-            if job.status != "cancelado":
-                job.status = "gerando_excel"
-                job.etapa_atual = "geração do Excel"
-                job.mensagem_atual = "Gerando arquivo Excel."
-                job.progresso = 92
-                db.session.commit()
-                file_rows = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).all()
-                item_rows = SeeItemExtraido.query.filter_by(processamento_id=job.id).all()
-                occurrence_rows = SeeOcorrencia.query.filter_by(processamento_id=job.id).all()
-                file_map = {row.id: row for row in file_rows}
-
-                def cadastro_info(row) -> dict:
-                    data = row.dados_extraidos_json or {}
-                    info = data.get("cadastro") or {}
-                    return {
-                        "escola_nota": data.get("nome_escola"),
-                        "origem_codigo": info.get("origem_codigo"),
-                        "destaque": info.get("destaque"),
-                        "conferencia": info.get("conferencia"),
-                    }
-
-                output = SEE_OUTPUT_DIR / f"notas_see_{job.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                generate_see_xlsx(
-                    output,
-                    [{"Arquivo PDF": row.nome_original, "Status": row.status, "DANFE": row.numero_danfe, "DRE": row.dre, "Código Escola": row.codigo_escola, "Escola": row.nome_escola, "Escola (nota)": cadastro_info(row)["escola_nota"], "Origem do código": cadastro_info(row)["origem_codigo"], "Conferência": cadastro_info(row)["conferencia"], "Produtos": row.total_produtos, "Alertas": row.total_alertas, "Erros": row.total_erros} for row in file_rows],
-                    [{"arquivo": file_map[row.arquivo_id].nome_original, "dre": file_map[row.arquivo_id].dre, "codigo_escola": file_map[row.arquivo_id].codigo_escola, "nome_escola": file_map[row.arquivo_id].nome_escola, "numero_danfe": file_map[row.arquivo_id].numero_danfe, "codigo": row.codigo_produto, "nome": row.nome_produto, "quantidade": row.quantidade, **cadastro_info(file_map[row.arquivo_id])} for row in item_rows],
-                    [{"Arquivo PDF": file_map[row.arquivo_id].nome_original if row.arquivo_id in file_map else "", "Severidade": row.severidade, "Fase": row.fase, "Código": row.codigo, "Mensagem": row.mensagem, "Detalhe": row.detalhe_tecnico} for row in occurrence_rows],
-                    products,
-                )
-                job.nome_arquivo_saida = output.name
-                job.caminho_arquivo_saida = str(output.resolve())
-                job.tamanho_arquivo_saida = output.stat().st_size
-                job.status = "finalizado_com_alertas" if job.arquivos_alerta or job.arquivos_erro else "finalizado"
-                job.etapa_atual = "concluído"
-                job.mensagem_atual = "Processamento concluído."
-                job.progresso = 100
-            job.finalizado_em = datetime.utcnow()
-            job.duracao_segundos = (job.finalizado_em - started).total_seconds()
-            _see_add_event(job, job.mensagem_atual)
-            db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            job = db.session.get(SeeProcessamento, processamento_id)
-            if job:
-                job.status = "falha"
-                job.erro_geral = f"{type(exc).__name__}: {exc}"[:2000]
-                job.mensagem_atual = "Falha geral no processamento."
-                job.finalizado_em = datetime.utcnow()
-                job.duracao_segundos = (job.finalizado_em - started).total_seconds()
-                db.session.commit()
-            current_app.logger.exception("Falha no processamento Notas SEE %s", processamento_id)
-        finally:
-            db.session.remove()
-
-
-def _start_see_worker(job: SeeProcessamento) -> None:
-    worker_path = Path(__file__).resolve().parents[1] / "worker.py"
-    log_dir = Path("outputs") / "status"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_handle = open(log_dir / f"worker_see_{job.id}.log", "a", encoding="utf-8")
-    creationflags = 0
-    if sys.platform.startswith("win"):
-        creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-        )
-    try:
-        process = subprocess.Popen(
-            [sys.executable, str(worker_path), "--kind", "see", "--upload-id", str(job.id)],
-            cwd=str(worker_path.parent),
-            stdout=log_handle,
-            stderr=log_handle,
-            creationflags=creationflags,
-        )
-        job.worker_pid = process.pid
-        db.session.commit()
-    except Exception:
-        log_handle.close()
-        current_app.logger.exception("Falha ao iniciar worker SEE; usando thread.")
-        app = current_app._get_current_object()
-        threading.Thread(target=_run_see_processamento, args=(app, job.id), daemon=True).start()
-
-
-@home_bp.route("/api/notas-see/processamentos", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_processar():
-    try:
-        catalogo_id = int(request.form.get("catalogo_id") or 0)
-    except ValueError:
-        catalogo_id = 0
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo or not catalogo.ativo:
-        return jsonify({"error": "Selecione um catálogo ativo."}), 400
-    if not SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, ativo=True).first():
-        return jsonify({"error": "O catálogo selecionado não possui produtos ativos."}), 400
-    append_mode = (request.form.get("append_mode") or "novo").strip().lower()
-    try:
-        base_job_id = int(request.form.get("base_job_id") or 0)
-    except ValueError:
-        base_job_id = 0
-    base_job = None
-    base_files = []
-    if append_mode == "acrescentar":
-        base_job = db.session.get(SeeProcessamento, base_job_id)
-        terminal_statuses = {"finalizado", "finalizado_com_alertas"}
-        if (
-            not base_job
-            or base_job.usuario_id != _current_usuario_id()
-            or base_job.catalogo_id != catalogo_id
-            or base_job.status not in terminal_statuses
-        ):
-            return jsonify({"error": "O processamento anterior não pode ser atualizado."}), 400
-        base_files = (
-            SeeProcessamentoArquivo.query
-            .filter_by(processamento_id=base_job.id)
-            .order_by(SeeProcessamentoArquivo.ordem)
-            .all()
-        )
-    user = session.get("user") or {}
-    job = SeeProcessamento(
-        usuario_id=_current_usuario_id(),
-        user_email=(user.get("email") or "desconhecido"),
-        catalogo_id=catalogo_id,
-        status="enviando",
-        etapa_atual="upload",
-        total_arquivos=0,
-    )
-    db.session.add(job)
-    db.session.flush()
-    inherited = 0
-    inherited_file_map = {}
-    for old_file in base_files:
-        copied_file = SeeProcessamentoArquivo(
-            processamento_id=job.id,
-            ordem=old_file.ordem,
-            nome_original=old_file.nome_original,
-            caminho_relativo=old_file.caminho_relativo,
-            nome_armazenado=old_file.nome_armazenado,
-            caminho_armazenado=old_file.caminho_armazenado,
-            mime_type=old_file.mime_type,
-            tamanho_bytes=old_file.tamanho_bytes,
-            sha256=old_file.sha256,
-            status=old_file.status,
-            etapa_atual="herdado",
-            progresso=100,
-            total_paginas=old_file.total_paginas,
-            pagina_atual=old_file.pagina_atual,
-            metodo_extracao=old_file.metodo_extracao,
-            chave_acesso=old_file.chave_acesso,
-            numero_danfe=old_file.numero_danfe,
-            dre=old_file.dre,
-            codigo_escola=old_file.codigo_escola,
-            nome_escola=old_file.nome_escola,
-            confianca_metadados=old_file.confianca_metadados,
-            total_produtos=old_file.total_produtos,
-            total_alertas=old_file.total_alertas,
-            total_erros=old_file.total_erros,
-            dados_extraidos_json=old_file.dados_extraidos_json,
-            erro_resumido=old_file.erro_resumido,
-            iniciado_em=old_file.iniciado_em,
-            finalizado_em=old_file.finalizado_em,
-            duracao_segundos=old_file.duracao_segundos,
-        )
-        db.session.add(copied_file)
-        db.session.flush()
-        inherited_file_map[old_file.id] = copied_file.id
-        inherited += 1
-    if base_job:
-        for old_item in SeeItemExtraido.query.filter_by(processamento_id=base_job.id).all():
-            if old_item.arquivo_id not in inherited_file_map:
-                continue
-            db.session.add(SeeItemExtraido(
-                processamento_id=job.id, arquivo_id=inherited_file_map[old_item.arquivo_id],
-                catalogo_produto_id=old_item.catalogo_produto_id, codigo_produto=old_item.codigo_produto,
-                nome_produto=old_item.nome_produto, unidade=old_item.unidade, quantidade=old_item.quantidade,
-                pagina=old_item.pagina, linha_referencia=old_item.linha_referencia,
-                estrategia_extracao=old_item.estrategia_extracao, confianca=old_item.confianca,
-                texto_origem=old_item.texto_origem, revisado=old_item.revisado,
-                corrigido_manualmente=old_item.corrigido_manualmente, valor_original=old_item.valor_original,
-            ))
-        for old_occurrence in SeeOcorrencia.query.filter_by(processamento_id=base_job.id).all():
-            if old_occurrence.codigo == "ARQUIVO_IGNORADO":
-                continue
-            mapped_file_id = inherited_file_map.get(old_occurrence.arquivo_id)
-            if old_occurrence.arquivo_id and not mapped_file_id:
-                continue
-            db.session.add(SeeOcorrencia(
-                processamento_id=job.id, arquivo_id=mapped_file_id, severidade=old_occurrence.severidade,
-                fase=old_occurrence.fase, codigo=old_occurrence.codigo, mensagem=old_occurrence.mensagem,
-                detalhe_tecnico=old_occurrence.detalhe_tecnico, pagina=old_occurrence.pagina,
-                contexto=old_occurrence.contexto, dados_contexto_json=old_occurrence.dados_contexto_json,
-                resolvido=old_occurrence.resolvido, resolvido_por=old_occurrence.resolvido_por,
-                resolvido_em=old_occurrence.resolvido_em, observacao_resolucao=old_occurrence.observacao_resolucao,
-            ))
-    job.total_arquivos = inherited
-    job.arquivos_enviados = 0
-    job.arquivos_processados = inherited
-    job.arquivos_sucesso = sum(1 for row in base_files if row.status == "finalizado")
-    job.arquivos_alerta = sum(1 for row in base_files if row.status == "finalizado_com_alerta")
-    job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
-    job.mensagem_atual = "Recebendo PDFs."
-    db.session.commit()
-    return jsonify({"ok": True, "job_id": job.id, "initial": inherited}), 201
-
-
-def _see_upload_job(processamento_id: int):
-    """Retorna o processamento em fase de upload do usuário atual, ou uma resposta de erro."""
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job or job.usuario_id != _current_usuario_id():
-        return None, (jsonify({"error": "Processamento não encontrado."}), 404)
-    if job.status != "enviando":
-        return None, (jsonify({"error": "Este processamento não está mais recebendo arquivos."}), 409)
-    return job, None
-
-
-def _see_discard_upload(job: SeeProcessamento, message: str) -> None:
-    job.status = "descartado"
-    job.mensagem_atual = message
-    job.finalizado_em = datetime.utcnow()
-    db.session.commit()
-    shutil.rmtree(SEE_UPLOAD_DIR / str(job.id), ignore_errors=True)
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/arquivos", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_enviar_arquivos(processamento_id: int):
-    job, error = _see_upload_job(processamento_id)
-    if error:
-        return error
-    uploads = [file for file in request.files.getlist("pdfs") if file and file.filename]
-    if not uploads:
-        return jsonify({"error": "Nenhum arquivo recebido neste lote."}), 400
-    existing = (
-        db.session.query(SeeProcessamentoArquivo.sha256, SeeProcessamentoArquivo.etapa_atual, SeeProcessamentoArquivo.ordem)
-        .filter(SeeProcessamentoArquivo.processamento_id == job.id)
-        .all()
-    )
-    base_hashes = {sha for sha, etapa, _ in existing if sha and etapa == "herdado"}
-    seen_hashes = {sha for sha, _, _ in existing if sha}
-    order = max((ordem or 0 for _, _, ordem in existing), default=0)
-    upload_dir = SEE_UPLOAD_DIR / str(job.id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    saved = 0
-    ignored = []
-    accepted_names = []
-    for upload in uploads:
-        original = upload.filename.replace("\\", "/")
-        display_name = Path(original).name
-        if not original.lower().endswith(".pdf"):
-            ignored.append({"name": display_name, "reason": "Extensão diferente de PDF."})
-            continue
-        data = upload.read()
-        if not data.startswith(b"%PDF"):
-            ignored.append({"name": display_name, "reason": "O conteúdo do arquivo não é um PDF válido."})
-            continue
-        digest = hashlib.sha256(data).hexdigest()
-        if digest in seen_hashes:
-            reason = "Arquivo já processado anteriormente." if digest in base_hashes else "Arquivo duplicado na seleção atual."
-            ignored.append({"name": display_name, "reason": reason})
-            continue
-        seen_hashes.add(digest)
-        order += 1
-        stored = f"{order:05d}_{uuid.uuid4().hex}.pdf"
-        path = upload_dir / stored
-        path.write_bytes(data)
-        db.session.add(
-            SeeProcessamentoArquivo(
-                processamento_id=job.id,
-                ordem=order,
-                nome_original=display_name,
-                caminho_relativo=original,
-                nome_armazenado=stored,
-                caminho_armazenado=str(path.resolve()),
-                mime_type=upload.mimetype or "application/pdf",
-                tamanho_bytes=len(data),
-                sha256=digest,
-                status="enviado",
-            )
-        )
-        saved += 1
-        accepted_names.append(display_name)
-    for item in ignored:
-        db.session.add(SeeOcorrencia(
-            processamento_id=job.id,
-            severidade="informacao",
-            fase="upload",
-            codigo="ARQUIVO_IGNORADO",
-            mensagem=f"{item['name']}: {item['reason']}",
-            contexto=item["name"],
-            dados_contexto_json=item,
-        ))
-    job.arquivos_enviados = (job.arquivos_enviados or 0) + saved
-    job.mensagem_atual = f"{job.arquivos_enviados} PDF(s) recebido(s)."
-    db.session.commit()
-    return jsonify({"ok": True, "added": saved, "accepted": accepted_names, "ignored": ignored})
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/iniciar", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_iniciar(processamento_id: int):
-    job, error = _see_upload_job(processamento_id)
-    if error:
-        return error
-    saved = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id, status="enviado").count()
-    inherited = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id, etapa_atual="herdado").count()
-    ignored = [
-        row.dados_contexto_json or {"name": row.contexto, "reason": row.mensagem}
-        for row in SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
-    ]
-    if not saved:
-        details = "; ".join(f"{item.get('name')}: {item.get('reason')}" for item in ignored[:5])
-        suffix = f"; e mais {len(ignored) - 5}" if len(ignored) > 5 else ""
-        message = f"Nenhum arquivo novo para processar. {details}{suffix}" if details else "Nenhum PDF válido foi recebido."
-        _see_discard_upload(job, message)
-        return jsonify({"error": message, "ignored_count": len(ignored)}), 400
-    job.total_arquivos = inherited + saved
-    job.arquivos_enviados = saved
-    job.status = "na_fila"
-    job.etapa_atual = "fila"
-    job.mensagem_atual = (
-        f"Atualização iniciada: {inherited} anterior(es) + {saved} novo(s), {len(ignored)} ignorado(s)."
-        if inherited else f"{saved} PDF(s) recebido(s), {len(ignored)} ignorado(s)."
-    )
-    db.session.commit()
-    _start_see_worker(job)
-    return jsonify({"ok": True, "job_id": job.id, "message": job.mensagem_atual, "initial": inherited, "added": saved, "total": inherited + saved, "ignored_count": len(ignored)}), 202
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>", methods=["GET"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_status(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job:
-        return jsonify({"error": "Processamento não encontrado."}), 404
-    files = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).order_by(SeeProcessamentoArquivo.ordem).all()
-    ignored_occurrences = SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
-    ignored_files = [
-        {
-            "name": (row.dados_contexto_json or {}).get("name") or row.contexto or "Arquivo",
-            "reason": (row.dados_contexto_json or {}).get("reason") or row.mensagem,
-        }
-        for row in ignored_occurrences
-    ]
-    catalog = db.session.get(SeeCatalogo, job.catalogo_id)
-    inherited = sum(1 for row in files if row.etapa_atual == "herdado")
-    duration = float(job.duracao_segundos or 0)
-    if not duration and job.iniciado_em:
-        duration = max(0, (datetime.utcnow() - job.iniciado_em).total_seconds())
-    return jsonify({
-        "id": job.id,
-        "catalog_id": job.catalogo_id,
-        "catalog_name": catalog.nome if catalog else "Catálogo removido",
-        "executed_by": job.user_email,
-        "created_at": _see_server_datetime_iso(job.created_at),
-        "initial_count": inherited,
-        "added_count": max(0, job.total_arquivos - inherited),
-        "ignored_count": len(ignored_files),
-        "status": job.status,
-        "etapa": job.etapa_atual,
-        "message": job.mensagem_atual,
-        "progress": float(job.progresso or 0),
-        "total": job.total_arquivos,
-        "processed": job.arquivos_processados,
-        "success": job.arquivos_sucesso,
-        "warnings": job.arquivos_alerta,
-        "errors": job.arquivos_erro,
-        "duration": duration,
-        "download_ready": bool(job.caminho_arquivo_saida),
-        "files": [
-            {"name": row.nome_original, "status": row.status, "progress": float(row.progresso or 0), "error": row.erro_resumido or "", "warnings": row.total_alertas}
-            for row in files
-        ] + [
-            {"name": item["name"], "status": "ignorado", "progress": 0, "error": item["reason"], "warnings": 0}
-            for item in ignored_files
-        ],
-    })
-
-
-@home_bp.route("/api/notas-see/processamentos/ultimo", methods=["GET"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_ultimo_processamento():
-    try:
-        catalogo_id = int(request.args.get("catalogo_id") or 0)
-    except ValueError:
-        catalogo_id = 0
-    if not catalogo_id:
-        return jsonify({"job_id": None})
-    job = (
-        SeeProcessamento.query
-        .filter(
-            SeeProcessamento.catalogo_id == catalogo_id,
-            SeeProcessamento.status.notin_(["enviando", "descartado"]),
-        )
-        .order_by(SeeProcessamento.id.desc())
-        .first()
-    )
-    return jsonify({"job_id": job.id if job else None})
-
-
-@home_bp.route("/api/notas-see/processamentos/historico", methods=["GET"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_historico():
-    try:
-        catalogo_id = int(request.args.get("catalogo_id") or 0)
-    except ValueError:
-        catalogo_id = 0
-    exercicio = _see_parse_exercicio(request.args.get("exercicio"))
-    # Cada atualização gera um novo processamento acumulado; só o mais recente de cada
-    # catálogo ativo (a versão atual) é exibido.
-    latest_ids = (
-        db.session.query(func.max(SeeProcessamento.id))
-        .join(SeeCatalogo, SeeCatalogo.id == SeeProcessamento.catalogo_id)
-        .filter(
-            SeeCatalogo.ativo == True,  # noqa: E712
-            SeeProcessamento.status.in_(["finalizado", "finalizado_com_alertas"]),
-            SeeProcessamento.caminho_arquivo_saida.isnot(None),
-        )
-        .group_by(SeeProcessamento.catalogo_id)
-    )
-    if catalogo_id:
-        latest_ids = latest_ids.filter(SeeProcessamento.catalogo_id == catalogo_id)
-    if exercicio:
-        latest_ids = latest_ids.filter(SeeCatalogo.exercicio == exercicio)
-    jobs = (
-        SeeProcessamento.query
-        .filter(SeeProcessamento.id.in_(latest_ids.scalar_subquery()))
-        .order_by(SeeProcessamento.id.desc())
-        .all()
-    )
-    catalogs_by_id = {
-        row.id: row
-        for row in SeeCatalogo.query.filter(SeeCatalogo.id.in_({job.catalogo_id for job in jobs})).all()
-    } if jobs else {}
-    items = []
-    for job in jobs:
-        items.append({
-            "id": job.id,
-            "catalog_id": job.catalogo_id,
-            "catalog_name": catalogs_by_id[job.catalogo_id].nome if job.catalogo_id in catalogs_by_id else "Catálogo removido",
-            "exercicio": catalogs_by_id[job.catalogo_id].exercicio if job.catalogo_id in catalogs_by_id else None,
-            "executed_by": job.user_email,
-            "created_at": _see_server_datetime_iso(job.created_at),
-            "status": job.status,
-            "total": job.total_arquivos,
-            "success": job.arquivos_sucesso,
-            "warnings": job.arquivos_alerta,
-            "errors": job.arquivos_erro,
-        })
-    return jsonify({"processamentos": items})
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/cancelar", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_cancelar(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job:
-        return jsonify({"error": "Processamento não encontrado."}), 404
-    if job.status == "enviando":
-        _see_discard_upload(job, "Envio cancelado.")
-        return jsonify({"ok": True, "message": "Envio cancelado."})
-    job.cancelamento_solicitado = True
-    db.session.commit()
-    return jsonify({"ok": True, "message": "Cancelamento solicitado."})
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/download")
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_download(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job or not job.caminho_arquivo_saida:
-        return jsonify({"error": "Arquivo de saída não disponível."}), 404
-    target = Path(job.caminho_arquivo_saida).resolve()
-    output_root = SEE_OUTPUT_DIR.resolve()
-    if output_root not in target.parents or not target.exists():
-        return jsonify({"error": "Arquivo de saída não encontrado."}), 404
-    return send_file(target, as_attachment=True, download_name=job.nome_arquivo_saida or target.name)
-
-
 @home_bp.route("/partial/atualizar/fip613")
 @login_required
 @require_feature("atualizar/fip613")
@@ -3012,6 +2433,33 @@ def partial_atualizar_contrato_visual_protegido():
         mostrar_temas=False,
         mostrar_contrato=True,
     )
+
+
+@home_bp.route("/partial/atualizar/seguranca-sessao")
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def partial_atualizar_seguranca_sessao():
+    return render_template("partials/atualizar_seguranca_sessao.html", info=session_config.get_info())
+
+
+@home_bp.route("/api/configuracoes/sessao", methods=["GET", "POST"])
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def api_configuracoes_sessao():
+    if request.method == "GET":
+        return jsonify(session_config.get_info())
+    data = request.get_json(silent=True) or {}
+    try:
+        session_config.set_timeout_minutos(
+            data.get("minutos"), (getattr(g, "user", None) or {}).get("email")
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.error("Falha ao gravar tempo de sessao", exc_info=True)
+        return jsonify({"error": "Falha ao gravar a configuração."}), 500
+    return jsonify({"ok": True, **session_config.get_info()})
 
 
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")
@@ -10137,7 +9585,7 @@ def _calc_ped_sum_for_dotacao(chave_dotacao: str) -> Decimal:
         return Decimal("0")
     rows = (
         PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10153,7 +9601,7 @@ def _calc_emp_sum_for_dotacao(chave_dotacao: str) -> Decimal:
         return Decimal("0")
     rows = (
         EmpRegistro.query.with_entities(EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave)
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10266,7 +9714,7 @@ def _calc_ped_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
         return Decimal("0"), 0
     rows = (
         PedRegistro.query.with_entities(PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10283,7 +9731,7 @@ def _collect_ped_rows_for_dotacao_keys(keys: set[str]) -> dict[int, Decimal]:
         return {}
     rows = (
         PedRegistro.query.with_entities(PedRegistro.id, PedRegistro.valor_ped, PedRegistro.chave)
-        .filter(PedRegistro.ativo == True)  # noqa: E712
+        .filter(PedRegistro.ativo == True, _uo_seduc(PedRegistro))  # noqa: E712
         .all()
     )
     matched: dict[int, Decimal] = {}
@@ -10305,7 +9753,7 @@ def _calc_emp_sum_for_dotacao_keys(keys: set[str]) -> tuple[Decimal, int]:
         EmpRegistro.query.with_entities(
             EmpRegistro.numero_emp, EmpRegistro.valor_emp_devolucao_gcv, EmpRegistro.chave
         )
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     total = Decimal("0")
@@ -10329,7 +9777,7 @@ def _collect_emp_rows_for_dotacao_keys(keys: set[str]) -> dict[int, tuple[Decima
             EmpRegistro.valor_emp_devolucao_gcv,
             EmpRegistro.chave,
         )
-        .filter(EmpRegistro.ativo == True)  # noqa: E712
+        .filter(EmpRegistro.ativo == True, _uo_seduc(EmpRegistro))  # noqa: E712
         .all()
     )
     matched: dict[int, tuple[Decimal, str]] = {}
@@ -16119,7 +15567,7 @@ def _calc_dotacao_saldo(
         chave_field = "chave"
     chave_norm = _normalize_chave(chave_planejamento)
 
-    ped_base_common = [PedRegistro.ativo == True]  # noqa: E712
+    ped_base_common = [PedRegistro.ativo == True, _uo_seduc(PedRegistro)]  # noqa: E712
     if exercicio:
         ped_base_common.append(PedRegistro.exercicio == exercicio)
     if programa_key:
@@ -16151,7 +15599,7 @@ def _calc_dotacao_saldo(
         else:
             ped_base_common.append(PedRegistro.regiao == regiao)
 
-    emp_base_common = [EmpRegistro.ativo == True]  # noqa: E712
+    emp_base_common = [EmpRegistro.ativo == True, _uo_seduc(EmpRegistro)]  # noqa: E712
     if exercicio:
         emp_base_common.append(EmpRegistro.exercicio == exercicio)
     if programa_key:
@@ -16230,7 +15678,7 @@ def _calc_dotacao_saldo(
     valor_ped = sum(merged.values(), Decimal("0"))
     ped_count = len(merged)
     if ped_count == 0 and chave_planejamento:
-        ped_fallback = [PedRegistro.ativo == True]  # noqa: E712
+        ped_fallback = [PedRegistro.ativo == True, _uo_seduc(PedRegistro)]  # noqa: E712
         if exercicio:
             ped_fallback.append(PedRegistro.exercicio == exercicio)
         ped_rows = (
@@ -16605,7 +16053,7 @@ def api_relatorio_fip613():
             return str(value)
 
     try:
-        rows = Fip613Registro.query.filter_by(ativo=True).all()
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_liberadas(Fip613Registro)).all()  # noqa: E712
         last_upload = Fip613Upload.query.order_by(Fip613Upload.uploaded_at.desc()).first()
         data_arquivo = _as_iso(last_upload.data_arquivo) if last_upload else None
         uploaded_at = _as_iso(last_upload.uploaded_at) if last_upload else None
@@ -16642,7 +16090,7 @@ def api_relatorio_fip613():
                     "valor_a_pagar": float(r.valor_a_pagar or 0),
                 }
             )
-        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email})
+        return jsonify({"ok": True, "data": data, "data_arquivo": data_arquivo, "uploaded_at": uploaded_at, "user_email": user_email, "uos_padrao": sorted(UOS_SEDUC), "ultimas_por_uo": _ultimas_cargas_por_uo("fip613", Fip613Upload)})
     except Exception as exc:
         return jsonify({"error": f"Falha ao buscar dados: {exc}"}), 500
 
@@ -16847,7 +16295,7 @@ def api_relatorio_plan21_nger():
 @require_feature("relatorios/fip613")
 def api_relatorio_fip613_download():
     try:
-        rows = Fip613Registro.query.filter_by(ativo=True).all()
+        rows = Fip613Registro.query.filter(Fip613Registro.ativo == True, _uo_relatorio_download(Fip613Registro)).all()  # noqa: E712
         data = []
         for r in rows:
             data.append(
@@ -17677,7 +17125,7 @@ def api_relatorio_ped():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -17746,7 +17194,7 @@ def api_relatorio_ped():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -17839,6 +17287,8 @@ def api_relatorio_ped():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("ped", PedUpload),
             }
         )
     except Exception as exc:
@@ -17864,7 +17314,7 @@ def api_relatorio_ped_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -17933,7 +17383,7 @@ def api_relatorio_ped_download():
                         tipo_obrigacao_patronal,
                         numero_nla
                     FROM ped
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -18293,6 +17743,40 @@ def _plan20_relatorio_rows():
     )
 
 
+def _plan20_ultimas_por_uo():
+    """Última carga ativa de cada UO no Plan20, para o painel "Última
+    atualização" do relatório. A tabela plan20_seduc não guarda o id do upload;
+    a UO vem do texto "14.101 - SECRETARIA ..." e a carga mais recente é a de
+    maior data_atualizacao."""
+    try:
+        linhas = db.session.execute(
+            text(
+                "SELECT unidade_orcamentaria, user_email, data_arquivo, MAX(data_atualizacao) AS atualizado "
+                "FROM plan20_seduc WHERE ativo = 1 GROUP BY unidade_orcamentaria, user_email, data_arquivo"
+            )
+        ).fetchall()
+    except Exception:
+        _safe_session_rollback()
+        return []
+    por_uo: dict[str, tuple] = {}
+    for unidade, email, data_arquivo, atualizado in linhas:
+        codigo = uo_codigo(str(unidade or "").split(" - ")[0])
+        if not codigo:
+            continue
+        if codigo not in por_uo or (atualizado and (por_uo[codigo][3] is None or atualizado > por_uo[codigo][3])):
+            por_uo[codigo] = (email, data_arquivo, unidade, atualizado)
+    return [
+        {
+            "uo": codigo,
+            "rotulo": uo_label(codigo),
+            "user_email": email,
+            "uploaded_at": atualizado.isoformat() if atualizado else None,
+            "data_arquivo": data_arquivo.isoformat() if data_arquivo else None,
+        }
+        for codigo, (email, data_arquivo, _unidade, atualizado) in sorted(por_uo.items())
+    ]
+
+
 def _plan20_seduc_norm_col(name: str) -> str:
     base = unicodedata.normalize("NFKD", str(name or ""))
     ascii_only = "".join(ch for ch in base if not unicodedata.combining(ch))
@@ -18476,6 +17960,18 @@ def api_plan20_upload():
 
         output_path = run_plan20(save_path, PLAN20_OUTPUT_DIR)
 
+        # Confere se alguma linha vai para o banco: UO não liberada, sem linhas
+        # gravaveis etc. eram "processado com sucesso" sem gravar nada.
+        try:
+            aviso_uo = verificar_uo_plan20(output_path)
+        except UORecusada as exc:
+            for arq in (save_path, output_path):
+                try:
+                    arq.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            return jsonify({"error": str(exc)}), 400
+
         registro = Plan20Upload(
             user_email=user_email,
             original_filename=arquivo.filename,
@@ -18522,7 +18018,7 @@ def api_plan20_upload():
         return jsonify(
             {
                 "ok": True,
-                "message": "Plan20 processado com sucesso.",
+                "message": f"Plan20 processado com sucesso. {aviso_uo}".strip(),
                 "output": output_path.name,
                 "last": {
                     "user_email": user_email,
@@ -18606,6 +18102,7 @@ def api_relatorio_plan20():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "ultimas_por_uo": _plan20_ultimas_por_uo(),
             }
         )
     except Exception as exc:
@@ -18653,7 +18150,7 @@ def api_relatorio_emp():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -18699,7 +18196,7 @@ def api_relatorio_emp():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -18766,6 +18263,8 @@ def api_relatorio_emp():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("emp", EmpUpload),
             }
         )
     except Exception as exc:
@@ -19041,7 +18540,7 @@ def api_relatorio_est_emp():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_est,
@@ -19067,7 +18566,7 @@ def api_relatorio_est_emp():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -19114,6 +18613,8 @@ def api_relatorio_est_emp():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("est_emp", EstEmpUpload),
             }
         )
     except Exception as exc:
@@ -19168,7 +18669,7 @@ def api_relatorio_nob():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_nob,
@@ -19207,7 +18708,7 @@ def api_relatorio_nob():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {SQL_UO_LIBERADAS}
                     """
                 )
             )
@@ -19267,6 +18768,8 @@ def api_relatorio_nob():
                 "data_arquivo": data_arquivo,
                 "uploaded_at": uploaded_at,
                 "user_email": user_email,
+                "uos_padrao": sorted(UOS_SEDUC),
+                "ultimas_por_uo": _ultimas_cargas_por_uo("nob", NobUpload),
             }
         )
     except Exception as exc:
@@ -19636,7 +19139,7 @@ def api_relatorio_nob_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_nob,
@@ -19675,7 +19178,7 @@ def api_relatorio_nob_download():
                         data_cadastro_nob,
                         data_hora_cadastro_liq
                     FROM nob
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -19823,7 +19326,7 @@ def api_relatorio_emp_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         chave,
                         chave_planejamento,
@@ -19869,7 +19372,7 @@ def api_relatorio_emp_download():
                         numero_contrato,
                         numero_convenio
                     FROM emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )
@@ -20432,7 +19935,7 @@ def api_relatorio_est_emp_download():
         rows = (
             db.session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         exercicio,
                         numero_est,
@@ -20458,7 +19961,7 @@ def api_relatorio_est_emp_download():
                         situacao,
                         rp
                     FROM est_emp
-                    WHERE ativo = 1
+                    WHERE ativo = 1 AND {_sql_uo_download()}
                     """
                 )
             )

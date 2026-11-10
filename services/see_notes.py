@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Callable
 
 import pandas as pd
-import pdfplumber
 
 
 def _ascii_upper(value: str) -> str:
@@ -203,12 +202,30 @@ def _extract_row_quantity(words: list[dict], code: str) -> tuple[Decimal, str, s
     return None
 
 
+class PdfPlumberIndisponivel(RuntimeError):
+    """A dependência opcional pdfplumber não está instalada."""
+
+
+def pdfplumber_disponivel() -> bool:
+    try:
+        import pdfplumber  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def extract_pdf(
     path: Path,
     products: list[dict],
     page_callback: Callable[[int, int], None] | None = None,
 ) -> dict:
-    product_by_code = {str(item["codigo"]).strip(): item for item in products}
+    try:
+        import pdfplumber  # importação tardia: sem a biblioteca só esta funcionalidade fica indisponível
+    except ImportError as exc:  # pragma: no cover - depende do ambiente
+        raise PdfPlumberIndisponivel(
+            "A biblioteca pdfplumber não está instalada neste servidor (pip install pdfplumber==0.11.7)."
+        ) from exc
+    product_by_code = {re.sub(r"\D", "", str(item["codigo"])): item for item in products}
     occurrences: list[dict] = []
     seen: set[tuple] = set()
     texts: list[str] = []

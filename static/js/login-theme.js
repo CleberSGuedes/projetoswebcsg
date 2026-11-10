@@ -1,8 +1,9 @@
 (function () {
   const palettes = {
+    classic: { light: ["#0f7c68", "#1f9b7e", "15, 124, 104", "127, 207, 187", "#0d6154"], dark: ["#3dd6b7", "#22b58f", "61, 214, 183", "15, 124, 104", "#1f9b7e"] },
     blue: { light: ["#1c71d8", "#3584e4", "53, 132, 228", "153, 193, 241", "#1a5fb4"], dark: ["#78aeed", "#99c1f1", "120, 174, 237", "53, 132, 228", "#3584e4"] },
-    teal: { light: ["#15828e", "#2190a4", "33, 144, 164", "147, 221, 223", "#0e6f7d"], dark: ["#6ed4de", "#93dddf", "110, 212, 222", "33, 144, 164", "#2190a4"] },
-    green: { light: ["#009879", "#25a98e", "0, 152, 121", "150, 221, 203", "#007f68"], dark: ["#42dfc0", "#6ee7cf", "66, 223, 192", "0, 152, 121", "#25a98e"] },
+    teal: { light: ["#0e8fb3", "#19a7cc", "25, 167, 204", "143, 220, 238", "#0b7494"], dark: ["#5fd0ec", "#8fdcee", "95, 208, 236", "25, 167, 204", "#19a7cc"] },
+    green: { light: ["#26a255", "#33b865", "51, 184, 101", "163, 232, 189", "#1e8545"], dark: ["#5fd48b", "#8fe3ac", "95, 212, 139", "51, 184, 101", "#33b865"] },
     yellow: { light: ["#e5a50a", "#f6d32d", "229, 165, 10", "249, 240, 107", "#c88800"], dark: ["#f8e45c", "#f9f06b", "248, 228, 92", "229, 165, 10", "#e5a50a"] },
     orange: { light: ["#e66100", "#ff7800", "230, 97, 0", "255, 190, 111", "#c64600"], dark: ["#ffa348", "#ffbe6f", "255, 163, 72", "230, 97, 0", "#e66100"] },
     red: { light: ["#e01b24", "#ed333b", "224, 27, 36", "255, 123, 123", "#c01c28"], dark: ["#ff7b7b", "#f66151", "255, 123, 123", "224, 27, 36", "#e01b24"] },
@@ -13,14 +14,14 @@
   const systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themePreference = localStorage.getItem("app-theme") || "auto";
   const dark = themePreference === "dark" || (themePreference === "auto" && systemDark);
-  const storedAccent = localStorage.getItem("app-accent") || "blue";
+  const storedAccent = localStorage.getItem("app-accent") || "classic";
   const accent = storedAccent === "spo" ? "green" : storedAccent;
-  const palette = palettes[accent] || palettes.blue;
+  const palette = palettes[accent] || palettes.classic;
   const values = dark ? palette.dark : palette.light;
 
   body.classList.toggle("theme-dark", dark);
   body.dataset.themePreference = themePreference;
-  body.dataset.accentPreference = palettes[accent] ? accent : "blue";
+  body.dataset.accentPreference = palettes[accent] ? accent : "classic";
   body.style.setProperty("--accent", values[0]);
   body.style.setProperty("--accent-strong", values[1]);
   body.style.setProperty("--lab-accent", values[1]);

@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
 from services.fiplan_file_reader import prepare_fiplan_file
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
+from services.uo import UOS_EXECUCAO, UOS_EXECUCAO_LIBERADAS, UOS_SEDUC
 
 EMP_INPUT_DIR = Path("upload/emp")
 NOB_INPUT_DIR = Path("upload/nob")
@@ -45,6 +46,11 @@ def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_
         existing_opts = str(node_env.get("NODE_OPTIONS") or "").strip()
         if extra_opt not in existing_opts:
             node_env["NODE_OPTIONS"] = f"{existing_opts} {extra_opt}".strip()
+
+    # Listas de UO do Python (services/uo.py): fonte única para os runners Node.
+    node_env["UOS_EXECUCAO"] = ",".join(sorted(UOS_EXECUCAO))
+    node_env["UOS_EXECUCAO_LIBERADAS"] = ",".join(sorted(UOS_EXECUCAO_LIBERADAS))
+    node_env["UOS_SEDUC"] = ",".join(sorted(UOS_SEDUC))
 
     args = [
         NODE_EXE,
@@ -212,26 +218,32 @@ def _run_managed_job(job_id: int) -> None:
     try:
         if job.tipo == "fip613":
             from services.fip613_runner import run_fip613
-            total, output = run_fip613(file_path, upload.data_arquivo, upload.user_email, upload.id,
-                                       progress, cancel_check)
+            total, output, conferencia = run_fip613(file_path, upload.data_arquivo, upload.user_email, upload.id,
+                                                    progress, cancel_check)
             alerts = None
+            nota_final = conferencia
         elif job.tipo == "ped":
             from services.ped_runner import run_ped
-            total, output, missing_dotacao, missing_planejamento = run_ped(
+            total, output, missing_dotacao, missing_planejamento, uo_arquivo = run_ped(
                 file_path, upload.data_arquivo, upload.user_email, upload.id, progress, cancel_check
             )
-            alerts = {"chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
+            # A UO vai junto (sempre, mesmo sem avisos) para o modal agrupar por UO
+            # e uma carga limpa de uma UO apagar só os avisos dela.
+            alerts = {"uo": uo_arquivo, "chaves_dotacao": missing_dotacao, "linhas_planejamento": missing_planejamento}
+            nota_final = ""
         elif job.tipo == "est_emp":
             from services.est_emp_runner import run_est_emp
             total, output = run_est_emp(file_path, upload.data_arquivo, upload.user_email, upload.id,
                                         progress, cancel_check)
             alerts = None
+            nota_final = ""
         else:
             from services.receita_anexo10_runner import run_receita_anexo10
             total, output, alerts = run_receita_anexo10(input_dir, upload.id, progress, cancel_check)
+            nota_final = ""
         cancel_check()
         upload.output_filename = output.name if output else None
-        alert_count = sum(len(v) for v in alerts.values()) if alerts else 0
+        alert_count = sum(len(v) for v in alerts.values() if isinstance(v, list)) if alerts else 0
         detalhes_existentes = {}
         if job.detalhes_alertas:
             try:
@@ -247,8 +259,9 @@ def _run_managed_job(job_id: int) -> None:
             detalhes_finais.update(alerts)
         job.detalhes_alertas = json.dumps(detalhes_finais, ensure_ascii=False) if detalhes_finais else None
         finish_job(job, "finalizado_com_alertas" if alert_count else "finalizado",
-                   f"Processamento concluído. {total} registros inseridos.",
-                   arquivo_saida=output.name if output else None, caminho_saida=str(output) if output else None, total_registros=total,
+                   f"Processamento concluído. {total} registros inseridos. {nota_final}".strip(),
+                   arquivo_saida=output.name if output else None, caminho_saida=str(output) if output else None,
+                   total_registros=total,
                    registros_processados=total, total_alertas=alert_count)
         db.session.commit()
     except Exception:
@@ -271,6 +284,12 @@ def _run_managed_job(job_id: int) -> None:
 def main() -> int:
     args = _parse_args()
     app = create_app()
+    if args.kind == "see":
+        # Notas SEE: o próprio processamento grava status/falha nas tabelas see_*.
+        from rotas.notas_see_routes import _run_see_processamento
+
+        _run_see_processamento(app, args.upload_id)
+        return 0
     with app.app_context():
         try:
             if args.kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
@@ -281,11 +300,8 @@ def main() -> int:
                              progress=0, pid=os.getpid())
                 if args.kind == "emp":
                     _run_emp(args.upload_id)
-                elif args.kind == "nob":
-                    _run_nob(args.upload_id)
                 else:
-                    from rotas.home_routes import _run_see_processamento
-                    _run_see_processamento(app, args.upload_id)
+                    _run_nob(args.upload_id)
         except Exception as exc:
             msg = f"{type(exc).__name__}: {exc}"
             if args.kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
@@ -294,6 +310,12 @@ def main() -> int:
                 if job:
                     if "PROCESSAMENTO_CANCELADO" in msg:
                         finish_job(job, "cancelado", "Processamento cancelado pelo usuário.")
+                    elif type(exc).__name__ == "UORecusada":
+                        # Arquivo recusado pela UO: a mensagem já explica o motivo
+                        # e nada foi gravado.
+                        job.erro_tecnico = msg
+                        job.total_erros = 1
+                        finish_job(job, "falha", str(exc))
                     else:
                         job.erro_tecnico = msg
                         job.total_erros = 1

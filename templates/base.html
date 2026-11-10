@@ -6,7 +6,7 @@
   <title>SPO</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261016.sync-main.2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261110.layout-novo.7">
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
 <body class="app-body spo-shell">
@@ -132,6 +132,7 @@
                 <a href="#" data-route="atualizar/emp" class="menu-item" title="EMP"><i class="bi bi-cloud-arrow-up"></i> <span>EMP</span></a>
                 <a href="#" data-route="atualizar/est-emp" class="menu-item" title="EST EMP"><i class="bi bi-cloud-check"></i> <span>EST EMP</span></a>
                 <a href="#" data-route="atualizar/nob" class="menu-item" title="NOB"><i class="bi bi-cloud-plus"></i> <span>NOB</span></a>
+                <a href="#" data-route="atualizar/plan51" class="menu-item" title="PLAN 51 (Atualizar)"><i class="bi bi-cloud-upload"></i> <span>PLAN 51</span></a>
                 <a href="#" data-route="atualizar/limpeza-historico" class="menu-item" title="Limpeza de Histórico"><i class="bi bi-trash3"></i> <span>Limpeza de Histórico</span></a>
               </div>
             </div>
@@ -172,7 +173,7 @@
             <div class="menu-group" id="menu-relatorios-planejamento">
               <div class="menu-item menu-parent" data-submenu="submenu-relatorios-planejamento" title="Planejamento"><i class="bi bi-diagram-3"></i> <span>Planejamento</span></div>
               <div class="submenu" id="submenu-relatorios-planejamento">
-                <a href="#" data-route="relatorios/plan20-seduc" class="menu-item" title="Relatório Plan20 - SEDUC"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN20 - SEDUC</span></a>
+                <a href="#" data-route="relatorios/plan20-seduc" class="menu-item" title="Relatório Plan20"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN20</span></a>
                 <a href="#" data-route="relatorios/plan21-nger" class="menu-item" title="Relatório Plan21 - NGER"><i class="bi bi-file-earmark-spreadsheet"></i> <span>PLAN21_NGER</span></a>
                 <div class="menu-group" id="menu-relatorios-estrutura-planejamento">
                   <div class="menu-item menu-parent" data-submenu="submenu-relatorios-estrutura-planejamento" title="Estrutura do Planejamento"><i class="bi bi-diagram-2"></i> <span>Estrutura do Planejamento</span></div>
@@ -190,7 +191,7 @@
                 <a href="#" data-route="relatorios/emp" class="menu-item" title="Relatório EMP"><i class="bi bi-clipboard-data"></i> <span>EMP</span></a>
                 <a href="#" data-route="relatorios/est-emp" class="menu-item" title="Relatório Est EMP"><i class="bi bi-clipboard-check"></i> <span>EST EMP</span></a>
                 <a href="#" data-route="relatorios/nob" class="menu-item" title="Relatório NOB"><i class="bi bi-clipboard-plus"></i> <span>NOB</span></a>
-                <a href="#" data-route="relatorios/receita-anexo10" class="menu-item" title="Receita Anexo 10"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Receita Anexo 10</span></a>
+                <a href="#" data-route="relatorios/plan51" class="menu-item" title="Relatório PLAN 51"><i class="bi bi-file-earmark-bar-graph"></i> <span>PLAN 51</span></a>
                 <a href="#" data-route="relatorios/dotacao" class="menu-item" title="Relatório Dotação"><i class="bi bi-clipboard-data"></i> <span>DOTAÇÃO</span></a>
                 <a href="#" data-route="relatorios/est-dotacao" class="menu-item" title="Relatório Estorno de Dotação"><i class="bi bi-clipboard-minus"></i> <span>ESTORNO DE DOTAÇÃO</span></a>
               </div>
@@ -255,7 +256,7 @@
         <span class="footer-line">Núcleo de Gestão Estratégica para Resultados - NGER</span>
         <span class="footer-line">Sistema de Planejamento e Orçamento</span>
         <span class="footer-line">Desenvolvido por Cleber S. Guedes</span>
-        <span class="footer-line footer-build">RELEASE_2_2026_10_15.2</span>
+        <span class="footer-line footer-build">RELEASE_2_2026_11_10.2</span>
       </footer>
     </div>
   </div>
@@ -282,6 +283,6 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}?v=20261016.sync-main.2"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}?v=20261110.layout-novo.7"></script>
 </body>
 </html>
