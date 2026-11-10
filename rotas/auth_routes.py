@@ -3,17 +3,23 @@ import secrets
 import os
 from types import SimpleNamespace
 from datetime import datetime, timedelta
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import check_password_hash
 from models import db, Usuario, LogLogin, ActiveSession, Perfil
+from services.session_config import get_session_timeout, get_timeout_minutos
 from sqlalchemy import func, text
 from sqlalchemy.exc import SQLAlchemyError
 
 
 auth_bp = Blueprint("auth", __name__)
-SESSION_TIMEOUT = timedelta(hours=2)
+
+MOTIVOS_SESSAO = {
+    "outro_local": "Sua sessão foi encerrada porque este usuário entrou no SPO em outro local.",
+    "expirada": "Sua sessão expirou por inatividade. Entre novamente.",
+    "encerrada": "Sua sessão foi encerrada. Entre novamente.",
+}
 
 
 def _log_login(email: str, status: str, motivo: Optional[str] = None) -> None:
@@ -129,7 +135,7 @@ def login():
                 flash("Email ou senha invalidos.", "error")
                 return redirect(url_for("auth.login"))
 
-            cutoff = datetime.utcnow() - SESSION_TIMEOUT
+            cutoff = datetime.utcnow() - get_session_timeout()
             active = ActiveSession.query.filter_by(email=email).first()
             if active and active.last_activity and active.last_activity >= cutoff and not force_login:
                 _debug_probe("login_conflict_active_session", path=request.path, email=email)
@@ -216,7 +222,24 @@ def login():
             flash("Falha interna ao processar login.", "error")
             return redirect(url_for("auth.login"))
 
+    motivo = MOTIVOS_SESSAO.get((request.args.get("motivo") or "").strip())
+    if motivo:
+        flash(motivo, "info")
     return render_template("login.html")
+
+
+@auth_bp.route("/api/sessao/status")
+def sessao_status():
+    """Verificacao leve feita pelo navegador. Nao conta como atividade (ver app.py)."""
+    if getattr(g, "user", None):
+        resp = jsonify({"ok": True, "timeout_minutos": get_timeout_minutos()})
+        status = 200
+    else:
+        resp = jsonify({"ok": False, "reason": getattr(g, "session_end_reason", None) or "sem_sessao"})
+        status = 401
+    resp.status_code = status
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @auth_bp.route("/logout", methods=["POST"])

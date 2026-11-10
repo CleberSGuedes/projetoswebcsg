@@ -1,7 +1,7 @@
 <div class="grid">
   <header class="report-header"><div class="report-header-copy"><div class="report-eyebrow">Relatórios · Execução</div><h1>Relatório NOB</h1><p>Consulte notas de ordem bancária, acompanhe valores e exporte os dados.</p></div><i class="bi bi-clipboard-plus" aria-hidden="true"></i></header>
   <div class="card plan20-card report-data-card">
-    <div class="actions relatorio-top">
+    <div class="actions relatorio-top relatorio-top-uo">
       <div class="muted" id="nob-relatorio-meta">Carregando...</div>
       <div class="relatorio-top-right">
         <div class="totais-box">
@@ -20,6 +20,7 @@
       <table class="table plan20-table" id="nob-relatorio-tabela">
         <thead>
           <tr>
+            <th>UO</th>
             <th>Exercício</th>
             <th>Nº NOB</th>
             <th>Nº NOB Estorno/Estornado</th>
@@ -31,7 +32,6 @@
             <th>Valor NOB</th>
             <th>Devolução GCV</th>
             <th>Valor NOB - GCV</th>
-            <th>UO</th>
             <th>UG</th>
             <th>Dotação Orçamentária</th>
             <th>Função</th>
@@ -58,6 +58,7 @@
             <th>Data/Hora de Cadastro da LIQ</th>
           </tr>
           <tr class="filter-row">
+            <th><div class="multi-filter" data-col="uo"></div></th>
             <th><div class="multi-filter" data-col="exercicio"></div></th>
             <th><div class="multi-filter" data-col="numero_nob"></div></th>
             <th><div class="multi-filter" data-col="numero_nob_estorno"></div></th>
@@ -69,7 +70,6 @@
             <th><div class="multi-filter" data-col="valor_nob"></div></th>
             <th><div class="multi-filter" data-col="devolucao_gcv"></div></th>
             <th><div class="multi-filter" data-col="valor_nob_gcv"></div></th>
-            <th><div class="multi-filter" data-col="uo"></div></th>
             <th><div class="multi-filter" data-col="ug"></div></th>
             <th><div class="multi-filter" data-col="dotacao_orcamentaria"></div></th>
             <th><div class="multi-filter" data-col="funcao"></div></th>

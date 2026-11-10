@@ -21,9 +21,13 @@ from flask_mail import Mail
 from config import Config
 from models import db, ActiveSession, Perfil, Usuario
 from rotas import register_blueprints
+from services.session_config import get_session_timeout
 
 mail = Mail()
-SESSION_TIMEOUT = timedelta(hours=2)
+# Verificacao leve feita pelo proprio navegador (nao conta como atividade do usuario).
+HEARTBEAT_PATH = "/api/sessao/status"
+# Retorno de _fetch_active_session quando a consulta falhou (diferente de "nao existe linha").
+_FETCH_ERROR = object()
 ACTIVE_SESSIONS_COUNT_TTL_S = max(
     0, int(os.getenv("ACTIVE_SESSIONS_COUNT_TTL_S", "15") or "15")
 )
@@ -148,7 +152,7 @@ def _fetch_active_session(email: str):
     ).where(ActiveSession.email == email)
     result = _execute_with_retry(stmt)
     if result is None:
-        return None
+        return _FETCH_ERROR
     try:
         return result.mappings().first()
     except Exception:
@@ -157,7 +161,7 @@ def _fetch_active_session(email: str):
         with db.engine.connect() as conn:
             return conn.execute(stmt).mappings().first()
     except Exception:
-        return None
+        return _FETCH_ERROR
 
 
 def _ensure_active_session(email: str, token: str, now: datetime) -> bool:
@@ -413,15 +417,17 @@ def create_app():
             return
 
         now = datetime.utcnow()
-        cutoff = now - SESSION_TIMEOUT
+        cutoff = now - get_session_timeout()
         now_ts = _now_ts()
+        is_heartbeat = request.path == HEARTBEAT_PATH
         active_session_checked_at = user.get("_active_session_checked_at")
         try:
             active_session_checked_at = float(active_session_checked_at or 0.0)
         except Exception:
             active_session_checked_at = 0.0
         if (
-            ACTIVE_SESSION_CHECK_TTL_S > 0
+            not is_heartbeat
+            and ACTIVE_SESSION_CHECK_TTL_S > 0
             and now_ts > 0
             and active_session_checked_at > 0
             and (now_ts - active_session_checked_at) <= ACTIVE_SESSION_CHECK_TTL_S
@@ -476,26 +482,40 @@ def create_app():
                 _debug_probe("preload_db_index_error_cached_session_kept", path=request.path, email=user.get("email"))
             return
 
-        if active_row is None:
-            if _ensure_active_session(user.get("email"), token, now):
-                active_row = {"email": user.get("email"), "session_token": token, "last_activity": now}
+        if active_row is _FETCH_ERROR:
+            # Falha de banco (nao e "sessao inexistente"): mantem a sessao do cache por tolerancia.
+            try:
+                app.logger.warning(
+                    "auth preload active_row fetch failed, keeping cached session email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
+            if not _restore_cached_user_context(user):
+                session.clear()
+                _debug_probe("preload_active_row_error_session_cleared", path=request.path, email=user.get("email"))
             else:
-                try:
-                    app.logger.warning(
-                        "auth preload active_row=None keeping cached session email=%s path=%s",
-                        user.get("email"),
-                        request.path,
-                    )
-                except Exception:
-                    pass
-                if not _restore_cached_user_context(user):
-                    session.clear()
-                    _debug_probe("preload_active_row_missing_session_cleared", path=request.path, email=user.get("email"))
-                else:
-                    _debug_probe("preload_active_row_missing_cached_session_kept", path=request.path, email=user.get("email"))
-                return
+                _debug_probe("preload_active_row_error_cached_session_kept", path=request.path, email=user.get("email"))
+            return
+
+        if active_row is None:
+            # A linha da sessao nao existe mais (logout/encerramento em outro local): nao recria.
+            g.session_end_reason = "encerrada"
+            try:
+                app.logger.info(
+                    "auth preload active session missing, session ended email=%s path=%s",
+                    user.get("email"),
+                    request.path,
+                )
+            except Exception:
+                pass
+            session.clear()
+            _debug_probe("preload_active_row_missing_session_cleared", path=request.path, email=user.get("email"))
+            return
 
         if not active_row or active_row.get("session_token") != token:
+            g.session_end_reason = "outro_local"
             _best_effort_clear_active_session(user.get("email"), token)
             try:
                 app.logger.warning(
@@ -517,6 +537,7 @@ def create_app():
                 last_activity = None
 
         if last_activity and last_activity < cutoff:
+            g.session_end_reason = "expirada"
             try:
                 result = _execute_with_retry(
                     delete(ActiveSession).where(
@@ -542,37 +563,21 @@ def create_app():
             _debug_probe("preload_session_expired", path=request.path, email=user.get("email"))
             return
 
-        try:
-            result = _execute_with_retry(
-                update(ActiveSession)
-                .where(
-                    ActiveSession.email == user.get("email"),
-                    ActiveSession.session_token == token,
-                )
-                .values(last_activity=now)
-            )
-            if result is None:
-                _safe_session_rollback()
-                try:
-                    app.logger.warning(
-                        "auth preload last_activity update failed, keeping cached session email=%s path=%s",
-                        user.get("email"),
-                        request.path,
+        if not is_heartbeat:
+            try:
+                result = _execute_with_retry(
+                    update(ActiveSession)
+                    .where(
+                        ActiveSession.email == user.get("email"),
+                        ActiveSession.session_token == token,
                     )
-                except Exception:
-                    pass
-                if not _restore_cached_user_context(user):
-                    session.clear()
-                    _debug_probe("preload_last_activity_update_failed_session_cleared", path=request.path, email=user.get("email"))
-                else:
-                    _debug_probe("preload_last_activity_update_failed_cached_session_kept", path=request.path, email=user.get("email"))
-                return
-            db.session.commit()
-            if result.rowcount == 0:
-                if not _ensure_active_session(user.get("email"), token, now):
+                    .values(last_activity=now)
+                )
+                if result is None:
+                    _safe_session_rollback()
                     try:
                         app.logger.warning(
-                            "auth preload last_activity rowcount=0 keeping cached session email=%s path=%s",
+                            "auth preload last_activity update failed, keeping cached session email=%s path=%s",
                             user.get("email"),
                             request.path,
                         )
@@ -580,27 +585,44 @@ def create_app():
                         pass
                     if not _restore_cached_user_context(user):
                         session.clear()
-                        _debug_probe("preload_last_activity_rowcount_zero_session_cleared", path=request.path, email=user.get("email"))
+                        _debug_probe("preload_last_activity_update_failed_session_cleared", path=request.path, email=user.get("email"))
                     else:
-                        _debug_probe("preload_last_activity_rowcount_zero_cached_session_kept", path=request.path, email=user.get("email"))
+                        _debug_probe("preload_last_activity_update_failed_cached_session_kept", path=request.path, email=user.get("email"))
                     return
-        except SQLAlchemyError:
-            _safe_session_rollback()
-            try:
-                app.logger.warning(
-                    "auth preload last_activity exception, keeping cached session email=%s path=%s",
-                    user.get("email"),
-                    request.path,
-                    exc_info=True,
-                )
-            except Exception:
-                pass
-            if not _restore_cached_user_context(user):
-                session.clear()
-                _debug_probe("preload_last_activity_exception_session_cleared", path=request.path, email=user.get("email"))
-            else:
-                _debug_probe("preload_last_activity_exception_cached_session_kept", path=request.path, email=user.get("email"))
-            return
+                db.session.commit()
+                if result.rowcount == 0:
+                    if not _ensure_active_session(user.get("email"), token, now):
+                        try:
+                            app.logger.warning(
+                                "auth preload last_activity rowcount=0 keeping cached session email=%s path=%s",
+                                user.get("email"),
+                                request.path,
+                            )
+                        except Exception:
+                            pass
+                        if not _restore_cached_user_context(user):
+                            session.clear()
+                            _debug_probe("preload_last_activity_rowcount_zero_session_cleared", path=request.path, email=user.get("email"))
+                        else:
+                            _debug_probe("preload_last_activity_rowcount_zero_cached_session_kept", path=request.path, email=user.get("email"))
+                        return
+            except SQLAlchemyError:
+                _safe_session_rollback()
+                try:
+                    app.logger.warning(
+                        "auth preload last_activity exception, keeping cached session email=%s path=%s",
+                        user.get("email"),
+                        request.path,
+                        exc_info=True,
+                    )
+                except Exception:
+                    pass
+                if not _restore_cached_user_context(user):
+                    session.clear()
+                    _debug_probe("preload_last_activity_exception_session_cleared", path=request.path, email=user.get("email"))
+                else:
+                    _debug_probe("preload_last_activity_exception_cached_session_kept", path=request.path, email=user.get("email"))
+                return
         g.user = user
         g.user_id = _as_int_or_none(user.get("id"))
         user["_active_session_checked_at"] = now_ts

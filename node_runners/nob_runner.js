@@ -2,6 +2,7 @@
 const fs = require("fs");
 const ExcelJS = require("exceljs");
 const { connect, bulkInsert } = require("./db");
+const { lerUoExercicios, desativarVersaoAnterior } = require("./execucao_uo");
 const {
   ensureDir,
   cleanHistorico,
@@ -646,23 +647,46 @@ async function loadSheetData(filePath) {
   return { columns: keepNames, rows };
 }
 
+function detectHeaderNob(cachedRows) {
+  const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
+  let foundRowIdx = null;
+  let foundValues = [];
+  let bestMatchCount = 0;
+
+  for (let idx = 0; idx < cachedRows.length; idx += 1) {
+    const row = cachedRows[idx];
+    const rawValues = row.map((c) => (c === null ? "" : String(c).trim()));
+    const normValues = normalizeColumns(rawValues);
+    const matchCount = normValues.filter((name) => requiredCanon.has(name)).length;
+    if (matchCount > bestMatchCount) {
+      bestMatchCount = matchCount;
+      foundRowIdx = idx + 1;
+      foundValues = rawValues;
+    }
+  }
+
+  if (!foundRowIdx || bestMatchCount < 3) return null;
+  return { foundRowIdx, foundValues };
+}
+
 async function processNob(filePath, dataArquivo, userEmail, uploadId) {
-  ensureDir(OUTPUT_DIR);
-  await moveOldOutputs(OUTPUT_DIR);
   updateStatusFields("nob", uploadId, {
     progress: 3,
     message: "Lendo planilha NOB.",
   });
+  // UO e exercício do CONTEÚDO do relatório, antes de gerar saída ou tocar no
+  // banco: recusa UO ausente, múltipla ou não liberada.
+  const { uo, exercicios } = await lerUoExercicios(filePath, detectHeaderNob, normalizeColumns);
+  ensureDir(OUTPUT_DIR);
+  await moveOldOutputs(OUTPUT_DIR);
   const outputFile = path.join(OUTPUT_DIR, `${path.basename(filePath, path.extname(filePath))}_tratado.xlsx`);
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: outputFile });
   const sheet = workbook.addWorksheet("nob_tratado");
 
   const db = await connect();
-  if (db.kind === "mssql") {
-    await db.pool.request().query("UPDATE nob SET ativo = 0 WHERE ativo = 1");
-  } else {
-    await db.pool.query("UPDATE nob SET ativo = 0 WHERE ativo = 1");
-  }
+  // Desativa só a versão anterior da MESMA UO e dos MESMOS exercícios (antes:
+  // a tabela inteira - o arquivo de uma UO apagaria as outras).
+  await desativarVersaoAnterior(db, "nob", uo, exercicios);
 
   const batch = [];
   let totalInserted = 0;
@@ -676,27 +700,7 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
   const bufferRows = [];
   const seenRecordKeys = new Set();
 
-  const detectHeader = (cachedRows) => {
-    const requiredCanon = new Set(normalizeColumns(REQUIRED_COLS_RAW));
-    let foundRowIdx = null;
-    let foundValues = [];
-    let bestMatchCount = 0;
-
-    for (let idx = 0; idx < cachedRows.length; idx += 1) {
-      const row = cachedRows[idx];
-      const rawValues = row.map((c) => (c === null ? "" : String(c).trim()));
-      const normValues = normalizeColumns(rawValues);
-      const matchCount = normValues.filter((name) => requiredCanon.has(name)).length;
-      if (matchCount > bestMatchCount) {
-        bestMatchCount = matchCount;
-        foundRowIdx = idx + 1;
-        foundValues = rawValues;
-      }
-    }
-
-    if (!foundRowIdx || bestMatchCount < 3) return null;
-    return { foundRowIdx, foundValues };
-  };
+  const detectHeader = detectHeaderNob;
 
   const initHeader = (foundIdx, foundValues) => {
     headerRowIdx = foundIdx;
@@ -868,4 +872,6 @@ async function processNob(filePath, dataArquivo, userEmail, uploadId) {
 
 module.exports = {
   processNob,
+  detectHeaderNob,
+  normalizeColumns,
 };

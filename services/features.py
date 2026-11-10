@@ -7,8 +7,37 @@ def _group(group_id, nome, children):
     return {"id": group_id, "nome": nome, "group": True, "children": children}
 
 
+FEATURE_ALIASES = {
+    "atualizar/analise-receita": "atualizar/receita-anexo10",
+}
+
+
+def normalize_feature_id(feature_id):
+    return FEATURE_ALIASES.get(feature_id, feature_id)
+
+
+def normalize_feature_list(features):
+    normalized = []
+    seen = set()
+    for feature in features or []:
+        feature_id = normalize_feature_id(feature)
+        if feature_id and feature_id not in seen:
+            normalized.append(feature_id)
+            seen.add(feature_id)
+    return normalized
+
+
 FEATURES = [
-    {"id": "dashboard", "nome": "Início", "locked": True, "children": []},
+    {
+        "id": "dashboard",
+        "nome": "Início",
+        "locked": True,
+        # Cards da tela inicial: liberados no Painel de Permissões, mas fora do menu ("menu": False).
+        # O card "Bem-vindo" é fixo (sem permissão). Novo card = nova linha aqui + bloco no dashboard.html.
+        "children": [
+            {"id": "dashboard/card-status", "nome": "Card Status (usuários logados)", "menu": False},
+        ],
+    },
     {
         "id": "atualizar",
         "nome": "Administrar SPO",
@@ -17,6 +46,7 @@ FEATURES = [
                 {"id": "atualizar/personalizar-spo/temas", "nome": "Personalizar Temas SPO"},
                 {"id": "atualizar/personalizar-spo/contrato-visual-protegido", "nome": "Contrato Visual Protegido"},
             ]),
+            {"id": "atualizar/seguranca-sessao", "nome": "Sessão e Login"},
             _group("grupo/governanca-resultados", "Governança e Resultados", [
                 {"id": "atualizar/governanca-resultados/mapa", "nome": "Mapa Conceitual"},
                 {"id": "atualizar/governanca-resultados/programacao-pta2027", "nome": "Programação PTA 2027"},
@@ -39,7 +69,6 @@ FEATURES = [
                     {"id": "atualizar/estrutura-planejamento/replicar-exercicio", "nome": "Replicar exercício"},
                 ]),
                 {"id": "atualizar/teto-seduc", "nome": "Teto Financeiro"},
-                {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA"},
             ]),
             _group("grupo/pta-gerencial-nger", "PTA-Gerencial NGER", [
                 {"id": "atualizar/plan20-seduc", "nome": "PLAN-20 FIPLAN"},
@@ -55,12 +84,15 @@ FEATURES = [
                 {"id": "atualizar/fip613", "nome": "FIP 613"},
                 {"id": "atualizar/ped", "nome": "PED"},
                 {"id": "atualizar/emp", "nome": "EMP"},
+                {"id": "atualizar/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "atualizar/est-emp", "nome": "EST EMP"},
                 {"id": "atualizar/nob", "nome": "NOB"},
+                {"id": "atualizar/plan51", "nome": "PLAN 51"},
                 {"id": "atualizar/limpeza-historico", "nome": "Limpeza de Histórico"},
             ]),
         ],
     },
+    {"id": "cadastrar/planejamento/programar-pta-loa", "nome": "Programar PTA/LOA", "children": []},
     {
         "id": "cadastrar",
         "nome": "Emitir/Ajustar Dotação",
@@ -84,7 +116,7 @@ FEATURES = [
         "nome": "Relatórios",
         "children": [
             _group("grupo/relatorios-planejamento", "Planejamento", [
-                {"id": "relatorios/plan20-seduc", "nome": "PLAN20 - SEDUC"},
+                {"id": "relatorios/plan20-seduc", "nome": "PLAN20"},
                 {"id": "relatorios/plan21-nger", "nome": "PLAN21_NGER"},
                 _group("grupo/relatorios-estrutura", "Estrutura do Planejamento", [
                     {"id": "relatorios/estrutura-planejamento", "nome": "Consultar Estrutura"},
@@ -96,6 +128,8 @@ FEATURES = [
                 {"id": "relatorios/emp", "nome": "EMP"},
                 {"id": "relatorios/est-emp", "nome": "EST EMP"},
                 {"id": "relatorios/nob", "nome": "NOB"},
+                {"id": "relatorios/plan51", "nome": "PLAN 51"},
+                {"id": "relatorios/receita-anexo10", "nome": "Receita Anexo 10"},
                 {"id": "relatorios/dotacao", "nome": "DOTAÇÃO"},
                 {"id": "relatorios/est-dotacao", "nome": "ESTORNO DE DOTAÇÃO"},
             ]),
@@ -170,6 +204,7 @@ MENU_META = {
     "grupo/personalizar-spo": {"icon": "palette"},
     "atualizar/personalizar-spo/temas": {"icon": "brush"},
     "atualizar/personalizar-spo/contrato-visual-protegido": {"icon": "shield-lock"},
+    "atualizar/seguranca-sessao": {"icon": "clock-history"},
     "grupo/governanca-resultados": {"icon": "compass"},
     "atualizar/governanca-resultados/mapa": {"icon": "diagram-3"},
     "atualizar/governanca-resultados/programacao-pta2027": {"icon": "map"},
@@ -186,6 +221,10 @@ MENU_META = {
     "cadastrar": {"icon": "clipboard-plus"},
     "cadastrar/dotacao": {"icon": "clipboard-plus"},
     "cadastrar/est-dotacao": {"icon": "clipboard-minus"},
+    "cadastrar/planejamento/programar-pta-loa": {
+        "icon": "box-arrow-up-right",
+        "url": "https://pta2025.projetoswebcsg.life/",
+    },
     "cadastrar/plan_21-nger/meta_fisica": {"icon": "table"},
     "cadastrar/plan_21-nger/subacao": {"icon": "diagram-3-fill"},
     "cadastrar/plan_21-nger/etapa": {"icon": "list-task"},
@@ -206,6 +245,8 @@ MENU_META = {
     "relatorios/emp": {"icon": "clipboard-data"},
     "relatorios/est-emp": {"icon": "clipboard-check"},
     "relatorios/nob": {"icon": "clipboard-plus"},
+    "relatorios/plan51": {"icon": "file-earmark-bar-graph"},
+    "relatorios/receita-anexo10": {"icon": "file-earmark-spreadsheet"},
     "relatorios/dotacao": {"icon": "clipboard-data"},
     "relatorios/est-dotacao": {"icon": "clipboard-minus"},
     "paineis-dashboards": {"icon": "speedometer2"},
@@ -231,20 +272,16 @@ MENU_META = {
     "atualizar/estrutura-planejamento/catalogo-chave": {"icon": "key"},
     "atualizar/estrutura-planejamento/replicar-exercicio": {"icon": "arrow-repeat"},
     "atualizar/teto-seduc": {"icon": "cash-stack"},
-    # Link externo (sistema de programacao do PTA/LOA) - _menu.html abre em
-    # nova aba via data-external-url (tratado em static/js/main.js).
-    "cadastrar/planejamento/programar-pta-loa": {
-        "icon": "box-arrow-up-right",
-        "external_url": "https://pta2025.projetoswebcsg.life/",
-    },
     "atualizar/plan20-seduc": {"icon": "file-earmark-spreadsheet"},
     "atualizar/chave_planejamento_regra": {"icon": "tools"},
     "atualizar/chaves_planejamento_upload": {"icon": "cloud-upload"},
     "atualizar/fip613": {"icon": "cloud-upload"},
     "atualizar/ped": {"icon": "arrow-up-circle"},
     "atualizar/emp": {"icon": "cloud-arrow-up"},
+    "atualizar/receita-anexo10": {"icon": "file-spreadsheet"},
     "atualizar/est-emp": {"icon": "cloud-check"},
     "atualizar/nob": {"icon": "cloud-plus"},
+    "atualizar/plan51": {"icon": "cloud-upload"},
     "atualizar/limpeza-historico": {"icon": "trash3"},
     "area-uens/sage/notas-see": {"icon": "file-earmark-pdf"},
 }
@@ -279,6 +316,7 @@ def build_menu_tree(features=None):
     items = deepcopy(FEATURES if features is None else features)
 
     def enrich(nodes):
+        nodes[:] = [node for node in nodes if node.get("menu", True)]
         for node in nodes:
             meta = MENU_META.get(node["id"], {})
             node.update(meta)
