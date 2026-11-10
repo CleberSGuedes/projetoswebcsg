@@ -42,12 +42,14 @@ def desativar_versao_anterior(
     exercicios: list[Any],
     coluna_exercicio: str = "exercicio",
     conn: Any = None,
+    commit: bool = True,
 ) -> int:
     """Desativa só as linhas ativas da MESMA UO e dos MESMOS exercícios do
     arquivo. Compara por número: cargas antigas guardaram o exercício como
     "26" e a UO sem o zero à esquerda. Devolve quantas linhas desativou.
 
-    `conn` serve aos testes (tabela temporária na própria conexão).
+    `conn` serve aos testes (tabela temporária na própria conexão). Com
+    `commit=False` o chamador faz o commit (troca da carga numa transação só).
     """
     uo = uo_codigo(uo)
     if not uo:
@@ -70,7 +72,8 @@ def desativar_versao_anterior(
         return conn.execute(sql, params).rowcount or 0
     try:
         res = db.session.execute(sql, params)
-        db.session.commit()
+        if commit:
+            db.session.commit()
         return res.rowcount or 0
     except SQLAlchemyError:
         db.session.rollback()

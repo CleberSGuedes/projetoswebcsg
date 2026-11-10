@@ -269,7 +269,7 @@ def save_clean_data(data, output_dir: Path) -> Path:
     return output_path
 
 
-def update_database(data, ano, data_arquivo, user_email, upload_id):
+def update_database(data, ano, data_arquivo, user_email, upload_id, progress_callback=None, cancel_callback=None):
     insert_sql = text(
         """
         INSERT INTO fip613 (
@@ -289,10 +289,6 @@ def update_database(data, ano, data_arquivo, user_email, upload_id):
         """
     )
 
-    # Desativa só a versão anterior da MESMA UO e do MESMO ano (antes era a
-    # tabela inteira: o arquivo de uma UO apagaria as outras).
-    desativar_versao_anterior("fip613", data.attrs["uo"], [ano], coluna_exercicio="ano")
-
     rows = data.to_dict(orient="records")
     total = 0
     for start in range(0, len(rows), BATCH_SIZE):
@@ -303,27 +299,46 @@ def update_database(data, ano, data_arquivo, user_email, upload_id):
             r["data_arquivo"] = data_arquivo
             r["user_email"] = user_email
             r["upload_id"] = upload_id
-            r["ativo"] = True
+            r["ativo"] = False
+        if cancel_callback:
+            cancel_callback()
         try:
             db.session.execute(insert_sql, chunk)
             db.session.commit()
             total += len(chunk)
+            if progress_callback:
+                progress_callback(total, len(rows))
         except SQLAlchemyError as exc:
             db.session.rollback()
             raise exc
     return total
 
 
-def run_fip613(
-    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
-) -> tuple[int, Path, str]:
+def run_fip613(file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int,
+               progress_callback=None, cancel_callback=None) -> tuple[int, Path, str]:
     ensure_dirs()
+    if progress_callback:
+        progress_callback("leitura", 10, "Lendo e validando a planilha.")
     ano = get_year_from_file(file_path)
     # Valida a UO (UORecusada) antes de gerar a saída ou gravar qualquer coisa.
     data = load_clean_data(file_path)
     if data is None or ano is None:
         raise RuntimeError("Não foi possível ler o arquivo FIP 613 (cabeçalho ou ano ausente).")
 
+    if cancel_callback:
+        cancel_callback()
     output_path = save_clean_data(data, OUTPUT_DIR)
-    total = update_database(data, ano, data_arquivo, user_email, upload_id)
+    if progress_callback:
+        progress_callback("gravacao", 35, "Planilha tratada. Gravando registros.")
+    def _batch(done, total_rows):
+        if progress_callback:
+            progress_callback("gravacao", 35 + int((done / max(total_rows, 1)) * 55), f"Gravados {done} de {total_rows} registros.")
+    total = update_database(data, ano, data_arquivo, user_email, upload_id, _batch, cancel_callback)
+    if cancel_callback:
+        cancel_callback()
+    # Troca a carga só da MESMA UO e do MESMO ano (antes: a tabela inteira),
+    # na mesma transação que ativa a carga nova.
+    desativar_versao_anterior("fip613", data.attrs["uo"], [ano], coluna_exercicio="ano", commit=False)
+    db.session.execute(text("UPDATE fip613 SET ativo = 1 WHERE upload_id = :upload_id"), {"upload_id": upload_id})
+    db.session.commit()
     return total, output_path, data.attrs.get("conferencia", "")

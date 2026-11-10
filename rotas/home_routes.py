@@ -23,6 +23,7 @@ from models import (
     Perfil,
     PerfilPermissao,
     NivelPermissao,
+    UsuarioPermissao,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -34,6 +35,8 @@ from models import (
     EstEmpRegistro,
     NobUpload,
     NobRegistro,
+    ProcessamentoJob,
+    ProcessamentoEvento,
     Plan21Nger,
     Adj,
     Regiao,
@@ -103,7 +106,7 @@ from sqlalchemy.exc import (
 )
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
-from services.features import FEATURES, flatten_features, build_parent_map
+from services.features import FEATURES, build_menu_tree, flatten_features, build_parent_map
 from services.fip613_runner import run_fip613, UPLOAD_DIR
 from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
 from services.execucao_uo import cond_uo_em, sql_uo_em
@@ -133,6 +136,7 @@ from services.est_emp_runner import (
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
+from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
 from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
@@ -820,6 +824,13 @@ def _start_worker(kind: str, upload_id: int) -> None:
             stderr=log_handle,
             creationflags=creationflags,
         )
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.worker_pid = proc.pid
+                job.mensagem_atual = "Worker externo iniciado."
+                db.session.commit()
+            return
         update_status_fields(
             kind,
             upload_id,
@@ -827,6 +838,15 @@ def _start_worker(kind: str, upload_id: int) -> None:
             pid=proc.pid,
         )
     except Exception as exc:
+        if kind in {"fip613", "ped", "est_emp"}:
+            job = db.session.get(ProcessamentoJob, upload_id)
+            if job:
+                job.status = "falha"
+                job.erro_tecnico = f"{type(exc).__name__}: {exc}"
+                job.mensagem_atual = "Não foi possível iniciar o worker externo."
+                job.finalizado_em = datetime.utcnow()
+                db.session.commit()
+            raise
         update_status_fields(
             kind,
             upload_id,
@@ -844,6 +864,7 @@ def index():
         allowed = _permissoes_with_parents(
             getattr(g, "user_perfil_id", None),
             getattr(g, "user_nivel", None),
+            _current_usuario_id(),
         )
     except SQLAlchemyError as exc:
         # Instabilidade de conexao com o banco esgotou todas as tentativas
@@ -864,6 +885,7 @@ def index():
         "base.html",
         initial_content="dashboard",
         initial_features=allowed,
+        menu_features=build_menu_tree(),
         permissoes_indisponiveis=permissoes_indisponiveis,
     )
 
@@ -956,11 +978,25 @@ def partial_dashboard():
         except (ProgrammingError, NoSuchColumnError, OperationalError, ResourceClosedError):
             _safe_session_rollback()
             active_sessions = []
-    # Avisos do modal, por UO: o PED guarda os da última carga de cada UO na sessão
-    # e o EMP no status da última carga de cada UO. Uma carga de outra UO não
-    # apaga nem sobrepõe os avisos da primeira.
+    # Avisos do modal, por UO: vale a última carga de cada UO (uma carga de outra
+    # UO não apaga nem sobrepõe os avisos da primeira). Cargas antigas, sem UO
+    # gravada, são da secretaria.
     uo_padrao_aviso = sorted(UOS_SEDUC)[0]
     avisos_por_uo: dict[str, dict] = {}
+
+    def _uo_da_carga(tabela, upload_id):
+        """UO de uma carga antiga (sem UO gravada no aviso), lida das linhas que
+        ela inseriu. Sem linhas (ex.: removidas pela Limpeza de Histórico), vale
+        a secretaria."""
+        try:
+            valor = db.session.execute(
+                text(f"SELECT uo FROM {tabela} WHERE upload_id = :id AND uo IS NOT NULL LIMIT 1"),
+                {"id": upload_id},
+            ).scalar()
+        except Exception:
+            _safe_session_rollback()
+            return ""
+        return uo_codigo(valor)
 
     def _aviso_uo(uo):
         chave = uo_codigo(uo) or uo_padrao_aviso
@@ -968,10 +1004,28 @@ def partial_dashboard():
             chave, {"ped_dotacao": [], "ped_linhas": [], "emp_dotacao": [], "emp_linhas": []}
         )
 
-    for uo_sessao, dados_sessao in (session.get("ped_avisos_uo") or {}).items():
-        aviso = _aviso_uo(uo_sessao)
-        aviso["ped_dotacao"] = list((dados_sessao or {}).get("dotacao") or [])
-        aviso["ped_linhas"] = list((dados_sessao or {}).get("linhas") or [])
+    try:
+        vistas_ped: set[str] = set()
+        jobs_ped = (
+            ProcessamentoJob.query.filter(
+                ProcessamentoJob.tipo == "ped",
+                ProcessamentoJob.status.in_(["finalizado", "finalizado_com_alertas"]),
+            )
+            .order_by(ProcessamentoJob.id.desc())
+            .limit(50)
+            .all()
+        )
+        for job in jobs_ped:
+            alertas = json.loads(job.detalhes_alertas) if job.detalhes_alertas else {}
+            uo_job = uo_codigo(alertas.get("uo")) or _uo_da_carga("ped", job.upload_id) or uo_padrao_aviso
+            if uo_job in vistas_ped:
+                continue
+            vistas_ped.add(uo_job)
+            aviso = _aviso_uo(uo_job)
+            aviso["ped_dotacao"] = list(alertas.get("chaves_dotacao") or [])
+            aviso["ped_linhas"] = list(alertas.get("linhas_planejamento") or [])
+    except Exception:
+        _safe_session_rollback()
     if not any(a["ped_dotacao"] for a in avisos_por_uo.values()):
         try:
             t2 = datetime.utcnow()
@@ -1279,18 +1333,65 @@ def ensure_admin_nivel1():
     if nivel != 1:
         abort(403)
 
+
+def _current_usuario_id() -> int | None:
+    usuario_id = getattr(g, "user_id", None)
+    if usuario_id:
+        return int(usuario_id)
+    user_session = session.get("user") or {}
+    usuario_id = user_session.get("id")
+    if usuario_id:
+        g.user_id = int(usuario_id)
+        return int(usuario_id)
+    email = (user_session.get("email") or "").strip().lower()
+    if not email:
+        return None
+    try:
+        usuario_id = db.session.execute(
+            select(Usuario.id).where(func.lower(func.trim(Usuario.email)) == email)
+        ).scalar_one_or_none()
+    except SQLAlchemyError:
+        _safe_session_rollback()
+        return None
+    if usuario_id is not None:
+        g.user_id = int(usuario_id)
+        user_session["id"] = int(usuario_id)
+        session["user"] = user_session
+        return int(usuario_id)
+    return None
 def has_permission(feature: str) -> bool:
+    # Administrador (nível 1) passa em tudo: telas novas não dependem de marcar no painel.
     if getattr(g, "user_nivel", None) == 1:
         return True
     perfil_id = getattr(g, "user_perfil_id", None)
     nivel = getattr(g, "user_nivel", None)
     if not perfil_id and nivel is None:
         return False
+    usuario_id = _current_usuario_id()
+    if usuario_id:
+        try:
+            override = (
+                db.session.query(UsuarioPermissao.permitido)
+                .filter(
+                    UsuarioPermissao.usuario_id == usuario_id,
+                    UsuarioPermissao.feature == feature,
+                    UsuarioPermissao.ativo == True,  # noqa: E712
+                )
+                .scalar()
+            )
+            if override is not None:
+                return bool(override)
+        except ProgrammingError:
+            db.session.rollback()
     try:
         if perfil_id:
             exists = (
                 db.session.query(PerfilPermissao.id)
-                .filter(PerfilPermissao.perfil_id == perfil_id, PerfilPermissao.feature == feature)
+                .filter(
+                    PerfilPermissao.perfil_id == perfil_id,
+                    PerfilPermissao.feature == feature,
+                    PerfilPermissao.ativo == True,  # noqa: E712
+                )
                 .first()
             )
             if exists:
@@ -1301,7 +1402,11 @@ def has_permission(feature: str) -> bool:
         if nivel is not None:
             exists = (
                 db.session.query(NivelPermissao.id)
-                .filter(NivelPermissao.nivel == nivel, NivelPermissao.feature == feature)
+                .filter(
+                    NivelPermissao.nivel == nivel,
+                    NivelPermissao.feature == feature,
+                    NivelPermissao.ativo == True,  # noqa: E712
+                )
                 .first()
             )
             return bool(exists)
@@ -1353,13 +1458,34 @@ def _load_permissoes_nivel(nivel: int | None):
         return []
 
 
+def _load_permissoes_usuario(usuario_id: int | None):
+    if usuario_id is None:
+        return [], []
+    try:
+        rows = db.session.execute(
+            select(UsuarioPermissao.feature, UsuarioPermissao.permitido).where(
+                UsuarioPermissao.usuario_id == usuario_id,
+                UsuarioPermissao.ativo == True,  # noqa: E712
+                UsuarioPermissao.feature.isnot(None),
+            )
+        ).all()
+        allowed = [feature for feature, permitido in rows if feature and permitido]
+        denied = [feature for feature, permitido in rows if feature and not permitido]
+        return allowed, denied
+    except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
+        _safe_session_rollback()
+        return [], []
+
+
 def _add_parent_features(features: list[str]) -> list[str]:
     parent_map = build_parent_map()
     feats = list(features)
-    for feat in list(feats):
-        parent = parent_map.get(feat)
+    pending = list(feats)
+    while pending:
+        parent = parent_map.get(pending.pop())
         if parent and parent not in feats:
             feats.append(parent)
+            pending.append(parent)
     return feats
 
 
@@ -1383,10 +1509,20 @@ def _load_permissoes_por_nivel_perfis(nivel: int):
         return []
 
 
-def _permissoes_with_parents(perfil_id: int | None, nivel: int | None = None):
+def _permissoes_with_parents(
+    perfil_id: int | None,
+    nivel: int | None = None,
+    usuario_id: int | None = None,
+):
     locked = [f["id"] for f in FEATURES if f.get("locked")]
-    parent_map = build_parent_map()
+    if nivel == 1:
+        # Administrador vê todo o menu, inclusive telas novas ainda não marcadas no painel.
+        return list(flatten_features())
     feats = _load_permissoes_perfil(perfil_id) + _load_permissoes_nivel(nivel)
+    user_allowed, user_denied = _load_permissoes_usuario(usuario_id)
+    feats.extend(user_allowed)
+    denied = set(user_denied)
+    feats = [feat for feat in feats if feat not in denied]
     # include parents of children
     feats = _add_parent_features(feats)
     # add locked always
@@ -1467,7 +1603,7 @@ def partial_usuarios_cadastrar():
 @login_required
 @require_feature("usuarios/editar")
 def partial_usuarios_editar():
-    usuarios = Usuario.query.order_by(Usuario.nome).all()
+    usuarios = Usuario.query.filter_by(ativo=True).order_by(Usuario.nome).all()
     perfis_query = Perfil.query.filter_by(ativo=True)
     caller_nivel = getattr(g, "user_nivel", None)
     if caller_nivel != 1:
@@ -1478,7 +1614,7 @@ def partial_usuarios_editar():
 
 @home_bp.route("/partial/usuarios/perfil")
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def partial_usuarios_perfil():
     perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
     return render_template("partials/usuarios_perfil.html", perfis=perfis)
@@ -2154,6 +2290,12 @@ def partial_painel():
     allowed_nivel = {}
     for nivel in niveis:
         allowed_nivel[nivel] = _load_permissoes_nivel(nivel)
+    usuarios = (
+        Usuario.query.join(Perfil, Usuario.perfil_id == Perfil.id)
+        .filter(Usuario.ativo == True, Perfil.nivel != 1)  # noqa: E712
+        .order_by(Usuario.nome, Usuario.email)
+        .all()
+    )
     return render_template(
         "partials/painel.html",
         perfis=perfis,
@@ -2161,6 +2303,7 @@ def partial_painel():
         allowed_perfil=allowed_perfil,
         allowed_nivel=allowed_nivel,
         niveis=niveis,
+        usuarios=usuarios,
     )
 
 
@@ -2169,6 +2312,77 @@ def partial_painel():
 @require_feature("atualizar/fip613")
 def partial_atualizar_fip613():
     return render_template("partials/atualizar_fip613.html")
+
+
+@home_bp.route("/partial/atualizar/personalizar-spo/temas")
+@login_required
+@require_feature("atualizar/personalizar-spo/temas")
+def partial_atualizar_personalizar_spo_temas():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=True,
+        mostrar_contrato=False,
+    )
+
+
+@home_bp.route("/partial/atualizar/personalizar-spo/contrato-visual-protegido")
+@login_required
+@require_feature("atualizar/personalizar-spo/contrato-visual-protegido")
+def partial_atualizar_contrato_visual_protegido():
+    return render_template(
+        "partials/atualizar_personalizar_spo.html",
+        mostrar_temas=False,
+        mostrar_contrato=True,
+    )
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/mapa")
+@login_required
+@require_feature("atualizar/governanca-resultados/mapa")
+def partial_atualizar_governanca_resultados_mapa():
+    return render_template("partials/atualizar_governanca_resultados_mapa.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/programacao-pta2027")
+@login_required
+@require_feature("atualizar/governanca-resultados/programacao-pta2027")
+def partial_atualizar_governanca_resultados_programacao_pta2027():
+    return render_template("partials/atualizar_governanca_resultados_programacao_pta2027.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/estrategia")
+@login_required
+@require_feature("atualizar/governanca-resultados/estrategia")
+def partial_atualizar_governanca_resultados_estrategia():
+    return render_template("partials/atualizar_governanca_resultados_estrategia.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/eap-politicas")
+@login_required
+@require_feature("atualizar/governanca-resultados/eap-politicas")
+def partial_atualizar_governanca_resultados_eap_politicas():
+    return render_template("partials/atualizar_governanca_resultados_eap_politicas.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/entregas-okr")
+@login_required
+@require_feature("atualizar/governanca-resultados/entregas-okr")
+def partial_atualizar_governanca_resultados_entregas_okr():
+    return render_template("partials/atualizar_governanca_resultados_entregas_okr.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/processos-riscos-projetos")
+@login_required
+@require_feature("atualizar/governanca-resultados/processos-riscos-projetos")
+def partial_atualizar_governanca_resultados_processos_riscos_projetos():
+    return render_template("partials/atualizar_governanca_resultados_processos_riscos_projetos.html")
+
+
+@home_bp.route("/partial/atualizar/governanca-resultados/matriculas-metas")
+@login_required
+@require_feature("atualizar/governanca-resultados/matriculas-metas")
+def partial_atualizar_governanca_resultados_matriculas_metas():
+    return render_template("partials/atualizar_governanca_resultados_matriculas_metas.html")
 
 
 @home_bp.route("/partial/atualizar/ped")
@@ -2575,7 +2789,7 @@ def _require_planning_structure_entity(view):
         feature = _planning_structure_feature(entity)
         if not feature:
             abort(404)
-        if getattr(g, "user_nivel", None) != 1 and not has_permission(feature):
+        if not has_permission(feature):
             abort(403)
         return view(entity, *args, **kwargs)
 
@@ -2597,10 +2811,7 @@ def partial_atualizar_estrutura_planejamento(entity: str):
 
 def _planning_component_public_config(component: str) -> dict:
     config = PLANNING_COMPONENTS[component]
-    can_manage_links = (
-        getattr(g, "user_nivel", None) == 1
-        or has_permission("atualizar/estrutura-planejamento/vinculos")
-    )
+    can_manage_links = has_permission("atualizar/estrutura-planejamento/vinculos")
     return {
         "key": component,
         "title": config["title"],
@@ -6574,20 +6785,104 @@ REV_COMPONENT_LINKS = {
     },
 }
 
+REV_COMPONENT_LINK_SEQUENCE = (
+    "politica_decr",
+    "produto_acao",
+    "eixo",
+    "macropolitica",
+)
 
-def _rev_component_options(component: ComponenteRev, tipo: str) -> list[dict]:
+
+def _rev_component_link_ids(component_id: int) -> dict[str, set[int]]:
+    return {
+        tipo: {
+            int(getattr(row, cfg["field"]))
+            for row in cfg["model"].query.filter_by(
+                componente_rev_id=component_id
+            ).all()
+        }
+        for tipo, cfg in REV_COMPONENT_LINKS.items()
+    }
+
+
+def _rev_component_next_link_type(link_ids: dict[str, set[int]]) -> str | None:
+    return next(
+        (tipo for tipo in REV_COMPONENT_LINK_SEQUENCE if not link_ids[tipo]),
+        None,
+    )
+
+
+def _rev_component_links_out_of_sequence(
+    link_ids: dict[str, set[int]],
+) -> bool:
+    found_missing = False
+    for tipo in REV_COMPONENT_LINK_SEQUENCE:
+        if not link_ids[tipo]:
+            found_missing = True
+        elif found_missing:
+            return True
+    return False
+
+
+def _rev_component_options(
+    component: ComponenteRev,
+    tipo: str,
+    link_ids: dict[str, set[int]] | None = None,
+) -> list[dict]:
     cfg = REV_COMPONENT_LINKS[tipo]
     model = cfg["target_model"]
-    if tipo == "produto_acao":
+    link_ids = link_ids or _rev_component_link_ids(component.id)
+    politica_ids = link_ids["politica_decr"]
+    produto_ids = link_ids["produto_acao"]
+
+    if tipo == "produto_acao" and politica_ids:
         rows = (
-            ProdutoAcaoPlanejamento.query.filter(
+            ProdutoAcaoPlanejamento.query.join(
+                PoliticaDecretoProdutoAcao,
+                PoliticaDecretoProdutoAcao.produto_acao_id
+                == ProdutoAcaoPlanejamento.id,
+            )
+            .filter(
                 ProdutoAcaoPlanejamento.exercicio == component.exercicio,
                 ProdutoAcaoPlanejamento.ativo.is_(True),
                 ProdutoAcaoPlanejamento.excluido_em.is_(None),
+                PoliticaDecretoProdutoAcao.politica_decr_id.in_(politica_ids),
             )
+            .distinct()
             .order_by(ProdutoAcaoPlanejamento.nome.asc())
             .all()
         )
+    elif tipo == "eixo" and politica_ids and produto_ids:
+        rows = (
+            Eixo.query.join(
+                PoliticaDecretoEixo,
+                PoliticaDecretoEixo.eixo_id == Eixo.id,
+            )
+            .filter(
+                Eixo.ativo.is_(True),
+                PoliticaDecretoEixo.politica_id.in_(politica_ids),
+            )
+            .distinct()
+            .order_by(Eixo.abreviacao.asc())
+            .all()
+        )
+    elif tipo == "macropolitica" and politica_ids:
+        rows = (
+            Macropolitica.query.join(
+                PoliticaDecretoMacropolitica,
+                PoliticaDecretoMacropolitica.macropolitica_id
+                == Macropolitica.id,
+            )
+            .filter(
+                Macropolitica.ativo.is_(True),
+                PoliticaDecretoMacropolitica.politica_decr_id.in_(politica_ids),
+            )
+            .distinct()
+            .order_by(Macropolitica.abreviacao.asc())
+            .all()
+        )
+    elif tipo in ("produto_acao", "eixo", "macropolitica"):
+        rows = []
     else:
         order_field = getattr(model, "codigo", None)
         if order_field is None:
@@ -6627,8 +6922,11 @@ def api_componente_rev_links_list(component_id: int):
     component = db.session.get(ComponenteRev, component_id)
     if not component or component.excluido_em:
         return jsonify({"error": "Componente da Revista não encontrado."}), 404
+    link_ids = _rev_component_link_ids(component.id)
+    sequence_invalid = _rev_component_links_out_of_sequence(link_ids)
+    next_type = _rev_component_next_link_type(link_ids)
     options = {
-        tipo: _rev_component_options(component, tipo)
+        tipo: _rev_component_options(component, tipo, link_ids)
         for tipo in REV_COMPONENT_LINKS
     }
     rows = []
@@ -6643,10 +6941,13 @@ def api_componente_rev_links_list(component_id: int):
         {
             "ok": True,
             "component": _serialize_componente_rev(component),
-            "tipos": [
-                {"id": tipo, "label": cfg["label"]}
-                for tipo, cfg in REV_COMPONENT_LINKS.items()
-            ],
+            "tipos": (
+                [{"id": next_type, "label": REV_COMPONENT_LINKS[next_type]["label"]}]
+                if next_type
+                else []
+            ),
+            "next_type": next_type,
+            "sequence_invalid": sequence_invalid,
             "options": options,
             "rows": rows,
         }
@@ -6668,25 +6969,70 @@ def api_componente_rev_links_create(component_id: int):
     cfg = REV_COMPONENT_LINKS.get(tipo)
     if not cfg:
         return jsonify({"error": "Selecione um tipo de vínculo válido."}), 400
+    link_ids = _rev_component_link_ids(component.id)
+    if _rev_component_links_out_of_sequence(link_ids):
+        return jsonify(
+            {
+                "error": (
+                    "Existem vínculos da sequência anterior. Remova-os antes "
+                    "de iniciar pela Política do Decreto."
+                )
+            }
+        ), 409
+    next_type = _rev_component_next_link_type(link_ids)
+    if not next_type:
+        return jsonify({"error": "A sequência de vínculos já está completa."}), 409
+    if tipo != next_type:
+        return jsonify(
+            {
+                "error": (
+                    "Respeite a sequência obrigatória: Política do Decreto, "
+                    "Produto da Ação, Eixo e Macropolítica."
+                )
+            }
+        ), 409
+    raw_value_ids = (
+        payload.get("valor_ids")
+        if tipo == "produto_acao"
+        else [payload.get("valor_id")]
+    )
+    if not isinstance(raw_value_ids, list) or not raw_value_ids:
+        return jsonify({"error": "Selecione ao menos um registro."}), 400
     try:
-        value_id = int(payload.get("valor_id"))
+        value_ids = list(dict.fromkeys(int(value) for value in raw_value_ids))
     except (TypeError, ValueError):
-        return jsonify({"error": "Selecione o registro que será vinculado."}), 400
-    target = db.session.get(cfg["target_model"], value_id)
-    if not target or not getattr(target, "ativo", True):
+        return jsonify({"error": "Selecione registros válidos."}), 400
+    allowed_ids = {
+        int(item["id"])
+        for item in _rev_component_options(component, tipo, link_ids)
+    }
+    if any(value_id not in allowed_ids for value_id in value_ids):
+        return jsonify(
+            {"error": "Um dos registros não é compatível com os vínculos anteriores."}
+        ), 409
+    targets = [db.session.get(cfg["target_model"], value_id) for value_id in value_ids]
+    if any(not target or not getattr(target, "ativo", True) for target in targets):
         return jsonify({"error": "Registro não encontrado ou inativo."}), 404
-    if tipo == "produto_acao":
-        if target.excluido_em or target.exercicio != component.exercicio:
-            return jsonify(
-                {
-                    "error": (
-                        "O produto selecionado não pertence ao exercício do componente."
-                    )
-                }
-            ), 409
-    link = cfg["model"](componente_rev_id=component.id, **{cfg["field"]: value_id})
+    if tipo == "produto_acao" and any(
+        target.excluido_em or target.exercicio != component.exercicio
+        for target in targets
+    ):
+        return jsonify(
+            {
+                "error": (
+                    "Um produto selecionado não pertence ao exercício do componente."
+                )
+            }
+        ), 409
+    links = [
+        cfg["model"](
+            componente_rev_id=component.id,
+            **{cfg["field"]: value_id},
+        )
+        for value_id in value_ids
+    ]
     try:
-        db.session.add(link)
+        db.session.add_all(links)
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
@@ -6697,7 +7043,16 @@ def api_componente_rev_links_create(component_id: int):
             "Falha ao vincular componente da revista: %s/%s", component_id, tipo
         )
         return jsonify({"error": "Falha ao cadastrar o vínculo."}), 500
-    return jsonify({"ok": True, "message": "Vínculo cadastrado com sucesso."}), 201
+    return jsonify(
+        {
+            "ok": True,
+            "message": (
+                f"{len(links)} vínculos cadastrados com sucesso."
+                if len(links) > 1
+                else "Vínculo cadastrado com sucesso."
+            ),
+        }
+    ), 201
 
 
 @home_bp.route(
@@ -6722,6 +7077,18 @@ def api_componente_rev_links_delete(component_id: int):
     ).first()
     if not link:
         return jsonify({"error": "Vínculo não encontrado."}), 404
+    link_ids = _rev_component_link_ids(component_id)
+    tipo_index = REV_COMPONENT_LINK_SEQUENCE.index(tipo)
+    later_types = REV_COMPONENT_LINK_SEQUENCE[tipo_index + 1 :]
+    if any(link_ids[later_type] for later_type in later_types):
+        return jsonify(
+            {
+                "error": (
+                    "Remova primeiro os vínculos posteriores, seguindo a ordem "
+                    "inversa da sequência."
+                )
+            }
+        ), 409
     try:
         db.session.delete(link)
         db.session.commit()
@@ -7080,11 +7447,11 @@ def _start_teto_seduc_thread(
                 # gravar (REPEATABLE READ) e duplicar os registros ativos.
                 # UOs diferentes nao disputam registros, entao nao se bloqueiam.
                 lock_name = f"teto_seduc:{exercicio}:{uo}"
-                # O GET_LOCK pertence a CONEXAO que o adquiriu, e a sessao
-                # devolve a conexao ao pool a cada commit. Por isso a trava
-                # usa uma conexao dedicada, mantida ate o RELEASE_LOCK: em
-                # db.session ele rodaria em outra conexao, nao liberaria
-                # nada e a trava ficaria presa numa conexao ociosa do pool.
+                # GET_LOCK pertence a CONEXAO que o adquiriu. A sessao do
+                # SQLAlchemy devolve a conexao ao pool a cada commit, entao o
+                # RELEASE_LOCK podia cair em outra conexao e o lock ficava
+                # preso. Por isso o lock usa uma conexao dedicada, liberada
+                # na mesma conexao.
                 lock_conn = db.engine.connect()
                 try:
                     obtido_lock = lock_conn.execute(
@@ -8440,7 +8807,7 @@ def api_permissoes(perfil_id):
     if not perfil:
         return jsonify({"error": "Perfil nao encontrado."}), 404
 
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
 
     if request.method == "GET":
@@ -8467,6 +8834,10 @@ def api_permissoes(perfil_id):
             continue
         seen.add(fid)
         clean_feats.append(fid)
+    valid_features = set(flatten_features())
+    invalid_features = [f for f in clean_feats if f not in valid_features]
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
     locked_feats = {f["id"] for f in FEATURES if f.get("locked")}
     clean_feats = [f for f in clean_feats if f not in locked_feats]
     try:
@@ -8493,7 +8864,7 @@ def api_permissoes(perfil_id):
 @home_bp.route("/api/permissoes/nivel/<int:nivel>", methods=["GET", "POST"])
 @login_required
 def api_permissoes_nivel(nivel):
-    if not (has_permission("painel") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("painel"):
         return jsonify({"error": "Sem permissao."}), 403
     if nivel < 1 or nivel > 5:
         return jsonify({"error": "Nivel invalido."}), 400
@@ -8521,6 +8892,10 @@ def api_permissoes_nivel(nivel):
             continue
         seen.add(fid)
         clean_feats.append(fid)
+    valid_features = set(flatten_features())
+    invalid_features = [f for f in clean_feats if f not in valid_features]
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
     locked_feats = {f["id"] for f in FEATURES if f.get("locked")}
     clean_feats = [f for f in clean_feats if f not in locked_feats]
     try:
@@ -8533,6 +8908,96 @@ def api_permissoes_nivel(nivel):
         db.session.rollback()
         return jsonify({"error": "Tabela nivel_permissoes inexistente. Crie a tabela antes de salvar."}), 500
     return jsonify({"ok": True, "message": "Permissoes atualizadas."})
+
+
+@home_bp.route("/api/permissoes/usuario/<int:usuario_id>", methods=["GET", "POST"])
+@login_required
+def api_permissoes_usuario(usuario_id):
+    if not has_permission("painel"):
+        return jsonify({"error": "Sem permissao."}), 403
+
+    usuario = db.session.get(Usuario, usuario_id)
+    if not usuario:
+        return jsonify({"error": "Usuario nao encontrado."}), 404
+    perfil = db.session.get(Perfil, usuario.perfil_id) if usuario.perfil_id else None
+    nivel = perfil.nivel if perfil else None
+    perfil_features = _load_permissoes_perfil(usuario.perfil_id)
+    nivel_features = _load_permissoes_nivel(nivel)
+    inherited_features = _add_parent_features(list(set(perfil_features + nivel_features)))
+    user_allow, user_deny = _load_permissoes_usuario(usuario_id)
+
+    if request.method == "GET":
+        effective_features = _permissoes_with_parents(usuario.perfil_id, nivel, usuario_id)
+        return jsonify(
+            {
+                "usuario": {
+                    "id": usuario.id,
+                    "nome": usuario.nome,
+                    "email": usuario.email,
+                    "perfil": usuario.perfil,
+                    "nivel": nivel,
+                },
+                "perfil_features": perfil_features,
+                "nivel_features": nivel_features,
+                "inherited_features": inherited_features,
+                "user_allow": user_allow,
+                "user_deny": user_deny,
+                "effective_features": effective_features,
+            }
+        )
+
+    data = request.get_json() or {}
+    allow = data.get("allow") or []
+    deny = data.get("deny") or []
+    if not isinstance(allow, list) or not isinstance(deny, list):
+        return jsonify({"error": "Formato invalido."}), 400
+
+    valid_features = set(flatten_features())
+    locked_features = {f["id"] for f in FEATURES if f.get("locked")}
+    allow_set = {f.strip() for f in allow if isinstance(f, str) and f.strip()}
+    deny_set = {f.strip() for f in deny if isinstance(f, str) and f.strip()}
+    invalid_features = sorted((allow_set | deny_set) - valid_features)
+    if invalid_features:
+        return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
+    if allow_set & deny_set:
+        return jsonify({"error": "Uma funcionalidade nao pode ser permitida e negada ao mesmo tempo."}), 400
+    if deny_set & locked_features:
+        return jsonify({"error": "Funcionalidades obrigatorias nao podem ser negadas."}), 400
+
+    # Guarda apenas excecoes reais: permissoes herdadas nao precisam de allow e
+    # permissoes ausentes nao precisam de deny.
+    inherited_set = set(inherited_features)
+    allow_set -= inherited_set
+    deny_set &= inherited_set
+    try:
+        UsuarioPermissao.query.filter_by(usuario_id=usuario_id).delete(synchronize_session=False)
+        now = datetime.utcnow()
+        for feature in sorted(allow_set):
+            db.session.add(
+                UsuarioPermissao(
+                    usuario_id=usuario_id,
+                    feature=feature,
+                    permitido=True,
+                    ativo=True,
+                    created_at=now,
+                )
+            )
+        for feature in sorted(deny_set):
+            db.session.add(
+                UsuarioPermissao(
+                    usuario_id=usuario_id,
+                    feature=feature,
+                    permitido=False,
+                    ativo=True,
+                    created_at=now,
+                )
+            )
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao salvar permissoes do usuario %s", usuario_id)
+        return jsonify({"error": "Falha ao salvar permissoes do usuario."}), 500
+    return jsonify({"ok": True, "message": "Permissoes do usuario atualizadas."})
 
 
 @home_bp.route("/api/permissoes/current", methods=["GET"])
@@ -8548,7 +9013,11 @@ def api_permissoes_current():
         has_user=bool(session.get("user")),
     )
     try:
-        feats = _permissoes_with_parents(perfil_id, getattr(g, "user_nivel", None))
+        feats = _permissoes_with_parents(
+            perfil_id,
+            getattr(g, "user_nivel", None),
+            _current_usuario_id(),
+        )
     except SQLAlchemyError as exc:
         current_app.logger.warning(
             "Falha de banco ao carregar permissoes (perfil_id=%s, path=%s): %s",
@@ -15214,10 +15683,93 @@ def api_dotacao_saldo():
     )
 
 
+def _managed_job_status(tipo: str, upload_model):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        upload = upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+        if not upload:
+            return jsonify({"ok": True, "last": None})
+        return jsonify({"ok": True, "last": {
+            "user_email": upload.user_email,
+            "original_filename": upload.original_filename,
+            "output_filename": upload.output_filename,
+            "status": "historico",
+            "status_message": "Processamento anterior à implantação do acompanhamento detalhado.",
+            "status_progress": 100 if upload.output_filename else 0,
+            "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+            "data_arquivo": upload.data_arquivo.isoformat() if upload.data_arquivo else None,
+            "total_records": 0, "processed_records": 0, "total_alerts": 0, "total_errors": 0,
+        }})
+    upload = db.session.get(upload_model, job.upload_id)
+    data = serialize_job(job)
+    data["data_arquivo"] = upload.data_arquivo.isoformat() if upload and upload.data_arquivo else None
+    data["events"] = [
+        {
+            "type": item.tipo_evento, "stage": item.etapa, "message": item.mensagem,
+            "progress": float(item.progresso) if item.progresso is not None else None,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
+        for item in ProcessamentoEvento.query.filter_by(processamento_id=job.id)
+        .order_by(ProcessamentoEvento.id.desc()).limit(20).all()
+    ]
+    return jsonify({"ok": True, "last": data})
+
+
+def _managed_reprocess(tipo: str, upload_model, input_dir: Path):
+    payload = request.get_json(silent=True) or {}
+    upload_id = payload.get("upload_id")
+    upload = db.session.get(upload_model, upload_id) if upload_id else upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
+    if not upload:
+        return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    active = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
+        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+    ).first()
+    if active:
+        return jsonify({"error": f"Já existe um processamento {tipo.upper()} em andamento."}), 409
+    file_path = _find_upload_path(input_dir, upload.stored_filename)
+    if not file_path:
+        return jsonify({"error": "Arquivo original do upload não foi encontrado."}), 404
+    stored_filename = f"tmp/{file_path.name}" if file_path.parent.name == "tmp" else upload.stored_filename
+    novo_upload = upload_model(
+        user_email=(session.get("user") or {}).get("email") or upload.user_email,
+        original_filename=upload.original_filename,
+        stored_filename=stored_filename,
+        data_arquivo=upload.data_arquivo,
+        uploaded_at=datetime.utcnow(),
+    )
+    db.session.add(novo_upload)
+    db.session.commit()
+    try:
+        job = create_job(tipo, novo_upload, _current_usuario_id())
+        job.tentativa = (
+            db.session.query(func.count(ProcessamentoJob.id))
+            .filter_by(tipo=tipo).scalar() or 1
+        )
+        db.session.commit()
+        _start_worker(tipo, job.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": job.id})
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
+def _managed_cancel(tipo: str):
+    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    if not job:
+        return jsonify({"error": "Nenhum processamento encontrado."}), 404
+    if job.status not in {"aguardando", "em_processamento", "cancelamento_solicitado"}:
+        return jsonify({"error": "O processamento já foi finalizado."}), 409
+    update_job(job, status="cancelamento_solicitado", etapa="cancelamento",
+               mensagem="Cancelamento solicitado pelo usuário.", event_type="cancelamento",
+               cancelamento_solicitado=True)
+    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": job.id})
+
+
 @home_bp.route("/api/fip613/status", methods=["GET"])
 @login_required
 @require_feature("atualizar/fip613")
 def api_fip613_status():
+    return _managed_job_status("fip613", Fip613Upload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -15302,32 +15854,26 @@ def api_fip613_upload():
         db.session.add(registro)
         db.session.commit()
 
-        try:
-            total, output_path, conferencia = run_fip613(save_path, data_arquivo, user_email, registro.id)
-        except UORecusada as exc:
-            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
-            db.session.rollback()
-            db.session.delete(registro)
-            db.session.commit()
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": str(exc)}), 400
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}. {conferencia}".strip(),
-                "output": output_path.name,
-            }
-        )
+        job = create_job("fip613", registro, _current_usuario_id())
+        _start_worker("fip613", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/fip613/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_reprocess():
+    return _managed_reprocess("fip613", Fip613Upload, UPLOAD_DIR)
+
+
+@home_bp.route("/api/fip613/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/fip613")
+def api_fip613_cancel():
+    return _managed_cancel("fip613")
 
 
 @home_bp.route("/api/relatorios/fip613", methods=["GET"])
@@ -15685,6 +16231,8 @@ def api_relatorio_fip613_download():
 @login_required
 @require_feature("atualizar/ped")
 def api_ped_status():
+    return _managed_job_status("ped", PedUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if value in (None, ""):
             return None
@@ -15767,50 +16315,26 @@ def api_ped_upload():
         db.session.add(registro)
         db.session.commit()
 
-        try:
-            total, output_path, missing_dotacao_keys, missing_planejamento_lines, uo_arquivo = run_ped(
-                save_path, data_arquivo, user_email, registro.id
-            )
-        except UORecusada as exc:
-            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
-            db.session.rollback()
-            db.session.delete(registro)
-            db.session.commit()
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": str(exc)}), 400
-
-        # Avisos do dashboard por UO: uma carga limpa apaga só os avisos da própria UO,
-        # e uma carga de outra UO não sobrepõe os da primeira.
-        avisos_ped = dict(session.get("ped_avisos_uo") or {})
-        chave_uo = uo_codigo(uo_arquivo) or sorted(UOS_SEDUC)[0]
-        if missing_dotacao_keys or missing_planejamento_lines:
-            avisos_ped[chave_uo] = {
-                "dotacao": list(missing_dotacao_keys or []),
-                "linhas": list(missing_planejamento_lines or []),
-            }
-        else:
-            avisos_ped.pop(chave_uo, None)
-        session["ped_avisos_uo"] = avisos_ped
-        session.pop("ped_dotacao_missing", None)
-        session.pop("ped_planejamento_missing_lines", None)
-        session.modified = True
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("ped", registro, _current_usuario_id())
+        _start_worker("ped", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/ped/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_reprocess():
+    return _managed_reprocess("ped", PedUpload, PED_UPLOAD_DIR)
+
+
+@home_bp.route("/api/ped/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/ped")
+def api_ped_cancel():
+    return _managed_cancel("ped")
 
 
 # EMP
@@ -15872,6 +16396,8 @@ def api_emp_status():
 @login_required
 @require_feature("atualizar/est-emp")
 def api_est_emp_status():
+    return _managed_job_status("est_emp", EstEmpUpload)
+    """Compatibilidade histórica; o retorno agora vem de processamento_jobs."""
     def _as_iso(value):
         if not value:
             return None
@@ -16112,32 +16638,26 @@ def api_est_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        try:
-            total, output_path = run_est_emp(save_path, data_arquivo, user_email, registro.id)
-        except UORecusada as exc:
-            # Recusado antes de gravar qualquer linha: não deixa o envio no histórico.
-            db.session.rollback()
-            db.session.delete(registro)
-            db.session.commit()
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": str(exc)}), 400
-
-        registro.output_filename = str(output_path.name)
-        db.session.commit()
-
-        return jsonify(
-            {
-                "ok": True,
-                "message": f"Processado com sucesso. Registros inseridos: {total}.",
-                "output": output_path.name,
-            }
-        )
+        job = create_job("est_emp", registro, _current_usuario_id())
+        _start_worker("est_emp", job.id)
+        return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/est-emp/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_reprocess():
+    return _managed_reprocess("est_emp", EstEmpUpload, EST_EMP_UPLOAD_DIR)
+
+
+@home_bp.route("/api/est-emp/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/est-emp")
+def api_est_emp_cancel():
+    return _managed_cancel("est_emp")
 
 
 @home_bp.route("/api/nob/upload", methods=["POST"])
@@ -19282,7 +19802,7 @@ def api_usuario(email):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -19295,7 +19815,7 @@ def api_usuario(email):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -19304,7 +19824,7 @@ def api_usuario(email):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -19348,7 +19868,7 @@ def api_usuario_por_id(user_id: int):
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
 
     if request.method == "GET":
-        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+        if not (has_permission("usuarios/editar") or has_permission("usuarios/senha")):
             return jsonify({"error": "Sem permissao."}), 403
         return jsonify(
             {
@@ -19362,7 +19882,7 @@ def api_usuario_por_id(user_id: int):
         )
 
     if request.method == "DELETE":
-        if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+        if not has_permission("usuarios/editar"):
             return jsonify({"error": "Sem permissao."}), 403
         usuario.ativo = False
         db.session.commit()
@@ -19371,7 +19891,7 @@ def api_usuario_por_id(user_id: int):
     if request.method not in ("PUT", "POST"):
         return jsonify({"error": "Metodo nao permitido."}), 405
 
-    if not (has_permission("usuarios/editar") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/editar"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -19440,7 +19960,7 @@ def api_usuario_senha(email):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -19470,7 +19990,7 @@ def api_usuario_senha_por_id(user_id: int):
     target_is_nivel1 = _is_nivel1(perfil_id=getattr(usuario, "perfil_id", None))
     if caller_nivel != 1 and target_is_nivel1:
         return jsonify({"error": "Apenas admin pode alterar usuario admin."}), 403
-    if not (has_permission("usuarios/senha") or getattr(g, "user_nivel", None) == 1):
+    if not has_permission("usuarios/senha"):
         return jsonify({"error": "Sem permissao."}), 403
 
     data = request.get_json() or {}
@@ -19492,7 +20012,7 @@ def api_usuario_senha_por_id(user_id: int):
 
 @home_bp.route("/api/perfis", methods=["GET", "POST"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfis():
     if request.method == "GET":
         perfis = Perfil.query.order_by(Perfil.nivel, Perfil.nome).all()
@@ -19539,7 +20059,7 @@ def api_perfis():
 
 @home_bp.route("/api/perfis/<int:perfil_id>", methods=["PUT", "DELETE"])
 @login_required
-@role_required("admin")
+@require_feature("usuarios/perfil")
 def api_perfil(perfil_id):
     perfil = db.session.get(Perfil, perfil_id)
     if not perfil:

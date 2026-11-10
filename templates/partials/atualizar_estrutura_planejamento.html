@@ -5,8 +5,9 @@
   data-entity="{{ entity }}"
   data-singular="{{ singular }}"
 >
-  <div class="planning-structure-header">
-    <div>
+  <div class="planning-structure-header module-header module-header-with-controls">
+    <div class="module-header-copy">
+      <div class="module-eyebrow">Administrar SPO · Estrutura do Planejamento</div>
       <div class="card-title">{{ title }}</div>
       <p class="muted">Cadastre e mantenha a estrutura utilizada no planejamento.</p>
     </div>
@@ -310,6 +311,30 @@
           <select id="estrutura-planejamento-revista-link-valor" disabled>
             <option value="">Selecione primeiro o tipo...</option>
           </select>
+          <div
+            id="estrutura-planejamento-revista-link-valores"
+            class="planning-action-checklist"
+            hidden
+          >
+            <button
+              class="planning-action-checklist-toggle"
+              id="estrutura-planejamento-revista-link-valores-toggle"
+              type="button"
+              disabled
+            >
+              Selecione...
+            </button>
+            <div
+              class="planning-action-checklist-panel"
+              id="estrutura-planejamento-revista-link-valores-panel"
+              hidden
+            >
+              <div
+                class="planning-action-checklist-options"
+                id="estrutura-planejamento-revista-link-valores-options"
+              ></div>
+            </div>
+          </div>
         </label>
         <div class="actions planning-component-links-actions">
           <button

@@ -1,26 +1,27 @@
 ﻿<div class="grid">
-  <div class="card highlight">
+  <div class="card highlight home-welcome-card">
     <div class="card-title">Bem-vindo</div>
     <p>Use o menu ao lado para navegar. Itens carregam sem sair da Home.</p>
   </div>
-  <div class="card">
+  <div class="card home-status-card">
     <div class="card-title">Status</div>
     <p>Ambiente conectado. Verifique permissões para acessar usuários.</p>
     {% if can_view_sessions %}
-      <hr>
+      <div class="home-session-status">
       <div class="muted">Usuários logados agora: {{ active_sessions|length }}</div>
       {% if active_sessions %}
-        <ul class="muted" style="margin-top:6px;">
+        <ul class="muted">
           {% for s in active_sessions %}
             <li>{{ s.nome }}</li>
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted" style="margin-top:6px;">Nenhum usuário logado no momento.</div>
+        <div class="muted">Nenhum usuário logado no momento.</div>
       {% endif %}
+      </div>
     {% endif %}
   </div>
-  <div class="card">
+  <div class="card home-next-card">
     <div class="card-title">Próximos passos</div>
     <ul>
       <li>Completar telas do MVP</li>

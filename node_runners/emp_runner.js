@@ -1708,7 +1708,7 @@ async function processEmp(filePath, dataArquivo, userEmail, uploadId) {
   };
   for (let i = 0; i < df.rows.length; i += 1) {
     const row = df.rows[i];
-    // UO fora da secretaria nunca recebe chave (D2): n\u00e3o \u00e9 falta a avisar.
+    // UO fora da secretaria nunca recebe chave (D2): não é falta a avisar.
     if (temColunaUoEmp && !uoUsaChave(row["UO"])) continue;
     const historico = row["Hist\u00f3rico"] || "";
     const chavePlan = String(row[keyColName] || "").trim();

@@ -183,7 +183,7 @@ def identificar_uo_e_exercicios(ped_df: pd.DataFrame) -> tuple[str, list[int]]:
     return uo, [int(a) for a in exercicios]
 
 
-def _update_dotacao_from_ped(df: pd.DataFrame, uo: str) -> None:
+def _update_dotacao_from_ped(df: pd.DataFrame, uo: str, commit: bool = True) -> None:
     """Recalcula só as dotações da UO do arquivo (antes mexia em todas)."""
     if "Chave" not in df.columns:
         return
@@ -225,7 +225,8 @@ def _update_dotacao_from_ped(df: pd.DataFrame, uo: str) -> None:
         total = ped_sum + emp_sum
         dot.valor_ped_emp = total
         dot.valor_atual = dot_val - total
-    db.session.commit()
+    if commit:
+        db.session.commit()
 
 
 def carregar_chaves_planejamento(json_path: Path) -> list[str]:
@@ -1147,14 +1148,8 @@ def montar_registros_para_db(df: pd.DataFrame, data_arquivo: datetime, user_emai
         registros.append(payload)
     return registros
 
-def update_database(
-    df: pd.DataFrame,
-    data_arquivo: datetime,
-    user_email: str,
-    upload_id: int,
-    uo: str,
-    exercicios: list[int],
-) -> int:
+def update_database(df: pd.DataFrame, data_arquivo: datetime, user_email: str, upload_id: int,
+                    progress_callback=None, cancel_callback=None) -> int:
     insert_sql = text(
         """
         INSERT INTO ped (
@@ -1188,18 +1183,20 @@ def update_database(
         """
     )
 
-    # Desativa só a versão anterior da MESMA UO e dos MESMOS exercícios do
-    # arquivo (antes era a tabela inteira).
-    desativar_versao_anterior("ped", uo, exercicios)
-
     registros = montar_registros_para_db(df, data_arquivo, user_email, upload_id)
+    for registro in registros:
+        registro["ativo"] = False
     total = 0
     for start in range(0, len(registros), BATCH_SIZE):
         chunk = registros[start : start + BATCH_SIZE]
+        if cancel_callback:
+            cancel_callback()
         try:
             db.session.execute(insert_sql, chunk)
             db.session.commit()
             total += len(chunk)
+            if progress_callback:
+                progress_callback(total, len(registros))
         except SQLAlchemyError:
             db.session.rollback()
             raise
@@ -1261,10 +1258,13 @@ def _find_missing_planejamento_lines(df: pd.DataFrame) -> list[int]:
 
 
 def run_ped(
-    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int
+    file_path: Path, data_arquivo: datetime, user_email: str, upload_id: int,
+    progress_callback=None, cancel_callback=None
     # devolve também a UO do arquivo (os avisos são por UO)
 ) -> tuple[int, Path, list[str], list[int], str]:
     ensure_dirs()
+    if progress_callback:
+        progress_callback("regras", 5, "Carregando regras de planejamento.")
     chaves_planejamento, casos_especificos, forcar_map = carregar_regras_chave_planejamento()
 
     ped_df = preparar_aba_ped(file_path)
@@ -1274,6 +1274,10 @@ def run_ped(
     # UO do CONTEÚDO do relatório; recusa antes de gerar saída ou gravar.
     uo, exercicios = identificar_uo_e_exercicios(ped_df)
 
+    if cancel_callback:
+        cancel_callback()
+    if progress_callback:
+        progress_callback("tratamento", 20, "Tratando e validando os registros PED.")
     tratado_df = processar_planilha(ped_df.copy(), chaves_planejamento, casos_especificos, forcar_map)
     if tratado_df is None:
         raise RuntimeError("Falha ao tratar a planilha PED.")
@@ -1282,8 +1286,13 @@ def run_ped(
     missing_planejamento_lines = _find_missing_planejamento_lines(tratado_df)
     tratado_df_export = tratado_df.drop(columns=["_forcar_chave"], errors="ignore")
     output_path = salvar_planilhas(ped_df, tratado_df_export, file_path)
+    if progress_callback:
+        progress_callback("gravacao", 40, "Planilha tratada. Gravando registros.")
+    def _batch(done, total_rows):
+        if progress_callback:
+            progress_callback("gravacao", 40 + int((done / max(total_rows, 1)) * 45), f"Gravados {done} de {total_rows} registros.")
     try:
-        total = update_database(tratado_df, data_arquivo, user_email, upload_id, uo, exercicios)
+        total = update_database(tratado_df, data_arquivo, user_email, upload_id, _batch, cancel_callback)
     except SQLAlchemyError as exc:
         if "Packet sequence number wrong" in str(exc):
             db.session.remove()
@@ -1291,8 +1300,19 @@ def run_ped(
                 db.engine.dispose()
             except Exception:
                 pass
-            total = update_database(tratado_df, data_arquivo, user_email, upload_id, uo, exercicios)
+            total = update_database(tratado_df, data_arquivo, user_email, upload_id, _batch, cancel_callback)
         else:
             raise
-    _update_dotacao_from_ped(tratado_df, uo)
+    if cancel_callback:
+        cancel_callback()
+    if progress_callback:
+        progress_callback("dotacoes", 92, "Atualizando os saldos das dotações.")
+    _update_dotacao_from_ped(tratado_df, uo, commit=False)
+    if cancel_callback:
+        cancel_callback()
+    # Troca a carga só da MESMA UO e dos MESMOS exercícios (antes: a tabela
+    # inteira), na mesma transação que ativa a carga nova.
+    desativar_versao_anterior("ped", uo, exercicios, commit=False)
+    db.session.execute(text("UPDATE ped SET ativo = 1 WHERE upload_id = :upload_id"), {"upload_id": upload_id})
+    db.session.commit()
     return total, output_path, missing_dotacao_keys, missing_planejamento_lines, uo
