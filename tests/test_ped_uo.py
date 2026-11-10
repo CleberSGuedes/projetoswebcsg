@@ -134,9 +134,8 @@ def test_alerta_de_chave_ausente_so_para_a_secretaria():
     df = pd.DataFrame(
         {
             "UO": ["14101", "26101", "14101"],
-            "Chave": ["NÃO IDENTIFICADO", "NÃO IDENTIFICADO", "* 1 * 2 *"],
-            "Chave de Planejamento": ["NÃO IDENTIFICADO", "NÃO IDENTIFICADO", "* 1 * 2 *"],
+            "Chave": ["-", "-", "* R1 * 2 *"],
+            "Chave de Planejamento": ["NÃO IDENTIFICADO", "NÃO IDENTIFICADO", "-"],
         }
     )
-    # só a linha 2 do arquivo (SEDUC sem chave); a da 26101 nunca recebe chave
     assert pr._find_missing_planejamento_lines(df) == [2]

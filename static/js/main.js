@@ -1,14 +1,472 @@
 ﻿(function () {
+  // --- Guarda de sessão: detecta sessão encerrada (outro login/expiração) sem depender de F5 ---
+  (function sessionGuard() {
+    if (!document.getElementById("content-area") || !document.getElementById("user-meta")) return;
+    const STATUS_URL = "/api/sessao/status";
+    const HEARTBEAT_MS = 45000;
+    const nativeFetch = window.fetch.bind(window);
+    let ended = false;
+    let checking = false;
+
+    function goToLogin(reason) {
+      if (ended) return;
+      ended = true;
+      const motivo = ["outro_local", "expirada", "encerrada"].includes(reason) ? reason : "encerrada";
+      window.location.href = "/login?motivo=" + motivo;
+    }
+
+    async function checkSession() {
+      if (ended || checking) return;
+      checking = true;
+      try {
+        const res = await nativeFetch(STATUS_URL, {
+          headers: { "X-Requested-With": "fetch" },
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (res.status === 401) {
+          const data = await res.json().catch(() => ({}));
+          goToLogin(data.reason);
+        }
+      } catch (err) {
+        // Falha de rede: não derruba o usuário.
+      } finally {
+        checking = false;
+      }
+    }
+
+    // Qualquer chamada interna que volte 401 é confirmada pelo servidor antes de redirecionar.
+    window.fetch = async function (input, init) {
+      const res = await nativeFetch(input, init);
+      if (res.status === 401 && !ended) {
+        try {
+          const target = new URL(typeof input === "string" ? input : input.url, window.location.href);
+          if (target.origin === window.location.origin && target.pathname !== STATUS_URL && target.pathname !== "/login") {
+            checkSession();
+          }
+        } catch (err) { /* ignora */ }
+      }
+      return res;
+    };
+
+    window.setInterval(checkSession, HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkSession();
+    });
+    window.addEventListener("focus", checkSession);
+  })();
+
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
+  const topbar = document.querySelector(".topbar");
   const logoutBtn = document.getElementById("logout-btn");
   const menu = document.getElementById("menu");
   const userMeta = document.getElementById("user-meta");
   const userPerfilId = userMeta ? userMeta.dataset.perfilId : "";
   const userNivel = userMeta ? userMeta.dataset.nivel : "";
   const themeLightBtn = document.getElementById("theme-light");
+  const themeAutoBtn = document.getElementById("theme-auto");
   const themeDarkBtn = document.getElementById("theme-dark");
+  const systemThemeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const systemContrastQuery = window.matchMedia ? window.matchMedia("(prefers-contrast: more)") : null;
+  const systemForcedColorsQuery = window.matchMedia ? window.matchMedia("(forced-colors: active)") : null;
+  const SPO_RESPONSIVE_CONTRACT = Object.freeze({
+    mobileMaxViewport: 420,
+    splitPressureMaxViewport: 480,
+    splitPressureMinOuterGap: 180,
+  });
+  const PROTECTED_CONTRACT_VERSION = "2026.07.visual-1";
+  const COMMON_VISUAL_STORAGE_KEY = "spo-common-visual-preferences";
+  const PROTECTED_CONTRACT_STORAGE_KEY = "spo-protected-contract-preset";
+  const PROTECTED_CONTRACT_STATE_KEY = "spo-protected-contract-state";
+  const PROTECTED_CONTRACT_AUDIT_KEY = "spo-protected-contract-audit";
+  const PROTECTED_CONTRACT_CUSTOM_KEY = "spo-protected-contract-custom-presets";
+  const PROTECTED_CONTRACT_PACKAGE_SCHEMA = "spo.protected-contract.local-package";
+  const PROTECTED_CONTRACT_AUDIT_LIMIT = 12;
+  const PROTECTED_CONTRACT_AUDIT_ACTIONS = Object.freeze({
+    active: "ativou o rascunho local",
+    draft: "promoveu para rascunho",
+    edit: "editou preset local",
+    editPreview: "pré-visualizou edição local",
+    editReset: "limpou edição local",
+    import: "importou como rascunho local",
+    restore: "restaurou",
+    save: "ativou a prévia local",
+    preview: "pré-visualizou",
+  });
+  const COMMON_VISUAL_DEFAULTS = Object.freeze({
+    density: "comfortable",
+    contrast: "standard",
+    cards: "soft",
+    diagrams: "auto",
+  });
+  const COMMON_VISUAL_OPTIONS = Object.freeze({
+    density: {
+      comfortable: "confortável",
+      compact: "compacta",
+      spacious: "ampla",
+    },
+    contrast: {
+      standard: "padrão",
+      enhanced: "reforçado",
+    },
+    cards: {
+      soft: "suave",
+      outlined: "contornado",
+      flat: "plano",
+    },
+    diagrams: {
+      auto: "automático",
+      light: "claro",
+      dark: "escuro",
+      high: "alto contraste",
+    },
+  });
+  const COMMON_DIAGRAM_THEMES = Object.freeze({
+    light: {
+      text: "#24323d",
+      muted: "#64748b",
+      grid: "rgba(100, 116, 139, 0.08)",
+      axis: "rgba(71, 85, 105, 0.68)",
+      panel: "rgba(255,255,255,0)",
+      plot: "rgba(255,255,255,0)",
+      border: "rgba(71, 85, 105, 0.28)",
+      line: "#c23b3b",
+      total: "#0074D9",
+      positive: "#2E7D5B",
+      negative: "#D43F3A",
+      cumulative: "#EF553B",
+      connector: "#2563eb",
+      focus: "#1d4ed8",
+      selection: "#0074D9",
+      warning: "#b45309",
+      critical: "#c23b3b",
+      palette: ["#345feb", "#048075", "#f8cb2e", "#f58220", "#ea1d2c", "#6a1b9a", "#008FFB", "#9C27B0"],
+    },
+    dark: {
+      text: "#f8fafc",
+      muted: "#cbd5e1",
+      grid: "rgba(226, 232, 240, 0.10)",
+      axis: "rgba(226, 232, 240, 0.48)",
+      panel: "rgba(15,23,42,0.12)",
+      plot: "rgba(15,23,42,0.20)",
+      border: "rgba(226, 232, 240, 0.24)",
+      line: "#ff9f8f",
+      total: "#7ab7ff",
+      positive: "#8bd8b0",
+      negative: "#ff8b8b",
+      cumulative: "#ffb26b",
+      connector: "#93c5fd",
+      focus: "#bfdbfe",
+      selection: "#7ab7ff",
+      warning: "#facc15",
+      critical: "#ff9f8f",
+      palette: ["#7ab7ff", "#5fd0c2", "#ffe066", "#ffad66", "#ff7b86", "#d8a2ff", "#73e2a7", "#f8a5c2"],
+    },
+    high: {
+      text: "#ffffff",
+      muted: "#ffffff",
+      grid: "rgba(255,255,255,0.22)",
+      axis: "rgba(255,255,255,0.88)",
+      panel: "#050816",
+      plot: "#050816",
+      border: "#ffffff",
+      line: "#ffea00",
+      total: "#00e5ff",
+      positive: "#00ff85",
+      negative: "#ff4d6d",
+      cumulative: "#ffea00",
+      connector: "#ffffff",
+      focus: "#ffea00",
+      selection: "#00e5ff",
+      warning: "#ffea00",
+      critical: "#ff4d6d",
+      palette: ["#00e5ff", "#ffea00", "#00ff85", "#ff4d6d", "#b967ff", "#ff9f1c", "#ffffff", "#7df9ff"],
+    },
+    highLight: {
+      text: "#0f172a",
+      muted: "#334155",
+      grid: "rgba(51,65,85,0.08)",
+      axis: "rgba(15,23,42,0.78)",
+      panel: "#ffffff",
+      plot: "#ffffff",
+      border: "#334155",
+      line: "#1d4ed8",
+      total: "#1d4ed8",
+      positive: "#047857",
+      negative: "#b91c1c",
+      cumulative: "#b45309",
+      connector: "#1d4ed8",
+      focus: "#1d4ed8",
+      selection: "#1d4ed8",
+      warning: "#92400e",
+      critical: "#b91c1c",
+      palette: ["#1d4ed8", "#047857", "#b91c1c", "#b45309", "#6d28d9", "#0f766e", "#334155", "#0369a1"],
+    },
+    highDark: {
+      text: "#f8fafc",
+      muted: "#e2e8f0",
+      grid: "rgba(226,232,240,0.12)",
+      axis: "rgba(248,250,252,0.82)",
+      panel: "#111827",
+      plot: "#0f172a",
+      border: "rgba(226,232,240,0.72)",
+      line: "#93c5fd",
+      total: "#60a5fa",
+      positive: "#34d399",
+      negative: "#fb7185",
+      cumulative: "#facc15",
+      connector: "#93c5fd",
+      focus: "#facc15",
+      selection: "#60a5fa",
+      warning: "#facc15",
+      critical: "#fb7185",
+      palette: ["#93c5fd", "#34d399", "#fb7185", "#facc15", "#c4b5fd", "#67e8f9", "#e2e8f0", "#f9a8d4"],
+    },
+  });
+  const COMMON_DIAGRAM_CONTRAST_CHECKS = Object.freeze([
+    { name: "texto no painel", foreground: "text", background: "panel", minimum: 4.5 },
+    { name: "texto no gráfico", foreground: "text", background: "plot", minimum: 4.5 },
+    { name: "texto secundário no painel", foreground: "muted", background: "panel", minimum: 4.5 },
+    { name: "eixo no gráfico", foreground: "axis", background: "plot", minimum: 3 },
+    { name: "linha principal no gráfico", foreground: "line", background: "plot", minimum: 3 },
+    { name: "total no gráfico", foreground: "total", background: "plot", minimum: 3 },
+    { name: "positivo no gráfico", foreground: "positive", background: "plot", minimum: 3 },
+    { name: "negativo no gráfico", foreground: "negative", background: "plot", minimum: 3 },
+    { name: "acumulado no gráfico", foreground: "cumulative", background: "plot", minimum: 3 },
+    { name: "conector do diagrama", foreground: "connector", background: "panel", minimum: 3 },
+    { name: "foco do diagrama", foreground: "focus", background: "panel", minimum: 3 },
+    { name: "seleção do diagrama", foreground: "selection", background: "panel", minimum: 3 },
+    { name: "alerta do diagrama", foreground: "warning", background: "plot", minimum: 3 },
+    { name: "estado crítico do diagrama", foreground: "critical", background: "plot", minimum: 3 },
+  ]);
+  const COMMON_DIAGRAM_CONTRAST_BACKDROPS = Object.freeze({
+    light: "#ffffff",
+    dark: "#111827",
+    high: "#050816",
+    highLight: "#ffffff",
+    highDark: "#0f172a",
+  });
+  const PROTECTED_CONTRACT_PRESETS = Object.freeze({
+    default: {
+      label: "Padrão SPO",
+      summary: "Mantém o contrato visual validado para layout, temas e responsividade.",
+      scope: "Contrato base",
+      state: "Ativo local",
+      rules: {
+        Densidade: "Confortável",
+        Responsividade: "Modo móvel e split separados",
+        Menu: "Overlay global preservado",
+        Diagramas: "Claro/escuro automático",
+      },
+      details: [
+        "Tema e destaque seguem as escolhas atuais.",
+        "Modo móvel e split permanecem separados.",
+        "Sem reforços adicionais de borda ou compactação.",
+      ],
+    },
+    compact: {
+      label: "Compacto gerencial",
+      summary: "Reduz discretamente espaços em telas densas, preservando a hierarquia.",
+      scope: "Painéis densos",
+      state: "Rascunho testável",
+      rules: {
+        Densidade: "Compacta",
+        Responsividade: "Mesmo contrato móvel",
+        Menu: "Hierarquia preservada",
+        Diagramas: "Sem alteração",
+      },
+      details: [
+        "Painéis usam respiro menor.",
+        "Botões preservam área de toque.",
+        "Indicado para revisão em telas menores.",
+      ],
+    },
+    contrast: {
+      label: "Contraste técnico",
+      summary: "Reforça bordas e estados para leitura técnica e revisão visual.",
+      scope: "Revisão visual",
+      state: "Rascunho testável",
+      rules: {
+        Contraste: "Reforçado",
+        Estados: "Bordas e foco mais presentes",
+        Menu: "Ativos mais visíveis",
+        Diagramas: "Tema alto contraste",
+      },
+      details: [
+        "Cards ganham contorno mais presente.",
+        "Estados ativos ficam mais perceptíveis.",
+        "Não altera conteúdo nem menu.",
+      ],
+    },
+    mobile: {
+      label: "Pressão operacional",
+      summary: "Destaca parâmetros usados no modo móvel e no split do Chrome.",
+      scope: "Responsividade crítica",
+      state: "Rascunho testável",
+      rules: {
+        Responsividade: "Pressão operacional",
+        "Mínimo útil": "Modo celular preservado",
+        Split: "Overlay geral permitido",
+        Diagramas: "Redimensionamento protegido",
+      },
+      details: [
+        "Área de toque fica levemente maior.",
+        "Componentes priorizam leitura vertical.",
+        "Serve para testar limite operacional.",
+      ],
+    },
+  });
+  // Cor de destaque padrão no primeiro acesso: a do layout antigo, para reduzir o impacto da troca de visual.
+  const DEFAULT_ACCENT = "classic";
+  const ACCENT_COLORS = {
+    classic: {
+      label: "Clássico (padrão SPO)",
+      // Cor do layout antigo (verde-azulado): accent = #0f7c68, destaque forte = #1f9b7e; escuro = #3dd6b7.
+      vars: {
+        "--color-50": "#eefaf8",
+        "--color-100": "#d7f1eb",
+        "--color-200": "#a9e0d2",
+        "--color-300": "#5fc3aa",
+        "--color-400": "#1f9b7e",
+        "--color-500": "#0f7c68",
+        "--color-600": "#0d6154",
+        "--color-700": "#0b4c44",
+        "--color-800": "#083b36",
+        "--color-900": "#062b28",
+        "--accent-rgb": "15, 124, 104",
+        "--accent-soft-rgb": "127, 207, 187",
+      },
+      dark: { "--accent": "#3dd6b7", "--accent-strong": "#22b58f", "--lab-accent": "#3dd6b7", "--accent-rgb": "61, 214, 183" },
+    },
+    blue: {
+      label: "Azul",
+      vars: {
+        "--color-50": "#f0f7ff",
+        "--color-100": "#d9ecff",
+        "--color-200": "#99c1f1",
+        "--color-300": "#62a0ea",
+        "--color-400": "#3584e4",
+        "--color-500": "#1c71d8",
+        "--color-600": "#1a5fb4",
+        "--color-700": "#1a4f91",
+        "--color-800": "#173f73",
+        "--color-900": "#12345c",
+        "--accent-rgb": "53, 132, 228",
+        "--accent-soft-rgb": "153, 193, 241",
+      },
+      dark: { "--accent": "#78aeed", "--accent-strong": "#99c1f1", "--lab-accent": "#78aeed", "--accent-rgb": "120, 174, 237" },
+    },
+    teal: {
+      label: "Ciano",
+      vars: {
+        "--color-50": "#ecfafd",
+        "--color-100": "#cdf1f9",
+        "--color-200": "#8fdcee",
+        "--color-300": "#4cc3e0",
+        "--color-400": "#19a7cc",
+        "--color-500": "#0e8fb3",
+        "--color-600": "#0b7494",
+        "--color-700": "#095c76",
+        "--color-800": "#07485e",
+        "--color-900": "#05384a",
+        "--accent-rgb": "25, 167, 204",
+        "--accent-soft-rgb": "143, 220, 238",
+      },
+      dark: { "--accent": "#5fd0ec", "--accent-strong": "#8fdcee", "--lab-accent": "#5fd0ec", "--accent-rgb": "95, 208, 236" },
+    },
+    green: {
+      label: "Verde",
+      vars: {
+        "--color-50": "#effbf3",
+        "--color-100": "#d3f5df",
+        "--color-200": "#a3e8bd",
+        "--color-300": "#5fd48b",
+        "--color-400": "#33b865",
+        "--color-500": "#26a255",
+        "--color-600": "#1e8545",
+        "--color-700": "#186a38",
+        "--color-800": "#12522b",
+        "--color-900": "#0d3d20",
+        "--accent-rgb": "51, 184, 101",
+        "--accent-soft-rgb": "163, 232, 189",
+      },
+      dark: { "--accent": "#5fd48b", "--accent-strong": "#8fe3ac", "--lab-accent": "#5fd48b", "--accent-rgb": "95, 212, 139" },
+    },
+    yellow: {
+      label: "Amarelo",
+      vars: {
+        "--color-50": "#fff9e6",
+        "--color-100": "#fff0bf",
+        "--color-200": "#f9f06b",
+        "--color-300": "#f8e45c",
+        "--color-400": "#f6d32d",
+        "--color-500": "#e5a50a",
+        "--color-600": "#c88800",
+        "--color-700": "#9c6a00",
+        "--color-800": "#704d00",
+        "--color-900": "#523800",
+        "--accent-rgb": "229, 165, 10",
+        "--accent-soft-rgb": "249, 240, 107",
+      },
+      dark: { "--accent": "#f8e45c", "--accent-strong": "#f9f06b", "--lab-accent": "#f8e45c", "--accent-rgb": "248, 228, 92" },
+    },
+    orange: {
+      label: "Laranja",
+      vars: {
+        "--color-50": "#fff3e8",
+        "--color-100": "#ffe1c8",
+        "--color-200": "#ffbe6f",
+        "--color-300": "#ffa348",
+        "--color-400": "#ff7800",
+        "--color-500": "#e66100",
+        "--color-600": "#c64600",
+        "--color-700": "#a33400",
+        "--color-800": "#772600",
+        "--color-900": "#571c00",
+        "--accent-rgb": "230, 97, 0",
+        "--accent-soft-rgb": "255, 190, 111",
+      },
+      dark: { "--accent": "#ffa348", "--accent-strong": "#ffbe6f", "--lab-accent": "#ffa348", "--accent-rgb": "255, 163, 72" },
+    },
+    red: {
+      label: "Vermelho",
+      vars: {
+        "--color-50": "#fff0f0",
+        "--color-100": "#ffd7d7",
+        "--color-200": "#ff7b7b",
+        "--color-300": "#f66151",
+        "--color-400": "#ed333b",
+        "--color-500": "#e01b24",
+        "--color-600": "#c01c28",
+        "--color-700": "#a51d2d",
+        "--color-800": "#7d1824",
+        "--color-900": "#5d121b",
+        "--accent-rgb": "224, 27, 36",
+        "--accent-soft-rgb": "255, 123, 123",
+      },
+      dark: { "--accent": "#ff7b7b", "--accent-strong": "#f66151", "--lab-accent": "#ff7b7b", "--accent-rgb": "255, 123, 123" },
+    },
+    purple: {
+      label: "Roxo",
+      vars: {
+        "--color-50": "#f7f0ff",
+        "--color-100": "#eadcff",
+        "--color-200": "#dc8add",
+        "--color-300": "#c061cb",
+        "--color-400": "#9141ac",
+        "--color-500": "#813d9c",
+        "--color-600": "#613583",
+        "--color-700": "#4e2a68",
+        "--color-800": "#3d2052",
+        "--color-900": "#2e183e",
+        "--accent-rgb": "129, 61, 156",
+        "--accent-soft-rgb": "220, 138, 221",
+      },
+      dark: { "--accent": "#c061cb", "--accent-strong": "#dc8add", "--lab-accent": "#c061cb", "--accent-rgb": "192, 97, 203" },
+    },
+  };
   let multiFilterClickBound = false;
   const appLoadingOverlay = document.getElementById("app-loading-overlay");
   const appLoadingTitle = document.getElementById("app-loading-title");
@@ -41,26 +499,1606 @@
   window.showAppLoading = showAppLoading;
   window.hideAppLoading = hideAppLoading;
 
-  function applyTheme(theme) {
-    const body = document.body;
-    const isDark = theme === "dark";
-    body.classList.toggle("theme-dark", isDark);
-    if (themeLightBtn && themeDarkBtn) {
-      themeLightBtn.classList.toggle("active", !isDark);
-      themeDarkBtn.classList.toggle("active", isDark);
+  function getResolvedTheme(theme) {
+    if (theme === "auto") {
+      return systemThemeQuery && systemThemeQuery.matches ? "dark" : "light";
     }
-    localStorage.setItem("app-theme", isDark ? "dark" : "light");
+    return theme === "dark" ? "dark" : "light";
+  }
+
+  function getSystemPrefersMoreContrast() {
+    return Boolean(systemContrastQuery && systemContrastQuery.matches);
+  }
+
+  function getSystemForcedColorsActive() {
+    return Boolean(systemForcedColorsQuery && systemForcedColorsQuery.matches);
+  }
+
+  function resolveCssSystemColor(name, fallback) {
+    const host = document.body || document.documentElement;
+    if (!host) return fallback;
+    const probe = document.createElement("span");
+    probe.style.color = name;
+    probe.style.backgroundColor = name;
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.width = "1px";
+    probe.style.height = "1px";
+    probe.style.pointerEvents = "none";
+    host.appendChild(probe);
+    const computed = window.getComputedStyle(probe);
+    const resolved = computed.color || computed.backgroundColor || "";
+    probe.remove();
+    return /^rgba?\(/i.test(resolved) ? resolved : fallback;
+  }
+
+  function withColorAlpha(color, alpha) {
+    const match = String(color || "").match(/^rgba?\(([^)]+)\)$/i);
+    if (!match) return color;
+    const channels = match[1]
+      .replace(/\//g, " ")
+      .split(/[,\s]+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => clampColorChannel(part));
+    if (channels.length < 3) return color;
+    return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${Math.max(0, Math.min(1, alpha))})`;
+  }
+
+  function getForcedColorsDiagramTheme() {
+    const canvas = resolveCssSystemColor("Canvas", "#000000");
+    const canvasText = resolveCssSystemColor("CanvasText", "#ffffff");
+    const highlight = resolveCssSystemColor("Highlight", "#ffff00");
+    const highlightText = resolveCssSystemColor("HighlightText", "#000000");
+    const linkText = resolveCssSystemColor("LinkText", highlight);
+    const grayText = resolveCssSystemColor("GrayText", canvasText);
+    const buttonText = resolveCssSystemColor("ButtonText", canvasText);
+    return {
+      text: canvasText,
+      muted: canvasText,
+      grid: withColorAlpha(canvasText, 0.16),
+      axis: canvasText,
+      panel: canvas,
+      plot: canvas,
+      border: canvasText,
+      line: highlight,
+      total: highlight,
+      positive: linkText,
+      negative: buttonText,
+      cumulative: highlight,
+      connector: linkText,
+      focus: highlight,
+      selection: highlight,
+      warning: canvasText,
+      critical: canvasText,
+      palette: [highlight, linkText, canvasText, grayText, buttonText, highlightText, highlight, linkText],
+    };
+  }
+
+  function getDiagramSemanticTokens(theme = getCommonDiagramTheme()) {
+    return {
+      connector: theme.connector || theme.axis || theme.text,
+      focus: theme.focus || theme.total || theme.text,
+      selection: theme.selection || theme.total || theme.text,
+      warning: theme.warning || theme.cumulative || theme.text,
+      critical: theme.critical || theme.line || theme.text,
+    };
+  }
+
+  function getDiagramToken(theme, key) {
+    return theme[key] || getDiagramSemanticTokens(theme)[key] || theme.text || "#000000";
+  }
+
+  function getStoredAccent() {
+    const saved = localStorage.getItem("app-accent") || DEFAULT_ACCENT;
+    if (saved === "spo") return "green";
+    return ACCENT_COLORS[saved] ? saved : DEFAULT_ACCENT;
+  }
+
+  function clampColorChannel(value) {
+    return Math.max(0, Math.min(255, Number(value) || 0));
+  }
+
+  function parseOpaqueDiagramColor(value) {
+    const text = String(value || "").trim();
+    const hex = text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const raw = hex[1].length === 3
+        ? hex[1].split("").map((part) => part + part).join("")
+        : hex[1];
+      return {
+        r: parseInt(raw.slice(0, 2), 16),
+        g: parseInt(raw.slice(2, 4), 16),
+        b: parseInt(raw.slice(4, 6), 16),
+      };
+    }
+    const rgb = text.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim());
+      return {
+        r: clampColorChannel(parts[0]),
+        g: clampColorChannel(parts[1]),
+        b: clampColorChannel(parts[2]),
+      };
+    }
+    return null;
+  }
+
+  function parseDiagramColor(value, backdrop = "#ffffff") {
+    const text = String(value || "").trim();
+    const fallback = parseOpaqueDiagramColor(backdrop) || { r: 255, g: 255, b: 255 };
+    const opaque = parseOpaqueDiagramColor(text);
+    const rgb = text.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim());
+      const alpha = parts.length > 3 ? Math.max(0, Math.min(1, Number(parts[3]))) : 1;
+      const source = opaque || fallback;
+      return {
+        r: Math.round(source.r * alpha + fallback.r * (1 - alpha)),
+        g: Math.round(source.g * alpha + fallback.g * (1 - alpha)),
+        b: Math.round(source.b * alpha + fallback.b * (1 - alpha)),
+      };
+    }
+    return opaque || fallback;
+  }
+
+  function getRelativeLuminance(color) {
+    const toLinear = (channel) => {
+      const value = channel / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * toLinear(color.r) + 0.7152 * toLinear(color.g) + 0.0722 * toLinear(color.b);
+  }
+
+  function getContrastRatio(foreground, background, backdrop) {
+    const fg = parseDiagramColor(foreground, backdrop);
+    const bg = parseDiagramColor(background, backdrop);
+    const lighter = Math.max(getRelativeLuminance(fg), getRelativeLuminance(bg));
+    const darker = Math.min(getRelativeLuminance(fg), getRelativeLuminance(bg));
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function validateCommonDiagramContrast() {
+    return Object.entries(COMMON_DIAGRAM_THEMES).flatMap(([themeKey, theme]) => {
+      const backdrop = COMMON_DIAGRAM_CONTRAST_BACKDROPS[themeKey] || "#ffffff";
+      return COMMON_DIAGRAM_CONTRAST_CHECKS.map((check) => {
+        const ratio = getContrastRatio(getDiagramToken(theme, check.foreground), getDiagramToken(theme, check.background), backdrop);
+        return {
+          theme: themeKey,
+          name: check.name,
+          foreground: check.foreground,
+          background: check.background,
+          ratio: Number(ratio.toFixed(2)),
+          minimum: check.minimum,
+          passed: ratio >= check.minimum,
+        };
+      });
+    });
+  }
+
+  function reportCommonDiagramContrast() {
+    const results = validateCommonDiagramContrast();
+    const failures = results.filter((item) => !item.passed);
+    if (failures.length && document.body.matches(".spo-env-lab, .spo-env-dev")) {
+      console.warn("SPO: pares de contraste de diagramas abaixo do contrato visual.", failures);
+    }
+    return { results, failures };
+  }
+
+  window.spoValidateDiagramContrast = reportCommonDiagramContrast;
+  window.spoGetDiagramSemanticTokens = () => ({
+    mode: getResolvedCommonDiagramMode(),
+    tokens: getDiagramSemanticTokens(),
+  });
+
+  function applyAccentColor(accent, persist = true) {
+    const key = ACCENT_COLORS[accent] ? accent : DEFAULT_ACCENT;
+    const palette = ACCENT_COLORS[key];
+    const root = document.documentElement;
+    const targets = [root, document.body].filter(Boolean);
+    const setVar = (name, value) => targets.forEach((target) => target.style.setProperty(name, value));
+    Object.entries(palette.vars).forEach(([name, value]) => setVar(name, value));
+    setVar("--accent", "var(--color-500)");
+    setVar("--accent-strong", "var(--color-400)");
+    setVar("--lab-accent", "var(--color-400)");
+    if (document.body.classList.contains("theme-dark")) {
+      Object.entries(palette.dark).forEach(([name, value]) => setVar(name, value));
+    }
+    document.body.dataset.accentPreference = key;
+    document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.accentChoice === key);
+      btn.setAttribute("aria-pressed", String(btn.dataset.accentChoice === key));
+    });
+    if (persist) localStorage.setItem("app-accent", key);
+  }
+
+  function applyTheme(theme, persist = true) {
+    const body = document.body;
+    const selectedTheme = theme === "auto" ? "auto" : getResolvedTheme(theme);
+    const resolvedTheme = getResolvedTheme(selectedTheme);
+    const isDark = resolvedTheme === "dark";
+    body.classList.toggle("theme-dark", isDark);
+    body.dataset.themePreference = selectedTheme;
+    if (themeLightBtn && themeDarkBtn) {
+      themeLightBtn.classList.toggle("active", selectedTheme === "light");
+      if (themeAutoBtn) themeAutoBtn.classList.toggle("active", selectedTheme === "auto");
+      themeDarkBtn.classList.toggle("active", selectedTheme === "dark");
+    }
+    applyAccentColor(getStoredAccent(), false);
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+    if (persist) localStorage.setItem("app-theme", selectedTheme);
   }
 
   function initTheme() {
-    const saved = localStorage.getItem("app-theme") || "light";
+    applyAccentColor(getStoredAccent(), false);
+    const saved = localStorage.getItem("app-theme") || "auto";
     applyTheme(saved);
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+    if (canManageProtectedContract()) {
+      applyProtectedContractPreset(getStoredProtectedContractPreset(), false);
+    }
+    reportCommonDiagramContrast();
     if (themeLightBtn) {
       themeLightBtn.addEventListener("click", () => applyTheme("light"));
+    }
+    if (themeAutoBtn) {
+      themeAutoBtn.addEventListener("click", () => applyTheme("auto"));
     }
     if (themeDarkBtn) {
       themeDarkBtn.addEventListener("click", () => applyTheme("dark"));
     }
+    if (systemThemeQuery) {
+      const refreshAutoTheme = () => {
+        if ((localStorage.getItem("app-theme") || "auto") === "auto") {
+          applyTheme("auto", false);
+        }
+      };
+      if (typeof systemThemeQuery.addEventListener === "function") {
+        systemThemeQuery.addEventListener("change", refreshAutoTheme);
+      } else if (typeof systemThemeQuery.addListener === "function") {
+        systemThemeQuery.addListener(refreshAutoTheme);
+      }
+    }
+    if (systemContrastQuery) {
+      const refreshAutoDiagramContrast = () => {
+        const preferences = readCommonVisualPreferences();
+        if (preferences.diagrams === "auto") {
+          applyCommonVisualPreferences(preferences, false);
+        }
+      };
+      if (typeof systemContrastQuery.addEventListener === "function") {
+        systemContrastQuery.addEventListener("change", refreshAutoDiagramContrast);
+      } else if (typeof systemContrastQuery.addListener === "function") {
+        systemContrastQuery.addListener(refreshAutoDiagramContrast);
+      }
+    }
+    if (systemForcedColorsQuery) {
+      const refreshForcedColors = () => {
+        applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+      };
+      if (typeof systemForcedColorsQuery.addEventListener === "function") {
+        systemForcedColorsQuery.addEventListener("change", refreshForcedColors);
+      } else if (typeof systemForcedColorsQuery.addListener === "function") {
+        systemForcedColorsQuery.addListener(refreshForcedColors);
+      }
+    }
+  }
+
+  function syncThemeControls(scope = document) {
+    const currentTheme = localStorage.getItem("app-theme") || "auto";
+    const currentAccent = getStoredAccent();
+    scope.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+      const active = btn.dataset.themeChoice === currentTheme;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    scope.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      const active = btn.dataset.accentChoice === currentAccent;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function normalizeCommonVisualPreferences(raw = {}) {
+    const normalized = { ...COMMON_VISUAL_DEFAULTS };
+    Object.keys(COMMON_VISUAL_DEFAULTS).forEach((key) => {
+      const value = raw && raw[key];
+      if (COMMON_VISUAL_OPTIONS[key] && COMMON_VISUAL_OPTIONS[key][value]) {
+        normalized[key] = value;
+      }
+    });
+    return normalized;
+  }
+
+  function readCommonVisualPreferences() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(COMMON_VISUAL_STORAGE_KEY) || "{}");
+      return normalizeCommonVisualPreferences(parsed);
+    } catch (_) {
+      return { ...COMMON_VISUAL_DEFAULTS };
+    }
+  }
+
+  function writeCommonVisualPreferences(preferences) {
+    localStorage.setItem(
+      COMMON_VISUAL_STORAGE_KEY,
+      JSON.stringify(normalizeCommonVisualPreferences(preferences))
+    );
+  }
+
+  function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {
+    const current = normalizeCommonVisualPreferences(preferences);
+    const isDark = document.body.classList.contains("theme-dark");
+    if (getSystemForcedColorsActive()) return "system";
+    if (current.diagrams === "auto") {
+      if (getSystemPrefersMoreContrast()) return isDark ? "highDark" : "highLight";
+      return isDark ? "dark" : "light";
+    }
+    if (current.diagrams === "high") {
+      return isDark ? "highDark" : "highLight";
+    }
+    return COMMON_DIAGRAM_THEMES[current.diagrams] ? current.diagrams : "light";
+  }
+
+  function getCommonDiagramTheme(preferences = readCommonVisualPreferences()) {
+    const resolvedMode = getResolvedCommonDiagramMode(preferences);
+    if (resolvedMode === "system") return getForcedColorsDiagramTheme();
+    return COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
+  }
+
+  function emitCommonVisualChange(preferences) {
+    document.dispatchEvent(new CustomEvent("spo-common-visual-change", {
+      detail: normalizeCommonVisualPreferences(preferences),
+    }));
+  }
+
+  function applyCommonVisualPreferences(preferences, persist = false) {
+    const current = normalizeCommonVisualPreferences(preferences);
+    document.body.dataset.visualDensity = current.density;
+    document.body.dataset.visualContrast = current.contrast;
+    document.body.dataset.visualCards = current.cards;
+    document.body.dataset.visualDiagrams = current.diagrams;
+    document.body.dataset.visualDiagramTheme = getResolvedCommonDiagramMode(current);
+    document.body.dataset.forcedColors = getSystemForcedColorsActive() ? "active" : "none";
+    if (persist) writeCommonVisualPreferences(current);
+    emitCommonVisualChange(current);
+    return current;
+  }
+
+  function renderCommonVisualSummary(scope, preferences) {
+    const summary = scope.querySelector("#spo-common-visual-summary");
+    if (!summary) return;
+    summary.textContent = [
+      `Preferências locais: densidade ${getCommonVisualOptionLabel("density", preferences.density)}`,
+      `contraste ${getCommonVisualOptionLabel("contrast", preferences.contrast)}`,
+      `cartões ${getCommonVisualOptionLabel("cards", preferences.cards)}`,
+      `diagramas ${getCommonVisualOptionLabel("diagrams", preferences.diagrams)}.`,
+    ].join(", ");
+  }
+
+  function getCommonVisualOptionLabel(group, value) {
+    return COMMON_VISUAL_OPTIONS[group]?.[value] || value || "";
+  }
+
+  function setCommonVisualGroupOpen(scope, groupKey = "") {
+    const key = String(groupKey || "");
+    scope.querySelectorAll("[data-visual-pref-group]").forEach((group) => {
+      const current = group.dataset.visualPrefGroup || "";
+      const open = Boolean(key) && current === key;
+      group.classList.toggle("is-open", open);
+      const toggle = group.querySelector("[data-visual-pref-toggle]");
+      const panel = group.querySelector("[data-visual-pref-panel]");
+      if (toggle) toggle.setAttribute("aria-expanded", String(open));
+      if (panel) panel.hidden = !open;
+    });
+  }
+
+  function syncCommonVisualControls(scope = document) {
+    const preferences = readCommonVisualPreferences();
+    scope.querySelectorAll("[data-visual-pref]").forEach((btn) => {
+      const key = btn.dataset.visualPref;
+      const active = preferences[key] === btn.dataset.visualValue;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    scope.querySelectorAll("[data-visual-pref-current]").forEach((target) => {
+      const key = target.dataset.visualPrefCurrent;
+      target.textContent = getCommonVisualOptionLabel(key, preferences[key]);
+    });
+    renderCommonVisualSummary(scope, preferences);
+  }
+
+  function initCommonVisualControls(panel) {
+    applyCommonVisualPreferences(readCommonVisualPreferences(), false);
+    syncCommonVisualControls(panel);
+    setCommonVisualGroupOpen(panel, "");
+    panel.querySelectorAll("[data-visual-pref-toggle]").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const key = toggle.dataset.visualPrefToggle || "";
+        const group = panel.querySelector(`[data-visual-pref-group="${key}"]`);
+        const isOpen = group?.classList.contains("is-open");
+        setCommonVisualGroupOpen(panel, isOpen ? "" : key);
+      });
+    });
+    panel.querySelectorAll("[data-visual-pref]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.visualPref;
+        const value = btn.dataset.visualValue;
+        if (!COMMON_VISUAL_OPTIONS[key] || !COMMON_VISUAL_OPTIONS[key][value]) return;
+        const preferences = applyCommonVisualPreferences(
+          { ...readCommonVisualPreferences(), [key]: value },
+          true
+        );
+        syncCommonVisualControls(panel);
+        showToast(`Preferência visual "${COMMON_VISUAL_OPTIONS[key][value]}" aplicada localmente.`);
+        renderCommonVisualSummary(panel, preferences);
+        setCommonVisualGroupOpen(panel, "");
+      });
+    });
+  }
+
+  function normalizeContractUser(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function getProtectedContractUser() {
+    return {
+      name: userMeta ? userMeta.dataset.name || "" : "",
+      email: userMeta ? userMeta.dataset.email || "" : "",
+      nivel: userNivel || "",
+      perfilId: userPerfilId || "",
+    };
+  }
+
+  function canManageProtectedContract() {
+    // Quem controla o acesso é o servidor (feature atualizar/personalizar-spo/contrato-visual-protegido,
+    // liberada no Painel - Permissões; o admin sempre passa). Antes havia uma trava fixa por nome/e-mail
+    // ("jean"/"cleber") que escondia a tela de qualquer outro usuário, inclusive do admin.
+    return true;
+  }
+
+  function getProtectedContractPresetKey(key) {
+    return PROTECTED_CONTRACT_PRESETS[key] ? key : "default";
+  }
+
+  function getOptionalProtectedContractPresetKey(key) {
+    return PROTECTED_CONTRACT_PRESETS[key] ? key : "";
+  }
+
+  function cloneProtectedContractPreset(preset) {
+    return {
+      ...preset,
+      rules: { ...(preset.rules || {}) },
+      details: Array.isArray(preset.details) ? [...preset.details] : [],
+    };
+  }
+
+  function sanitizeProtectedContractText(value, fallback = "", maxLength = 180) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    const safe = text || fallback;
+    return safe.length > maxLength ? safe.slice(0, maxLength).trim() : safe;
+  }
+
+  function normalizeProtectedContractRules(value, fallback = {}) {
+    const entries = [];
+    const addRule = (label, ruleValue) => {
+      const safeLabel = sanitizeProtectedContractText(label, "", 48);
+      const safeValue = sanitizeProtectedContractText(ruleValue, "", 120);
+      if (safeLabel && safeValue) entries.push([safeLabel, safeValue]);
+    };
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (Array.isArray(item)) {
+          addRule(item[0], item[1]);
+        } else if (item && typeof item === "object") {
+          addRule(item.label || item.key || item.name, item.value || item.text);
+        }
+      });
+    } else if (value && typeof value === "object") {
+      Object.entries(value).forEach(([label, ruleValue]) => addRule(label, ruleValue));
+    }
+
+    if (!entries.length) {
+      Object.entries(fallback || {}).forEach(([label, ruleValue]) => addRule(label, ruleValue));
+    }
+
+    return entries.slice(0, 8).reduce((rules, [label, ruleValue]) => {
+      rules[label] = ruleValue;
+      return rules;
+    }, {});
+  }
+
+  function normalizeProtectedContractDetails(value, fallback = []) {
+    const source = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+    const details = source
+      .map((item) => sanitizeProtectedContractText(item, "", 180))
+      .filter(Boolean)
+      .slice(0, 8);
+    if (details.length) return details;
+    return (Array.isArray(fallback) ? fallback : [])
+      .map((item) => sanitizeProtectedContractText(item, "", 180))
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function normalizeProtectedContractPresetOverride(key, raw) {
+    const presetKey = getOptionalProtectedContractPresetKey(key);
+    const base = presetKey ? PROTECTED_CONTRACT_PRESETS[presetKey] : null;
+    if (!base || !raw || typeof raw !== "object") return null;
+    return {
+      label: sanitizeProtectedContractText(raw.label, base.label, 80),
+      summary: sanitizeProtectedContractText(raw.summary, base.summary, 220),
+      scope: sanitizeProtectedContractText(raw.scope, base.scope, 90),
+      state: sanitizeProtectedContractText(raw.state, base.state, 90),
+      rules: normalizeProtectedContractRules(raw.rules, base.rules),
+      details: normalizeProtectedContractDetails(raw.details, base.details),
+      updatedAt: raw.updatedAt || "",
+      updatedBy: sanitizeProtectedContractText(raw.updatedBy, "", 120),
+    };
+  }
+
+  function normalizeProtectedContractCustomPresets(raw) {
+    const custom = {};
+    if (!raw || typeof raw !== "object") return custom;
+    Object.keys(PROTECTED_CONTRACT_PRESETS).forEach((key) => {
+      const normalized = normalizeProtectedContractPresetOverride(key, raw[key]);
+      if (normalized) custom[key] = normalized;
+    });
+    return custom;
+  }
+
+  function readProtectedContractCustomPresets() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_CUSTOM_KEY) || "{}");
+      return normalizeProtectedContractCustomPresets(parsed);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeProtectedContractCustomPresets(customPresets) {
+    const normalized = normalizeProtectedContractCustomPresets(customPresets);
+    if (Object.keys(normalized).length) {
+      localStorage.setItem(PROTECTED_CONTRACT_CUSTOM_KEY, JSON.stringify(normalized));
+    } else {
+      localStorage.removeItem(PROTECTED_CONTRACT_CUSTOM_KEY);
+    }
+    return normalized;
+  }
+
+  function mergeProtectedContractPreset(key, customPresets = readProtectedContractCustomPresets()) {
+    const presetKey = getProtectedContractPresetKey(key);
+    const base = PROTECTED_CONTRACT_PRESETS[presetKey] || PROTECTED_CONTRACT_PRESETS.default;
+    const custom = normalizeProtectedContractPresetOverride(presetKey, customPresets[presetKey]);
+    if (!custom) return cloneProtectedContractPreset(base);
+    return {
+      ...cloneProtectedContractPreset(base),
+      ...custom,
+      localEdited: true,
+    };
+  }
+
+  function getProtectedContractPreset(key) {
+    return mergeProtectedContractPreset(key);
+  }
+
+  function getProtectedContractPresetCatalog() {
+    const customPresets = readProtectedContractCustomPresets();
+    return Object.keys(PROTECTED_CONTRACT_PRESETS).reduce((catalog, key) => {
+      catalog[key] = mergeProtectedContractPreset(key, customPresets);
+      return catalog;
+    }, {});
+  }
+
+  function hasProtectedContractCustomPreset(key) {
+    const presetKey = getOptionalProtectedContractPresetKey(key);
+    return Boolean(presetKey && readProtectedContractCustomPresets()[presetKey]);
+  }
+
+  function formatProtectedContractRulesText(rules) {
+    return Object.entries(rules || {}).map(([label, value]) => `${label}: ${value}`).join("\n");
+  }
+
+  function parseProtectedContractRulesText(text, fallback = {}) {
+    const rules = {};
+    String(text || "").split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      const separator = trimmed.indexOf(":");
+      const label = separator >= 0 ? trimmed.slice(0, separator) : trimmed;
+      const value = separator >= 0 ? trimmed.slice(separator + 1) : "";
+      const safeLabel = sanitizeProtectedContractText(label, "", 48);
+      const safeValue = sanitizeProtectedContractText(value, "", 120);
+      if (safeLabel && safeValue) rules[safeLabel] = safeValue;
+    });
+    return Object.keys(rules).length ? rules : normalizeProtectedContractRules(fallback);
+  }
+
+  function setProtectedContractVisualPreset(key) {
+    const presetKey = getProtectedContractPresetKey(key);
+    document.documentElement.dataset.visualContractPreset = presetKey;
+    document.body.dataset.visualContractPreset = presetKey;
+    return presetKey;
+  }
+
+  function buildProtectedContractDefaultState() {
+    const legacy = getProtectedContractPresetKey(localStorage.getItem(PROTECTED_CONTRACT_STORAGE_KEY) || "default");
+    return {
+      active: legacy,
+      draft: "",
+      preview: legacy,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local",
+      updatedAt: "",
+      updatedBy: "",
+    };
+  }
+
+  function normalizeProtectedContractState(raw) {
+    const base = buildProtectedContractDefaultState();
+    if (!raw || typeof raw !== "object") return base;
+    const active = getProtectedContractPresetKey(raw.active || base.active);
+    const draft = getOptionalProtectedContractPresetKey(raw.draft);
+    const preview = getProtectedContractPresetKey(raw.preview || draft || active);
+    return {
+      active,
+      draft,
+      preview,
+      version: raw.version || PROTECTED_CONTRACT_VERSION,
+      source: raw.source || "js-local",
+      updatedAt: raw.updatedAt || "",
+      updatedBy: raw.updatedBy || "",
+    };
+  }
+
+  function readProtectedContractState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_STATE_KEY) || "null");
+      return normalizeProtectedContractState(parsed);
+    } catch (_) {
+      return buildProtectedContractDefaultState();
+    }
+  }
+
+  function writeProtectedContractState(state) {
+    const normalized = normalizeProtectedContractState(state);
+    localStorage.setItem(PROTECTED_CONTRACT_STATE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(PROTECTED_CONTRACT_STORAGE_KEY, normalized.active);
+    return normalized;
+  }
+
+  function getStoredProtectedContractPreset() {
+    const state = readProtectedContractState();
+    return getProtectedContractPresetKey(state.preview || state.draft || state.active);
+  }
+
+  function applyProtectedContractPreset(key, persist = false, mode = "preview") {
+    const presetKey = getProtectedContractPresetKey(key);
+    setProtectedContractVisualPreset(presetKey);
+    if (!persist) return presetKey;
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    let next = { ...current, preview: presetKey };
+    if (mode === "draft") {
+      next = { ...current, draft: presetKey, preview: presetKey };
+    } else if (mode === "active") {
+      const draftKey = getOptionalProtectedContractPresetKey(current.draft);
+      const activeKey = draftKey || presetKey;
+      next = { ...current, active: activeKey, draft: activeKey, preview: activeKey };
+    } else if (mode === "save") {
+      next = { ...current, active: presetKey, draft: presetKey, preview: presetKey };
+    } else if (mode === "restore") {
+      next = { ...current, active: "default", draft: "", preview: "default" };
+    }
+    next.version = PROTECTED_CONTRACT_VERSION;
+    next.source = "js-local";
+    next.updatedAt = new Date().toISOString();
+    next.updatedBy = user.name || user.email || "Usuário autorizado";
+    const saved = writeProtectedContractState(next);
+    const applied = getProtectedContractPresetKey(saved.preview || saved.draft || saved.active);
+    return setProtectedContractVisualPreset(applied);
+  }
+
+  function getProtectedContractAuditActionLabel(action) {
+    return PROTECTED_CONTRACT_AUDIT_ACTIONS[action] || "registrou";
+  }
+
+  function formatProtectedContractAuditDate(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("pt-BR");
+  }
+
+  function normalizeProtectedContractAuditEntry(entry = {}, index = 0) {
+    const action = String(entry.action || "record");
+    const key = getProtectedContractPresetKey(entry.key || "default");
+    const preset = getProtectedContractPreset(key);
+    const atIso = entry.atIso || entry.isoAt || "";
+    const at = entry.at || formatProtectedContractAuditDate(atIso) || "Sem data local";
+    const state = entry.state && typeof entry.state === "object" ? normalizeProtectedContractState(entry.state) : null;
+    return {
+      id: entry.id || `${action}-${key}-${atIso || at}-${index}`,
+      action,
+      actionLabel: getProtectedContractAuditActionLabel(action),
+      key,
+      preset: entry.preset || preset.label,
+      version: entry.version || PROTECTED_CONTRACT_VERSION,
+      source: entry.source || "js-local",
+      user: entry.user || "Usuário autorizado",
+      at,
+      atIso,
+      state,
+    };
+  }
+
+  function normalizeProtectedContractAudit(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((entry, index) => normalizeProtectedContractAuditEntry(entry, index))
+      .slice(0, PROTECTED_CONTRACT_AUDIT_LIMIT);
+  }
+
+  function readProtectedContractAudit() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROTECTED_CONTRACT_AUDIT_KEY) || "[]");
+      return normalizeProtectedContractAudit(parsed);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeProtectedContractAudit(items) {
+    localStorage.setItem(
+      PROTECTED_CONTRACT_AUDIT_KEY,
+      JSON.stringify(normalizeProtectedContractAudit(items))
+    );
+  }
+
+  function addProtectedContractAudit(action, presetKey, meta = {}) {
+    const user = getProtectedContractUser();
+    const preset = getProtectedContractPreset(presetKey);
+    const atIso = new Date().toISOString();
+    const entry = {
+      id: `${action}-${presetKey}-${Date.now()}`,
+      action,
+      key: presetKey,
+      preset: preset.label,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: meta.source || "js-local",
+      user: user.name || user.email || "Usuário autorizado",
+      at: formatProtectedContractAuditDate(atIso),
+      atIso,
+      state: normalizeProtectedContractState(meta.state || readProtectedContractState()),
+    };
+    writeProtectedContractAudit([entry, ...readProtectedContractAudit()]);
+  }
+
+  function buildProtectedContractPackage() {
+    const user = getProtectedContractUser();
+    const state = normalizeProtectedContractState(readProtectedContractState());
+    const customPresets = readProtectedContractCustomPresets();
+    const presets = Object.entries(getProtectedContractPresetCatalog()).map(([key, preset]) => ({
+      key,
+      label: preset.label,
+      scope: preset.scope,
+      state: preset.state,
+      summary: preset.summary,
+      rules: preset.rules,
+      details: preset.details,
+      localEdited: Boolean(preset.localEdited),
+    }));
+    return {
+      schema: PROTECTED_CONTRACT_PACKAGE_SCHEMA,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local",
+      exportedAt: new Date().toISOString(),
+      exportedBy: user.name || user.email || "Usuário autorizado",
+      state,
+      customPresets,
+      audit: readProtectedContractAudit(),
+      presets,
+    };
+  }
+
+  function stringifyProtectedContractPackage() {
+    return JSON.stringify(buildProtectedContractPackage(), null, 2);
+  }
+
+  function setProtectedContractPackageStatus(panel, message, isError = false) {
+    const status = panel.querySelector("#spo-contract-package-status");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function getProtectedContractPackageState(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    if (payload.state && typeof payload.state === "object") return payload.state;
+    if (payload.contract && typeof payload.contract === "object") return payload.contract;
+    return payload;
+  }
+
+  function getProtectedContractPackagePresetKey(payload) {
+    if (typeof payload === "string") return getOptionalProtectedContractPresetKey(payload);
+    const state = getProtectedContractPackageState(payload);
+    if (!state) return "";
+    return (
+      getOptionalProtectedContractPresetKey(state.draft) ||
+      getOptionalProtectedContractPresetKey(state.preview) ||
+      getOptionalProtectedContractPresetKey(state.active)
+    );
+  }
+
+  function getProtectedContractPackageCustomPresets(payload) {
+    if (!payload || typeof payload !== "object") return {};
+    const direct = normalizeProtectedContractCustomPresets(payload.customPresets);
+    if (Object.keys(direct).length) return direct;
+    if (!Array.isArray(payload.presets)) return {};
+    const fromPresetList = {};
+    payload.presets.forEach((preset) => {
+      const key = getOptionalProtectedContractPresetKey(preset && preset.key);
+      if (key && preset.localEdited) fromPresetList[key] = preset;
+    });
+    return normalizeProtectedContractCustomPresets(fromPresetList);
+  }
+
+  function generateProtectedContractPackage(panel) {
+    const output = panel.querySelector("#spo-contract-package-output");
+    if (!output) return "";
+    const packageText = stringifyProtectedContractPackage();
+    output.value = packageText;
+    setProtectedContractPackageStatus(panel, "Pacote local gerado a partir do estado deste navegador.");
+    return packageText;
+  }
+
+  async function copyProtectedContractPackage(panel) {
+    const output = panel.querySelector("#spo-contract-package-output");
+    const packageText = output && output.value.trim() ? output.value : generateProtectedContractPackage(panel);
+    if (!packageText) return;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(packageText);
+      } else if (output) {
+        output.focus();
+        output.select();
+        document.execCommand("copy");
+      }
+      setProtectedContractPackageStatus(panel, "Pacote local copiado.");
+      showToast("Pacote local copiado.");
+    } catch (_) {
+      setProtectedContractPackageStatus(panel, "Não foi possível copiar automaticamente. Selecione o pacote gerado e copie manualmente.", true);
+    }
+  }
+
+  function importProtectedContractPackage(panel) {
+    const input = panel.querySelector("#spo-contract-package-input");
+    if (!input) return;
+    const raw = input.value.trim();
+    if (!raw) {
+      setProtectedContractPackageStatus(panel, "Cole um pacote local antes de importar.", true);
+      return;
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(raw);
+    } catch (_) {
+      setProtectedContractPackageStatus(panel, "Pacote inválido: o conteúdo precisa ser um JSON válido.", true);
+      return;
+    }
+    const presetKey = getProtectedContractPackagePresetKey(payload);
+    if (!presetKey) {
+      setProtectedContractPackageStatus(panel, "Pacote inválido: nenhum preset conhecido foi encontrado.", true);
+      return;
+    }
+
+    const importedCustomPresets = getProtectedContractPackageCustomPresets(payload);
+    const importedCustomCount = Object.keys(importedCustomPresets).length;
+    if (importedCustomCount) {
+      writeProtectedContractCustomPresets({
+        ...readProtectedContractCustomPresets(),
+        ...importedCustomPresets,
+      });
+    }
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    const imported = writeProtectedContractState({
+      ...current,
+      draft: presetKey,
+      preview: presetKey,
+      version: payload.version || PROTECTED_CONTRACT_VERSION,
+      source: "js-local-package",
+      updatedAt: new Date().toISOString(),
+      updatedBy: user.name || user.email || "Usuário autorizado",
+    });
+    setProtectedContractVisualPreset(imported.preview);
+    addProtectedContractAudit("import", presetKey, { source: "js-local-package" });
+    input.value = "";
+    generateProtectedContractPackage(panel);
+    syncProtectedContractPanel(panel);
+    setProtectedContractPackageStatus(
+      panel,
+      `Pacote importado como rascunho local: ${getProtectedContractLabel(presetKey)}. O ativo local não foi alterado.${importedCustomCount ? ` ${importedCustomCount} edição(ões) local(is) importada(s).` : ""}`
+    );
+    showToast(`Pacote importado como rascunho: ${getProtectedContractLabel(presetKey)}.`);
+  }
+
+  function renderProtectedContractAudit(panel) {
+    const list = panel.querySelector("#spo-contract-audit-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = readProtectedContractAudit();
+    const summary = panel.querySelector("#spo-contract-audit-summary");
+    const clearButton = panel.querySelector("#spo-contract-clear-audit");
+    if (summary) {
+      summary.textContent = entries.length
+        ? `${entries.length} registro(s) local(is) neste navegador.`
+        : "Nenhum registro local neste navegador.";
+    }
+    if (clearButton) clearButton.disabled = !entries.length;
+    if (!entries.length) {
+      return;
+    }
+    entries.forEach((entry) => {
+      const item = document.createElement("li");
+      item.className = "contract-audit-item";
+
+      const header = document.createElement("div");
+      header.className = "contract-audit-item-header";
+      const action = document.createElement("strong");
+      action.textContent = `${entry.actionLabel} ${entry.preset}`;
+      const time = document.createElement("time");
+      if (entry.atIso) time.dateTime = entry.atIso;
+      time.textContent = entry.at;
+      header.appendChild(action);
+      header.appendChild(time);
+
+      const meta = document.createElement("div");
+      meta.className = "contract-audit-meta";
+      [entry.user, entry.source, entry.version].forEach((value) => {
+        if (!value) return;
+        const itemMeta = document.createElement("span");
+        itemMeta.textContent = value;
+        meta.appendChild(itemMeta);
+      });
+
+      item.appendChild(header);
+      item.appendChild(meta);
+      if (entry.state) {
+        const state = document.createElement("div");
+        state.className = "contract-audit-state";
+        const active = getProtectedContractPresetKey(entry.state.active);
+        const draft = getOptionalProtectedContractPresetKey(entry.state.draft);
+        const preview = getProtectedContractPresetKey(entry.state.preview || entry.state.draft || entry.state.active);
+        state.textContent = `Ativo ${getProtectedContractLabel(active)}; rascunho ${getProtectedContractLabel(draft)}; prévia ${getProtectedContractLabel(preview)}.`;
+        item.appendChild(state);
+      }
+      list.appendChild(item);
+    });
+  }
+
+  function clearProtectedContractAudit(panel) {
+    localStorage.removeItem(PROTECTED_CONTRACT_AUDIT_KEY);
+    renderProtectedContractAudit(panel);
+    showToast("Auditoria local limpa neste navegador.");
+  }
+
+  function getProtectedContractLabel(key, fallback = "Nenhum") {
+    if (!key) return fallback;
+    const preset = getProtectedContractPreset(key);
+    return preset ? preset.label : fallback;
+  }
+
+  function formatProtectedContractUpdatedAt(value) {
+    if (!value) return "Sem registro local";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Registro local";
+    return date.toLocaleString("pt-BR");
+  }
+
+  function setProtectedContractStateText(panel, selector, text) {
+    const target = panel.querySelector(selector);
+    if (target) target.textContent = text;
+  }
+
+  function renderProtectedContractState(panel, state) {
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    setProtectedContractStateText(panel, "#spo-contract-active-label", getProtectedContractLabel(active));
+    setProtectedContractStateText(panel, "#spo-contract-draft-label", getProtectedContractLabel(draft));
+    setProtectedContractStateText(panel, "#spo-contract-preview-label", getProtectedContractLabel(preview));
+    setProtectedContractStateText(panel, "#spo-contract-updated-label", formatProtectedContractUpdatedAt(state.updatedAt));
+  }
+
+  function syncProtectedContractActions(panel, state) {
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    const promoteDraft = panel.querySelector("#spo-contract-promote-draft");
+    const activateDraft = panel.querySelector("#spo-contract-activate-draft");
+    const activatePreview = panel.querySelector("#spo-contract-save");
+    const restore = panel.querySelector("#spo-contract-restore");
+    if (promoteDraft) {
+      promoteDraft.disabled = draft === preview;
+      promoteDraft.title = promoteDraft.disabled ? "A prévia já está salva como rascunho local." : "";
+    }
+    if (activateDraft) {
+      activateDraft.disabled = !draft || draft === active;
+      activateDraft.title = !draft
+        ? "Promova uma prévia a rascunho antes de ativar."
+        : activateDraft.disabled
+          ? "O rascunho já está ativo localmente."
+          : "";
+    }
+    if (activatePreview) {
+      activatePreview.disabled = preview === active && (!draft || draft === active);
+      activatePreview.title = activatePreview.disabled ? "A prévia já está ativa localmente." : "";
+    }
+    if (restore) {
+      restore.disabled = active === "default" && !draft && preview === "default";
+      restore.title = restore.disabled ? "O contrato local já está no Padrão SPO." : "";
+    }
+  }
+
+  function renderProtectedContractPreview(panel, presetKey) {
+    const preview = panel.querySelector("#spo-contract-preview");
+    const preset = getProtectedContractPreset(presetKey);
+    if (!preview) return;
+    preview.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "contract-preview-title";
+    title.textContent = preset.label;
+    const summary = document.createElement("p");
+    summary.className = "muted";
+    summary.textContent = preset.summary;
+    const metaIntro = document.createElement("p");
+    metaIntro.className = "muted";
+    metaIntro.textContent = `${preset.scope} · ${preset.state}`;
+    const meta = document.createElement("div");
+    meta.className = "contract-preview-meta";
+    Object.entries(preset.rules || {}).forEach(([label, value]) => {
+      const item = document.createElement("span");
+      const itemLabel = document.createElement("strong");
+      const itemValue = document.createElement("em");
+      itemLabel.textContent = label;
+      itemValue.textContent = value;
+      item.appendChild(itemLabel);
+      item.appendChild(itemValue);
+      meta.appendChild(item);
+    });
+    const list = document.createElement("ul");
+    preset.details.forEach((detail) => {
+      const item = document.createElement("li");
+      item.textContent = detail;
+      list.appendChild(item);
+    });
+    preview.appendChild(title);
+    preview.appendChild(summary);
+    preview.appendChild(metaIntro);
+    preview.appendChild(meta);
+    preview.appendChild(list);
+  }
+
+  function appendProtectedContractRuleBadge(target, text, variant) {
+    const badge = document.createElement("span");
+    badge.className = `contract-rule-badge contract-rule-badge-${variant}`;
+    badge.textContent = text;
+    target.appendChild(badge);
+  }
+
+  function renderProtectedContractRules(panel, state) {
+    const grid = panel.querySelector("#spo-contract-rule-grid");
+    if (!grid) return;
+    const catalog = getProtectedContractPresetCatalog();
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const preview = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    grid.innerHTML = "";
+
+    Object.entries(catalog).forEach(([presetKey, preset]) => {
+      const card = document.createElement("article");
+      card.className = "contract-rule-card";
+      card.classList.toggle("is-preview", presetKey === preview);
+      card.classList.toggle("is-active-local", presetKey === active);
+      card.classList.toggle("is-draft-local", Boolean(draft) && presetKey === draft);
+
+      const header = document.createElement("div");
+      header.className = "contract-rule-header";
+      const titleBlock = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = preset.label;
+      const summary = document.createElement("p");
+      summary.className = "muted";
+      summary.textContent = preset.summary;
+      titleBlock.appendChild(title);
+      titleBlock.appendChild(summary);
+
+      const badges = document.createElement("div");
+      badges.className = "contract-rule-badges";
+      if (presetKey === preview) appendProtectedContractRuleBadge(badges, "Prévia", "preview");
+      if (presetKey === active) appendProtectedContractRuleBadge(badges, "Ativo local", "active");
+      if (draft && presetKey === draft) appendProtectedContractRuleBadge(badges, "Rascunho", "draft");
+      if (preset.localEdited) appendProtectedContractRuleBadge(badges, "Editado local", "draft");
+      if (!badges.children.length) appendProtectedContractRuleBadge(badges, "Catálogo", "catalog");
+      header.appendChild(titleBlock);
+      header.appendChild(badges);
+
+      const meta = document.createElement("div");
+      meta.className = "contract-rule-meta";
+      const scope = document.createElement("span");
+      scope.textContent = `Escopo: ${preset.scope}`;
+      const stateLabel = document.createElement("span");
+      stateLabel.textContent = `Estado: ${preset.state}`;
+      meta.appendChild(scope);
+      meta.appendChild(stateLabel);
+
+      const rules = document.createElement("dl");
+      rules.className = "contract-rule-list";
+      Object.entries(preset.rules || {}).forEach(([label, value]) => {
+        const row = document.createElement("div");
+        row.className = "contract-rule-row";
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const description = document.createElement("dd");
+        description.textContent = value;
+        row.appendChild(term);
+        row.appendChild(description);
+        rules.appendChild(row);
+      });
+
+      const details = document.createElement("ul");
+      details.className = "contract-rule-details";
+      (preset.details || []).forEach((detail) => {
+        const item = document.createElement("li");
+        item.textContent = detail;
+        details.appendChild(item);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "contract-rule-actions";
+      const previewButton = document.createElement("button");
+      previewButton.className = "secondary-button";
+      previewButton.type = "button";
+      previewButton.textContent = presetKey === preview ? "Em prévia" : "Pré-visualizar este preset";
+      previewButton.disabled = presetKey === preview;
+      previewButton.setAttribute("aria-label", `Pré-visualizar ${preset.label}`);
+      previewButton.addEventListener("click", () => {
+        const appliedKey = applyProtectedContractPreset(presetKey, true, "preview");
+        addProtectedContractAudit("preview", appliedKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Preset "${getProtectedContractLabel(appliedKey)}" pré-visualizado localmente.`);
+      });
+      actions.appendChild(previewButton);
+
+      card.appendChild(header);
+      card.appendChild(meta);
+      card.appendChild(rules);
+      card.appendChild(details);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+  }
+
+  function setProtectedContractEditorStatus(panel, message, isError = false) {
+    const status = panel.querySelector("#spo-contract-editor-status");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function getProtectedContractEditorKey(panel, state = readProtectedContractState()) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    return getProtectedContractPresetKey(select?.value || state.preview || state.draft || state.active);
+  }
+
+  function populateProtectedContractEditorOptions(panel, selectedKey) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    const catalog = getProtectedContractPresetCatalog();
+    select.innerHTML = "";
+    Object.entries(catalog).forEach(([key, preset]) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = preset.localEdited ? `${preset.label} · editado local` : preset.label;
+      select.appendChild(option);
+    });
+    select.value = getProtectedContractPresetKey(selectedKey);
+  }
+
+  function fillProtectedContractEditor(panel, presetKey, force = false) {
+    const key = getProtectedContractPresetKey(presetKey);
+    if (!force && panel.dataset.contractEditorDirty === "1" && panel.dataset.contractEditorKey === key) {
+      return;
+    }
+
+    const preset = getProtectedContractPreset(key);
+    const label = panel.querySelector("#spo-contract-editor-label");
+    const scope = panel.querySelector("#spo-contract-editor-scope");
+    const state = panel.querySelector("#spo-contract-editor-state");
+    const summary = panel.querySelector("#spo-contract-editor-summary");
+    const rules = panel.querySelector("#spo-contract-editor-rules");
+    const details = panel.querySelector("#spo-contract-editor-details");
+    const source = panel.querySelector("#spo-contract-editor-source");
+    const badge = panel.querySelector("#spo-contract-editor-badge");
+    const reset = panel.querySelector("#spo-contract-editor-reset");
+
+    if (label) label.value = preset.label;
+    if (scope) scope.value = preset.scope;
+    if (state) state.value = preset.state;
+    if (summary) summary.value = preset.summary;
+    if (rules) rules.value = formatProtectedContractRulesText(preset.rules);
+    if (details) details.value = (preset.details || []).join("\n");
+    if (source) {
+      source.textContent = preset.localEdited
+        ? `Edição local salva neste navegador${preset.updatedAt ? ` em ${formatProtectedContractUpdatedAt(preset.updatedAt)}` : ""}.`
+        : "Catálogo base sem edição local.";
+    }
+    if (badge) badge.textContent = preset.localEdited ? "Editado localmente" : "Catálogo base";
+    if (reset) reset.disabled = !preset.localEdited;
+
+    panel.dataset.contractEditorKey = key;
+    panel.dataset.contractEditorDirty = "0";
+  }
+
+  function renderProtectedContractEditor(panel, state) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    const selectedKey = getProtectedContractEditorKey(panel, state);
+    populateProtectedContractEditorOptions(panel, selectedKey);
+    fillProtectedContractEditor(panel, selectedKey);
+  }
+
+  function readProtectedContractEditorPreset(panel) {
+    const key = getProtectedContractEditorKey(panel);
+    const base = PROTECTED_CONTRACT_PRESETS[key] || PROTECTED_CONTRACT_PRESETS.default;
+    const user = getProtectedContractUser();
+    const label = panel.querySelector("#spo-contract-editor-label");
+    const scope = panel.querySelector("#spo-contract-editor-scope");
+    const state = panel.querySelector("#spo-contract-editor-state");
+    const summary = panel.querySelector("#spo-contract-editor-summary");
+    const rules = panel.querySelector("#spo-contract-editor-rules");
+    const details = panel.querySelector("#spo-contract-editor-details");
+    return {
+      key,
+      preset: normalizeProtectedContractPresetOverride(key, {
+        label: label?.value || base.label,
+        scope: scope?.value || base.scope,
+        state: state?.value || base.state,
+        summary: summary?.value || base.summary,
+        rules: parseProtectedContractRulesText(rules?.value || "", base.rules),
+        details: normalizeProtectedContractDetails(details?.value || "", base.details),
+        updatedAt: new Date().toISOString(),
+        updatedBy: user.name || user.email || "Usuário autorizado",
+      }),
+    };
+  }
+
+  function saveProtectedContractEditorPreset(panel, mode = "draft") {
+    const editor = readProtectedContractEditorPreset(panel);
+    if (!editor.preset) {
+      setProtectedContractEditorStatus(panel, "Não foi possível ler a edição local deste preset.", true);
+      return;
+    }
+    writeProtectedContractCustomPresets({
+      ...readProtectedContractCustomPresets(),
+      [editor.key]: editor.preset,
+    });
+
+    const user = getProtectedContractUser();
+    const current = readProtectedContractState();
+    const next = {
+      ...current,
+      preview: editor.key,
+      version: PROTECTED_CONTRACT_VERSION,
+      source: "js-local-editor",
+      updatedAt: new Date().toISOString(),
+      updatedBy: user.name || user.email || "Usuário autorizado",
+    };
+    if (mode === "draft") next.draft = editor.key;
+    writeProtectedContractState(next);
+    setProtectedContractVisualPreset(editor.key);
+    addProtectedContractAudit(mode === "draft" ? "edit" : "editPreview", editor.key, { source: "js-local-editor" });
+    panel.dataset.contractEditorDirty = "0";
+    syncProtectedContractPanel(panel);
+    setProtectedContractEditorStatus(
+      panel,
+      mode === "draft"
+        ? `Edição local salva como rascunho: ${getProtectedContractLabel(editor.key)}.`
+        : `Edição local em prévia: ${getProtectedContractLabel(editor.key)}.`
+    );
+    showToast(
+      mode === "draft"
+        ? `Edição local salva: ${getProtectedContractLabel(editor.key)}.`
+        : `Edição local em prévia: ${getProtectedContractLabel(editor.key)}.`
+    );
+  }
+
+  function resetProtectedContractEditorPreset(panel) {
+    const key = getProtectedContractEditorKey(panel);
+    const customPresets = readProtectedContractCustomPresets();
+    if (!customPresets[key]) {
+      setProtectedContractEditorStatus(panel, "Este preset já está usando o catálogo base.");
+      return;
+    }
+    delete customPresets[key];
+    writeProtectedContractCustomPresets(customPresets);
+    addProtectedContractAudit("editReset", key, { source: "js-local-editor" });
+    panel.dataset.contractEditorDirty = "0";
+    syncProtectedContractPanel(panel);
+    setProtectedContractEditorStatus(panel, `Edição local removida: ${getProtectedContractLabel(key)}.`);
+    showToast("Edição local removida.");
+  }
+
+  function initProtectedContractEditor(panel) {
+    const select = panel.querySelector("#spo-contract-editor-preset");
+    if (!select) return;
+    select.addEventListener("change", () => {
+      fillProtectedContractEditor(panel, select.value, true);
+      setProtectedContractEditorStatus(panel, "Preset carregado para edição local.");
+    });
+    [
+      "#spo-contract-editor-label",
+      "#spo-contract-editor-scope",
+      "#spo-contract-editor-state",
+      "#spo-contract-editor-summary",
+      "#spo-contract-editor-rules",
+      "#spo-contract-editor-details",
+    ].forEach((selector) => {
+      const field = panel.querySelector(selector);
+      if (!field) return;
+      field.addEventListener("input", () => {
+        panel.dataset.contractEditorDirty = "1";
+        setProtectedContractEditorStatus(panel, "Edição local ainda não salva.");
+      });
+    });
+
+    const preview = panel.querySelector("#spo-contract-editor-preview");
+    if (preview) {
+      preview.addEventListener("click", () => {
+        saveProtectedContractEditorPreset(panel, "preview");
+      });
+    }
+    const save = panel.querySelector("#spo-contract-editor-save");
+    if (save) {
+      save.addEventListener("click", () => {
+        saveProtectedContractEditorPreset(panel, "draft");
+      });
+    }
+    const reset = panel.querySelector("#spo-contract-editor-reset");
+    if (reset) {
+      reset.addEventListener("click", () => {
+        resetProtectedContractEditorPreset(panel);
+      });
+    }
+  }
+
+  function getProtectedContractViewKey(key) {
+    const value = String(key || "").trim();
+    return ["presets", "rules", "editor", "package", "audit"].includes(value) ? value : "presets";
+  }
+
+  function activateProtectedContractView(panel, viewKey, shouldFocus = false) {
+    const current = getProtectedContractViewKey(viewKey);
+    const selectedTab = panel.querySelector(`[data-contract-view="${current}"]`);
+    panel.querySelectorAll("[data-contract-view]").forEach((tab) => {
+      const selected = tab.dataset.contractView === current;
+      tab.classList.toggle("active", selected);
+      tab.setAttribute("aria-selected", String(selected));
+      tab.setAttribute("tabindex", selected ? "0" : "-1");
+    });
+    panel.querySelectorAll("[data-contract-panel]").forEach((viewPanel) => {
+      const selected = viewPanel.dataset.contractPanel === current;
+      viewPanel.hidden = !selected;
+      viewPanel.classList.toggle("active", selected);
+    });
+    const card = panel.querySelector("#spo-protected-contract-card");
+    if (card) card.dataset.contractActiveView = current;
+    if (shouldFocus && selectedTab) selectedTab.focus();
+  }
+
+  function initProtectedContractTabs(panel) {
+    const tabs = Array.from(panel.querySelectorAll("[data-contract-view]"));
+    if (!tabs.length) return;
+    const viewKeys = tabs.map((tab) => getProtectedContractViewKey(tab.dataset.contractView));
+    tabs.forEach((tab) => {
+      const view = getProtectedContractViewKey(tab.dataset.contractView);
+      const tabId = tab.id || `spo-contract-tab-${view}`;
+      const panelId = `spo-contract-panel-${view}`;
+      const viewPanel = panel.querySelector(`[data-contract-panel="${view}"]`);
+      tab.id = tabId;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panelId);
+      if (viewPanel) {
+        viewPanel.id = viewPanel.id || panelId;
+        viewPanel.setAttribute("role", "tabpanel");
+        viewPanel.setAttribute("aria-labelledby", tabId);
+        viewPanel.setAttribute("tabindex", "0");
+      }
+      tab.addEventListener("click", () => {
+        activateProtectedContractView(panel, view);
+        syncProtectedContractPanel(panel);
+      });
+      tab.addEventListener("keydown", (ev) => {
+        const currentIndex = viewKeys.indexOf(view);
+        let nextIndex = currentIndex;
+        if (ev.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+        if (ev.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        if (ev.key === "Home") nextIndex = 0;
+        if (ev.key === "End") nextIndex = tabs.length - 1;
+        if (nextIndex === currentIndex) return;
+        ev.preventDefault();
+        activateProtectedContractView(panel, viewKeys[nextIndex], true);
+        syncProtectedContractPanel(panel);
+      });
+    });
+    const initial = tabs.find((tab) => tab.classList.contains("active"))?.dataset.contractView || tabs[0].dataset.contractView;
+    activateProtectedContractView(panel, initial);
+  }
+
+  function syncProtectedContractPanel(panel) {
+    const state = readProtectedContractState();
+    const current = getProtectedContractPresetKey(state.preview || state.draft || state.active);
+    const active = getProtectedContractPresetKey(state.active);
+    const draft = getOptionalProtectedContractPresetKey(state.draft);
+    const activePreset = getProtectedContractPreset(active);
+    const draftPreset = draft ? getProtectedContractPreset(draft) : null;
+    const preset = getProtectedContractPreset(current);
+    const status = panel.querySelector("#spo-contract-status");
+    panel.querySelectorAll("[data-contract-preset]").forEach((btn) => {
+      const presetKey = btn.dataset.contractPreset;
+      const selected = presetKey === current;
+      btn.classList.toggle("active", selected);
+      btn.classList.toggle("contract-preset-active-local", presetKey === active);
+      btn.classList.toggle("contract-preset-draft-local", Boolean(draft) && presetKey === draft);
+      btn.setAttribute("aria-pressed", String(selected));
+    });
+    if (status) {
+      const draftLabel = draftPreset ? draftPreset.label : "nenhum";
+      const stage =
+        draft && current !== draft
+          ? "Prévia diferente do rascunho salvo."
+          : draft && draft !== active
+          ? "Rascunho pronto para ativação."
+          : current !== active
+            ? "Prévia ainda não ativada."
+            : "Prévia alinhada ao ativo local.";
+      status.textContent = `Catálogo local em JavaScript: ativo ${activePreset.label}; rascunho ${draftLabel}; prévia ${preset.label}. ${stage} Nenhuma alteração em banco de dados.`;
+    }
+    renderProtectedContractState(panel, state);
+    syncProtectedContractActions(panel, state);
+    renderProtectedContractPreview(panel, current);
+    renderProtectedContractRules(panel, state);
+    renderProtectedContractEditor(panel, state);
+    renderProtectedContractAudit(panel);
+  }
+
+  function initProtectedContractControls(panel) {
+    const card = panel.querySelector("#spo-protected-contract-card");
+    if (!card) return;
+    if (!canManageProtectedContract()) {
+      card.remove();
+      return;
+    }
+    initProtectedContractTabs(panel);
+    initProtectedContractEditor(panel);
+    applyProtectedContractPreset(getStoredProtectedContractPreset(), false);
+    panel.querySelectorAll("[data-contract-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset(btn.dataset.contractPreset || "default", true, "preview");
+        addProtectedContractAudit("preview", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Preset "${getProtectedContractLabel(presetKey)}" pré-visualizado localmente.`);
+      });
+    });
+    const promoteDraft = panel.querySelector("#spo-contract-promote-draft");
+    if (promoteDraft) {
+      promoteDraft.addEventListener("click", () => {
+        const state = readProtectedContractState();
+        const previewKey = getProtectedContractPresetKey(state.preview || state.active);
+        const presetKey = applyProtectedContractPreset(previewKey, true, "draft");
+        addProtectedContractAudit("draft", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Prévia "${getProtectedContractLabel(presetKey)}" salva como rascunho local.`);
+      });
+    }
+    const activateDraft = panel.querySelector("#spo-contract-activate-draft");
+    if (activateDraft) {
+      activateDraft.addEventListener("click", () => {
+        const state = readProtectedContractState();
+        const draftKey = getOptionalProtectedContractPresetKey(state.draft);
+        if (!draftKey) {
+          showToast("Promova uma prévia a rascunho antes de ativar.");
+          syncProtectedContractPanel(panel);
+          return;
+        }
+        const presetKey = applyProtectedContractPreset(draftKey, true, "active");
+        addProtectedContractAudit("active", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast(`Rascunho "${getProtectedContractLabel(presetKey)}" ativado localmente.`);
+      });
+    }
+    const save = panel.querySelector("#spo-contract-save");
+    if (save) {
+      save.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset(getStoredProtectedContractPreset(), true, "save");
+        addProtectedContractAudit("save", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast("Prévia protegida ativada localmente.");
+      });
+    }
+    const restore = panel.querySelector("#spo-contract-restore");
+    if (restore) {
+      restore.addEventListener("click", () => {
+        const presetKey = applyProtectedContractPreset("default", true, "restore");
+        addProtectedContractAudit("restore", presetKey);
+        syncProtectedContractPanel(panel);
+        showToast("Contrato visual restaurado para o padrão SPO.");
+      });
+    }
+    const generatePackage = panel.querySelector("#spo-contract-generate-package");
+    if (generatePackage) {
+      generatePackage.addEventListener("click", () => {
+        generateProtectedContractPackage(panel);
+        showToast("Pacote local gerado.");
+      });
+    }
+    const copyPackage = panel.querySelector("#spo-contract-copy-package");
+    if (copyPackage) {
+      copyPackage.addEventListener("click", () => {
+        copyProtectedContractPackage(panel);
+      });
+    }
+    const importPackage = panel.querySelector("#spo-contract-import-package");
+    if (importPackage) {
+      importPackage.addEventListener("click", () => {
+        importProtectedContractPackage(panel);
+      });
+    }
+    const clearAudit = panel.querySelector("#spo-contract-clear-audit");
+    if (clearAudit) {
+      clearAudit.addEventListener("click", () => {
+        clearProtectedContractAudit(panel);
+      });
+    }
+    syncProtectedContractPanel(panel);
+  }
+
+  function initPersonalizarSpo() {
+    const panel = document.getElementById("personalizar-spo-panel");
+    if (!panel || panel.dataset.bound === "1") return;
+    panel.querySelectorAll(".personalizar-subnav").forEach((node) => node.remove());
+    panel.dataset.bound = "1";
+    syncThemeControls(panel);
+    initCommonVisualControls(panel);
+    panel.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyTheme(btn.dataset.themeChoice || "auto");
+        syncThemeControls(panel);
+        syncCommonVisualControls(panel);
+      });
+    });
+    panel.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyAccentColor(btn.dataset.accentChoice || DEFAULT_ACCENT);
+        syncThemeControls(panel);
+      });
+    });
+    const reset = document.getElementById("spo-theme-reset");
+    if (reset) {
+      reset.addEventListener("click", () => {
+        applyAccentColor(DEFAULT_ACCENT);
+        applyTheme("auto");
+        localStorage.removeItem(COMMON_VISUAL_STORAGE_KEY);
+        applyCommonVisualPreferences(COMMON_VISUAL_DEFAULTS, false);
+        syncThemeControls(panel);
+        syncCommonVisualControls(panel);
+        showToast("Personalização restaurada para o padrão do laboratório.");
+      });
+    }
+    initProtectedContractControls(panel);
   }
 
   function bindToggleVisibility(scope) {
@@ -76,11 +2114,311 @@
     });
   }
 
+  const SCROLLBAR_EDGE_PX = 28;
+  const SCROLLBAR_TARGET_SELECTOR = [
+    ".sidebar",
+    "#content-area",
+    ".modal-body",
+    ".table-responsive",
+    ".planning-structure-layout",
+    ".planning-key-model-layout",
+    ".teto-table-wrap",
+    ".teto-table-scroll",
+    ".import-preview",
+  ].join(",");
+
+  function isScrollableTarget(el) {
+    if (!el) return false;
+    if (el === document.documentElement) {
+      return document.documentElement.scrollHeight > window.innerHeight + 1;
+    }
+    return el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+  }
+
+  function setScrollbarVisible(el, visible) {
+    if (!el) return;
+    el.classList.toggle("scrollbar-visible", !!visible);
+  }
+
+  function bindAccentScrollbar(el) {
+    if (!el || el.dataset?.scrollbarBound === "1") return;
+    if (el.dataset) el.dataset.scrollbarBound = "1";
+    let hideTimer = null;
+
+    const showBriefly = () => {
+      if (!isScrollableTarget(el)) return;
+      setScrollbarVisible(el, true);
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setScrollbarVisible(el, false), 900);
+    };
+
+    const updateFromPointer = (ev) => {
+      if (!isScrollableTarget(el)) return;
+      const rect = el === document.documentElement
+        ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+        : el.getBoundingClientRect();
+      const nearRight = ev.clientX >= rect.right - SCROLLBAR_EDGE_PX && ev.clientX <= rect.right + 2;
+      const nearBottom = ev.clientY >= rect.bottom - SCROLLBAR_EDGE_PX && ev.clientY <= rect.bottom + 2;
+      setScrollbarVisible(el, nearRight || nearBottom);
+    };
+
+    const hide = () => {
+      window.clearTimeout(hideTimer);
+      setScrollbarVisible(el, false);
+    };
+
+    const scrollTarget = el === document.documentElement ? window : el;
+    scrollTarget.addEventListener("scroll", showBriefly, { passive: true });
+    el.addEventListener("mousemove", updateFromPointer, { passive: true });
+    el.addEventListener("mouseleave", hide, { passive: true });
+  }
+
+  function refreshAccentScrollbars(scope = document) {
+    bindAccentScrollbar(document.documentElement);
+    if (sidebar) bindAccentScrollbar(sidebar);
+    if (content) bindAccentScrollbar(content);
+    scope.querySelectorAll?.(SCROLLBAR_TARGET_SELECTOR).forEach(bindAccentScrollbar);
+  }
+
+  let pta2027IntegrationCleanup = null;
+
+  function initPta2027Integration() {
+    const frame = document.getElementById("pta2027-frame");
+    const wrap = document.querySelector(".pta2027-frame-wrap");
+    const integration = document.querySelector(".pta2027-integration");
+    const stickyBack = document.getElementById("pta2027-sticky-back");
+    if (!frame) return;
+    if (typeof pta2027IntegrationCleanup === "function") {
+      pta2027IntegrationCleanup();
+      pta2027IntegrationCleanup = null;
+    }
+
+    const readThemePayload = () => {
+      const rootStyles = getComputedStyle(document.documentElement);
+      const hostUser = readHostUserMeta();
+      return {
+        type: "spo-theme",
+        theme: document.body.classList.contains("theme-dark") ? "dark" : "light",
+        accent: rootStyles.getPropertyValue("--accent").trim(),
+        accentStrong: rootStyles.getPropertyValue("--accent-strong").trim(),
+        accentRgb: rootStyles.getPropertyValue("--accent-rgb").trim(),
+        surface: rootStyles.getPropertyValue("--surface").trim(),
+        card: rootStyles.getPropertyValue("--card-bg").trim(),
+        bg: rootStyles.getPropertyValue("--bg").trim(),
+        text: rootStyles.getPropertyValue("--text").trim(),
+        muted: rootStyles.getPropertyValue("--muted").trim(),
+        border: rootStyles.getPropertyValue("--border").trim(),
+        layoutSidebarCollapsed: rootStyles.getPropertyValue("--spo-layout-sidebar-collapsed-width").trim(),
+        layoutPageGutter: rootStyles.getPropertyValue("--spo-layout-page-gutter").trim(),
+        layoutPanelGap: rootStyles.getPropertyValue("--spo-layout-panel-gap").trim(),
+        userMeta: hostUser.text,
+        userName: hostUser.name,
+        userInitials: hostUser.initials,
+      };
+    };
+
+    const diagnostics = {
+      initializedAt: new Date().toISOString(),
+      lastMessages: {},
+      lastMeasuredHeight: null,
+      lastTheme: null,
+      loadCount: 0,
+    };
+
+    const markMessage = (type, details = {}) => {
+      diagnostics.lastMessages[type] = { at: new Date().toISOString(), ...details };
+      frame.dataset.integrationLastMessage = type;
+    };
+
+    const readIframeStatus = () => {
+      try {
+        const runtimeStatus = frame.contentWindow?.pta2027GetRuntimeStatus?.();
+        if (runtimeStatus) return runtimeStatus;
+        const doc = frame.contentDocument;
+        return {
+          available: Boolean(doc),
+          bodyClasses: doc?.body ? Array.from(doc.body.classList) : [],
+          visibleView: doc?.querySelector("#wizard-view:not(.hidden)") ? "wizard" : "value",
+        };
+      } catch (err) {
+        return { available: false, error: err?.message || "iframe indisponivel" };
+      }
+    };
+
+    const getIntegrationStatus = () => ({
+      kind: "spo-pta2027-host",
+      initializedAt: diagnostics.initializedAt,
+      route: window.location.hash || window.location.pathname,
+      contract: {
+        flow: integration?.dataset.contractFlow || null,
+        scope: integration?.dataset.contractScope || null,
+        embeddedFlow: frame.dataset.contractEmbeddedFlow || null,
+      },
+      host: {
+        immersive: document.body.classList.contains("pta2027-immersive"),
+        contextFocus: document.body.classList.contains("pta2027-context-focus"),
+        specialContextFocus: document.body.classList.contains("special-context-focus"),
+        stickyBackVisible: Boolean(stickyBack && !stickyBack.hidden),
+        theme: document.body.classList.contains("theme-dark") ? "dark" : "light",
+        sidebarCollapsed: Boolean(sidebar?.classList.contains("collapsed")),
+      },
+      frame: {
+        height: frame.style.height || null,
+        wrapMinHeight: wrap?.style.minHeight || null,
+        dataset: { ...frame.dataset },
+      },
+      lastMessages: { ...diagnostics.lastMessages },
+      lastMeasuredHeight: diagnostics.lastMeasuredHeight,
+      lastTheme: diagnostics.lastTheme,
+      loadCount: diagnostics.loadCount,
+      iframe: readIframeStatus(),
+    });
+
+    window.spoGetPta2027IntegrationStatus = getIntegrationStatus;
+    frame.dataset.integrationState = "initialized";
+
+    const syncFrameHeight = (height) => {
+      const safeHeight = Math.max(720, Math.ceil(Number(height) || 0));
+      diagnostics.lastMeasuredHeight = safeHeight;
+      frame.style.height = `${safeHeight}px`;
+      if (wrap) wrap.style.minHeight = `${safeHeight}px`;
+      frame.dataset.integrationHeight = String(safeHeight);
+    };
+
+    const postTheme = () => {
+      const payload = readThemePayload();
+      try {
+        frame.contentWindow?.postMessage(payload, window.location.origin);
+        diagnostics.lastTheme = {
+          at: new Date().toISOString(),
+          theme: payload.theme,
+          accent: payload.accent,
+          accentRgb: payload.accentRgb,
+        };
+        frame.dataset.integrationTheme = payload.theme;
+      } catch (err) {
+        console.debug("Falha ao sincronizar tema do PTA 2027", err);
+      }
+    };
+
+    const postBackToStrategicChain = () => {
+      try {
+        frame.contentWindow?.postMessage({ type: "spo-pta2027-back-to-map" }, window.location.origin);
+        markMessage("spo-pta2027-back-to-map");
+      } catch (err) {
+        console.debug("Falha ao solicitar retorno para a cadeia estrategica", err);
+      }
+    };
+
+    const resizeFromDocument = () => {
+      try {
+        const doc = frame.contentDocument?.documentElement;
+        const body = frame.contentDocument?.body;
+        if (!doc || !body) return;
+        syncFrameHeight(Math.max(doc.scrollHeight, body.scrollHeight, doc.offsetHeight, body.offsetHeight));
+      } catch (_) {
+        // A leitura direta é apenas um reforço para iframe de mesma origem.
+      }
+    };
+
+    const setImmersiveMode = (enabled) => {
+      document.body.classList.toggle("pta2027-immersive", Boolean(enabled));
+      frame.dataset.integrationImmersive = enabled ? "on" : "off";
+      if (wrap) wrap.dataset.integrationImmersive = enabled ? "on" : "off";
+      if (sidebar) {
+        if (enabled) {
+          sidebar.classList.remove("open");
+          sidebar.classList.add("collapsed");
+        } else {
+          sidebar.classList.remove("open");
+          if (!isSidebarNarrow()) sidebar.classList.remove("collapsed");
+        }
+      }
+      updateToggleIcon();
+      syncTopbarHeight();
+      window.setTimeout(() => {
+        postTheme();
+        resizeFromDocument();
+      }, 80);
+    };
+
+    const onMessage = (event) => {
+      if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
+      if (event.data?.type === "pta2027-height") {
+        markMessage("pta2027-height", { height: event.data.height });
+        syncFrameHeight(event.data.height);
+      }
+      if (event.data?.type === "pta2027-immersive") {
+        const enabled = Boolean(event.data.enabled);
+        markMessage("pta2027-immersive", { enabled });
+        setImmersiveMode(enabled);
+      }
+      if (event.data?.type === "pta2027-context-focus") {
+        const enabled = Boolean(event.data.enabled);
+        markMessage("pta2027-context-focus", { enabled });
+        document.body.classList.toggle("special-context-focus", enabled);
+        document.body.classList.toggle("pta2027-context-focus", enabled);
+        frame.dataset.integrationContext = enabled ? "focused" : "idle";
+        if (stickyBack) stickyBack.hidden = !enabled;
+        syncPtaContextMeta();
+        syncTopbarHeight();
+        window.setTimeout(() => {
+          syncTopbarHeight();
+          postTheme();
+          resizeFromDocument();
+        }, 80);
+      }
+      if (event.data?.type === "pta2027-scroll-top") {
+        markMessage("pta2027-scroll-top");
+        document.querySelector(".pta2027-integration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+
+    const observer = new MutationObserver(() => {
+      postTheme();
+      window.setTimeout(resizeFromDocument, 80);
+    });
+
+    window.addEventListener("message", onMessage);
+    stickyBack?.addEventListener("click", postBackToStrategicChain);
+    frame.addEventListener("load", () => {
+      diagnostics.loadCount += 1;
+      frame.dataset.integrationState = "loaded";
+      syncTopbarHeight();
+      postTheme();
+      resizeFromDocument();
+      window.setTimeout(resizeFromDocument, 180);
+      window.setTimeout(resizeFromDocument, 700);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class", "style"] });
+
+    postTheme();
+    window.setTimeout(resizeFromDocument, 120);
+
+    pta2027IntegrationCleanup = () => {
+      window.removeEventListener("message", onMessage);
+      stickyBack?.removeEventListener("click", postBackToStrategicChain);
+      if (stickyBack) stickyBack.hidden = true;
+      observer.disconnect();
+      if (window.spoGetPta2027IntegrationStatus === getIntegrationStatus) {
+        delete window.spoGetPta2027IntegrationStatus;
+      }
+      document.body.classList.remove("special-context-focus", "pta2027-context-focus");
+      syncTopbarHeight();
+      setImmersiveMode(false);
+    };
+  }
+
   async function loadPage(route) {
     let url = "/partial/" + route;
     if (route === "logout") {
       await logout();
       return;
+    }
+    if (route !== "atualizar/governanca-resultados/programacao-pta2027" && typeof pta2027IntegrationCleanup === "function") {
+      pta2027IntegrationCleanup();
+      pta2027IntegrationCleanup = null;
     }
     showAppLoading("Carregando página...", "Aguarde enquanto a página é carregada.");
     try {
@@ -90,12 +2428,15 @@
         return;
       }
       if (res.status === 403) {
-        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Requer perfil admin.</p></div>';
+        content.innerHTML = '<div class="card"><div class="card-title">Acesso negado</div><p>Seu usuário não possui permissão para acessar esta funcionalidade.</p></div>';
         return;
       }
       const html = await res.text();
       content.innerHTML = html;
+      syncPtaContextMeta();
+      syncTopbarHeight();
       initRoute(route);
+      refreshAccentScrollbars(content);
     } catch (err) {
       content.innerHTML = '<div class="card"><div class="card-title">Erro</div><p>Falha ao carregar.</p></div>';
       console.error(err);
@@ -130,6 +2471,11 @@
     }
   }
 
+  function clearMenuRouteActiveState() {
+    document.querySelectorAll(".menu-item.active").forEach((el) => el.classList.remove("active"));
+    document.querySelectorAll(".menu-group.active-ancestor").forEach((group) => group.classList.remove("active-ancestor"));
+  }
+
   async function logout() {
     try {
       await fetch("/logout", { method: "POST" });
@@ -138,15 +2484,48 @@
     }
   }
 
+  const sidebarNarrowQuery = window.matchMedia("(max-width: 1200px)");
+
+  function isSidebarNarrow() {
+    return sidebarNarrowQuery.matches;
+  }
+
+  function isPta2027Immersive() {
+    return document.body.classList.contains("pta2027-immersive");
+  }
+
+  function shouldUseSidebarOverlay() {
+    return isSidebarNarrow() || isPta2027Immersive();
+  }
+
   function updateToggleIcon() {
     if (!toggle || !sidebar) return;
     const icon = toggle.querySelector("i");
     if (!icon) return;
-    const collapsed = sidebar.classList.contains("collapsed");
-    icon.classList.toggle("bi-chevron-right", collapsed);
-    icon.classList.toggle("bi-chevron-left", !collapsed);
-    toggle.setAttribute("aria-label", collapsed ? "Expandir menu" : "Recolher menu");
-    toggle.setAttribute("aria-expanded", String(!collapsed));
+    const expanded = shouldUseSidebarOverlay()
+      ? sidebar.classList.contains("open")
+      : !sidebar.classList.contains("collapsed");
+    icon.classList.toggle("bi-chevron-right", !expanded);
+    icon.classList.toggle("bi-chevron-left", expanded);
+    toggle.setAttribute("aria-label", expanded ? "Recolher menu" : "Expandir menu");
+    toggle.setAttribute("aria-expanded", String(expanded));
+  }
+
+  function syncSidebarForViewport() {
+    if (!sidebar) return;
+    if (shouldUseSidebarOverlay()) {
+      sidebar.classList.toggle("collapsed", !sidebar.classList.contains("open"));
+    } else {
+      sidebar.classList.remove("open");
+    }
+    updateToggleIcon();
+  }
+
+  function closeNarrowSidebar() {
+    if (!sidebar || !shouldUseSidebarOverlay()) return;
+    sidebar.classList.remove("open");
+    sidebar.classList.add("collapsed");
+    updateToggleIcon();
   }
 
   function resizeTetoDashboardCharts() {
@@ -175,6 +2554,71 @@
     sidebar.style.setProperty("--sidebar-expanded-width", `${Math.max(160, measuredWidth)}px`);
   }
 
+  function syncTopbarHeight() {
+    const contextHeader = document.querySelector(".pta2027-integration-header");
+    const useContextHeader = document.body.classList.contains("special-context-focus") && contextHeader;
+    const height = useContextHeader
+      ? Math.ceil(contextHeader.getBoundingClientRect().height)
+      : topbar && getComputedStyle(topbar).display !== "none"
+        ? Math.ceil(topbar.getBoundingClientRect().height)
+        : 0;
+    document.documentElement.style.setProperty("--spo-topbar-height", `${height}px`);
+    document.documentElement.style.setProperty("--spo-contextbar-height", `${height}px`);
+  }
+
+  function syncSplitPressureMode() {
+    const viewportWidth = Math.max(
+      document.documentElement.clientWidth || 0,
+      window.innerWidth || 0
+    );
+    const outerWidth = window.outerWidth || viewportWidth;
+    const isSplitPressure =
+      viewportWidth <= SPO_RESPONSIVE_CONTRACT.splitPressureMaxViewport &&
+      outerWidth - viewportWidth >= SPO_RESPONSIVE_CONTRACT.splitPressureMinOuterGap;
+    document.documentElement.classList.toggle("spo-split-pressure", isSplitPressure);
+    document.body.classList.toggle("spo-split-pressure", isSplitPressure);
+  }
+
+  function readHostUserMeta() {
+    if (!userMeta) return { text: "", name: "", initials: "" };
+    const name = userMeta.dataset.name || "";
+    const text = userMeta.textContent.trim() || name;
+    const initials = name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+    return { text, name, initials };
+  }
+
+  function syncPtaContextMeta() {
+    const meta = document.getElementById("pta2027-context-meta");
+    if (!meta) return;
+    const hostUser = readHostUserMeta();
+    const text = hostUser.text || "";
+    if (!text) {
+      meta.textContent = "";
+      meta.removeAttribute("title");
+      return;
+    }
+    const [namePart, ...detailParts] = text.split(" - ");
+    const nameText = namePart || hostUser.name || text;
+    const detailText = detailParts.join(" - ");
+    const nameLine = document.createElement("span");
+    nameLine.className = "pta2027-context-user-name";
+    nameLine.textContent = nameText;
+    meta.replaceChildren(nameLine);
+    if (detailText) {
+      const detailLine = document.createElement("span");
+      detailLine.className = "pta2027-context-user-detail";
+      detailLine.textContent = detailText;
+      meta.appendChild(detailLine);
+    }
+    meta.title = text;
+  }
+
   function setUserMeta() {
     if (!userMeta) return;
     const name = userMeta.dataset.name || "";
@@ -191,28 +2635,93 @@
     });
     const countLabel = activeCount ? ` | Logados: ${activeCount}` : "";
     userMeta.textContent = `${name} - ${formatted}${countLabel}`;
+    syncPtaContextMeta();
   }
 
-  if (sidebar && window.matchMedia("(max-width: 860px)").matches) {
+  if (sidebar && isSidebarNarrow()) {
     sidebar.classList.add("collapsed");
   }
 
   if (toggle) {
     toggle.addEventListener("click", () => {
-      sidebar.classList.toggle("collapsed");
-      sidebar.classList.toggle("open");
+      if (shouldUseSidebarOverlay()) {
+        const open = !sidebar.classList.contains("open");
+        sidebar.classList.toggle("open", open);
+        sidebar.classList.toggle("collapsed", !open);
+      } else {
+        sidebar.classList.toggle("collapsed");
+        sidebar.classList.remove("open");
+      }
       updateToggleIcon();
       resizeTetoDashboardCharts();
     });
     updateToggleIcon();
   }
+  if (sidebarNarrowQuery.addEventListener) {
+    sidebarNarrowQuery.addEventListener("change", syncSidebarForViewport);
+  } else if (sidebarNarrowQuery.addListener) {
+    sidebarNarrowQuery.addListener(syncSidebarForViewport);
+  }
+  const syncViewportPressure = () => {
+    syncSplitPressureMode();
+    syncTopbarHeight();
+  };
+
+  syncSplitPressureMode();
+  window.addEventListener("resize", syncViewportPressure, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncViewportPressure, { passive: true });
+  }
+  if (topbar && "ResizeObserver" in window) {
+    new ResizeObserver(syncTopbarHeight).observe(topbar);
+  }
+
+  document.addEventListener("click", (ev) => {
+    if (!sidebar || !shouldUseSidebarOverlay() || !sidebar.classList.contains("open")) return;
+    if (sidebar.contains(ev.target) || toggle?.contains(ev.target)) return;
+    closeNarrowSidebar();
+  });
 
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => logout());
   }
 
   initTheme();
+  refreshAccentScrollbars();
+  function initLocalTableFilter(inputId, tbodyId) {
+    const input = document.getElementById(inputId);
+    const tbody = document.getElementById(tbodyId);
+    if (!input || !tbody || input.dataset.bound === "1") return;
+    input.dataset.bound = "1";
+    const normalize = (value) => String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .trim();
+    const empty = document.createElement("tr");
+    empty.className = "users-filter-empty";
+    empty.hidden = true;
+    const cell = document.createElement("td");
+    cell.colSpan = Math.max(tbody.closest("table")?.querySelectorAll("thead th").length || 1, 1);
+    cell.textContent = "Nenhum registro encontrado.";
+    empty.appendChild(cell);
+    tbody.appendChild(empty);
+    const applyFilter = () => {
+      const query = normalize(input.value);
+      let visible = 0;
+      Array.from(tbody.querySelectorAll("tr:not(.users-filter-empty)")).forEach((row) => {
+        const show = !query || normalize(row.textContent).includes(query);
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+      empty.hidden = visible !== 0;
+    };
+    input.addEventListener("input", applyFilter);
+    applyFilter();
+  }
+
   function initUsuariosForm() {
+    initLocalTableFilter("usuarios-cadastrar-search", "usuarios-cadastrar-tbody");
     const form = document.getElementById("form-criar-usuario");
     const msg = document.getElementById("criar-usuario-msg");
     if (!form || !msg) return;
@@ -255,6 +2764,7 @@
   }
 
   function initUsuariosEditar() {
+    initLocalTableFilter("usuarios-editar-search", "usuarios-editar-tbody");
     const form = document.getElementById("form-editar-usuario");
     const msg = document.getElementById("editar-usuario-msg");
     const fillFromRow = (row) => {
@@ -277,6 +2787,38 @@
       btn.addEventListener("click", () => {
         const row = btn.closest("tr[data-id]");
         if (row) fillFromRow(row);
+      });
+    });
+
+    document.querySelectorAll(".delete-usuario").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest("tr[data-id]");
+        const id = row?.dataset.id || btn.dataset.id || "";
+        const nome = btn.dataset.nome || row?.dataset.nome || "este usuário";
+        if (!id || !window.confirm(`Excluir ${nome} da lista de usuários ativos?\n\nO registro será preservado e apenas desativado.`)) return;
+        btn.disabled = true;
+        msg.textContent = "Desativando usuário...";
+        msg.classList.remove("text-error");
+        try {
+          const res = await fetch(`/api/usuarios/id/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "fetch" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Falha ao excluir usuário.");
+          if (document.getElementById("edit-id").value === id) {
+            form.reset();
+            document.getElementById("edit-id").value = "";
+          }
+          row?.remove();
+          document.getElementById("usuarios-editar-search")?.dispatchEvent(new Event("input"));
+          msg.textContent = "Usuário desativado e removido da lista.";
+        } catch (err) {
+          console.error(err);
+          btn.disabled = false;
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
       });
     });
 
@@ -340,6 +2882,7 @@
   }
 
   function initPerfis() {
+    initLocalTableFilter("perfis-search", "perfis-tbody");
     const form = document.getElementById("form-perfil");
     const msg = document.getElementById("perfil-msg");
     if (!form || !msg) return;
@@ -711,16 +3254,19 @@
       link.style.display = isAllowedRoute(route) ? "" : "none";
     });
 
-    // Parents: show if any allowed child
-    menu.querySelectorAll(".menu-group").forEach((group) => {
+    // Processa de dentro para fora para preservar todos os ancestrais de rotas visíveis.
+    Array.from(menu.querySelectorAll(".menu-group")).reverse().forEach((group) => {
       const submenu = group.querySelector(".submenu");
       if (!submenu) return;
       const parentId = group.id?.replace("menu-", "") || "";
-      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some((item) =>
-        isAllowedRoute(item.getAttribute("data-route"))
+      const hasAllowedChild = Array.from(submenu.querySelectorAll("[data-route]")).some(
+        (item) => item.style.display !== "none"
+      );
+      const hasVisibleGroup = Array.from(submenu.querySelectorAll(".menu-group")).some(
+        (child) => child.style.display !== "none"
       );
       const parentAllowed = parentId && allowed.has(parentId);
-      group.style.display = hasAllowedChild || parentAllowed ? "" : "none";
+      group.style.display = hasAllowedChild || hasVisibleGroup || parentAllowed ? "" : "none";
     });
 
     // Top-level items without submenu
@@ -755,14 +3301,6 @@
   }
 
   async function fetchCurrentPermissions() {
-    if (userNivel === "1") {
-      // admin: libera tudo visível no menu
-      const allRoutes = Array.from(menu.querySelectorAll("[data-route]")).map((el) =>
-        el.getAttribute("data-route")
-      );
-      applyMenuPermissions(allRoutes);
-      return;
-    }
     try {
       const res = await fetch("/api/permissoes/current", {
         headers: { "X-Requested-With": "fetch" },
@@ -785,12 +3323,18 @@
     const selectTipo = document.getElementById("painel-tipo");
     const selectPerfil = document.getElementById("painel-perfil");
     const selectNivel = document.getElementById("painel-nivel");
+    const selectUsuario = document.getElementById("painel-usuario");
+    const usuarioPesquisa = document.getElementById("painel-usuario-pesquisa");
+    const usuarioOpcoes = document.getElementById("painel-usuario-opcoes");
+    const usuarioSelecionados = document.getElementById("painel-usuario-selecionados");
     const fieldPerfil = document.getElementById("painel-perfil-field");
     const fieldNivel = document.getElementById("painel-nivel-field");
+    const fieldUsuario = document.getElementById("painel-usuario-field");
+    const usuarioLegenda = document.getElementById("painel-usuario-legenda");
     const btnSalvar = document.getElementById("painel-salvar");
     const btnCancelar = document.getElementById("painel-cancelar");
     const msg = document.getElementById("painel-msg");
-    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectTipo) return;
+    if (!dataScript || !treeEl || !ativosEl || !selectPerfil || !selectNivel || !selectUsuario || !usuarioOpcoes || !selectTipo) return;
     if (treeEl.dataset.bound === "1") return;
     treeEl.dataset.bound = "1";
 
@@ -799,6 +3343,11 @@
     const allowedNivelRaw = JSON.parse(dataScript.dataset.allowedNivel || "{}");
     const allowedPerfil = {};
     const allowedNivel = {};
+    const allowedUsuario = {};
+    const inheritedUsuario = {};
+    const userAllow = {};
+    const userDeny = {};
+    let mixedUsuario = new Set();
     Object.entries(allowedPerfilRaw).forEach(([k, v]) => {
       allowedPerfil[String(k)] = v;
     });
@@ -806,14 +3355,7 @@
       allowedNivel[String(k)] = v;
     });
     const lockedBase = new Set(features.filter((f) => f.locked).map((f) => f.id));
-    const sortFeatures = (items) =>
-      (items || [])
-        .map((f) => ({
-          ...f,
-          children: f.children ? sortFeatures([...f.children]) : [],
-        }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-    const sortedFeatures = sortFeatures(features);
+    const menuFeatures = features;
     let originalPerfil = {};
     let originalNivel = {};
     Object.entries(allowedPerfil).forEach(([k, v]) => {
@@ -826,26 +3368,62 @@
     let profileLocked = new Set();
     let currentMode = selectTipo.value || "perfil";
 
-    const getAllowedMap = () => (currentMode === "nivel" ? allowedNivel : allowedPerfil);
+    const getAllowedMap = () => {
+      if (currentMode === "nivel") return allowedNivel;
+      if (currentMode === "usuario") return allowedUsuario;
+      return allowedPerfil;
+    };
     const getOriginalMap = () => (currentMode === "nivel" ? originalNivel : originalPerfil);
-    const getSelectedKey = () => String(currentMode === "nivel" ? selectNivel.value || "" : selectPerfil.value || "");
+    const getSelectedUserIds = () => Array.from(
+      usuarioOpcoes.querySelectorAll("input[type='checkbox']:checked")
+    ).map((input) => String(input.value));
+    const getSelectedKey = () => String(
+      currentMode === "nivel"
+        ? selectNivel.value || ""
+        : currentMode === "usuario"
+          ? (getSelectedUserIds().length ? "__usuarios__" : "")
+          : selectPerfil.value || ""
+    );
     const getLockedSet = () => {
       const locked = new Set(lockedBase);
       if (currentMode === "perfil") {
         nivelLocked.forEach((id) => locked.add(id));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((id) => locked.add(id));
       }
       return locked;
     };
 
+    const featureNames = new Map();
+    const indexFeatureNames = (items) => (items || []).forEach((f) => {
+      featureNames.set(f.id, f.nome || f.id);
+      indexFeatureNames(f.children || []);
+    });
+    indexFeatureNames(features);
+
     const renderAtivos = (list) => {
       ativosEl.innerHTML = "";
       list.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = item;
+        li.textContent = featureNames.get(item) || item;
         ativosEl.appendChild(li);
       });
+    };
+
+    const aggregateSelectedUsers = () => {
+      const ids = getSelectedUserIds();
+      if (!ids.length) {
+        allowedUsuario.__usuarios__ = [];
+        mixedUsuario = new Set();
+        return;
+      }
+      const sets = ids.map((id) => new Set(allowedUsuario[id] || []));
+      const union = new Set(sets.flatMap((set) => Array.from(set)));
+      const intersection = new Set(Array.from(union).filter((feature) =>
+        sets.every((set) => set.has(feature))
+      ));
+      allowedUsuario.__usuarios__ = Array.from(intersection);
+      mixedUsuario = new Set(Array.from(union).filter((feature) => !intersection.has(feature)));
     };
 
     const buildTree = (key) => {
@@ -854,15 +3432,43 @@
         ativosEl.innerHTML = "";
         return;
       }
+      if (currentMode === "usuario") aggregateSelectedUsers();
       const allowedMap = getAllowedMap();
       const currentAllowed = new Set(allowedMap[key] || []);
       lockedBase.forEach((f) => currentAllowed.add(f));
       if (currentMode === "perfil") {
         nivelLocked.forEach((f) => currentAllowed.add(f));
-      } else {
+      } else if (currentMode === "nivel") {
         profileLocked.forEach((f) => currentAllowed.add(f));
       }
       const lockedAll = getLockedSet();
+
+      const setUserPermission = (id, checked) => {
+        if (currentMode !== "usuario") return;
+        getSelectedUserIds().forEach((usuarioId) => {
+          const inherited = new Set(inheritedUsuario[usuarioId] || []);
+          const allow = new Set(userAllow[usuarioId] || []);
+          const deny = new Set(userDeny[usuarioId] || []);
+          const effective = new Set(allowedUsuario[usuarioId] || []);
+          if (checked) {
+            effective.add(id);
+            deny.delete(id);
+            if (inherited.has(id)) allow.delete(id);
+            else allow.add(id);
+          } else {
+            effective.delete(id);
+            allow.delete(id);
+            if (inherited.has(id)) deny.add(id);
+            else deny.delete(id);
+          }
+          userAllow[usuarioId] = Array.from(allow);
+          userDeny[usuarioId] = Array.from(deny);
+          allowedUsuario[usuarioId] = Array.from(effective).filter((feature) => !lockedBase.has(feature));
+        });
+        if (checked) currentAllowed.add(id);
+        else currentAllowed.delete(id);
+        mixedUsuario.delete(id);
+      };
 
       const toggleChildren = (node, checked) => {
         node.querySelectorAll("input[type='checkbox']").forEach((cb) => {
@@ -872,7 +3478,8 @@
             return;
           }
           cb.checked = checked;
-          if (checked) currentAllowed.add(id);
+          if (currentMode === "usuario") setUserPermission(id, checked);
+          else if (checked) currentAllowed.add(id);
           else currentAllowed.delete(id);
         });
       };
@@ -880,6 +3487,9 @@
       const createNode = (feat) => {
         const wrapper = document.createElement("div");
         wrapper.className = "tree-item";
+        if (feat.children && feat.children.length) wrapper.classList.add("has-children");
+        const row = document.createElement("div");
+        row.className = "tree-row";
         const controls = document.createElement("div");
         controls.className = "tree-controls";
         if (feat.children && feat.children.length) {
@@ -902,36 +3512,43 @@
           spacer.style.width = "14px";
           controls.appendChild(spacer);
         }
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = currentAllowed.has(feat.id);
-        cb.dataset.id = feat.id;
-        cb.disabled = lockedAll.has(feat.id);
-        controls.appendChild(cb);
+        const cb = feat.group ? null : document.createElement("input");
+        if (cb) {
+          cb.type = "checkbox";
+          cb.checked = currentAllowed.has(feat.id);
+          cb.indeterminate = currentMode === "usuario" && mixedUsuario.has(feat.id);
+          cb.dataset.id = feat.id;
+          cb.disabled = lockedAll.has(feat.id);
+          controls.appendChild(cb);
+        }
         const label = document.createElement("span");
         label.textContent = feat.nome;
-        wrapper.appendChild(controls);
-        wrapper.appendChild(label);
+        row.appendChild(controls);
+        row.appendChild(label);
+        wrapper.appendChild(row);
 
-        cb.addEventListener("change", () => {
+        cb?.addEventListener("change", () => {
           if (cb.checked) {
-            currentAllowed.add(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, true);
+            else currentAllowed.add(feat.id);
             if (feat.parentId) {
               const parentCb = treeEl.querySelector(`input[data-id='${feat.parentId}']`);
               if (parentCb) {
                 parentCb.checked = true;
-                currentAllowed.add(feat.parentId);
+                if (currentMode === "usuario") setUserPermission(feat.parentId, true);
+                else currentAllowed.add(feat.parentId);
               }
             }
           } else {
-            if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
+            if (currentMode === "usuario") setUserPermission(feat.id, false);
+            else if (!lockedAll.has(feat.id)) currentAllowed.delete(feat.id);
             if (feat.children && feat.children.length) {
               const subtree = wrapper.querySelector(".tree-children");
               if (subtree) toggleChildren(subtree, false);
             }
           }
           const updated = Array.from(currentAllowed).filter((id) => !lockedAll.has(id));
-          allowedMap[key] = updated;
+          if (currentMode !== "usuario") allowedMap[key] = updated;
           renderAtivos(Array.from(currentAllowed));
         });
 
@@ -942,7 +3559,7 @@
             childrenBox.style.display = "none";
           }
           feat.children.forEach((ch) => {
-            ch.parentId = feat.id;
+            ch.parentId = feat.group ? feat.parentId : feat.id;
             const childNode = createNode(ch);
             childrenBox.appendChild(childNode);
           });
@@ -951,7 +3568,7 @@
         return wrapper;
       };
 
-      sortedFeatures.forEach((f) => {
+      menuFeatures.forEach((f) => {
         const node = createNode(f);
         treeEl.appendChild(node);
       });
@@ -999,12 +3616,42 @@
       }
     };
 
+    const loadUsuarioPermissions = async (usuario) => {
+      if (!usuario) return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      try {
+        const res = await fetch(`/api/permissoes/usuario/${usuario}`, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar permissões do usuário.");
+        return {
+          effectiveFeatures: Array.isArray(data.effective_features) ? data.effective_features : [],
+          inheritedFeatures: Array.isArray(data.inherited_features) ? data.inherited_features : [],
+          allow: Array.isArray(data.user_allow) ? data.user_allow : [],
+          deny: Array.isArray(data.user_deny) ? data.user_deny : [],
+        };
+      } catch (err) {
+        console.error(err);
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        return { effectiveFeatures: [], inheritedFeatures: [], allow: [], deny: [] };
+      }
+    };
+
     const updateMode = async () => {
       currentMode = selectTipo.value || "perfil";
       if (fieldPerfil) fieldPerfil.style.display = currentMode === "perfil" ? "" : "none";
       if (fieldNivel) fieldNivel.style.display = currentMode === "nivel" ? "" : "none";
+      if (fieldUsuario) fieldUsuario.style.display = currentMode === "usuario" ? "" : "none";
+      if (usuarioLegenda) usuarioLegenda.style.display = currentMode === "usuario" ? "" : "none";
       if (ativosTitle) {
-        ativosTitle.textContent = currentMode === "nivel" ? "Ativos para o nivel" : "Ativos para o perfil";
+        ativosTitle.textContent = currentMode === "nivel"
+          ? "Ativos para o nível"
+          : currentMode === "usuario"
+            ? "Ativos para os usuários selecionados"
+            : "Ativos para o perfil";
       }
       treeEl.innerHTML = "";
       ativosEl.innerHTML = "";
@@ -1024,12 +3671,24 @@
         originalPerfil[key] = [...allowedPerfil[key]];
         nivelLocked = new Set(result.nivelFeatures.filter((f) => typeof f === "string"));
         profileLocked = new Set();
-      } else {
+      } else if (currentMode === "nivel") {
         const result = await loadNivelPermissions(key);
         allowedNivel[key] = result.features.filter((f) => typeof f === "string");
         originalNivel[key] = [...allowedNivel[key]];
         nivelLocked = new Set();
         profileLocked = new Set(result.perfilFeatures.filter((f) => typeof f === "string"));
+      } else {
+        const ids = getSelectedUserIds();
+        const results = await Promise.all(ids.map((id) => loadUsuarioPermissions(id)));
+        results.forEach((result, index) => {
+          const id = ids[index];
+          allowedUsuario[id] = result.effectiveFeatures.filter((f) => typeof f === "string");
+          inheritedUsuario[id] = result.inheritedFeatures.filter((f) => typeof f === "string");
+          userAllow[id] = result.allow.filter((f) => typeof f === "string");
+          userDeny[id] = result.deny.filter((f) => typeof f === "string");
+        });
+        nivelLocked = new Set();
+        profileLocked = new Set();
       }
       buildTree(key);
     };
@@ -1067,16 +3726,68 @@
       buildTree(nivel);
     });
 
+    const updateSelectedUsersLabel = () => {
+      if (!usuarioSelecionados) return;
+      const count = getSelectedUserIds().length;
+      usuarioSelecionados.textContent = count
+        ? `${count} usuário${count === 1 ? "" : "s"} selecionado${count === 1 ? "" : "s"}.`
+        : "Nenhum usuário selecionado.";
+    };
+
+    usuarioOpcoes.addEventListener("change", async (event) => {
+      if (!event.target.matches("input[type='checkbox']")) return;
+      updateSelectedUsersLabel();
+      if (currentMode !== "usuario") return;
+      if (!getSelectedUserIds().length) {
+        treeEl.innerHTML = "";
+        ativosEl.innerHTML = "";
+        return;
+      }
+      await updateMode();
+    });
+
+    if (usuarioPesquisa) {
+      usuarioPesquisa.addEventListener("input", () => {
+        const term = usuarioPesquisa.value.trim().toLocaleLowerCase("pt-BR");
+        usuarioOpcoes.querySelectorAll(".painel-user-option").forEach((option) => {
+          const searchText = (option.dataset.search || option.textContent || "").toLocaleLowerCase("pt-BR");
+          option.hidden = Boolean(term) && !searchText.includes(term);
+        });
+      });
+    }
+
     const handleSalvar = async () => {
       const key = getSelectedKey();
       if (!key) {
-        if (msg) msg.textContent = currentMode === "nivel" ? "Selecione um nivel." : "Selecione um perfil.";
+        if (msg) msg.textContent = currentMode === "nivel"
+          ? "Selecione um nível."
+          : currentMode === "usuario"
+            ? "Selecione um usuário."
+            : "Selecione um perfil.";
         return;
       }
       const allowedMap = getAllowedMap();
       const feats = allowedMap[key] || [];
       if (msg) msg.textContent = "Salvando...";
       try {
+        if (currentMode === "usuario") {
+          const ids = getSelectedUserIds();
+          for (const usuarioId of ids) {
+            const response = await fetch(`/api/permissoes/usuario/${usuarioId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+              body: JSON.stringify({
+                allow: userAllow[usuarioId] || [],
+                deny: userDeny[usuarioId] || [],
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+          }
+          await updateMode();
+          if (msg) msg.textContent = `Permissões atualizadas para ${ids.length} usuário${ids.length === 1 ? "" : "s"}.`;
+          return;
+        }
         const url = currentMode === "nivel" ? `/api/permissoes/nivel/${key}` : `/api/permissoes/${key}`;
         const res = await fetch(url, {
           method: "POST",
@@ -1103,6 +3814,10 @@
     const handleCancelar = () => {
       const key = getSelectedKey();
       if (!key) return;
+      if (currentMode === "usuario") {
+        updateMode();
+        return;
+      }
       const allowedMap = getAllowedMap();
       const originalMap = getOriginalMap();
       allowedMap[key] = [...(originalMap[key] || [])];
@@ -1257,7 +3972,127 @@
     meta.innerHTML = `<div><strong>Última atualização${lista.length > 1 || lista[0].rotulo ? " por UO" : ""}</strong></div><div class="meta-uo-grid">${colunas}</div>`;
   };
 
-  async function loadFipStatus(target) {
+  async function loadManagedJobStatus(endpoint, target, submitBtn, viewLabel) {
+    if (!target) return null;
+    target.textContent = "Carregando...";
+    try {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao consultar status");
+      if (!data.last) {
+        target.textContent = "Nenhuma atualização encontrada.";
+        return null;
+      }
+      const last = data.last;
+      const safe = (value) => String(value ?? "-")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+      const progress = Number(
+        last.status_progress !== null && last.status_progress !== undefined
+          ? last.status_progress
+          : (last.output_filename ? 100 : 0)
+      );
+      const rawStatus = String(last.status || (last.output_filename ? "finalizado" : "aguardando"));
+      const statusKey = rawStatus.toLowerCase().replaceAll(" ", "_");
+      const statusLabelMap = {
+        aguardando: "Aguardando",
+        em_processamento: "Em processamento",
+        cancelamento_solicitado: "Cancelamento solicitado",
+        finalizado: "Finalizado",
+        finalizado_com_alertas: "Finalizado com alertas",
+        falha: "Falha",
+        cancelado: "Cancelado",
+        historico: "Histórico",
+        "histórico": "Histórico",
+      };
+      const statusLabel = statusLabelMap[statusKey] || rawStatus.replaceAll("_", " ");
+      const normalizedStatus = statusKey.includes("falha") ? "falha"
+        : statusKey.includes("cancel") ? "cancelado"
+        : statusKey.includes("finalizado") ? "finalizado"
+        : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
+        : statusKey;
+      const duration = last.duration_seconds == null ? "-" : `${Number(last.duration_seconds).toFixed(1)}s`;
+      const hasValidationErrors = Number(last.total_errors || 0) > 0 || /nao processado|não processado/i.test(String(last.mensagem_validacao || ""));
+      const prettyMessage = (value) =>
+        String(value ?? "-")
+          .replace(/\bNao\b/g, "Não")
+          .replace(/\bnao\b/g, "não")
+          .replace(/\bmes\b/g, "mês")
+          .replace(/\bcompetencia\b/g, "competência")
+          .replace(/\brelatorio\b/g, "relatório")
+          .replace(/\bfisico\b/g, "físico")
+          .replace(/\bobrigatorios\b/g, "obrigatórios")
+          .replace(/\binvalida\b/g, "inválida")
+          .replace(/\bconteudo\b/g, "conteúdo")
+          .replace(/\bja\b/g, "já")
+          .replace(/\bnao processado/g, "não processado");
+      const renderAlerts = (alerts) => {
+        if (!alerts) return "";
+        if (Array.isArray(alerts)) {
+          return alerts.map((item) => `<li>${safe(prettyMessage(item))}</li>`).join("");
+        }
+        if (typeof alerts === "object") {
+          return Object.entries(alerts)
+            .map(([name, messages]) => {
+              const list = Array.isArray(messages) ? messages : [messages];
+              return `
+                <li>
+                  <strong>${safe(name)}</strong>
+                  <ul>${list.map((msg) => `<li>${safe(prettyMessage(msg))}</li>`).join("")}</ul>
+                </li>
+              `;
+            })
+            .join("");
+        }
+        return `<li>${safe(prettyMessage(alerts))}</li>`;
+      };
+      const alertDetails = last.alerts && last.total_alerts
+        ? `<details class="job-alerts job-alerts-danger"><summary>${last.total_alerts} alerta(s)</summary><ul>${renderAlerts(last.alerts)}</ul></details>` : "";
+      const receitaDetails = last.tipo === "receita_anexo10" ? `
+        <div><strong>Tipo de carga:</strong> ${safe(last.tipo_carga)}</div>
+        <div><strong>Mês fechado:</strong> ${safe(last.mes_fechado_label)}</div>
+        ${last.status_validacao ? `<div><strong>Validação:</strong> ${safe(last.status_validacao)}</div>` : ""}
+        ${last.mensagem_validacao ? `<div class="${hasValidationErrors ? "job-validation-error" : ""}"><strong>Mensagem validação:</strong> ${safe(prettyMessage(last.mensagem_validacao))}</div>` : ""}
+      ` : "";
+      target.innerHTML = `
+        <div class="job-status-head"><strong>${safe(statusLabel)}</strong><strong>${progress.toFixed(0)}%</strong></div>
+        <div class="job-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
+        <div><strong>Etapa:</strong> ${safe(prettyMessage(last.status_message))}</div>
+        <div><strong>Enviado por:</strong> ${safe(last.user_email)}</div>
+        <div><strong>Upload em:</strong> ${formatAmazonTime(last.uploaded_at)}</div>
+        <div><strong>Data do download:</strong> ${formatAmazonLocalTime(last.data_arquivo)}</div>
+        <div><strong>Arquivo original:</strong> ${safe(last.original_filename)}</div>
+        ${receitaDetails}
+        <div><strong>Registros:</strong> ${last.processed_records || 0} / ${last.total_records || 0}</div>
+        <div><strong>Duração:</strong> ${duration}</div>
+        <div><strong>Saída gerada:</strong> ${safe(last.output_filename)}</div>
+        ${last.error ? `<div class="text-error"><strong>Erro:</strong> ${safe(last.error)}</div>` : ""}
+        ${alertDetails}
+      `;
+      if (submitBtn && last.output_filename) {
+        submitBtn.dataset.mode = "view";
+        submitBtn.dataset.output = last.output_filename;
+        submitBtn.textContent = viewLabel || "Ver relatório";
+      }
+      const isRunning = ["aguardando", "em_processamento", "cancelamento_solicitado"].includes(normalizedStatus);
+      const actionBox = target.closest(".card");
+      const actionButtons = actionBox?.querySelectorAll(".upload-status-actions button") || [];
+      if (actionButtons[0]) actionButtons[0].disabled = isRunning;
+      if (actionButtons[1]) actionButtons[1].disabled = !isRunning || normalizedStatus === "cancelamento_solicitado";
+      if (isRunning) return "running";
+      if (["finalizado", "finalizado_com_alertas"].includes(normalizedStatus) || last.output_filename) return "done";
+      if (["falha", "cancelado"].includes(normalizedStatus)) return "error";
+      return normalizedStatus || null;
+    } catch (err) {
+      target.textContent = "Falha ao carregar status.";
+      console.error(err);
+      return null;
+    }
+  }
+
+  async function loadFipStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/fip613/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -1312,6 +4147,8 @@
   }
 
   async function loadPedStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/ped/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -1349,6 +4186,8 @@
   }
 
   async function loadEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -1406,6 +4245,8 @@
   }
 
   async function loadEstEmpStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/est-emp/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -1442,7 +4283,13 @@
     }
   }
 
+  async function loadReceitaAnexo10Status(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/receita-anexo10/status", target, submitBtn, viewLabel);
+  }
+
   async function loadNobStatus(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/nob/status", target, submitBtn, viewLabel);
+    /* compatibilidade do renderizador anterior */
     if (!target) return;
     target.textContent = "Carregando...";
     try {
@@ -1494,7 +4341,7 @@
     }
   }
 
-  function startStatusPolling(loader, attempts = 20, intervalMs = 30000) {
+  function startStatusPolling(loader, attempts = 240, intervalMs = 3000) {
     const tick = async (left) => {
       if (left <= 0) return;
       const state = await loader();
@@ -1532,6 +4379,8 @@
     const fileInput = document.getElementById("fip613-file");
     const loading = document.getElementById("fip613-loading");
   const submitBtn = document.getElementById("fip613-submit");
+  const reprocessBtn = document.getElementById("fip613-reprocess");
+  const cancelBtn = document.getElementById("fip613-cancel");
   const defaultLabel = "Upload e processar";
   const viewLabel = "Ver Relatório";
 
@@ -1539,7 +4388,21 @@
     setDefaultAmazonTime(inputData);
   }
 
-    loadFipStatus(statusBox);
+    loadFipStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadFipStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/fip613/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/fip613/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -1569,7 +4432,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -1588,11 +4451,8 @@
         }
         form.reset();
         if (inputData) inputData.value = "";
-        loadFipStatus(statusBox);
-        if (submitBtn) {
-          submitBtn.textContent = viewLabel;
-          submitBtn.dataset.mode = "view";
-        }
+        await loadFipStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -2208,7 +5068,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadPedStatus(statusBox, submitBtn, viewLabel);
+    loadPedStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -2289,7 +5151,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -2309,6 +5171,7 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadPedStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadPedStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
@@ -2355,7 +5218,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -2436,7 +5301,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -2490,6 +5355,8 @@
     const fileInput = document.getElementById("est-emp-file");
     const loading = document.getElementById("est-emp-loading");
     const submitBtn = document.getElementById("est-emp-submit");
+    const reprocessBtn = document.getElementById("est-emp-reprocess");
+    const cancelBtn = document.getElementById("est-emp-cancel");
     const defaultLabel = "Upload e processar";
     const viewLabel = "Ver relatório";
     const goToReport = () => {
@@ -2501,7 +5368,21 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+    loadEstEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) msg.textContent = pendingText;
+      const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
+    };
+    reprocessBtn?.addEventListener("click", () => postAction("/api/est-emp/reprocess", "Reprocessamento iniciado.").catch((err) => { if (msg) msg.textContent = err.message; }));
+    cancelBtn?.addEventListener("click", () => postAction("/api/est-emp/cancel", "Solicitando cancelamento...").catch((err) => { if (msg) msg.textContent = err.message; }));
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -2529,7 +5410,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -2549,11 +5430,129 @@
         form.reset();
         if (inputData) inputData.value = "";
         await loadEstEmpStatus(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadEstEmpStatus(statusBox, submitBtn, viewLabel));
         if (submitBtn && data.output) {
           submitBtn.textContent = viewLabel;
           submitBtn.dataset.mode = "view";
           submitBtn.dataset.output = data.output;
         }
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        console.error(err);
+        if (submitBtn) {
+          submitBtn.textContent = defaultLabel;
+          submitBtn.dataset.mode = "upload";
+        }
+      } finally {
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  function initReceitaAnexo10() {
+    const form = document.getElementById("form-receita-anexo10");
+    if (!form) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const msg = document.getElementById("receita-anexo10-msg");
+    const statusBox = document.getElementById("receita-anexo10-status");
+    const inputData = document.getElementById("receita-anexo10-data");
+    const fileInput = document.getElementById("receita-anexo10-files");
+    const loading = document.getElementById("receita-anexo10-loading");
+    const submitBtn = document.getElementById("receita-anexo10-submit");
+    const reprocessBtn = document.getElementById("receita-anexo10-reprocess");
+    const cancelBtn = document.getElementById("receita-anexo10-cancel");
+    const defaultLabel = "Upload e processar";
+    const viewLabel = "Processado";
+
+    if (inputData) {
+      setDefaultAmazonTime(inputData);
+    }
+
+    loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") {
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+      }
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) {
+        msg.textContent = pendingText;
+        msg.classList.remove("text-error");
+      }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+    };
+
+    reprocessBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/reprocess", "Reprocessamento iniciado.").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    cancelBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/cancel", "Solicitando cancelamento...").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    if (submitBtn) {
+      submitBtn.dataset.mode = "upload";
+      submitBtn.textContent = defaultLabel;
+    }
+
+    if (fileInput && submitBtn) {
+      fileInput.addEventListener("change", () => {
+        submitBtn.dataset.mode = "upload";
+        submitBtn.textContent = defaultLabel;
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!fileInput?.files?.length) {
+        if (msg) {
+          msg.textContent = "Selecione ao menos um arquivo.";
+          msg.classList.add("text-error");
+        }
+        return;
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/api/receita-anexo10/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
+        if (msg) {
+          msg.textContent = data.message || "Upload concluido.";
+          msg.classList.remove("text-error");
+        }
+        form.reset();
+        if (inputData) inputData.value = "";
+        await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -2595,7 +5594,9 @@
       setDefaultAmazonTime(inputData);
     }
 
-    loadNobStatus(statusBox, submitBtn, viewLabel);
+    loadNobStatus(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
+    });
 
     if (submitBtn) {
       submitBtn.dataset.mode = "upload";
@@ -2675,7 +5676,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4847,7 +7848,7 @@
         if (origemWrapEl) origemWrapEl.style.display = "";
         if (destinoWrapEl) destinoWrapEl.style.display = "";
         if (msg) {
-          msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+          msg.textContent = "Usuário sem permissão para upload anual de chaves_planejamento.";
           msg.classList.add("text-error");
         }
       }
@@ -5089,7 +8090,7 @@
           if (row) {
             const rowTipo = String(row.dataset.tipo || "");
             if (rowTipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
-              msg.textContent = "Usuario sem permissao para editar chaves_planejamento.";
+              msg.textContent = "Usuário sem permissão para editar chaves_planejamento.";
               msg.classList.add("text-error");
               return;
             }
@@ -5141,7 +8142,7 @@
       const id = String(idEl?.value || "").trim();
       const tipo = String(tipoEl?.value || "").trim();
       if (tipo === "chaves_planejamento" && !hasPlanejamentoUpload) {
-        msg.textContent = "Usuario sem permissao para upload anual de chaves_planejamento.";
+        msg.textContent = "Usuário sem permissão para upload anual de chaves_planejamento.";
         msg.classList.add("text-error");
         return;
       }
@@ -5263,6 +8264,10 @@
     const revLinksClose = document.getElementById("estrutura-planejamento-revista-links-close");
     const revLinkTipoEl = document.getElementById("estrutura-planejamento-revista-link-tipo");
     const revLinkValorEl = document.getElementById("estrutura-planejamento-revista-link-valor");
+    const revLinkValoresEl = document.getElementById("estrutura-planejamento-revista-link-valores");
+    const revLinkValoresToggle = document.getElementById("estrutura-planejamento-revista-link-valores-toggle");
+    const revLinkValoresPanel = document.getElementById("estrutura-planejamento-revista-link-valores-panel");
+    const revLinkValoresOptions = document.getElementById("estrutura-planejamento-revista-link-valores-options");
     const revLinkSaveBtn = document.getElementById("estrutura-planejamento-revista-link-save");
     const revLinksMsg = document.getElementById("estrutura-planejamento-revista-links-msg");
     const revLinksBody = document.getElementById("estrutura-planejamento-revista-links-body");
@@ -5287,6 +8292,8 @@
       tipos: [],
       options: {},
       rows: [],
+      nextType: "",
+      sequenceInvalid: false,
     };
 
     const esc = (value) =>
@@ -5385,12 +8392,21 @@
     const populateRevLinkValues = (selectedValue = "") => {
       if (!revLinkValorEl) return;
       const tipo = String(revLinkTipoEl?.value || "");
+      const isMultiple = tipo === "produto_acao";
+      revLinkValorEl.hidden = isMultiple;
+      if (revLinkValoresEl) revLinkValoresEl.hidden = !isMultiple;
       if (!tipo) {
         setLabeledOptions(revLinkValorEl, [], "Selecione primeiro o tipo...");
         revLinkValorEl.disabled = true;
+        renderRevLinkValueChecklist([]);
         return;
       }
       const options = revLinkState.options[tipo] || [];
+      if (isMultiple) {
+        revLinkValorEl.disabled = true;
+        renderRevLinkValueChecklist(options);
+        return;
+      }
       setLabeledOptions(
         revLinkValorEl,
         options,
@@ -5399,6 +8415,40 @@
       );
       revLinkValorEl.disabled = !options.length;
     };
+
+    const selectedRevLinkValueIds = () => {
+      if (!revLinkValoresOptions) return [];
+      return Array.from(
+        revLinkValoresOptions.querySelectorAll("input[type='checkbox']:checked")
+      ).map((input) => input.value);
+    };
+
+    const updateRevLinkValueChecklistLabel = () => {
+      if (!revLinkValoresToggle) return;
+      const selected = selectedRevLinkValueIds();
+      revLinkValoresToggle.textContent = selected.length
+        ? `${selected.length} produto(s) selecionado(s)`
+        : "Selecione...";
+    };
+
+    function renderRevLinkValueChecklist(options = []) {
+      if (!revLinkValoresOptions) return;
+      revLinkValoresOptions.innerHTML = options.length
+        ? options
+            .map(
+              (option) => `
+                <label class="planning-action-checklist-option">
+                  <input type="checkbox" value="${esc(option.id)}" />
+                  <span>${esc(option.label || "")}</span>
+                </label>
+              `
+            )
+            .join("")
+        : '<div class="muted">Nenhum produto compatível disponível.</div>';
+      if (revLinkValoresToggle) revLinkValoresToggle.disabled = !options.length;
+      if (revLinkValoresPanel) revLinkValoresPanel.hidden = true;
+      updateRevLinkValueChecklistLabel();
+    }
 
     const selectedChecklistActionIds = () => {
       if (!acaoChecklistOptions) return [];
@@ -5803,6 +8853,8 @@
       revLinkState.tipos = [];
       revLinkState.options = {};
       revLinkState.rows = [];
+      revLinkState.nextType = "";
+      revLinkState.sequenceInvalid = false;
       if (revLinkTipoEl) revLinkTipoEl.value = "";
       populateRevLinkValues();
       setRevLinksMsg("");
@@ -5829,6 +8881,8 @@
         revLinkState.tipos = Array.isArray(data.tipos) ? data.tipos : [];
         revLinkState.options = data.options || {};
         revLinkState.rows = Array.isArray(data.rows) ? data.rows : [];
+        revLinkState.nextType = String(data.next_type || "");
+        revLinkState.sequenceInvalid = !!data.sequence_invalid;
         const component = data.component || {};
         if (revLinksTitle) {
           revLinksTitle.textContent = [component.exercicio, component.nome].filter(Boolean).join(" | ");
@@ -5836,9 +8890,23 @@
         setLabeledOptions(
           revLinkTipoEl,
           revLinkState.tipos,
-          revLinkState.tipos.length ? "Selecione..." : "Nenhum tipo de vínculo disponível"
+          revLinkState.tipos.length ? "Selecione..." : "Sequência concluída",
+          revLinkState.nextType
         );
         populateRevLinkValues();
+        if (revLinkState.sequenceInvalid) {
+          if (revLinkTipoEl) revLinkTipoEl.disabled = true;
+          if (revLinkValorEl) revLinkValorEl.disabled = true;
+          if (revLinkValoresToggle) revLinkValoresToggle.disabled = true;
+          if (revLinkSaveBtn) revLinkSaveBtn.disabled = true;
+          setRevLinksMsg(
+            "Remova os vínculos existentes e reinicie pela Política do Decreto.",
+            true
+          );
+        } else {
+          if (revLinkTipoEl) revLinkTipoEl.disabled = !revLinkState.tipos.length;
+          if (revLinkSaveBtn) revLinkSaveBtn.disabled = !revLinkState.tipos.length;
+        }
         renderRevLinks();
         revLinksCard.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) {
@@ -6036,13 +9104,23 @@
       setRevLinksMsg("");
     });
     revLinkValorEl?.addEventListener("change", () => setRevLinksMsg(""));
+    revLinkValoresToggle?.addEventListener("click", () => {
+      if (revLinkValoresToggle.disabled || !revLinkValoresPanel) return;
+      revLinkValoresPanel.hidden = !revLinkValoresPanel.hidden;
+    });
+    revLinkValoresOptions?.addEventListener("change", () => {
+      updateRevLinkValueChecklistLabel();
+      setRevLinksMsg("");
+    });
     revLinkSaveBtn?.addEventListener("click", async () => {
       if (!revLinkState.componentId) return;
+      const isMultiple = revLinkTipoEl?.value === "produto_acao";
       const payload = {
         tipo: revLinkTipoEl?.value || "",
         valor_id: revLinkValorEl?.value || "",
       };
-      if (!payload.tipo || !payload.valor_id) {
+      if (isMultiple) payload.valor_ids = selectedRevLinkValueIds();
+      if (!payload.tipo || (isMultiple ? !payload.valor_ids.length : !payload.valor_id)) {
         setRevLinksMsg("Selecione o tipo e o registro do vínculo.", true);
         return;
       }
@@ -12521,6 +15599,520 @@
     load();
   }
 
+  function initRelatorioReceitaAnexo10() {
+    const table = document.getElementById("receita-anexo10-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("receita-anexo10-empty");
+    const meta = document.getElementById("receita-anexo10-relatorio-meta");
+    const pager = document.getElementById("receita-anexo10-pagination");
+    const pageSizeSelect = document.getElementById("receita-anexo10-page-size");
+    const btnDownload = document.getElementById("receita-anexo10-download");
+    const btnReset = document.getElementById("receita-anexo10-reset");
+    const totRegistros = document.getElementById("receita-anexo10-tot-registros");
+    const totArquivos = document.getElementById("receita-anexo10-tot-arquivos");
+    const totFontes = document.getElementById("receita-anexo10-tot-fontes");
+    const totCompetencias = document.getElementById("receita-anexo10-tot-competencias");
+    const totOrcado = document.getElementById("receita-anexo10-tot-orcado");
+    const totArrecadada = document.getElementById("receita-anexo10-tot-arrecadada");
+    const totMais = document.getElementById("receita-anexo10-tot-mais");
+    const totMenos = document.getElementById("receita-anexo10-tot-menos");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+    const allData = { rows: [] };
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+    const fmtNum = (v) => {
+      const n = Number(v || 0);
+      if (Number.isNaN(n)) return "";
+      return numFmt.format(n);
+    };
+    const esc = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const colKeys = [
+      "competencia",
+      "exercicio",
+      "mes",
+      "fonte_recurso",
+      "cod_uo",
+      "uo",
+      "tipo_carga",
+      "mes_fechado_label",
+      "situacao_movimentacao",
+      "codigo_receita",
+      "descricao_receita",
+      "orcado_atualizado",
+      "arrecadada",
+      "diferenca_para_mais",
+      "diferenca_para_menos",
+      "original_filename",
+      "formato_detectado",
+      "arquivo_status",
+      "linha_origem",
+      "pagina_origem",
+      "upload_id",
+      "user_email",
+      "data_arquivo_fmt",
+      "uploaded_at_fmt",
+    ];
+
+    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
+    const filters = Object.fromEntries(colKeys.map((key) => [key, new Set()]));
+    const filterControls = {};
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const filterValue = (row, key) => {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") return "";
+      if (["orcado_atualizado", "arrecadada", "diferenca_para_mais", "diferenca_para_menos"].includes(key)) {
+        return fmtNum(value);
+      }
+      return String(value);
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((value) => map[value] || value)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          row.style.display = txt.textContent.toLowerCase().includes(term) ? "" : "none";
+        });
+        allRow.style.display = "(todos)".includes(term) || term === "" ? "" : "none";
+        selectVisibleRow.style.display = "";
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((value) => tempSelected.add(value));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((value) => set.add(value));
+        updateDisplay(key);
+        renderFiltered();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          tempSelected.clear();
+          filters[key].forEach((value) => tempSelected.add(value));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      container.innerHTML = "";
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((item) => item.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((row) => {
+        colKeys.forEach((key, idx) => {
+          const value = filterValue(row, key);
+          uniques[idx].add(value);
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx])
+          .filter((value) => value !== "")
+          .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "page-btn";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          render();
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) start = Math.max(1, end - maxButtons + 1);
+      if (start > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          pager.appendChild(ellipsis);
+        }
+      }
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const updateTotals = (rows) => {
+      const arquivos = new Set();
+      const fontes = new Set();
+      const competencias = new Set();
+      let orcado = 0;
+      let arrecadada = 0;
+      let mais = 0;
+      let menos = 0;
+      rows.forEach((row) => {
+        if (row.original_filename) arquivos.add(row.original_filename);
+        if (row.fonte_recurso) fontes.add(row.fonte_recurso);
+        if (row.competencia) competencias.add(row.competencia);
+        if (row.tipo_linha !== "sem_movimentacao") {
+          orcado += Number(row.orcado_atualizado || 0);
+          arrecadada += Number(row.arrecadada || 0);
+          mais += Number(row.diferenca_para_mais || 0);
+          menos += Number(row.diferenca_para_menos || 0);
+        }
+      });
+      if (totRegistros) {
+        totRegistros.textContent = intFmt.format(rows.filter((row) => row.tipo_linha !== "sem_movimentacao").length);
+      }
+      if (totArquivos) totArquivos.textContent = intFmt.format(arquivos.size);
+      if (totFontes) totFontes.textContent = intFmt.format(fontes.size);
+      if (totCompetencias) {
+        totCompetencias.textContent = competencias.size
+          ? Array.from(competencias).sort((a, b) => a.localeCompare(b, "pt-BR")).join(" | ")
+          : "-";
+      }
+      if (totOrcado) totOrcado.textContent = fmtNum(orcado);
+      if (totArrecadada) totArrecadada.textContent = fmtNum(arrecadada);
+      if (totMais) totMais.textContent = fmtNum(mais);
+      if (totMenos) totMenos.textContent = fmtNum(menos);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(r.competencia)}</td>
+          <td>${esc(r.exercicio)}</td>
+          <td>${esc(r.mes)}</td>
+          <td>${esc(r.fonte_recurso)}</td>
+          <td>${esc(r.cod_uo)}</td>
+          <td>${esc(r.uo)}</td>
+          <td>${esc(r.tipo_carga)}</td>
+          <td>${esc(r.mes_fechado_label)}</td>
+          <td>${esc(r.situacao_movimentacao)}</td>
+          <td>${esc(r.codigo_receita)}</td>
+          <td>${esc(r.descricao_receita)}</td>
+          <td class="num">${fmtNum(r.orcado_atualizado)}</td>
+          <td class="num">${fmtNum(r.arrecadada)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_mais)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_menos)}</td>
+          <td>${esc(r.original_filename)}</td>
+          <td>${esc(r.formato_detectado)}</td>
+          <td>${esc(r.arquivo_status)}</td>
+          <td>${esc(r.linha_origem)}</td>
+          <td>${esc(r.pagina_origem)}</td>
+          <td>${esc(r.upload_id)}</td>
+          <td>${esc(r.user_email)}</td>
+          <td>${esc(r.data_arquivo_fmt)}</td>
+          <td>${esc(r.uploaded_at_fmt)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((row) =>
+        colKeys.every((key) => {
+          const selected = filters[key];
+          if (!selected || selected.size === 0) return true;
+          return selected.has(filterValue(row, key).toLowerCase());
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/receita-anexo10");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        allData.rows = (data.data || []).map((row) => ({
+          ...row,
+          data_arquivo_fmt: formatAmazonLocalTime(row.data_arquivo),
+          uploaded_at_fmt: formatAmazonTime(row.uploaded_at),
+        }));
+        filteredRows = allData.rows;
+        setOptions(allData.rows);
+        render();
+        if (meta) {
+          const dt = formatAmazonLocalTime(data.data_arquivo);
+          const user = data.user_email || "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
+          meta.innerHTML = `
+            <div><strong>Última atualização</strong></div>
+            <div>Enviado por: ${esc(user)}</div>
+            <div>Upload em: ${esc(uploaded)}</div>
+            <div>Data do download: ${esc(dt)}</div>
+            <div>Arquivos: ${esc(data.total_arquivos ?? 0)} | Registros: ${esc(data.total_registros ?? 0)} | Alertas: ${esc(data.total_alertas ?? 0)} | Erros: ${esc(data.total_erros ?? 0)}</div>
+          `;
+        }
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/receita-anexo10/download", "_blank");
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        closeAllPanels();
+        Object.keys(filters).forEach((key) => filters[key].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    load();
+  }
+
   function initMetaFisicaPlan21() {
     const form = document.getElementById("form-meta-fisica");
     const msg = document.getElementById("meta-fisica-msg");
@@ -15811,6 +19403,31 @@
       SAEX: "#345feb",
     };
     const politicalKeys = ["regiao", "subfuncao", "paoe", "adj", "macropolitica", "pilar", "eixo", "politica"];
+    const getTetoChartColors = () => {
+      const theme = getCommonDiagramTheme();
+      const palette = theme.palette || oldChartPalette;
+      const semantic = getDiagramSemanticTokens(theme);
+      return {
+        theme,
+        semantic,
+        palette,
+        groupColors: {
+          "1": palette[0] || groupColors["1"],
+          "3": palette[1] || groupColors["3"],
+          "4": palette[2] || groupColors["4"],
+        },
+        adjColors: {
+          SAGP: palette[4] || adjColors.SAGP,
+          SAAS: palette[1] || adjColors.SAAS,
+          SAGE: palette[3] || adjColors.SAGE,
+          SAIP: palette[0] || adjColors.SAIP,
+          SAGR: palette[5] || adjColors.SAGR,
+          GAB: palette[2] || adjColors.GAB,
+          SARC: palette[7] || adjColors.SARC,
+          SAEX: palette[6] || adjColors.SAEX,
+        },
+      };
+    };
 
     const clean = (value) => String(value ?? "").trim();
     const codeOf = (value) => {
@@ -15846,14 +19463,34 @@
         .replaceAll("'", "&#039;");
     const percent = (value, total) => (total ? `${((value / total) * 100).toFixed(2).replace(".", ",")}%` : "-");
     const plotConfig = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d"] };
-    const plotLayout = (extra = {}) => ({
-      margin: { t: 20, r: 24, b: 70, l: 70 },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      font: { family: "Arial, sans-serif", size: 11, color: getComputedStyle(document.body).getPropertyValue("--text").trim() || "#24323d" },
-      separators: ",.",
-      ...extra,
-    });
+    const plotLayout = (extra = {}) => {
+      const diagramTheme = getCommonDiagramTheme();
+      const mergeAxis = (axis = {}) => ({
+        ...axis,
+        gridcolor: diagramTheme.grid,
+        zerolinecolor: diagramTheme.grid,
+        linecolor: diagramTheme.axis,
+        tickfont: { color: diagramTheme.text, ...(axis.tickfont || {}) },
+        titlefont: { color: diagramTheme.text, ...(axis.titlefont || {}) },
+      });
+      const mergeAnnotation = (annotation = {}) => ({
+        ...annotation,
+        font: { color: diagramTheme.text, ...(annotation.font || {}) },
+      });
+      return {
+        margin: { t: 20, r: 24, b: 70, l: 70 },
+        paper_bgcolor: diagramTheme.panel,
+        plot_bgcolor: diagramTheme.plot,
+        font: { family: "Arial, sans-serif", size: 11, color: diagramTheme.text },
+        separators: ",.",
+        ...extra,
+        xaxis: mergeAxis(extra.xaxis),
+        yaxis: mergeAxis(extra.yaxis),
+        ...(extra.yaxis2 ? { yaxis2: mergeAxis(extra.yaxis2) } : {}),
+        legend: { font: { color: diagramTheme.text }, ...(extra.legend || {}) },
+        annotations: Array.isArray(extra.annotations) ? extra.annotations.map(mergeAnnotation) : extra.annotations,
+      };
+    };
 
     const setStatus = (message, isError = false) => {
       if (!statusEl) return;
@@ -16064,6 +19701,9 @@
         setStatus("Não foi possível carregar a biblioteca de gráficos.", true);
         return;
       }
+      const chartColors = getTetoChartColors();
+      const diagramTheme = chartColors.theme;
+      root.dataset.diagramMode = getResolvedCommonDiagramMode();
       const base = data.policyMode ? data.joined : data.momp;
       const byGroup = groupSum(base, "grupo");
       const groupEl = document.getElementById("teto-chart-grupo");
@@ -16075,15 +19715,16 @@
           labels: byGroup.map((row) => displayGrupo(row.label)),
           values: byGroup.map((row) => row.valor),
           customdata: byGroup.map((row) => row.label),
+          hovertext: byGroup.map((row) => money.format(row.valor)),
           textinfo: "percent",
           textposition: "outside",
           marker: {
             colors: byGroup.map((row, index) =>
-              groupColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+              chartColors.groupColors[codeOf(row.label)] || chartColors.palette[index % chartColors.palette.length]
             ),
-            line: { color: "#ffffff", width: 1 },
+            line: { color: diagramTheme.border, width: 1 },
           },
-          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<br>%{percent}<extra></extra>",
+          hovertemplate: "<b>%{label}</b><br>%{hovertext}<br>%{percent}<extra></extra>",
         }], plotLayout({ margin: { t: 8, r: 20, b: 80, l: 20 }, legend: { orientation: "h", y: -0.18 } }), plotConfig);
         bindPlotFilter("teto-chart-grupo", "grupo", (point) => point?.customdata);
       }
@@ -16099,16 +19740,16 @@
           labels: byAdj.map((row) => row.label),
           parents: byAdj.map(() => ""),
           values: byAdj.map((row) => row.valor),
-          customdata: byAdj.map((row) => row.label),
+          customdata: byAdj.map((row) => [row.label, money.format(row.valor)]),
           marker: {
             colors: byAdj.map((row, index) =>
-              adjColors[codeOf(row.label)] || oldChartPalette[index % oldChartPalette.length]
+              chartColors.adjColors[codeOf(row.label)] || chartColors.palette[index % chartColors.palette.length]
             ),
           },
           textinfo: "label",
-          hovertemplate: "<b>%{label}</b><br>R$ %{value:,.2f}<extra></extra>",
+          hovertemplate: "<b>%{label}</b><br>%{customdata[1]}<extra></extra>",
         }], plotLayout({ margin: { t: 8, r: 8, b: 8, l: 8 } }), plotConfig);
-        bindPlotFilter("teto-chart-adj", "adj", (point) => point?.customdata);
+        bindPlotFilter("teto-chart-adj", "adj", (point) => point?.customdata?.[0]);
       }
 
       const byMacro = groupSum(data.politicas, "macropolitica");
@@ -16125,11 +19766,11 @@
           {
             type: "bar", name: "Teto (R$)", x: byMacro.map((row) => row.label),
             y: byMacro.map((row) => row.valor), customdata: byMacro.map((row) => row.label),
-            marker: { color: "#636EFA" }, hovertemplate: "<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>",
+            marker: { color: chartColors.palette[0] }, hovertemplate: "<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>",
           },
           {
             type: "scatter", name: "Acumulado (%)", x: byMacro.map((row) => row.label),
-            y: accumulated, mode: "lines+markers", yaxis: "y2", line: { color: "#EF553B" },
+            y: accumulated, mode: "lines+markers", yaxis: "y2", line: { color: diagramTheme.cumulative },
             hovertemplate: "<b>%{x}</b><br>%{y:.1%}<extra></extra>",
           },
         ], plotLayout({
@@ -16137,7 +19778,7 @@
           yaxis: { title: "Teto (R$)", rangemode: "tozero" },
           yaxis2: { title: "Acumulado", overlaying: "y", side: "right", range: [0, 1], tickformat: ".0%" },
           legend: { orientation: "h", y: -0.38 },
-          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: "#c23b3b", dash: "dash" } }],
+          shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y2", y0: 0.8, y1: 0.8, line: { color: chartColors.semantic.critical, dash: "dash" } }],
         }), plotConfig);
         bindPlotFilter("teto-chart-macro", "macropolitica", (point) => point?.customdata || point?.x);
       }
@@ -16159,10 +19800,10 @@
             ["", money.format(sum(byPaoe))],
           ],
           textposition: "outside",
-          increasing: { marker: { color: "#3D9970" } },
-          decreasing: { marker: { color: "#FF4136" } },
-          totals: { marker: { color: "#0074D9" } },
-          connector: { line: { color: "#7b8790", width: 1 } },
+          increasing: { marker: { color: diagramTheme.positive } },
+          decreasing: { marker: { color: diagramTheme.negative } },
+          totals: { marker: { color: diagramTheme.total } },
+          connector: { line: { color: chartColors.semantic.connector, width: 1 } },
           hovertemplate: "<b>%{x}</b><br>%{customdata[1]}<extra></extra>",
         }], plotLayout({
           margin: { t: 20, r: 24, b: 85, l: 70 },
@@ -16191,14 +19832,14 @@
           y: years.map((year) => sum(base.filter((row) => row.exercicio === year && row.grupo === group))),
           customdata: years.map(() => group),
           marker: {
-            color: groupColors[codeOf(group)] || oldChartPalette[index % oldChartPalette.length],
+            color: chartColors.groupColors[codeOf(group)] || chartColors.palette[index % chartColors.palette.length],
           },
           hovertemplate: `<b>Exercício %{x}</b><br>${escapeHtml(displayGrupo(group))}<br>R$ %{y:,.2f}<extra></extra>`,
         }));
         traces.push({
           type: "scatter", name: "Total Geral", mode: "lines+markers", x: years,
           y: years.map((year) => sum(base.filter((row) => row.exercicio === year))),
-          line: { color: "#B620E0", width: 2 },
+          line: { color: chartColors.palette[5] || chartColors.semantic.selection || diagramTheme.cumulative, width: 2 },
           hovertemplate: "<b>Exercício %{x}</b><br>Total: R$ %{y:,.2f}<extra></extra>",
         });
         Plotly.react("teto-chart-exercicio", traces, plotLayout({
@@ -16666,6 +20307,11 @@
       setStatus(`${number.format(valueRows)} registros considerados. Base monetária: ${data.policyMode ? "políticas orçamentárias" : "MOMP"}.`);
     };
 
+    document.addEventListener("spo-common-visual-change", () => {
+      if (!root.isConnected) return;
+      render();
+    });
+
     const load = async () => {
       setStatus("Carregando dados...");
       try {
@@ -16753,9 +20399,207 @@
     load();
   }
 
+  function initGovernancaSemanticFlows() {
+    const panels = Array.from(document.querySelectorAll("[data-governanca-flow-panel]"));
+    if (!panels.length) return;
+
+    panels.forEach((panel) => {
+      if (panel.dataset.flowBound === "1") return;
+      panel.dataset.flowBound = "1";
+
+      const flow = panel.querySelector("[data-flow-node-container]") || panel.querySelector(".governanca-flow");
+      const nodes = Array.from(panel.querySelectorAll("[data-flow-node]"));
+      const contextPanel = panel.querySelector("[data-flow-context-panel]");
+      const contextLabel = contextPanel?.querySelector(".flow-context-label");
+      const contextTitle = contextPanel?.querySelector("strong");
+      const contextText = contextPanel?.querySelector("p");
+      const mobileFlowQuery = window.matchMedia ? window.matchMedia("(max-width: 720px)") : null;
+      let contextOpen = true;
+
+      if (!flow || !nodes.length) return;
+
+      const isMobileFlow = () => (mobileFlowQuery ? mobileFlowQuery.matches : window.innerWidth <= 720);
+
+      const placeContextPanel = (node) => {
+        if (!contextPanel) return;
+        const inline = isMobileFlow();
+        contextPanel.classList.toggle("is-inline", inline);
+        contextPanel.hidden = inline && !contextOpen;
+        if (inline && node && flow.contains(node)) {
+          node.insertAdjacentElement("afterend", contextPanel);
+        } else if (!inline) {
+          contextOpen = true;
+          contextPanel.hidden = false;
+          flow.insertAdjacentElement("afterend", contextPanel);
+        }
+      };
+
+      const selectNode = (node, options = {}) => {
+        if (!node) return;
+        const alreadySelected = node.classList.contains("is-selected");
+        if (isMobileFlow() && alreadySelected && options.toggleContext) {
+          contextOpen = !contextOpen;
+        } else {
+          contextOpen = true;
+        }
+        nodes.forEach((item) => {
+          const active = item === node;
+          item.classList.toggle("is-selected", active);
+          item.setAttribute("aria-expanded", active && (!isMobileFlow() || contextOpen) ? "true" : "false");
+          if (active) {
+            item.dataset.diagramState = "selected";
+          } else {
+            delete item.dataset.diagramState;
+          }
+          item.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+
+        if (contextLabel) contextLabel.textContent = node.dataset.flowContext || "Contexto ativo";
+        if (contextTitle) contextTitle.textContent = node.querySelector("strong")?.textContent?.trim() || "";
+        if (contextText) {
+          contextText.textContent =
+            node.dataset.flowDetail || node.querySelector("small")?.textContent?.trim() || "";
+        }
+        placeContextPanel(node);
+      };
+
+      const moveSelection = (offset) => {
+        const currentIndex = Math.max(
+          0,
+          nodes.findIndex((node) => node.classList.contains("is-selected"))
+        );
+        const nextIndex = (currentIndex + offset + nodes.length) % nodes.length;
+        nodes[nextIndex].focus();
+        selectNode(nodes[nextIndex]);
+      };
+
+      nodes.forEach((node) => {
+        node.setAttribute("aria-pressed", "false");
+        if (contextPanel?.id) node.setAttribute("aria-controls", contextPanel.id);
+        node.addEventListener("click", () => selectNode(node, { toggleContext: true }));
+        node.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            moveSelection(1);
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            moveSelection(-1);
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            nodes[0].focus();
+            selectNode(nodes[0]);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            nodes[nodes.length - 1].focus();
+            selectNode(nodes[nodes.length - 1]);
+          }
+        });
+      });
+
+      selectNode(nodes.find((node) => node.dataset.flowDefault === "true") || nodes[0]);
+      if (mobileFlowQuery) {
+        const syncContextPlacement = () => {
+          contextOpen = true;
+          placeContextPanel(nodes.find((node) => node.classList.contains("is-selected")) || nodes[0]);
+        };
+        if (typeof mobileFlowQuery.addEventListener === "function") {
+          mobileFlowQuery.addEventListener("change", syncContextPlacement);
+        } else if (typeof mobileFlowQuery.addListener === "function") {
+          mobileFlowQuery.addListener(syncContextPlacement);
+        }
+      }
+    });
+  }
+
+  function initSegurancaSessao() {
+    const form = document.getElementById("form-sessao");
+    if (!form) return;
+    const input = document.getElementById("sessao-minutos");
+    const equivale = document.getElementById("sessao-equivale");
+    const msg = document.getElementById("sessao-msg");
+    const btn = document.getElementById("sessao-salvar");
+    const auditoria = document.getElementById("sessao-auditoria");
+    const min = Number(form.dataset.min);
+    const max = Number(form.dataset.max);
+    const padrao = Number(form.dataset.padrao);
+
+    function formatar(minutos) {
+      if (!Number.isFinite(minutos) || minutos <= 0) return "";
+      const h = Math.floor(minutos / 60);
+      const m = minutos % 60;
+      if (!h) return `${m} minuto(s)`;
+      return m ? `${h} hora(s) e ${m} minuto(s)` : `${h} hora(s)`;
+    }
+    function atualizarEquivale() {
+      equivale.textContent = formatar(Number(input.value));
+    }
+    input.addEventListener("input", atualizarEquivale);
+    atualizarEquivale();
+
+    document.getElementById("sessao-padrao")?.addEventListener("click", () => {
+      input.value = padrao;
+      atualizarEquivale();
+    });
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const minutos = Number(input.value);
+      if (!Number.isInteger(minutos) || minutos < min || minutos > max) {
+        msg.textContent = `Informe um valor entre ${min} e ${max} minutos.`;
+        return;
+      }
+      btn.disabled = true;
+      msg.textContent = "Salvando...";
+      try {
+        const res = await fetch("/api/configuracoes/sessao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify({ minutos }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          msg.textContent = data.error || "Não foi possível salvar.";
+          return;
+        }
+        input.value = data.minutos;
+        atualizarEquivale();
+        msg.textContent = "Salvo. Tempo de inatividade: " + formatar(data.minutos) + ".";
+        if (auditoria && data.atualizado_em) {
+          auditoria.textContent = `Última alteração: ${data.atualizado_em}${data.atualizado_por ? " por " + data.atualizado_por : ""}.`;
+        }
+      } catch (err) {
+        msg.textContent = "Falha de comunicação ao salvar.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
+    }
+    if (route === "atualizar/seguranca-sessao") {
+      initSegurancaSessao();
+    }
+    if (
+      route === "atualizar/personalizar-spo/temas" ||
+      route === "atualizar/personalizar-spo/contrato-visual-protegido"
+    ) {
+      initPersonalizarSpo();
+    }
+    if (route === "atualizar/governanca-resultados/programacao-pta2027") {
+      initPta2027Integration();
+    }
+    if (
+      route === "atualizar/governanca-resultados/mapa" ||
+      route === "atualizar/governanca-resultados/estrategia" ||
+      route === "atualizar/governanca-resultados/eap-politicas" ||
+      route === "atualizar/governanca-resultados/entregas-okr" ||
+      route === "atualizar/governanca-resultados/processos-riscos-projetos" ||
+      route === "atualizar/governanca-resultados/matriculas-metas"
+    ) {
+      initGovernancaSemanticFlows();
     }
     if (route === "usuarios" || route === "usuarios/cadastrar") {
       initUsuariosForm();
@@ -16775,20 +20619,23 @@
     if (route === "painel") {
       initPainel();
     }
+    if (route === "area-uens/sage/notas-see") {
+      initNotasSee();
+    }
     if (route === "atualizar/fip613") {
       initFip613();
     }
     if (route === "atualizar/plan51") {
       initPlan51();
     }
-    if (route === "area-uens/sage/notas-see") {
-      initNotasSee();
-    }
     if (route === "atualizar/ped") {
       initPed();
     }
     if (route === "atualizar/emp") {
       initEmp();
+    }
+    if (route === "atualizar/receita-anexo10") {
+      initReceitaAnexo10();
     }
     if (route === "atualizar/est-emp") {
       initEstEmp();
@@ -16855,6 +20702,9 @@
     }
     if (route === "relatorios/nob") {
       initRelatorioNob();
+    }
+    if (route === "relatorios/receita-anexo10") {
+      initRelatorioReceitaAnexo10();
     }
     if (route === "relatorios/ped") {
       initRelatorioPed();
@@ -19789,7 +23639,7 @@
       if (!selectedRow) return setFilterMsg("Selecione um registro para aprovar.", true);
       const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser aprovados.", true);
-      if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuario sem permissao para aprovar.", true);
+      if (![1, 2].includes(nivelAtual)) return setFilterMsg("Usuário sem permissão para aprovar.", true);
       if (etapaIsConsultaView) {
         sessionStorage.setItem(
           etapaPendingActionKey,
@@ -19807,7 +23657,7 @@
       const status = String(selectedRow.dataset.statusAprovacao || "").toLowerCase();
       if (status && status !== "aguardando") return setFilterMsg("Somente registros aguardando podem ser editados.", true);
       if (selectedRow.dataset.criadorPerfilId && selectedRow.dataset.criadorPerfilId !== currentUserPerfilId) {
-        return setFilterMsg("Usuario sem permissao para editar este registro.", true);
+        return setFilterMsg("Usuário sem permissão para editar este registro.", true);
       }
       if (etapaIsConsultaView) {
         sessionStorage.setItem(
@@ -23742,6 +27592,12 @@
       if (parentToggle) {
         const targetId = parentToggle.getAttribute("data-submenu");
         const group = parentToggle.closest(".menu-group");
+        const activeRouteItem = menu.querySelector(".menu-item.active[data-route]");
+        if (activeRouteItem?.getAttribute("data-route") === "dashboard") {
+          activeRouteItem.classList.remove("active");
+        } else if (group && activeRouteItem && !group.contains(activeRouteItem)) {
+          clearMenuRouteActiveState();
+        }
         if (sidebar?.classList.contains("collapsed")) {
           sidebar.classList.remove("collapsed");
           sidebar.classList.add("open");
@@ -23768,13 +27624,12 @@
       if (!link) return;
       const externalUrl = link.getAttribute("data-external-url");
       if (externalUrl) {
-        ev.preventDefault();
-        window.open(externalUrl, "_blank", "noopener,noreferrer");
         return;
       }
       ev.preventDefault();
       const route = link.getAttribute("data-route");
       setActive(route);
+      closeNarrowSidebar();
       loadPage(route).then(() => {
         if (route === "dashboard") {
           initDashboard({ forceShow: true });
@@ -23784,6 +27639,11 @@
   }
 
   setUserMeta();
+  syncTopbarHeight();
+  window.setInterval(() => {
+    setUserMeta();
+    syncTopbarHeight();
+  }, 30000);
   fetchCurrentPermissions();
 
   if (content) {
