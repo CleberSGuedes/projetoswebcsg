@@ -4,9 +4,11 @@ import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 import os
+import time
 from io import BytesIO
 import json
 import unicodedata
+import shutil
 import subprocess
 import sys
 import threading
@@ -23,13 +25,6 @@ from models import (
     PerfilPermissao,
     NivelPermissao,
     UsuarioPermissao,
-    SeeCatalogo,
-    SeeCatalogoProduto,
-    SeeProcessamento,
-    SeeProcessamentoArquivo,
-    SeeItemExtraido,
-    SeeOcorrencia,
-    SeeProcessamentoEvento,
     Fip613Upload,
     Fip613Registro,
     Plan20Upload,
@@ -41,6 +36,9 @@ from models import (
     EstEmpRegistro,
     NobUpload,
     NobRegistro,
+    ReceitaAnexo10Upload,
+    ReceitaAnexo10Arquivo,
+    ReceitaAnexo10Registro,
     ProcessamentoJob,
     ProcessamentoEvento,
     Plan21Nger,
@@ -112,9 +110,18 @@ from sqlalchemy.exc import (
 )
 from services.auth import login_required, role_required, current_user
 from services.emp_record import get_emp_record_snapshot
-from services.features import FEATURES, build_menu_tree, flatten_features, build_parent_map
-from services.see_notes import extract_pdf as extract_see_pdf, generate_xlsx as generate_see_xlsx
+from services.features import (
+    FEATURES,
+    FEATURE_ALIASES,
+    build_menu_tree,
+    flatten_features,
+    build_parent_map,
+    normalize_feature_id,
+    normalize_feature_list,
+)
 from services.fip613_runner import run_fip613, UPLOAD_DIR
+from services import session_config
+from services.session_config import get_session_timeout
 from services.plan20_runner import run_plan20, verificar_uo_plan20, _uo_key as _plan20_uo_key
 from services.execucao_uo import cond_uo_em, sql_uo_em
 from services.uo import UOS_EXECUCAO_LIBERADAS, UOS_SEDUC, UORecusada, uo_codigo, uo_label
@@ -142,6 +149,7 @@ from services.est_emp_runner import (
     OUTPUT_DIR as EST_EMP_OUTPUT_DIR,
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
+from services.fiplan_file_reader import FiplanFormatError, detect_fiplan_format, iter_preview_rows
 from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
 from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
@@ -222,6 +230,7 @@ EMP_UPLOAD_DIR = Path("upload/emp")
 EMP_OUTPUT_DIR = Path("outputs/td_emp")
 NOB_UPLOAD_DIR = Path("upload/nob")
 NOB_OUTPUT_DIR = Path("outputs/td_nob")
+RECEITA_ANEXO10_UPLOAD_DIR = Path("upload/receita_anexo10")
 NODE_RUNNER = Path(__file__).resolve().parents[1] / "node_runners" / "run.js"
 NODE_EXE = os.getenv("NODE_EXE", "node")
 META_FISICA_OPTIONS_CACHE_TTL_S = max(
@@ -300,7 +309,7 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
     if not tmp_dir.exists():
         return None
     stem = Path(stored_filename).stem
-    matches = sorted(tmp_dir.glob(f"{stem}_*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
+    matches = sorted(tmp_dir.glob(f"{stem}_*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0] if matches else None
 
 
@@ -317,16 +326,16 @@ def _normalize_header_token(value: object) -> str:
 
 def _detect_upload_layouts(file_path: Path) -> set[str]:
     try:
-        df_raw = pd.read_excel(file_path, sheet_name=0, header=None, dtype=str, nrows=260)
+        preview_rows = list(iter_preview_rows(file_path, max_rows=260))
     except Exception:
         return set()
-    if df_raw is None or df_raw.empty:
+    if not preview_rows:
         return set()
 
     rows_tokens: list[set[str]] = []
     all_tokens: list[str] = []
-    for _, row in df_raw.iterrows():
-        vals = [str(v).strip() if pd.notna(v) else "" for v in row.tolist()]
+    for row in preview_rows:
+        vals = [str(v).strip() if pd.notna(v) else "" for v in row]
         vals = [v for v in vals if v]
         if not vals:
             continue
@@ -367,6 +376,11 @@ def _detect_upload_layouts(file_path: Path) -> set[str]:
         )
         if nob_core and nob_aux:
             detected.add("nob")
+
+        # PLAN 51 (Créditos Adicionais): cabeçalho "TIPO CRÉDITO" com os elementos
+        # suplementado/anulado na mesma linha.
+        if _has(tokens, "TIPO CREDITO") and _has(tokens, "ELEMENTO SUPLEMENTADO") and _has(tokens, "ELEMENTO ANULADO"):
+            detected.add("plan51")
 
         has_exerc = any(t.startswith("EXERC") for t in tokens)
         if not has_exerc:
@@ -417,6 +431,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
         "est_emp": {"est_emp", "emp"},
         "nob": {"nob"},
         "plan20": {"plan20"},
+        "plan51": {"plan51"},
     }
     allowed = allowed_sets.get(expected_kind, {expected_kind})
 
@@ -433,6 +448,7 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
             "nob": "NOB",
             "fip613": "FIP613",
             "plan20": "PLAN20",
+            "plan51": "PLAN51",
         }
         detected_text = ", ".join(display_map.get(k, k.upper()) for k in sorted(detected))
     if len(detected) > 1:
@@ -444,6 +460,54 @@ def _validate_upload_layout(file_path: Path, expected_kind: str, expected_label:
         f"Arquivo invalido para {expected_label}: layout detectado ({detected_text}). "
         f"Envie um arquivo de {expected_label}."
     )
+
+
+def _move_existing_fiplan_files_to_tmp(base_dir: Path) -> None:
+    tmp = base_dir / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    for f in base_dir.iterdir():
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in {".xls", ".xlsx", ".csv"}:
+            continue
+        dest = tmp / f"{f.stem}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{f.suffix}"
+        try:
+            f.rename(dest)
+        except OSError:
+            pass
+
+
+def _save_fiplan_upload_file(arquivo, upload_dir: Path, prefix: str, expected_kind: str, expected_label: str) -> tuple[str, Path, str]:
+    original_name = arquivo.filename or ""
+    safe_original = secure_filename(original_name) or "arquivo"
+    suffix = Path(safe_original).suffix.lower()
+    if suffix not in {".xls", ".xlsx", ".csv"}:
+        raise FiplanFormatError("Envie um arquivo FIPLAN nos formatos .xls, .xlsx ou .csv.")
+
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    (upload_dir / "tmp").mkdir(parents=True, exist_ok=True)
+    stem = f"{prefix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    raw_name = f"{stem}{suffix}"
+    raw_path = upload_dir / raw_name
+    arquivo.save(raw_path)
+
+    try:
+        formato_detectado = detect_fiplan_format(raw_path)
+        if formato_detectado not in {"xlsx", "xls_biff", "html_excel", "xml_excel", "csv_br"}:
+            if formato_detectado == "pdf":
+                raise FiplanFormatError("PDF não está habilitado para esta funcionalidade.")
+            raise FiplanFormatError(f"Formato de arquivo não suportado ou não identificado: {formato_detectado}.")
+        layout_error = _validate_upload_layout(raw_path, expected_kind, expected_label)
+        if layout_error:
+            raise FiplanFormatError(layout_error)
+    except Exception:
+        try:
+            raw_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
+
+    return raw_name, raw_path, formato_detectado
 
 
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
@@ -595,6 +659,59 @@ def _execute_with_retry(stmt, attempts: int | None = None, backoff_s: float | No
                         pass
                 continue
     return None
+
+
+# UO de cada carga (tabela, upload_id): não muda depois de gravada, então fica em memória.
+_UO_CARGA_CACHE: dict[tuple[str, int], str] = {}
+# Cargas sem linhas (ex.: removidas pela Limpeza de Histórico) só são reconsultadas
+# depois deste tempo: a consulta varre a tabela inteira e as linhas podem ainda estar
+# sendo gravadas por uma carga em andamento.
+_UO_CARGA_SEM_LINHAS: dict[tuple[str, int], float] = {}
+_UO_CARGA_SEM_LINHAS_TTL_S = 120.0
+
+
+def _uos_das_cargas(tabela: str, upload_ids) -> dict[int, str]:
+    """UO de várias cargas numa única ida ao banco, com cache em memória.
+
+    Cada carga é um `SELECT ... LIMIT 1` (UNION ALL), que com o índice em
+    `upload_id` (db/indices_upload_id_ativo.sql) para na primeira linha da carga.
+    Sem o índice a consulta varre a tabela inteira (~0,7 s na EMP com 1,2 mi de
+    linhas): o painel fazia uma por carga (até 50) e levava ~30 s para abrir.
+    O que já foi descoberto não é consultado de novo. Carga sem linhas (ex.:
+    removidas pela Limpeza de Histórico) fica de fora do resultado e só é
+    reconsultada depois de um prazo, porque as linhas podem ainda estar sendo
+    gravadas."""
+    ids = sorted({int(i) for i in upload_ids})
+    achadas = {i: _UO_CARGA_CACHE[(tabela, i)] for i in ids if (tabela, i) in _UO_CARGA_CACHE}
+    agora = time.monotonic()
+    faltam = [
+        i
+        for i in ids
+        if i not in achadas and agora - _UO_CARGA_SEM_LINHAS.get((tabela, i), -1e9) >= _UO_CARGA_SEM_LINHAS_TTL_S
+    ]
+    if not faltam:
+        return achadas
+    try:
+        rows = db.session.execute(
+            text(
+                " UNION ALL ".join(
+                    f"(SELECT upload_id, uo FROM {tabela} WHERE upload_id = {i} AND uo IS NOT NULL LIMIT 1)"
+                    for i in faltam
+                )
+            )
+        ).all()
+    except Exception:
+        _safe_session_rollback()
+        return achadas
+    for upload_id, valor in rows:
+        uo = uo_codigo(valor)
+        if uo:
+            achadas[int(upload_id)] = uo
+            _UO_CARGA_CACHE[(tabela, int(upload_id))] = uo
+    for i in faltam:
+        if i not in achadas:
+            _UO_CARGA_SEM_LINHAS[(tabela, i)] = agora
+    return achadas
 
 
 def _fetch_all_with_retry(stmt, attempts: int | None = None, backoff_s: float | None = None):
@@ -771,7 +888,7 @@ def _start_worker(kind: str, upload_id: int) -> None:
             stderr=log_handle,
             creationflags=creationflags,
         )
-        if kind in {"fip613", "ped", "est_emp"}:
+        if kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
             job = db.session.get(ProcessamentoJob, upload_id)
             if job:
                 job.worker_pid = proc.pid
@@ -785,7 +902,7 @@ def _start_worker(kind: str, upload_id: int) -> None:
             pid=proc.pid,
         )
     except Exception as exc:
-        if kind in {"fip613", "ped", "est_emp"}:
+        if kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
             job = db.session.get(ProcessamentoJob, upload_id)
             if job:
                 job.status = "falha"
@@ -883,10 +1000,17 @@ def partial_dashboard():
                 )
         except Exception:
             pass
-    can_view_sessions = nivel_int in (1, 2)
+    # Card Status da Início: controlado pela permissão "dashboard/card-status" (Painel de Permissões).
+    try:
+        can_view_sessions = has_permission("dashboard/card-status")
+    except Exception:
+        # Um card opcional nunca pode derrubar a tela Início (falha de conexao esgotou o retry).
+        db.session.rollback()
+        can_view_sessions = False
+        current_app.logger.warning("card-status: falha ao checar permissao, card oculto", exc_info=True)
     active_sessions = []
     if can_view_sessions:
-        cutoff = datetime.utcnow() - timedelta(hours=2)
+        cutoff = datetime.utcnow() - get_session_timeout()
         try:
             t0 = datetime.utcnow()
             rows = _fetch_all_with_retry(
@@ -1001,11 +1125,20 @@ def partial_dashboard():
         uploads_emp = _fetch_scalars_all_with_retry(
             select(EmpUpload).order_by(EmpUpload.uploaded_at.desc()).limit(50)
         )
+        status_por_carga: dict[int, dict] = {}
         for upload_emp in uploads_emp:
             status_data = read_status("emp", upload_emp.id) or {}
             if "planejamento_missing_lines" not in status_data and "dotacao_missing_keys" not in status_data:
                 continue  # carga que falhou ou ainda não chegou nessa etapa
-            uo_emp = uo_codigo(status_data.get("uo")) or _uo_da_carga("emp", upload_emp.id) or uo_padrao_aviso
+            status_por_carga[upload_emp.id] = status_data
+        uos_das_cargas = _uos_das_cargas(
+            "emp", [i for i, st in status_por_carga.items() if not uo_codigo(st.get("uo"))]
+        )
+        for upload_emp in uploads_emp:
+            status_data = status_por_carga.get(upload_emp.id)
+            if status_data is None:
+                continue
+            uo_emp = uo_codigo(status_data.get("uo")) or uos_das_cargas.get(upload_emp.id) or uo_padrao_aviso
             if uo_emp in vistas_emp:
                 continue
             vistas_emp.add(uo_emp)
@@ -1297,7 +1430,33 @@ def _current_usuario_id() -> int | None:
         session["user"] = user_session
         return int(usuario_id)
     return None
+def _db_retry(fn, attempts: int = 3, backoff_s: float = 0.2):
+    """Repete uma consulta que falhou por instabilidade de conexao (ver docs/claude.md, secao 13).
+
+    Logo apos reiniciar o servidor, a primeira consulta numa conexao recem-aberta pode
+    falhar com ResourceClosedError/OperationalError e funciona na tentativa seguinte.
+    """
+    import time as _time
+
+    for idx in range(max(1, attempts)):
+        try:
+            return fn()
+        except (ResourceClosedError, OperationalError, NoSuchColumnError, IndexError):
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            if idx >= attempts - 1:
+                raise
+            _time.sleep(backoff_s * (idx + 1))
+
+
 def has_permission(feature: str) -> bool:
+    # Administrador (nível 1) passa em tudo: telas novas não dependem de marcar no painel.
+    if getattr(g, "user_nivel", None) == 1:
+        return True
+    feature = normalize_feature_id(feature)
+    equivalent_features = [feature] + [old for old, new in FEATURE_ALIASES.items() if new == feature]
     perfil_id = getattr(g, "user_perfil_id", None)
     nivel = getattr(g, "user_nivel", None)
     if not perfil_id and nivel is None:
@@ -1305,26 +1464,29 @@ def has_permission(feature: str) -> bool:
     usuario_id = _current_usuario_id()
     if usuario_id:
         try:
-            override = (
-                db.session.query(UsuarioPermissao.permitido)
-                .filter(
-                    UsuarioPermissao.usuario_id == usuario_id,
-                    UsuarioPermissao.feature == feature,
-                    UsuarioPermissao.ativo == True,  # noqa: E712
+            overrides = [
+                row[0]
+                for row in _db_retry(
+                    lambda: db.session.query(UsuarioPermissao.permitido)
+                    .filter(
+                        UsuarioPermissao.usuario_id == usuario_id,
+                        UsuarioPermissao.feature.in_(equivalent_features),
+                        UsuarioPermissao.ativo == True,  # noqa: E712
+                    )
+                    .all()
                 )
-                .scalar()
-            )
-            if override is not None:
-                return bool(override)
+            ]
+            if overrides:
+                return any(bool(item) for item in overrides)
         except ProgrammingError:
             db.session.rollback()
     try:
         if perfil_id:
-            exists = (
-                db.session.query(PerfilPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(PerfilPermissao.id)
                 .filter(
                     PerfilPermissao.perfil_id == perfil_id,
-                    PerfilPermissao.feature == feature,
+                    PerfilPermissao.feature.in_(equivalent_features),
                     PerfilPermissao.ativo == True,  # noqa: E712
                 )
                 .first()
@@ -1335,11 +1497,11 @@ def has_permission(feature: str) -> bool:
         db.session.rollback()
     try:
         if nivel is not None:
-            exists = (
-                db.session.query(NivelPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(NivelPermissao.id)
                 .filter(
                     NivelPermissao.nivel == nivel,
-                    NivelPermissao.feature == feature,
+                    NivelPermissao.feature.in_(equivalent_features),
                     NivelPermissao.ativo == True,  # noqa: E712
                 )
                 .first()
@@ -1367,10 +1529,12 @@ def _load_permissoes_perfil(perfil_id: int | None):
             ),
             raise_on_failure=True,
         )
-        return [f for f in rows if f]
+        return normalize_feature_list([f for f in rows if f])
     except ProgrammingError:
         # Tabela/coluna realmente ausente (ex.: banco novo sem migracao) -
         # esse caso continua tratado como "sem permissoes", nao um erro.
+        # Falha de conexao (OperationalError etc.) propaga de proposito
+        # (docs/claude.md, secao 13).
         _safe_session_rollback()
         return []
 
@@ -1387,7 +1551,7 @@ def _load_permissoes_nivel(nivel: int | None):
             ),
             raise_on_failure=True,
         )
-        return [f for f in rows if f]
+        return normalize_feature_list([f for f in rows if f])
     except ProgrammingError:
         _safe_session_rollback()
         return []
@@ -1404,8 +1568,8 @@ def _load_permissoes_usuario(usuario_id: int | None):
                 UsuarioPermissao.feature.isnot(None),
             )
         ).all()
-        allowed = [feature for feature, permitido in rows if feature and permitido]
-        denied = [feature for feature, permitido in rows if feature and not permitido]
+        allowed = normalize_feature_list([feature for feature, permitido in rows if feature and permitido])
+        denied = normalize_feature_list([feature for feature, permitido in rows if feature and not permitido])
         return allowed, denied
     except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
         _safe_session_rollback()
@@ -1414,7 +1578,7 @@ def _load_permissoes_usuario(usuario_id: int | None):
 
 def _add_parent_features(features: list[str]) -> list[str]:
     parent_map = build_parent_map()
-    feats = list(features)
+    feats = normalize_feature_list(features)
     pending = list(feats)
     while pending:
         parent = parent_map.get(pending.pop())
@@ -1437,7 +1601,7 @@ def _load_permissoes_por_nivel_perfis(nivel: int):
                 PerfilPermissao.feature.isnot(None),
             )
         )
-        feats = [f for f in feats if f]
+        feats = normalize_feature_list([f for f in feats if f])
         return _add_parent_features(list(set(feats)))
     except (ProgrammingError, NoSuchColumnError, ResourceClosedError, OperationalError, SQLAlchemyError, IndexError):
         _safe_session_rollback()
@@ -1450,7 +1614,9 @@ def _permissoes_with_parents(
     usuario_id: int | None = None,
 ):
     locked = [f["id"] for f in FEATURES if f.get("locked")]
-    parent_map = build_parent_map()
+    if nivel == 1:
+        # Administrador vê todo o menu, inclusive telas novas ainda não marcadas no painel.
+        return list(flatten_features())
     feats = _load_permissoes_perfil(perfil_id) + _load_permissoes_nivel(nivel)
     user_allowed, user_denied = _load_permissoes_usuario(usuario_id)
     feats.extend(user_allowed)
@@ -1469,6 +1635,8 @@ def require_feature(feature_id):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
+            if getattr(g, "user_nivel", None) == 1:
+                return view(*args, **kwargs)
             if has_permission(feature_id):
                 return view(*args, **kwargs)
             abort(403)
@@ -1564,6 +1732,7 @@ API_SCOPE_OPTIONS = [
     {"scope": "dados.ped.read", "label": "PED (somente leitura)"},
     {"scope": "dados.est_emp.read", "label": "EST_EMP (somente leitura)"},
     {"scope": "dados.fip613.read", "label": "FIP613 (somente leitura)"},
+    {"scope": "dados.plan51.read", "label": "PLAN 51 (somente leitura)"},
 ]
 API_SCOPE_SET = {item["scope"] for item in API_SCOPE_OPTIONS}
 API_SCOPE_LABEL = {item["scope"]: item["label"] for item in API_SCOPE_OPTIONS}
@@ -1986,6 +2155,8 @@ def api_clients_delete(client_id: int):
     row = db.session.get(ApiClient, client_id)
     if not row:
         return jsonify({"error": "Servidor nao encontrado."}), 404
+    if (row.status or "").lower() != "revogado":
+        return jsonify({"error": "Revogue o servidor antes de excluir."}), 400
     try:
         ApiClientScope.query.filter_by(client_id=row.id).delete(synchronize_session=False)
         ApiKey.query.filter_by(client_id=row.id).delete(synchronize_session=False)
@@ -2074,7 +2245,7 @@ def api_auth_token():
 
 
 def _api_query_model(model, table_name: str):
-    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo"}
+    reserved = {"limit", "offset", "order_by", "order_dir", "fields", "uo", "after_id"}
     mapper = inspect(model)
     col_keys = [c.key for c in mapper.columns]
     if "ativo" not in col_keys:
@@ -2127,6 +2298,17 @@ def _api_query_model(model, table_name: str):
     if order_by not in col_keys:
         order_by = "id" if "id" in col_keys else col_keys[0]
     order_col = getattr(model, order_by)
+    # Paginação por id (`after_id` = `next_after_id` da página anterior): estável durante
+    # uma carga e sem a lentidão do OFFSET em tabelas grandes. Só vale ordenando por id.
+    after_id = None
+    if request.args.get("after_id") not in (None, ""):
+        try:
+            after_id = int(str(request.args.get("after_id")))
+        except Exception:
+            return jsonify({"error": "Parâmetro after_id inválido."}), 400
+        if order_by != "id":
+            return jsonify({"error": "after_id exige order_by=id."}), 400
+        query = query.filter(order_col > after_id if order_dir == "asc" else order_col < after_id)
     query = query.order_by(order_col.asc() if order_dir == "asc" else order_col.desc())
 
     fields_param = str(request.args.get("fields") or "").strip()
@@ -2134,12 +2316,12 @@ def _api_query_model(model, table_name: str):
         asked = [f.strip() for f in fields_param.split(",") if f.strip()]
         fields = [f for f in asked if f in col_keys]
     else:
-        fields = [f for f in col_keys if f != "raw_payload"]
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")]
     if not fields:
-        fields = [f for f in col_keys if f != "raw_payload"] or col_keys
+        fields = [f for f in col_keys if f not in ("raw_payload", "estilo")] or col_keys
 
-    total = query.count()
-    rows = query.offset(offset).limit(limit).all()
+    total = query.count() if after_id is None else None
+    rows = query.offset(0 if after_id is not None else offset).limit(limit).all()
     data = []
     for row in rows:
         item = {}
@@ -2152,10 +2334,12 @@ def _api_query_model(model, table_name: str):
             "ok": True,
             "table": table_name,
             "uo": uo_filtrada,
-            "total": int(total),
+            "total": int(total) if total is not None else None,
             "limit": int(limit),
             "offset": int(offset),
             "count": len(data),
+            "next_after_id": int(getattr(rows[-1], "id")) if rows and "id" in col_keys and order_by == "id" and len(rows) == limit else None,
+            "upload_id": sorted({int(getattr(r, "upload_id")) for r in rows if getattr(r, "upload_id", None) is not None}),
             "data": data,
         }
     )
@@ -2222,658 +2406,6 @@ def partial_painel():
     )
 
 
-SEE_UPLOAD_DIR = Path("upload") / "notas_see"
-SEE_OUTPUT_DIR = Path("outputs") / "notas_see"
-
-
-def _see_catalog_payload(catalogo: SeeCatalogo) -> dict:
-    produtos = (
-        SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo.id, ativo=True)
-        .order_by(SeeCatalogoProduto.codigo)
-        .all()
-    )
-    return {
-        "id": catalogo.id,
-        "nome": catalogo.nome,
-        "descricao": catalogo.descricao or "",
-        "ativo": bool(catalogo.ativo),
-        "produtos": [
-            {
-                "id": produto.id,
-                "codigo": produto.codigo,
-                "nome": produto.nome,
-                "observacao": produto.observacao or "",
-            }
-            for produto in produtos
-        ],
-    }
-
-
-@home_bp.route("/partial/area-uens/sage/notas-see")
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def partial_notas_see():
-    return render_template("partials/notas_see.html")
-
-
-@home_bp.route("/api/notas-see/catalogos", methods=["GET", "POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_catalogos():
-    if request.method == "GET":
-        catalogos = SeeCatalogo.query.order_by(SeeCatalogo.ativo.desc(), SeeCatalogo.nome).all()
-        return jsonify({"catalogos": [_see_catalog_payload(catalogo) for catalogo in catalogos]})
-    data = request.get_json() or {}
-    nome = (data.get("nome") or "").strip()
-    if not nome:
-        return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-    if SeeCatalogo.query.filter(func.lower(SeeCatalogo.nome) == nome.lower()).first():
-        return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
-    catalogo = SeeCatalogo(
-        nome=nome,
-        descricao=(data.get("descricao") or "").strip() or None,
-        ativo=True,
-        criado_por=_current_usuario_id(),
-        atualizado_por=_current_usuario_id(),
-    )
-    db.session.add(catalogo)
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
-
-
-@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>", methods=["PUT", "DELETE"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_catalogo(catalogo_id: int):
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo:
-        return jsonify({"error": "Catálogo não encontrado."}), 404
-    if request.method == "DELETE":
-        catalogo.ativo = False
-    else:
-        data = request.get_json() or {}
-        nome = (data.get("nome") or "").strip()
-        if not nome:
-            return jsonify({"error": "Nome do catálogo é obrigatório."}), 400
-        duplicate = SeeCatalogo.query.filter(
-            func.lower(SeeCatalogo.nome) == nome.lower(), SeeCatalogo.id != catalogo.id
-        ).first()
-        if duplicate:
-            return jsonify({"error": "Já existe um catálogo com esse nome."}), 400
-        catalogo.nome = nome
-        catalogo.descricao = (data.get("descricao") or "").strip() or None
-        catalogo.ativo = bool(data.get("ativo", catalogo.ativo))
-    catalogo.atualizado_por = _current_usuario_id()
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
-
-
-@home_bp.route("/api/notas-see/catalogos/<int:catalogo_id>/produtos", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_produto_criar(catalogo_id: int):
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo or not catalogo.ativo:
-        return jsonify({"error": "Catálogo não encontrado ou inativo."}), 404
-    data = request.get_json() or {}
-    codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
-    nome = (data.get("nome") or "").strip()
-    if not codigo or not nome:
-        return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
-    existing = SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, codigo=codigo).first()
-    if existing:
-        if existing.ativo:
-            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
-        existing.nome = nome
-        existing.observacao = (data.get("observacao") or "").strip() or None
-        existing.ativo = True
-        produto = existing
-    else:
-        produto = SeeCatalogoProduto(
-            catalogo_id=catalogo_id,
-            codigo=codigo,
-            nome=nome,
-            observacao=(data.get("observacao") or "").strip() or None,
-            ativo=True,
-        )
-        db.session.add(produto)
-    db.session.commit()
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)}), 201
-
-
-@home_bp.route("/api/notas-see/produtos/<int:produto_id>", methods=["PUT", "DELETE"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_produto(produto_id: int):
-    produto = db.session.get(SeeCatalogoProduto, produto_id)
-    if not produto:
-        return jsonify({"error": "Produto não encontrado."}), 404
-    if request.method == "DELETE":
-        produto.ativo = False
-    else:
-        data = request.get_json() or {}
-        codigo = re.sub(r"\s+", "", str(data.get("codigo") or ""))
-        nome = (data.get("nome") or "").strip()
-        if not codigo or not nome:
-            return jsonify({"error": "Código e nome do produto são obrigatórios."}), 400
-        duplicate = SeeCatalogoProduto.query.filter(
-            SeeCatalogoProduto.catalogo_id == produto.catalogo_id,
-            SeeCatalogoProduto.codigo == codigo,
-            SeeCatalogoProduto.id != produto.id,
-            SeeCatalogoProduto.ativo == True,  # noqa: E712
-        ).first()
-        if duplicate:
-            return jsonify({"error": "Este código já está cadastrado no catálogo."}), 400
-        produto.codigo = codigo
-        produto.nome = nome
-        produto.observacao = (data.get("observacao") or "").strip() or None
-    db.session.commit()
-    catalogo = db.session.get(SeeCatalogo, produto.catalogo_id)
-    return jsonify({"ok": True, "catalogo": _see_catalog_payload(catalogo)})
-
-
-def _see_add_event(job: SeeProcessamento, message: str, arquivo_id: int | None = None) -> None:
-    db.session.add(
-        SeeProcessamentoEvento(
-            processamento_id=job.id,
-            arquivo_id=arquivo_id,
-            tipo="progresso",
-            estado=job.status,
-            mensagem=message,
-            progresso=job.progresso,
-            arquivos_processados=job.arquivos_processados,
-            arquivos_sucesso=job.arquivos_sucesso,
-            arquivos_alerta=job.arquivos_alerta,
-            arquivos_erro=job.arquivos_erro,
-        )
-    )
-
-
-def _see_server_datetime_iso(value):
-    """Serializa datas sem fuso do MySQL como horário do servidor."""
-    if not value:
-        return None
-    if value.tzinfo is not None:
-        return value.isoformat()
-    timezone_name = os.getenv("SEE_SERVER_TIMEZONE", "America/Sao_Paulo")
-    try:
-        return pytz.timezone(timezone_name).localize(value).isoformat()
-    except (pytz.UnknownTimeZoneError, ValueError):
-        current_app.logger.warning("Fuso SEE_SERVER_TIMEZONE inválido: %s", timezone_name)
-        return pytz.timezone("America/Sao_Paulo").localize(value).isoformat()
-
-
-def _run_see_processamento(app, processamento_id: int) -> None:
-    with app.app_context():
-        started = datetime.utcnow()
-        try:
-            job = db.session.get(SeeProcessamento, processamento_id)
-            if not job:
-                return
-            job.status = "processando"
-            job.etapa_atual = "extração"
-            job.mensagem_atual = "Processamento dos PDFs iniciado."
-            job.iniciado_em = started
-            job.progresso = 1
-            _see_add_event(job, job.mensagem_atual)
-            db.session.commit()
-            product_rows = SeeCatalogoProduto.query.filter_by(catalogo_id=job.catalogo_id, ativo=True).all()
-            products = [
-                {"id": row.id, "codigo": row.codigo, "nome": row.nome}
-                for row in product_rows
-            ]
-            files = (
-                SeeProcessamentoArquivo.query
-                .filter_by(processamento_id=job.id, status="enviado")
-                .order_by(SeeProcessamentoArquivo.ordem)
-                .all()
-            )
-            for index, file_row in enumerate(files, start=1):
-                db.session.refresh(job)
-                if job.cancelamento_solicitado:
-                    job.status = "cancelado"
-                    job.mensagem_atual = "Processamento cancelado pelo usuário."
-                    break
-                file_started = datetime.utcnow()
-                file_row.status = "processando"
-                file_row.etapa_atual = "extração do PDF"
-                file_row.iniciado_em = file_started
-                job.mensagem_atual = f"Processando {index} de {len(files)}: {file_row.nome_original}"
-                db.session.commit()
-
-                def page_progress(page: int, total: int) -> None:
-                    file_row.pagina_atual = page
-                    file_row.total_paginas = total
-                    file_row.progresso = round((page / max(total, 1)) * 100, 2)
-                    db.session.commit()
-
-                try:
-                    result = extract_see_pdf(Path(file_row.caminho_armazenado), products, page_progress)
-                    metadata = result["metadata"]
-                    file_row.total_paginas = result["total_pages"]
-                    file_row.metodo_extracao = result["method"]
-                    file_row.chave_acesso = metadata.get("chave_acesso")
-                    file_row.numero_danfe = metadata.get("numero_danfe")
-                    file_row.dre = metadata.get("dre")
-                    file_row.codigo_escola = metadata.get("codigo_escola")
-                    file_row.nome_escola = metadata.get("nome_escola")
-                    file_row.confianca_metadados = metadata.get("confianca")
-                    file_row.dados_extraidos_json = metadata
-                    for item in result["items"]:
-                        db.session.add(
-                            SeeItemExtraido(
-                                processamento_id=job.id,
-                                arquivo_id=file_row.id,
-                                catalogo_produto_id=item.get("catalogo_produto_id"),
-                                codigo_produto=item["codigo"],
-                                nome_produto=item["nome"],
-                                unidade=item.get("unidade"),
-                                quantidade=item["quantidade"],
-                                pagina=item.get("pagina"),
-                                estrategia_extracao=item.get("estrategia"),
-                                confianca=item.get("confianca"),
-                                texto_origem=item.get("texto_origem"),
-                            )
-                        )
-                    for warning in result["warnings"]:
-                        db.session.add(
-                            SeeOcorrencia(
-                                processamento_id=job.id,
-                                arquivo_id=file_row.id,
-                                severidade="alerta",
-                                fase="extração",
-                                codigo=warning["codigo"],
-                                mensagem=warning["mensagem"],
-                            )
-                        )
-                    file_row.total_produtos = len(result["items"])
-                    file_row.total_alertas = len(result["warnings"])
-                    file_row.status = "finalizado_com_alerta" if result["warnings"] else "finalizado"
-                    file_row.progresso = 100
-                    if result["warnings"]:
-                        job.arquivos_alerta += 1
-                    else:
-                        job.arquivos_sucesso += 1
-                except Exception as exc:
-                    file_row.status = "falha"
-                    file_row.total_erros = 1
-                    file_row.erro_resumido = f"{type(exc).__name__}: {exc}"[:2000]
-                    job.arquivos_erro += 1
-                    db.session.add(
-                        SeeOcorrencia(
-                            processamento_id=job.id,
-                            arquivo_id=file_row.id,
-                            severidade="erro",
-                            fase="extração",
-                            codigo=type(exc).__name__,
-                            mensagem=f"Falha ao processar {file_row.nome_original}.",
-                            detalhe_tecnico=str(exc),
-                        )
-                    )
-                file_row.finalizado_em = datetime.utcnow()
-                file_row.duracao_segundos = (file_row.finalizado_em - file_started).total_seconds()
-                job.arquivos_processados += 1
-                job.progresso = round(5 + (job.arquivos_processados / max(job.total_arquivos, 1)) * 85, 2)
-                _see_add_event(job, job.mensagem_atual, file_row.id)
-                db.session.commit()
-
-            if job.status != "cancelado":
-                job.status = "gerando_excel"
-                job.etapa_atual = "geração do Excel"
-                job.mensagem_atual = "Gerando arquivo Excel."
-                job.progresso = 92
-                db.session.commit()
-                file_rows = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).all()
-                item_rows = SeeItemExtraido.query.filter_by(processamento_id=job.id).all()
-                occurrence_rows = SeeOcorrencia.query.filter_by(processamento_id=job.id).all()
-                file_map = {row.id: row for row in file_rows}
-                output = SEE_OUTPUT_DIR / f"notas_see_{job.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                generate_see_xlsx(
-                    output,
-                    [{"Arquivo PDF": row.nome_original, "Status": row.status, "DANFE": row.numero_danfe, "DRE": row.dre, "Código Escola": row.codigo_escola, "Escola": row.nome_escola, "Produtos": row.total_produtos, "Alertas": row.total_alertas, "Erros": row.total_erros} for row in file_rows],
-                    [{"arquivo": file_map[row.arquivo_id].nome_original, "dre": file_map[row.arquivo_id].dre, "codigo_escola": file_map[row.arquivo_id].codigo_escola, "nome_escola": file_map[row.arquivo_id].nome_escola, "numero_danfe": file_map[row.arquivo_id].numero_danfe, "codigo": row.codigo_produto, "nome": row.nome_produto, "quantidade": row.quantidade} for row in item_rows],
-                    [{"Arquivo PDF": file_map[row.arquivo_id].nome_original if row.arquivo_id in file_map else "", "Severidade": row.severidade, "Fase": row.fase, "Código": row.codigo, "Mensagem": row.mensagem, "Detalhe": row.detalhe_tecnico} for row in occurrence_rows],
-                    products,
-                )
-                job.nome_arquivo_saida = output.name
-                job.caminho_arquivo_saida = str(output.resolve())
-                job.tamanho_arquivo_saida = output.stat().st_size
-                job.status = "finalizado_com_alertas" if job.arquivos_alerta or job.arquivos_erro else "finalizado"
-                job.etapa_atual = "concluído"
-                job.mensagem_atual = "Processamento concluído."
-                job.progresso = 100
-            job.finalizado_em = datetime.utcnow()
-            job.duracao_segundos = (job.finalizado_em - started).total_seconds()
-            _see_add_event(job, job.mensagem_atual)
-            db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            job = db.session.get(SeeProcessamento, processamento_id)
-            if job:
-                job.status = "falha"
-                job.erro_geral = f"{type(exc).__name__}: {exc}"[:2000]
-                job.mensagem_atual = "Falha geral no processamento."
-                job.finalizado_em = datetime.utcnow()
-                job.duracao_segundos = (job.finalizado_em - started).total_seconds()
-                db.session.commit()
-            current_app.logger.exception("Falha no processamento Notas SEE %s", processamento_id)
-        finally:
-            db.session.remove()
-
-
-def _start_see_worker(job: SeeProcessamento) -> None:
-    worker_path = Path(__file__).resolve().parents[1] / "worker.py"
-    log_dir = Path("outputs") / "status"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_handle = open(log_dir / f"worker_see_{job.id}.log", "a", encoding="utf-8")
-    creationflags = 0
-    if sys.platform.startswith("win"):
-        creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-        )
-    try:
-        process = subprocess.Popen(
-            [sys.executable, str(worker_path), "--kind", "see", "--upload-id", str(job.id)],
-            cwd=str(worker_path.parent),
-            stdout=log_handle,
-            stderr=log_handle,
-            creationflags=creationflags,
-        )
-        job.worker_pid = process.pid
-        db.session.commit()
-    except Exception:
-        log_handle.close()
-        current_app.logger.exception("Falha ao iniciar worker SEE; usando thread.")
-        app = current_app._get_current_object()
-        threading.Thread(target=_run_see_processamento, args=(app, job.id), daemon=True).start()
-
-
-@home_bp.route("/api/notas-see/processamentos", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_processar():
-    try:
-        catalogo_id = int(request.form.get("catalogo_id") or 0)
-    except ValueError:
-        catalogo_id = 0
-    catalogo = db.session.get(SeeCatalogo, catalogo_id)
-    if not catalogo or not catalogo.ativo:
-        return jsonify({"error": "Selecione um catálogo ativo."}), 400
-    if not SeeCatalogoProduto.query.filter_by(catalogo_id=catalogo_id, ativo=True).first():
-        return jsonify({"error": "O catálogo selecionado não possui produtos ativos."}), 400
-    uploads = [file for file in request.files.getlist("pdfs") if file and file.filename]
-    if not uploads:
-        return jsonify({"error": "Selecione ao menos um arquivo PDF."}), 400
-    append_mode = (request.form.get("append_mode") or "novo").strip().lower()
-    try:
-        base_job_id = int(request.form.get("base_job_id") or 0)
-    except ValueError:
-        base_job_id = 0
-    base_job = None
-    base_files = []
-    if append_mode == "acrescentar":
-        base_job = db.session.get(SeeProcessamento, base_job_id)
-        terminal_statuses = {"finalizado", "finalizado_com_alertas"}
-        if (
-            not base_job
-            or base_job.usuario_id != _current_usuario_id()
-            or base_job.catalogo_id != catalogo_id
-            or base_job.status not in terminal_statuses
-        ):
-            return jsonify({"error": "O processamento anterior não pode ser atualizado."}), 400
-        base_files = (
-            SeeProcessamentoArquivo.query
-            .filter_by(processamento_id=base_job.id)
-            .order_by(SeeProcessamentoArquivo.ordem)
-            .all()
-        )
-    user = session.get("user") or {}
-    job = SeeProcessamento(
-        usuario_id=_current_usuario_id(),
-        user_email=(user.get("email") or "desconhecido"),
-        catalogo_id=catalogo_id,
-        status="enviando",
-        etapa_atual="upload",
-        total_arquivos=len(uploads),
-    )
-    db.session.add(job)
-    db.session.flush()
-    upload_dir = SEE_UPLOAD_DIR / str(job.id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    base_hashes = {row.sha256 for row in base_files if row.sha256}
-    seen_hashes = set(base_hashes)
-    saved = 0
-    ignored = []
-    accepted_names = []
-    inherited = 0
-    inherited_file_map = {}
-    for old_file in base_files:
-        copied_file = SeeProcessamentoArquivo(
-            processamento_id=job.id,
-            ordem=old_file.ordem,
-            nome_original=old_file.nome_original,
-            caminho_relativo=old_file.caminho_relativo,
-            nome_armazenado=old_file.nome_armazenado,
-            caminho_armazenado=old_file.caminho_armazenado,
-            mime_type=old_file.mime_type,
-            tamanho_bytes=old_file.tamanho_bytes,
-            sha256=old_file.sha256,
-            status=old_file.status,
-            etapa_atual="herdado",
-            progresso=100,
-            total_paginas=old_file.total_paginas,
-            pagina_atual=old_file.pagina_atual,
-            metodo_extracao=old_file.metodo_extracao,
-            chave_acesso=old_file.chave_acesso,
-            numero_danfe=old_file.numero_danfe,
-            dre=old_file.dre,
-            codigo_escola=old_file.codigo_escola,
-            nome_escola=old_file.nome_escola,
-            confianca_metadados=old_file.confianca_metadados,
-            total_produtos=old_file.total_produtos,
-            total_alertas=old_file.total_alertas,
-            total_erros=old_file.total_erros,
-            dados_extraidos_json=old_file.dados_extraidos_json,
-            erro_resumido=old_file.erro_resumido,
-            iniciado_em=old_file.iniciado_em,
-            finalizado_em=old_file.finalizado_em,
-            duracao_segundos=old_file.duracao_segundos,
-        )
-        db.session.add(copied_file)
-        db.session.flush()
-        inherited_file_map[old_file.id] = copied_file.id
-        inherited += 1
-    if base_job:
-        for old_item in SeeItemExtraido.query.filter_by(processamento_id=base_job.id).all():
-            if old_item.arquivo_id not in inherited_file_map:
-                continue
-            db.session.add(SeeItemExtraido(
-                processamento_id=job.id, arquivo_id=inherited_file_map[old_item.arquivo_id],
-                catalogo_produto_id=old_item.catalogo_produto_id, codigo_produto=old_item.codigo_produto,
-                nome_produto=old_item.nome_produto, unidade=old_item.unidade, quantidade=old_item.quantidade,
-                pagina=old_item.pagina, linha_referencia=old_item.linha_referencia,
-                estrategia_extracao=old_item.estrategia_extracao, confianca=old_item.confianca,
-                texto_origem=old_item.texto_origem, revisado=old_item.revisado,
-                corrigido_manualmente=old_item.corrigido_manualmente, valor_original=old_item.valor_original,
-            ))
-        for old_occurrence in SeeOcorrencia.query.filter_by(processamento_id=base_job.id).all():
-            if old_occurrence.codigo == "ARQUIVO_IGNORADO":
-                continue
-            mapped_file_id = inherited_file_map.get(old_occurrence.arquivo_id)
-            if old_occurrence.arquivo_id and not mapped_file_id:
-                continue
-            db.session.add(SeeOcorrencia(
-                processamento_id=job.id, arquivo_id=mapped_file_id, severidade=old_occurrence.severidade,
-                fase=old_occurrence.fase, codigo=old_occurrence.codigo, mensagem=old_occurrence.mensagem,
-                detalhe_tecnico=old_occurrence.detalhe_tecnico, pagina=old_occurrence.pagina,
-                contexto=old_occurrence.contexto, dados_contexto_json=old_occurrence.dados_contexto_json,
-                resolvido=old_occurrence.resolvido, resolvido_por=old_occurrence.resolvido_por,
-                resolvido_em=old_occurrence.resolvido_em, observacao_resolucao=old_occurrence.observacao_resolucao,
-            ))
-    for order, upload in enumerate(uploads, start=inherited + 1):
-        original = upload.filename.replace("\\", "/")
-        display_name = Path(original).name
-        if not original.lower().endswith(".pdf"):
-            ignored.append({"name": display_name, "reason": "Extensão diferente de PDF."})
-            continue
-        data = upload.read()
-        if not data.startswith(b"%PDF"):
-            ignored.append({"name": display_name, "reason": "O conteúdo do arquivo não é um PDF válido."})
-            continue
-        digest = hashlib.sha256(data).hexdigest()
-        if digest in seen_hashes:
-            reason = "Arquivo já processado anteriormente." if digest in base_hashes else "Arquivo duplicado na seleção atual."
-            ignored.append({"name": display_name, "reason": reason})
-            continue
-        seen_hashes.add(digest)
-        stored = f"{order:05d}_{uuid.uuid4().hex}.pdf"
-        path = upload_dir / stored
-        path.write_bytes(data)
-        db.session.add(
-            SeeProcessamentoArquivo(
-                processamento_id=job.id,
-                ordem=order,
-                nome_original=Path(original).name,
-                caminho_relativo=original,
-                nome_armazenado=stored,
-                caminho_armazenado=str(path.resolve()),
-                mime_type=upload.mimetype or "application/pdf",
-                tamanho_bytes=len(data),
-                sha256=digest,
-                status="enviado",
-            )
-        )
-        saved += 1
-        accepted_names.append(display_name)
-    if not saved:
-        db.session.rollback()
-        details = "; ".join(f"{item['name']}: {item['reason']}" for item in ignored[:5])
-        suffix = f"; e mais {len(ignored) - 5}" if len(ignored) > 5 else ""
-        message = f"Nenhum arquivo novo para processar. {details}{suffix}" if details else "Nenhum PDF válido foi recebido."
-        return jsonify({"error": message, "ignored": ignored, "ignored_count": len(ignored)}), 400
-    for item in ignored:
-        db.session.add(SeeOcorrencia(
-            processamento_id=job.id,
-            severidade="informacao",
-            fase="upload",
-            codigo="ARQUIVO_IGNORADO",
-            mensagem=f"{item['name']}: {item['reason']}",
-            contexto=item["name"],
-            dados_contexto_json=item,
-        ))
-    job.total_arquivos = inherited + saved
-    job.arquivos_enviados = saved
-    job.arquivos_processados = inherited
-    job.arquivos_sucesso = sum(1 for row in base_files if row.status == "finalizado")
-    job.arquivos_alerta = sum(1 for row in base_files if row.status == "finalizado_com_alerta")
-    job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
-    job.status = "na_fila"
-    job.etapa_atual = "fila"
-    job.mensagem_atual = (
-        f"Atualização iniciada: {inherited} anterior(es) + {saved} novo(s), {len(ignored)} ignorado(s)."
-        if inherited else f"{saved} PDF(s) recebido(s), {len(ignored)} ignorado(s)."
-    )
-    db.session.commit()
-    _start_see_worker(job)
-    return jsonify({"ok": True, "job_id": job.id, "message": job.mensagem_atual, "initial": inherited, "added": saved, "total": inherited + saved, "ignored": ignored, "ignored_count": len(ignored), "accepted": accepted_names}), 202
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>", methods=["GET"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_status(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job:
-        return jsonify({"error": "Processamento não encontrado."}), 404
-    files = SeeProcessamentoArquivo.query.filter_by(processamento_id=job.id).order_by(SeeProcessamentoArquivo.ordem).all()
-    ignored_occurrences = SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all()
-    ignored_files = [
-        {
-            "name": (row.dados_contexto_json or {}).get("name") or row.contexto or "Arquivo",
-            "reason": (row.dados_contexto_json or {}).get("reason") or row.mensagem,
-        }
-        for row in ignored_occurrences
-    ]
-    catalog = db.session.get(SeeCatalogo, job.catalogo_id)
-    inherited = sum(1 for row in files if row.etapa_atual == "herdado")
-    duration = float(job.duracao_segundos or 0)
-    if not duration and job.iniciado_em:
-        duration = max(0, (datetime.utcnow() - job.iniciado_em).total_seconds())
-    return jsonify({
-        "id": job.id,
-        "catalog_id": job.catalogo_id,
-        "catalog_name": catalog.nome if catalog else "Catálogo removido",
-        "executed_by": job.user_email,
-        "created_at": _see_server_datetime_iso(job.created_at),
-        "initial_count": inherited,
-        "added_count": max(0, job.total_arquivos - inherited),
-        "ignored_count": len(ignored_files),
-        "status": job.status,
-        "etapa": job.etapa_atual,
-        "message": job.mensagem_atual,
-        "progress": float(job.progresso or 0),
-        "total": job.total_arquivos,
-        "processed": job.arquivos_processados,
-        "success": job.arquivos_sucesso,
-        "warnings": job.arquivos_alerta,
-        "errors": job.arquivos_erro,
-        "duration": duration,
-        "download_ready": bool(job.caminho_arquivo_saida),
-        "files": [
-            {"name": row.nome_original, "status": row.status, "progress": float(row.progresso or 0), "error": row.erro_resumido or "", "warnings": row.total_alertas}
-            for row in files
-        ] + [
-            {"name": item["name"], "status": "ignorado", "progress": 0, "error": item["reason"], "warnings": 0}
-            for item in ignored_files
-        ],
-    })
-
-
-@home_bp.route("/api/notas-see/processamentos/ultimo", methods=["GET"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_ultimo_processamento():
-    try:
-        catalogo_id = int(request.args.get("catalogo_id") or 0)
-    except ValueError:
-        catalogo_id = 0
-    if not catalogo_id:
-        return jsonify({"job_id": None})
-    job = (
-        SeeProcessamento.query
-        .filter_by(catalogo_id=catalogo_id)
-        .order_by(SeeProcessamento.id.desc())
-        .first()
-    )
-    return jsonify({"job_id": job.id if job else None})
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/cancelar", methods=["POST"])
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_cancelar(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job:
-        return jsonify({"error": "Processamento não encontrado."}), 404
-    job.cancelamento_solicitado = True
-    db.session.commit()
-    return jsonify({"ok": True, "message": "Cancelamento solicitado."})
-
-
-@home_bp.route("/api/notas-see/processamentos/<int:processamento_id>/download")
-@login_required
-@require_feature("area-uens/sage/notas-see")
-def api_notas_see_download(processamento_id: int):
-    job = db.session.get(SeeProcessamento, processamento_id)
-    if not job or not job.caminho_arquivo_saida:
-        return jsonify({"error": "Arquivo de saída não disponível."}), 404
-    target = Path(job.caminho_arquivo_saida).resolve()
-    output_root = SEE_OUTPUT_DIR.resolve()
-    if output_root not in target.parents or not target.exists():
-        return jsonify({"error": "Arquivo de saída não encontrado."}), 404
-    return send_file(target, as_attachment=True, download_name=job.nome_arquivo_saida or target.name)
-
-
 @home_bp.route("/partial/atualizar/fip613")
 @login_required
 @require_feature("atualizar/fip613")
@@ -2901,6 +2433,33 @@ def partial_atualizar_contrato_visual_protegido():
         mostrar_temas=False,
         mostrar_contrato=True,
     )
+
+
+@home_bp.route("/partial/atualizar/seguranca-sessao")
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def partial_atualizar_seguranca_sessao():
+    return render_template("partials/atualizar_seguranca_sessao.html", info=session_config.get_info())
+
+
+@home_bp.route("/api/configuracoes/sessao", methods=["GET", "POST"])
+@login_required
+@require_feature("atualizar/seguranca-sessao")
+def api_configuracoes_sessao():
+    if request.method == "GET":
+        return jsonify(session_config.get_info())
+    data = request.get_json(silent=True) or {}
+    try:
+        session_config.set_timeout_minutos(
+            data.get("minutos"), (getattr(g, "user", None) or {}).get("email")
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.error("Falha ao gravar tempo de sessao", exc_info=True)
+        return jsonify({"error": "Falha ao gravar a configuração."}), 500
+    return jsonify({"ok": True, **session_config.get_info()})
 
 
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")
@@ -2964,6 +2523,13 @@ def partial_atualizar_ped():
 @require_feature("atualizar/emp")
 def partial_atualizar_emp():
     return render_template("partials/atualizar_emp.html")
+
+
+@home_bp.route("/partial/atualizar/receita-anexo10")
+@login_required
+@require_feature("atualizar/receita-anexo10")
+def partial_atualizar_receita_anexo10():
+    return render_template("partials/atualizar_receita_anexo10.html")
 
 
 @home_bp.route("/partial/atualizar/chave_planejamento_regra")
@@ -9209,6 +8775,13 @@ def partial_relatorios_nob():
     return render_template("partials/relatorios_nob.html")
 
 
+@home_bp.route("/partial/relatorios/receita-anexo10")
+@login_required
+@require_feature("relatorios/receita-anexo10")
+def partial_relatorios_receita_anexo10():
+    return render_template("partials/relatorios_receita_anexo10.html")
+
+
 @home_bp.route("/partial/relatorios/plan20-seduc")
 @login_required
 @require_feature("relatorios/plan20-seduc")
@@ -9396,7 +8969,7 @@ def api_permissoes(perfil_id):
     for f in feats:
         if not isinstance(f, str):
             continue
-        fid = f.strip()
+        fid = normalize_feature_id(f.strip())
         if not fid or fid in seen:
             continue
         seen.add(fid)
@@ -9454,7 +9027,7 @@ def api_permissoes_nivel(nivel):
     for f in feats:
         if not isinstance(f, str):
             continue
-        fid = f.strip()
+        fid = normalize_feature_id(f.strip())
         if not fid or fid in seen:
             continue
         seen.add(fid)
@@ -9521,8 +9094,8 @@ def api_permissoes_usuario(usuario_id):
 
     valid_features = set(flatten_features())
     locked_features = {f["id"] for f in FEATURES if f.get("locked")}
-    allow_set = {f.strip() for f in allow if isinstance(f, str) and f.strip()}
-    deny_set = {f.strip() for f in deny if isinstance(f, str) and f.strip()}
+    allow_set = {normalize_feature_id(f.strip()) for f in allow if isinstance(f, str) and f.strip()}
+    deny_set = {normalize_feature_id(f.strip()) for f in deny if isinstance(f, str) and f.strip()}
     invalid_features = sorted((allow_set | deny_set) - valid_features)
     if invalid_features:
         return jsonify({"error": "Funcionalidade invalida.", "features": invalid_features}), 400
@@ -16256,20 +15829,53 @@ def _managed_job_status(tipo: str, upload_model):
         upload = upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
         if not upload:
             return jsonify({"ok": True, "last": None})
-        return jsonify({"ok": True, "last": {
+        total_records = int(getattr(upload, "total_registros", 0) or 0)
+        total_alerts = int(getattr(upload, "total_alertas", 0) or 0)
+        total_errors = int(getattr(upload, "total_erros", 0) or 0)
+        payload = {
             "user_email": upload.user_email,
             "original_filename": upload.original_filename,
             "output_filename": upload.output_filename,
-            "status": "historico",
-            "status_message": "Processamento anterior à implantação do acompanhamento detalhado.",
-            "status_progress": 100 if upload.output_filename else 0,
+            "status": "histórico",
+            "status_message": getattr(upload, "mensagem_validacao", None)
+            or "Processamento anterior à implantação do acompanhamento detalhado.",
+            "status_progress": 100 if total_records or upload.output_filename else 0,
             "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
             "data_arquivo": upload.data_arquivo.isoformat() if upload.data_arquivo else None,
-            "total_records": 0, "processed_records": 0, "total_alerts": 0, "total_errors": 0,
-        }})
+            "total_records": total_records,
+            "processed_records": total_records,
+            "total_alerts": total_alerts,
+            "total_errors": total_errors,
+        }
+        if tipo == "receita_anexo10":
+            payload.update(
+                {
+                    "tipo": tipo,
+                    "mes_fechado": bool(getattr(upload, "mes_fechado", False)),
+                    "mes_fechado_label": "Sim" if bool(getattr(upload, "mes_fechado", False)) else "Não",
+                    "tipo_carga": getattr(upload, "tipo_carga", None),
+                    "status_validacao": getattr(upload, "status_validacao", None),
+                    "mensagem_validacao": getattr(upload, "mensagem_validacao", None),
+                    "substitui_upload_ids": getattr(upload, "substitui_upload_ids", None),
+                }
+            )
+            try:
+                payload["alerts"] = json.loads(upload.detalhes_alertas) if upload.detalhes_alertas else None
+            except Exception:
+                payload["alerts"] = None
+        return jsonify({"ok": True, "last": payload})
     upload = db.session.get(upload_model, job.upload_id)
+    if not upload:
+        return jsonify({"ok": True, "last": None})
     data = serialize_job(job)
-    data["data_arquivo"] = upload.data_arquivo.isoformat() if upload and upload.data_arquivo else None
+    data["data_arquivo"] = upload.data_arquivo.isoformat() if upload.data_arquivo else None
+    if tipo == "receita_anexo10":
+        data["mes_fechado"] = bool(getattr(upload, "mes_fechado", False))
+        data["mes_fechado_label"] = "Sim" if bool(getattr(upload, "mes_fechado", False)) else "Não"
+        data["tipo_carga"] = getattr(upload, "tipo_carga", None)
+        data["status_validacao"] = getattr(upload, "status_validacao", None)
+        data["mensagem_validacao"] = getattr(upload, "mensagem_validacao", None)
+        data["substitui_upload_ids"] = getattr(upload, "substitui_upload_ids", None)
     data["events"] = [
         {
             "type": item.tipo_evento, "stage": item.etapa, "message": item.mensagem,
@@ -16384,32 +15990,14 @@ def api_fip613_upload():
     except ValueError:
         return jsonify({"error": "Data do download invÃƒÂ¡lida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         (UPLOAD_DIR / "tmp").mkdir(parents=True, exist_ok=True)
-        for f in UPLOAD_DIR.glob("*.xlsx"):
-            dest = UPLOAD_DIR / "tmp" / f"{f.stem}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{f.suffix}"
-            try:
-                f.rename(dest)
-            except OSError:
-                pass
-        stored_name = f"fip613_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "fip613", "FIP613")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, UPLOAD_DIR, "fip613", "fip613", "FIP613")
 
         registro = Fip613Upload(
             user_email=user_email,
@@ -16422,8 +16010,13 @@ def api_fip613_upload():
         db.session.commit()
 
         job = create_job("fip613", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("fip613", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -16851,26 +16444,13 @@ def api_ped_upload():
     except ValueError:
         return jsonify({"error": "Data do download inválida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         PED_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        move_existing_to_tmp(PED_UPLOAD_DIR)
-        stored_name = f"ped_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = PED_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "ped", "PED")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(PED_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, PED_UPLOAD_DIR, "ped", "ped", "PED")
 
         registro = PedUpload(
             user_email=user_email,
@@ -16883,8 +16463,13 @@ def api_ped_upload():
         db.session.commit()
 
         job = create_job("ped", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("ped", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -17068,26 +16653,13 @@ def api_emp_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        _move_existing_to_tmp(EMP_UPLOAD_DIR)
-        stored_name = f"emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = EMP_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "emp", "EMP")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(EMP_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, EMP_UPLOAD_DIR, "emp", "emp", "EMP")
 
         registro = EmpUpload(
             user_email=user_email,
@@ -17099,7 +16671,7 @@ def api_emp_upload():
         db.session.add(registro)
         db.session.commit()
 
-        write_status("emp", registro.id, "em processamento", "Arquivo recebido. Processamento em background.")
+        write_status("emp", registro.id, "em processamento", f"Arquivo recebido. Formato detectado: {formato_detectado}. Processamento em background.")
         _start_worker("emp", registro.id)
         return jsonify(
             {
@@ -17108,6 +16680,9 @@ def api_emp_upload():
                 "job_id": registro.id,
             }
         )
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -17159,6 +16734,198 @@ def api_emp_cancel():
     return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": registro.id})
 
 
+@home_bp.route("/api/receita-anexo10/status", methods=["GET"])
+@login_required
+@require_feature("atualizar/receita-anexo10")
+def api_receita_anexo10_status():
+    return _managed_job_status("receita_anexo10", ReceitaAnexo10Upload)
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+@home_bp.route("/api/receita-anexo10/upload", methods=["POST"])
+@login_required
+@require_feature("atualizar/receita-anexo10")
+def api_receita_anexo10_upload():
+    files = []
+    for key in ("arquivos", "arquivo"):
+        files.extend(request.files.getlist(key))
+    files = [item for item in files if item and item.filename]
+    if not files:
+        return jsonify({"error": "Selecione ao menos um arquivo."}), 400
+
+    data_arquivo_raw = request.form.get("data_arquivo")
+    if not data_arquivo_raw:
+        return jsonify({"error": "Data do download obrigatoria."}), 400
+    try:
+        data_arquivo = datetime.fromisoformat(data_arquivo_raw)
+    except ValueError:
+        return jsonify({"error": "Data do download invalida."}), 400
+    mes_fechado_raw = (request.form.get("mes_fechado") or "").strip().lower()
+    if mes_fechado_raw not in {"sim", "nao"}:
+        return jsonify({"error": "Informe se o mês está fechado."}), 400
+    mes_fechado = mes_fechado_raw == "sim"
+    tipo_carga = "fechada" if mes_fechado else "aberta"
+
+    active = ProcessamentoJob.query.filter_by(tipo="receita_anexo10").filter(
+        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+    ).first()
+    if active:
+        return jsonify({"error": "Ja existe um processamento RECEITA ANEXO 10 em andamento."}), 409
+
+    user = session.get("user") or {}
+    user_email = user.get("email") or "desconhecido"
+    modo_upload = "arquivo_unico" if len(files) == 1 else "multiplos_arquivos"
+    RECEITA_ANEXO10_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    try:
+        upload = ReceitaAnexo10Upload(
+            user_email=user_email,
+            modo_upload=modo_upload,
+            original_filename=files[0].filename if len(files) == 1 else f"{len(files)} arquivos",
+            stored_filename=None,
+            data_arquivo=data_arquivo,
+            uploaded_at=datetime.utcnow(),
+            total_arquivos=len(files),
+            mes_fechado=mes_fechado,
+            tipo_carga=tipo_carga,
+            status_validacao="pendente",
+            permite_corrigir_fechada=getattr(g, "user_nivel", None) == 1,
+        )
+        db.session.add(upload)
+        db.session.flush()
+
+        for index, arquivo in enumerate(files, start=1):
+            original = arquivo.filename or f"arquivo_{index}"
+            safe_original = secure_filename(original) or f"arquivo_{index}"
+            suffix = Path(safe_original).suffix.lower()
+            stored_name = (
+                f"receita_anexo10_{upload.id}_{index}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                f"_{uuid.uuid4().hex[:8]}{suffix}"
+            )
+            save_path = RECEITA_ANEXO10_UPLOAD_DIR / stored_name
+            arquivo.save(save_path)
+            if len(files) == 1:
+                upload.stored_filename = stored_name
+            db.session.add(
+                ReceitaAnexo10Arquivo(
+                    upload_id=upload.id,
+                    user_email=user_email,
+                    original_filename=original,
+                    stored_filename=stored_name,
+                    extensao_original=suffix[:20],
+                    formato_detectado="desconhecido",
+                    hash_sha256=_hash_file(save_path),
+                    tamanho_bytes=save_path.stat().st_size,
+                    status="aguardando",
+                    data_arquivo=data_arquivo,
+                    mes_fechado=mes_fechado,
+                    tipo_carga=tipo_carga,
+                )
+            )
+        db.session.commit()
+        job = create_job("receita_anexo10", upload, _current_usuario_id())
+        _start_worker("receita_anexo10", job.id)
+        return jsonify(
+            {
+                "ok": True,
+                "message": "Arquivo(s) recebido(s). O processamento ocorrera em segundo plano.",
+                "job_id": job.id,
+                "upload_id": upload.id,
+                "total_arquivos": len(files),
+            }
+        )
+    except RuntimeError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 409
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
+@home_bp.route("/api/receita-anexo10/reprocess", methods=["POST"])
+@login_required
+@require_feature("atualizar/receita-anexo10")
+def api_receita_anexo10_reprocess():
+    payload = request.get_json(silent=True) or {}
+    upload_id = payload.get("upload_id")
+    source_upload = (
+        db.session.get(ReceitaAnexo10Upload, upload_id)
+        if upload_id
+        else ReceitaAnexo10Upload.query.order_by(ReceitaAnexo10Upload.uploaded_at.desc()).first()
+    )
+    if not source_upload:
+        return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    active = ProcessamentoJob.query.filter_by(tipo="receita_anexo10").filter(
+        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+    ).first()
+    if active:
+        return jsonify({"error": "Ja existe um processamento ANALISE RECEITA em andamento."}), 409
+    source_files = ReceitaAnexo10Arquivo.query.filter_by(upload_id=source_upload.id).all()
+    if not source_files:
+        return jsonify({"error": "Nenhum arquivo encontrado para reprocessar."}), 404
+    try:
+        user_email = (session.get("user") or {}).get("email") or source_upload.user_email
+        new_upload = ReceitaAnexo10Upload(
+            user_email=user_email,
+            modo_upload=source_upload.modo_upload,
+            original_filename=source_upload.original_filename,
+            stored_filename=source_upload.stored_filename,
+            data_arquivo=source_upload.data_arquivo,
+            uploaded_at=datetime.utcnow(),
+            total_arquivos=len(source_files),
+            mes_fechado=source_upload.mes_fechado,
+            tipo_carga=source_upload.tipo_carga or ("fechada" if bool(source_upload.mes_fechado) else "aberta"),
+            status_validacao="pendente",
+            permite_corrigir_fechada=getattr(g, "user_nivel", None) == 1,
+        )
+        db.session.add(new_upload)
+        db.session.flush()
+        for item in source_files:
+            file_path = RECEITA_ANEXO10_UPLOAD_DIR / item.stored_filename
+            if not file_path.exists():
+                raise RuntimeError(f"Arquivo original nao encontrado: {item.original_filename}")
+            db.session.add(
+                ReceitaAnexo10Arquivo(
+                    upload_id=new_upload.id,
+                    user_email=user_email,
+                    original_filename=item.original_filename,
+                    stored_filename=item.stored_filename,
+                    extensao_original=item.extensao_original,
+                    formato_detectado="desconhecido",
+                    hash_sha256=item.hash_sha256,
+                    tamanho_bytes=item.tamanho_bytes,
+                    status="aguardando",
+                    data_arquivo=new_upload.data_arquivo,
+                    mes_fechado=new_upload.mes_fechado,
+                    tipo_carga=new_upload.tipo_carga,
+                )
+            )
+        db.session.commit()
+        job = create_job("receita_anexo10", new_upload, _current_usuario_id())
+        _start_worker("receita_anexo10", job.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": job.id})
+    except RuntimeError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 409
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Falha ao reprocessar: {exc}"}), 500
+
+
+@home_bp.route("/api/receita-anexo10/cancel", methods=["POST"])
+@login_required
+@require_feature("atualizar/receita-anexo10")
+def api_receita_anexo10_cancel():
+    return _managed_cancel("receita_anexo10")
+
+
 @home_bp.route("/api/est-emp/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/est-emp")
@@ -17174,26 +16941,13 @@ def api_est_emp_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         EST_EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        move_est_emp_existing_to_tmp(EST_EMP_UPLOAD_DIR)
-        stored_name = f"est_emp_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = EST_EMP_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "est_emp", "EST_EMP")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(EST_EMP_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, EST_EMP_UPLOAD_DIR, "est_emp", "est_emp", "EST_EMP")
 
         registro = EstEmpUpload(
             user_email=user_email,
@@ -17206,8 +16960,13 @@ def api_est_emp_upload():
         db.session.commit()
 
         job = create_job("est_emp", registro, _current_usuario_id())
+        job.detalhes_alertas = json.dumps({"formato_detectado": formato_detectado}, ensure_ascii=False)
+        db.session.commit()
         _start_worker("est_emp", job.id)
         return jsonify({"ok": True, "message": "Arquivo recebido. O processamento ocorrerá em segundo plano.", "job_id": job.id})
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -17242,26 +17001,13 @@ def api_nob_upload():
     except ValueError:
         return jsonify({"error": "Data do download invalida."}), 400
 
-    if not arquivo.filename.lower().endswith(".xlsx"):
-        return jsonify({"error": "Envie um arquivo .xlsx."}), 400
-
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
     try:
         NOB_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        _move_existing_to_tmp(NOB_UPLOAD_DIR)
-        stored_name = f"nob_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        save_path = NOB_UPLOAD_DIR / stored_name
-        arquivo.save(save_path)
-
-        layout_error = _validate_upload_layout(save_path, "nob", "NOB")
-        if layout_error:
-            try:
-                save_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return jsonify({"error": layout_error}), 400
+        _move_existing_fiplan_files_to_tmp(NOB_UPLOAD_DIR)
+        stored_name, _, formato_detectado = _save_fiplan_upload_file(arquivo, NOB_UPLOAD_DIR, "nob", "nob", "NOB")
 
         registro = NobUpload(
             user_email=user_email,
@@ -17273,7 +17019,7 @@ def api_nob_upload():
         db.session.add(registro)
         db.session.commit()
 
-        write_status("nob", registro.id, "em processamento", "Arquivo recebido. Processamento em background.")
+        write_status("nob", registro.id, "em processamento", f"Arquivo recebido. Formato detectado: {formato_detectado}. Processamento em background.")
         _start_worker("nob", registro.id)
         return jsonify(
             {
@@ -17282,6 +17028,9 @@ def api_nob_upload():
                 "job_id": registro.id,
             }
         )
+    except FiplanFormatError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao processar: {exc}"}), 500
@@ -19025,6 +18774,336 @@ def api_relatorio_nob():
         )
     except Exception as exc:
         return jsonify({"error": f"Falha ao buscar dados do NOB: {exc}"}), 500
+
+
+def _receita_anexo10_rows():
+    return (
+        db.session.execute(
+            text(
+                """
+                SELECT
+                    r.id,
+                    'registro' AS tipo_linha,
+                    NULL AS situacao_movimentacao,
+                    r.upload_id,
+                    r.arquivo_id,
+                    r.competencia,
+                    r.exercicio,
+                    r.mes,
+                    r.fonte_recurso,
+                    r.orgao_codigo,
+                    r.orgao_nome,
+                    r.escopo_relatorio,
+                    r.cod_uo,
+                    r.uo,
+                    r.mes_fechado,
+                    r.tipo_carga,
+                    r.chave_competencia_fonte_uo,
+                    r.codigo_receita,
+                    r.descricao_receita,
+                    r.orcado_atualizado,
+                    r.arrecadada,
+                    r.diferenca_para_mais,
+                    r.diferenca_para_menos,
+                    r.linha_origem,
+                    r.pagina_origem,
+                    r.ativo,
+                    r.created_at,
+                    a.original_filename,
+                    a.formato_detectado,
+                    a.hash_sha256,
+                    a.status AS arquivo_status,
+                    a.mensagem AS arquivo_mensagem,
+                    a.total_linhas_importadas,
+                    u.user_email,
+                    u.data_arquivo,
+                    u.uploaded_at,
+                    u.modo_upload,
+                    u.total_arquivos,
+                    u.total_registros,
+                    u.total_alertas,
+                    u.total_erros,
+                    u.status_validacao,
+                    u.mensagem_validacao
+                FROM receita_anexo10_registros r
+                LEFT JOIN receita_anexo10_arquivos a ON a.id = r.arquivo_id
+                LEFT JOIN receita_anexo10_uploads u ON u.id = r.upload_id
+                WHERE r.ativo = 1
+                UNION ALL
+                SELECT
+                    NULL AS id,
+                    'sem_movimentacao' AS tipo_linha,
+                    COALESCE(a.mensagem, 'Não houve movimentação no período.') AS situacao_movimentacao,
+                    a.upload_id,
+                    a.id AS arquivo_id,
+                    a.competencia,
+                    a.exercicio,
+                    a.mes,
+                    a.fonte_recurso,
+                    a.orgao_codigo,
+                    a.orgao_nome,
+                    a.escopo_relatorio,
+                    a.cod_uo,
+                    a.uo,
+                    a.mes_fechado,
+                    a.tipo_carga,
+                    a.chave_competencia_fonte_uo,
+                    NULL AS codigo_receita,
+                    NULL AS descricao_receita,
+                    0 AS orcado_atualizado,
+                    0 AS arrecadada,
+                    0 AS diferenca_para_mais,
+                    0 AS diferenca_para_menos,
+                    NULL AS linha_origem,
+                    NULL AS pagina_origem,
+                    1 AS ativo,
+                    a.created_at,
+                    a.original_filename,
+                    a.formato_detectado,
+                    a.hash_sha256,
+                    a.status AS arquivo_status,
+                    a.mensagem AS arquivo_mensagem,
+                    a.total_linhas_importadas,
+                    u.user_email,
+                    u.data_arquivo,
+                    u.uploaded_at,
+                    u.modo_upload,
+                    u.total_arquivos,
+                    u.total_registros,
+                    u.total_alertas,
+                    u.total_erros,
+                    u.status_validacao,
+                    u.mensagem_validacao
+                FROM receita_anexo10_arquivos a
+                LEFT JOIN receita_anexo10_uploads u ON u.id = a.upload_id
+                WHERE a.status = 'alerta'
+                  AND COALESCE(a.total_linhas_importadas, 0) = 0
+                  AND a.competencia IS NOT NULL
+                  AND a.fonte_recurso IS NOT NULL
+                  AND a.cod_uo IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM receita_anexo10_registros r2
+                      WHERE r2.arquivo_id = a.id
+                        AND r2.ativo = 1
+                  )
+                ORDER BY
+                    exercicio,
+                    mes,
+                    fonte_recurso,
+                    cod_uo,
+                    codigo_receita,
+                    id
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+
+def _receita_anexo10_last_upload():
+    return ReceitaAnexo10Upload.query.order_by(ReceitaAnexo10Upload.uploaded_at.desc()).first()
+
+
+def _receita_anexo10_to_float(val):
+    try:
+        if val in (None, ""):
+            return 0.0
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _receita_anexo10_iso(value):
+    if not value:
+        return None
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+    try:
+        return datetime.fromisoformat(str(value)).isoformat()
+    except Exception:
+        return str(value)
+
+
+def _receita_anexo10_date(value):
+    if not value:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y %H:%M:%S")
+    return str(value)
+
+
+@home_bp.route("/api/relatorios/receita-anexo10", methods=["GET"])
+@login_required
+@require_feature("relatorios/receita-anexo10")
+def api_relatorio_receita_anexo10():
+    try:
+        rows = _receita_anexo10_rows()
+        last_upload = _receita_anexo10_last_upload()
+        data = []
+        for r in rows:
+            cod_uo = r.get("cod_uo") or r.get("orgao_codigo") or ""
+            uo = r.get("uo") or r.get("orgao_nome") or ""
+            mes_fechado = bool(r.get("mes_fechado"))
+            data.append(
+                {
+                    "id": r.get("id"),
+                    "tipo_linha": r.get("tipo_linha"),
+                    "situacao_movimentacao": r.get("situacao_movimentacao"),
+                    "upload_id": r.get("upload_id"),
+                    "arquivo_id": r.get("arquivo_id"),
+                    "competencia": r.get("competencia"),
+                    "exercicio": r.get("exercicio"),
+                    "mes": r.get("mes"),
+                    "fonte_recurso": r.get("fonte_recurso"),
+                    "orgao_codigo": r.get("orgao_codigo") or None,
+                    "orgao_nome": r.get("orgao_nome") or None,
+                    "escopo_relatorio": r.get("escopo_relatorio"),
+                    "cod_uo": cod_uo or None,
+                    "uo": uo or None,
+                    "mes_fechado": mes_fechado,
+                    "mes_fechado_label": "Sim" if mes_fechado else "Não",
+                    "tipo_carga": r.get("tipo_carga"),
+                    "chave_competencia_fonte_uo": r.get("chave_competencia_fonte_uo"),
+                    "codigo_receita": r.get("codigo_receita"),
+                    "descricao_receita": r.get("descricao_receita"),
+                    "orcado_atualizado": _receita_anexo10_to_float(r.get("orcado_atualizado")),
+                    "arrecadada": _receita_anexo10_to_float(r.get("arrecadada")),
+                    "diferenca_para_mais": _receita_anexo10_to_float(r.get("diferenca_para_mais")),
+                    "diferenca_para_menos": _receita_anexo10_to_float(r.get("diferenca_para_menos")),
+                    "linha_origem": r.get("linha_origem"),
+                    "pagina_origem": r.get("pagina_origem"),
+                    "ativo": bool(r.get("ativo")),
+                    "created_at": _receita_anexo10_iso(r.get("created_at")),
+                    "original_filename": r.get("original_filename"),
+                    "formato_detectado": r.get("formato_detectado"),
+                    "hash_sha256": r.get("hash_sha256"),
+                    "arquivo_status": r.get("arquivo_status"),
+                    "arquivo_mensagem": r.get("arquivo_mensagem"),
+                    "total_linhas_importadas": r.get("total_linhas_importadas"),
+                    "user_email": r.get("user_email"),
+                    "data_arquivo": _receita_anexo10_iso(r.get("data_arquivo")),
+                    "uploaded_at": _receita_anexo10_iso(r.get("uploaded_at")),
+                    "modo_upload": r.get("modo_upload"),
+                    "total_arquivos": r.get("total_arquivos"),
+                    "total_registros": r.get("total_registros"),
+                    "total_alertas": r.get("total_alertas"),
+                    "total_erros": r.get("total_erros"),
+                    "status_validacao": r.get("status_validacao"),
+                    "mensagem_validacao": r.get("mensagem_validacao"),
+                }
+            )
+        return jsonify(
+            {
+                "ok": True,
+                "data": data,
+                "data_arquivo": _receita_anexo10_iso(getattr(last_upload, "data_arquivo", None)) if last_upload else None,
+                "uploaded_at": _receita_anexo10_iso(getattr(last_upload, "uploaded_at", None)) if last_upload else None,
+                "user_email": last_upload.user_email if last_upload else None,
+                "total_arquivos": last_upload.total_arquivos if last_upload else 0,
+                "total_registros": last_upload.total_registros if last_upload else 0,
+                "total_alertas": last_upload.total_alertas if last_upload else 0,
+                "total_erros": last_upload.total_erros if last_upload else 0,
+            }
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao buscar dados da Receita Anexo 10: {exc}"}), 500
+
+
+@home_bp.route("/api/relatorios/receita-anexo10/download", methods=["GET"])
+@login_required
+@require_feature("relatorios/receita-anexo10")
+def api_relatorio_receita_anexo10_download():
+    try:
+        rows = _receita_anexo10_rows()
+        if not rows:
+            return jsonify({"error": "Nenhum dado para exportar."}), 404
+
+        df = pd.DataFrame(rows)
+        for col in ("orcado_atualizado", "arrecadada", "diferenca_para_mais", "diferenca_para_menos"):
+            if col in df.columns:
+                df[col] = df[col].apply(_receita_anexo10_to_float)
+        for col in ("data_arquivo", "uploaded_at", "created_at"):
+            if col in df.columns:
+                df[col] = df[col].apply(_receita_anexo10_date)
+        if "ativo" in df.columns:
+            df["ativo"] = df["ativo"].apply(lambda v: "Sim" if bool(v) else "Não")
+        if "mes_fechado" in df.columns:
+            df["mes_fechado"] = df["mes_fechado"].apply(lambda v: "Sim" if bool(v) else "Não")
+
+        rename_map = {
+            "id": "ID Registro",
+            "tipo_linha": "Tipo Linha",
+            "situacao_movimentacao": "Situação",
+            "upload_id": "ID Upload",
+            "arquivo_id": "ID Arquivo",
+            "competencia": "Competência",
+            "exercicio": "Exercício",
+            "mes": "Mês",
+            "fonte_recurso": "Fonte de Recurso",
+            "orgao_codigo": "Órgão Código",
+            "orgao_nome": "Órgão Nome",
+            "escopo_relatorio": "Escopo Relatório",
+            "cod_uo": "Cod.UO",
+            "uo": "UO",
+            "mes_fechado": "Mês Fechado",
+            "tipo_carga": "Tipo Carga",
+            "chave_competencia_fonte_uo": "Chave Competência Fonte UO",
+            "codigo_receita": "Código Receita",
+            "descricao_receita": "Descrição Receita",
+            "orcado_atualizado": "Orçado Atualizado",
+            "arrecadada": "Arrecadada",
+            "diferenca_para_mais": "Diferença para Mais",
+            "diferenca_para_menos": "Diferença para Menos",
+            "linha_origem": "Linha Origem",
+            "pagina_origem": "Página Origem",
+            "ativo": "Ativo",
+            "created_at": "Registro Criado em",
+            "original_filename": "Arquivo Original",
+            "formato_detectado": "Formato Real",
+            "hash_sha256": "Hash SHA-256",
+            "arquivo_status": "Status Arquivo",
+            "arquivo_mensagem": "Mensagem Arquivo",
+            "total_linhas_importadas": "Linhas Importadas no Arquivo",
+            "user_email": "Usuário",
+            "data_arquivo": "Data do Download",
+            "uploaded_at": "Upload em",
+            "modo_upload": "Modo Upload",
+            "total_arquivos": "Total Arquivos do Lote",
+            "total_registros": "Total Registros do Lote",
+            "total_alertas": "Total Alertas do Lote",
+            "total_erros": "Total Erros do Lote",
+            "status_validacao": "Status Validação",
+            "mensagem_validacao": "Mensagem Validação",
+        }
+        df.rename(columns=rename_map, inplace=True)
+        col_order = [rename_map[key] for key in rename_map if rename_map[key] in df.columns]
+        if col_order:
+            df = df[col_order]
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Receita Anexo 10", header=False, startrow=1)
+            workbook = writer.book
+            worksheet = writer.sheets["Receita Anexo 10"]
+            cell_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8})
+            header_fmt = workbook.add_format({"font_name": "Helvetica", "font_size": 8, "bold": True})
+            worksheet.set_default_row(12, cell_fmt)
+            if len(df.columns) > 0:
+                worksheet.set_column(0, len(df.columns) - 1, 18, cell_fmt)
+                worksheet.write_row(0, 0, df.columns, header_fmt)
+                worksheet.set_row(0, None, header_fmt)
+                worksheet.freeze_panes(1, 0)
+                worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
+        output.seek(0)
+        filename = f"receita_anexo10_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return _send_excel_bytes(output, filename)
+    except Exception as exc:
+        return jsonify({"error": f"Falha ao exportar Receita Anexo 10: {exc}"}), 500
 
 
 @home_bp.route("/api/relatorios/nob/download", methods=["GET"])

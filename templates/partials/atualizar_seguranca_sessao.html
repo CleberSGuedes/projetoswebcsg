@@ -1,0 +1,32 @@
+<div class="grid">
+  <header class="module-header"><div class="module-header-copy"><div class="module-eyebrow">Administrar SPO · Segurança</div><h1>Sessão e Login</h1><p>Defina por quanto tempo o usuário pode ficar sem atividade antes de ser desconectado.</p></div><i class="bi bi-clock-history" aria-hidden="true"></i></header>
+  <div class="card module-card">
+    <div class="module-card-title"><i class="bi bi-hourglass-split"></i><div><h2>Tempo de inatividade</h2><p>Vale para todos os usuários.</p></div></div>
+    <form id="form-sessao" class="form" data-min="{{ info.min }}" data-max="{{ info.max }}" data-padrao="{{ info.padrao }}">
+      <div class="form-grid">
+        <label class="field">
+          <span>Minutos sem atividade</span>
+          <input type="number" id="sessao-minutos" name="minutos" min="{{ info.min }}" max="{{ info.max }}" step="5" value="{{ info.minutos }}" required />
+        </label>
+        <div class="field">
+          <span>Equivale a</span>
+          <div id="sessao-equivale" class="muted"></div>
+        </div>
+      </div>
+      <p class="muted">Permitido de {{ info.min }} minutos a {{ info.max // 60 }} horas. Padrão: {{ info.padrao // 60 }} horas.</p>
+      <div class="actions">
+        <button class="btn btn-primary sm" type="submit" id="sessao-salvar">Salvar</button>
+        <button class="btn sm" type="button" id="sessao-padrao">Restaurar padrão</button>
+        <div id="sessao-msg" class="muted"></div>
+      </div>
+    </form>
+    <p class="muted" id="sessao-auditoria">
+      {% if info.atualizado_em %}Última alteração: {{ info.atualizado_em }}{% if info.atualizado_por %} por {{ info.atualizado_por }}{% endif %}.{% else %}Ainda não alterado: está valendo o padrão.{% endif %}
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">Como funciona</div>
+    <p class="muted">A mudança vale para as próximas verificações, sem precisar reiniciar o sistema (pode levar até 30 segundos para todos os servidores). Usuários já conectados passam a ser avaliados pelo novo prazo.</p>
+    <p class="muted">Se o mesmo usuário entrar em outro local, a sessão anterior é encerrada e o navegador antigo volta para o login em até 1 minuto.</p>
+  </div>
+</div>

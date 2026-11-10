@@ -1,4 +1,61 @@
 ﻿(function () {
+  // --- Guarda de sessão: detecta sessão encerrada (outro login/expiração) sem depender de F5 ---
+  (function sessionGuard() {
+    if (!document.getElementById("content-area") || !document.getElementById("user-meta")) return;
+    const STATUS_URL = "/api/sessao/status";
+    const HEARTBEAT_MS = 45000;
+    const nativeFetch = window.fetch.bind(window);
+    let ended = false;
+    let checking = false;
+
+    function goToLogin(reason) {
+      if (ended) return;
+      ended = true;
+      const motivo = ["outro_local", "expirada", "encerrada"].includes(reason) ? reason : "encerrada";
+      window.location.href = "/login?motivo=" + motivo;
+    }
+
+    async function checkSession() {
+      if (ended || checking) return;
+      checking = true;
+      try {
+        const res = await nativeFetch(STATUS_URL, {
+          headers: { "X-Requested-With": "fetch" },
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (res.status === 401) {
+          const data = await res.json().catch(() => ({}));
+          goToLogin(data.reason);
+        }
+      } catch (err) {
+        // Falha de rede: não derruba o usuário.
+      } finally {
+        checking = false;
+      }
+    }
+
+    // Qualquer chamada interna que volte 401 é confirmada pelo servidor antes de redirecionar.
+    window.fetch = async function (input, init) {
+      const res = await nativeFetch(input, init);
+      if (res.status === 401 && !ended) {
+        try {
+          const target = new URL(typeof input === "string" ? input : input.url, window.location.href);
+          if (target.origin === window.location.origin && target.pathname !== STATUS_URL && target.pathname !== "/login") {
+            checkSession();
+          }
+        } catch (err) { /* ignora */ }
+      }
+      return res;
+    };
+
+    window.setInterval(checkSession, HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkSession();
+    });
+    window.addEventListener("focus", checkSession);
+  })();
+
   const content = document.getElementById("content-area");
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebar-toggle");
@@ -261,7 +318,28 @@
       ],
     },
   });
+  // Cor de destaque padrão no primeiro acesso: a do layout antigo, para reduzir o impacto da troca de visual.
+  const DEFAULT_ACCENT = "classic";
   const ACCENT_COLORS = {
+    classic: {
+      label: "Clássico (padrão SPO)",
+      // Cor do layout antigo (verde-azulado): accent = #0f7c68, destaque forte = #1f9b7e; escuro = #3dd6b7.
+      vars: {
+        "--color-50": "#eefaf8",
+        "--color-100": "#d7f1eb",
+        "--color-200": "#a9e0d2",
+        "--color-300": "#5fc3aa",
+        "--color-400": "#1f9b7e",
+        "--color-500": "#0f7c68",
+        "--color-600": "#0d6154",
+        "--color-700": "#0b4c44",
+        "--color-800": "#083b36",
+        "--color-900": "#062b28",
+        "--accent-rgb": "15, 124, 104",
+        "--accent-soft-rgb": "127, 207, 187",
+      },
+      dark: { "--accent": "#3dd6b7", "--accent-strong": "#22b58f", "--lab-accent": "#3dd6b7", "--accent-rgb": "61, 214, 183" },
+    },
     blue: {
       label: "Azul",
       vars: {
@@ -281,40 +359,40 @@
       dark: { "--accent": "#78aeed", "--accent-strong": "#99c1f1", "--lab-accent": "#78aeed", "--accent-rgb": "120, 174, 237" },
     },
     teal: {
-      label: "Turquesa",
+      label: "Ciano",
       vars: {
-        "--color-50": "#edfafa",
-        "--color-100": "#d2f4f4",
-        "--color-200": "#93dddf",
-        "--color-300": "#47c2c8",
-        "--color-400": "#2190a4",
-        "--color-500": "#15828e",
-        "--color-600": "#0e6f7d",
-        "--color-700": "#0b5964",
-        "--color-800": "#08444d",
-        "--color-900": "#06343c",
-        "--accent-rgb": "33, 144, 164",
-        "--accent-soft-rgb": "147, 221, 223",
+        "--color-50": "#ecfafd",
+        "--color-100": "#cdf1f9",
+        "--color-200": "#8fdcee",
+        "--color-300": "#4cc3e0",
+        "--color-400": "#19a7cc",
+        "--color-500": "#0e8fb3",
+        "--color-600": "#0b7494",
+        "--color-700": "#095c76",
+        "--color-800": "#07485e",
+        "--color-900": "#05384a",
+        "--accent-rgb": "25, 167, 204",
+        "--accent-soft-rgb": "143, 220, 238",
       },
-      dark: { "--accent": "#6ed4de", "--accent-strong": "#93dddf", "--lab-accent": "#6ed4de", "--accent-rgb": "110, 212, 222" },
+      dark: { "--accent": "#5fd0ec", "--accent-strong": "#8fdcee", "--lab-accent": "#5fd0ec", "--accent-rgb": "95, 208, 236" },
     },
     green: {
-      label: "Verde padrão SPO",
+      label: "Verde",
       vars: {
-        "--color-50": "#e9f8f4",
-        "--color-100": "#ccefe6",
-        "--color-200": "#96ddcb",
-        "--color-300": "#50c1a7",
-        "--color-400": "#25a98e",
-        "--color-500": "#009879",
-        "--color-600": "#007f68",
-        "--color-700": "#006756",
-        "--color-800": "#075246",
-        "--color-900": "#063f38",
-        "--accent-rgb": "0, 152, 121",
-        "--accent-soft-rgb": "150, 221, 203",
+        "--color-50": "#effbf3",
+        "--color-100": "#d3f5df",
+        "--color-200": "#a3e8bd",
+        "--color-300": "#5fd48b",
+        "--color-400": "#33b865",
+        "--color-500": "#26a255",
+        "--color-600": "#1e8545",
+        "--color-700": "#186a38",
+        "--color-800": "#12522b",
+        "--color-900": "#0d3d20",
+        "--accent-rgb": "51, 184, 101",
+        "--accent-soft-rgb": "163, 232, 189",
       },
-      dark: { "--accent": "#42dfc0", "--accent-strong": "#6ee7cf", "--lab-accent": "#42dfc0", "--accent-rgb": "66, 223, 192" },
+      dark: { "--accent": "#5fd48b", "--accent-strong": "#8fe3ac", "--lab-accent": "#5fd48b", "--accent-rgb": "95, 212, 139" },
     },
     yellow: {
       label: "Amarelo",
@@ -512,9 +590,9 @@
   }
 
   function getStoredAccent() {
-    const saved = localStorage.getItem("app-accent") || "blue";
+    const saved = localStorage.getItem("app-accent") || DEFAULT_ACCENT;
     if (saved === "spo") return "green";
-    return ACCENT_COLORS[saved] ? saved : "blue";
+    return ACCENT_COLORS[saved] ? saved : DEFAULT_ACCENT;
   }
 
   function clampColorChannel(value) {
@@ -614,7 +692,7 @@
   });
 
   function applyAccentColor(accent, persist = true) {
-    const key = ACCENT_COLORS[accent] ? accent : "blue";
+    const key = ACCENT_COLORS[accent] ? accent : DEFAULT_ACCENT;
     const palette = ACCENT_COLORS[key];
     const root = document.documentElement;
     const targets = [root, document.body].filter(Boolean);
@@ -873,9 +951,10 @@
   }
 
   function canManageProtectedContract() {
-    const user = getProtectedContractUser();
-    const token = normalizeContractUser(`${user.name} ${user.email}`);
-    return token.includes("jean") || token.includes("cleber");
+    // Quem controla o acesso é o servidor (feature atualizar/personalizar-spo/contrato-visual-protegido,
+    // liberada no Painel - Permissões; o admin sempre passa). Antes havia uma trava fixa por nome/e-mail
+    // ("jean"/"cleber") que escondia a tela de qualquer outro usuário, inclusive do admin.
+    return true;
   }
 
   function getProtectedContractPresetKey(key) {
@@ -2003,14 +2082,14 @@
     });
     panel.querySelectorAll("[data-accent-choice]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        applyAccentColor(btn.dataset.accentChoice || "blue");
+        applyAccentColor(btn.dataset.accentChoice || DEFAULT_ACCENT);
         syncThemeControls(panel);
       });
     });
     const reset = document.getElementById("spo-theme-reset");
     if (reset) {
       reset.addEventListener("click", () => {
-        applyAccentColor("blue");
+        applyAccentColor(DEFAULT_ACCENT);
         applyTheme("auto");
         localStorage.removeItem(COMMON_VISUAL_STORAGE_KEY);
         applyCommonVisualPreferences(COMMON_VISUAL_DEFAULTS, false);
@@ -2978,11 +3057,14 @@
             <td>${esc(r.acesso_fim_em ? formatDateTime(r.acesso_fim_em) : "Permanente")}</td>
             <td>${esc((r.scopes_label || []).join(" | "))}</td>
             <td>${esc(formatDateTime(r.last_used_at))}</td>
-            <td class="actions" style="display:flex; gap:6px;">
-              <button class="icon-btn sm api-select" data-id="${esc(r.id)}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
-              <button class="icon-btn sm api-rotate" data-id="${esc(r.id)}" type="button" title="Rotacionar segredo"><i class="bi bi-arrow-repeat"></i></button>
-              <button class="icon-btn sm api-revoke" data-id="${esc(r.id)}" type="button" title="Revogar"><i class="bi bi-slash-circle"></i></button>
-              <button class="icon-btn sm api-delete" data-id="${esc(r.id)}" type="button" title="Excluir"><i class="bi bi-trash"></i></button>
+            <td class="actions">
+              <div style="display:flex; gap:6px; flex-wrap:nowrap;">
+                <button class="icon-btn sm api-select" data-id="${esc(r.id)}" type="button" title="Editar"><i class="bi bi-pencil"></i></button>
+                ${r.status === "revogado"
+                  ? `<button class="icon-btn sm api-delete" data-id="${esc(r.id)}" type="button" title="Excluir (somente chaves revogadas)"><i class="bi bi-trash"></i></button>`
+                  : `<button class="icon-btn sm api-rotate" data-id="${esc(r.id)}" type="button" title="Rotacionar segredo"><i class="bi bi-arrow-repeat"></i></button>
+                <button class="icon-btn sm api-revoke" data-id="${esc(r.id)}" type="button" title="Revogar"><i class="bi bi-slash-circle"></i></button>`}
+              </div>
             </td>
           </tr>`
         )
@@ -3057,7 +3139,7 @@
         btn.addEventListener("click", async () => {
           const id = btn.dataset.id;
           if (!id) return;
-          if (!window.confirm("Deseja realmente excluir este servidor de API?")) return;
+          if (!window.confirm("Excluir definitivamente este servidor de API? A chave revogada e o histórico de tokens serão apagados.")) return;
           setMsg("Excluindo servidor...");
           try {
             const res = await fetch(`/api/api-clients/${encodeURIComponent(id)}`, {
@@ -3912,22 +3994,75 @@
       );
       const rawStatus = String(last.status || (last.output_filename ? "finalizado" : "aguardando"));
       const statusKey = rawStatus.toLowerCase().replaceAll(" ", "_");
+      const statusLabelMap = {
+        aguardando: "Aguardando",
+        em_processamento: "Em processamento",
+        cancelamento_solicitado: "Cancelamento solicitado",
+        finalizado: "Finalizado",
+        finalizado_com_alertas: "Finalizado com alertas",
+        falha: "Falha",
+        cancelado: "Cancelado",
+        historico: "Histórico",
+        "histórico": "Histórico",
+      };
+      const statusLabel = statusLabelMap[statusKey] || rawStatus.replaceAll("_", " ");
       const normalizedStatus = statusKey.includes("falha") ? "falha"
         : statusKey.includes("cancel") ? "cancelado"
         : statusKey.includes("finalizado") ? "finalizado"
         : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
         : statusKey;
       const duration = last.duration_seconds == null ? "-" : `${Number(last.duration_seconds).toFixed(1)}s`;
+      const hasValidationErrors = Number(last.total_errors || 0) > 0 || /nao processado|não processado/i.test(String(last.mensagem_validacao || ""));
+      const prettyMessage = (value) =>
+        String(value ?? "-")
+          .replace(/\bNao\b/g, "Não")
+          .replace(/\bnao\b/g, "não")
+          .replace(/\bmes\b/g, "mês")
+          .replace(/\bcompetencia\b/g, "competência")
+          .replace(/\brelatorio\b/g, "relatório")
+          .replace(/\bfisico\b/g, "físico")
+          .replace(/\bobrigatorios\b/g, "obrigatórios")
+          .replace(/\binvalida\b/g, "inválida")
+          .replace(/\bconteudo\b/g, "conteúdo")
+          .replace(/\bja\b/g, "já")
+          .replace(/\bnao processado/g, "não processado");
+      const renderAlerts = (alerts) => {
+        if (!alerts) return "";
+        if (Array.isArray(alerts)) {
+          return alerts.map((item) => `<li>${safe(prettyMessage(item))}</li>`).join("");
+        }
+        if (typeof alerts === "object") {
+          return Object.entries(alerts)
+            .map(([name, messages]) => {
+              const list = Array.isArray(messages) ? messages : [messages];
+              return `
+                <li>
+                  <strong>${safe(name)}</strong>
+                  <ul>${list.map((msg) => `<li>${safe(prettyMessage(msg))}</li>`).join("")}</ul>
+                </li>
+              `;
+            })
+            .join("");
+        }
+        return `<li>${safe(prettyMessage(alerts))}</li>`;
+      };
       const alertDetails = last.alerts && last.total_alerts
-        ? `<details class="job-alerts"><summary>${last.total_alerts} alerta(s)</summary><pre>${safe(JSON.stringify(last.alerts, null, 2))}</pre></details>` : "";
+        ? `<details class="job-alerts job-alerts-danger"><summary>${last.total_alerts} alerta(s)</summary><ul>${renderAlerts(last.alerts)}</ul></details>` : "";
+      const receitaDetails = last.tipo === "receita_anexo10" ? `
+        <div><strong>Tipo de carga:</strong> ${safe(last.tipo_carga)}</div>
+        <div><strong>Mês fechado:</strong> ${safe(last.mes_fechado_label)}</div>
+        ${last.status_validacao ? `<div><strong>Validação:</strong> ${safe(last.status_validacao)}</div>` : ""}
+        ${last.mensagem_validacao ? `<div class="${hasValidationErrors ? "job-validation-error" : ""}"><strong>Mensagem validação:</strong> ${safe(prettyMessage(last.mensagem_validacao))}</div>` : ""}
+      ` : "";
       target.innerHTML = `
-        <div class="job-status-head"><strong>${safe(rawStatus)}</strong><strong>${progress.toFixed(0)}%</strong></div>
+        <div class="job-status-head"><strong>${safe(statusLabel)}</strong><strong>${progress.toFixed(0)}%</strong></div>
         <div class="job-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
-        <div><strong>Etapa:</strong> ${safe(last.status_message)}</div>
+        <div><strong>Etapa:</strong> ${safe(prettyMessage(last.status_message))}</div>
         <div><strong>Enviado por:</strong> ${safe(last.user_email)}</div>
         <div><strong>Upload em:</strong> ${formatAmazonTime(last.uploaded_at)}</div>
         <div><strong>Data do download:</strong> ${formatAmazonLocalTime(last.data_arquivo)}</div>
         <div><strong>Arquivo original:</strong> ${safe(last.original_filename)}</div>
+        ${receitaDetails}
         <div><strong>Registros:</strong> ${last.processed_records || 0} / ${last.total_records || 0}</div>
         <div><strong>Duração:</strong> ${duration}</div>
         <div><strong>Saída gerada:</strong> ${safe(last.output_filename)}</div>
@@ -3962,6 +4097,33 @@
     target.textContent = "Carregando...";
     try {
       const res = await fetch("/api/fip613/status");
+      if (!res.ok) throw new Error("Erro ao consultar status");
+      const data = await res.json();
+      if (!data.last) {
+        target.textContent = "Nenhuma atualização encontrada.";
+        return;
+      }
+      const last = data.last;
+      const uploaded = formatAmazonTime(last.uploaded_at);
+      const dataArquivo = formatAmazonLocalTime(last.data_arquivo);
+      target.innerHTML = `
+        <div><strong>Enviado por:</strong> ${last.user_email || "-"}</div>
+        <div><strong>Upload em:</strong> ${uploaded}</div>
+        <div><strong>Data do download:</strong> ${dataArquivo}</div>
+        <div><strong>Arquivo original:</strong> ${last.original_filename || "-"}</div>
+        <div><strong>Saída gerada:</strong> ${last.output_filename || "-"}</div>
+      `;
+    } catch (err) {
+      target.textContent = "Falha ao carregar status.";
+      console.error(err);
+    }
+  }
+
+  async function loadPlan51Status(target) {
+    if (!target) return;
+    target.textContent = "Carregando...";
+    try {
+      const res = await fetch("/api/plan51/status");
       if (!res.ok) throw new Error("Erro ao consultar status");
       const data = await res.json();
       if (!data.last) {
@@ -4121,6 +4283,10 @@
     }
   }
 
+  async function loadReceitaAnexo10Status(target, submitBtn, viewLabel) {
+    return loadManagedJobStatus("/api/receita-anexo10/status", target, submitBtn, viewLabel);
+  }
+
   async function loadNobStatus(target, submitBtn, viewLabel) {
     return loadManagedJobStatus("/api/nob/status", target, submitBtn, viewLabel);
     /* compatibilidade do renderizador anterior */
@@ -4266,7 +4432,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4287,6 +4453,580 @@
         if (inputData) inputData.value = "";
         await loadFipStatus(statusBox, submitBtn, viewLabel);
         startStatusPolling(() => loadFipStatus(statusBox, submitBtn, viewLabel));
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        console.error(err);
+        if (submitBtn) {
+          submitBtn.textContent = defaultLabel;
+          submitBtn.dataset.mode = "upload";
+        }
+      } finally {
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  // ---- Área UENs > SAGE > Notas SEE (partials/notas_see.html) ----
+  function initNotasSee() {
+    const root = document.getElementById("see-page");
+    if (!root || root.dataset.bound === "1") return;
+    root.dataset.bound = "1";
+    const catalogSelect = document.getElementById("see-catalog-select");
+    const catalogForm = document.getElementById("see-catalog-form");
+    const productForm = document.getElementById("see-product-form");
+    const productsWrap = document.getElementById("see-products-wrap");
+    const productsBody = document.getElementById("see-products-body");
+    const processForm = document.getElementById("see-process-form");
+    const processCatalogId = document.getElementById("see-process-catalog-id");
+    const processCatalogSelect = document.getElementById("see-process-catalog-select");
+    const processCatalogInfo = document.getElementById("see-process-catalog-info");
+    const folderInput = document.getElementById("see-folder-input");
+    const filesInput = document.getElementById("see-files-input");
+    const submit = document.getElementById("see-process-submit");
+    const catalogMsg = document.getElementById("see-catalog-msg");
+    const processMsg = document.getElementById("see-process-msg");
+    const progressCard = document.getElementById("see-progress-card");
+    const appendChoice = document.getElementById("see-append-choice");
+    const processingMeta = document.getElementById("see-processing-meta");
+    const seeGrid = root.querySelector(".see-grid");
+    const uploadCard = processForm.closest(".see-card");
+    if (seeGrid && uploadCard && progressCard) {
+      const processColumn = document.createElement("div");
+      processColumn.className = "see-process-column";
+      seeGrid.insertBefore(processColumn, uploadCard);
+      processColumn.append(uploadCard, progressCard);
+    }
+    let catalogs = [];
+    let jobId = null;
+    let pollTimer = null;
+    let lastProcessing = null;
+    let watchingJobId = null;
+    const historyCatalog = document.getElementById("see-history-catalog");
+    const historyExercicio = document.getElementById("see-history-exercicio");
+    const catalogLabel = (item) => `${item.exercicio} · ${escapeHtml(item.nome)}`;
+    const historyBody = document.getElementById("see-history-body");
+    const historyMsg = document.getElementById("see-history-msg");
+    const SEE_BATCH_MAX_FILES = 50;
+    const SEE_BATCH_MAX_BYTES = 20 * 1024 * 1024;
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const selectedCatalog = () => catalogs.find((item) => String(item.id) === String(catalogSelect.value));
+    const setMessage = (el, message, error = false) => {
+      if (!el) return;
+      el.textContent = message || "";
+      el.classList.toggle("text-error", error);
+    };
+    const clearVisibleErrors = () => {
+      [catalogMsg, processMsg].forEach((el) => {
+        if (el?.classList.contains("text-error")) setMessage(el, "");
+      });
+    };
+    root.addEventListener("input", clearVisibleErrors);
+    root.addEventListener("change", clearVisibleErrors);
+    root.addEventListener("click", clearVisibleErrors);
+    const requestJson = async (url, options = {}) => {
+      const { headers = {}, ...rest } = options;
+      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+      return data;
+    };
+    const renderProducts = () => {
+      const catalog = selectedCatalog();
+      processCatalogId.value = catalog ? catalog.id : "";
+      processCatalogSelect.value = catalog ? String(catalog.id) : "";
+      processCatalogInfo.textContent = !catalog
+        ? "Escolha o catálogo antes de selecionar os PDFs."
+        : catalog.produtos.length
+          ? `As notas serão conferidas com os ${catalog.produtos.length} produto(s) de "${catalog.nome}" (exercício ${catalog.exercicio}).`
+          : `O catálogo "${catalog.nome}" ainda não tem produtos. Cadastre ao menos um em "Catálogo de produtos" para liberar o envio dos PDFs.`;
+      processCatalogInfo.classList.remove("text-error");
+      [folderInput, filesInput].forEach((input) => {
+        input.disabled = !catalog || !catalog.produtos.length;
+        input.closest(".see-upload-option")?.classList.toggle("is-disabled", input.disabled);
+      });
+      document.getElementById("see-catalog-edit").disabled = !catalog;
+      document.getElementById("see-catalog-delete").disabled = !catalog;
+      productsWrap.hidden = !catalog;
+      productForm.hidden = true;
+      productsBody.innerHTML = catalog ? catalog.produtos.map((product) => `
+        <tr>
+          <td>${escapeHtml(product.codigo)}</td><td>${escapeHtml(product.nome)}</td>
+          <td class="see-row-actions"><button class="icon-btn sm see-product-edit" data-id="${product.id}" title="Editar"><i class="bi bi-pencil"></i></button><button class="icon-btn sm see-product-delete" data-id="${product.id}" title="Remover"><i class="bi bi-trash"></i></button></td>
+        </tr>`).join("") : "";
+      updateSelection();
+    };
+    const loadCatalogs = async (keepId = "") => {
+      const data = await requestJson("/api/notas-see/catalogos");
+      catalogs = data.catalogos || [];
+      const options = catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${catalogLabel(item)} (${item.produtos.length})</option>`).join("");
+      catalogSelect.innerHTML = '<option value="">Selecione</option>' + options;
+      processCatalogSelect.innerHTML = '<option value="">Selecione o catálogo</option>' + options;
+      const exercicioValue = historyExercicio.value;
+      const exercicios = [...new Set(catalogs.filter((item) => item.ativo).map((item) => String(item.exercicio)))].sort().reverse();
+      historyExercicio.innerHTML = '<option value="">Todos os exercícios</option>' + exercicios.map((ano) => `<option value="${ano}">${ano}</option>`).join("");
+      historyExercicio.value = exercicios.includes(exercicioValue) ? exercicioValue : "";
+      renderHistoryCatalogs();
+      if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
+      renderProducts();
+    };
+    const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    function updateSelection() {
+      const files = selectedFiles();
+      const size = files.reduce((total, file) => total + file.size, 0);
+      document.getElementById("see-selection-summary").textContent = files.length
+        ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
+        : "Nenhum PDF selecionado.";
+      const catalog = selectedCatalog();
+      const processingActive = lastProcessing
+        && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
+      const canAppend = lastProcessing
+        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
+        && String(lastProcessing.catalog_id) === String(catalog?.id);
+      // A pergunta só faz sentido quando há novos PDFs para um catálogo que já foi processado.
+      appendChoice.hidden = !canAppend || !files.length;
+    }
+    const resetUploadCard = () => {
+      folderInput.value = "";
+      filesInput.value = "";
+      const defaultMode = processForm.querySelector('input[name="see_append_mode"][value="acrescentar"]');
+      if (defaultMode) defaultMode.checked = true;
+      setMessage(processMsg, "");
+      updateSelection();
+    };
+
+    catalogSelect.addEventListener("change", async () => {
+      renderProducts();
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      jobId = null;
+      lastProcessing = null;
+      progressCard.hidden = true;
+      appendChoice.hidden = true;
+      processingMeta.innerHTML = "";
+      if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
+    });
+    processCatalogSelect.addEventListener("change", () => {
+      catalogSelect.value = processCatalogSelect.value;
+      catalogSelect.dispatchEvent(new Event("change"));
+    });
+    folderInput.addEventListener("click", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("click", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    folderInput.addEventListener("change", () => {
+      filesInput.value = "";
+      updateSelection();
+    });
+    filesInput.addEventListener("change", () => {
+      folderInput.value = "";
+      updateSelection();
+    });
+    document.getElementById("see-catalog-new").addEventListener("click", () => {
+      catalogForm.reset();
+      document.getElementById("see-catalog-id").value = "";
+      document.getElementById("see-catalog-exercicio").value = new Date().getFullYear();
+      catalogForm.hidden = false;
+      document.getElementById("see-catalog-name").focus();
+    });
+    document.getElementById("see-catalog-form-cancel").addEventListener("click", () => { catalogForm.reset(); catalogForm.hidden = true; });
+    document.getElementById("see-catalog-edit").addEventListener("click", () => {
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      document.getElementById("see-catalog-id").value = catalog.id;
+      document.getElementById("see-catalog-name").value = catalog.nome;
+      document.getElementById("see-catalog-exercicio").value = catalog.exercicio || "";
+      document.getElementById("see-catalog-description").value = catalog.descricao || "";
+      catalogForm.hidden = false;
+    });
+    document.getElementById("see-catalog-delete").addEventListener("click", async () => {
+      const catalog = selectedCatalog();
+      if (!catalog || !confirm(`Desativar o catálogo ${catalog.nome}?`)) return;
+      try { await requestJson(`/api/notas-see/catalogos/${catalog.id}`, { method: "DELETE" }); await loadCatalogs(); setMessage(catalogMsg, "Catálogo desativado."); }
+      catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    catalogForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const catalogId = document.getElementById("see-catalog-id").value;
+        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, exercicio: document.getElementById("see-catalog-exercicio").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
+        catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    document.getElementById("see-product-add").addEventListener("click", () => { productForm.reset(); document.getElementById("see-product-id").value = ""; productForm.hidden = false; document.getElementById("see-product-code").focus(); });
+    document.getElementById("see-product-cancel").addEventListener("click", () => { productForm.reset(); productForm.hidden = true; });
+    productForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const catalog = selectedCatalog();
+      if (!catalog) return;
+      const productId = document.getElementById("see-product-id").value;
+      const payload = { codigo: document.getElementById("see-product-code").value, nome: document.getElementById("see-product-name").value };
+      try {
+        await requestJson(productId ? `/api/notas-see/produtos/${productId}` : `/api/notas-see/catalogos/${catalog.id}/produtos`, { method: productId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        productForm.reset(); productForm.hidden = true; await loadCatalogs(catalog.id); setMessage(catalogMsg, "Produto salvo.");
+      } catch (error) { setMessage(catalogMsg, error.message, true); }
+    });
+    productsBody.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".see-product-edit");
+      const remove = event.target.closest(".see-product-delete");
+      const catalog = selectedCatalog();
+      if (edit && catalog) {
+        const product = catalog.produtos.find((item) => String(item.id) === edit.dataset.id);
+        if (!product) return;
+        document.getElementById("see-product-id").value = product.id;
+        document.getElementById("see-product-code").value = product.codigo;
+        document.getElementById("see-product-name").value = product.nome;
+        productForm.hidden = false;
+      }
+      if (remove && catalog && confirm("Remover este produto do catálogo?")) {
+        try { await requestJson(`/api/notas-see/produtos/${remove.dataset.id}`, { method: "DELETE" }); await loadCatalogs(catalog.id); }
+        catch (error) { setMessage(catalogMsg, error.message, true); }
+      }
+    });
+
+    const renderStatus = (data) => {
+      lastProcessing = data;
+      progressCard.hidden = false;
+      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
+      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
+      document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
+      document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
+      document.getElementById("see-stat-success").textContent = data.success;
+      document.getElementById("see-stat-warning").textContent = data.warnings;
+      document.getElementById("see-stat-error").textContent = data.errors;
+      document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
+      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
+      document.getElementById("see-download").hidden = !data.download_ready;
+      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
+      const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
+      const updateSummary = data.initial_count
+        ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
+        : `<span><strong>${data.total ?? 0}</strong>Total do processamento</span>`;
+      const ignoredSummary = data.ignored_count
+        ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
+        : "";
+      processingMeta.innerHTML = `
+        <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
+        <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
+        <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
+        ${updateSummary}
+        ${ignoredSummary}`;
+      updateSelection();
+    };
+    const poll = async () => {
+      if (!jobId) return;
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
+        renderStatus(data);
+        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
+          pollTimer = setTimeout(poll, 1000);
+        } else if (String(watchingJobId) === String(data.id)) {
+          // Concluiu um processamento iniciado nesta tela: limpa o envio e avisa o usuário.
+          watchingJobId = null;
+          resetUploadCard();
+          openDoneModal(data);
+          loadHistory();
+        } else {
+          updateSelection();
+        }
+      } catch (error) { setMessage(processMsg, error.message, true); }
+    };
+    const openDoneModal = (data) => {
+      document.getElementById("see-done-overlay")?.remove();
+      const success = ["finalizado", "finalizado_com_alertas"].includes(data.status);
+      const title = success
+        ? `Catálogo "${data.catalog_name}" processado com sucesso!`
+        : data.status === "cancelado"
+          ? `Processamento do catálogo "${data.catalog_name}" cancelado.`
+          : `Falha no processamento do catálogo "${data.catalog_name}".`;
+      const note = data.status === "finalizado_com_alertas"
+        ? `<p class="see-done-note">Há notas com alertas ou erros. Confira a aba "Ocorrências" da planilha.</p>`
+        : !success ? `<p class="see-done-note">${escapeHtml(data.message || "")}</p>` : "";
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "see-done-overlay";
+      overlay.innerHTML = `
+        <div class="modal-card see-done-modal" role="dialog" aria-modal="true" aria-labelledby="see-done-title">
+          <div class="modal-header">
+            <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+            <div class="modal-header-text">
+              <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+              <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="modal-title" id="see-done-title">${escapeHtml(title)}</div>
+            <div class="see-done-summary">
+              <span><strong>${data.processed}/${data.total}</strong>Notas processadas</span>
+              <span><strong>${data.success}</strong>Sem alertas</span>
+              <span><strong>${data.warnings}</strong>Com alertas</span>
+              <span><strong>${data.errors}</strong>Com erros</span>
+              ${data.ignored_count ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>` : ""}
+              <span><strong>${data.duration ? `${data.duration.toFixed(1)}s` : "-"}</strong>Duração</span>
+            </div>
+            ${note}
+          </div>
+          <div class="see-done-footer">
+            ${data.download_ready ? '<button type="button" class="btn sm" data-see-done="download"><i class="bi bi-download"></i>Baixar Excel</button>' : ""}
+            <button type="button" class="btn btn-primary sm" data-see-done="close">Fechar</button>
+          </div>
+        </div>`;
+      const close = () => {
+        document.removeEventListener("keydown", onKeyDown, true);
+        overlay.remove();
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      const onKeyDown = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(); } };
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
+      overlay.querySelector('[data-see-done="close"]').addEventListener("click", close);
+      overlay.querySelector('[data-see-done="download"]')?.addEventListener("click", () => downloadJob(data.id));
+      document.addEventListener("keydown", onKeyDown, true);
+      document.body.appendChild(overlay);
+      overlay.querySelector('[data-see-done="close"]').focus();
+    };
+    function renderHistoryCatalogs() {
+      // O filtro de catálogo mostra só os catálogos ativos do exercício escolhido.
+      const current = historyCatalog.value;
+      const options = catalogs.filter((item) => item.ativo && (!historyExercicio.value || String(item.exercicio) === historyExercicio.value));
+      historyCatalog.innerHTML = '<option value="">Todos os catálogos</option>' + options.map((item) => `<option value="${item.id}">${catalogLabel(item)}</option>`).join("");
+      historyCatalog.value = options.some((item) => String(item.id) === current) ? current : "";
+    }
+    const loadHistory = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (historyExercicio.value) params.set("exercicio", historyExercicio.value);
+        if (historyCatalog.value) params.set("catalogo_id", historyCatalog.value);
+        const query = params.toString() ? `?${params}` : "";
+        const data = await requestJson(`/api/notas-see/processamentos/historico${query}`);
+        const items = data.processamentos || [];
+        historyBody.innerHTML = items.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.exercicio ?? "-")}</td>
+            <td>${escapeHtml(item.catalog_name)}</td>
+            <td>${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString("pt-BR") : "-")}</td>
+            <td>${escapeHtml(item.executed_by || "-")}</td>
+            <td>${item.total}</td>
+            <td>${item.warnings}</td>
+            <td>${item.errors}</td>
+            <td class="see-row-actions"><button class="btn sm see-history-download" type="button" data-id="${item.id}"><i class="bi bi-download"></i>Baixar</button></td>
+          </tr>`).join("");
+        setMessage(historyMsg, items.length ? "" : "Nenhum processamento concluído.");
+      } catch (error) { setMessage(historyMsg, error.message, true); }
+    };
+    historyCatalog.addEventListener("change", loadHistory);
+    historyExercicio.addEventListener("change", () => {
+      renderHistoryCatalogs();
+      loadHistory();
+    });
+    historyBody.addEventListener("click", (event) => {
+      const button = event.target.closest(".see-history-download");
+      if (button) downloadJob(button.dataset.id);
+    });
+    const restoreLastProcessing = async (catalogId) => {
+      if (!catalogId) return;
+      const requestedCatalogId = String(catalogId);
+      try {
+        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
+        if (String(catalogSelect.value) !== requestedCatalogId) return;
+        if (!data.job_id) return;
+        jobId = data.job_id;
+        await poll();
+      } catch (error) {
+        setMessage(processMsg, error.message, true);
+      }
+    };
+    processForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!processForm.reportValidity() || submit.disabled) return;
+      submit.disabled = true; setMessage(processMsg, "Preparando envio...");
+      let uploadJobId = null;
+      try {
+        const files = selectedFiles();
+        const createData = new FormData();
+        createData.append("catalogo_id", catalogSelect.value);
+        const appendMode = appendChoice.hidden
+          ? "novo"
+          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
+        createData.append("append_mode", appendMode);
+        if (appendMode === "acrescentar" && lastProcessing?.id) createData.append("base_job_id", lastProcessing.id);
+        const created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData });
+        uploadJobId = created.job_id;
+
+        // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
+        const batches = [];
+        let current = [];
+        let currentSize = 0;
+        files.forEach((file) => {
+          if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) {
+            batches.push(current);
+            current = [];
+            currentSize = 0;
+          }
+          current.push(file);
+          currentSize += file.size;
+        });
+        if (current.length) batches.push(current);
+        const accepted = [];
+        const ignored = [];
+        let sent = 0;
+        for (const batch of batches) {
+          setMessage(processMsg, `Enviando PDFs: ${sent} de ${files.length} (${Math.round((sent / files.length) * 100)}%)...`);
+          const batchData = new FormData();
+          batch.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
+          const result = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/arquivos`, { method: "POST", body: batchData });
+          accepted.push(...(result.accepted || []));
+          ignored.push(...(result.ignored || []));
+          sent += batch.length;
+        }
+        setMessage(processMsg, "Iniciando processamento...");
+        const data = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/iniciar`, { method: "POST" });
+        uploadJobId = null;
+        data.accepted = accepted;
+        data.ignored = ignored;
+        jobId = data.job_id;
+        watchingJobId = data.job_id;
+        setMessage(processMsg, data.message);
+        progressCard.hidden = false;
+        renderStatus({
+          id: data.job_id,
+          status: "na_fila",
+          message: data.message || "Processamento colocado na fila.",
+          progress: 0,
+          processed: 0,
+          total: data.total || selectedFiles().length,
+          success: 0,
+          warnings: 0,
+          errors: 0,
+          duration: 0,
+          files: [
+            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
+            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+          ],
+          catalog_id: Number(catalogSelect.value),
+          catalog_name: selectedCatalog()?.nome,
+          executed_by: lastProcessing?.executed_by,
+          created_at: new Date().toISOString(),
+          initial_count: data.initial || 0,
+          added_count: data.added || selectedFiles().length,
+          ignored_count: data.ignored_count || 0,
+        });
+        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        poll();
+      } catch (error) {
+        // Envio interrompido: descarta o processamento parcial para não deixá-lo pendente.
+        if (uploadJobId) {
+          requestJson(`/api/notas-see/processamentos/${uploadJobId}/cancelar`, { method: "POST" }).catch(() => {});
+        }
+        setMessage(processMsg, error.message, true);
+        submit.disabled = false;
+      }
+    });
+    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
+    async function downloadJob(id) {
+      if (!id) return;
+      const url = `/api/notas-see/processamentos/${id}/download`;
+      if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
+      try {
+        const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
+        if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
+        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${id}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        const writable = await handle.createWritable();
+        await writable.write(await response.blob());
+        await writable.close();
+      } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
+    }
+    document.getElementById("see-download").addEventListener("click", () => downloadJob(jobId));
+    loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
+    loadHistory();
+  }
+
+  function initPlan51() {
+    const form = document.getElementById("form-plan51");
+    if (!form) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const msg = document.getElementById("plan51-msg");
+    const statusBox = document.getElementById("plan51-status");
+    const inputData = document.getElementById("plan51-data");
+    const fileInput = document.getElementById("plan51-file");
+    const loading = document.getElementById("plan51-loading");
+  const submitBtn = document.getElementById("plan51-submit");
+  const defaultLabel = "Upload e processar";
+  const viewLabel = "Ver Relatório";
+
+  if (inputData) {
+    setDefaultAmazonTime(inputData);
+  }
+
+    loadPlan51Status(statusBox);
+
+    if (submitBtn) {
+      submitBtn.dataset.mode = "upload";
+      submitBtn.textContent = defaultLabel;
+      submitBtn.addEventListener("click", (ev) => {
+        if (submitBtn.dataset.mode === "view") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setActive("relatorios/plan51");
+          loadPage("relatorios/plan51");
+        }
+      });
+    }
+
+    if (fileInput && submitBtn) {
+      fileInput.addEventListener("change", () => {
+        submitBtn.dataset.mode = "upload";
+        submitBtn.textContent = defaultLabel;
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (submitBtn?.dataset.mode === "view") {
+        setActive("relatorios/plan51");
+        loadPage("relatorios/plan51");
+        return;
+      }
+      if (!fileInput?.files?.length) {
+        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        return;
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/api/plan51/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
+        if (msg) {
+          msg.textContent = data.message || "Upload concluído.";
+          msg.classList.remove("text-error");
+        }
+        form.reset();
+        if (inputData) inputData.value = "";
+        loadPlan51Status(statusBox);
+        if (submitBtn) {
+          submitBtn.textContent = viewLabel;
+          submitBtn.dataset.mode = "view";
+        }
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -4411,7 +5151,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4561,7 +5301,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4670,7 +5410,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -4696,6 +5436,123 @@
           submitBtn.dataset.mode = "view";
           submitBtn.dataset.output = data.output;
         }
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+        console.error(err);
+        if (submitBtn) {
+          submitBtn.textContent = defaultLabel;
+          submitBtn.dataset.mode = "upload";
+        }
+      } finally {
+        if (loading) loading.style.display = "none";
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  function initReceitaAnexo10() {
+    const form = document.getElementById("form-receita-anexo10");
+    if (!form) return;
+    if (form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const msg = document.getElementById("receita-anexo10-msg");
+    const statusBox = document.getElementById("receita-anexo10-status");
+    const inputData = document.getElementById("receita-anexo10-data");
+    const fileInput = document.getElementById("receita-anexo10-files");
+    const loading = document.getElementById("receita-anexo10-loading");
+    const submitBtn = document.getElementById("receita-anexo10-submit");
+    const reprocessBtn = document.getElementById("receita-anexo10-reprocess");
+    const cancelBtn = document.getElementById("receita-anexo10-cancel");
+    const defaultLabel = "Upload e processar";
+    const viewLabel = "Processado";
+
+    if (inputData) {
+      setDefaultAmazonTime(inputData);
+    }
+
+    loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel).then((state) => {
+      if (state === "running") {
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+      }
+    });
+
+    const postAction = async (url, pendingText) => {
+      if (msg) {
+        msg.textContent = pendingText;
+        msg.classList.remove("text-error");
+      }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na operação.");
+      if (msg) msg.textContent = data.message || pendingText;
+      await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+      startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
+    };
+
+    reprocessBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/reprocess", "Reprocessamento iniciado.").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    cancelBtn?.addEventListener("click", () =>
+      postAction("/api/receita-anexo10/cancel", "Solicitando cancelamento...").catch((err) => {
+        if (msg) {
+          msg.textContent = err.message;
+          msg.classList.add("text-error");
+        }
+      })
+    );
+
+    if (submitBtn) {
+      submitBtn.dataset.mode = "upload";
+      submitBtn.textContent = defaultLabel;
+    }
+
+    if (fileInput && submitBtn) {
+      fileInput.addEventListener("change", () => {
+        submitBtn.dataset.mode = "upload";
+        submitBtn.textContent = defaultLabel;
+      });
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!fileInput?.files?.length) {
+        if (msg) {
+          msg.textContent = "Selecione ao menos um arquivo.";
+          msg.classList.add("text-error");
+        }
+        return;
+      }
+      if (loading) loading.style.display = "inline";
+      if (submitBtn) submitBtn.disabled = true;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/api/receita-anexo10/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao enviar.");
+        if (msg) {
+          msg.textContent = data.message || "Upload concluido.";
+          msg.classList.remove("text-error");
+        }
+        form.reset();
+        if (inputData) inputData.value = "";
+        await loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel);
+        startStatusPolling(() => loadReceitaAnexo10Status(statusBox, submitBtn, viewLabel));
       } catch (err) {
         if (msg) {
           msg.textContent = err.message;
@@ -4819,7 +5676,7 @@
         return;
       }
       if (!fileInput?.files?.length) {
-        if (msg) msg.textContent = "Selecione um arquivo .xlsx.";
+        if (msg) msg.textContent = "Selecione um arquivo .xls, .xlsx ou .csv.";
         return;
       }
       if (loading) loading.style.display = "inline";
@@ -11517,6 +12374,563 @@
     }
   }
 
+  function initRelatorioPlan51() {
+    const table = document.getElementById("plan51-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("plan51-empty");
+    const meta = document.getElementById("plan51-relatorio-meta");
+    const pager = document.getElementById("plan51-pagination");
+    const pageSizeSelect = document.getElementById("plan51-page-size");
+    const btnDownload = document.getElementById("plan51-download");
+    const btnReset = document.getElementById("plan51-reset");
+    const totExercicio = document.getElementById("plan51-tot-exercicio");
+    const totSupl = document.getElementById("plan51-tot-supl");
+    const totAnul = document.getElementById("plan51-tot-anul");
+    const totLiq = document.getElementById("plan51-tot-liquido");
+    const headerRow = document.getElementById("plan51-header-row");
+    const footEl = document.getElementById("plan51-foot");
+    const filterRow = document.getElementById("plan51-filter-row");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const fmtNum = (v) => {
+      const n = Number(v);
+      if (Number.isNaN(n)) return v ?? "";
+      return numFmt.format(n);
+    };
+    const esc = (v) =>
+      String(v ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    // Totais do que está na tela (filtros aplicados); sem filtro = estado inteiro.
+    let exerciciosCarga = [];
+    const updateTotals = (rows) => {
+      let sup = 0;
+      let anu = 0;
+      rows.forEach((r) => {
+        const vs = Number(r.valor_supl || 0);
+        const va = Number(r.valor_anul || 0);
+        if (!Number.isNaN(vs)) sup += vs;
+        if (!Number.isNaN(va)) anu += va;
+      });
+      if (totExercicio) {
+        totExercicio.textContent = exerciciosCarga.length ? exerciciosCarga.join(" * ") : "-";
+      }
+      const setVal = (el, val, sinal) => {
+        if (!el) return;
+        el.textContent = numFmt.format(val);
+        el.classList.remove("pos", "neg");
+        if (sinal && val > 0) el.classList.add("pos");
+        else if (sinal && val < 0) el.classList.add("neg");
+      };
+      setVal(totSupl, sup, false);
+      setVal(totAnul, anu, false);
+      setVal(totLiq, sup - anu, true);
+      renderRodape(sup, anu);
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      if (totalPages <= 1) return;
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          renderFiltered(false);
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+
+      const maxButtons = 5;
+      const start = Math.max(1, Math.min(currentPage - 2, totalPages - maxButtons + 1));
+      const end = Math.min(totalPages, start + maxButtons - 1);
+      for (let p = start; p <= end; p++) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        const m = r.__estilo || 0;
+        tr.innerHTML = columns
+          .map((c, i) => {
+            const cls = p51ClasseCelula(m, c.key, i);
+            return c.numeric
+              ? `<td class="num ${cls}">${fmtNum(r[c.key])}</td>`
+              : `<td${cls ? ` class="${cls}"` : ""}>${esc(r[c.key])}</td>`;
+          })
+          .join("");
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
+    };
+
+    const allData = { rows: [] };
+
+    // Cores da planilha tratada (td_plan51.py, salvar_saida). Cada linha traz uma
+    // máscara de bits (`estilo`, calculada no tratamento e gravada no banco -
+    // services/plan51_runner.py, BIT_*); aqui só se aplicam as mesmas regras,
+    // na mesma ordem do script (a última cor aplicada vence).
+    const P51_BIT = { FLAG15: 0, SUPL: 1, ANUL: 2, SPLIT_ANUL: 3, PROX_FLAG15: 4, SPLIT_BASE: 5, RED_DEF: 18 };
+    const P51_BASES = ["uo", "funcao", "subfuncao", "programa", "paoe", "regiao", "despesa", "cat_e", "gru", "modalidade", "elem", "fonte", "iduso"];
+    const P51_COLS_15 = new Set(["n_fiplan", "decreto", "data_contabil", "n_doe", "tipo_credito"]);
+    const P51_COLS_SUP = new Set(["uo_projeto_ativ_supl", "uo_supl", "funcao_supl", "subfuncao_supl", "programa_supl", "paoe_supl", "regiao_supl"]);
+    const P51_COLS_ANUL = new Set(["uo_projeto_ativ_anul", "uo_anul", "funcao_anul", "subfuncao_anul", "programa_anul", "paoe_anul", "regiao_anul"]);
+    const P51_CABECALHO_AMARELO = new Set([
+      "n_fiplan",
+      "uo_supl", "funcao_supl", "subfuncao_supl", "programa_supl", "paoe_supl", "regiao_supl",
+      "uo_anul", "funcao_anul", "subfuncao_anul", "programa_anul", "paoe_anul", "regiao_anul",
+    ]);
+    const P51_COLUNAS_CENTRALIZADAS = 39; // as colunas calculadas (S)/(A)/(DEF)
+    let p51Pos = { ini: -1, fim: -1, base: {} };
+
+    const p51CalcularPosicoes = () => {
+      const base = {};
+      P51_BASES.forEach((b) => {
+        base[b] = { s: colKeys.indexOf(`${b}_s`), def: colKeys.indexOf(`${b}_def`) };
+      });
+      p51Pos = { ini: colKeys.indexOf("uo_projeto_ativ_anul"), fim: colKeys.indexOf("valor_anul"), base };
+    };
+
+    const p51ClasseCabecalho = (c) => {
+      if (/_def$/.test(c.key) && /\(DEF\)$/.test(c.label)) return "p51-th-def";
+      if (P51_CABECALHO_AMARELO.has(c.key)) return "p51-th-amarelo";
+      if (/\((S|A)\)$/.test(c.label)) return "p51-th-negrito";
+      return "";
+    };
+
+    const p51ClasseCelula = (m, key, i) => {
+      const bit = (n) => (m >> n) & 1;
+      let fundo = "";
+      let fonte = "";
+      if (bit(P51_BIT.FLAG15) && P51_COLS_15.has(key)) {
+        fundo = "p51-f15";
+        fonte = "p51-mag";
+      }
+      if (bit(P51_BIT.PROX_FLAG15) && P51_COLS_15.has(key)) fonte = "p51-mag";
+      if (bit(P51_BIT.SUPL) && P51_COLS_SUP.has(key)) fundo = "p51-sup";
+      if (bit(P51_BIT.ANUL) && P51_COLS_ANUL.has(key)) fundo = "p51-anul";
+      if (bit(P51_BIT.SPLIT_ANUL) && i >= p51Pos.ini && i <= p51Pos.fim) fundo = "p51-cinza";
+      P51_BASES.forEach((b, k) => {
+        if (bit(P51_BIT.SPLIT_BASE + k) && i < p51Pos.base[b].s) fundo = "p51-cinza";
+        if (bit(P51_BIT.RED_DEF + k) && i === p51Pos.base[b].def) fonte = "p51-red";
+      });
+      return [i < P51_COLUNAS_CENTRALIZADAS ? "p51-c" : "", fundo, fonte].filter(Boolean).join(" ");
+    };
+
+    // Linhas de subtotal do rodapé da planilha (SUBTOTAL do Excel: soma só o que
+    // está filtrado), com os rótulos duas colunas antes dos valores, como no script.
+    const renderRodape = (sup, anu) => {
+      if (!footEl || !columns.length) return;
+      const iS = colKeys.indexOf("valor_supl");
+      const iA = colKeys.indexOf("valor_anul");
+      if (iS < 2 || iA < 2) return;
+      const monta = (itens) => {
+        const tds = [];
+        for (let i = 0; i < columns.length; i += 1) {
+          const it = itens[i];
+          if (it && it.rotulo) {
+            tds.push(`<td colspan="2" class="p51-rot">${esc(it.rotulo)}</td>`);
+            i += 1;
+          } else if (it) {
+            tds.push(`<td class="num p51-sub">${numFmt.format(it.valor)}</td>`);
+          } else {
+            tds.push("<td></td>");
+          }
+        }
+        return `<tr>${tds.join("")}</tr>`;
+      };
+      footEl.innerHTML =
+        monta({ [iS - 2]: { rotulo: "SUBTOTAL (SUPLEMENT)" }, [iS]: { valor: sup }, [iA - 2]: { rotulo: "SUBTOTAL (ANULAÇÕES)" }, [iA]: { valor: anu } }) +
+        monta({ [iA - 2]: { rotulo: "SUBTOTAL (LÍQUIDO)" }, [iA]: { valor: sup - anu } });
+    };
+
+    // Colunas vem da API (data.columns), nao ficam mais fixas aqui - ver
+    // PLAN20_RELATORIO_COLUNAS em rotas/home_routes.py (docs/claude.md,
+    // secao 19). initColumnsUI() preenche essas variaveis e o cabecalho
+    // da tabela assim que a resposta chega, antes do primeiro render().
+    let columns = [];
+    let colKeys = [];
+    let filterContainers = [];
+    let filters = {};
+    let filterControls = {};
+
+    const initColumnsUI = (cols) => {
+      columns = Array.isArray(cols) ? cols : [];
+      colKeys = columns.map((c) => c.key);
+      if (headerRow) {
+        headerRow.innerHTML = columns
+          .map((c) => {
+            const cls = p51ClasseCabecalho(c);
+            return `<th${cls ? ` class="${cls}"` : ""}>${esc(c.label)}</th>`;
+          })
+          .join("");
+      }
+      if (filterRow) {
+        filterRow.innerHTML = columns
+          .map((c) => `<th><div class="multi-filter" data-col="${esc(c.key)}"></div></th>`)
+          .join("");
+      }
+      p51CalcularPosicoes();
+      filterContainers = table.querySelectorAll(".filter-row [data-col]");
+      filters = Object.fromEntries(colKeys.map((k) => [k, new Set()]));
+      filterControls = {};
+    };
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((v) => map[v] || v)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      container.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allId = `${key}-all`;
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.id = allId;
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        const allVisibleSelected = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+        selectVisibleCb.checked = allVisibleSelected;
+      };
+
+      const applyTempToFilters = () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((v) => set.add(v));
+        updateDisplay(key);
+        renderFiltered();
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        allCb.checked = tempSelected.size === 0;
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+            allCb.checked = false;
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          const match = txt.textContent.toLowerCase().includes(term);
+          row.style.display = match ? "" : "none";
+        });
+        const allMatch = "(todos)".includes(term) || term === "";
+        allRow.style.display = allMatch ? "" : "none";
+        selectVisibleRow.style.display = "";
+        syncUIFromTemp();
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((v) => tempSelected.add(v));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        applyTempToFilters();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          panel.style.width = "";
+          panel.style.height = "";
+          tempSelected.clear();
+          filters[key].forEach((v) => tempSelected.add(v));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((c) => c.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((r) => {
+        colKeys.forEach((k, idx) => {
+          const v = r[k];
+          if (v !== undefined && v !== null && v !== "") uniques[idx].add(String(v));
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx]).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((r) =>
+        colKeys.every((k) => {
+          const set = filters[k];
+          if (!set || set.size === 0) return true;
+          const val = r[k];
+          const cmp = val === null || val === undefined ? "" : String(val).toLowerCase();
+          return set.has(cmp);
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/plan51");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        initColumnsUI(data.columns);
+        exerciciosCarga = data.exercicios || [];
+        const chaves = (data.columns || []).map((c) => c.key);
+        const estilos = data.estilos || [];
+        allData.rows = (data.rows || []).map((linha, idx) => {
+          const obj = { __estilo: Number(estilos[idx] || 0) };
+          chaves.forEach((k, i) => {
+            obj[k] = linha[i];
+          });
+          return obj;
+        });
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        render();
+        renderUltimasAtualizacoes(meta, data);
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    load();
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        Object.keys(filters).forEach((k) => filters[k].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        const val = parseInt(pageSizeSelect.value || "20", 10);
+        pageSize = Number.isNaN(val) ? 20 : val;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/plan51/download", "_blank");
+      });
+    }
+  }
+
   function initRelatorioPlan21Nger() {
     const table = document.getElementById("plan21-relatorio-tabela");
     const tbody = table ? table.querySelector("tbody") : null;
@@ -14170,6 +15584,520 @@
         closeAllPanels();
         aplicarUoPadrao();
         renderFiltered();
+      });
+    }
+
+    if (!multiFilterClickBound) {
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest(".mf-wrapper")) {
+          closeAllPanels();
+        }
+      });
+      multiFilterClickBound = true;
+    }
+
+    load();
+  }
+
+  function initRelatorioReceitaAnexo10() {
+    const table = document.getElementById("receita-anexo10-relatorio-tabela");
+    const tbody = table ? table.querySelector("tbody") : null;
+    const emptyState = document.getElementById("receita-anexo10-empty");
+    const meta = document.getElementById("receita-anexo10-relatorio-meta");
+    const pager = document.getElementById("receita-anexo10-pagination");
+    const pageSizeSelect = document.getElementById("receita-anexo10-page-size");
+    const btnDownload = document.getElementById("receita-anexo10-download");
+    const btnReset = document.getElementById("receita-anexo10-reset");
+    const totRegistros = document.getElementById("receita-anexo10-tot-registros");
+    const totArquivos = document.getElementById("receita-anexo10-tot-arquivos");
+    const totFontes = document.getElementById("receita-anexo10-tot-fontes");
+    const totCompetencias = document.getElementById("receita-anexo10-tot-competencias");
+    const totOrcado = document.getElementById("receita-anexo10-tot-orcado");
+    const totArrecadada = document.getElementById("receita-anexo10-tot-arrecadada");
+    const totMais = document.getElementById("receita-anexo10-tot-mais");
+    const totMenos = document.getElementById("receita-anexo10-tot-menos");
+    if (!table || !tbody) return;
+    if (table.dataset.bound === "1") return;
+    table.dataset.bound = "1";
+
+    let pageSize = parseInt(pageSizeSelect?.value || "20", 10) || 20;
+    let currentPage = 1;
+    let filteredRows = [];
+    const allData = { rows: [] };
+
+    const numFmt = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+    const fmtNum = (v) => {
+      const n = Number(v || 0);
+      if (Number.isNaN(n)) return "";
+      return numFmt.format(n);
+    };
+    const esc = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const colKeys = [
+      "competencia",
+      "exercicio",
+      "mes",
+      "fonte_recurso",
+      "cod_uo",
+      "uo",
+      "tipo_carga",
+      "mes_fechado_label",
+      "situacao_movimentacao",
+      "codigo_receita",
+      "descricao_receita",
+      "orcado_atualizado",
+      "arrecadada",
+      "diferenca_para_mais",
+      "diferenca_para_menos",
+      "original_filename",
+      "formato_detectado",
+      "arquivo_status",
+      "linha_origem",
+      "pagina_origem",
+      "upload_id",
+      "user_email",
+      "data_arquivo_fmt",
+      "uploaded_at_fmt",
+    ];
+
+    const filterContainers = table.querySelectorAll(".filter-row [data-col]");
+    const filters = Object.fromEntries(colKeys.map((key) => [key, new Set()]));
+    const filterControls = {};
+
+    const closeAllPanels = () => {
+      Object.values(filterControls).forEach((ctrl) => {
+        if (ctrl?.panel) ctrl.panel.classList.remove("open");
+      });
+    };
+
+    const filterValue = (row, key) => {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") return "";
+      if (["orcado_atualizado", "arrecadada", "diferenca_para_mais", "diferenca_para_menos"].includes(key)) {
+        return fmtNum(value);
+      }
+      return String(value);
+    };
+
+    const updateDisplay = (key) => {
+      const set = filters[key] || new Set();
+      const ctrl = filterControls[key];
+      if (!ctrl) return;
+      const map = ctrl.labelMap || {};
+      if (ctrl.allCb) ctrl.allCb.checked = set.size === 0;
+      (ctrl.optionCbs || []).forEach((cb) => {
+        cb.checked = set.has(cb.dataset.val || "");
+      });
+      if (set.size === 0) {
+        ctrl.label.textContent = "(Todos)";
+      } else if (set.size <= 2) {
+        ctrl.label.textContent = Array.from(set)
+          .map((value) => map[value] || value)
+          .join(", ");
+      } else {
+        ctrl.label.textContent = `${set.size} selecionados`;
+      }
+    };
+
+    const buildFilter = (container, options, key) => {
+      const wrap = document.createElement("div");
+      wrap.className = "mf-wrapper";
+      const display = document.createElement("button");
+      display.type = "button";
+      display.className = "mf-display";
+      const label = document.createElement("span");
+      label.textContent = "(Todos)";
+      display.appendChild(label);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-chevron-down";
+      display.appendChild(icon);
+
+      const panel = document.createElement("div");
+      panel.className = "mf-panel";
+      const search = document.createElement("input");
+      search.type = "text";
+      search.className = "mf-search";
+      search.placeholder = "Buscar...";
+      const list = document.createElement("div");
+      list.className = "mf-options";
+
+      const tempSelected = new Set(filters[key] || []);
+      const allRow = document.createElement("label");
+      allRow.className = "mf-option";
+      const allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.dataset.val = "";
+      allRow.appendChild(allCb);
+      const allSpan = document.createElement("span");
+      allSpan.textContent = "(Todos)";
+      allRow.appendChild(allSpan);
+      list.appendChild(allRow);
+
+      const selectVisibleRow = document.createElement("label");
+      selectVisibleRow.className = "mf-option mf-select-visible";
+      const selectVisibleCb = document.createElement("input");
+      selectVisibleCb.type = "checkbox";
+      selectVisibleRow.appendChild(selectVisibleCb);
+      const selectVisibleSpan = document.createElement("span");
+      selectVisibleSpan.textContent = "Selecionar exibidos";
+      selectVisibleRow.appendChild(selectVisibleSpan);
+      list.appendChild(selectVisibleRow);
+
+      const cbs = [];
+      const labelMap = {};
+      options.forEach((opt) => {
+        const row = document.createElement("label");
+        row.className = "mf-option";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const norm = String(opt || "").toLowerCase();
+        cb.dataset.val = norm;
+        labelMap[norm] = opt;
+        row.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = opt;
+        row.appendChild(txt);
+        list.appendChild(row);
+        cbs.push({ cb, txt, row, val: norm });
+      });
+
+      const syncUIFromTemp = () => {
+        allCb.checked = tempSelected.size === 0;
+        cbs.forEach(({ cb, val }) => {
+          cb.checked = tempSelected.has(val);
+        });
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      };
+
+      const closePanel = () => panel.classList.remove("open");
+
+      allCb.addEventListener("change", () => {
+        if (allCb.checked) {
+          tempSelected.clear();
+          syncUIFromTemp();
+        }
+      });
+
+      selectVisibleCb.addEventListener("change", () => {
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        if (selectVisibleCb.checked) {
+          visible.forEach(({ val }) => tempSelected.add(val));
+        } else {
+          visible.forEach(({ val }) => tempSelected.delete(val));
+        }
+        syncUIFromTemp();
+      });
+
+      cbs.forEach(({ cb, val }) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tempSelected.add(val);
+          } else {
+            tempSelected.delete(val);
+          }
+          syncUIFromTemp();
+        });
+      });
+
+      search.addEventListener("input", () => {
+        const term = search.value.toLowerCase();
+        cbs.forEach(({ row, txt }) => {
+          row.style.display = txt.textContent.toLowerCase().includes(term) ? "" : "none";
+        });
+        allRow.style.display = "(todos)".includes(term) || term === "" ? "" : "none";
+        selectVisibleRow.style.display = "";
+        const visible = cbs.filter(({ row }) => row.style.display !== "none");
+        selectVisibleCb.checked = visible.length > 0 && visible.every(({ cb }) => cb.checked);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "mf-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "mf-btn ghost";
+      cancelBtn.textContent = "Cancelar";
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mf-btn primary";
+      applyBtn.textContent = "Aplicar";
+
+      cancelBtn.addEventListener("click", () => {
+        tempSelected.clear();
+        filters[key].forEach((value) => tempSelected.add(value));
+        syncUIFromTemp();
+        closePanel();
+      });
+      applyBtn.addEventListener("click", () => {
+        const set = filters[key];
+        set.clear();
+        tempSelected.forEach((value) => set.add(value));
+        updateDisplay(key);
+        renderFiltered();
+        closePanel();
+      });
+
+      display.addEventListener("click", () => {
+        const isOpen = panel.classList.contains("open");
+        closeAllPanels();
+        if (!isOpen) {
+          tempSelected.clear();
+          filters[key].forEach((value) => tempSelected.add(value));
+          cbs.forEach(({ row }) => (row.style.display = ""));
+          allRow.style.display = "";
+          search.value = "";
+          syncUIFromTemp();
+          panel.classList.add("open");
+        }
+      });
+
+      container.innerHTML = "";
+      wrap.appendChild(display);
+      panel.appendChild(search);
+      panel.appendChild(list);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(applyBtn);
+      panel.appendChild(actions);
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+
+      filterControls[key] = {
+        panel,
+        label,
+        allCb,
+        optionCbs: cbs.map((item) => item.cb),
+        labelMap,
+      };
+      updateDisplay(key);
+    };
+
+    const setOptions = (rows = allData.rows) => {
+      closeAllPanels();
+      const uniques = colKeys.map(() => new Set());
+      (rows || []).forEach((row) => {
+        colKeys.forEach((key, idx) => {
+          const value = filterValue(row, key);
+          uniques[idx].add(value);
+        });
+      });
+      filterContainers.forEach((container) => {
+        const key = container.getAttribute("data-col");
+        const idx = colKeys.indexOf(key);
+        if (idx === -1) return;
+        const opts = Array.from(uniques[idx])
+          .filter((value) => value !== "")
+          .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+        buildFilter(container, opts, key);
+      });
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = "";
+      const addBtn = (label, page, disabled = false, active = false) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "page-btn";
+        b.textContent = label;
+        if (disabled) b.disabled = true;
+        if (active) b.classList.add("active");
+        b.addEventListener("click", () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          render();
+        });
+        pager.appendChild(b);
+      };
+      addBtn("<<", 1, currentPage === 1);
+      addBtn("<", Math.max(1, currentPage - 1), currentPage === 1);
+      const maxButtons = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) start = Math.max(1, end - maxButtons + 1);
+      if (start > 1) {
+        addBtn("1", 1, false, currentPage === 1);
+        if (start > 2) {
+          const ellipsis = document.createElement("span");
+          ellipsis.textContent = "...";
+          pager.appendChild(ellipsis);
+        }
+      }
+      for (let p = start; p <= end; p += 1) {
+        addBtn(String(p), p, false, p === currentPage);
+      }
+      if (end < totalPages) {
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
+        pager.appendChild(ellipsis);
+        addBtn(String(totalPages), totalPages, false, currentPage === totalPages);
+      }
+      addBtn(">", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      addBtn(">>", totalPages, currentPage === totalPages);
+    };
+
+    const updateTotals = (rows) => {
+      const arquivos = new Set();
+      const fontes = new Set();
+      const competencias = new Set();
+      let orcado = 0;
+      let arrecadada = 0;
+      let mais = 0;
+      let menos = 0;
+      rows.forEach((row) => {
+        if (row.original_filename) arquivos.add(row.original_filename);
+        if (row.fonte_recurso) fontes.add(row.fonte_recurso);
+        if (row.competencia) competencias.add(row.competencia);
+        if (row.tipo_linha !== "sem_movimentacao") {
+          orcado += Number(row.orcado_atualizado || 0);
+          arrecadada += Number(row.arrecadada || 0);
+          mais += Number(row.diferenca_para_mais || 0);
+          menos += Number(row.diferenca_para_menos || 0);
+        }
+      });
+      if (totRegistros) {
+        totRegistros.textContent = intFmt.format(rows.filter((row) => row.tipo_linha !== "sem_movimentacao").length);
+      }
+      if (totArquivos) totArquivos.textContent = intFmt.format(arquivos.size);
+      if (totFontes) totFontes.textContent = intFmt.format(fontes.size);
+      if (totCompetencias) {
+        totCompetencias.textContent = competencias.size
+          ? Array.from(competencias).sort((a, b) => a.localeCompare(b, "pt-BR")).join(" | ")
+          : "-";
+      }
+      if (totOrcado) totOrcado.textContent = fmtNum(orcado);
+      if (totArrecadada) totArrecadada.textContent = fmtNum(arrecadada);
+      if (totMais) totMais.textContent = fmtNum(mais);
+      if (totMenos) totMenos.textContent = fmtNum(menos);
+    };
+
+    const render = () => {
+      const rows = filteredRows;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      tbody.innerHTML = "";
+      pageRows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(r.competencia)}</td>
+          <td>${esc(r.exercicio)}</td>
+          <td>${esc(r.mes)}</td>
+          <td>${esc(r.fonte_recurso)}</td>
+          <td>${esc(r.cod_uo)}</td>
+          <td>${esc(r.uo)}</td>
+          <td>${esc(r.tipo_carga)}</td>
+          <td>${esc(r.mes_fechado_label)}</td>
+          <td>${esc(r.situacao_movimentacao)}</td>
+          <td>${esc(r.codigo_receita)}</td>
+          <td>${esc(r.descricao_receita)}</td>
+          <td class="num">${fmtNum(r.orcado_atualizado)}</td>
+          <td class="num">${fmtNum(r.arrecadada)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_mais)}</td>
+          <td class="num">${fmtNum(r.diferenca_para_menos)}</td>
+          <td>${esc(r.original_filename)}</td>
+          <td>${esc(r.formato_detectado)}</td>
+          <td>${esc(r.arquivo_status)}</td>
+          <td>${esc(r.linha_origem)}</td>
+          <td>${esc(r.pagina_origem)}</td>
+          <td>${esc(r.upload_id)}</td>
+          <td>${esc(r.user_email)}</td>
+          <td>${esc(r.data_arquivo_fmt)}</td>
+          <td>${esc(r.uploaded_at_fmt)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      renderPagination(totalPages);
+      updateTotals(rows);
+      toggleReportEmptyState({
+        tableEl: table,
+        emptyEl: emptyState,
+        btnDownloadEl: btnDownload,
+        pagerEl: pager,
+        hasRows: rows.length > 0,
+      });
+    };
+
+    const renderFiltered = (resetPage = true) => {
+      const filtered = allData.rows.filter((row) =>
+        colKeys.every((key) => {
+          const selected = filters[key];
+          if (!selected || selected.size === 0) return true;
+          return selected.has(filterValue(row, key).toLowerCase());
+        })
+      );
+      setOptions(filtered);
+      filteredRows = filtered;
+      if (resetPage) currentPage = 1;
+      render();
+    };
+
+    const load = async () => {
+      if (meta) meta.textContent = "Carregando...";
+      try {
+        const res = await fetch("/api/relatorios/receita-anexo10");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao carregar.");
+        allData.rows = (data.data || []).map((row) => ({
+          ...row,
+          data_arquivo_fmt: formatAmazonLocalTime(row.data_arquivo),
+          uploaded_at_fmt: formatAmazonTime(row.uploaded_at),
+        }));
+        filteredRows = allData.rows;
+        setOptions(allData.rows);
+        render();
+        if (meta) {
+          const dt = formatAmazonLocalTime(data.data_arquivo);
+          const user = data.user_email || "-";
+          const uploaded = formatAmazonTime(data.uploaded_at);
+          meta.innerHTML = `
+            <div><strong>Última atualização</strong></div>
+            <div>Enviado por: ${esc(user)}</div>
+            <div>Upload em: ${esc(uploaded)}</div>
+            <div>Data do download: ${esc(dt)}</div>
+            <div>Arquivos: ${esc(data.total_arquivos ?? 0)} | Registros: ${esc(data.total_registros ?? 0)} | Alertas: ${esc(data.total_alertas ?? 0)} | Erros: ${esc(data.total_erros ?? 0)}</div>
+          `;
+        }
+      } catch (err) {
+        if (meta) meta.textContent = err.message;
+        console.error(err);
+      }
+    };
+
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener("change", () => {
+        pageSize = parseInt(pageSizeSelect.value || "20", 10) || 20;
+        currentPage = 1;
+        render();
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.addEventListener("click", () => {
+        window.open("/api/relatorios/receita-anexo10/download", "_blank");
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener("click", () => {
+        closeAllPanels();
+        Object.keys(filters).forEach((key) => filters[key].clear());
+        setOptions(allData.rows);
+        filteredRows = allData.rows;
+        currentPage = 1;
+        render();
       });
     }
 
@@ -18471,306 +20399,6 @@
     load();
   }
 
-  function initNotasSee() {
-    const root = document.getElementById("see-page");
-    if (!root || root.dataset.bound === "1") return;
-    root.dataset.bound = "1";
-    const catalogSelect = document.getElementById("see-catalog-select");
-    const catalogForm = document.getElementById("see-catalog-form");
-    const productForm = document.getElementById("see-product-form");
-    const productsWrap = document.getElementById("see-products-wrap");
-    const productsBody = document.getElementById("see-products-body");
-    const processForm = document.getElementById("see-process-form");
-    const processCatalogId = document.getElementById("see-process-catalog-id");
-    const folderInput = document.getElementById("see-folder-input");
-    const filesInput = document.getElementById("see-files-input");
-    const submit = document.getElementById("see-process-submit");
-    const catalogMsg = document.getElementById("see-catalog-msg");
-    const processMsg = document.getElementById("see-process-msg");
-    const progressCard = document.getElementById("see-progress-card");
-    const appendChoice = document.getElementById("see-append-choice");
-    const processingMeta = document.getElementById("see-processing-meta");
-    const seeGrid = root.querySelector(".see-grid");
-    const uploadCard = processForm.closest(".see-card");
-    if (seeGrid && uploadCard && progressCard) {
-      const processColumn = document.createElement("div");
-      processColumn.className = "see-process-column";
-      seeGrid.insertBefore(processColumn, uploadCard);
-      processColumn.append(uploadCard, progressCard);
-    }
-    let catalogs = [];
-    let jobId = null;
-    let pollTimer = null;
-    let lastProcessing = null;
-
-    const escapeHtml = (value) => String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-
-    const selectedCatalog = () => catalogs.find((item) => String(item.id) === String(catalogSelect.value));
-    const setMessage = (el, message, error = false) => {
-      if (!el) return;
-      el.textContent = message || "";
-      el.classList.toggle("text-error", error);
-    };
-    const clearVisibleErrors = () => {
-      [catalogMsg, processMsg].forEach((el) => {
-        if (el?.classList.contains("text-error")) setMessage(el, "");
-      });
-    };
-    root.addEventListener("input", clearVisibleErrors);
-    root.addEventListener("change", clearVisibleErrors);
-    root.addEventListener("click", clearVisibleErrors);
-    const requestJson = async (url, options = {}) => {
-      const { headers = {}, ...rest } = options;
-      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
-      return data;
-    };
-    const renderProducts = () => {
-      const catalog = selectedCatalog();
-      processCatalogId.value = catalog ? catalog.id : "";
-      document.getElementById("see-catalog-edit").disabled = !catalog;
-      document.getElementById("see-catalog-delete").disabled = !catalog;
-      productsWrap.hidden = !catalog;
-      productForm.hidden = true;
-      productsBody.innerHTML = catalog ? catalog.produtos.map((product) => `
-        <tr>
-          <td>${escapeHtml(product.codigo)}</td><td>${escapeHtml(product.nome)}</td>
-          <td class="see-row-actions"><button class="icon-btn sm see-product-edit" data-id="${product.id}" title="Editar"><i class="bi bi-pencil"></i></button><button class="icon-btn sm see-product-delete" data-id="${product.id}" title="Remover"><i class="bi bi-trash"></i></button></td>
-        </tr>`).join("") : "";
-      updateSelection();
-    };
-    const loadCatalogs = async (keepId = "") => {
-      const data = await requestJson("/api/notas-see/catalogos");
-      catalogs = data.catalogos || [];
-      catalogSelect.innerHTML = '<option value="">Selecione</option>' + catalogs.filter((item) => item.ativo).map((item) => `<option value="${item.id}">${escapeHtml(item.nome)} (${item.produtos.length})</option>`).join("");
-      if (keepId && catalogs.some((item) => String(item.id) === String(keepId))) catalogSelect.value = String(keepId);
-      renderProducts();
-    };
-    const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
-    function updateSelection() {
-      const files = selectedFiles();
-      const size = files.reduce((total, file) => total + file.size, 0);
-      document.getElementById("see-selection-summary").textContent = files.length
-        ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
-        : "Nenhum PDF selecionado.";
-      const catalog = selectedCatalog();
-      const processingActive = lastProcessing
-        && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
-      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
-      const canAppend = lastProcessing
-        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
-        && String(lastProcessing.catalog_id) === String(catalog?.id);
-      appendChoice.hidden = !canAppend;
-    }
-
-    catalogSelect.addEventListener("change", async () => {
-      renderProducts();
-      if (pollTimer) clearTimeout(pollTimer);
-      pollTimer = null;
-      jobId = null;
-      lastProcessing = null;
-      progressCard.hidden = true;
-      appendChoice.hidden = true;
-      processingMeta.innerHTML = "";
-      if (catalogSelect.value) await restoreLastProcessing(catalogSelect.value);
-    });
-    folderInput.addEventListener("click", () => {
-      filesInput.value = "";
-      updateSelection();
-    });
-    filesInput.addEventListener("click", () => {
-      folderInput.value = "";
-      updateSelection();
-    });
-    folderInput.addEventListener("change", () => {
-      filesInput.value = "";
-      updateSelection();
-    });
-    filesInput.addEventListener("change", () => {
-      folderInput.value = "";
-      updateSelection();
-    });
-    document.getElementById("see-catalog-new").addEventListener("click", () => {
-      catalogForm.reset();
-      document.getElementById("see-catalog-id").value = "";
-      catalogForm.hidden = false;
-      document.getElementById("see-catalog-name").focus();
-    });
-    document.getElementById("see-catalog-form-cancel").addEventListener("click", () => { catalogForm.reset(); catalogForm.hidden = true; });
-    document.getElementById("see-catalog-edit").addEventListener("click", () => {
-      const catalog = selectedCatalog();
-      if (!catalog) return;
-      document.getElementById("see-catalog-id").value = catalog.id;
-      document.getElementById("see-catalog-name").value = catalog.nome;
-      document.getElementById("see-catalog-description").value = catalog.descricao || "";
-      catalogForm.hidden = false;
-    });
-    document.getElementById("see-catalog-delete").addEventListener("click", async () => {
-      const catalog = selectedCatalog();
-      if (!catalog || !confirm(`Desativar o catálogo ${catalog.nome}?`)) return;
-      try { await requestJson(`/api/notas-see/catalogos/${catalog.id}`, { method: "DELETE" }); await loadCatalogs(); setMessage(catalogMsg, "Catálogo desativado."); }
-      catch (error) { setMessage(catalogMsg, error.message, true); }
-    });
-    catalogForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      try {
-        const catalogId = document.getElementById("see-catalog-id").value;
-        const data = await requestJson(catalogId ? `/api/notas-see/catalogos/${catalogId}` : "/api/notas-see/catalogos", { method: catalogId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: document.getElementById("see-catalog-name").value, descricao: document.getElementById("see-catalog-description").value, ativo: true }) });
-        catalogForm.reset(); catalogForm.hidden = true; await loadCatalogs(data.catalogo.id); setMessage(catalogMsg, "Catálogo salvo.");
-      } catch (error) { setMessage(catalogMsg, error.message, true); }
-    });
-    document.getElementById("see-product-add").addEventListener("click", () => { productForm.reset(); document.getElementById("see-product-id").value = ""; productForm.hidden = false; document.getElementById("see-product-code").focus(); });
-    document.getElementById("see-product-cancel").addEventListener("click", () => { productForm.reset(); productForm.hidden = true; });
-    productForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const catalog = selectedCatalog();
-      if (!catalog) return;
-      const productId = document.getElementById("see-product-id").value;
-      const payload = { codigo: document.getElementById("see-product-code").value, nome: document.getElementById("see-product-name").value };
-      try {
-        await requestJson(productId ? `/api/notas-see/produtos/${productId}` : `/api/notas-see/catalogos/${catalog.id}/produtos`, { method: productId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        productForm.reset(); productForm.hidden = true; await loadCatalogs(catalog.id); setMessage(catalogMsg, "Produto salvo.");
-      } catch (error) { setMessage(catalogMsg, error.message, true); }
-    });
-    productsBody.addEventListener("click", async (event) => {
-      const edit = event.target.closest(".see-product-edit");
-      const remove = event.target.closest(".see-product-delete");
-      const catalog = selectedCatalog();
-      if (edit && catalog) {
-        const product = catalog.produtos.find((item) => String(item.id) === edit.dataset.id);
-        if (!product) return;
-        document.getElementById("see-product-id").value = product.id;
-        document.getElementById("see-product-code").value = product.codigo;
-        document.getElementById("see-product-name").value = product.nome;
-        productForm.hidden = false;
-      }
-      if (remove && catalog && confirm("Remover este produto do catálogo?")) {
-        try { await requestJson(`/api/notas-see/produtos/${remove.dataset.id}`, { method: "DELETE" }); await loadCatalogs(catalog.id); }
-        catch (error) { setMessage(catalogMsg, error.message, true); }
-      }
-    });
-
-    const renderStatus = (data) => {
-      lastProcessing = data;
-      progressCard.hidden = false;
-      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
-      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
-      document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
-      document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
-      document.getElementById("see-stat-success").textContent = data.success;
-      document.getElementById("see-stat-warning").textContent = data.warnings;
-      document.getElementById("see-stat-error").textContent = data.errors;
-      document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
-      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
-      document.getElementById("see-download").hidden = !data.download_ready;
-      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
-      const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
-      const updateSummary = data.initial_count
-        ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
-        : `<span><strong>${data.total ?? 0}</strong>Total do processamento</span>`;
-      const ignoredSummary = data.ignored_count
-        ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
-        : "";
-      processingMeta.innerHTML = `
-        <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
-        <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
-        <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
-        ${updateSummary}
-        ${ignoredSummary}`;
-      updateSelection();
-    };
-    const poll = async () => {
-      if (!jobId) return;
-      try {
-        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
-        renderStatus(data);
-        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
-          pollTimer = setTimeout(poll, 1000);
-        } else {
-          updateSelection();
-        }
-      } catch (error) { setMessage(processMsg, error.message, true); }
-    };
-    const restoreLastProcessing = async (catalogId) => {
-      if (!catalogId) return;
-      const requestedCatalogId = String(catalogId);
-      try {
-        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
-        if (String(catalogSelect.value) !== requestedCatalogId) return;
-        if (!data.job_id) return;
-        jobId = data.job_id;
-        await poll();
-      } catch (error) {
-        setMessage(processMsg, error.message, true);
-      }
-    };
-    processForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!processForm.reportValidity() || submit.disabled) return;
-      submit.disabled = true; setMessage(processMsg, "Enviando PDFs...");
-      try {
-        const formData = new FormData();
-        formData.append("catalogo_id", catalogSelect.value);
-        const appendMode = appendChoice.hidden
-          ? "novo"
-          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
-        formData.append("append_mode", appendMode);
-        if (appendMode === "acrescentar" && lastProcessing?.id) formData.append("base_job_id", lastProcessing.id);
-        selectedFiles().forEach((file) => formData.append("pdfs", file, file.webkitRelativePath || file.name));
-        const data = await requestJson("/api/notas-see/processamentos", { method: "POST", body: formData });
-        jobId = data.job_id;
-        setMessage(processMsg, data.message);
-        progressCard.hidden = false;
-        renderStatus({
-          id: data.job_id,
-          status: "na_fila",
-          message: data.message || "Processamento colocado na fila.",
-          progress: 0,
-          processed: 0,
-          total: data.total || selectedFiles().length,
-          success: 0,
-          warnings: 0,
-          errors: 0,
-          duration: 0,
-          files: [
-            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
-            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
-          ],
-          catalog_id: Number(catalogSelect.value),
-          catalog_name: selectedCatalog()?.nome,
-          executed_by: lastProcessing?.executed_by,
-          created_at: new Date().toISOString(),
-          initial_count: data.initial || 0,
-          added_count: data.added || selectedFiles().length,
-          ignored_count: data.ignored_count || 0,
-        });
-        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        poll();
-      } catch (error) { setMessage(processMsg, error.message, true); submit.disabled = false; }
-    });
-    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
-    document.getElementById("see-download").addEventListener("click", async () => {
-      if (!jobId) return;
-      const url = `/api/notas-see/processamentos/${jobId}/download`;
-      if (!("showSaveFilePicker" in window)) { window.location.href = url; return; }
-      try {
-        const response = await fetch(url, { headers: { "X-Requested-With": "fetch" } });
-        if (!response.ok) throw new Error("Falha ao baixar o arquivo Excel.");
-        const handle = await window.showSaveFilePicker({ suggestedName: `notas_see_${jobId}.xlsx`, types: [{ description: "Planilha Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
-        const writable = await handle.createWritable();
-        await writable.write(await response.blob());
-        await writable.close();
-      } catch (error) { if (error.name !== "AbortError") setMessage(processMsg, error.message, true); }
-    });
-    loadCatalogs().catch((error) => setMessage(catalogMsg, error.message, true));
-  }
-
   function initGovernancaSemanticFlows() {
     const panels = Array.from(document.querySelectorAll("[data-governanca-flow-panel]"));
     if (!panels.length) return;
@@ -18883,9 +20511,76 @@
     });
   }
 
+  function initSegurancaSessao() {
+    const form = document.getElementById("form-sessao");
+    if (!form) return;
+    const input = document.getElementById("sessao-minutos");
+    const equivale = document.getElementById("sessao-equivale");
+    const msg = document.getElementById("sessao-msg");
+    const btn = document.getElementById("sessao-salvar");
+    const auditoria = document.getElementById("sessao-auditoria");
+    const min = Number(form.dataset.min);
+    const max = Number(form.dataset.max);
+    const padrao = Number(form.dataset.padrao);
+
+    function formatar(minutos) {
+      if (!Number.isFinite(minutos) || minutos <= 0) return "";
+      const h = Math.floor(minutos / 60);
+      const m = minutos % 60;
+      if (!h) return `${m} minuto(s)`;
+      return m ? `${h} hora(s) e ${m} minuto(s)` : `${h} hora(s)`;
+    }
+    function atualizarEquivale() {
+      equivale.textContent = formatar(Number(input.value));
+    }
+    input.addEventListener("input", atualizarEquivale);
+    atualizarEquivale();
+
+    document.getElementById("sessao-padrao")?.addEventListener("click", () => {
+      input.value = padrao;
+      atualizarEquivale();
+    });
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const minutos = Number(input.value);
+      if (!Number.isInteger(minutos) || minutos < min || minutos > max) {
+        msg.textContent = `Informe um valor entre ${min} e ${max} minutos.`;
+        return;
+      }
+      btn.disabled = true;
+      msg.textContent = "Salvando...";
+      try {
+        const res = await fetch("/api/configuracoes/sessao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          body: JSON.stringify({ minutos }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          msg.textContent = data.error || "Não foi possível salvar.";
+          return;
+        }
+        input.value = data.minutos;
+        atualizarEquivale();
+        msg.textContent = "Salvo. Tempo de inatividade: " + formatar(data.minutos) + ".";
+        if (auditoria && data.atualizado_em) {
+          auditoria.textContent = `Última alteração: ${data.atualizado_em}${data.atualizado_por ? " por " + data.atualizado_por : ""}.`;
+        }
+      } catch (err) {
+        msg.textContent = "Falha de comunicação ao salvar.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   function initRoute(route) {
     if (route === "dashboard") {
       initDashboard();
+    }
+    if (route === "atualizar/seguranca-sessao") {
+      initSegurancaSessao();
     }
     if (
       route === "atualizar/personalizar-spo/temas" ||
@@ -18930,11 +20625,17 @@
     if (route === "atualizar/fip613") {
       initFip613();
     }
+    if (route === "atualizar/plan51") {
+      initPlan51();
+    }
     if (route === "atualizar/ped") {
       initPed();
     }
     if (route === "atualizar/emp") {
       initEmp();
+    }
+    if (route === "atualizar/receita-anexo10") {
+      initReceitaAnexo10();
     }
     if (route === "atualizar/est-emp") {
       initEstEmp();
@@ -19002,11 +20703,17 @@
     if (route === "relatorios/nob") {
       initRelatorioNob();
     }
+    if (route === "relatorios/receita-anexo10") {
+      initRelatorioReceitaAnexo10();
+    }
     if (route === "relatorios/ped") {
       initRelatorioPed();
     }
     if (route === "relatorios/plan20-seduc") {
       initRelatorioPlan20();
+    }
+    if (route === "relatorios/plan51") {
+      initRelatorioPlan51();
     }
     if (route === "relatorios/plan21-nger") {
       initRelatorioPlan21Nger();
@@ -25917,8 +27624,6 @@
       if (!link) return;
       const externalUrl = link.getAttribute("data-external-url");
       if (externalUrl) {
-        ev.preventDefault();
-        window.open(externalUrl, "_blank", "noopener,noreferrer");
         return;
       }
       ev.preventDefault();
