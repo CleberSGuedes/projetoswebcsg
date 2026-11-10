@@ -873,9 +873,10 @@
   }
 
   function canManageProtectedContract() {
-    const user = getProtectedContractUser();
-    const token = normalizeContractUser(`${user.name} ${user.email}`);
-    return token.includes("jean") || token.includes("cleber");
+    // Quem controla o acesso é o servidor (feature atualizar/personalizar-spo/contrato-visual-protegido,
+    // liberada no Painel - Permissões; o admin sempre passa). Antes havia uma trava fixa por nome/e-mail
+    // ("jean"/"cleber") que escondia a tela de qualquer outro usuário, inclusive do admin.
+    return true;
   }
 
   function getProtectedContractPresetKey(key) {
