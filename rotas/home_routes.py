@@ -1001,7 +1001,13 @@ def partial_dashboard():
         except Exception:
             pass
     # Card Status da Início: controlado pela permissão "dashboard/card-status" (Painel de Permissões).
-    can_view_sessions = has_permission("dashboard/card-status")
+    try:
+        can_view_sessions = has_permission("dashboard/card-status")
+    except Exception:
+        # Um card opcional nunca pode derrubar a tela Início (falha de conexao esgotou o retry).
+        db.session.rollback()
+        can_view_sessions = False
+        current_app.logger.warning("card-status: falha ao checar permissao, card oculto", exc_info=True)
     active_sessions = []
     if can_view_sessions:
         cutoff = datetime.utcnow() - get_session_timeout()
@@ -1424,6 +1430,27 @@ def _current_usuario_id() -> int | None:
         session["user"] = user_session
         return int(usuario_id)
     return None
+def _db_retry(fn, attempts: int = 3, backoff_s: float = 0.2):
+    """Repete uma consulta que falhou por instabilidade de conexao (ver docs/claude.md, secao 13).
+
+    Logo apos reiniciar o servidor, a primeira consulta numa conexao recem-aberta pode
+    falhar com ResourceClosedError/OperationalError e funciona na tentativa seguinte.
+    """
+    import time as _time
+
+    for idx in range(max(1, attempts)):
+        try:
+            return fn()
+        except (ResourceClosedError, OperationalError, NoSuchColumnError, IndexError):
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            if idx >= attempts - 1:
+                raise
+            _time.sleep(backoff_s * (idx + 1))
+
+
 def has_permission(feature: str) -> bool:
     # Administrador (nível 1) passa em tudo: telas novas não dependem de marcar no painel.
     if getattr(g, "user_nivel", None) == 1:
@@ -1439,13 +1466,15 @@ def has_permission(feature: str) -> bool:
         try:
             overrides = [
                 row[0]
-                for row in db.session.query(UsuarioPermissao.permitido)
-                .filter(
-                    UsuarioPermissao.usuario_id == usuario_id,
-                    UsuarioPermissao.feature.in_(equivalent_features),
-                    UsuarioPermissao.ativo == True,  # noqa: E712
+                for row in _db_retry(
+                    lambda: db.session.query(UsuarioPermissao.permitido)
+                    .filter(
+                        UsuarioPermissao.usuario_id == usuario_id,
+                        UsuarioPermissao.feature.in_(equivalent_features),
+                        UsuarioPermissao.ativo == True,  # noqa: E712
+                    )
+                    .all()
                 )
-                .all()
             ]
             if overrides:
                 return any(bool(item) for item in overrides)
@@ -1453,8 +1482,8 @@ def has_permission(feature: str) -> bool:
             db.session.rollback()
     try:
         if perfil_id:
-            exists = (
-                db.session.query(PerfilPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(PerfilPermissao.id)
                 .filter(
                     PerfilPermissao.perfil_id == perfil_id,
                     PerfilPermissao.feature.in_(equivalent_features),
@@ -1468,8 +1497,8 @@ def has_permission(feature: str) -> bool:
         db.session.rollback()
     try:
         if nivel is not None:
-            exists = (
-                db.session.query(NivelPermissao.id)
+            exists = _db_retry(
+                lambda: db.session.query(NivelPermissao.id)
                 .filter(
                     NivelPermissao.nivel == nivel,
                     NivelPermissao.feature.in_(equivalent_features),

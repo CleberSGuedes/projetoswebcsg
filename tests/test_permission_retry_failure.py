@@ -73,3 +73,27 @@ def test_load_permissoes_perfil_still_returns_empty_for_missing_table():
         with patch("rotas.home_routes.db.session.execute", side_effect=_raise_programming_error):
             with patch.dict("os.environ", {"DB_RETRY_ATTEMPTS": "2", "DB_RETRY_BACKOFF": "0"}):
                 assert _load_permissoes_perfil(perfil_id=1) == []
+
+
+def test_has_permission_repete_apos_resource_closed():
+    """Regressao: apos reiniciar o servidor a 1a consulta podia falhar com ResourceClosedError
+    e derrubar a Inicio com erro interno (2026-11-10)."""
+    from flask import g
+    from sqlalchemy.exc import ResourceClosedError
+    from rotas.home_routes import _db_retry
+
+    chamadas = {"n": 0}
+
+    def consulta():
+        chamadas["n"] += 1
+        if chamadas["n"] < 3:
+            raise ResourceClosedError("This result object does not return rows.")
+        return "ok"
+
+    app = create_app()
+    with app.app_context():
+        assert _db_retry(consulta, attempts=3, backoff_s=0) == "ok"
+        assert chamadas["n"] == 3
+        chamadas["n"] = -10
+        with pytest.raises(ResourceClosedError):
+            _db_retry(consulta, attempts=2, backoff_s=0)

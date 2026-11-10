@@ -1292,3 +1292,9 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 - Texto do Bem-vindo: resumo curto (2 a 3 linhas no desktop, largura até 140ch, fonte responsiva) do que é o SPO; a frase "Use o menu ao lado..." ficou no fim, em fonte pequena (`.home-welcome-hint`). Para mudar o texto: `templates/partials/dashboard.html`.
 - Layout da Início (`.home-grid`): o Bem-vindo ocupa a largura toda, centralizado, como destaque; os demais cards entram em grade automática abaixo (`minmax(320px, 1fr)`), então 1, 2 ou 3 cards se reorganizam sozinhos.
 - Testes: `tests/test_cards_inicio.py`.
+
+## 35. Erro interno na Início logo após o deploy (ResourceClosedError em has_permission) (2026-11-10)
+- **Sintoma:** ao reiniciar o servidor após o deploy da integração, a tela Início deu "Internal Error"; com Ctrl+F5 abriu normalmente.
+- **Causa (log de produção):** `ResourceClosedError: This result object does not return rows` em `has_permission` (`rotas/home_routes.py`), chamada por `partial_dashboard` para o card Status. É a mesma instabilidade de conexão da seção 13 (a primeira consulta numa conexão recém-aberta após o restart falha e funciona na seguinte). Os carregadores de permissão do menu já tinham retry; `has_permission` só tratava `ProgrammingError`, e a Início passou a chamá-la com o card novo.
+- **Correção:** `_db_retry()` (3 tentativas, rollback entre elas; trata `ResourceClosedError`, `OperationalError`, `NoSuchColumnError`, `IndexError`) nas três consultas de `has_permission` (exceção do usuário, perfil, nível) — vale para todas as telas protegidas por `require_feature`. Além disso, o card opcional **nunca derruba a Início**: se a checagem falhar de vez, o card fica oculto e a falha vai para o log.
+- Teste: `tests/test_permission_retry_failure.py::test_has_permission_repete_apos_resource_closed`.
