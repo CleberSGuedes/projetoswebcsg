@@ -66,7 +66,7 @@ function buildMysqlConfig() {
     port,
     database,
     waitForConnections: true,
-    connectionLimit: 5,
+    connectionLimit: Number(process.env.NODE_DB_POOL_LIMIT || 3) || 3,
   };
 }
 

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
 from services.fiplan_file_reader import prepare_fiplan_file
+from services.fila_pesada import aguardar_vez
 from services.job_status import clear_cancel_flag, update_status_fields, write_status
 from services.uo import UOS_EXECUCAO, UOS_EXECUCAO_LIBERADAS, UOS_SEDUC
 
@@ -40,6 +41,8 @@ def _find_upload_path(base_dir: Path, stored_filename: str) -> Path | None:
 
 def _run_node(kind: str, file_path: Path, user_email: str, data_arquivo, upload_id: int) -> dict:
     node_env = os.environ.copy()
+    # Menos threads por processo Node (limite de threads da conta); sobrescrevivel via .env.
+    node_env.setdefault("UV_THREADPOOL_SIZE", "2")
     node_max_old_space_mb = os.getenv("NODE_MAX_OLD_SPACE_MB", "4096").strip()
     if node_max_old_space_mb.isdigit() and int(node_max_old_space_mb) > 0:
         extra_opt = f"--max-old-space-size={int(node_max_old_space_mb)}"
@@ -283,8 +286,25 @@ def _run_managed_job(job_id: int) -> None:
 
 def main() -> int:
     args = _parse_args()
+
+    # Fila: um processamento pesado por vez (limite de processos/threads da conta).
+    # A espera acontece ANTES de create_app() para nao deixar conexao ociosa no banco.
+    def _avisar_espera() -> None:
+        if args.kind in {"emp", "nob"}:
+            update_status_fields(args.kind, args.upload_id,
+                                 message="Aguardando a vez na fila de processamento.")
+
+    erro_fila = None
+    try:
+        _trava_fila = aguardar_vez(on_wait=_avisar_espera)  # noqa: F841 - mantida aberta ate o fim
+    except TimeoutError as exc:
+        erro_fila = exc
+
     app = create_app()
     if args.kind == "see":
+        if erro_fila:
+            print(f"Fila: {erro_fila}", file=sys.stderr)
+            return 1
         # Notas SEE: o próprio processamento grava status/falha nas tabelas see_*.
         from rotas.notas_see_routes import _run_see_processamento
 
@@ -292,6 +312,8 @@ def main() -> int:
         return 0
     with app.app_context():
         try:
+            if erro_fila:
+                raise erro_fila
             if args.kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
                 _run_managed_job(args.upload_id)
             else:
