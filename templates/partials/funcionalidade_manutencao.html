@@ -1,0 +1,8 @@
+<div class="grid">
+  <header class="module-header"><div class="module-header-copy"><div class="module-eyebrow">Administrar SPO</div><h1>{{ nome }}</h1><p>Funcionalidade em manutenção.</p></div><i class="bi bi-tools" aria-hidden="true"></i></header>
+  <div class="card module-card">
+    <div class="module-card-title"><i class="bi bi-exclamation-triangle"></i><div><h2>Em manutenção</h2><p>Esta funcionalidade ainda está incompleta.</p></div></div>
+    {% if detalhe %}<p class="muted">{{ detalhe }}</p>{% endif %}
+    <p class="muted">Este aviso é visível a quem tem a permissão para que ela não seja esquecida. Quando a tela ficar pronta, o aviso é retirado.</p>
+  </div>
+</div>

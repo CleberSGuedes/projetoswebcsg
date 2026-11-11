@@ -3522,7 +3522,7 @@
           controls.appendChild(cb);
         }
         const label = document.createElement("span");
-        label.textContent = feat.nome;
+        label.textContent = feat.manutencao ? `${feat.nome} (em manutenção)` : feat.nome;
         row.appendChild(controls);
         row.appendChild(label);
         wrapper.appendChild(row);
@@ -20654,6 +20654,15 @@
     }
     if (route === "atualizar/chave_planejamento_regra") {
       initChavePlanejamentoRegra();
+    }
+    if (route === "atualizar/chaves_planejamento_upload") {
+      // Mesma tela da Correção de Erros de Chave, já no tipo de upload anual.
+      initChavePlanejamentoRegra();
+      const tipoUpload = document.getElementById("chave-regra-tipo");
+      if (tipoUpload && tipoUpload.querySelector("option[value='chaves_planejamento']:not([disabled])")) {
+        tipoUpload.value = "chaves_planejamento";
+        tipoUpload.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     }
     if (route.startsWith("atualizar/estrutura-planejamento/")) {
       initEstruturaPlanejamento();
