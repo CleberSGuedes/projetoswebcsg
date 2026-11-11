@@ -62,6 +62,15 @@
       const form = document.getElementById("login-form");
       const emailInput = document.getElementById("login-email");
       const flashStack = document.querySelector(".alert-stack");
+      // Aviso de sessao encerrada (?motivo=...): ja foi exibido; tira o parametro da URL para
+      // que um F5 nao o mostre de novo.
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("motivo")) {
+          url.searchParams.delete("motivo");
+          window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+        }
+      } catch (err) { /* sem history API: mantem como esta */ }
       const addAlert = (text) => {
         if (!flashStack) return;
         const div = document.createElement("div");
