@@ -150,7 +150,7 @@ from services.est_emp_runner import (
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
 from services.fiplan_file_reader import FiplanFormatError, detect_fiplan_format, iter_preview_rows
-from services.job_status import read_status, set_cancel_flag, update_status_fields, write_status
+from services.job_status import read_status, set_cancel_flag, update_status_fields, upload_em_andamento, write_status
 from services.processamento_jobs import create_job, serialize_job, update_job
 from pathlib import Path
 from sqlalchemy import text, func, or_, select, inspect
@@ -869,6 +869,58 @@ def _start_thread(kind: str, upload_id: int) -> None:
     thread.start()
 
 
+def _upload_em_andamento_409(tipo: str):
+    """Resposta 409 se ja houver processamento do mesmo tipo em andamento, senao None.
+
+    Checada ANTES de gravar o arquivo: o upload move o arquivo anterior para tmp e
+    cria o registro, e nao deve acontecer se o envio vai ser recusado.
+    """
+    try:
+        if tipo in {"fip613", "ped", "est_emp", "receita_anexo10"}:
+            ativo = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
+                ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
+            ).first()
+            ativo_id = ativo.id if ativo else None
+        else:
+            ativo_id = upload_em_andamento(tipo)
+    except Exception as exc:  # a trava nunca deve impedir um envio por falha propria
+        current_app.logger.warning("Checagem de processamento em andamento falhou (%s): %s", tipo, exc)
+        return None
+    if ativo_id is None:
+        return None
+    resp = jsonify({
+        "error": f"Já existe um processamento {tipo.upper().replace('_', ' ')} em andamento. "
+                 "Aguarde o término antes de enviar outro arquivo.",
+        "em_andamento": True,
+        "job_id": ativo_id,
+    })
+    resp.status_code = 409
+    resp.headers["Retry-After"] = "180"
+    return resp
+
+
+def _erro_upload_resposta(exc: Exception, tipo: str):
+    """Registra no log e devolve a resposta de erro de um upload.
+
+    Falta de recurso da hospedagem (EAGAIN/ENOMEM ao criar processo) vira 503 com
+    Retry-After, para o cliente (ex.: automacao) esperar em vez de reenviar.
+    """
+    current_app.logger.exception("Falha no upload %s: %s", tipo, exc)
+    sem_recurso = (
+        isinstance(exc, OSError) and getattr(exc, "errno", None) in {11, 12}
+    ) or "can't start new thread" in str(exc)
+    if sem_recurso:
+        resp = jsonify({
+            "error": "Servidor temporariamente sem recursos para iniciar o processamento. "
+                     "O arquivo não foi processado; aguarde alguns minutos e tente novamente.",
+            "sem_recursos": True,
+        })
+        resp.status_code = 503
+        resp.headers["Retry-After"] = "180"
+        return resp
+    return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+
+
 def _start_worker(kind: str, upload_id: int) -> None:
     worker_path = Path(__file__).resolve().parents[1] / "worker.py"
     creationflags = 0
@@ -902,7 +954,14 @@ def _start_worker(kind: str, upload_id: int) -> None:
             pid=proc.pid,
         )
     except Exception as exc:
+        # Normalmente e o limite de processos da hospedagem (Errno 11). Rodar como
+        # thread dentro do servidor web so piora (falha pelo mesmo motivo, ou
+        # consome o servidor), entao nao ha mais plano B: a falha fica registrada.
+        current_app.logger.exception(
+            "Falha ao iniciar worker externo kind=%s upload_id=%s: %s", kind, upload_id, exc
+        )
         if kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
+            db.session.rollback()
             job = db.session.get(ProcessamentoJob, upload_id)
             if job:
                 job.status = "falha"
@@ -911,12 +970,14 @@ def _start_worker(kind: str, upload_id: int) -> None:
                 job.finalizado_em = datetime.utcnow()
                 db.session.commit()
             raise
-        update_status_fields(
+        write_status(
             kind,
             upload_id,
-            message=f"Falha ao iniciar worker externo ({type(exc).__name__}: {exc}). Usando thread.",
+            "falha no processamento",
+            f"Servidor sem recursos para iniciar o processamento ({type(exc).__name__}: {exc}). "
+            "Aguarde alguns minutos e tente novamente.",
         )
-        _start_thread(kind, upload_id)
+        raise
 
 
 @home_bp.route("/")
@@ -16025,6 +16086,10 @@ def api_fip613_upload():
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
+    ocupado = _upload_em_andamento_409("fip613")
+    if ocupado is not None:
+        return ocupado
+
     try:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         (UPLOAD_DIR / "tmp").mkdir(parents=True, exist_ok=True)
@@ -16051,7 +16116,7 @@ def api_fip613_upload():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+        return _erro_upload_resposta(exc, "fip613")
 
 
 @home_bp.route("/api/fip613/reprocess", methods=["POST"])
@@ -16479,6 +16544,10 @@ def api_ped_upload():
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
+    ocupado = _upload_em_andamento_409("ped")
+    if ocupado is not None:
+        return ocupado
+
     try:
         PED_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         _move_existing_fiplan_files_to_tmp(PED_UPLOAD_DIR)
@@ -16504,7 +16573,7 @@ def api_ped_upload():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+        return _erro_upload_resposta(exc, "ped")
 
 
 @home_bp.route("/api/ped/reprocess", methods=["POST"])
@@ -16688,6 +16757,10 @@ def api_emp_upload():
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
+    ocupado = _upload_em_andamento_409("emp")
+    if ocupado is not None:
+        return ocupado
+
     try:
         EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         _move_existing_fiplan_files_to_tmp(EMP_UPLOAD_DIR)
@@ -16717,13 +16790,16 @@ def api_emp_upload():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+        return _erro_upload_resposta(exc, "emp")
 
 
 @home_bp.route("/api/emp/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/emp")
 def api_emp_reprocess():
+    ocupado = _upload_em_andamento_409("emp")
+    if ocupado is not None:
+        return ocupado
     payload = request.get_json(silent=True) or {}
     upload_id = payload.get("upload_id")
     if upload_id:
@@ -16976,6 +17052,10 @@ def api_est_emp_upload():
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
+    ocupado = _upload_em_andamento_409("est_emp")
+    if ocupado is not None:
+        return ocupado
+
     try:
         EST_EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         _move_existing_fiplan_files_to_tmp(EST_EMP_UPLOAD_DIR)
@@ -17001,7 +17081,7 @@ def api_est_emp_upload():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+        return _erro_upload_resposta(exc, "est_emp")
 
 
 @home_bp.route("/api/est-emp/reprocess", methods=["POST"])
@@ -17036,6 +17116,10 @@ def api_nob_upload():
     user = session.get("user") or {}
     user_email = user.get("email") or "desconhecido"
 
+    ocupado = _upload_em_andamento_409("nob")
+    if ocupado is not None:
+        return ocupado
+
     try:
         NOB_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         _move_existing_fiplan_files_to_tmp(NOB_UPLOAD_DIR)
@@ -17065,13 +17149,16 @@ def api_nob_upload():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Falha ao processar: {exc}"}), 500
+        return _erro_upload_resposta(exc, "nob")
 
 
 @home_bp.route("/api/nob/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/nob")
 def api_nob_reprocess():
+    ocupado = _upload_em_andamento_409("nob")
+    if ocupado is not None:
+        return ocupado
     payload = request.get_json(silent=True) or {}
     upload_id = payload.get("upload_id")
     if upload_id:
