@@ -86,7 +86,9 @@ SEE_OUTPUT_DIR = Path("outputs") / "notas_see"
 
 # Ordem de exibição dos produtos: alunos (al) antes de professores (pr); dentro de cada grupo,
 # regular, EJA, especial e artes; e, em cada tipo, pela série (1º, 2º, ...).
-_SEE_PRODUTO_RE = re.compile(r"^\s*(\d+)\D*?_?(reg|eja|esp|art)_(al|pr)\s*$", re.IGNORECASE)
+# Aceita "1º reg_al", "10º_eja_al", "6º art_pr" e o formato novo "3º ANO PR", "6º ANO ARTE PR"
+# (sem tipo = regular).
+_SEE_PRODUTO_RE = re.compile(r"^\s*(\d+)\D*?(?:[\s_]*(reg|eja|esp|arte|art))?[\s_]*(al|pr)\s*$", re.IGNORECASE)
 _SEE_ORDEM_PUBLICO = {"al": 0, "pr": 1}
 _SEE_ORDEM_TIPO = {"reg": 0, "eja": 1, "esp": 2, "art": 3}
 
@@ -95,7 +97,8 @@ def _see_produto_ordem(produto) -> tuple:
     match = _SEE_PRODUTO_RE.match(produto.nome or "")
     if not match:  # nomes fora do padrão vão para o fim, por código
         return (1, 0, 0, 0, str(produto.codigo))
-    serie, tipo, publico = int(match.group(1)), match.group(2).lower(), match.group(3).lower()
+    serie, publico = int(match.group(1)), match.group(3).lower()
+    tipo = (match.group(2) or "reg").lower()[:3]
     return (0, _SEE_ORDEM_PUBLICO[publico], _SEE_ORDEM_TIPO[tipo], serie, str(produto.codigo))
 
 
