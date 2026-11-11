@@ -63,7 +63,11 @@ FEATURES = [
                     {"id": "atualizar/estrutura-planejamento/produtos", "nome": "Produtos da Ação"},
                     {"id": "atualizar/estrutura-planejamento/componentes", "nome": "Componentes"},
                     {"id": "atualizar/estrutura-planejamento/componentes-rev", "nome": "Componentes da Revista"},
-                    {"id": "atualizar/estrutura-planejamento/vinculos", "nome": "Gerenciar Vínculos"},
+                    {
+                        "id": "atualizar/estrutura-planejamento/vinculos",
+                        "nome": "Gerenciar Vínculos",
+                        "manutencao": "Hoje é apenas a permissão que libera o gerenciamento de vínculos dentro de Componentes; a tela própria ainda não foi construída.",
+                    },
                     {"id": "atualizar/estrutura-planejamento/modelos-chave", "nome": "Modelos de Chave"},
                     {"id": "atualizar/estrutura-planejamento/catalogo-chave", "nome": "Catálogo de Chaves"},
                     {"id": "atualizar/estrutura-planejamento/replicar-exercicio", "nome": "Replicar exercício"},
@@ -182,6 +186,17 @@ def flatten_features(features=None):
             flat.append(feature["id"])
         flat.extend(flatten_features(feature.get("children") or []))
     return flat
+
+
+def find_feature(feature_id, features=None):
+    """Devolve o item do catalogo (dict) com esse id, ou None."""
+    for feature in (FEATURES if features is None else features):
+        if feature.get("id") == feature_id:
+            return feature
+        found = find_feature(feature_id, feature.get("children") or [])
+        if found:
+            return found
+    return None
 
 
 def build_parent_map(features=None, permission_parent=None):
