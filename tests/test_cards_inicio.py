@@ -41,3 +41,23 @@ def test_card_status_so_aparece_com_permissao():
     assert "home-status-card" not in html
     assert "Bem-vindo" in html  # fixo para todos
     assert "Próximos passos" not in html
+
+
+def test_vinculos_fica_visivel_como_em_manutencao_e_upload_abre_a_tela_de_chaves():
+    """'Gerenciar Vinculos' so libera recursos dentro de Componentes (sem tela propria): fica no menu
+    e no painel marcado como em manutencao e a rota mostra um aviso. O 'Upload anual de chaves' abre
+    a propria tela Correcao de Erros de Chave (onde o upload existe)."""
+    from services.features import find_feature
+
+    app = create_app()
+    fid = "atualizar/estrutura-planejamento/vinculos"
+    item = find_feature(fid)
+    assert item and item.get("manutencao")
+    assert fid in _ids(build_menu_tree()) and fid in list(flatten_features())
+    with app.test_request_context("/"):
+        html = render_template("partials/funcionalidade_manutencao.html", nome=item["nome"], detalhe=item["manutencao"])
+    assert "Em manutenção" in html and item["nome"] in html
+    rules = {r.rule for r in app.url_map.iter_rules()}
+    assert "/partial/" + fid in rules
+    assert "/partial/atualizar/chaves_planejamento_upload" in rules
+    assert not find_feature("atualizar/chaves_planejamento_upload").get("manutencao")

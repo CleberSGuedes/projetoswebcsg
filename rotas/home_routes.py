@@ -2462,6 +2462,34 @@ def api_configuracoes_sessao():
     return jsonify({"ok": True, **session_config.get_info()})
 
 
+def _render_manutencao(feature_id: str):
+    """Aviso de funcionalidade incompleta: o item fica visivel (menu e painel) para nao ser esquecido."""
+    from services.features import find_feature
+
+    item = find_feature(feature_id) or {}
+    return render_template(
+        "partials/funcionalidade_manutencao.html",
+        nome=item.get("nome") or feature_id,
+        detalhe=item.get("manutencao") or "",
+    )
+
+
+@home_bp.route("/partial/atualizar/estrutura-planejamento/vinculos")
+@login_required
+@require_feature("atualizar/estrutura-planejamento/vinculos")
+def partial_manutencao_vinculos():
+    return _render_manutencao("atualizar/estrutura-planejamento/vinculos")
+
+
+@home_bp.route("/partial/atualizar/chaves_planejamento_upload")
+@login_required
+@require_feature("atualizar/chaves_planejamento_upload")
+def partial_atualizar_chaves_planejamento_upload():
+    # O upload anual vive na tela Correção de Erros de Chave (tipo "upload_chaves_planejamento");
+    # este item de menu abre essa mesma tela já com o tipo selecionado (ver initRoute no main.js).
+    return _render_chave_planejamento_regra()
+
+
 @home_bp.route("/partial/atualizar/governanca-resultados/mapa")
 @login_required
 @require_feature("atualizar/governanca-resultados/mapa")
@@ -2536,6 +2564,10 @@ def partial_atualizar_receita_anexo10():
 @login_required
 @require_feature("atualizar/chave_planejamento_regra")
 def partial_atualizar_chave_planejamento_regra():
+    return _render_chave_planejamento_regra()
+
+
+def _render_chave_planejamento_regra():
     regras = (
         ChavePlanejamentoRegra.query.order_by(
             ChavePlanejamentoRegra.tipo_regra.asc(),
