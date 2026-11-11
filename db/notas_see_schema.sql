@@ -7,7 +7,10 @@
 --
 -- 1) Exercício no catálogo; o nome passa a ser único DENTRO do exercício.
 ALTER TABLE see_catalogos ADD COLUMN IF NOT EXISTS exercicio SMALLINT NOT NULL AFTER nome;
+-- O índice único antigo só por nome pode ter um destes nomes, conforme a versão do modelo que
+-- criou a tabela; apaga os dois (IF EXISTS: seguro rodar de novo).
 ALTER TABLE see_catalogos DROP INDEX IF EXISTS nome;
+ALTER TABLE see_catalogos DROP INDEX IF EXISTS uq_see_catalogo_nome;
 ALTER TABLE see_catalogos ADD UNIQUE INDEX IF NOT EXISTS uq_see_catalogo_exercicio_nome (exercicio, nome);
 
 -- 2) Índices de consulta (o modelo os declara; create_all não os cria em tabela existente).
