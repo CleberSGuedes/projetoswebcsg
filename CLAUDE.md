@@ -82,9 +82,9 @@ Problemas encontrados e corrigidos em `services/see_notes.py`:
 - Migração: `db/see_catalogo_exercicio.sql` (preenche os catálogos existentes com o ano escrito no nome ou o ano de criação). **Já executada em dev.**
 - Formulário do catálogo com o campo Exercício (padrão: ano atual); seletores exibem "exercício · nome".
 
-### Implantação em homologação/produção (checklist)
+### Implantação (checklist para um ambiente novo)
 
-> **Situação (2026-10-01):** as alterações estão só na branch `dev/cleber`. A subida para homologação/produção foi **adiada** e será feita futuramente; não implantar sem pedido explícito.
+> **Situação (2026-11-12):** já implantado em homologação e produção (`main`), com correções feitas depois em produção; a versão atual já está nesta branch. O checklist abaixo só vale para montar um ambiente novo.
 
 1. Executar `db/see_catalogo_exercicio.sql` **antes** de subir o código.
 2. Subir o código. A tabela `see_escolas` é criada pelo `db.create_all()` no start.
