@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+# Limite de threads das bibliotecas numericas ANTES de qualquer import do numpy/pandas.
+# O servidor tem 88 nucleos e o OpenBLAS abria 64 threads por processo Python: com o
+# limite de 100 processos/threads da conta (NPROC), o segundo worker morria no import
+# (EMP 253 e 256, 12/11/2026). setdefault: o valor do cPanel, se existir, prevalece.
+import os as _os
+
+for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    _os.environ.setdefault(_var, "1")
+
+
 import argparse
 import json
 import os
@@ -9,14 +19,42 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from app import create_app
+# Leves: a fila e o status vem ANTES do resto. Importar `app` carrega a aplicacao
+# inteira (~6 s, conexao com o banco); um segundo EMP/NOB que fazia isso enquanto o
+# primeiro rodava com o Node estourava o limite da conta e o worker morria sem gravar
+# status (EMP 256, 12/11/2026). Agora quem nao tem a vez so espera, quase sem custo.
+from services.fila_pesada import aguardar_vez
+from services.job_status import clear_cancel_flag, update_status_fields, write_status
+
+
+def _entrar_na_fila(argv: list[str]):
+    """Pede a vez na fila. Devolve (trava, erro) - a trava fica aberta ate o fim."""
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--kind")
+    pre.add_argument("--upload-id", type=int)
+    args, _ = pre.parse_known_args(argv)
+
+    def _avisar_espera() -> None:
+        if args.kind in {"emp", "nob"} and args.upload_id:
+            update_status_fields(args.kind, args.upload_id,
+                                 message="Aguardando a vez na fila de processamento.")
+
+    try:
+        return aguardar_vez(on_wait=_avisar_espera), None
+    except TimeoutError as exc:
+        return None, exc
+
+
+_FILA: tuple | None = None  # (trava, erro) quando a vez ja foi pedida na carga do script
+if __name__ == "__main__":
+    _FILA = _entrar_na_fila(sys.argv[1:])
+
+from app import create_app  # noqa: E402 - pesado: so depois da vez na fila
 from models import db, EmpUpload, NobUpload, Fip613Upload, PedUpload, EstEmpUpload, ReceitaAnexo10Upload, ProcessamentoJob
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from services.emp_record import update_emp_record_from_status
 from services.fiplan_file_reader import prepare_fiplan_file
-from services.fila_pesada import aguardar_vez
-from services.job_status import clear_cancel_flag, update_status_fields, write_status
 from services.uo import UOS_EXECUCAO, UOS_EXECUCAO_LIBERADAS, UOS_SEDUC
 
 EMP_INPUT_DIR = Path("upload/emp")
@@ -288,17 +326,8 @@ def main() -> int:
     args = _parse_args()
 
     # Fila: um processamento pesado por vez (limite de processos/threads da conta).
-    # A espera acontece ANTES de create_app() para nao deixar conexao ociosa no banco.
-    def _avisar_espera() -> None:
-        if args.kind in {"emp", "nob"}:
-            update_status_fields(args.kind, args.upload_id,
-                                 message="Aguardando a vez na fila de processamento.")
-
-    erro_fila = None
-    try:
-        _trava_fila = aguardar_vez(on_wait=_avisar_espera)  # noqa: F841 - mantida aberta ate o fim
-    except TimeoutError as exc:
-        erro_fila = exc
+    # Rodando como script, a vez ja foi pedida antes dos imports pesados (topo do arquivo).
+    _trava_fila, erro_fila = _FILA if _FILA is not None else _entrar_na_fila(sys.argv[1:])  # noqa: F841
 
     app = create_app()
     if args.kind == "see":

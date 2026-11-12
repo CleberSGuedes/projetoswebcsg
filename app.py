@@ -1,3 +1,12 @@
+# Limite de threads das bibliotecas numericas ANTES de qualquer import do numpy/pandas.
+# O servidor tem 88 nucleos e o OpenBLAS abria 64 threads por processo Python: com o
+# limite de 100 processos/threads da conta (NPROC), o segundo worker morria no import
+# (EMP 253 e 256, 12/11/2026). setdefault: o valor do cPanel, se existir, prevalece.
+import os as _os
+
+for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    _os.environ.setdefault(_var, "1")
+
 from dotenv import load_dotenv
 load_dotenv()
 
