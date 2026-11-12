@@ -150,8 +150,23 @@ from services.est_emp_runner import (
     move_existing_to_tmp as move_est_emp_existing_to_tmp,
 )
 from services.fiplan_file_reader import FiplanFormatError, detect_fiplan_format, iter_preview_rows
-from services.job_status import read_status, set_cancel_flag, update_status_fields, upload_em_andamento, write_status
-from services.processamento_jobs import create_job, serialize_job, update_job
+from services.job_status import (
+    EM_PROCESSAMENTO,
+    encerrar_se_orfao,
+    read_status,
+    solicitar_cancelamento,
+    update_status_fields,
+    upload_em_andamento,
+    write_status,
+)
+from services.processamento_jobs import (
+    create_job,
+    encerrar_orfaos,
+    job_ativo,
+    serialize_job,
+    solicitar_cancelamento_job,
+    update_job,
+)
 from pathlib import Path
 from sqlalchemy import text, func, or_, select, inspect
 from urllib.parse import unquote
@@ -877,9 +892,7 @@ def _upload_em_andamento_409(tipo: str):
     """
     try:
         if tipo in {"fip613", "ped", "est_emp", "receita_anexo10"}:
-            ativo = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
-                ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
-            ).first()
+            ativo = job_ativo(tipo)
             ativo_id = ativo.id if ativo else None
         else:
             ativo_id = upload_em_andamento(tipo)
@@ -888,15 +901,64 @@ def _upload_em_andamento_409(tipo: str):
         return None
     if ativo_id is None:
         return None
+    return _resposta_409_em_andamento(tipo, ativo_id)
+
+
+def _resposta_409_em_andamento(tipo: str, job_id):
     resp = jsonify({
         "error": f"Já existe um processamento {tipo.upper().replace('_', ' ')} em andamento. "
                  "Aguarde o término antes de enviar outro arquivo.",
         "em_andamento": True,
-        "job_id": ativo_id,
+        "job_id": job_id,
     })
     resp.status_code = 409
     resp.headers["Retry-After"] = "180"
     return resp
+
+
+def _nome_trava_upload(tipo: str) -> str:
+    # GET_LOCK vale para o servidor MariaDB inteiro: o nome leva o banco para producao,
+    # homologacao e dev (mesmo servidor) nao se bloquearem.
+    banco = db.engine.url.database or "spo"
+    return f"spo_upload:{banco}:{tipo}"[:64]
+
+
+def _upload_exclusivo(tipo: str):
+    """Checagem + criacao do processamento numa operacao atomica, por tipo.
+
+    Sem isso, dois envios que se cruzassem entre a checagem da trava 409 e a gravacao
+    do status passavam os dois. A trava (GET_LOCK do MariaDB, vale entre os processos
+    do LiteSpeed) fica com a requisicao ate o worker ser iniciado; quem chega nesse
+    meio tempo recebe o mesmo 409 de "em andamento". Se o banco falhar ao pegar a
+    trava, o envio segue (a checagem do status continua valendo), com aviso no log.
+    """
+    def deco(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            nome = _nome_trava_upload(tipo)
+            conn = None
+            try:
+                conn = db.engine.connect()
+                obtida = conn.execute(text("SELECT GET_LOCK(:n, 0)"), {"n": nome}).scalar()
+            except Exception as exc:
+                current_app.logger.warning("Trava de upload indisponivel (%s): %s", tipo, exc)
+                if conn is not None:
+                    conn.close()
+                conn, obtida = None, None
+            if conn is not None and obtida != 1:
+                conn.close()
+                return _resposta_409_em_andamento(tipo, None)
+            try:
+                return view(*args, **kwargs)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.execute(text("SELECT RELEASE_LOCK(:n)"), {"n": nome})
+                        conn.close()
+                    except Exception:
+                        conn.invalidate()  # descarta a conexao (e a trava) em vez de devolve-la ao pool
+        return wrapper
+    return deco
 
 
 def _erro_upload_resposta(exc: Exception, tipo: str):
@@ -921,25 +983,53 @@ def _erro_upload_resposta(exc: Exception, tipo: str):
     return jsonify({"error": f"Falha ao processar: {exc}"}), 500
 
 
+# Workers iniciados por este processo: recolhidos (poll) antes de cada novo spawn,
+# para nao ficarem zumbis (um zumbi parecia vivo e prendia a trava 409).
+_WORKERS_INICIADOS: list = []
+
+
+def _recolher_workers() -> None:
+    for proc in list(_WORKERS_INICIADOS):
+        try:
+            if proc.poll() is not None:
+                _WORKERS_INICIADOS.remove(proc)
+        except Exception:
+            _WORKERS_INICIADOS.remove(proc)
+
+
 def _start_worker(kind: str, upload_id: int) -> None:
     worker_path = Path(__file__).resolve().parents[1] / "worker.py"
     creationflags = 0
+    destacar = {}
     if sys.platform.startswith("win"):
         creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0
         )
+    else:
+        # Sessao propria: o worker nao morre junto com o processo do LiteSpeed que o
+        # iniciou (os processos lswsgi sao reciclados a cada poucos minutos).
+        destacar["start_new_session"] = True
+    env = os.environ.copy()
+    for var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        env.setdefault(var, "1")
+    _recolher_workers()
     try:
         log_dir = Path("outputs") / "status"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / f"worker_{kind}_{upload_id}.log"
-        log_handle = open(log_path, "a", encoding="utf-8")
-        proc = subprocess.Popen(
-            [sys.executable, str(worker_path), "--kind", kind, "--upload-id", str(upload_id)],
-            cwd=str(worker_path.parent),
-            stdout=log_handle,
-            stderr=log_handle,
-            creationflags=creationflags,
-        )
+        with open(log_path, "a", encoding="utf-8") as log_handle:  # o filho fica com a propria copia
+            proc = subprocess.Popen(
+                [sys.executable, str(worker_path), "--kind", kind, "--upload-id", str(upload_id)],
+                cwd=str(worker_path.parent),
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=log_handle,
+                close_fds=True,
+                env=env,
+                creationflags=creationflags,
+                **destacar,
+            )
+        _WORKERS_INICIADOS.append(proc)
         if kind in {"fip613", "ped", "est_emp", "receita_anexo10"}:
             job = db.session.get(ProcessamentoJob, upload_id)
             if job:
@@ -15917,7 +16007,14 @@ def api_dotacao_saldo():
 
 
 def _managed_job_status(tipo: str, upload_model):
-    job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
+    encerrar_orfaos(tipo)  # worker morto: o job vira falha aqui, nao fica "em processamento"
+    job_id = request.args.get("job_id", type=int)
+    if job_id:
+        job = ProcessamentoJob.query.filter_by(tipo=tipo, id=job_id).first()
+        if not job:
+            return jsonify({"error": "Processamento não encontrado.", "job_id": job_id}), 404
+    else:
+        job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
     if not job:
         upload = upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
         if not upload:
@@ -15961,6 +16058,7 @@ def _managed_job_status(tipo: str, upload_model):
     if not upload:
         return jsonify({"ok": True, "last": None})
     data = serialize_job(job)
+    data["job_id"] = job.id
     data["data_arquivo"] = upload.data_arquivo.isoformat() if upload.data_arquivo else None
     if tipo == "receita_anexo10":
         data["mes_fechado"] = bool(getattr(upload, "mes_fechado", False))
@@ -15987,11 +16085,9 @@ def _managed_reprocess(tipo: str, upload_model, input_dir: Path):
     upload = db.session.get(upload_model, upload_id) if upload_id else upload_model.query.order_by(upload_model.uploaded_at.desc()).first()
     if not upload:
         return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
-    active = ProcessamentoJob.query.filter_by(tipo=tipo).filter(
-        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
-    ).first()
+    active = job_ativo(tipo)
     if active:
-        return jsonify({"error": f"Já existe um processamento {tipo.upper()} em andamento."}), 409
+        return _resposta_409_em_andamento(tipo, active.id)
     file_path = _find_upload_path(input_dir, upload.stored_filename)
     if not file_path:
         return jsonify({"error": "Arquivo original do upload não foi encontrado."}), 404
@@ -16022,12 +16118,10 @@ def _managed_cancel(tipo: str):
     job = ProcessamentoJob.query.filter_by(tipo=tipo).order_by(ProcessamentoJob.id.desc()).first()
     if not job:
         return jsonify({"error": "Nenhum processamento encontrado."}), 404
-    if job.status not in {"aguardando", "em_processamento", "cancelamento_solicitado"}:
-        return jsonify({"error": "O processamento já foi finalizado."}), 409
-    update_job(job, status="cancelamento_solicitado", etapa="cancelamento",
-               mensagem="Cancelamento solicitado pelo usuário.", event_type="cancelamento",
-               cancelamento_solicitado=True)
-    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": job.id})
+    aceito, mensagem = solicitar_cancelamento_job(job)
+    if not aceito:
+        return jsonify({"error": mensagem, "job_id": job.id}), 409
+    return jsonify({"ok": True, "message": mensagem, "job_id": job.id})
 
 
 @home_bp.route("/api/fip613/status", methods=["GET"])
@@ -16071,6 +16165,7 @@ def api_fip613_status():
 @home_bp.route("/api/fip613/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/fip613")
+@_upload_exclusivo("fip613")
 def api_fip613_upload():
     if "arquivo" not in request.files:
         return jsonify({"error": "Arquivo ÃƒÂ© obrigatÃƒÂ³rio."}), 400
@@ -16122,6 +16217,7 @@ def api_fip613_upload():
 @home_bp.route("/api/fip613/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/fip613")
+@_upload_exclusivo("fip613")
 def api_fip613_reprocess():
     return _managed_reprocess("fip613", Fip613Upload, UPLOAD_DIR)
 
@@ -16529,6 +16625,7 @@ def api_ped_status():
 @home_bp.route("/api/ped/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/ped")
+@_upload_exclusivo("ped")
 def api_ped_upload():
     if "arquivo" not in request.files:
         return jsonify({"error": "Arquivo é obrigatório."}), 400
@@ -16579,6 +16676,7 @@ def api_ped_upload():
 @home_bp.route("/api/ped/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/ped")
+@_upload_exclusivo("ped")
 def api_ped_reprocess():
     return _managed_reprocess("ped", PedUpload, PED_UPLOAD_DIR)
 
@@ -16617,10 +16715,17 @@ def api_emp_status():
     try:
         EMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         EMP_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        last = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
+        job_id = request.args.get("job_id", type=int)
+        if job_id:
+            last = db.session.get(EmpUpload, job_id)
+            if not last:
+                return jsonify({"error": "Processamento não encontrado.", "job_id": job_id}), 404
+        else:
+            last = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
         if not last:
             return jsonify({"ok": True, "last": None})
-        status_data = read_status("emp", last.id)
+        # worker morto: o status vira falha aqui, em vez de ficar "em processamento" para sempre
+        status_data = encerrar_se_orfao("emp", last.id)
         output_name = last.output_filename
         if not output_name and status_data:
             output_name = status_data.get("output_filename") or output_name
@@ -16628,6 +16733,7 @@ def api_emp_status():
             {
                 "ok": True,
                 "last": {
+                    "job_id": last.id,
                     "user_email": last.user_email,
                     "uploaded_at": _as_iso(last.uploaded_at),
                     "data_arquivo": _as_iso(last.data_arquivo),
@@ -16711,10 +16817,17 @@ def api_nob_status():
     try:
         NOB_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         NOB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        last = NobUpload.query.order_by(NobUpload.uploaded_at.desc()).first()
+        job_id = request.args.get("job_id", type=int)
+        if job_id:
+            last = db.session.get(NobUpload, job_id)
+            if not last:
+                return jsonify({"error": "Processamento não encontrado.", "job_id": job_id}), 404
+        else:
+            last = NobUpload.query.order_by(NobUpload.uploaded_at.desc()).first()
         if not last:
             return jsonify({"ok": True, "last": None})
-        status_data = read_status("nob", last.id)
+        # worker morto: o status vira falha aqui, em vez de ficar "em processamento" para sempre
+        status_data = encerrar_se_orfao("nob", last.id)
         output_name = last.output_filename
         if not output_name and status_data:
             output_name = status_data.get("output_filename") or output_name
@@ -16722,6 +16835,7 @@ def api_nob_status():
             {
                 "ok": True,
                 "last": {
+                    "job_id": last.id,
                     "user_email": last.user_email,
                     "uploaded_at": _as_iso(last.uploaded_at),
                     "data_arquivo": _as_iso(last.data_arquivo),
@@ -16742,6 +16856,7 @@ def api_nob_status():
 @home_bp.route("/api/emp/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/emp")
+@_upload_exclusivo("emp")
 def api_emp_upload():
     if "arquivo" not in request.files:
         return jsonify({"error": "Arquivo obrigatorio."}), 400
@@ -16796,6 +16911,7 @@ def api_emp_upload():
 @home_bp.route("/api/emp/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/emp")
+@_upload_exclusivo("emp")
 def api_emp_reprocess():
     ocupado = _upload_em_andamento_409("emp")
     if ocupado is not None:
@@ -16808,18 +16924,31 @@ def api_emp_reprocess():
         registro = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
     if not registro:
         return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    atual = encerrar_se_orfao("emp", registro.id) or {}
+    if atual.get("state") == EM_PROCESSAMENTO:
+        return jsonify({
+            "error": "Este upload ainda está em processamento. Aguarde o término ou use Cancelar.",
+            "em_andamento": True,
+            "job_id": registro.id,
+        }), 409
     try:
         file_path = _find_upload_path(EMP_UPLOAD_DIR, registro.stored_filename)
         if not file_path:
             return jsonify({"error": "Arquivo do upload nao encontrado."}), 404
-        # garante o caminho correto para o worker
-        if file_path.parent.name == "tmp":
-            registro.stored_filename = f"tmp/{file_path.name}"
-        registro.output_filename = None
+        # Upload novo (id novo), como nos jobs gerenciados: o id de um job nunca e
+        # reaproveitado (o Reprocessar do 253 regravou o status do proprio 253).
+        novo = EmpUpload(
+            user_email=(session.get("user") or {}).get("email") or registro.user_email,
+            original_filename=registro.original_filename,
+            stored_filename=f"tmp/{file_path.name}" if file_path.parent.name == "tmp" else registro.stored_filename,
+            data_arquivo=registro.data_arquivo,
+            uploaded_at=datetime.utcnow(),
+        )
+        db.session.add(novo)
         db.session.commit()
-        write_status("emp", registro.id, "em processamento", "Reprocessamento iniciado.")
-        _start_worker("emp", registro.id)
-        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": registro.id})
+        write_status("emp", novo.id, "em processamento", f"Reprocessamento do upload {registro.id} iniciado.")
+        _start_worker("emp", novo.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": novo.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao reprocessar: {exc}"}), 500
@@ -16837,9 +16966,10 @@ def api_emp_cancel():
         registro = EmpUpload.query.order_by(EmpUpload.uploaded_at.desc()).first()
     if not registro:
         return jsonify({"error": "Nenhum upload encontrado para cancelar."}), 404
-    set_cancel_flag("emp", registro.id)
-    update_status_fields("emp", registro.id, message="Cancelamento solicitado.")
-    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": registro.id})
+    aceito, mensagem = solicitar_cancelamento("emp", registro.id)
+    if not aceito:
+        return jsonify({"error": mensagem, "job_id": registro.id}), 409
+    return jsonify({"ok": True, "message": mensagem, "job_id": registro.id})
 
 
 @home_bp.route("/api/receita-anexo10/status", methods=["GET"])
@@ -16860,6 +16990,7 @@ def _hash_file(path: Path) -> str:
 @home_bp.route("/api/receita-anexo10/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/receita-anexo10")
+@_upload_exclusivo("receita_anexo10")
 def api_receita_anexo10_upload():
     files = []
     for key in ("arquivos", "arquivo"):
@@ -16881,9 +17012,7 @@ def api_receita_anexo10_upload():
     mes_fechado = mes_fechado_raw == "sim"
     tipo_carga = "fechada" if mes_fechado else "aberta"
 
-    active = ProcessamentoJob.query.filter_by(tipo="receita_anexo10").filter(
-        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
-    ).first()
+    active = job_ativo("receita_anexo10")
     if active:
         return jsonify({"error": "Ja existe um processamento RECEITA ANEXO 10 em andamento."}), 409
 
@@ -16960,6 +17089,7 @@ def api_receita_anexo10_upload():
 @home_bp.route("/api/receita-anexo10/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/receita-anexo10")
+@_upload_exclusivo("receita_anexo10")
 def api_receita_anexo10_reprocess():
     payload = request.get_json(silent=True) or {}
     upload_id = payload.get("upload_id")
@@ -16970,9 +17100,7 @@ def api_receita_anexo10_reprocess():
     )
     if not source_upload:
         return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
-    active = ProcessamentoJob.query.filter_by(tipo="receita_anexo10").filter(
-        ProcessamentoJob.status.in_({"aguardando", "em_processamento", "cancelamento_solicitado"})
-    ).first()
+    active = job_ativo("receita_anexo10")
     if active:
         return jsonify({"error": "Ja existe um processamento ANALISE RECEITA em andamento."}), 409
     source_files = ReceitaAnexo10Arquivo.query.filter_by(upload_id=source_upload.id).all()
@@ -17037,6 +17165,7 @@ def api_receita_anexo10_cancel():
 @home_bp.route("/api/est-emp/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/est-emp")
+@_upload_exclusivo("est_emp")
 def api_est_emp_upload():
     if "arquivo" not in request.files:
         return jsonify({"error": "Arquivo obrigatorio."}), 400
@@ -17087,6 +17216,7 @@ def api_est_emp_upload():
 @home_bp.route("/api/est-emp/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/est-emp")
+@_upload_exclusivo("est_emp")
 def api_est_emp_reprocess():
     return _managed_reprocess("est_emp", EstEmpUpload, EST_EMP_UPLOAD_DIR)
 
@@ -17101,6 +17231,7 @@ def api_est_emp_cancel():
 @home_bp.route("/api/nob/upload", methods=["POST"])
 @login_required
 @require_feature("atualizar/nob")
+@_upload_exclusivo("nob")
 def api_nob_upload():
     if "arquivo" not in request.files:
         return jsonify({"error": "Arquivo obrigatorio."}), 400
@@ -17155,6 +17286,7 @@ def api_nob_upload():
 @home_bp.route("/api/nob/reprocess", methods=["POST"])
 @login_required
 @require_feature("atualizar/nob")
+@_upload_exclusivo("nob")
 def api_nob_reprocess():
     ocupado = _upload_em_andamento_409("nob")
     if ocupado is not None:
@@ -17167,17 +17299,31 @@ def api_nob_reprocess():
         registro = NobUpload.query.order_by(NobUpload.uploaded_at.desc()).first()
     if not registro:
         return jsonify({"error": "Nenhum upload encontrado para reprocessar."}), 404
+    atual = encerrar_se_orfao("nob", registro.id) or {}
+    if atual.get("state") == EM_PROCESSAMENTO:
+        return jsonify({
+            "error": "Este upload ainda está em processamento. Aguarde o término ou use Cancelar.",
+            "em_andamento": True,
+            "job_id": registro.id,
+        }), 409
     try:
         file_path = _find_upload_path(NOB_UPLOAD_DIR, registro.stored_filename)
         if not file_path:
             return jsonify({"error": "Arquivo do upload nao encontrado."}), 404
-        if file_path.parent.name == "tmp":
-            registro.stored_filename = f"tmp/{file_path.name}"
-        registro.output_filename = None
+        # Upload novo (id novo), como nos jobs gerenciados: o id de um job nunca e
+        # reaproveitado (o Reprocessar do 253 regravou o status do proprio 253).
+        novo = NobUpload(
+            user_email=(session.get("user") or {}).get("email") or registro.user_email,
+            original_filename=registro.original_filename,
+            stored_filename=f"tmp/{file_path.name}" if file_path.parent.name == "tmp" else registro.stored_filename,
+            data_arquivo=registro.data_arquivo,
+            uploaded_at=datetime.utcnow(),
+        )
+        db.session.add(novo)
         db.session.commit()
-        write_status("nob", registro.id, "em processamento", "Reprocessamento iniciado.")
-        _start_worker("nob", registro.id)
-        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": registro.id})
+        write_status("nob", novo.id, "em processamento", f"Reprocessamento do upload {registro.id} iniciado.")
+        _start_worker("nob", novo.id)
+        return jsonify({"ok": True, "message": "Reprocessamento iniciado.", "job_id": novo.id})
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Falha ao reprocessar: {exc}"}), 500
@@ -17195,9 +17341,10 @@ def api_nob_cancel():
         registro = NobUpload.query.order_by(NobUpload.uploaded_at.desc()).first()
     if not registro:
         return jsonify({"error": "Nenhum upload encontrado para cancelar."}), 404
-    set_cancel_flag("nob", registro.id)
-    update_status_fields("nob", registro.id, message="Cancelamento solicitado.")
-    return jsonify({"ok": True, "message": "Cancelamento solicitado.", "job_id": registro.id})
+    aceito, mensagem = solicitar_cancelamento("nob", registro.id)
+    if not aceito:
+        return jsonify({"error": mensagem, "job_id": registro.id}), 409
+    return jsonify({"ok": True, "message": mensagem, "job_id": registro.id})
 
 
 @home_bp.route("/api/ped/download/<path:filename>", methods=["GET"])
