@@ -4006,7 +4006,10 @@
         "histórico": "Histórico",
       };
       const statusLabel = statusLabelMap[statusKey] || rawStatus.replaceAll("_", " ");
-      const normalizedStatus = statusKey.includes("falha") ? "falha"
+      // "cancelamento_solicitado" contem "cancel": precisa vir antes, senao a tela trata o
+      // pedido como cancelado, para de acompanhar e desabilita o 2o clique em Cancelar.
+      const normalizedStatus = statusKey === "cancelamento_solicitado" ? "cancelamento_solicitado"
+        : statusKey.includes("falha") ? "falha"
         : statusKey.includes("cancel") ? "cancelado"
         : statusKey.includes("finalizado") ? "finalizado"
         : statusKey.includes("processamento") || statusKey === "aguardando" ? "em_processamento"
@@ -4078,7 +4081,8 @@
       const actionBox = target.closest(".card");
       const actionButtons = actionBox?.querySelectorAll(".upload-status-actions button") || [];
       if (actionButtons[0]) actionButtons[0].disabled = isRunning;
-      if (actionButtons[1]) actionButtons[1].disabled = !isRunning || normalizedStatus === "cancelamento_solicitado";
+      // Cancelar continua ativo com o pedido pendente: o 2o clique encerra um job cujo worker nao responde.
+      if (actionButtons[1]) actionButtons[1].disabled = !isRunning;
       if (isRunning) return "running";
       if (["finalizado", "finalizado_com_alertas"].includes(normalizedStatus) || last.output_filename) return "done";
       if (["falha", "cancelado"].includes(normalizedStatus)) return "error";
@@ -5218,8 +5222,11 @@
       setDefaultAmazonTime(inputData);
     }
 
+    // Reprocessar so libera depois que o status confirma que nada esta rodando.
+    if (reprocessBtn) reprocessBtn.disabled = true;
     loadEmpStatus(statusBox, submitBtn, viewLabel).then((state) => {
       if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
+      else if (state === null && reprocessBtn) reprocessBtn.disabled = false;
     });
 
     if (submitBtn) {
@@ -5236,6 +5243,8 @@
 
     if (reprocessBtn) {
       reprocessBtn.addEventListener("click", async () => {
+        if (reprocessBtn.disabled) return;
+        reprocessBtn.disabled = true;
         if (msg) {
           msg.textContent = "Reprocessando...";
           msg.classList.remove("text-error");
@@ -5257,6 +5266,10 @@
             msg.classList.add("text-error");
           }
           console.error(err);
+          // o status decide se o botao volta (ex.: 409 porque ainda esta rodando)
+          const state = await loadEmpStatus(statusBox, submitBtn, viewLabel);
+          if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
+          else if (state === null) reprocessBtn.disabled = false;
         }
       });
     }
@@ -5276,7 +5289,8 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao cancelar.");
           if (msg) msg.textContent = data.message || "Cancelamento solicitado.";
-          await loadEmpStatus(statusBox, submitBtn, viewLabel);
+          const state = await loadEmpStatus(statusBox, submitBtn, viewLabel);
+          if (state === "running") startStatusPolling(() => loadEmpStatus(statusBox, submitBtn, viewLabel));
         } catch (err) {
           if (msg) {
             msg.textContent = err.message;
@@ -5594,8 +5608,11 @@
       setDefaultAmazonTime(inputData);
     }
 
+    // Reprocessar so libera depois que o status confirma que nada esta rodando.
+    if (reprocessBtn) reprocessBtn.disabled = true;
     loadNobStatus(statusBox, submitBtn, viewLabel).then((state) => {
       if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
+      else if (state === null && reprocessBtn) reprocessBtn.disabled = false;
     });
 
     if (submitBtn) {
@@ -5612,6 +5629,8 @@
 
     if (reprocessBtn) {
       reprocessBtn.addEventListener("click", async () => {
+        if (reprocessBtn.disabled) return;
+        reprocessBtn.disabled = true;
         if (msg) {
           msg.textContent = "Reprocessando...";
           msg.classList.remove("text-error");
@@ -5633,6 +5652,10 @@
             msg.classList.add("text-error");
           }
           console.error(err);
+          // o status decide se o botao volta (ex.: 409 porque ainda esta rodando)
+          const state = await loadNobStatus(statusBox, submitBtn, viewLabel);
+          if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
+          else if (state === null) reprocessBtn.disabled = false;
         }
       });
     }
@@ -5652,7 +5675,8 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao cancelar.");
           if (msg) msg.textContent = data.message || "Cancelamento solicitado.";
-          await loadNobStatus(statusBox, submitBtn, viewLabel);
+          const state = await loadNobStatus(statusBox, submitBtn, viewLabel);
+          if (state === "running") startStatusPolling(() => loadNobStatus(statusBox, submitBtn, viewLabel));
         } catch (err) {
           if (msg) {
             msg.textContent = err.message;
