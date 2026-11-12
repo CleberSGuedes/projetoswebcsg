@@ -1167,6 +1167,7 @@ A `homologacao` foi recriada no remoto com `git push origin homologacao`, a part
 - Link de PR sempre com o destino fixo: `/compare/<destino>...<temporaria>`; conferir o campo *base* antes de mergear (seção 21.9).
 - Em Settings → General → Pull Requests, manter "Automatically delete head branches" **desligado** (branches fixas nunca devem ser apagadas); ao mergear, não clicar em "Delete branch" se a origem for uma branch fixa.
 - Se uma branch fixa sumir do remoto: conferir que a cópia local está no commit certo (`git rev-parse <branch>`) e recriar com `git push origin <branch>`; nunca recriar a partir de outra branch que tenha funcionalidades diferentes.
+- Fluxo completo de desenvolvimento entre os dois desenvolvedores (branches `feat/`, squash, cherry-pick para a homologação e a `main`, arquivos que não se toca): seção 40.
 
 ### 30.4 Desfecho do dia (2026-10-16)
 - Correção da trava do Teto-SEDUC presente em `homologacao`, `dev/cleber` (PR #22) e `dev/jean` (PR #23).
@@ -1358,3 +1359,64 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Testes:** `tests/test_trava_upload_jobs.py` (dois envios simultâneos do mesmo tipo = um 200 e um 409, com `GET_LOCK` real; horário "Z" do Node; worker morto; Reprocessar com job ativo e com id novo; Cancelar com worker morto e 2º Cancelar; spawn destacado; script), `tests/test_job_orfao.py`, `tests/test_fila_pesada.py`.
 
 **Deploy:** sem alteração de banco. Depois do deploy, Restart no cPanel; rodar `python scripts/limpar_jobs_orfaos.py` (e `--aplicar` se listar algo); durante um EMP, conferir `ps -u "$USER" -L | wc -l` (dezenas, não perto de 100) e que o worker tem sessão própria (`ps -u "$USER" -o pid,pgid,sid,cmd`: SID do worker = PID dele).
+
+**Validação em produção (12/11, com a automação):** às 14:49, com um EMP enviado pela tela em processamento, a automação tentou subir outro EMP e recebeu 409. Ela acompanhou o processamento até o fim e não reenviou. Não houve processamento duplicado nem job órfão; o EMP terminou com 60.280 registros. A madrugada de 13/11 foi a primeira com as correções publicadas.
+
+## 40. REGRA: fluxo de desenvolvimento com dois desenvolvedores (Cleber e Jean) (2026-11-12)
+
+Vale para os dois desenvolvedores e para quem (humano ou IA) trabalhar numa `dev/<nome>`. Completa a regra do §30.
+
+### 40.1 Fluxo
+```
+feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporária) → homologacao → (aprovado) → main
+                                                                                              │
+                                                       sincronização main → dev/cleber e dev/jean (branch sync/...)
+```
+- **Branches de trabalho:** curtas, a partir da própria `dev/<nome>`, um tema por vez. Nomes: `feat/<tema>` (funcionalidade) e `fix/<tema>` (correção).
+- **PR para a `dev/<nome>`:**
+  - Destino fixo, com o link `/compare/dev/<nome>...feat/<tema>`; conferir o campo *base* antes do merge (§21.8).
+  - Merge com **"Squash and merge"**: cada tema vira um commit só.
+  - Depois do merge, apagar só a `feat/`/`fix/`. Nunca usar uma branch fixa como origem (§30).
+- **Antes de abrir o PR:** atualizar a `feat/` com a `dev/<nome>`, que muda a cada sincronização da `main`.
+- **Para a homologação e a `main`:** quem promove (hoje, o Cleber) cria uma branch temporária a partir do destino e faz o **cherry-pick só do commit do tema**. Exemplos: `pr/<tema>-para-homologacao` e `pr/<tema>-para-main`.
+  - Não se faz merge da `dev/<nome>` inteira: cada `dev` tem arquivos próprios, que não podem chegar à homologação nem à `main`.
+  - Na `dev/cleber`: `.cpanel.yml`, `scripts/deploy_cpanel.sh` e `CLAUDE.md`.
+  - Na `dev/jean`: o selo "Integração DEV Jean" e o rodapé `PATCH_DEV...`.
+- **Sincronização `main` → `dev/cleber` e `dev/jean`:**
+  - Feita por quem promoveu, depois de cada subida para a `main`, com branch `sync/main-para-dev-<nome>` e PR.
+  - O tema do desenvolvedor volta para a `dev/<nome>` dele como outro commit, com o mesmo conteúdo, e normalmente não dá conflito.
+  - Se der conflito, mantém-se a versão mais nova do desenvolvedor.
+  - Correção urgente pode ir para todas as branches ao mesmo tempo, cada uma com a sua branch temporária, como no §39 (PRs #27, #28 e #29).
+
+### 40.2 Arquivos de uso comum (tocar com cuidado)
+- **`static/js/main.js` e `static/css/style.css`** (arquivos únicos): código novo num bloco próprio no fim do arquivo (função `init<Tema>`). Não reorganizar o que já existe.
+- **`templates/base.html`:** o `?v=` muda em quase todo PR e sempre dá conflito na sincronização. Usar sufixo com o nome do desenvolvedor, por exemplo `?v=AAAAMMDD.jean-<tema>.1`. Na sincronização fica o mais novo.
+- **`services/features.py` (menu e permissões) e `rotas/__init__.py` (registro de blueprint):** só acrescentar; não alterar entradas existentes.
+- **`rotas/home_routes.py`** (mais de 20 mil linhas): tocar o mínimo. Código novo em blueprint próprio (`rotas/<tema>_routes.py`) e em `services/<tema>.py`.
+- **`docs/claude.md`:** descrever o tema numa seção nova, **sem número**. Dois PRs ao mesmo tempo pegariam o mesmo número; quem promove para a homologação numera.
+
+### 40.3 Não tocar sem combinar antes
+- **`.cpanel.yml`, `scripts/deploy_cpanel.sh` e `CLAUDE.md` da raiz:** próprios de cada branch e de cada deploy.
+- **`app.py`, `config.py` e `worker.py`.**
+- **`services/job_status.py`, `services/processamento_jobs.py` e `services/fila_pesada.py`:** jobs órfãos, trava 409 e limite de processos do servidor (§38 e §39).
+- **Contrato da API com a automação:**
+  - Inclui as rotas de upload, Reprocessar e Cancelar, o formato do `/status`, os estados dos jobs, o 409 e o 503 com `Retry-After`.
+  - A equipe da automação pediu (12/11) para ser avisada **antes** de qualquer mudança.
+  - Se o tema encostar nisso, combinar entre os dois antes de começar e avisar a automação antes de publicar.
+
+### 40.4 Banco
+- **Scripts:** cada mudança de schema vai num script em `db/` que pode rodar mais de uma vez sem erro (conferir se a coluna ou o índice já existe antes de criar). `db.create_all()` só cria tabelas novas.
+- **Bancos:** cada ambiente tem banco próprio (homologação, `dev/cleber` e `dev/jean`); a `main` divide o banco com a produção (§8 e §21).
+- **Ordem:** o script é executado à mão em cada ambiente **antes** do código. O PR deve listar os scripts a rodar.
+- **Limite de conexões:** 15 por usuário do banco (§37). Nos testes, usar a aplicação única do `tests/conftest.py` (não chamar `create_app()` de novo) e apagar as linhas que o teste criar.
+
+### 40.5 Testes e entrega
+- **Antes do PR:**
+  - Testar com dado real no banco da própria `dev`.
+  - Suíte (`pytest`) passando duas vezes seguidas.
+  - `node --check static/js/main.js` quando mexer no JS.
+- **No PR:** escrever o que foi testado e com quais dados, os scripts de banco e se há mudança de contrato da API.
+
+### 40.6 Publicação
+- **Produção (`main`): só durante o dia, até ~18:00, nunca à noite.** A automação roda de madrugada e precisa validar antes.
+- **Depois do deploy:** Restart no cPanel e conferência rápida (login, a tela do tema e, se mexeu em jobs, `python scripts/limpar_jobs_orfaos.py`).

@@ -1,5 +1,11 @@
 # CLAUDE.md — SPO (Sistema de Planejamento e Orçamento) · SEDUC-MT
 
+> **Regras fixas desta branch (Cleber):**
+> - Responda, raciocine e escreva comentários, commits, PRs e documentação sempre em português do Brasil.
+> - Nunca faça commit, push, PR ou merge sem autorização explícita do Cleber; a autorização vale só para aquele conjunto de mudanças.
+> - Trabalhe sempre numa branch `feat/<tema>` ou `fix/<tema>` criada a partir da `dev/cleber`, nunca direto nela (fluxo nas seções 30 e 40 do `docs/claude.md`).
+> - Antes de pedir autorização para o commit, confira o `RELEASE_2_AAAA_MM_DD.N` no rodapé de `templates/base.html`: com data diferente de hoje, troque a data e use `.1`; com a data de hoje e N já usado em commit, some 1.
+
 ## Visão geral do projeto
 
 - **Backend:** Flask 3.1 / Werkzeug 3.1 (`app.py`, `create_app()`), rotas principais em `rotas/home_routes.py`.
