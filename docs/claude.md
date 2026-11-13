@@ -1908,3 +1908,36 @@ Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
 - Capturas nos dois temas. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-botoes-filtros.3` no CSS (JS sem mudança).
+
+## Login: aviso de sessão já aberta na própria página, no lugar do `window.confirm` (dev. Jean, 2026-11-13)
+
+**Problema:** quando o usuário já tem uma sessão ativa, o `POST /login` responde **409** e a tela perguntava "Deseja continuar?" com `window.confirm`. Num navegador que bloqueia diálogos (o painel do app Claude, alguns navegadores corporativos ou extensões), a resposta vira "não" e o login **parava sem aviso**: a pessoa digitava a senha e nada acontecia.
+
+**Correção (só no `login.html` e no CSS; o servidor não muda):**
+- **Aviso dentro do cartão de login** (`#login-sessao`, `role="alertdialog"`), com título "Usuário já conectado", ícone e uma faixa âmbar. Ele explica que, ao continuar, a outra sessão será encerrada: o servidor troca o token da sessão, então isso é o que acontece de fato.
+- **Botões** "Continuar e entrar" e "Cancelar".
+- **Foco:** vai para "Continuar e entrar" quando o aviso abre. **Esc** ou "Cancelar" fecham o aviso e devolvem o foco à senha.
+- Com o aviso aberto, "Entrar" não manda outro pedido.
+- **"Continuar"** manda o mesmo pedido de antes, com `force_login: true`. A rota `/login`, a resposta 409 e o fluxo sem JS (`flash`) não mudam; por isso a automação que usa o login não é afetada.
+- Se o aviso não existir na página, o código volta ao `window.confirm`.
+- **CSS:** bloco `[jean]` no fim do `style.css`. No claro, a borda do "Cancelar" dentro do aviso fica `#6b7280`, porque a borda dos campos dava 2,96:1 sobre o fundo âmbar.
+
+**Verificação:** SPO local, com a tela de login aberta num quadro isolado e as respostas do servidor **simuladas** (409 e depois "ok"). Nenhuma senha foi usada.
+- O 409 abre o aviso, com o foco em "Continuar".
+- "Entrar" com o aviso aberto não manda pedido.
+- Esc e "Cancelar" fecham o aviso e devolvem o foco à senha.
+- "Continuar" manda 1 pedido com `force_login` e segue para o destino.
+- **Contraste:**
+
+  | | Escuro | Claro |
+  |---|---|---|
+  | Título e texto | 10,68:1 | 14,38:1 |
+  | Ícone | 6,96:1 | 4,28:1 |
+  | Faixa | 8,28:1 | 4,63:1 |
+  | "Continuar" | 10,34:1 | 7,36:1 |
+  | "Cancelar": texto | 9,09:1 | 14,38:1 |
+  | "Cancelar": borda | 3,29:1 | 4,12:1 |
+
+- Sintaxe do script do `login.html` conferida com `node --check`. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-aviso-sessao.2` no CSS.
