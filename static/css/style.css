@@ -7572,3 +7572,37 @@ html.spo-split-pressure .governanca-grid {
 .theme-dark .menu-badge-manutencao { color: #fbbf24; }
 .sidebar-collapsed .menu-badge-manutencao,
 .collapsed .menu-badge-manutencao { display: none; }
+
+/* ==========================================================================
+   [jean] Totais dos relatórios de execução sem corte nem sobreposição
+   (fix/totais-relatorios-responsivo, 2026-11-12)
+   O quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e
+   NOB tinha duas colunas fixas e valores sem quebra de linha: transbordava em todas
+   as larguras (cortado a 390 px; valores invadindo a área vizinha a ~1024 px; até
+   25 px a mais a 1366 px). Agora as colunas se ajustam à largura disponível (2 quando
+   cabem, 1 quando não) e, se rótulo e valor não couberem lado a lado, o valor desce
+   para a linha de baixo. O PLAN 51 (.totais-box--wide) mantém o quadro próprio.
+   ========================================================================== */
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+  row-gap: 0;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > strong {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
