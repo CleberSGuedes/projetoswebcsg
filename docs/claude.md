@@ -1468,3 +1468,14 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 **Depois:** nas 4 telas × 8 cores × 2 temas × 2 modos (6.248 textos e 344 controles por combinação de tema): **0 textos abaixo de 7:1**; contornos ≥ 3,7:1 no padrão e ≥ 4,9:1 no reforçado. **Efeito visível:** contornos de campos e filtros mais marcados nos dois temas; no escuro, títulos pequenos, links e números um pouco mais claros; o reforçado agora se percebe (contornos fortes nos cartões e texto secundário quase na cor do principal).
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de texto (pior ponto dos degradês) e de contorno/preenchimento dos controles contra o fundo de fora, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (filtros do FIP 613, claro e escuro, e o reforçado). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-reforcado.1`.
+
+## Movimento reduzido (dev. Jean, 2026-11-12)
+
+**Problema:** o SPO não tinha nenhuma regra para quem pede "reduzir movimento" no sistema operacional (WCAG 2.3.3, meta AA+; `prefers-reduced-motion`): 4 animações contínuas (barra, marcador e pontos da tela "Carregando página…", ícone girando de `.planning-component-loading-row`), 32 transições no CSS (18 com deslocamento ou ampliação ao passar o mouse) e 14 rolagens suaves pedidas pelo JS (`scrollIntoView({ behavior: "smooth" })`), que o CSS sozinho não desliga.
+
+**Correção:**
+- `static/css/style.css`, bloco `[jean]` no fim, dentro de `@media (prefers-reduced-motion: reduce)`: transições e animações instantâneas (`0.01ms`, uma vez), rolagem `auto`; os indicadores de carregamento ficam parados (`animation: none`; barra em 34%, pontos visíveis) — o texto "Carregando…" continua;
+- `static/js/main.js`, bloco `initMovimentoReduzido` no fim: com a preferência ligada, `scrollIntoView` com `behavior: "smooth"` vira `"auto"` (o resto do pedido, como `block`, fica igual); sem a preferência, nada muda. Nenhuma chamada existente foi alterada.
+- `templates/base.html`: `?v=20261112.jean-movimento.1` no CSS e no JS.
+
+**Verificação** (o navegador do teste não simula a preferência, então em três partes): regra carregada com a condição `(prefers-reduced-motion: reduce)`; com o corpo da regra aplicado na página, elementos com transição/animação na Início caem de 100 para 0 e a barra/pontos de carregamento param; a lógica do JS testada com a preferência simulada (`smooth` → `auto`; sem a preferência e chamadas sem objeto, intactas) e a rolagem real funcionando; navegação por 4 telas sem erro no console. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
