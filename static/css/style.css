@@ -7972,3 +7972,19 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
 @media (pointer: coarse) {
   body .meta-fisica-plus-btn { width: 44px; min-width: 44px; height: 44px; }
 }
+
+/* ==========================================================================
+   [jean] Gráficos acessíveis: tabela "Ver dados do gráfico" (feat/graficos-acessiveis, 2026-11-12)
+   O JS (initGraficosAcessiveis, fim do main.js) cria um <details> abaixo de cada
+   gráfico Plotly com os mesmos números em tabela.
+   ========================================================================== */
+.spo-grafico-dados { margin: 6px 0 2px; font-size: 13px; color: var(--text); }
+.spo-grafico-dados > summary { display: inline-flex; align-items: center; min-height: 24px; cursor: pointer; color: var(--spo-accent-text, var(--accent)); font-weight: 600; }
+.spo-grafico-dados-corpo { max-height: 320px; overflow: auto; margin-top: 6px; border: 1px solid var(--spo-control-border, var(--border)); border-radius: 8px; }
+.spo-grafico-tabela { width: 100%; border-collapse: collapse; }
+.spo-grafico-tabela caption { caption-side: top; padding: 6px 8px; text-align: left; font-weight: 700; color: var(--text); }
+.spo-grafico-tabela th, .spo-grafico-tabela td { padding: 4px 8px; border-top: 1px solid var(--border); text-align: left; color: var(--text); }
+.spo-grafico-tabela td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spo-grafico-tabela thead th { position: sticky; top: 0; background: var(--card); }
+.spo-grafico-tabela tfoot th, .spo-grafico-tabela tfoot td { font-weight: 700; }
+@media (pointer: coarse) { .spo-grafico-dados > summary { min-height: 44px; } }

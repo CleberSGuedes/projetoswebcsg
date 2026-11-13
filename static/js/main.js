@@ -27839,3 +27839,149 @@
     return original.apply(this, arguments);
   };
 })();
+
+/* ==========================================================================
+   [jean] Gráficos acessíveis (feat/graficos-acessiveis, 2026-11-12)
+   Os gráficos Plotly (painel Teto Orçamentário) não tinham alternativa em texto
+   (WCAG 1.1.1, nível A): o leitor de tela lia só fragmentos do desenho
+   ("74,4%20,4%5,19%"). Para cada gráfico, este bloco: (1) dá nome e resumo
+   (role="img" + aria-label: título, tipo, nº de itens, maior item e total) e
+   (2) põe logo abaixo um "Ver dados do gráfico em tabela" (<details>) com os
+   mesmos números. Lê os dados do próprio gráfico (gd.data) e se atualiza
+   quando ele muda (filtros, tema). Não altera o código dos gráficos.
+   ========================================================================== */
+(function initGraficosAcessiveis() {
+  const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const pct = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
+  const TIPOS = { pie: "pizza", treemap: "mapa de árvore", bar: "barras", waterfall: "cascata", scatter: "linha" };
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+  function tituloDo(gd) {
+    const caixa = gd.closest("section, .teto-panel, .card");
+    const h = caixa && caixa.querySelector("h2, h3, .card-title");
+    return (h && h.textContent.trim()) || gd.getAttribute("data-titulo") || "Gráfico";
+  }
+
+  // Normaliza qualquer gráfico em séries: { nome, tipo, ehPercentual, itens: [{ rotulo, valor }] }
+  function series(gd) {
+    const out = [];
+    (gd.data || []).forEach((t, i) => {
+      if (t.visible === false) return;
+      let rotulos = [];
+      let valores = [];
+      if (t.type === "pie" || t.type === "treemap") {
+        rotulos = t.labels || [];
+        valores = t.values || [];
+      } else if (t.orientation === "h") {
+        rotulos = t.y || [];
+        valores = t.x || [];
+      } else {
+        rotulos = t.x || [];
+        valores = t.y || [];
+      }
+      if (t.type === "waterfall" && Array.isArray(t.customdata)) {
+        rotulos = rotulos.map((r, j) => {
+          const cd = t.customdata[j];
+          const longo = Array.isArray(cd) ? cd[0] : "";
+          if (!longo) return r;
+          return String(longo).startsWith(String(r)) ? longo : `${r} — ${longo}`;
+        });
+      }
+      const nums = valores.map(Number);
+      const ehPercentual = t.yaxis === "y2" && nums.every((v) => v >= 0 && v <= 1.0001);
+      out.push({
+        nome: t.name || (t.type === "pie" || t.type === "treemap" ? "Valor" : `Série ${i + 1}`),
+        tipo: t.type || "scatter",
+        ehPercentual,
+        itens: rotulos.map((r, j) => ({ rotulo: String(r), valor: nums[j] })),
+      });
+    });
+    return out;
+  }
+
+  const fmt = (s, v) => (v === undefined || Number.isNaN(v) ? "—" : s.ehPercentual ? pct.format(v) : moeda.format(v));
+
+  function resumo(gd, ss) {
+    const titulo = tituloDo(gd);
+    if (!ss.length || !ss.some((s) => s.itens.length)) {
+      const anotacao = gd.layout && gd.layout.annotations && gd.layout.annotations[0];
+      return `${titulo}: ${(anotacao && anotacao.text) || "sem dados"}.`;
+    }
+    const principal = ss.find((s) => !s.ehPercentual) || ss[0];
+    const tipo = TIPOS[principal.tipo] || "gráfico";
+    const itens = principal.itens.filter((x) => Number.isFinite(x.valor));
+    const ultimo = itens[itens.length - 1];
+    const total = principal.tipo === "waterfall" ? (ultimo && ultimo.valor) : itens.reduce((a, x) => a + x.valor, 0);
+    const maior = [...itens].sort((a, b) => b.valor - a.valor).find((x) => !(principal.tipo === "waterfall" && x === ultimo));
+    let texto = `${titulo}. Gráfico de ${tipo}`;
+    if (ss.length > 1) texto += ` com ${ss.length} séries (${ss.map((s) => s.nome).join(", ")})`;
+    texto += ` com ${principal.itens.length} ${principal.itens.length === 1 ? "item" : "itens"}.`;
+    if (ss.length > 1) {
+      // várias séries: o maior valor entre todas, dizendo de qual série é
+      let top = null;
+      ss.filter((s) => !s.ehPercentual).forEach((s) => s.itens.forEach((x) => {
+        if (Number.isFinite(x.valor) && (!top || x.valor > top.x.valor)) top = { s, x };
+      }));
+      if (top) texto += ` Maior valor: ${top.s.nome}, em ${top.x.rotulo}: ${fmt(top.s, top.x.valor)}.`;
+    } else if (maior) {
+      texto += ` Maior: ${maior.rotulo}, ${fmt(principal, maior.valor)}.`;
+    }
+    if (Number.isFinite(total) && ss.length === 1) texto += ` Total: ${fmt(principal, total)}.`;
+    return texto + " A tabela com todos os valores está logo abaixo do gráfico.";
+  }
+
+  function tabela(gd, ss) {
+    if (!ss.length || !ss.some((s) => s.itens.length)) return "<p>Sem dados.</p>";
+    const rotulos = [];
+    ss.forEach((s) => s.itens.forEach((x) => { if (!rotulos.includes(x.rotulo)) rotulos.push(x.rotulo); }));
+    const unica = ss.length === 1;
+    const total = unica && !ss[0].ehPercentual && ss[0].tipo !== "waterfall"
+      ? ss[0].itens.reduce((a, x) => a + (Number.isFinite(x.valor) ? x.valor : 0), 0) : null;
+    let h = `<table class="spo-grafico-tabela"><caption>${esc(tituloDo(gd))}</caption><thead><tr><th scope="col">Item</th>`;
+    ss.forEach((s) => { h += `<th scope="col">${esc(s.nome)}</th>`; });
+    if (total) h += "<th scope=\"col\">% do total</th>";
+    h += "</tr></thead><tbody>";
+    rotulos.forEach((r) => {
+      h += `<tr><th scope="row">${esc(r)}</th>`;
+      ss.forEach((s) => { const it = s.itens.find((x) => x.rotulo === r); h += `<td>${esc(it ? fmt(s, it.valor) : "—")}</td>`; });
+      if (total) { const it = ss[0].itens.find((x) => x.rotulo === r); h += `<td>${it ? pct.format(it.valor / total) : "—"}</td>`; }
+      h += "</tr>";
+    });
+    if (total) h += `</tbody><tfoot><tr><th scope="row">Total</th><td>${esc(moeda.format(total))}</td><td>${pct.format(1)}</td></tr></tfoot></table>`;
+    else h += "</tbody></table>";
+    return h;
+  }
+
+  function aplicar(gd) {
+    if (!gd || !gd.data) return;
+    const ss = series(gd);
+    const assinatura = JSON.stringify([tituloDo(gd), ss]);
+    if (gd.dataset.spoA11ySig === assinatura) return;
+    gd.dataset.spoA11ySig = assinatura;
+    gd.setAttribute("role", "img");
+    gd.setAttribute("aria-label", resumo(gd, ss));
+    let det = gd.nextElementSibling;
+    if (!det || !det.classList.contains("spo-grafico-dados")) {
+      det = document.createElement("details");
+      det.className = "spo-grafico-dados";
+      det.innerHTML = "<summary></summary><div class=\"spo-grafico-dados-corpo\"></div>";
+      gd.insertAdjacentElement("afterend", det);
+    }
+    det.querySelector("summary").textContent = `Ver dados do gráfico “${tituloDo(gd)}” em tabela`;
+    det.querySelector(".spo-grafico-dados-corpo").innerHTML = tabela(gd, ss);
+  }
+
+  let agendado = null;
+  function varrer() {
+    agendado = null;
+    document.querySelectorAll(".js-plotly-plot").forEach(aplicar);
+  }
+  const agendar = () => { if (!agendado) agendado = setTimeout(varrer, 250); };
+  if (document.body) {
+    new MutationObserver((muts) => {
+      // só reage a mudanças fora das tabelas que este bloco escreve
+      if (muts.some((m) => !(m.target.closest && m.target.closest(".spo-grafico-dados")))) agendar();
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  agendar();
+})();
