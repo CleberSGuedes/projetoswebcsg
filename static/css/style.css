@@ -7841,7 +7841,7 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
 
   /* Contorno dos controles (fora de hover/foco, que já têm o seu destaque) */
   body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]),
-           select, textarea, .mf-display, .icon-btn, .visual-pref-toggle, .preference-row,
+           select, textarea, .mf-display, .icon-btn,
            .btn:not(.btn-primary):not(.btn-secondary):not(.btn-danger)):not(:hover):not(:focus) {
     border-color: var(--spo-control-border);
   }
@@ -8104,3 +8104,56 @@ body[data-spo-table-text="medium"] :is(.pagination button, .page-btn, .page-size
 body[data-spo-table-text="medium"] .spo-fontes-amostra table { font-size: 10px; }
 body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px; }
 .spo-fontes-amostra caption { caption-side: top; padding: 4px 4px 2px; text-align: left; font-size: 12px; color: var(--muted); }
+
+/* ==========================================================================
+   [jean] Contornos na cor de destaque (fix/contornos-destaque, 2026-11-13)
+   O A7 deu aos contornos dos controles um cinza neutro fixo (#86848c / #828282)
+   para garantir 3:1 (WCAG 1.4.11). Funcionava, mas apagava a cor de destaque —
+   o Jean viu um "alto contraste fixo", diferente da prévia do Personalizar.
+   Agora o contorno é um tom do próprio destaque, o mais claro que passa:
+   claro → passo da paleta do destaque com ≥ 3:1 sobre #fff e #f6f5f4;
+   escuro → o destaque misturado ao cartão (65%; Roxo 85%) com ≥ 3:1 sobre
+   #242424 e #1e1e1e. "Contraste reforçado" → ≥ 4,5:1 (contas no PR).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) { --spo-control-border: var(--color-400); }
+  body:not(.theme-dark):is([data-accent-preference="teal"], [data-accent-preference="green"],
+                           [data-accent-preference="orange"]) { --spo-control-border: var(--color-500); }
+  body:not(.theme-dark)[data-accent-preference="yellow"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-accent-preference="purple"] { --spo-control-border: var(--color-300); }
+
+  body:not(.theme-dark)[data-visual-contrast="enhanced"] { --spo-control-border: var(--color-500); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"]:is([data-accent-preference="blue"], [data-accent-preference="teal"],
+      [data-accent-preference="red"]) { --spo-control-border: var(--color-600); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="orange"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="green"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="yellow"] { --spo-control-border: var(--color-800); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="purple"] { --spo-control-border: var(--color-400); }
+
+  body.theme-dark { --spo-control-border: color-mix(in srgb, var(--accent) 65%, var(--card)); }
+  body.theme-dark[data-accent-preference="purple"] { --spo-control-border: color-mix(in srgb, var(--accent) 85%, var(--card)); }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-control-border: var(--accent); }
+  body.theme-dark[data-visual-contrast="enhanced"][data-accent-preference="purple"] { --spo-control-border: var(--accent-strong); }
+}
+
+/* Três níveis nas linhas de opção do Personalizar (Tema, Leitura, Preferências):
+   no contraste padrão, a linha é suave (como a prévia) e só fica forte quando
+   importa — passar o mouse ou foco → tom de 3:1; selecionada/aberta → destaque
+   cheio (≥ 3:1, indicador de estado, WCAG 1.4.11) + fundo tingido + ✓.
+   No "contraste reforçado", todas ficam fortes e a selecionada continua a mais forte. */
+@media (forced-colors: none) {
+  body { --spo-option-border: color-mix(in srgb, var(--accent) 32%, var(--card)); --spo-selected-border: var(--spo-accent-text, var(--accent)); }
+  body.theme-dark { --spo-option-border: color-mix(in srgb, var(--accent) 30%, var(--card)); --spo-selected-border: var(--accent); }
+  body[data-visual-contrast="enhanced"] { --spo-option-border: var(--spo-control-border); }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-selected-border: var(--spo-accent-text, var(--accent)); }
+
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-toggle, .visual-pref-option) {
+    border-width: 1px; border-style: solid; border-color: var(--spo-option-border);
+  }
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-toggle, .visual-pref-option):is(:hover, :focus-visible),
+  body:is([data-visual-contrast], :not([data-visual-contrast])) .visual-pref-group.is-open .visual-pref-toggle { border-color: var(--spo-control-border); }
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-option).active {
+    border-color: var(--spo-selected-border);
+    box-shadow: inset 0 0 0 1px var(--spo-selected-border), inset 3px 0 0 var(--spo-selected-border); /* 2 px, sem mexer no tamanho */
+  }
+}
