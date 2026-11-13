@@ -7872,3 +7872,28 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
     border-color: var(--spo-control-border);
   }
 }
+
+/* ==========================================================================
+   [jean] Movimento reduzido (feat/movimento-reduzido, 2026-11-12)
+   O SPO não tinha nenhuma regra para quem pede "reduzir movimento" no sistema
+   (WCAG 2.3.3, meta AA+): 4 animações contínuas (barra, marcador e pontos da tela
+   "Carregando página…", ícone girando dos componentes), 32 transições (18 com
+   deslocamento/ampliação ao passar o mouse) e 14 rolagens suaves feitas pelo JS.
+   Com a preferência ligada: transições e animações viram instantâneas, os
+   indicadores de carregamento ficam parados (o texto "Carregando…" continua) e a
+   rolagem é imediata (no JS, ver initMovimentoReduzido no fim do main.js).
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  .app-loading-progress, .app-loading-marker, .app-loading-dot,
+  .planning-component-loading-row .bi {
+    animation: none !important;
+  }
+  .app-loading-dot { opacity: 1; }
+}

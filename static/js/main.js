@@ -27820,3 +27820,22 @@
   }
   prepareCard();
 })();
+
+/* ==========================================================================
+   [jean] Movimento reduzido (feat/movimento-reduzido, 2026-11-12)
+   O SPO chama scrollIntoView({ behavior: "smooth" }) em 14 pontos; o CSS não
+   consegue desligar uma rolagem suave pedida pelo JS. Quando a pessoa pede
+   "reduzir movimento" no sistema, a rolagem suave vira imediata. Não altera
+   nenhuma chamada existente; sem a preferência, nada muda.
+   ========================================================================== */
+(function initMovimentoReduzido() {
+  if (!window.matchMedia || !Element.prototype.scrollIntoView) return;
+  const consulta = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function scrollIntoViewRespeitandoMovimento(arg) {
+    if (consulta.matches && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      return original.call(this, { ...arg, behavior: "auto" });
+    }
+    return original.apply(this, arguments);
+  };
+})();
