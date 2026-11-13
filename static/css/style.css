@@ -7666,3 +7666,40 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
 .spo-fontes-amostra td { padding: 2px 4px; border-top: 1px solid var(--border); }
 .spo-fontes-amostra td:last-child { text-align: right; }
 .spo-fontes-status { min-height: 1.2em; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ==========================================================================
+   [jean] Contraste AA do botão principal dos relatórios, da prévia do Personalizar
+   e dos números do painel Teto, para as 8 cores de destaque (fix/contraste-aa, 2026-11-12)
+   Medido: texto branco sobre a cor de destaque no escuro ficava entre 1,2 e 2,5:1 em
+   todas as cores; no claro, os números do Teto (color-400) e o "Baixar Excel" (degradê
+   que começa na color-400) caíam a 1,5–4,1:1 em 6 das 8 cores. Regra: no claro, texto
+   na cor de destaque usa a color-700 e botão com texto branco usa fundo color-700/800;
+   no escuro, botão na cor de destaque clara usa texto escuro. Mínimo medido depois:
+   4,69:1 (amarelo, texto color-700) e acima de 5:1 nas demais. Junto: as cores de
+   positivo/negativo dos totais dos relatórios voltam a aparecer no tema claro.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) .teto-kpi strong {
+    color: var(--color-700);
+  }
+  body:not(.theme-dark) .report-actions .btn:last-child {
+    color: #ffffff;
+    background: linear-gradient(145deg, var(--color-800), var(--color-700));
+  }
+  body:not(.theme-dark) .preview-actions button:first-child {
+    color: #ffffff;
+    background: var(--color-700);
+    border-color: var(--color-700);
+  }
+  .theme-dark .report-actions .btn:last-child,
+  .theme-dark .preview-actions button:first-child {
+    color: #111111;
+  }
+  /* Totais positivos (azul) e negativos (vermelho), como no escuro: no claro, a regra de
+     layout ".report-data-card .totais-row strong { color: var(--text) }" é mais específica
+     que ".totais-row .pos/.neg" e apagava as duas cores. Contraste no branco ≥ 10:1. */
+  .report-data-card .totais-row strong.pos { color: #0b3c91; }
+  .report-data-card .totais-row strong.neg { color: #8b0000; }
+  .theme-dark .report-data-card .totais-row strong.pos { color: #6ea8ff; }
+  .theme-dark .report-data-card .totais-row strong.neg { color: #ff8b8b; }
+}
