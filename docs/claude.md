@@ -1562,3 +1562,34 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 - A 320 px, o cabeçalho fica sem "…" e sem rolagem lateral.
 - `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 - Sem script de banco. `templates/base.html`: `?v=20261113.jean-zoom.1` no CSS e no JS.
+
+## Contornos dos controles na cor de destaque, em três níveis (dev. Jean, 2026-11-13)
+
+**Problema:** para garantir 3:1 nos contornos (WCAG 1.4.11), um bloco anterior (contornos de controles, AA) usou um **cinza neutro fixo** (`--spo-control-border`: `#86848c` no claro, `#828282` no escuro) em todos os controles, inclusive nas linhas de opção do Personalizar. Isso trouxe dois efeitos:
+- a cor de destaque sumiu dos controles; a prévia do Personalizar seguia o destaque, os cartões ao lado não;
+- com todas as linhas contornadas com força, a **selecionada** quase não se distinguia das outras.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+1. **Campos, filtros e botões secundários** (onde a borda é o próprio controle): `--spo-control-border` vira um tom do destaque, o mais claro que passa em 3:1.
+   - Claro: um passo da paleta — `--color-400` (Clássico, Azul, Vermelho), `--color-500` (Ciano, Verde, Laranja), `--color-700` (Amarelo), `--color-300` (Roxo).
+   - Escuro: `color-mix(in srgb, var(--accent) 65%, var(--card))`; no Roxo, 85%.
+   - "Contraste reforçado": ≥ 4,5:1 (claro `--color-400`…`--color-800` conforme o destaque; escuro `--accent`, Roxo `--accent-strong`).
+2. **Linhas de opção** (`.preference-row`, `.visual-pref-toggle`, `.visual-pref-option`), em três níveis:
+   - **em repouso:** suave, no tom da prévia (`--spo-option-border`, destaque a ~30% sobre o cartão). Ícone, texto e seta já identificam o controle;
+   - **mouse, foco ou grupo aberto:** `--spo-control-border` (≥ 3:1);
+   - **selecionada:** destaque cheio (`--spo-selected-border`), com 2 px por `box-shadow`, sem mudar o tamanho; continua com o fundo tingido e o ✓.
+
+   As linhas de opção saíram da regra geral de contorno daquele bloco anterior.
+3. **"Contraste reforçado":** todas as linhas ficam fortes (≥ 4,5:1), e a selecionada continua a mais forte.
+
+Cartões que só exibem informação continuam suaves no padrão, como antes.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, no Personalizar, nos 8 destaques × 2 temas, medido contra o cartão e o fundo da página.
+
+| Elemento | Contraste padrão | Contraste reforçado |
+|---|---|---|
+| Campos, filtros e botões | 3,02–5,91:1 | 4,51–12,01:1 |
+| Linha em repouso | 1,17–2,36:1 (suave, de propósito) | ≥ 4,7:1 |
+| Linha selecionada | 4,3–12:1 | 7,5–13,1:1, sempre acima das outras |
+
+Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-contornos.3` no CSS (JS sem mudança).
