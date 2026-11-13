@@ -1359,6 +1359,19 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 
 **Deploy:** sem alteração de banco. Depois do deploy, Restart no cPanel; rodar `python scripts/limpar_jobs_orfaos.py` (e `--aplicar` se listar algo); durante um EMP, conferir `ps -u "$USER" -L | wc -l` (dezenas, não perto de 100) e que o worker tem sessão própria (`ps -u "$USER" -o pid,pgid,sid,cmd`: SID do worker = PID dele).
 
+## Totais dos relatórios de execução sem corte nem sobreposição (dev. Jean, 2026-11-12)
+
+**Problema (medido no ambiente do dev. Jean):** o quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e NOB tinha duas colunas fixas (`.relatorio-top-uo .totais-box`, linhas com `minmax(90px, 130px) minmax(0, 1fr)`) e valores com `white-space: nowrap`. O conteúdo ficava mais largo que o quadro em quase todas as larguras:
+- 390 px (celular): o quadro saía do cartão e era cortado (`.card.plan20-card` 342 px de conteúdo em 296; FIP 613 359/296; PLAN 20 366/296; EST EMP 349/296); na tela, "2026Valor PED: 19.23…" encavalado e valores cortados;
+- 1024 px: 352–376 px de conteúdo num quadro de 281 px, com os valores invadindo a coluna vizinha;
+- 1366 px: até 25 px a mais. NOB e PLAN 21 já cabiam.
+
+**Correção (só CSS, bloco `[jean]` no fim do `static/css/style.css`):** o quadro usa `grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr))` (duas colunas quando cabem, uma quando não) e cada linha vira flex com quebra: rótulo à esquerda, valor à direita, e o valor desce para a linha de baixo se os dois não couberem lado a lado. O PLAN 51 (`.totais-box--wide`) mantém o quadro próprio. `templates/base.html`: `?v=20261112.jean-totais.1` só no link do CSS.
+
+**Efeito visível:** a 1024 e 1366 px o quadro passa a uma coluna (fica mais alto; no FIP 613, os 6 totais em lista), mas nenhum valor é cortado.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, dados reais já carregados (PED, FIP 613, PLAN 20, PLAN 21, NOB, EST EMP); medição automática do quadro (largura do conteúdo × largura do quadro, valor além da linha, linhas sobrepostas) em 390, 768, 1024 e 1366 px — todos sem corte nem sobreposição depois da correção; capturas antes/depois do FIP 613 em 390 e 1024 px. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
 ## Fontes e tamanho do texto no Personalizar Temas SPO (dev. Jean, 2026-11-12)
 
 **Motivo:** o SPO não carregava nenhuma fonte web. A pilha começava por "Cantarell", que o Windows não tem, então cada aparelho mostrava uma fonte diferente (Segoe UI, a do sistema no Mac, Roboto no Android). E os tamanhos mais usados no CSS são pequenos (12 px ×72, 11 px ×59, 10 px ×17; 8 px nas células de tabela), o que pesa contra a meta de acessibilidade AA+.
@@ -1372,8 +1385,8 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 
 **Fontes hospedadas no SPO** (`static/fonts/`, pasta nova), não pelo Google Fonts: nenhum dado do usuário vai a terceiros. Só o subconjunto latino (cobre o português), ~180 KB no total; o navegador só baixa a fonte escolhida. Todas sob a **SIL Open Font License 1.1**, com o `OFL.txt` em cada pasta; origem (Fontsource 5.3.x via jsDelivr), bytes e sha256 de cada arquivo em `static/fonts/LEIA-ME.md`.
 
-**Arquivos:** `static/css/style.css` (bloco `[jean]` no fim: `@font-face` com nomes "SPO …", troca pelos atributos `data-spo-font-ui`, `data-spo-font-data` e `data-spo-text-size` no `<body>`); `static/js/main.js` (bloco `initFontesPersonalizar` no fim: lê e aplica a preferência em todas as telas; cliques no cartão por delegação e um `MutationObserver` para o cartão, que é carregado depois); `templates/partials/atualizar_personalizar_spo.html` (o cartão, com amostra de texto e números); `templates/base.html` (`?v=20261112.jean-fontes.1` no CSS e no JS). Nenhuma função ou regra existente foi alterada.
+**Arquivos:** `static/css/style.css` (bloco `[jean]` no fim: `@font-face` com nomes "SPO …", troca pelos atributos `data-spo-font-ui`, `data-spo-font-data` e `data-spo-text-size` no `<body>`); `static/js/main.js` (bloco `initFontesPersonalizar` no fim: lê e aplica a preferência em todas as telas; cliques no cartão por delegação e um `MutationObserver` para o cartão, que é carregado depois); `templates/partials/atualizar_personalizar_spo.html` (o cartão, com amostra de texto e números); `templates/base.html` (`?v=20261112.jean-fontes.2` no CSS e no JS). Nenhuma função ou regra existente foi alterada.
 
-**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com cliques reais no cartão: cada fonte aplicada e só ela baixada; a preferência sobrevive à recarga; "Clássica" nas tabelas continua clássica mesmo com outra fonte na interface; com 125%, nenhuma das 8 telas medidas transborda a 390 px. `node --check static/js/main.js` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com cliques reais no cartão: cada fonte aplicada e só ela baixada; a preferência sobrevive à recarga; "Clássica" nas tabelas continua clássica mesmo com outra fonte na interface; com 125%, nenhuma das 8 telas medidas transborda a 390 px. Ajuste junto: com o texto ampliado, a coluna "Última atualização por UO" (`.meta-uo-col`, `min-width: 190px`) e o e-mail longo passavam 6 px do cartão no celular; só nesse caso, a coluna libera a largura e o texto quebra (totais de PED, FIP 613, PLAN 20, EST EMP e NOB conferidos a 390 px em 112% e 125%). `node --check static/js/main.js` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
 **Depende do PR dos totais** (`fix/totais-relatorios-responsivo`): com fonte monoespaçada e 125%, os totais do FIP 613 encavalam sem aquela correção; com ela, ficam limpos (testado).

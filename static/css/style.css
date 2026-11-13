@@ -7574,6 +7574,40 @@ html.spo-split-pressure .governanca-grid {
 .collapsed .menu-badge-manutencao { display: none; }
 
 /* ==========================================================================
+   [jean] Totais dos relatórios de execução sem corte nem sobreposição
+   (fix/totais-relatorios-responsivo, 2026-11-12)
+   O quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e
+   NOB tinha duas colunas fixas e valores sem quebra de linha: transbordava em todas
+   as larguras (cortado a 390 px; valores invadindo a área vizinha a ~1024 px; até
+   25 px a mais a 1366 px). Agora as colunas se ajustam à largura disponível (2 quando
+   cabem, 1 quando não) e, se rótulo e valor não couberem lado a lado, o valor desce
+   para a linha de baixo. O PLAN 51 (.totais-box--wide) mantém o quadro próprio.
+   ========================================================================== */
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+  row-gap: 0;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > strong {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
    [jean] Fontes e tamanho do texto escolhidos em Personalizar Temas SPO
    (feat/fontes-personalizar, 2026-11-12)
    Fontes hospedadas no SPO (static/fonts, licença OFL 1.1; ver static/fonts/LEIA-ME.md).
@@ -7618,6 +7652,12 @@ body[data-spo-font-data="intel-mono"] :is(table, .totais-row strong, [id^="teto-
    mexer no menu nem no topo); o layout responsivo se reorganiza na largura menor. */
 body[data-spo-text-size="large"] .main { zoom: 1.125; }
 body[data-spo-text-size="larger"] .main { zoom: 1.25; }
+/* Com o texto ampliado num celular, a coluna "Última atualização por UO" (min-width
+   de 190 px) e o e-mail longo não cabiam no cartão: liberam a largura e quebram. */
+body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-col {
+  min-width: min(190px, 100%);
+  overflow-wrap: anywhere;
+}
 
 /* Cartão "Fontes e tamanho" no Personalizar: reaproveita o visual das preferências comuns */
 .spo-fontes-amostra { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
