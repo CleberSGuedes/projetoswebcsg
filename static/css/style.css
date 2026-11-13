@@ -8458,7 +8458,7 @@ body.theme-dark .pagination button.active {
 
   /* mouse/foco no claro: escurecer (o brightness(1.05) original clareava e baixava
      o texto branco para ~7,0:1 no Clássico); no escuro, clarear já aumenta o contraste */
-  body:not(.theme-dark) :is(.btn-primary, .btn-danger:not([id$="-clear"])):is(:hover, :focus) {
+  body:not(.theme-dark) :is(.btn-primary, .btn-danger:not([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"])):is(:hover, :focus) {
     filter: brightness(0.92);
   }
 
@@ -8466,13 +8466,34 @@ body.theme-dark .pagination button.active {
   body:not(.theme-dark) .btn-danger { color: #ffffff; background: #a51d2d; border-color: transparent; }
   body.theme-dark .btn-danger { color: #111111; background: #ff7b7b; border-color: transparent; }
 
-  /* "Limpar Formulário": contorno vermelho, sem preenchimento */
-  body .btn-danger[id$="-clear"] {
+  /* "Limpar Formulário" (#57) e, nos modais de consulta, "Cancelar" e "Remover" (fix/botoes-filtros):
+     contorno vermelho, sem preenchimento — dispensam ou tiram um critério, não apagam dados */
+  body .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]) {
     background: transparent;
     color: #a51d2d;
     border: 1.5px solid #a51d2d;
   }
-  body .btn-danger[id$="-clear"]:is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08); }
-  body.theme-dark .btn-danger[id$="-clear"] { color: #ffa3a3; border-color: #ffa3a3; }
-  body.theme-dark .btn-danger[id$="-clear"]:is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12); }
+  body .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]):is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08); }
+  body.theme-dark .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]) { color: #ffa3a3; border-color: #ffa3a3; }
+  body.theme-dark .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]):is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12); }
+  /* Secundário neutro (.btn-secondary: "Limpar" dos critérios, "Editar"…): contorno nos dois
+     temas. No claro era cinza cheio (#495057, do #39); no escuro já era contorno (regra antiga
+     + #37). Agora o claro faz como o escuro: sem fundo, texto do tema e a borda dos campos. */
+  body:not(.theme-dark) .btn-secondary {
+    --bs-btn-color: var(--text);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: var(--spo-control-border, #86848c);
+    --bs-btn-hover-color: var(--text);
+    --bs-btn-hover-bg: rgba(73, 80, 87, 0.08);
+    --bs-btn-hover-border-color: #495057;
+    --bs-btn-active-color: var(--text);
+    --bs-btn-active-bg: rgba(73, 80, 87, 0.14);
+    --bs-btn-active-border-color: #495057;
+    --bs-btn-disabled-color: #5f6670;
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: #c9ced6;
+  }
+  /* a regra .btn do SPO (border: 1px solid transparent) vence as variáveis do Bootstrap */
+  body:not(.theme-dark) .btn-secondary { border-color: var(--spo-control-border, #86848c); }
+  body:not(.theme-dark) .btn-secondary:is(:hover, :focus-visible) { border-color: #495057; }
 }
