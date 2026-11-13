@@ -1433,7 +1433,11 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Produção (`main`): só durante o dia, até ~18:00, nunca à noite.** A automação roda de madrugada e precisa validar antes.
 - **Depois do deploy:** Restart no cPanel e conferência rápida (login, a tela do tema e, se mexeu em jobs, `python scripts/limpar_jobs_orfaos.py`).
 
-## Totais dos relatórios de execução sem corte nem sobreposição (dev. Jean, 2026-11-12)
+## 41. AA+ (acessibilidade) — dev. Jean (2026-11-13)
+
+As subseções vêm dos PRs #31 a #63 da `dev/jean`, na ordem em que entraram.
+
+### 41.1 Totais dos relatórios de execução sem corte nem sobreposição (dev. Jean, 2026-11-12)
 
 **Problema (medido no ambiente do dev. Jean):** o quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e NOB tinha duas colunas fixas (`.relatorio-top-uo .totais-box`, linhas com `minmax(90px, 130px) minmax(0, 1fr)`) e valores com `white-space: nowrap`. O conteúdo ficava mais largo que o quadro em quase todas as larguras:
 - 390 px (celular): o quadro saía do cartão e era cortado (`.card.plan20-card` 342 px de conteúdo em 296; FIP 613 359/296; PLAN 20 366/296; EST EMP 349/296); na tela, "2026Valor PED: 19.23…" encavalado e valores cortados;
@@ -1446,7 +1450,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, dados reais já carregados (PED, FIP 613, PLAN 20, PLAN 21, NOB, EST EMP); medição automática do quadro (largura do conteúdo × largura do quadro, valor além da linha, linhas sobrepostas) em 390, 768, 1024 e 1366 px — todos sem corte nem sobreposição depois da correção; capturas antes/depois do FIP 613 em 390 e 1024 px. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
-## Fontes e tamanho do texto no Personalizar Temas SPO (dev. Jean, 2026-11-12)
+### 41.2 Fontes e tamanho do texto no Personalizar Temas SPO (dev. Jean, 2026-11-12)
 
 **Motivo:** o SPO não carregava nenhuma fonte web. A pilha começava por "Cantarell", que o Windows não tem, então cada aparelho mostrava uma fonte diferente (Segoe UI, a do sistema no Mac, Roboto no Android). E os tamanhos mais usados no CSS são pequenos (12 px ×72, 11 px ×59, 10 px ×17; 8 px nas células de tabela), o que pesa contra a meta de acessibilidade AA+.
 
@@ -1465,7 +1469,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 **Depende do PR dos totais** (`fix/totais-relatorios-responsivo`): com fonte monoespaçada e 125%, os totais do FIP 613 encavalam sem aquela correção; com ela, ficam limpos (testado).
 
-## Contraste AA do botão principal dos relatórios, da prévia do Personalizar e dos números do Teto (dev. Jean, 2026-11-12)
+### 41.3 Contraste AA do botão principal dos relatórios, da prévia do Personalizar e dos números do Teto (dev. Jean, 2026-11-12)
 
 **Problema (medido nas 8 cores de destaque × claro/escuro, no ambiente do dev. Jean):** três elementos usam a cor de destaque e ficavam abaixo do mínimo AA (4,5:1) — 35 das 48 combinações:
 - **"Baixar Excel"** (`.report-actions .btn:last-child`, texto branco sobre degradê da cor de destaque): no claro o degradê começa na `--color-400` (a mais clara da paleta; no claro, `--accent-strong` = color-400 e `--accent` = color-500), de 1,47:1 (amarelo) a 5,91 (roxo), Clássico 3,47; no escuro, de 1,19 a 2,51 em **todas** as cores;
@@ -1482,7 +1486,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste calculado no navegador sobre o pior ponto do degradê, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (números do Teto e "Baixar Excel", claro e escuro). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
-## Foco visível padrão em todo o SPO (dev. Jean, 2026-11-12)
+### 41.4 Foco visível padrão em todo o SPO (dev. Jean, 2026-11-12)
 
 **Problema (medido com teclado real, no ambiente do dev. Jean):** em 4 telas (FIP 613, Personalizar Temas, painel Teto, Alterar Senha), **nenhum dos 75 elementos focáveis** tinha indicador de foco próprio com 2 px e contraste 3:1 (WCAG 2.2: 2.4.7; meta AA+ 2.4.13). O menu dependia do contorno automático do navegador (fino e diferente em cada navegador); o botão de recolher o menu (`.icon-btn:focus { outline: none }`) e os botões pequenos (Limpar Filtros, Atualizar) não mostravam nada. Há 13 regras no CSS que removem o `outline` e 21 regras de foco, cada uma para um componente.
 
@@ -1492,7 +1496,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; Tab real para o modo teclado e foco em cada elemento, esperando as transições terminarem; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
-## Alvos de toque: mínimo 24 px sempre e 44 px em telas de toque (dev. Jean, 2026-11-12)
+### 41.5 Alvos de toque: mínimo 24 px sempre e 44 px em telas de toque (dev. Jean, 2026-11-12)
 
 **Problema (medido em FIP 613, Teto, Personalizar, Diretrizes, Alterar Senha e Início, no ambiente do dev. Jean):**
 - abaixo do mínimo AA (WCAG 2.2, 2.5.8: 24 px) só o **botão de recolher o menu**, `#sidebar-toggle`, com **22×22 px** no desktop (em tela estreita o Contrato Responsivo já o leva a 40 px);
@@ -1506,7 +1510,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, emulação de celular (390 px, toque) e desktop (1366 px, mouse); capturas antes/depois (cores do Personalizar e paginação do FIP 613). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-alvos.1`.
 
-## Contraste AA+ (7:1) no tema claro (dev. Jean, 2026-11-12)
+### 41.6 Contraste AA+ (7:1) no tema claro (dev. Jean, 2026-11-12)
 
 **Problema (medido em 10 telas no tema claro, no ambiente do dev. Jean):** 256 textos abaixo de 7:1 (meta AA+, WCAG 1.4.6), quase todos por duas cores:
 - **cinza secundário `--muted: #5e5c64`** — 210 textos (rótulos, "muted", rodapé), mínimo 5,46:1 no fundo esverdeado do Personalizar;
@@ -1527,7 +1531,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Pendente (tema escuro, AA+):** azul/vermelho dos números nas tabelas (`td.num.pos/.neg`, 6,3 e 6,7:1) e números do Teto (6,0:1) ficam um pouco abaixo de 7:1 no escuro.
 
-## Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade (dev. Jean, 2026-11-12)
+### 41.7 Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade (dev. Jean, 2026-11-12)
 
 **Problema (medido em FIP 613, Alterar Senha, Personalizar e Teto, 8 cores de destaque × claro/escuro × contraste padrão/reforçado, no ambiente do dev. Jean):**
 - **contorno dos controles** (campos, listas, filtros `.mf-display`, botões sem preenchimento) abaixo do **AA** (WCAG 1.4.11, 3:1): 1,36:1 no claro e 1,26–1,92:1 no escuro — 232 a 240 de 248 controles; os botões de preferência do Personalizar não tinham borda nenhuma no escuro;
@@ -1543,7 +1547,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de texto (pior ponto dos degradês) e de contorno/preenchimento dos controles contra o fundo de fora, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (filtros do FIP 613, claro e escuro, e o reforçado). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-reforcado.1`.
 
-## Movimento reduzido (dev. Jean, 2026-11-12)
+### 41.8 Movimento reduzido (dev. Jean, 2026-11-12)
 
 **Problema:** o SPO não tinha nenhuma regra para quem pede "reduzir movimento" no sistema operacional (WCAG 2.3.3, meta AA+; `prefers-reduced-motion`): 4 animações contínuas (barra, marcador e pontos da tela "Carregando página…", ícone girando de `.planning-component-loading-row`), 32 transições no CSS (18 com deslocamento ou ampliação ao passar o mouse) e 14 rolagens suaves pedidas pelo JS (`scrollIntoView({ behavior: "smooth" })`), que o CSS sozinho não desliga.
 
@@ -1554,7 +1558,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Verificação** (o navegador do teste não simula a preferência, então em três partes): regra carregada com a condição `(prefers-reduced-motion: reduce)`; com o corpo da regra aplicado na página, elementos com transição/animação na Início caem de 100 para 0 e a barra/pontos de carregamento param; a lógica do JS testada com a preferência simulada (`smooth` → `auto`; sem a preferência e chamadas sem objeto, intactas) e a rolagem real funcionando; navegação por 4 telas sem erro no console. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
-## AA nas telas que faltavam: botões vermelhos, etapas, títulos de seção, botão "+" e login (dev. Jean, 2026-11-12)
+### 41.9 AA nas telas que faltavam: botões vermelhos, etapas, títulos de seção, botão "+" e login (dev. Jean, 2026-11-12)
 
 **Problema (medido em uploads, cadastros e login, já com as correções de acessibilidade anteriores, no ambiente do dev. Jean):**
 - **botões vermelhos `.btn-danger`** (Cancelar, Remover, Excluir, Limpar Formulário) no claro: texto branco sobre `#ef4444`→`#dc2626`, **3,76:1** (abaixo do AA);
@@ -1570,7 +1574,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o usuário de teste recebendo acesso temporário às telas (só visualização; nada enviado; acesso revogado ao final); capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
-## Gráficos acessíveis: resumo para leitor de tela e tabela de dados (dev. Jean, 2026-11-12)
+### 41.10 Gráficos acessíveis: resumo para leitor de tela e tabela de dados (dev. Jean, 2026-11-12)
 
 **Problema:** os 5 gráficos Plotly do painel Teto Orçamentário (grupo de despesa, ADJ, Pareto de macropolíticas, ação/PAOE, exercício × grupo) não tinham **nenhuma alternativa em texto** (WCAG 1.1.1, **nível A**): sem nome, sem descrição, sem tabela; o leitor de tela lia só fragmentos do desenho ("74,4%20,4%5,19%", "417244918040…").
 
@@ -1581,7 +1585,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean: na árvore de acessibilidade os 5 gráficos aparecem como imagem com nome; somas conferidas (pizza = indicador "Teto total"; exercício: soma dos grupos = "Total Geral"); filtro "4 - Investimentos" atualiza resumo e tabela; teclado: foco no "Ver dados…" com anel visível e Enter abre; contraste mínimo 9,85:1 (claro) e 10,56:1 (escuro); a 390 px a página não transborda (tabelas largas rolam na própria caixa). `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-graficos.1` no CSS e no JS.
 
-## Semântica e teclado: menu operável, título da aba, "Pular para o conteúdo", avisos modais, abas e filtros (dev. Jean, 2026-11-12)
+### 41.11 Semântica e teclado: menu operável, título da aba, "Pular para o conteúdo", avisos modais, abas e filtros (dev. Jean, 2026-11-12)
 
 **Problema (medido com teclado real, no ambiente do dev. Jean):**
 - **o menu não era operável pelo teclado** (WCAG 2.1.1, **nível A**): os grupos (Administrar SPO, Institucional, Relatórios, Painéis, Usuários e os subgrupos) são `<div class="menu-item menu-parent">` sem foco; na Início o Tab só passava por "Expandir menu → Início → Sair → Fechar". Quem usa só o teclado não chegava a nenhum relatório;
@@ -1607,7 +1611,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Fora daqui:** Esc nas listas dos filtros e navegação por setas dentro do menu (o Tab já percorre tudo); telas de cadastro com modais próprios não foram exercitadas uma a uma.
 
-## Superfícies do tema: filtros, paginação e caixas de seleção (dev. Jean, 2026-11-13)
+### 41.12 Superfícies do tema: filtros, paginação e caixas de seleção (dev. Jean, 2026-11-13)
 
 **Problema:** peças antigas tinham cores fixas de uma paleta cinza-azulada em vez das variáveis do tema (cinzas neutros `#1e1e1e`/`#242424`/`#3d3d3d`): lista aberta do filtro (`.mf-panel`, `#11171d`), Cancelar/Aplicar (`.mf-btn`, `#1e2833`), paginação e "itens por página" (`#111827`, borda `#1f2937`, a ~1,1:1 sobre o cartão) e rodapé de totais das tabelas (`.table-foot`, `#0f1418`). No escuro a lista do filtro parecia de outro sistema. As caixas de seleção não tinham `accent-color` e ficavam no azul do navegador nos dois temas (só a árvore de permissões tinha cor própria). No claro, as bordas da paginação, de Cancelar e da lista do filtro ficavam em 1,36:1 (mínimo 3:1, WCAG 1.4.11). O selo "editando" dos cadastros tem `color:#111827` no HTML, ilegível no escuro.
 
@@ -1615,7 +1619,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean. Varredura em 30 telas no escuro procurando fundos/bordas azulados: antes, 8 relatórios com as peças acima; depois, nenhum (fora os diagramas). Nos 8 destaques × 2 temas: caixa marcada sobre o cartão ≥ 4,3:1 (escuro) e ≥ 8,17:1 (claro); bordas da paginação e da lista 4,04:1 (escuro) e 3,69:1 (claro). Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-superficies.1` no CSS (JS sem mudança).
 
-## Zoom, telas estreitas e "Texto das tabelas" no Personalizar (dev. Jean, 2026-11-13)
+### 41.13 Zoom, telas estreitas e "Texto das tabelas" no Personalizar (dev. Jean, 2026-11-13)
 
 **Medição:** 30 telas a 320 px de largura (WCAG 1.4.10), a 640 px (200% de uma tela de 1280, 1.4.4) e com espaçamento de texto ampliado (altura de linha 1,5, letras +0,12 em, palavras +0,16 em; 1.4.12). Nenhuma página rola de lado nem corta texto; as tabelas largas rolam dentro da própria caixa. Dois achados:
 1. a ≤ 420 px o cabeçalho cortava com "…" o nome do sistema e a linha do usuário (data e "Logados"), em todas as telas;
@@ -1637,7 +1641,7 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 - `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 - Sem script de banco. `templates/base.html`: `?v=20261113.jean-zoom.1` no CSS e no JS.
 
-## Contornos dos controles na cor de destaque, em três níveis (dev. Jean, 2026-11-13)
+### 41.14 Contornos dos controles na cor de destaque, em três níveis (dev. Jean, 2026-11-13)
 
 **Problema:** para garantir 3:1 nos contornos (WCAG 1.4.11), um bloco anterior (contornos de controles, AA) usou um **cinza neutro fixo** (`--spo-control-border`: `#86848c` no claro, `#828282` no escuro) em todos os controles, inclusive nas linhas de opção do Personalizar. Isso trouxe dois efeitos:
 - a cor de destaque sumiu dos controles; a prévia do Personalizar seguia o destaque, os cartões ao lado não;
@@ -1668,7 +1672,7 @@ Cartões que só exibem informação continuam suaves no padrão, como antes.
 
 Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-contornos.3` no CSS (JS sem mudança).
 
-## Diagramas e gráficos na cor de destaque (dev. Jean, 2026-11-13)
+### 41.15 Diagramas e gráficos na cor de destaque (dev. Jean, 2026-11-13)
 
 **Problema:** no tema escuro, os diagramas no modo "automático" ou "escuro" usavam uma **paleta azul fixa**, qualquer que fosse o destaque escolhido:
 - fundo `#0f172a`/`#111827`;
@@ -1700,7 +1704,7 @@ Isso valia para os gráficos do Teto, os cartões do fluxo (Mapa Conceitual e af
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-diagramas.3` no CSS e no JS.
 
-## Contraste em três níveis: Suave (padrão SPO), Médio e Reforçado (dev. Jean, 2026-11-13)
+### 41.16 Contraste em três níveis: Suave (padrão SPO), Médio e Reforçado (dev. Jean, 2026-11-13)
 
 **Problema:** a preferência "Contraste" (Personalizar → Preferências comuns) tinha só dois níveis:
 - **Padrão:** linhas de opção e cartões clicáveis com contorno leve, e só a seleção e o foco fortes;
@@ -1732,7 +1736,7 @@ Faltava um meio-termo para quem quer opções e cartões clicáveis sempre níti
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-contraste.2` no CSS e no JS.
 
-## Plano de fundo da página mais neutro e com mais separação dos cartões (dev. Jean, 2026-11-13)
+### 41.17 Plano de fundo da página mais neutro e com mais separação dos cartões (dev. Jean, 2026-11-13)
 
 **Problema:** o fundo da página quase não se separava dos cartões, e tudo parecia "chapado":
 - **claro:** `#f6f5f4`, um cinza quente, levemente rosado, contra cartões `#fff`: **1,09:1**;
@@ -1757,7 +1761,7 @@ A ideia constava do C13 ("superfície/plano de fundo") do laboratório do AA+, q
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-fundo.2` no CSS (JS sem mudança).
 
-## Abas pelo teclado e página ativa da paginação (dev. Jean, 2026-11-13)
+### 41.18 Abas pelo teclado e página ativa da paginação (dev. Jean, 2026-11-13)
 
 **Problemas:**
 - **Abas do Contrato Visual Protegido:** cada seta andava **duas** abas (de Presets, → ia para "Editor local"). As abas já tinham `role="tab"` e tratavam as setas (`initProtectedContractTabs`); o bloco de teclado do AA+ (`[jean] Semântica e teclado`) tratava a mesma tecla de novo.
@@ -1777,7 +1781,7 @@ Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=2026111
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-abas-paginacao.1` no CSS e no JS.
 
-## Listas dos filtros: Esc fecha e opção sob o mouse legível no escuro (dev. Jean, 2026-11-13)
+### 41.19 Listas dos filtros: Esc fecha e opção sob o mouse legível no escuro (dev. Jean, 2026-11-13)
 
 **Problema:** as listas abertas pelos filtros só fechavam clicando fora, em Cancelar ou em Aplicar. Quem usa o teclado ficava sem saída rápida, e o foco continuava dentro da lista.
 
@@ -1795,7 +1799,7 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-abas-paginacao.1` 
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no CSS e no JS.
 
-## Selo "editando" dos cadastros na cor do tema (dev. Jean, 2026-11-13)
+### 41.20 Selo "editando" dos cadastros na cor do tema (dev. Jean, 2026-11-13)
 
 **Problema:** o selo que aparece ao lado do título nos cadastros ("- Edição do registro …", "- Aprovação do registro …") tinha a cor fixa `#111827` no HTML de 5 parciais. No escuro, ficava ilegível; até aqui, isso era compensado com uma regra `!important` no `style.css`.
 
@@ -1812,7 +1816,7 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no 
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` no CSS (JS sem mudança).
 
-## Listas nativas (`<select>`) na cor do tema (dev. Jean, 2026-11-13)
+### 41.21 Listas nativas (`<select>`) na cor do tema (dev. Jean, 2026-11-13)
 
 **Problema:** a lista aberta de um `<select>` era desenhada pelo navegador e pelo Windows, com o fundo do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do destaque. Isso acontecia em todos os `<select>` do SPO (achado do dev. Jean na Subação). As listas montadas pelo SPO (filtros `mf-*`, listas de marcar) já seguiam o tema.
 
@@ -1838,7 +1842,7 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` n
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
 
-## Listas nativas: opções longas e valor longo no campo fechado (dev. Jean, 2026-11-13)
+### 41.22 Listas nativas: opções longas e valor longo no campo fechado (dev. Jean, 2026-11-13)
 
 Correção da seção anterior, achada no pré-teste do roteiro da homologação, com listas reais longas: a Subação da Dotação tem 471 opções, com até 345 caracteres.
 
@@ -1861,7 +1865,7 @@ Correção da seção anterior, achada no pré-teste do roteiro da homologação
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-longas.3` no CSS (JS sem mudança).
 
-## Totais dos relatórios de execução em duas colunas sempre que cabem (dev. Jean, 2026-11-13)
+### 41.23 Totais dos relatórios de execução em duas colunas sempre que cabem (dev. Jean, 2026-11-13)
 
 **Problema** (apontado pelo Cleber, comparando com a produção): no FIP 613, o quadro "Totais (filtros aplicados)" aparecia em **uma coluna de 6 linhas**, e na produção aparece em duas. O A2 (#31) trocou as duas colunas fixas por colunas que se ajustam à largura, com mínimo de **14rem** por coluna. Assim, duas colunas só cabiam com o quadro a partir de ~470 px. A 1.600 px com o menu aberto o quadro tem **467 px**: caía para 1 coluna e a faixa crescia de 112 para **176 px**, tirando espaço da tabela.
 
@@ -1885,7 +1889,7 @@ O par mais largo ("Bloqueado/Conting.:" com o valor) precisa de ~199 px, e cada 
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` no CSS (JS sem mudança).
 
-## Controles dos formulários: campo desabilitado no escuro e botões de decisão mais vivos (dev. Jean, 2026-11-13)
+### 41.24 Controles dos formulários: campo desabilitado no escuro e botões de decisão mais vivos (dev. Jean, 2026-11-13)
 
 **Problemas** (achados do dev. Jean na Etapa):
 1. **Campo desabilitado** (ex.: "Exercício"): o fundo era fixo, `#eef2f4`, nos dois temas. No escuro, o campo "acendia" (13,8:1 contra o cartão) em vez de parecer apagado. A borda também vinha na cor de destaque, porque desde o #44 o `--border` é tingido.
@@ -1917,7 +1921,7 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` 
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-controles.3` no CSS (JS sem mudança).
 
-## Setas no menu lateral (dev. Jean, 2026-11-13)
+### 41.25 Setas no menu lateral (dev. Jean, 2026-11-13)
 
 **Problema:** no menu lateral, só o Tab percorria os itens, um a um, inclusive os de grupos longos (Relatórios → Execução tem 9 itens). Era o item P5 do inventário do AA+.
 
@@ -1943,7 +1947,7 @@ Só age com o foco num `.menu-item` dentro de `#menu` e sem Ctrl, Alt ou Meta. A
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no JS (CSS sem mudança).
 
-## Tela de login com o mesmo `?v=` do CSS que o restante do SPO (dev. Jean, 2026-11-13)
+### 41.26 Tela de login com o mesmo `?v=` do CSS que o restante do SPO (dev. Jean, 2026-11-13)
 
 **Problema:** o `login.html` carregava `style.css?v=20261113.jean-fundo.2`, do #47. O CSS mudou depois em vários PRs (#49–#58), mas a linha do login não acompanhou. Quem abriu a tela de login desde o #47 podia continuar vendo nela uma cópia antiga do CSS, guardada no navegador.
 
@@ -1958,7 +1962,7 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no J
 
 Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
 
-## Botões secundários em contorno: "Cancelar"/"Remover" das consultas e os cinza nos dois temas (dev. Jean, 2026-11-13)
+### 41.27 Botões secundários em contorno: "Cancelar"/"Remover" das consultas e os cinza nos dois temas (dev. Jean, 2026-11-13)
 
 **Problema:** nas telas de Consultar (Dotação, Estorno de Dotação, Etapa, Meta Física, Subação e regra de chave), os botões **"Remover"** (tira um critério da lista) e **"Cancelar"** (fecha a consulta) eram vermelhos cheios, iguais ao **"Excluir"**, que apaga de verdade. Ações que só dispensam ficavam com o mesmo peso visual de uma ação destrutiva.
 
@@ -1983,7 +1987,7 @@ Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-botoes-filtros.3` no CSS (JS sem mudança).
 
-## Login: aviso de sessão já aberta na própria página, no lugar do `window.confirm` (dev. Jean, 2026-11-13)
+### 41.28 Login: aviso de sessão já aberta na própria página, no lugar do `window.confirm` (dev. Jean, 2026-11-13)
 
 **Problema:** quando o usuário já tem uma sessão ativa, o `POST /login` responde **409** e a tela perguntava "Deseja continuar?" com `window.confirm`. Num navegador que bloqueia diálogos (o painel do app Claude, alguns navegadores corporativos ou extensões), a resposta vira "não" e o login **parava sem aviso**: a pessoa digitava a senha e nada acontecia.
 
@@ -2016,7 +2020,7 @@ Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=2026111
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-aviso-sessao.2` no CSS.
 
-## Padrão visual "spo-aa+" documentado (dev. Jean, 2026-11-13)
+### 41.29 Padrão visual "spo-aa+" documentado (dev. Jean, 2026-11-13)
 
 **O quê:** documento novo [padrao-visual-spo-aa-plus.md](padrao-visual-spo-aa-plus.md), com as regras de cor, contraste, temas e componentes que o AA+ (#31–#61) estabeleceu. Ele vale para **toda tela nova ou alterada**. O `contrato-visual-spo.md` ganhou um link para ele.
 
@@ -2037,7 +2041,7 @@ Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=2026111
 
 Sem mudança de código. Sem script de banco.
 
-## Padrão de fontes do SPO: Inter, Intel One Mono e tabelas a 12 px (dev. Jean, 2026-11-13)
+### 41.30 Padrão de fontes do SPO: Inter, Intel One Mono e tabelas a 12 px (dev. Jean, 2026-11-13)
 
 **Problema:** a fonte padrão ("Clássica (padrão SPO)", a pilha `Cantarell, Segoe UI, system-ui…`) **variava com o computador**: Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux. O texto padrão das tabelas era o "Compacto", de **8 px**. O SPO não tinha identidade visual estável entre computadores e celulares, e as tabelas ficavam pequenas para ler.
 
@@ -2067,7 +2071,7 @@ As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer si
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
 
-## Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
+## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
 
