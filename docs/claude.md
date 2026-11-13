@@ -1495,3 +1495,14 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 **Depois:** as 7 telas (FIP 613 e EMP de Atualizar; Dotação formulário/consulta; Meta Física formulário/consulta; Subação) **sem nenhum texto abaixo de 7:1, contorno abaixo de 3:1 ou alvo abaixo de 24 px, nas 8 cores × claro/escuro**; ícone do "+" ≥ 10:1; login ≥ 9:1 no Clássico e no Amarelo. Efeito visível: vermelho mais escuro no claro; no escuro, botões vermelhos voltam a ser vermelhos (rosa claro).
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o usuário de teste recebendo acesso temporário às telas (só visualização; nada enviado; acesso revogado ao final); capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+## Gráficos acessíveis: resumo para leitor de tela e tabela de dados (dev. Jean, 2026-11-12)
+
+**Problema:** os 5 gráficos Plotly do painel Teto Orçamentário (grupo de despesa, ADJ, Pareto de macropolíticas, ação/PAOE, exercício × grupo) não tinham **nenhuma alternativa em texto** (WCAG 1.1.1, **nível A**): sem nome, sem descrição, sem tabela; o leitor de tela lia só fragmentos do desenho ("74,4%20,4%5,19%", "417244918040…").
+
+**Correção (bloco `initGraficosAcessiveis` no fim do `static/js/main.js`, CSS em bloco `[jean]` no fim do `style.css`; o código dos gráficos não foi alterado):** para cada gráfico Plotly (`.js-plotly-plot`), lendo os dados do próprio gráfico (`gd.data`):
+- `role="img"` + `aria-label` com título (o `h2` do painel), tipo, número de itens, maior item (ou maior valor e série, com várias séries) e total — por exemplo: "Teto por grupo de despesa. Gráfico de pizza com 3 itens. Maior: 1 - Pessoal e Encargos Sociais, R$ 8.430.673.401,00. Total: R$ 11.333.931.142,00…";
+- logo abaixo, um `<details>` **"Ver dados do gráfico em tabela"** com os mesmos números (uma coluna por série, `% do total` quando há uma série só, linha de total; `caption`, `th scope`); percentuais do eixo secundário (Pareto) como %;
+- atualiza sozinho quando o gráfico é redesenhado (filtros, tema), por `MutationObserver` com assinatura dos dados — sem laço com a própria tabela.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean: na árvore de acessibilidade os 5 gráficos aparecem como imagem com nome; somas conferidas (pizza = indicador "Teto total"; exercício: soma dos grupos = "Total Geral"); filtro "4 - Investimentos" atualiza resumo e tabela; teclado: foco no "Ver dados…" com anel visível e Enter abre; contraste mínimo 9,85:1 (claro) e 10,56:1 (escuro); a 390 px a página não transborda (tabelas largas rolam na própria caixa). `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-graficos.1` no CSS e no JS.
