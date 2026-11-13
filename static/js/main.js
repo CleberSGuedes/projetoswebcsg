@@ -28253,3 +28253,40 @@
     };
   };
 })();
+
+/* ==========================================================================
+   [jean] Esc fecha as listas dos filtros (fix/esc-filtros, 2026-11-13)
+   As listas abertas pelos filtros só fechavam clicando fora (ou em Cancelar /
+   Aplicar). Esc agora fecha a lista aberta e devolve o foco ao botão que a
+   abriu (WCAG 2.1.1 e o padrão de "disclosure"/listbox):
+   - filtros dos relatórios (.mf-panel.open): Esc = Cancelar (a seleção não
+     aplicada é descartada, como no botão);
+   - listas de marcar do Teto e da Estrutura (.planning-action-checklist-panel):
+     só fecha (a marcação já vale na hora).
+   Captura no document, registrada no carregamento: roda antes do Esc dos
+   avisos modais, então o primeiro Esc fecha a lista e o segundo, o aviso.
+   ========================================================================== */
+(function initEscFiltros() {
+  const visivel = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const mf = [...document.querySelectorAll(".mf-panel.open")].find(visivel);
+    if (mf) {
+      const wrap = mf.closest(".mf-wrapper") || mf.parentElement;
+      const cancelar = mf.querySelector(".mf-btn.ghost");
+      if (cancelar) cancelar.click();
+      else mf.classList.remove("open");
+      wrap?.querySelector(".mf-display")?.focus();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    const lista = [...document.querySelectorAll(".planning-action-checklist-panel")].find(visivel);
+    if (lista) {
+      lista.hidden = true;
+      lista.parentElement?.querySelector(".planning-action-checklist-toggle")?.focus();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true);
+})();
