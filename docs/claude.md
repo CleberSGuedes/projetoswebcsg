@@ -1786,3 +1786,27 @@ Correção da seção anterior, achada no pré-teste do roteiro da homologação
 - `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-longas.3` no CSS (JS sem mudança).
+
+## Totais dos relatórios de execução em duas colunas sempre que cabem (dev. Jean, 2026-11-13)
+
+**Problema** (apontado pelo Cleber, comparando com a produção): no FIP 613, o quadro "Totais (filtros aplicados)" aparecia em **uma coluna de 6 linhas**, e na produção aparece em duas. O A2 (#31) trocou as duas colunas fixas por colunas que se ajustam à largura, com mínimo de **14rem** por coluna. Assim, duas colunas só cabiam com o quadro a partir de ~470 px. A 1.600 px com o menu aberto o quadro tem **467 px**: caía para 1 coluna e a faixa crescia de 112 para **176 px**, tirando espaço da tabela.
+
+**Correção (só CSS, no bloco `[jean] Totais dos relatórios` do `style.css`):**
+- mínimo de **12rem** por coluna;
+- espaço entre colunas de 12 px (era 20);
+- espaço entre rótulo e valor de 6 px (era 8).
+
+O par mais largo ("Bloqueado/Conting.:" com o valor) precisa de ~199 px, e cada coluna passa a ter ~200. Quando duas colunas não cabem, continua em uma, com o valor descendo para a linha de baixo se preciso: o comportamento do A2, sem cortar valores.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com dados reais (Créd. Autorizado 5.914.425.031,88).
+
+| Largura | Menu | Colunas | Observação |
+|---|---|---|---|
+| 1.920 e 1.600 px | aberto ou fechado | **2** | nos 6 relatórios (FIP 613, PED, PLAN 20, EMP, EST EMP, NOB), sem valor cortado nem quebrado. A 1.600 com o menu aberto, a faixa voltou a 112 px. |
+| 1.366 px | fechado | **2** | |
+| 1.366 px | aberto | 1 | o quadro tem 317 px, e duas colunas cortariam os valores, como antes do A2 |
+| 1.024 e 390 px | — | 1 | sem corte e sem rolagem lateral |
+
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` no CSS (JS sem mudança).
