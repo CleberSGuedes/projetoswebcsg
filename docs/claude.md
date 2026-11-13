@@ -1407,3 +1407,13 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Fora daqui:** o rótulo "Clássico (padrão SPO)" da paleta, que a auditoria do dev. Jean apontou, é texto só para leitor de tela (recortado em 1 px) — falso positivo, nada a corrigir. Outros botões com texto branco sobre a cor de destaque ainda não foram medidos em todas as cores.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste calculado no navegador sobre o pior ponto do degradê, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (números do Teto e "Baixar Excel", claro e escuro). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+## Foco visível padrão em todo o SPO (dev. Jean, 2026-11-12)
+
+**Problema (medido com teclado real, no ambiente do dev. Jean):** em 4 telas (FIP 613, Personalizar Temas, painel Teto, Alterar Senha), **nenhum dos 75 elementos focáveis** tinha indicador de foco próprio com 2 px e contraste 3:1 (WCAG 2.2: 2.4.7; meta AA+ 2.4.13). O menu dependia do contorno automático do navegador (fino e diferente em cada navegador); o botão de recolher o menu (`.icon-btn:focus { outline: none }`) e os botões pequenos (Limpar Filtros, Atualizar) não mostravam nada. Há 13 regras no CSS que removem o `outline` e 21 regras de foco, cada uma para um componente.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)`):** no foco por teclado (`:focus-visible`), todo controle (links, botões, campos, `summary`, `[tabindex]`, `[role=button]`, `[role=tab]`) ganha um anel de **3 px, afastado 2 px**, na cor de destaque com contraste garantido: `--color-700` no claro e `--accent` no escuro (variável `--spo-focus-ring`). No menu lateral o anel fica por dentro (`outline-offset: -3px`) para não ser cortado. Clique de mouse não mostra o anel. A especificidade (`body :is(...):focus-visible`) vence as regras antigas que tiravam o contorno; a busca do Painel de Permissões, que tem foco no contêiner com `!important`, continua como está. `templates/base.html`: `?v=20261112.jean-foco.1`.
+
+**Depois:** nas mesmas telas, todos os elementos com anel de 3 px — 85/85 no escuro e 65/65 no claro (FIP 613 e Personalizar), contraste mínimo medido 8,5:1; calculado para as 8 cores de destaque: mínimo 4,30:1 (roxo no escuro), acima dos 3:1 exigidos. Clique de mouse no "Limpar Filtros": sem anel (`:focus-visible` falso). Capturas antes/depois com o dev. Jean.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; Tab real para o modo teclado e foco em cada elemento, esperando as transições terminarem; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
