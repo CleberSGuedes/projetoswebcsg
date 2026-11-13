@@ -8569,3 +8569,21 @@ body:not(.theme-dark) .login-card .login-sessao .btn-secondary { border-color: #
     padding: 0;
   }
 }
+
+/* ==========================================================================
+   [jean] Login com a paleta inteira do destaque (fix/login-tons-destaque, 2026-11-13)
+   O login-theme.js só põe no <body> o --accent e os tons 400/500/600. As regras do
+   AA+ que usam os outros tons (contorno de foco = color-700 no claro; botão
+   principal e texto na cor de destaque = 700/800/900) caíam no verde do :root em
+   qualquer destaque: o "Entrar" (#66) e o foco dos campos Email e Senha. Aqui o
+   login recebe os demais tons de cada destaque, com os mesmos valores de
+   ACCENT_COLORS (main.js). Se a paleta mudar lá, mudar aqui também.
+   ========================================================================== */
+body.login-body:is([data-accent-preference="classic"], :not([data-accent-preference])) { --color-50: #eefaf8; --color-100: #d7f1eb; --color-200: #a9e0d2; --color-300: #5fc3aa; --color-700: #0b4c44; --color-800: #083b36; --color-900: #062b28; }
+body.login-body[data-accent-preference="blue"] { --color-50: #f0f7ff; --color-100: #d9ecff; --color-200: #99c1f1; --color-300: #62a0ea; --color-700: #1a4f91; --color-800: #173f73; --color-900: #12345c; }
+body.login-body[data-accent-preference="teal"] { --color-50: #ecfafd; --color-100: #cdf1f9; --color-200: #8fdcee; --color-300: #4cc3e0; --color-700: #095c76; --color-800: #07485e; --color-900: #05384a; }
+body.login-body[data-accent-preference="green"] { --color-50: #effbf3; --color-100: #d3f5df; --color-200: #a3e8bd; --color-300: #5fd48b; --color-700: #186a38; --color-800: #12522b; --color-900: #0d3d20; }
+body.login-body[data-accent-preference="yellow"] { --color-50: #fff9e6; --color-100: #fff0bf; --color-200: #f9f06b; --color-300: #f8e45c; --color-700: #9c6a00; --color-800: #704d00; --color-900: #523800; }
+body.login-body[data-accent-preference="orange"] { --color-50: #fff3e8; --color-100: #ffe1c8; --color-200: #ffbe6f; --color-300: #ffa348; --color-700: #a33400; --color-800: #772600; --color-900: #571c00; }
+body.login-body[data-accent-preference="red"] { --color-50: #fff0f0; --color-100: #ffd7d7; --color-200: #ff7b7b; --color-300: #f66151; --color-700: #a51d2d; --color-800: #7d1824; --color-900: #5d121b; }
+body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-100: #eadcff; --color-200: #dc8add; --color-300: #c061cb; --color-700: #4e2a68; --color-800: #3d2052; --color-900: #2e183e; }
