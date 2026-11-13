@@ -8523,3 +8523,49 @@ body.theme-dark .pagination button.active {
 .login-sessao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 /* no claro, a borda do "Cancelar" (borda dos campos) dava 2,96:1 sobre o fundo âmbar do aviso */
 body:not(.theme-dark) .login-card .login-sessao .btn-secondary { border-color: #6b7280; }
+
+/* ==========================================================================
+   [jean] Login: "Entrar" na cor de destaque; "×" do Alerta redondo no celular
+   (fix/login-entrar-e-fechar-alerta, 2026-11-13; prints do Cleber na homologação)
+   (1) O login carrega só --accent, --accent-strong e color-400/500/600
+       (login-theme.js). A regra do #57 (botão principal = --spo-btn-fill, que vem
+       de color-700/800) tem a mesma especificidade da regra do login (0,4,1) e vem
+       depois, então vencia: o color-700/800 caía no verde do :root em qualquer
+       destaque. Aqui, no login, o tom do botão sai do próprio --accent escurecido,
+       como o título (A9), e vale também para o "Continuar e entrar" do aviso.
+   (2) No toque, a regra dos alvos (#35) põe min-height 44px em todo botão: o "×"
+       do Alerta (28 px, border-radius 50%) virava 28×44, oval no contorno de foco.
+       Fica com 28 px redondo e a área de toque cresce por um ::after invisível de
+       44 px (o mesmo recurso do botão do menu).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body.login-body:not(.theme-dark):not(#spo-login) {
+    --spo-btn-fill: color-mix(in srgb, var(--accent) 50%, #000000);
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"]:not(#spo-login) {
+    --spo-btn-fill: color-mix(in srgb, var(--accent) 40%, #000000);
+  }
+  body.login-body:not(.theme-dark) .login-form .btn-primary:not(#spo-login) {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, #000000),
+                                        color-mix(in srgb, var(--accent) 50%, #000000));
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"] .login-form .btn-primary:not(#spo-login) {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 34%, #000000),
+                                        color-mix(in srgb, var(--accent) 40%, #000000));
+  }
+}
+.emp-record-close-icon::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+}
+@media (pointer: coarse) {
+  body .emp-record-close-icon:not(#spo-fechar) {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+  }
+}
