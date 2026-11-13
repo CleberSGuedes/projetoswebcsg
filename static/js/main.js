@@ -28144,6 +28144,9 @@
       if (!lista.dataset.spoAbas) {
         lista.dataset.spoAbas = "1";
         lista.addEventListener("keydown", (ev) => {
+          // a tela já tratou a tecla (ex.: abas do Contrato Visual Protegido,
+          // initProtectedContractTabs): mover de novo pulava uma aba (fix/abas-paginacao)
+          if (ev.defaultPrevented) return;
           const atuais = [...lista.querySelectorAll("[role='tab']")];
           const i = atuais.indexOf(document.activeElement);
           if (i < 0) return;
@@ -28176,7 +28179,17 @@
 
   // Disparo: troca de tela (filhos diretos do <main>) e mudanças no restante da página
   let agendado = null;
-  function tudo() { agendado = null; prepararMenu(); prepararModais(); prepararAbas(); sincronizarListas(); }
+  // 7) Paginação: a página ativa só se distinguia pela cor; o leitor de tela
+  //    passa a anunciar "página atual" (fix/abas-paginacao)
+  function marcarPaginaAtual() {
+    document.querySelectorAll(".pagination button").forEach((b) => {
+      const atual = b.classList.contains("active");
+      if (atual && b.getAttribute("aria-current") !== "page") b.setAttribute("aria-current", "page");
+      else if (!atual && b.hasAttribute("aria-current")) b.removeAttribute("aria-current");
+    });
+  }
+
+  function tudo() { agendado = null; prepararMenu(); prepararModais(); prepararAbas(); sincronizarListas(); marcarPaginaAtual(); }
   const agendar = () => { if (!agendado) agendado = setTimeout(tudo, 120); };
   if (main) {
     let trocaAgendada = null;

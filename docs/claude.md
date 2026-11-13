@@ -1683,6 +1683,26 @@ A ideia constava do C13 ("superfície/plano de fundo") do laboratório do AA+, q
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-fundo.2` no CSS (JS sem mudança).
 
+## Abas pelo teclado e página ativa da paginação (dev. Jean, 2026-11-13)
+
+**Problemas:**
+- **Abas do Contrato Visual Protegido:** cada seta andava **duas** abas (de Presets, → ia para "Editor local"). As abas já tinham `role="tab"` e tratavam as setas (`initProtectedContractTabs`); o bloco de teclado do AA+ (`[jean] Semântica e teclado`) tratava a mesma tecla de novo.
+- **Consulta de Estrutura (Cadastros / Vínculos):** as abas não diziam ao leitor de tela o que controlavam. Usam `data-report-view` e mostram a mesma tabela; o bloco do AA+ só liga `aria-controls` por `data-view`.
+- **Paginação no escuro:** o número da página ativa ficava sobre 25% da cor de destaque. Com o Amarelo, **6,19:1** (o AA+ pede 7:1). A página ativa só se distinguia pela cor.
+
+**Correção:**
+- `main.js`, bloco `[jean] Semântica e teclado`: o tratamento das setas sai quando a tela já tratou a tecla (`ev.defaultPrevented`). Nova função `marcarPaginaAtual`: `aria-current="page"` no botão `.active` de toda `.pagination`.
+- `relatorios_estrutura_planejamento.html`: as abas ganham `id` e `aria-controls="planning-report-panel"`; o cartão da tabela vira `role="tabpanel"`, rotulado pelo título que muda com a consulta (`#planning-report-title`).
+- `style.css`, bloco `[jean]` no fim: no escuro, a página ativa fica com fundo a 16% do destaque, texto `var(--text)` e borda `var(--accent)`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Contrato Visual: → quatro vezes passa por Regras, Editor, Pacote e Auditoria e volta a Presets; ←, Home, End, ↑ e ↓ andam uma aba.
+- Consulta de Estrutura: abas ligadas ao painel; → troca para Vínculos ("Função × Programa") e volta.
+- Paginação no escuro, 8 destaques: texto da página ativa de **9,21:1** (Amarelo) a 11,64:1; borda de 4,30:1 (Roxo) a 12,01:1 sobre o fundo da paginação; `aria-current` só na ativa. O claro não muda.
+- `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-abas-paginacao.1` no CSS e no JS.
+
 ## Listas dos filtros: Esc fecha e opção sob o mouse legível no escuro (dev. Jean, 2026-11-13)
 
 **Problema:** as listas abertas pelos filtros só fechavam clicando fora, em Cancelar ou em Aplicar. Quem usa o teclado ficava sem saída rápida, e o foco continuava dentro da lista.
