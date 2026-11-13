@@ -7813,3 +7813,62 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
   }
 }
 .footer .footer-line { font-size: 11px; }
+
+/* ==========================================================================
+   [jean] Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade
+   (feat/contraste-reforcado, 2026-11-12)
+   Medido (FIP 613 e Alterar Senha, 8 cores × claro/escuro × padrão/reforçado):
+   - contorno de campos, listas, filtros e botões sem preenchimento: 1,36:1 no claro e
+     1,26–1,92:1 no escuro — abaixo do AA (WCAG 1.4.11, 3:1) em 232–240 de 248 controles;
+   - o "Contraste reforçado" (Personalizar) dava números IDÊNTICOS ao padrão;
+   - no escuro, texto abaixo de 7:1: secundário #c0bfbc (6,87), destaque como texto
+     (até 3,5:1 no Roxo), números das tabelas (#6ea8ff 5,24; #ff8b8b 5,61) e botões
+     com texto escuro sobre a cor de destaque (5,23 no Roxo).
+   Regra: padrão → contorno dos controles ≥ 3:1 nos dois temas e AA+ do texto no escuro;
+   reforçado → contornos ≥ 4,5:1, contorno também nos cartões e texto secundário ≥ 9,6:1.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-control-border: #86848c; }
+  body.theme-dark {
+    --spo-control-border: #828282;
+    --muted: #d0cfcc;
+    --spo-accent-text: var(--color-200);
+  }
+  body.theme-dark:is([data-accent-preference="blue"], [data-accent-preference="red"],
+                     [data-accent-preference="purple"]) {
+    --spo-accent-text: var(--color-100);
+  }
+
+  /* Contorno dos controles (fora de hover/foco, que já têm o seu destaque) */
+  body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]),
+           select, textarea, .mf-display, .icon-btn, .visual-pref-toggle, .preference-row,
+           .btn:not(.btn-primary):not(.btn-secondary):not(.btn-danger)):not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+  body .report-actions .btn:last-child:not(:hover):not(:focus) { border-color: transparent; }
+  /* No escuro estes botões do Personalizar não tinham borda nenhuma (largura 0) */
+  body :is(.visual-pref-toggle, .preference-row) { border-width: 1px; border-style: solid; }
+
+  /* AA+ do texto no escuro */
+  body.theme-dark :is(.subtitle, .eyebrow, .report-eyebrow, .module-eyebrow,
+                      .modal-header-title, .noticia-box a, .teto-kpi strong,
+                      .menu-admin-spo.active-ancestor > .menu-parent) {
+    color: var(--spo-accent-text);
+  }
+  body.theme-dark :is(.totais-row strong.pos, .fip-table td.num.pos) { color: #9cc4ff; }
+  body.theme-dark :is(.totais-row strong.neg, .fip-table td.num.neg) { color: #ffb3b3; }
+  body.theme-dark :is(.btn-primary, .report-actions .btn:last-child,
+                      .preview-actions button:first-child) {
+    color: #111111;
+    background: var(--spo-accent-text);
+    border-color: transparent;
+  }
+
+  /* Contraste reforçado (Personalizar → Preferências comuns → Contraste) */
+  body[data-visual-contrast="enhanced"] { --spo-control-border: #636169; --muted: #38363d; }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-control-border: #a6a6a6; --muted: #e2e1de; }
+  body[data-visual-contrast="enhanced"] :is(.card, .report-header, .module-header, .teto-kpi,
+                                            .noticia-box, .table-responsive) {
+    border-color: var(--spo-control-border);
+  }
+}

@@ -1452,3 +1452,19 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de todo texto visível, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (Diretrizes no Clássico, rodapé, Alterar Senha no Amarelo). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-aaplus.1`.
 
 **Pendente (tema escuro, AA+):** azul/vermelho dos números nas tabelas (`td.num.pos/.neg`, 6,3 e 6,7:1) e números do Teto (6,0:1) ficam um pouco abaixo de 7:1 no escuro.
+
+## Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade (dev. Jean, 2026-11-12)
+
+**Problema (medido em FIP 613, Alterar Senha, Personalizar e Teto, 8 cores de destaque × claro/escuro × contraste padrão/reforçado, no ambiente do dev. Jean):**
+- **contorno dos controles** (campos, listas, filtros `.mf-display`, botões sem preenchimento) abaixo do **AA** (WCAG 1.4.11, 3:1): 1,36:1 no claro e 1,26–1,92:1 no escuro — 232 a 240 de 248 controles; os botões de preferência do Personalizar não tinham borda nenhuma no escuro;
+- o **"Contraste reforçado"** (Personalizar → Preferências comuns → Contraste) dava números **idênticos** ao padrão: só mexia em sombras de alguns componentes;
+- no **escuro**, texto abaixo de 7:1 (meta AA+): secundário `#c0bfbc` (6,87), cor de destaque como texto (até 3,5:1 no Roxo), azul/vermelho dos números (`#6ea8ff` 5,24; `#ff8b8b` 5,61), números do Teto e "Administrar SPO" aberto (`--accent-strong`), botões com texto escuro sobre a cor de destaque (5,23 no Roxo).
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)`):**
+- variável **`--spo-control-border`** no contorno dos controles, fora de hover/foco: `#86848c` no claro (3,2:1) e `#828282` no escuro (3,3:1); os botões de preferência ganham borda de 1 px;
+- escuro: `--muted` `#d0cfcc`; `--spo-accent-text` = `--color-200` (`--color-100` em Azul, Vermelho e Roxo) nos títulos pequenos, subtítulo, links, números do Teto e "Administrar SPO" aberto; números azul `#9cc4ff` e vermelho `#ffb3b3`; botões principais com texto escuro sobre esse tom claro;
+- **reforçado**: contorno `#636169` (claro) / `#a6a6a6` (escuro), ≥ 4,5:1, também nos cartões, cabeçalhos e tabelas; texto secundário `#38363d` (claro) / `#e2e1de` (escuro), ≥ 9,6:1.
+
+**Depois:** nas 4 telas × 8 cores × 2 temas × 2 modos (6.248 textos e 344 controles por combinação de tema): **0 textos abaixo de 7:1**; contornos ≥ 3,7:1 no padrão e ≥ 4,9:1 no reforçado. **Efeito visível:** contornos de campos e filtros mais marcados nos dois temas; no escuro, títulos pequenos, links e números um pouco mais claros; o reforçado agora se percebe (contornos fortes nos cartões e texto secundário quase na cor do principal).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de texto (pior ponto dos degradês) e de contorno/preenchimento dos controles contra o fundo de fora, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (filtros do FIP 613, claro e escuro, e o reforçado). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-reforcado.1`.
