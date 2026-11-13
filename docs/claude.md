@@ -1625,3 +1625,35 @@ Isso valia para os gráficos do Teto, os cartões do fluxo (Mapa Conceitual e af
 - `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-diagramas.3` no CSS e no JS.
+
+## Contraste em três níveis: Suave (padrão SPO), Médio e Reforçado (dev. Jean, 2026-11-13)
+
+**Problema:** a preferência "Contraste" (Personalizar → Preferências comuns) tinha só dois níveis:
+- **Padrão:** linhas de opção e cartões clicáveis com contorno leve, e só a seleção e o foco fortes;
+- **Reforçado:** tudo com ≥ 4,5:1.
+
+Faltava um meio-termo para quem quer opções e cartões clicáveis sempre nítidos, sem o peso do Reforçado.
+
+**Correção:**
+- **`static/js/main.js`:** em `COMMON_VISUAL_OPTIONS.contrast` (lista que já existia), o rótulo de `standard` passa a "suave (padrão SPO)" e entra o valor novo `medium` ("médio").
+  - O valor gravado do padrão continua `standard`, então quem já tinha a preferência salva não vê mudança.
+  - Nada mais no JS foi alterado; `normalizeCommonVisualPreferences` aceita o valor novo porque lê essa lista.
+- **`templates/partials/atualizar_personalizar_spo.html`:** botão "Médio" e descrição nova do "Suave (padrão SPO)".
+- **CSS** (bloco `[jean]` no fim do `style.css`): no Médio, as linhas de opção e os cartões clicáveis do fluxo (Mapa Conceitual e afins) usam `--spo-control-border` (≥ 3:1 na cor de destaque); os cartões informativos continuam leves.
+  - No Reforçado, os cartões do fluxo também ficam fortes; antes ficavam leves.
+  - Verde no claro: o contorno passa ao `--color-600`, porque o `--color-500` dava 2,9:1 sobre o fundo `#f6f5f4`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Escolha pelo controle real: grava `contrast: "medium"` e o resumo mostra "médio".
+- Medido nos 3 níveis × 8 destaques × 2 temas:
+
+| Nível | Linhas de opção em repouso | Cartões do Mapa em repouso | Seleção |
+|---|---|---|---|
+| Suave | 1,33–2,4:1 (leve, de propósito) | leve | 4,3–12:1 |
+| Médio | 3,13–5,84:1 | 3,41–5,91:1 | 4,3–12:1 |
+| Reforçado | 4,7–11,9:1 | 5,12–12:1 | sempre a mais forte |
+
+- Campos e filtros: ≥ 3,17:1 no Suave e no Médio.
+- Capturas; `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-contraste.2` no CSS e no JS.
