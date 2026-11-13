@@ -1764,6 +1764,53 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` n
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
 
+## Listas nativas: opções longas e valor longo no campo fechado (dev. Jean, 2026-11-13)
+
+Correção da seção anterior, achada no pré-teste do roteiro da homologação, com listas reais longas: a Subação da Dotação tem 471 opções, com até 345 caracteres.
+
+**Problemas:**
+- **Lista aberta:** com opções longas, abria com **1.945 px** de largura numa janela de 1.070. O texto passava da borda direita da tela e a lista não ficava alinhada ao campo.
+- **Campo fechado:** com um valor longo escolhido, crescia para **94 px**, em 3 linhas. O nativo fica em 40 px e corta o texto.
+- **"Itens por página" dos relatórios:** ficava sem a seta e 13 px mais estreito. A seta era apagada por uma regra antiga `.theme-dark .page-size .input { background: … }`, de especificidade (0,3,0), e o nativo mede a largura pela opção mais larga, não pela escolhida.
+
+**Correção (no mesmo bloco `[jean]` do fim do `style.css`):**
+- A lista aberta tem no máximo `min(40rem, 100vw − 16px)`, e o texto da opção quebra linha, sem perder informação.
+- O campo fechado fica numa linha: `white-space: nowrap`, `overflow: clip` e `overflow-clip-margin: content-box`. O texto é cortado antes da seta, com 34 px reservados à direita.
+- A seta passa a ser desenhada no **fundo** do campo, com dois `linear-gradient` em `currentColor`, e vira para cima com a lista aberta. Assim ela não é cortada junto com o texto. A regra da seta leva `:not(#spo-seta)`, que só soma peso de id, para vencer as regras antigas com `background:`. O `::picker-icon` fica oculto.
+- "Itens por página": `min-width: 8.3em`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- **63 `<select>` de 17 telas**, nos dois temas, com o **valor mais longo** escolhido em cada um: todos com seta e com a mesma altura do nativo. A largura só muda nos "Itens por página", e depois do ajuste fica igual nos três tamanhos de "Texto das tabelas" (83, 83 e 100 px).
+- **Lista longa:** End vai à 471ª opção, Enter escolhe, a lista fecha e o foco volta ao campo.
+- **Celular** (emulado a 375 px): a lista da Etapa, com 439 opções, fica dentro da tela (95 a 370 px) e alinhada ao campo. O toque real fica para a homologação.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-longas.3` no CSS (JS sem mudança).
+
+## Totais dos relatórios de execução em duas colunas sempre que cabem (dev. Jean, 2026-11-13)
+
+**Problema** (apontado pelo Cleber, comparando com a produção): no FIP 613, o quadro "Totais (filtros aplicados)" aparecia em **uma coluna de 6 linhas**, e na produção aparece em duas. O A2 (#31) trocou as duas colunas fixas por colunas que se ajustam à largura, com mínimo de **14rem** por coluna. Assim, duas colunas só cabiam com o quadro a partir de ~470 px. A 1.600 px com o menu aberto o quadro tem **467 px**: caía para 1 coluna e a faixa crescia de 112 para **176 px**, tirando espaço da tabela.
+
+**Correção (só CSS, no bloco `[jean] Totais dos relatórios` do `style.css`):**
+- mínimo de **12rem** por coluna;
+- espaço entre colunas de 12 px (era 20);
+- espaço entre rótulo e valor de 6 px (era 8).
+
+O par mais largo ("Bloqueado/Conting.:" com o valor) precisa de ~199 px, e cada coluna passa a ter ~200. Quando duas colunas não cabem, continua em uma, com o valor descendo para a linha de baixo se preciso: o comportamento do A2, sem cortar valores.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com dados reais (Créd. Autorizado 5.914.425.031,88).
+
+| Largura | Menu | Colunas | Observação |
+|---|---|---|---|
+| 1.920 e 1.600 px | aberto ou fechado | **2** | nos 6 relatórios (FIP 613, PED, PLAN 20, EMP, EST EMP, NOB), sem valor cortado nem quebrado. A 1.600 com o menu aberto, a faixa voltou a 112 px. |
+| 1.366 px | fechado | **2** | |
+| 1.366 px | aberto | 1 | o quadro tem 317 px, e duas colunas cortariam os valores, como antes do A2 |
+| 1.024 e 390 px | — | 1 | sem corte e sem rolagem lateral |
+
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` no CSS (JS sem mudança).
+
 ## Controles dos formulários: campo desabilitado no escuro e botões de decisão mais vivos (dev. Jean, 2026-11-13)
 
 **Problemas** (achados do dev. Jean na Etapa):

@@ -7582,9 +7582,15 @@ html.spo-split-pressure .governanca-grid {
    25 px a mais a 1366 px). Agora as colunas se ajustam à largura disponível (2 quando
    cabem, 1 quando não) e, se rótulo e valor não couberem lado a lado, o valor desce
    para a linha de baixo. O PLAN 51 (.totais-box--wide) mantém o quadro próprio.
+   Ajuste (fix/totais-duas-colunas, 2026-11-13): o mínimo de 14rem por coluna só dava
+   2 colunas com o quadro ≥ ~470 px; com o menu aberto a 1600 px o quadro tem 467 px e
+   caía para 1 coluna (faixa de 112 → 176 px, menos espaço para a tabela). Mínimo de
+   12rem e espaços menores (colunas 12 px, rótulo/valor 6 px): 2 colunas, como na
+   produção, sempre que os pares cabem numa linha.
    ========================================================================== */
 .report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  column-gap: 12px;
   min-width: 0;
 }
 .report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row {
@@ -7592,7 +7598,7 @@ html.spo-split-pressure .governanca-grid {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  column-gap: 8px;
+  column-gap: 6px;
   row-gap: 0;
   min-width: 0;
 }
@@ -8326,6 +8332,12 @@ body.theme-dark .pagination button.active {
    seta volta a ser fina e gira quando a lista abre. Navegadores sem suporte
    (Firefox, Safari) ignoram o bloco e seguem com a lista nativa.
    Só selects de uma escolha (sem multiple/size), que é o caso de todo o SPO.
+   Correção (fix/listas-nativas-longas): opções longas (até 345 caracteres na
+   Subação da Dotação) abriam a lista com 1.945 px, além da tela, e um valor
+   longo escolhido fazia o campo fechado crescer para 3 linhas (94 px). Agora
+   a lista tem no máximo 40rem (e a tela − 16 px) e o texto da opção quebra
+   linha; o campo fechado fica numa linha (40 px), com o texto cortado antes
+   da seta. A seta passa a ser desenhada no fundo do campo (não é cortada).
    ========================================================================== */
 @supports (appearance: base-select) {
   select:not([multiple]):not([size]),
@@ -8340,6 +8352,7 @@ body.theme-dark .pagination button.active {
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
     padding: 4px;
     max-height: min(60vh, 420px);
+    max-width: min(40rem, calc(100vw - 16px));
   }
   .theme-dark select:not([multiple]):not([size])::picker(select) {
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
@@ -8349,6 +8362,9 @@ body.theme-dark .pagination button.active {
     border-radius: 6px;
     background: transparent;
     color: var(--text);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
   }
   select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
     background: rgba(var(--accent-rgb), 0.16);
@@ -8357,23 +8373,34 @@ body.theme-dark .pagination button.active {
   }
   select:not([multiple]):not([size]) option:checked { font-weight: 600; }
   select:not([multiple]):not([size]) option:disabled { opacity: 0.55; }
-  select:not([multiple]):not([size])::picker-icon {
-    content: "";
-    flex: none;
-    width: 7px;
-    height: 7px;
-    margin-inline-start: auto; /* seta na ponta direita, como a nativa */
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: translateY(-2px) rotate(45deg);
-    transition: transform 0.15s ease;
+  /* campo fechado: uma linha, texto cortado antes da seta (como o nativo) */
+  select:not([multiple]):not([size]) {
+    white-space: nowrap;
+    overflow: clip;
+    overflow-clip-margin: content-box;
+    padding-inline-end: 34px;
   }
-  select:not([multiple]):not([size]):open::picker-icon {
-    transform: translateY(2px) rotate(225deg);
+  /* a seta: :not(#spo-seta) só soma peso de id (não seleciona nada a mais),
+     para vencer regras antigas com "background:" que apagariam a imagem
+     (ex.: .theme-dark .page-size .input, especificidade 0,3,0) */
+  select:not([multiple]):not([size]):not(#spo-seta) {
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(-45deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px));
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+    background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  select::picker-icon { transition: none; }
+  /* lista aberta: a seta vira para cima */
+  select:not([multiple]):not([size]):not(#spo-seta):open {
+    background-image:
+      linear-gradient(135deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(-135deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px));
+  }
+  select:not([multiple]):not([size])::picker-icon { display: none; }
+  /* "Itens por página": o nativo mede pela opção mais larga ("100"), o
+     base-select pela escolhida ("20"); mínimo de 8.3em = 83 px a 10 px */
+  .page-size select:not([multiple]):not([size]) { min-width: 8.3em; }
 }
 
 /* ==========================================================================
