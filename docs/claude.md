@@ -1431,3 +1431,24 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Depois:** no celular, **91 de 91** controles medidos nas 6 telas com pelo menos 44 px e nenhum abaixo de 24 px, sem transbordo horizontal; no desktop, tamanhos visuais iguais aos de antes e o botão de recolher clicável num raio de 12 px a partir do centro. Efeito visível no celular: botões e filtros mais altos; a paginação do FIP 613 passa de 2 para 3 linhas.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, emulação de celular (390 px, toque) e desktop (1366 px, mouse); capturas antes/depois (cores do Personalizar e paginação do FIP 613). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-alvos.1`.
+
+## Contraste AA+ (7:1) no tema claro (dev. Jean, 2026-11-12)
+
+**Problema (medido em 10 telas no tema claro, no ambiente do dev. Jean):** 256 textos abaixo de 7:1 (meta AA+, WCAG 1.4.6), quase todos por duas cores:
+- **cinza secundário `--muted: #5e5c64`** — 210 textos (rótulos, "muted", rodapé), mínimo 5,46:1 no fundo esverdeado do Personalizar;
+- **cor de destaque como texto** (`--accent`, `#0f7c68` no Clássico) — 34 textos (subtítulo do topo, `.eyebrow`/`.report-eyebrow`/`.module-eyebrow`, links das Diretrizes, título de modal), mínimo 4,8:1; nas outras cores bem pior (Amarelo 1,9:1).
+
+Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Bootstrap (4,69), "Administrar SPO" com submenu aberto (`--accent-strong` = color-400, 3,45:1) e o **`.btn-primary` genérico** (degradê `--color-600` → `--color-400`, texto branco: 3,47:1 no Clássico, abaixo até do AA).
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, só no tema claro, dentro de `@media (forced-colors: none)`):**
+- `--muted` e `--bs-secondary-color` = **`#48464e`** (≥ 7,7:1 em todos os fundos claros medidos);
+- variável **`--spo-accent-text`**: o tom mais claro de cada paleta que passa de 7:1 — `--color-700` (Clássico, Azul, Roxo), `--color-800` (Ciano, Verde, Laranja, Vermelho), `--color-900` (Amarelo), escolhido pelo `body[data-accent-preference]`; usada no texto de `.subtitle`, `.eyebrow`, `.report-eyebrow`, `.module-eyebrow`, `.modal-header-title`, links de `.noticia-box`, "Administrar SPO" aberto e números do Teto;
+- botões com texto branco na cor de destaque (`.btn-primary`, "Baixar Excel", prévia do Personalizar): fundo em degradê desse mesmo tom;
+- `.btn-secondary` (Bootstrap): `#495057`;
+- rodapé (`.footer .footer-line`): de 9,2 para **11 px** (nos dois temas).
+
+**Depois:** 0 textos abaixo de 7:1 nas 8 telas medidas, **com as 8 cores de destaque** (1.141 textos por cor; degradês medidos no pior ponto). **Efeito visível (identidade):** no claro, textos secundários um pouco mais escuros; subtítulo, títulos pequenos e links num tom mais fechado da cor de destaque (no Amarelo, um tom ocre escuro); botões principais mais escuros. O tema escuro não muda (exceto o tamanho do rodapé).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de todo texto visível, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (Diretrizes no Clássico, rodapé, Alterar Senha no Amarelo). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-aaplus.1`.
+
+**Pendente (tema escuro, AA+):** azul/vermelho dos números nas tabelas (`td.num.pos/.neg`, 6,3 e 6,7:1) e números do Teto (6,0:1) ficam um pouco abaixo de 7:1 no escuro.

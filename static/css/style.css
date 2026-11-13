@@ -7762,3 +7762,54 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
   }
   body .accent-swatch { width: 44px; height: 44px; }
 }
+
+/* ==========================================================================
+   [jean] Contraste AA+ (7:1) no tema claro (feat/contraste-aa-plus-claro, 2026-11-12)
+   Medido em 10 telas no claro: 256 textos abaixo de 7:1 (meta AA+, WCAG 1.4.6), quase
+   todos por duas cores: o cinza secundário --muted #5e5c64 (210 textos, mín. 5,46:1 no
+   fundo esverdeado) e a cor de destaque usada como texto (#0f7c68 no Clássico; 34
+   textos: subtítulo do topo, títulos pequenos das seções, links, título de modal; mín.
+   4,8:1). Casos isolados: "text-muted" do Bootstrap (6,78), botão cinza "Fechar"
+   (4,69) e "Administrar SPO" no menu aberto (--accent-strong = color-400, 3,45:1).
+   Regra, só no claro: cinza #48464e (≥ 7,7:1 em todos os fundos claros medidos);
+   texto na cor de destaque no tom mais claro de cada paleta que passa de 7:1 —
+   color-700 (Clássico, Azul, Roxo), color-800 (Ciano, Verde, Laranja, Vermelho),
+   color-900 (Amarelo); botões com texto branco usam esse mesmo tom de fundo (o
+   .btn-primary genérico ia até a color-400). Rodapé de 9,2 para 11 px (nos dois temas).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) {
+    --muted: #48464e;
+    --bs-secondary-color: #48464e;
+    --spo-accent-text: var(--color-700);
+  }
+  body:not(.theme-dark):is([data-accent-preference="teal"], [data-accent-preference="green"],
+                           [data-accent-preference="orange"], [data-accent-preference="red"]) {
+    --spo-accent-text: var(--color-800);
+  }
+  body:not(.theme-dark)[data-accent-preference="yellow"] {
+    --spo-accent-text: var(--color-900);
+  }
+  body:not(.theme-dark) :is(.subtitle, .eyebrow, .report-eyebrow, .module-eyebrow,
+                            .modal-header-title, .noticia-box a,
+                            .menu-admin-spo.active-ancestor > .menu-parent) {
+    color: var(--spo-accent-text);
+  }
+  /* Botões com texto branco na cor de destaque: fundo no mesmo tom de texto (≥ 7:1 com
+     branco). Inclui o .btn-primary genérico (degradê color-600 → color-400: 3,47:1 no
+     Clássico) e alinha ao AA+ o que o A3 levou só ao AA ("Baixar Excel", prévia). */
+  body:not(.theme-dark) :is(.btn-primary, .report-actions .btn:last-child,
+                            .preview-actions button:first-child) {
+    color: #ffffff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--spo-accent-text) 82%, #000000), var(--spo-accent-text));
+    border-color: transparent;
+  }
+  body:not(.theme-dark) .teto-kpi strong { color: var(--spo-accent-text); }
+  body:not(.theme-dark) .btn-secondary {
+    --bs-btn-bg: #495057;
+    --bs-btn-border-color: #495057;
+    --bs-btn-hover-bg: #3d4246;
+    --bs-btn-hover-border-color: #3d4246;
+  }
+}
+.footer .footer-line { font-size: 11px; }
