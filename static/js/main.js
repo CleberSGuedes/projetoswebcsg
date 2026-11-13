@@ -843,7 +843,9 @@
   function getCommonDiagramTheme(preferences = readCommonVisualPreferences()) {
     const resolvedMode = getResolvedCommonDiagramMode(preferences);
     if (resolvedMode === "system") return getForcedColorsDiagramTheme();
-    return COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
+    const theme = COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
+    // [jean] diagramas na cor de destaque: ver initDiagramasDestaque, no fim do arquivo
+    return typeof window.spoTemaDiagramaComDestaque === "function" ? window.spoTemaDiagramaComDestaque(theme, resolvedMode) : theme;
   }
 
   function emitCommonVisualChange(preferences) {
@@ -28186,4 +28188,54 @@
     .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "aria-selected"] });
   document.addEventListener("click", () => setTimeout(sincronizarListas, 0), true);
   tudo();
+})();
+
+/* ==========================================================================
+   [jean] Diagramas e gráficos na cor de destaque (feat/diagramas-destaque, 2026-11-13)
+   Os gráficos do Teto tiravam as cores de paletas fixas (COMMON_DIAGRAM_THEMES):
+   no escuro, fundo azul-marinho e conectores azuis, qualquer que fosse o destaque.
+   Como no AA+ antigo (spo-aa-plus-plotly.js do laboratório), a 1ª cor da paleta
+   passa a ser o destaque (tom com ≥ 3:1, --spo-accent-graphic do CSS); a cor
+   fixa mais parecida com ele vai para o fim, para as séries continuarem
+   distintas. Fundo do gráfico transparente (o CSS do .teto-chart dá o fundo) e
+   seleção/foco/conector no destaque. Só nos modos "claro" e "escuro"; o alto
+   contraste fica com a paleta fixa. getCommonDiagramTheme chama esta função
+   (2 linhas alteradas lá); sem ela, nada muda.
+   ========================================================================== */
+(function initDiagramasDestaque() {
+  const hex = (cor) => {
+    const c = document.createElement("canvas").getContext("2d");
+    c.fillStyle = cor;
+    c.fillRect(0, 0, 1, 1);
+    const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+    return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  };
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const distancia = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+
+  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+    if (modo !== "light" && modo !== "dark") return tema;
+    const css = getComputedStyle(document.body);
+    const bruto = (css.getPropertyValue(modo === "dark" && document.body.classList.contains("theme-dark")
+      ? "--accent" : (modo === "dark" ? "--color-300" : "--spo-accent-graphic-light")) || "").trim();
+    if (!bruto) return tema;
+    const destaque = hex(bruto);
+    const escuroNoFundo = modo === "dark";
+    // Paletas da v4.3.1 (spo-aa-plus-plotly.js do laboratório): no claro, tons fundos
+    // e saturados (todos ≥ 5:1 sobre branco); no escuro, tons claros e vivos (≥ 8:1 sobre #1a1a1a).
+    const resto = escuroNoFundo
+      ? ["#5eead4", "#93c5fd", "#fca5a5", "#c4b5fd", "#67e8f9", "#e2e8f0", "#fb923c"]
+      : ["#0f766e", "#1d4ed8", "#b91c1c", "#6d28d9", "#0369a1", "#334155", "#c2410c"];
+    const parecida = resto.reduce((m, c, i) => (distancia(c, destaque) < distancia(resto[m], destaque) ? i : m), 0);
+    if (resto.length && distancia(resto[parecida], destaque) < 90) resto.push(resto.splice(parecida, 1)[0]);
+    return {
+      ...tema,
+      panel: "rgba(0,0,0,0)",
+      plot: "rgba(0,0,0,0)",
+      connector: destaque,
+      selection: destaque,
+      focus: destaque,
+      palette: [destaque, ...resto],
+    };
+  };
 })();
