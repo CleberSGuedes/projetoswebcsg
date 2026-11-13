@@ -8277,3 +8277,17 @@ body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px;
   /* Azul no claro: o texto de destaque (--color-700) dava 6,71:1 sobre o fundo novo; --color-800 dá 9+ */
   body:not(.theme-dark)[data-accent-preference="blue"] { --spo-accent-text: var(--color-800); }
 }
+
+/* ==========================================================================
+   [jean] Abas e paginação (fix/abas-paginacao, 2026-11-13)
+   No escuro, o número da página ativa ficava sobre 25% da cor de destaque:
+   com o Amarelo, 6,19:1 (AA+ pede 7). Fundo a 16%, texto na cor de texto do
+   tema e borda cheia no destaque: texto 9,2–11,6:1 e borda 4,3–12:1 sobre o
+   fundo da paginação, nos 8 destaques. A página ativa continua se
+   distinguindo pela borda e pelo negrito (e por aria-current, no main.js).
+   ========================================================================== */
+body.theme-dark .pagination button.active {
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: var(--accent);
+  color: var(--text);
+}
