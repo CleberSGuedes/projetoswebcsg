@@ -1479,3 +1479,19 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 - `templates/base.html`: `?v=20261112.jean-movimento.1` no CSS e no JS.
 
 **Verificação** (o navegador do teste não simula a preferência, então em três partes): regra carregada com a condição `(prefers-reduced-motion: reduce)`; com o corpo da regra aplicado na página, elementos com transição/animação na Início caem de 100 para 0 e a barra/pontos de carregamento param; a lógica do JS testada com a preferência simulada (`smooth` → `auto`; sem a preferência e chamadas sem objeto, intactas) e a rolagem real funcionando; navegação por 4 telas sem erro no console. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+## AA nas telas que faltavam: botões vermelhos, etapas, títulos de seção, botão "+" e login (dev. Jean, 2026-11-12)
+
+**Problema (medido em uploads, cadastros e login, já com as correções de acessibilidade anteriores, no ambiente do dev. Jean):**
+- **botões vermelhos `.btn-danger`** (Cancelar, Remover, Excluir, Limpar Formulário) no claro: texto branco sobre `#ef4444`→`#dc2626`, **3,76:1** (abaixo do AA);
+- no **escuro**, a regra `.theme-dark .btn` tirava o preenchimento de `.btn-danger` e `.btn-secondary`: ficavam só com borda translúcida **1,92:1** (abaixo do AA, 1.4.11), e o "Excluir" ficava igual ao "Editar";
+- **botão de etapa ativo** do formulário de Subação (`.wizard-step-btn.active`): branco sobre `--accent`, **1,83:1** no escuro e 5,12 no claro;
+- **título de seção** (`.form-section-title`) na cor de destaque: 5,12 no claro;
+- **botão "+" de adicionar linha** da Meta Física: **18×18 px** (abaixo de 24, 2.5.8) e com opacidade 85%;
+- **login** no claro: título e "Esqueci a senha" em `--accent`, 4,70:1; e o "Entrar" (depois do AA+ no claro) ficava verde em qualquer cor de destaque, porque o login só carrega o `--accent`, não a paleta inteira.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** `.btn-danger` `#a51d1d`→`#991b1b` no claro (≥ 7,5:1 com branco) e preenchido `#ffb3b3` com texto escuro no escuro; `.btn-secondary` com `--spo-control-border` no escuro; etapa ativa e título de seção no `--spo-accent-text` (fundo ou texto, como os demais) e etapas inativas com contorno de controle; botão "+" com 24×24 px (44 no toque) e opacidade 1; login com `--accent` escurecido por `color-mix` (50%, ou 40% no Amarelo) no título, no link e no "Entrar". `templates/base.html` e `templates/login.html`: `?v=20261112.jean-telas.1` (o login ainda estava em `20261002.sync-main.1`).
+
+**Depois:** as 7 telas (FIP 613 e EMP de Atualizar; Dotação formulário/consulta; Meta Física formulário/consulta; Subação) **sem nenhum texto abaixo de 7:1, contorno abaixo de 3:1 ou alvo abaixo de 24 px, nas 8 cores × claro/escuro**; ícone do "+" ≥ 10:1; login ≥ 9:1 no Clássico e no Amarelo. Efeito visível: vermelho mais escuro no claro; no escuro, botões vermelhos voltam a ser vermelhos (rosa claro).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o usuário de teste recebendo acesso temporário às telas (só visualização; nada enviado; acesso revogado ao final); capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
