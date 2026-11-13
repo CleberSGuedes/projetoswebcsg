@@ -1842,3 +1842,29 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` 
 - Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-controles.3` no CSS (JS sem mudança).
+
+## Setas no menu lateral (dev. Jean, 2026-11-13)
+
+**Problema:** no menu lateral, só o Tab percorria os itens, um a um, inclusive os de grupos longos (Relatórios → Execução tem 9 itens). Era o item P5 do inventário do AA+.
+
+**Correção (só JS, bloco `[jean] Setas no menu lateral` no fim do `main.js`):** com o foco num item do menu, as setas seguem o padrão de navegação em árvore. O Tab continua como antes.
+
+| Tecla | O que faz |
+|---|---|
+| **↓ / ↑** | próximo ou anterior item visível |
+| **Home / End** | primeiro e último item |
+| **→** | num grupo fechado, abre; num grupo aberto, vai ao 1º item dele |
+| **←** | num grupo aberto, fecha; num item ou grupo fechado, volta ao grupo de cima |
+
+Só age com o foco num `.menu-item` dentro de `#menu` e sem Ctrl, Alt ou Meta. Abrir e fechar usa o mesmo clique de sempre, então o `aria-expanded` do #41 continua certo.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o teclado de verdade, com o menu recolhido e expandido.
+- Relatórios: → abre, → vai a Planejamento, ↓ Execução, → abre, → FIP 613, ↓ PED, ← Execução, ← fecha, ← Relatórios, ← fecha.
+- Administrar SPO: → abre e → vai a Personalizar SPO.
+- ↓ ↑ Home End no menu todo (Início … Sair).
+- O Tab continua igual (Início → Administrar SPO → Programar PTA/LOA).
+- Com um aviso modal aberto, as setas não agem, porque o foco fica no aviso.
+- A página não rola com as setas.
+- `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no JS (CSS sem mudança).
