@@ -1506,3 +1506,29 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 - atualiza sozinho quando o gráfico é redesenhado (filtros, tema), por `MutationObserver` com assinatura dos dados — sem laço com a própria tabela.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean: na árvore de acessibilidade os 5 gráficos aparecem como imagem com nome; somas conferidas (pizza = indicador "Teto total"; exercício: soma dos grupos = "Total Geral"); filtro "4 - Investimentos" atualiza resumo e tabela; teclado: foco no "Ver dados…" com anel visível e Enter abre; contraste mínimo 9,85:1 (claro) e 10,56:1 (escuro); a 390 px a página não transborda (tabelas largas rolam na própria caixa). `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-graficos.1` no CSS e no JS.
+
+## Semântica e teclado: menu operável, título da aba, "Pular para o conteúdo", avisos modais, abas e filtros (dev. Jean, 2026-11-12)
+
+**Problema (medido com teclado real, no ambiente do dev. Jean):**
+- **o menu não era operável pelo teclado** (WCAG 2.1.1, **nível A**): os grupos (Administrar SPO, Institucional, Relatórios, Painéis, Usuários e os subgrupos) são `<div class="menu-item menu-parent">` sem foco; na Início o Tab só passava por "Expandir menu → Início → Sair → Fechar". Quem usa só o teclado não chegava a nenhum relatório;
+- o **título da aba** era sempre "SPO" (2.4.2, A);
+- sem **"Pular para o conteúdo"** (2.4.1);
+- ao trocar de tela o foco ficava no menu e nada anunciava a página nova; Início e Teto **sem título principal**;
+- **avisos modais** (`.modal-overlay`) sem `role="dialog"`/`aria-modal`, sem levar o foco para dentro nem prendê-lo, sem Esc;
+- **abas** Gráficos/Tabelas do Teto sem `aria-controls` nem setas;
+- **filtros** que abrem lista (`.mf-display`, `.planning-action-checklist-toggle`) sem `aria-expanded` (4.1.2).
+
+**Correção (bloco `initSemanticaTeclado` no fim do `static/js/main.js`; CSS em bloco `[jean]`; nenhuma função existente alterada):**
+- grupos do menu com `role="button"`, `tabindex="0"`, `aria-controls` e `aria-expanded` sincronizado; Enter/Espaço disparam o mesmo clique que já abre/fecha;
+- a cada troca de tela (filhos do `<main id="content-area">`): título da aba "‹título› — SPO" (sem `h1`, o nome do item do menu), título principal (`h1`, ou `role="heading" aria-level="1"` no título visível), foco no título e aviso "Página carregada: …" (`role="status"`); com um aviso modal aberto, o foco não sai dele;
+- "Pular para o conteúdo" como primeiro item do Tab (visível só no foco), levando ao `<main>`;
+- avisos modais: `role="dialog"`, `aria-modal`, `aria-labelledby` no título, foco no primeiro controle, Tab preso, Esc aciona "Fechar/Cancelar", e o foco volta a quem abriu (ou ao título da página);
+- abas (`role="tablist"`): `aria-controls`/`role="tabpanel"`, `tabindex` itinerante, setas/Home/End;
+- filtros: `aria-haspopup` e `aria-expanded` conforme a lista aberta;
+- ✓ nas opções escolhidas do Personalizar (a seleção já tinha `aria-pressed` e uma barra; agora também o sinal);
+- o mesmo anel de foco do A4 para elementos focados por script (`[tabindex="-1"]`).
+- `templates/base.html`: `?v=20261112.jean-teclado.1` no CSS e no JS.
+
+**Verificação (teclado real):** Tab: "Pular para o conteúdo → Expandir menu → Início → Administrar SPO → Institucional → Relatórios → Painéis…"; Enter em Relatórios → Execução → FIP 613 abre a tela, foco no `h1`, aba "FIP 613 — SPO", aviso "Página carregada: FIP 613"; modal de pendências da Início: foco dentro (3 de 3 aberturas), Tab preso, Esc fecha e o foco vai ao título; abas do Teto com setas; filtros com `aria-expanded` correto. Dois ajustes no caminho: a troca de tela roubava o foco do modal aberto; e o "devolver foco" de um aviso fechado tirava o foco de outro aviso aberto — corrigidos. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+**Fora daqui:** Esc nas listas dos filtros e navegação por setas dentro do menu (o Tab já percorre tudo); telas de cadastro com modais próprios não foram exercitadas uma a uma.

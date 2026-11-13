@@ -27985,3 +27985,204 @@
   }
   agendar();
 })();
+
+/* ==========================================================================
+   [jean] Semântica e teclado (feat/semantica-teclado, 2026-11-12)
+   Medido com teclado real: na Início o Tab só passava por "Expandir menu → Início
+   → Sair → Fechar"; os grupos do menu (Administrar SPO, Institucional, Relatórios,
+   Painéis, Usuários) são <div> sem foco, então quem usa só o teclado não chegava a
+   nenhum relatório (WCAG 2.1.1, nível A). Também: título da aba sempre "SPO"
+   (2.4.2, A); sem "Pular para o conteúdo" (2.4.1); ao trocar de tela o foco ficava
+   no menu e nada anunciava a página nova; Início e Teto sem título principal;
+   avisos modais sem role="dialog" nem foco preso; abas do Teto sem setas nem
+   aria-controls; filtros que abrem lista sem aria-expanded (4.1.2).
+   Este bloco corrige tudo isso por cima do HTML existente, sem alterar funções.
+   ========================================================================== */
+(function initSemanticaTeclado() {
+  const main = document.getElementById("content-area");
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const FOCAVEIS = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex='-1'])";
+
+  // Aviso para leitor de tela (troca de página)
+  const aviso = document.createElement("div");
+  aviso.className = "spo-sr-only";
+  aviso.setAttribute("role", "status");
+  aviso.setAttribute("aria-live", "polite");
+  document.body.appendChild(aviso);
+
+  // 1) "Pular para o conteúdo" — primeiro item do Tab, visível só ao receber foco
+  if (main && !document.querySelector(".spo-pular")) {
+    main.setAttribute("tabindex", "-1");
+    const pular = document.createElement("a");
+    pular.className = "spo-pular";
+    pular.href = "#content-area";
+    pular.textContent = "Pular para o conteúdo";
+    pular.addEventListener("click", (ev) => { ev.preventDefault(); main.focus(); });
+    document.body.prepend(pular);
+  }
+
+  // 2) Grupos do menu operáveis pelo teclado (o clique já abre/fecha; aqui Enter/Espaço)
+  function prepararMenu() {
+    document.querySelectorAll(".menu-parent").forEach((p) => {
+      if (!p.dataset.spoTeclado) {
+        p.dataset.spoTeclado = "1";
+        if (p.tagName !== "BUTTON" && p.tagName !== "A") {
+          p.setAttribute("role", "button");
+          p.tabIndex = 0;
+        }
+        if (p.dataset.submenu) p.setAttribute("aria-controls", p.dataset.submenu);
+        p.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); p.click(); }
+        });
+      }
+      const grupo = p.closest(".menu-group");
+      const aberto = String(!!(grupo && grupo.classList.contains("open")));
+      if (p.getAttribute("aria-expanded") !== aberto) p.setAttribute("aria-expanded", aberto);
+    });
+  }
+
+  // 3) Ao trocar de tela: título principal, título da aba, foco e aviso
+  let primeiraTela = true;
+  function aoTrocarTela() {
+    if (!main) return;
+    let titulo = [...main.querySelectorAll("h1")].find(visivel);
+    const temH1 = !!titulo;
+    if (!titulo) {
+      titulo = [...main.querySelectorAll(".module-header-copy .card-title, .report-header .card-title, .card-title, h2")].find(visivel);
+      if (titulo) { titulo.setAttribute("role", "heading"); titulo.setAttribute("aria-level", "1"); }
+    }
+    const ativo = document.querySelector(".menu-item.active[data-route]");
+    const doMenu = ativo ? ativo.textContent.trim().replace(/\s+/g, " ") : "";
+    const doTitulo = titulo ? titulo.textContent.trim().replace(/\s+/g, " ") : "";
+    // sem <h1> de verdade, o nome do item do menu ("Início") diz mais que o cartão ("Bem-vindo")
+    const nome = (temH1 ? doTitulo : (doMenu || doTitulo)) || "";
+    document.title = nome ? `${nome} — SPO` : "SPO";
+    // com um aviso modal aberto, o foco fica nele (não é roubado pelo título da página)
+    const dialogoAberto = [...document.querySelectorAll(".modal-overlay[data-spo-dialogo]")].some(visivel);
+    if (!primeiraTela && titulo && !dialogoAberto) {
+      titulo.setAttribute("tabindex", "-1");
+      titulo.focus({ preventScroll: true });
+      aviso.textContent = `Página carregada: ${nome}`;
+    }
+    primeiraTela = false;
+  }
+
+  // 4) Avisos modais: role="dialog", foco dentro, Tab preso, Esc fecha, foco volta
+  // para onde o foco volta quando um aviso modal fecha
+  function devolverFoco(volta, fechado) {
+    // só mexe no foco se ele estava no aviso que fechou ou se perdeu (body); nunca o tira de outro aviso aberto
+    const atual = document.activeElement;
+    if (atual && atual !== document.body && !(fechado && fechado.contains(atual)) && document.contains(atual)) return;
+    if (volta && volta !== document.body && document.contains(volta) && visivel(volta)) { volta.focus({ preventScroll: true }); return; }
+    const alvo = main && ([...main.querySelectorAll("h1, [role='heading'][aria-level='1']")].find(visivel) || main);
+    if (alvo) { if (!alvo.hasAttribute("tabindex")) alvo.setAttribute("tabindex", "-1"); alvo.focus({ preventScroll: true }); }
+  }
+  function botaoFechar(dlg) {
+    return [...dlg.querySelectorAll("button")].find((b) => /fechar|cancelar|^não$|^nao$/i.test((b.textContent || b.getAttribute("aria-label") || "").trim()) || /close/i.test(b.id || ""));
+  }
+  function prepararModais() {
+    document.querySelectorAll(".modal-overlay").forEach((ov) => {
+      const aberto = visivel(ov);
+      if (aberto && !ov.dataset.spoDialogo) {
+        ov.dataset.spoDialogo = "1";
+        ov.setAttribute("role", "dialog");
+        ov.setAttribute("aria-modal", "true");
+        const t = ov.querySelector(".modal-header-title, h1, h2, h3, .card-title");
+        if (t) { if (!t.id) t.id = `spo-dialogo-titulo-${Date.now()}`; ov.setAttribute("aria-labelledby", t.id); }
+        ov.__spoVoltar = document.activeElement;
+        const primeiro = [...ov.querySelectorAll(FOCAVEIS)].find(visivel);
+        if (primeiro) primeiro.focus({ preventScroll: true });
+        ov.__spoTeclas = (ev) => {
+          if (ev.key === "Escape") { const f = botaoFechar(ov); if (f) { ev.preventDefault(); f.click(); } return; }
+          if (ev.key !== "Tab") return;
+          const itens = [...ov.querySelectorAll(FOCAVEIS)].filter(visivel);
+          if (!itens.length) return;
+          const ini = itens[0], fim = itens[itens.length - 1];
+          if (ev.shiftKey && document.activeElement === ini) { ev.preventDefault(); fim.focus(); }
+          else if (!ev.shiftKey && document.activeElement === fim) { ev.preventDefault(); ini.focus(); }
+          else if (!ov.contains(document.activeElement)) { ev.preventDefault(); ini.focus(); }
+        };
+        document.addEventListener("keydown", ov.__spoTeclas, true);
+      } else if (!aberto && ov.dataset.spoDialogo) {
+        delete ov.dataset.spoDialogo;
+        document.removeEventListener("keydown", ov.__spoTeclas, true);
+        devolverFoco(ov.__spoVoltar, ov);
+      }
+    });
+  }
+  // modal removido do DOM (os criados por JS): libera o teclado
+  function limparModaisRemovidos(muts) {
+    muts.forEach((m) => m.removedNodes.forEach((n) => {
+      if (n.nodeType === 1 && n.dataset && n.dataset.spoDialogo) {
+        document.removeEventListener("keydown", n.__spoTeclas, true);
+        devolverFoco(n.__spoVoltar, n);
+      }
+    }));
+  }
+
+  // 5) Abas (role="tablist"): setas/Home/End, tabindex itinerante, aria-controls
+  function prepararAbas() {
+    document.querySelectorAll("[role='tablist']").forEach((lista) => {
+      const abas = [...lista.querySelectorAll("[role='tab']")];
+      if (!abas.length) return;
+      abas.forEach((aba) => {
+        const view = aba.dataset.view;
+        const painel = view && document.querySelector(`[data-view-panel="${view}"]`);
+        if (painel) {
+          if (!painel.id) painel.id = `spo-painel-${view}`;
+          if (!aba.id) aba.id = `spo-aba-${view}`;
+          aba.setAttribute("aria-controls", painel.id);
+          painel.setAttribute("role", "tabpanel");
+          painel.setAttribute("aria-labelledby", aba.id);
+        }
+        aba.tabIndex = aba.getAttribute("aria-selected") === "true" ? 0 : -1;
+      });
+      if (!lista.dataset.spoAbas) {
+        lista.dataset.spoAbas = "1";
+        lista.addEventListener("keydown", (ev) => {
+          const atuais = [...lista.querySelectorAll("[role='tab']")];
+          const i = atuais.indexOf(document.activeElement);
+          if (i < 0) return;
+          let j = null;
+          if (ev.key === "ArrowRight" || ev.key === "ArrowDown") j = (i + 1) % atuais.length;
+          if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") j = (i - 1 + atuais.length) % atuais.length;
+          if (ev.key === "Home") j = 0;
+          if (ev.key === "End") j = atuais.length - 1;
+          if (j === null) return;
+          ev.preventDefault();
+          atuais[j].focus();
+          atuais[j].click();
+        });
+      }
+    });
+  }
+
+  // 6) Botões que abrem lista (filtros): aria-expanded e aria-haspopup
+  function sincronizarListas() {
+    document.querySelectorAll(".mf-display, .planning-action-checklist-toggle").forEach((b) => {
+      const painel = b.classList.contains("mf-display")
+        ? b.parentElement && b.parentElement.querySelector(".mf-panel")
+        : b.parentElement && b.parentElement.querySelector(".planning-action-checklist-options");
+      if (!painel) return;
+      if (!b.hasAttribute("aria-haspopup")) b.setAttribute("aria-haspopup", "true");
+      const aberto = String(visivel(painel));
+      if (b.getAttribute("aria-expanded") !== aberto) b.setAttribute("aria-expanded", aberto);
+    });
+  }
+
+  // Disparo: troca de tela (filhos diretos do <main>) e mudanças no restante da página
+  let agendado = null;
+  function tudo() { agendado = null; prepararMenu(); prepararModais(); prepararAbas(); sincronizarListas(); }
+  const agendar = () => { if (!agendado) agendado = setTimeout(tudo, 120); };
+  if (main) {
+    let trocaAgendada = null;
+    new MutationObserver(() => {
+      clearTimeout(trocaAgendada);
+      trocaAgendada = setTimeout(() => { tudo(); aoTrocarTela(); }, 200);
+    }).observe(main, { childList: true });
+  }
+  new MutationObserver((muts) => { limparModaisRemovidos(muts); agendar(); })
+    .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "aria-selected"] });
+  document.addEventListener("click", () => setTimeout(sincronizarListas, 0), true);
+  tudo();
+})();

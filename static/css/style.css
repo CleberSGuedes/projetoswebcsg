@@ -7988,3 +7988,31 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
 .spo-grafico-tabela thead th { position: sticky; top: 0; background: var(--card); }
 .spo-grafico-tabela tfoot th, .spo-grafico-tabela tfoot td { font-weight: 700; }
 @media (pointer: coarse) { .spo-grafico-dados > summary { min-height: 44px; } }
+
+/* ==========================================================================
+   [jean] Semântica e teclado (feat/semantica-teclado, 2026-11-12)
+   "Pular para o conteúdo" (visível só no foco), texto só para leitor de tela,
+   ✓ nas opções escolhidas do Personalizar (seleção que não depende só da cor).
+   O JS fica em initSemanticaTeclado, no fim do main.js.
+   ========================================================================== */
+.spo-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.spo-pular {
+  position: fixed; top: 8px; left: 8px; z-index: 10000;
+  padding: 10px 16px; border-radius: 8px; font-weight: 700;
+  color: #ffffff; background: #1d1d1d;
+  transform: translateY(-200%);
+}
+.spo-pular:focus, .spo-pular:focus-visible { transform: none; }
+.menu-parent[role="button"] { cursor: pointer; }
+:is(.preference-row, .visual-pref-option).active { position: relative; }
+:is(.preference-row, .visual-pref-option).active::after {
+  content: "✓"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-weight: 700; color: var(--spo-accent-text, var(--accent));
+}
+/* foco levado por script (título da página ao trocar de tela, <main> pelo "Pular"): mesmo anel do A4 */
+@media (forced-colors: none) {
+  body [tabindex="-1"]:focus-visible { outline: 3px solid var(--spo-focus-ring, var(--accent)); outline-offset: 2px; }
+}
