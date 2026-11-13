@@ -108,7 +108,8 @@
       spacious: "ampla",
     },
     contrast: {
-      standard: "padrão",
+      standard: "suave (padrão SPO)", // [jean] três níveis de contraste: bloco no fim do style.css
+      medium: "médio",
       enhanced: "reforçado",
     },
     cards: {
@@ -843,7 +844,9 @@
   function getCommonDiagramTheme(preferences = readCommonVisualPreferences()) {
     const resolvedMode = getResolvedCommonDiagramMode(preferences);
     if (resolvedMode === "system") return getForcedColorsDiagramTheme();
-    return COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
+    const theme = COMMON_DIAGRAM_THEMES[resolvedMode] || COMMON_DIAGRAM_THEMES.light;
+    // [jean] diagramas na cor de destaque: ver initDiagramasDestaque, no fim do arquivo
+    return typeof window.spoTemaDiagramaComDestaque === "function" ? window.spoTemaDiagramaComDestaque(theme, resolvedMode) : theme;
   }
 
   function emitCommonVisualChange(preferences) {
@@ -27704,3 +27707,641 @@
 
 
 
+
+/* ==========================================================================
+   [jean] Fontes e tamanho do texto (feat/fontes-personalizar, 2026-11-12)
+   Preferência local do navegador, como as demais do Personalizar Temas SPO, com
+   chave própria; aplicada em todas as telas como atributos no <body> (o CSS fica no
+   bloco [jean] do fim do style.css). O cartão do Personalizar é carregado depois,
+   por isso os cliques são tratados por delegação e o estado é sincronizado quando
+   o cartão aparece na página. Não altera nenhuma função existente.
+   ========================================================================== */
+(function initFontesPersonalizar() {
+  const STORAGE_KEY = "spo-font-preferences";
+  const OPTIONS = Object.freeze({
+    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
+    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)" },
+    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
+    table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
+  });
+  // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
+  // Quem já salvou uma escolha no navegador continua com ela.
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText" });
+
+  function read() {
+    const prefs = { ...DEFAULTS };
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      Object.keys(DEFAULTS).forEach((key) => {
+        if (saved && OPTIONS[key][saved[key]]) prefs[key] = saved[key];
+      });
+    } catch (err) {
+      /* preferência ilegível ou armazenamento bloqueado: fica o padrão */
+    }
+    return prefs;
+  }
+
+  function save(prefs) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    } catch (err) {
+      /* armazenamento bloqueado: vale só nesta página */
+    }
+  }
+
+  function apply(prefs) {
+    if (!document.body) return;
+    Object.keys(ATTRS).forEach((key) => {
+      document.body.dataset[ATTRS[key]] = prefs[key];
+    });
+  }
+
+  function setOpen(card, key) {
+    card.querySelectorAll("[data-spo-font-group]").forEach((group) => {
+      const open = Boolean(key) && group.dataset.spoFontGroup === key;
+      group.classList.toggle("is-open", open);
+      const toggle = group.querySelector("[data-spo-font-toggle]");
+      const panel = group.querySelector("[data-spo-font-panel]");
+      if (toggle) toggle.setAttribute("aria-expanded", String(open));
+      if (panel) panel.hidden = !open;
+    });
+  }
+
+  function sync(card) {
+    const prefs = read();
+    card.querySelectorAll("[data-spo-font-pref]").forEach((btn) => {
+      const active = prefs[btn.dataset.spoFontPref] === btn.dataset.spoFontValue;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    card.querySelectorAll("[data-spo-font-current]").forEach((target) => {
+      const key = target.dataset.spoFontCurrent;
+      target.textContent = OPTIONS[key][prefs[key]];
+    });
+  }
+
+  function prepareCard() {
+    const card = document.getElementById("spo-fontes-card");
+    if (!card || card.dataset.spoFontReady === "1") return;
+    card.dataset.spoFontReady = "1";
+    sync(card);
+    setOpen(card, "");
+  }
+
+  document.addEventListener("click", (ev) => {
+    const card = ev.target.closest && ev.target.closest("#spo-fontes-card");
+    if (!card) return;
+    const toggle = ev.target.closest("[data-spo-font-toggle]");
+    if (toggle) {
+      const key = toggle.dataset.spoFontToggle;
+      const group = card.querySelector(`[data-spo-font-group="${key}"]`);
+      setOpen(card, group && group.classList.contains("is-open") ? "" : key);
+      return;
+    }
+    const option = ev.target.closest("[data-spo-font-pref]");
+    if (!option) return;
+    const key = option.dataset.spoFontPref;
+    const value = option.dataset.spoFontValue;
+    if (!OPTIONS[key] || !OPTIONS[key][value]) return;
+    const prefs = { ...read(), [key]: value };
+    save(prefs);
+    apply(prefs);
+    sync(card);
+    setOpen(card, "");
+    const status = card.querySelector(".spo-fontes-status");
+    if (status) status.textContent = `"${OPTIONS[key][value]}" aplicada neste navegador.`;
+  });
+
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== STORAGE_KEY) return;
+    apply(read());
+    const card = document.getElementById("spo-fontes-card");
+    if (card) sync(card);
+  });
+
+  apply(read());
+  if (document.body) {
+    new MutationObserver(prepareCard).observe(document.body, { childList: true, subtree: true });
+  }
+  prepareCard();
+})();
+
+/* ==========================================================================
+   [jean] Movimento reduzido (feat/movimento-reduzido, 2026-11-12)
+   O SPO chama scrollIntoView({ behavior: "smooth" }) em 14 pontos; o CSS não
+   consegue desligar uma rolagem suave pedida pelo JS. Quando a pessoa pede
+   "reduzir movimento" no sistema, a rolagem suave vira imediata. Não altera
+   nenhuma chamada existente; sem a preferência, nada muda.
+   ========================================================================== */
+(function initMovimentoReduzido() {
+  if (!window.matchMedia || !Element.prototype.scrollIntoView) return;
+  const consulta = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function scrollIntoViewRespeitandoMovimento(arg) {
+    if (consulta.matches && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      return original.call(this, { ...arg, behavior: "auto" });
+    }
+    return original.apply(this, arguments);
+  };
+})();
+
+/* ==========================================================================
+   [jean] Gráficos acessíveis (feat/graficos-acessiveis, 2026-11-12)
+   Os gráficos Plotly (painel Teto Orçamentário) não tinham alternativa em texto
+   (WCAG 1.1.1, nível A): o leitor de tela lia só fragmentos do desenho
+   ("74,4%20,4%5,19%"). Para cada gráfico, este bloco: (1) dá nome e resumo
+   (role="img" + aria-label: título, tipo, nº de itens, maior item e total) e
+   (2) põe logo abaixo um "Ver dados do gráfico em tabela" (<details>) com os
+   mesmos números. Lê os dados do próprio gráfico (gd.data) e se atualiza
+   quando ele muda (filtros, tema). Não altera o código dos gráficos.
+   ========================================================================== */
+(function initGraficosAcessiveis() {
+  const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const pct = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
+  const TIPOS = { pie: "pizza", treemap: "mapa de árvore", bar: "barras", waterfall: "cascata", scatter: "linha" };
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+  function tituloDo(gd) {
+    const caixa = gd.closest("section, .teto-panel, .card");
+    const h = caixa && caixa.querySelector("h2, h3, .card-title");
+    return (h && h.textContent.trim()) || gd.getAttribute("data-titulo") || "Gráfico";
+  }
+
+  // Normaliza qualquer gráfico em séries: { nome, tipo, ehPercentual, itens: [{ rotulo, valor }] }
+  function series(gd) {
+    const out = [];
+    (gd.data || []).forEach((t, i) => {
+      if (t.visible === false) return;
+      let rotulos = [];
+      let valores = [];
+      if (t.type === "pie" || t.type === "treemap") {
+        rotulos = t.labels || [];
+        valores = t.values || [];
+      } else if (t.orientation === "h") {
+        rotulos = t.y || [];
+        valores = t.x || [];
+      } else {
+        rotulos = t.x || [];
+        valores = t.y || [];
+      }
+      if (t.type === "waterfall" && Array.isArray(t.customdata)) {
+        rotulos = rotulos.map((r, j) => {
+          const cd = t.customdata[j];
+          const longo = Array.isArray(cd) ? cd[0] : "";
+          if (!longo) return r;
+          return String(longo).startsWith(String(r)) ? longo : `${r} — ${longo}`;
+        });
+      }
+      const nums = valores.map(Number);
+      const ehPercentual = t.yaxis === "y2" && nums.every((v) => v >= 0 && v <= 1.0001);
+      out.push({
+        nome: t.name || (t.type === "pie" || t.type === "treemap" ? "Valor" : `Série ${i + 1}`),
+        tipo: t.type || "scatter",
+        ehPercentual,
+        itens: rotulos.map((r, j) => ({ rotulo: String(r), valor: nums[j] })),
+      });
+    });
+    return out;
+  }
+
+  const fmt = (s, v) => (v === undefined || Number.isNaN(v) ? "—" : s.ehPercentual ? pct.format(v) : moeda.format(v));
+
+  function resumo(gd, ss) {
+    const titulo = tituloDo(gd);
+    if (!ss.length || !ss.some((s) => s.itens.length)) {
+      const anotacao = gd.layout && gd.layout.annotations && gd.layout.annotations[0];
+      return `${titulo}: ${(anotacao && anotacao.text) || "sem dados"}.`;
+    }
+    const principal = ss.find((s) => !s.ehPercentual) || ss[0];
+    const tipo = TIPOS[principal.tipo] || "gráfico";
+    const itens = principal.itens.filter((x) => Number.isFinite(x.valor));
+    const ultimo = itens[itens.length - 1];
+    const total = principal.tipo === "waterfall" ? (ultimo && ultimo.valor) : itens.reduce((a, x) => a + x.valor, 0);
+    const maior = [...itens].sort((a, b) => b.valor - a.valor).find((x) => !(principal.tipo === "waterfall" && x === ultimo));
+    let texto = `${titulo}. Gráfico de ${tipo}`;
+    if (ss.length > 1) texto += ` com ${ss.length} séries (${ss.map((s) => s.nome).join(", ")})`;
+    texto += ` com ${principal.itens.length} ${principal.itens.length === 1 ? "item" : "itens"}.`;
+    if (ss.length > 1) {
+      // várias séries: o maior valor entre todas, dizendo de qual série é
+      let top = null;
+      ss.filter((s) => !s.ehPercentual).forEach((s) => s.itens.forEach((x) => {
+        if (Number.isFinite(x.valor) && (!top || x.valor > top.x.valor)) top = { s, x };
+      }));
+      if (top) texto += ` Maior valor: ${top.s.nome}, em ${top.x.rotulo}: ${fmt(top.s, top.x.valor)}.`;
+    } else if (maior) {
+      texto += ` Maior: ${maior.rotulo}, ${fmt(principal, maior.valor)}.`;
+    }
+    if (Number.isFinite(total) && ss.length === 1) texto += ` Total: ${fmt(principal, total)}.`;
+    return texto + " A tabela com todos os valores está logo abaixo do gráfico.";
+  }
+
+  function tabela(gd, ss) {
+    if (!ss.length || !ss.some((s) => s.itens.length)) return "<p>Sem dados.</p>";
+    const rotulos = [];
+    ss.forEach((s) => s.itens.forEach((x) => { if (!rotulos.includes(x.rotulo)) rotulos.push(x.rotulo); }));
+    const unica = ss.length === 1;
+    const total = unica && !ss[0].ehPercentual && ss[0].tipo !== "waterfall"
+      ? ss[0].itens.reduce((a, x) => a + (Number.isFinite(x.valor) ? x.valor : 0), 0) : null;
+    let h = `<table class="spo-grafico-tabela"><caption>${esc(tituloDo(gd))}</caption><thead><tr><th scope="col">Item</th>`;
+    ss.forEach((s) => { h += `<th scope="col">${esc(s.nome)}</th>`; });
+    if (total) h += "<th scope=\"col\">% do total</th>";
+    h += "</tr></thead><tbody>";
+    rotulos.forEach((r) => {
+      h += `<tr><th scope="row">${esc(r)}</th>`;
+      ss.forEach((s) => { const it = s.itens.find((x) => x.rotulo === r); h += `<td>${esc(it ? fmt(s, it.valor) : "—")}</td>`; });
+      if (total) { const it = ss[0].itens.find((x) => x.rotulo === r); h += `<td>${it ? pct.format(it.valor / total) : "—"}</td>`; }
+      h += "</tr>";
+    });
+    if (total) h += `</tbody><tfoot><tr><th scope="row">Total</th><td>${esc(moeda.format(total))}</td><td>${pct.format(1)}</td></tr></tfoot></table>`;
+    else h += "</tbody></table>";
+    return h;
+  }
+
+  function aplicar(gd) {
+    if (!gd || !gd.data) return;
+    const ss = series(gd);
+    const assinatura = JSON.stringify([tituloDo(gd), ss]);
+    if (gd.dataset.spoA11ySig === assinatura) return;
+    gd.dataset.spoA11ySig = assinatura;
+    gd.setAttribute("role", "img");
+    gd.setAttribute("aria-label", resumo(gd, ss));
+    let det = gd.nextElementSibling;
+    if (!det || !det.classList.contains("spo-grafico-dados")) {
+      det = document.createElement("details");
+      det.className = "spo-grafico-dados";
+      det.innerHTML = "<summary></summary><div class=\"spo-grafico-dados-corpo\"></div>";
+      gd.insertAdjacentElement("afterend", det);
+    }
+    det.querySelector("summary").textContent = `Ver dados do gráfico “${tituloDo(gd)}” em tabela`;
+    det.querySelector(".spo-grafico-dados-corpo").innerHTML = tabela(gd, ss);
+  }
+
+  let agendado = null;
+  function varrer() {
+    agendado = null;
+    document.querySelectorAll(".js-plotly-plot").forEach(aplicar);
+  }
+  const agendar = () => { if (!agendado) agendado = setTimeout(varrer, 250); };
+  if (document.body) {
+    new MutationObserver((muts) => {
+      // só reage a mudanças fora das tabelas que este bloco escreve
+      if (muts.some((m) => !(m.target.closest && m.target.closest(".spo-grafico-dados")))) agendar();
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  agendar();
+})();
+
+/* ==========================================================================
+   [jean] Semântica e teclado (feat/semantica-teclado, 2026-11-12)
+   Medido com teclado real: na Início o Tab só passava por "Expandir menu → Início
+   → Sair → Fechar"; os grupos do menu (Administrar SPO, Institucional, Relatórios,
+   Painéis, Usuários) são <div> sem foco, então quem usa só o teclado não chegava a
+   nenhum relatório (WCAG 2.1.1, nível A). Também: título da aba sempre "SPO"
+   (2.4.2, A); sem "Pular para o conteúdo" (2.4.1); ao trocar de tela o foco ficava
+   no menu e nada anunciava a página nova; Início e Teto sem título principal;
+   avisos modais sem role="dialog" nem foco preso; abas do Teto sem setas nem
+   aria-controls; filtros que abrem lista sem aria-expanded (4.1.2).
+   Este bloco corrige tudo isso por cima do HTML existente, sem alterar funções.
+   ========================================================================== */
+(function initSemanticaTeclado() {
+  const main = document.getElementById("content-area");
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const FOCAVEIS = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex='-1'])";
+
+  // Aviso para leitor de tela (troca de página)
+  const aviso = document.createElement("div");
+  aviso.className = "spo-sr-only";
+  aviso.setAttribute("role", "status");
+  aviso.setAttribute("aria-live", "polite");
+  document.body.appendChild(aviso);
+
+  // 1) "Pular para o conteúdo" — primeiro item do Tab, visível só ao receber foco
+  if (main && !document.querySelector(".spo-pular")) {
+    main.setAttribute("tabindex", "-1");
+    const pular = document.createElement("a");
+    pular.className = "spo-pular";
+    pular.href = "#content-area";
+    pular.textContent = "Pular para o conteúdo";
+    pular.addEventListener("click", (ev) => { ev.preventDefault(); main.focus(); });
+    document.body.prepend(pular);
+  }
+
+  // 2) Grupos do menu operáveis pelo teclado (o clique já abre/fecha; aqui Enter/Espaço)
+  function prepararMenu() {
+    document.querySelectorAll(".menu-parent").forEach((p) => {
+      if (!p.dataset.spoTeclado) {
+        p.dataset.spoTeclado = "1";
+        if (p.tagName !== "BUTTON" && p.tagName !== "A") {
+          p.setAttribute("role", "button");
+          p.tabIndex = 0;
+        }
+        if (p.dataset.submenu) p.setAttribute("aria-controls", p.dataset.submenu);
+        p.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); p.click(); }
+        });
+      }
+      const grupo = p.closest(".menu-group");
+      const aberto = String(!!(grupo && grupo.classList.contains("open")));
+      if (p.getAttribute("aria-expanded") !== aberto) p.setAttribute("aria-expanded", aberto);
+    });
+  }
+
+  // 3) Ao trocar de tela: título principal, título da aba, foco e aviso
+  let primeiraTela = true;
+  function aoTrocarTela() {
+    if (!main) return;
+    let titulo = [...main.querySelectorAll("h1")].find(visivel);
+    const temH1 = !!titulo;
+    if (!titulo) {
+      titulo = [...main.querySelectorAll(".module-header-copy .card-title, .report-header .card-title, .card-title, h2")].find(visivel);
+      if (titulo) { titulo.setAttribute("role", "heading"); titulo.setAttribute("aria-level", "1"); }
+    }
+    const ativo = document.querySelector(".menu-item.active[data-route]");
+    const doMenu = ativo ? ativo.textContent.trim().replace(/\s+/g, " ") : "";
+    const doTitulo = titulo ? titulo.textContent.trim().replace(/\s+/g, " ") : "";
+    // sem <h1> de verdade, o nome do item do menu ("Início") diz mais que o cartão ("Bem-vindo")
+    const nome = (temH1 ? doTitulo : (doMenu || doTitulo)) || "";
+    document.title = nome ? `${nome} — SPO` : "SPO";
+    // com um aviso modal aberto, o foco fica nele (não é roubado pelo título da página)
+    const dialogoAberto = [...document.querySelectorAll(".modal-overlay[data-spo-dialogo]")].some(visivel);
+    if (!primeiraTela && titulo && !dialogoAberto) {
+      titulo.setAttribute("tabindex", "-1");
+      titulo.focus({ preventScroll: true });
+      aviso.textContent = `Página carregada: ${nome}`;
+    }
+    primeiraTela = false;
+  }
+
+  // 4) Avisos modais: role="dialog", foco dentro, Tab preso, Esc fecha, foco volta
+  // para onde o foco volta quando um aviso modal fecha
+  function devolverFoco(volta, fechado) {
+    // só mexe no foco se ele estava no aviso que fechou ou se perdeu (body); nunca o tira de outro aviso aberto
+    const atual = document.activeElement;
+    if (atual && atual !== document.body && !(fechado && fechado.contains(atual)) && document.contains(atual)) return;
+    if (volta && volta !== document.body && document.contains(volta) && visivel(volta)) { volta.focus({ preventScroll: true }); return; }
+    const alvo = main && ([...main.querySelectorAll("h1, [role='heading'][aria-level='1']")].find(visivel) || main);
+    if (alvo) { if (!alvo.hasAttribute("tabindex")) alvo.setAttribute("tabindex", "-1"); alvo.focus({ preventScroll: true }); }
+  }
+  function botaoFechar(dlg) {
+    return [...dlg.querySelectorAll("button")].find((b) => /fechar|cancelar|^não$|^nao$/i.test((b.textContent || b.getAttribute("aria-label") || "").trim()) || /close/i.test(b.id || ""));
+  }
+  function prepararModais() {
+    document.querySelectorAll(".modal-overlay").forEach((ov) => {
+      const aberto = visivel(ov);
+      if (aberto && !ov.dataset.spoDialogo) {
+        ov.dataset.spoDialogo = "1";
+        ov.setAttribute("role", "dialog");
+        ov.setAttribute("aria-modal", "true");
+        const t = ov.querySelector(".modal-header-title, h1, h2, h3, .card-title");
+        if (t) { if (!t.id) t.id = `spo-dialogo-titulo-${Date.now()}`; ov.setAttribute("aria-labelledby", t.id); }
+        ov.__spoVoltar = document.activeElement;
+        const primeiro = [...ov.querySelectorAll(FOCAVEIS)].find(visivel);
+        if (primeiro) primeiro.focus({ preventScroll: true });
+        ov.__spoTeclas = (ev) => {
+          if (ev.key === "Escape") { const f = botaoFechar(ov); if (f) { ev.preventDefault(); f.click(); } return; }
+          if (ev.key !== "Tab") return;
+          const itens = [...ov.querySelectorAll(FOCAVEIS)].filter(visivel);
+          if (!itens.length) return;
+          const ini = itens[0], fim = itens[itens.length - 1];
+          if (ev.shiftKey && document.activeElement === ini) { ev.preventDefault(); fim.focus(); }
+          else if (!ev.shiftKey && document.activeElement === fim) { ev.preventDefault(); ini.focus(); }
+          else if (!ov.contains(document.activeElement)) { ev.preventDefault(); ini.focus(); }
+        };
+        document.addEventListener("keydown", ov.__spoTeclas, true);
+      } else if (!aberto && ov.dataset.spoDialogo) {
+        delete ov.dataset.spoDialogo;
+        document.removeEventListener("keydown", ov.__spoTeclas, true);
+        devolverFoco(ov.__spoVoltar, ov);
+      }
+    });
+  }
+  // modal removido do DOM (os criados por JS): libera o teclado
+  function limparModaisRemovidos(muts) {
+    muts.forEach((m) => m.removedNodes.forEach((n) => {
+      if (n.nodeType === 1 && n.dataset && n.dataset.spoDialogo) {
+        document.removeEventListener("keydown", n.__spoTeclas, true);
+        devolverFoco(n.__spoVoltar, n);
+      }
+    }));
+  }
+
+  // 5) Abas (role="tablist"): setas/Home/End, tabindex itinerante, aria-controls
+  function prepararAbas() {
+    document.querySelectorAll("[role='tablist']").forEach((lista) => {
+      const abas = [...lista.querySelectorAll("[role='tab']")];
+      if (!abas.length) return;
+      abas.forEach((aba) => {
+        const view = aba.dataset.view;
+        const painel = view && document.querySelector(`[data-view-panel="${view}"]`);
+        if (painel) {
+          if (!painel.id) painel.id = `spo-painel-${view}`;
+          if (!aba.id) aba.id = `spo-aba-${view}`;
+          aba.setAttribute("aria-controls", painel.id);
+          painel.setAttribute("role", "tabpanel");
+          painel.setAttribute("aria-labelledby", aba.id);
+        }
+        aba.tabIndex = aba.getAttribute("aria-selected") === "true" ? 0 : -1;
+      });
+      if (!lista.dataset.spoAbas) {
+        lista.dataset.spoAbas = "1";
+        lista.addEventListener("keydown", (ev) => {
+          // a tela já tratou a tecla (ex.: abas do Contrato Visual Protegido,
+          // initProtectedContractTabs): mover de novo pulava uma aba (fix/abas-paginacao)
+          if (ev.defaultPrevented) return;
+          const atuais = [...lista.querySelectorAll("[role='tab']")];
+          const i = atuais.indexOf(document.activeElement);
+          if (i < 0) return;
+          let j = null;
+          if (ev.key === "ArrowRight" || ev.key === "ArrowDown") j = (i + 1) % atuais.length;
+          if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") j = (i - 1 + atuais.length) % atuais.length;
+          if (ev.key === "Home") j = 0;
+          if (ev.key === "End") j = atuais.length - 1;
+          if (j === null) return;
+          ev.preventDefault();
+          atuais[j].focus();
+          atuais[j].click();
+        });
+      }
+    });
+  }
+
+  // 6) Botões que abrem lista (filtros): aria-expanded e aria-haspopup
+  function sincronizarListas() {
+    document.querySelectorAll(".mf-display, .planning-action-checklist-toggle").forEach((b) => {
+      const painel = b.classList.contains("mf-display")
+        ? b.parentElement && b.parentElement.querySelector(".mf-panel")
+        : b.parentElement && b.parentElement.querySelector(".planning-action-checklist-options");
+      if (!painel) return;
+      if (!b.hasAttribute("aria-haspopup")) b.setAttribute("aria-haspopup", "true");
+      const aberto = String(visivel(painel));
+      if (b.getAttribute("aria-expanded") !== aberto) b.setAttribute("aria-expanded", aberto);
+    });
+  }
+
+  // Disparo: troca de tela (filhos diretos do <main>) e mudanças no restante da página
+  let agendado = null;
+  // 7) Paginação: a página ativa só se distinguia pela cor; o leitor de tela
+  //    passa a anunciar "página atual" (fix/abas-paginacao)
+  function marcarPaginaAtual() {
+    document.querySelectorAll(".pagination button").forEach((b) => {
+      const atual = b.classList.contains("active");
+      if (atual && b.getAttribute("aria-current") !== "page") b.setAttribute("aria-current", "page");
+      else if (!atual && b.hasAttribute("aria-current")) b.removeAttribute("aria-current");
+    });
+  }
+
+  function tudo() { agendado = null; prepararMenu(); prepararModais(); prepararAbas(); sincronizarListas(); marcarPaginaAtual(); }
+  const agendar = () => { if (!agendado) agendado = setTimeout(tudo, 120); };
+  if (main) {
+    let trocaAgendada = null;
+    new MutationObserver(() => {
+      clearTimeout(trocaAgendada);
+      trocaAgendada = setTimeout(() => { tudo(); aoTrocarTela(); }, 200);
+    }).observe(main, { childList: true });
+  }
+  new MutationObserver((muts) => { limparModaisRemovidos(muts); agendar(); })
+    .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "aria-selected"] });
+  document.addEventListener("click", () => setTimeout(sincronizarListas, 0), true);
+  tudo();
+})();
+
+/* ==========================================================================
+   [jean] Diagramas e gráficos na cor de destaque (feat/diagramas-destaque, 2026-11-13)
+   Os gráficos do Teto tiravam as cores de paletas fixas (COMMON_DIAGRAM_THEMES):
+   no escuro, fundo azul-marinho e conectores azuis, qualquer que fosse o destaque.
+   Como no AA+ antigo (spo-aa-plus-plotly.js do laboratório), a 1ª cor da paleta
+   passa a ser o destaque (tom com ≥ 3:1, --spo-accent-graphic do CSS); a cor
+   fixa mais parecida com ele vai para o fim, para as séries continuarem
+   distintas. Fundo do gráfico transparente (o CSS do .teto-chart dá o fundo) e
+   seleção/foco/conector no destaque. Só nos modos "claro" e "escuro"; o alto
+   contraste fica com a paleta fixa. getCommonDiagramTheme chama esta função
+   (2 linhas alteradas lá); sem ela, nada muda.
+   ========================================================================== */
+(function initDiagramasDestaque() {
+  const hex = (cor) => {
+    const c = document.createElement("canvas").getContext("2d");
+    c.fillStyle = cor;
+    c.fillRect(0, 0, 1, 1);
+    const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+    return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  };
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const distancia = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+
+  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+    if (modo !== "light" && modo !== "dark") return tema;
+    const css = getComputedStyle(document.body);
+    const bruto = (css.getPropertyValue(modo === "dark" && document.body.classList.contains("theme-dark")
+      ? "--accent" : (modo === "dark" ? "--color-300" : "--spo-accent-graphic-light")) || "").trim();
+    if (!bruto) return tema;
+    const destaque = hex(bruto);
+    const escuroNoFundo = modo === "dark";
+    // Paletas da v4.3.1 (spo-aa-plus-plotly.js do laboratório): no claro, tons fundos
+    // e saturados (todos ≥ 5:1 sobre branco); no escuro, tons claros e vivos (≥ 8:1 sobre #1a1a1a).
+    const resto = escuroNoFundo
+      ? ["#5eead4", "#93c5fd", "#fca5a5", "#c4b5fd", "#67e8f9", "#e2e8f0", "#fb923c"]
+      : ["#0f766e", "#1d4ed8", "#b91c1c", "#6d28d9", "#0369a1", "#334155", "#c2410c"];
+    const parecida = resto.reduce((m, c, i) => (distancia(c, destaque) < distancia(resto[m], destaque) ? i : m), 0);
+    if (resto.length && distancia(resto[parecida], destaque) < 90) resto.push(resto.splice(parecida, 1)[0]);
+    return {
+      ...tema,
+      panel: "rgba(0,0,0,0)",
+      plot: "rgba(0,0,0,0)",
+      connector: destaque,
+      selection: destaque,
+      focus: destaque,
+      palette: [destaque, ...resto],
+    };
+  };
+})();
+
+/* ==========================================================================
+   [jean] Esc fecha as listas dos filtros (fix/esc-filtros, 2026-11-13)
+   As listas abertas pelos filtros só fechavam clicando fora (ou em Cancelar /
+   Aplicar). Esc agora fecha a lista aberta e devolve o foco ao botão que a
+   abriu (WCAG 2.1.1 e o padrão de "disclosure"/listbox):
+   - filtros dos relatórios (.mf-panel.open): Esc = Cancelar (a seleção não
+     aplicada é descartada, como no botão);
+   - listas de marcar do Teto e da Estrutura (.planning-action-checklist-panel):
+     só fecha (a marcação já vale na hora).
+   Captura no document, registrada no carregamento: roda antes do Esc dos
+   avisos modais, então o primeiro Esc fecha a lista e o segundo, o aviso.
+   ========================================================================== */
+(function initEscFiltros() {
+  const visivel = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const mf = [...document.querySelectorAll(".mf-panel.open")].find(visivel);
+    if (mf) {
+      const wrap = mf.closest(".mf-wrapper") || mf.parentElement;
+      const cancelar = mf.querySelector(".mf-btn.ghost");
+      if (cancelar) cancelar.click();
+      else mf.classList.remove("open");
+      wrap?.querySelector(".mf-display")?.focus();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    const lista = [...document.querySelectorAll(".planning-action-checklist-panel")].find(visivel);
+    if (lista) {
+      lista.hidden = true;
+      lista.parentElement?.querySelector(".planning-action-checklist-toggle")?.focus();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true);
+})();
+
+/* ==========================================================================
+   [jean] Setas no menu lateral (feat/setas-menu, 2026-11-13)
+   Item P5 do inventário do AA+: no menu só o Tab percorria os itens, um a um,
+   inclusive os de grupos longos. Agora, com o foco num item do menu (padrão de
+   navegação em árvore; o Tab continua como antes):
+   ↓/↑ próximo/anterior item visível · Home/End primeiro/último ·
+   → abre o grupo (se já aberto, vai ao 1º item dele) ·
+   ← fecha o grupo (se já fechado, ou num item, volta ao grupo de cima).
+   Só age quando o foco está num .menu-item dentro de #menu e sem Ctrl/Alt/Meta.
+   ========================================================================== */
+(function initSetasMenu() {
+  const menu = document.getElementById("menu");
+  if (!menu) return;
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const itens = () => [...menu.querySelectorAll(".menu-item")].filter(visivel);
+  const grupoDe = (el) => el.closest(".menu-group");
+  const aberto = (pai) => !!(grupoDe(pai) && grupoDe(pai).classList.contains("open"));
+  const paiAcima = (el) => {
+    const grupo = el.classList.contains("menu-parent") ? grupoDe(el)?.parentElement?.closest(".menu-group") : grupoDe(el);
+    return grupo ? grupo.querySelector(":scope > .menu-parent") : null;
+  };
+  const focar = (el) => { if (el) { el.focus(); el.scrollIntoView({ block: "nearest" }); } };
+  menu.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    const atual = ev.target.closest(".menu-item");
+    if (!atual || !menu.contains(atual)) return;
+    const lista = itens();
+    const i = lista.indexOf(atual);
+    const ehPai = atual.classList.contains("menu-parent");
+    let alvo = null;
+    switch (ev.key) {
+      case "ArrowDown": alvo = lista[i + 1]; break;
+      case "ArrowUp": alvo = lista[i - 1]; break;
+      case "Home": alvo = lista[0]; break;
+      case "End": alvo = lista[lista.length - 1]; break;
+      case "ArrowRight":
+        if (!ehPai) return;
+        ev.preventDefault();
+        if (!aberto(atual)) { atual.click(); return; }
+        alvo = itens().find((el) => grupoDe(atual).querySelector(":scope > .submenu")?.contains(el));
+        break;
+      case "ArrowLeft":
+        ev.preventDefault();
+        if (ehPai && aberto(atual)) { atual.click(); return; }
+        alvo = paiAcima(atual);
+        break;
+      default: return;
+    }
+    ev.preventDefault();
+    focar(alvo);
+  });
+})();

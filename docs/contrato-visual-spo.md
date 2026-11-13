@@ -2,6 +2,8 @@
 
 Este documento registra o contrato atual de layout, temas e responsividade do SPO. Ele existe para evitar que um ajuste de modo móvel, split do Chrome, barra de rolagem ou cor de destaque interfira em outra camada.
 
+> **Cor, contraste e componentes:** as regras de acessibilidade e de cor (tokens por tema, níveis de contraste, hierarquia de botões, campos, listas, como medir e checklist de PR) estão no [Padrão visual spo-aa+](padrao-visual-spo-aa-plus.md). Leia antes de criar ou mudar uma tela.
+
 ## Classes de ambiente
 
 - `spo-shell`: casca global do sistema.
@@ -21,7 +23,7 @@ As barras usam o padrão global `scrollbar-visible`: ficam discretas em repouso 
 
 ## Cores de destaque
 
-As cores ficam centralizadas em variáveis CSS e no mapa `ACCENT_COLORS` em `static/js/main.js`. Evite cores fixas em novos componentes; prefira `--accent`, `--accent-strong`, `--accent-rgb` e `--accent-soft-rgb`.
+As cores ficam centralizadas em variáveis CSS e no mapa `ACCENT_COLORS` em `static/js/main.js`. Evite cores fixas em novos componentes; prefira `--accent`, `--accent-strong`, `--accent-rgb` e `--accent-soft-rgb`. Para texto na cor de destaque, fundo de botão principal e contorno de controle, use os tokens do padrão spo-aa+ (`--spo-accent-text`, `--spo-btn-fill`, `--spo-control-border`; ver [§3](padrao-visual-spo-aa-plus.md#3-tokens-a-fonte-única-de-cor)).
 
 ## Personalização comum
 

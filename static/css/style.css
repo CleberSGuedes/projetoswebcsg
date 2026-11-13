@@ -7572,3 +7572,954 @@ html.spo-split-pressure .governanca-grid {
 .theme-dark .menu-badge-manutencao { color: #fbbf24; }
 .sidebar-collapsed .menu-badge-manutencao,
 .collapsed .menu-badge-manutencao { display: none; }
+
+/* ==========================================================================
+   [jean] Totais dos relatórios de execução sem corte nem sobreposição
+   (fix/totais-relatorios-responsivo, 2026-11-12)
+   O quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e
+   NOB tinha duas colunas fixas e valores sem quebra de linha: transbordava em todas
+   as larguras (cortado a 390 px; valores invadindo a área vizinha a ~1024 px; até
+   25 px a mais a 1366 px). Agora as colunas se ajustam à largura disponível (2 quando
+   cabem, 1 quando não) e, se rótulo e valor não couberem lado a lado, o valor desce
+   para a linha de baixo. O PLAN 51 (.totais-box--wide) mantém o quadro próprio.
+   Ajuste (fix/totais-duas-colunas, 2026-11-13): o mínimo de 14rem por coluna só dava
+   2 colunas com o quadro ≥ ~470 px; com o menu aberto a 1600 px o quadro tem 467 px e
+   caía para 1 coluna (faixa de 112 → 176 px, menos espaço para a tabela). Mínimo de
+   12rem e espaços menores (colunas 12 px, rótulo/valor 6 px): 2 colunas, como na
+   produção, sempre que os pares cabem numa linha.
+   ========================================================================== */
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  column-gap: 12px;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 6px;
+  row-gap: 0;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row > strong {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   [jean] Fontes e tamanho do texto escolhidos em Personalizar Temas SPO
+   (feat/fontes-personalizar, 2026-11-12)
+   Fontes hospedadas no SPO (static/fonts, licença OFL 1.1; ver static/fonts/LEIA-ME.md).
+   O navegador só baixa a fonte em uso. "Do sistema" = a pilha antiga, que varia com o
+   computador. Padrão SPO desde feat/padrao-fontes (2026-11-13): Inter na interface,
+   Intel One Mono nos dados, tabelas a 12 px. Preferência guardada no navegador
+   (initFontesPersonalizar, no fim do main.js), aplicada como atributos no <body>:
+   data-spo-font-ui, data-spo-font-data e data-spo-text-size.
+   ========================================================================== */
+@font-face { font-family: "SPO Inter"; src: url("../fonts/inter/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible"; src: url("../fonts/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Source Sans 3"; src: url("../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO IBM Plex Sans"; src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Intel One Mono"; src: url("../fonts/intel-one-mono/intel-one-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+
+body {
+  --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+/* Fonte da interface (os campos e botões já herdam a fonte do body) */
+/* padrão SPO: Inter também sem escolha marcada (tela de login, e antes de o main.js rodar) */
+body:is([data-spo-font-ui="inter"], :not([data-spo-font-ui])) { font-family: "SPO Inter", var(--spo-font-classic); }
+body[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
+body[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
+
+/* Fonte de tabelas e dados: tabelas, totais e indicadores numéricos.
+   Números de largura fixa (tabular-nums) alinham os valores nas colunas. */
+/* "Clássica" nas tabelas é a fonte clássica mesmo quando a interface usa outra */
+body[data-spo-font-data="classic"]:not([data-spo-font-ui="classic"]) :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: var(--spo-font-classic);
+}
+body[data-spo-font-data="inter"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO Inter", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="plex-sans"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO IBM Plex Sans", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="intel-mono"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace;
+}
+
+/* Tamanho do texto: amplia a área de conteúdo (como o zoom do navegador, mas sem
+   mexer no menu nem no topo); o layout responsivo se reorganiza na largura menor. */
+body[data-spo-text-size="large"] .main { zoom: 1.125; }
+body[data-spo-text-size="larger"] .main { zoom: 1.25; }
+/* Com o texto ampliado num celular, a coluna "Última atualização por UO" (min-width
+   de 190 px) e o e-mail longo não cabiam no cartão: liberam a largura e quebram. */
+body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-col {
+  min-width: min(190px, 100%);
+  overflow-wrap: anywhere;
+}
+
+/* Cartão "Fontes e tamanho" no Personalizar: reaproveita o visual das preferências comuns */
+.spo-fontes-amostra { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.spo-fontes-amostra p { margin: 0 0 4px; }
+.spo-fontes-amostra table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.spo-fontes-amostra td { padding: 2px 4px; border-top: 1px solid var(--border); }
+.spo-fontes-amostra td:last-child { text-align: right; }
+.spo-fontes-status { min-height: 1.2em; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ==========================================================================
+   [jean] Contraste AA do botão principal dos relatórios, da prévia do Personalizar
+   e dos números do painel Teto, para as 8 cores de destaque (fix/contraste-aa, 2026-11-12)
+   Medido: texto branco sobre a cor de destaque no escuro ficava entre 1,2 e 2,5:1 em
+   todas as cores; no claro, os números do Teto (color-400) e o "Baixar Excel" (degradê
+   que começa na color-400) caíam a 1,5–4,1:1 em 6 das 8 cores. Regra: no claro, texto
+   na cor de destaque usa a color-700 e botão com texto branco usa fundo color-700/800;
+   no escuro, botão na cor de destaque clara usa texto escuro. Mínimo medido depois:
+   4,69:1 (amarelo, texto color-700) e acima de 5:1 nas demais. Junto: as cores de
+   positivo/negativo dos totais dos relatórios voltam a aparecer no tema claro.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) .teto-kpi strong {
+    color: var(--color-700);
+  }
+  body:not(.theme-dark) .report-actions .btn:last-child {
+    color: #ffffff;
+    background: linear-gradient(145deg, var(--color-800), var(--color-700));
+  }
+  body:not(.theme-dark) .preview-actions button:first-child {
+    color: #ffffff;
+    background: var(--color-700);
+    border-color: var(--color-700);
+  }
+  .theme-dark .report-actions .btn:last-child,
+  .theme-dark .preview-actions button:first-child {
+    color: #111111;
+  }
+  /* Totais positivos (azul) e negativos (vermelho), como no escuro: no claro, a regra de
+     layout ".report-data-card .totais-row strong { color: var(--text) }" é mais específica
+     que ".totais-row .pos/.neg" e apagava as duas cores. Contraste no branco ≥ 10:1. */
+  .report-data-card .totais-row strong.pos { color: #0b3c91; }
+  .report-data-card .totais-row strong.neg { color: #8b0000; }
+  .theme-dark .report-data-card .totais-row strong.pos { color: #6ea8ff; }
+  .theme-dark .report-data-card .totais-row strong.neg { color: #ff8b8b; }
+}
+
+/* ==========================================================================
+   [jean] Foco visível padrão em todo o SPO (feat/foco-visivel, 2026-11-12)
+   Medido com teclado real: em 4 telas (FIP 613, Personalizar, Teto, Alterar Senha),
+   nenhum dos 75 elementos focáveis tinha indicador próprio com 2 px e 3:1 de contraste
+   (WCAG 2.2: 2.4.7; meta AA+ 2.4.13): o menu dependia do contorno automático do
+   navegador; o botão de recolher o menu e os botões pequenos (Limpar, Atualizar) não
+   tinham nenhum (13 regras removem o outline). Agora, no foco por teclado
+   (:focus-visible), todo controle ganha um anel de 3 px, afastado 2 px, na cor de
+   destaque com contraste garantido: color-700 no claro, --accent no escuro.
+   Clique de mouse não mostra o anel (só teclado, como manda o :focus-visible).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-focus-ring: var(--color-700); }
+  body.theme-dark { --spo-focus-ring: var(--accent); }
+
+  body :is(a[href], button, input:not([type="hidden"]), select, textarea, summary,
+           [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible {
+    outline: 3px solid var(--spo-focus-ring);
+    outline-offset: 2px;
+  }
+  /* Itens do menu lateral ficam dentro de áreas com rolagem: o anel vai para dentro,
+     para não ser cortado pela borda do menu. */
+  body .sidebar :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline-offset: -3px;
+  }
+}
+
+/* ==========================================================================
+   [jean] Alvos de toque (fix/alvos-de-toque, 2026-11-12)
+   Medido (FIP 613, Teto, Personalizar, Diretrizes, Alterar Senha, Início):
+   - abaixo do mínimo AA (WCAG 2.2, 2.5.8: 24 px) só o botão de recolher o menu,
+     22×22 px no desktop (em tela estreita o Contrato Responsivo já o leva a 40 px);
+   - abaixo da meta AA+ (2.5.5: 44 px) quase todos os controles: filtros das tabelas
+     32 px, paginação 29, cores do Personalizar 34, itens do menu 38, botões 34–40.
+   Regra: em qualquer tela, a área clicável do botão de recolher o menu cresce para
+   34 px sem mudar o desenho (pseudo-elemento invisível); em telas de toque
+   (pointer: coarse), os controles passam a ter no mínimo 44 px. Com mouse, a
+   densidade atual do desktop não muda.
+   ========================================================================== */
+.icon-btn.toggle-btn { position: relative; }
+.icon-btn.toggle-btn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
+
+@media (pointer: coarse) {
+  body :is(button, [role="button"], [role="tab"], a.btn, .menu-item, .mf-display,
+           select, textarea,
+           input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"])) {
+    min-height: 44px;
+  }
+  body :is(.icon-btn, .accent-swatch, .pagination button, .pagination a, .menu-item) {
+    min-width: 44px;
+  }
+  body .accent-swatch { width: 44px; height: 44px; }
+}
+
+/* ==========================================================================
+   [jean] Contraste AA+ (7:1) no tema claro (feat/contraste-aa-plus-claro, 2026-11-12)
+   Medido em 10 telas no claro: 256 textos abaixo de 7:1 (meta AA+, WCAG 1.4.6), quase
+   todos por duas cores: o cinza secundário --muted #5e5c64 (210 textos, mín. 5,46:1 no
+   fundo esverdeado) e a cor de destaque usada como texto (#0f7c68 no Clássico; 34
+   textos: subtítulo do topo, títulos pequenos das seções, links, título de modal; mín.
+   4,8:1). Casos isolados: "text-muted" do Bootstrap (6,78), botão cinza "Fechar"
+   (4,69) e "Administrar SPO" no menu aberto (--accent-strong = color-400, 3,45:1).
+   Regra, só no claro: cinza #48464e (≥ 7,7:1 em todos os fundos claros medidos);
+   texto na cor de destaque no tom mais claro de cada paleta que passa de 7:1 —
+   color-700 (Clássico, Azul, Roxo), color-800 (Ciano, Verde, Laranja, Vermelho),
+   color-900 (Amarelo); botões com texto branco usam esse mesmo tom de fundo (o
+   .btn-primary genérico ia até a color-400). Rodapé de 9,2 para 11 px (nos dois temas).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) {
+    --muted: #48464e;
+    --bs-secondary-color: #48464e;
+    --spo-accent-text: var(--color-700);
+  }
+  body:not(.theme-dark):is([data-accent-preference="teal"], [data-accent-preference="green"],
+                           [data-accent-preference="orange"], [data-accent-preference="red"]) {
+    --spo-accent-text: var(--color-800);
+  }
+  body:not(.theme-dark)[data-accent-preference="yellow"] {
+    --spo-accent-text: var(--color-900);
+  }
+  body:not(.theme-dark) :is(.subtitle, .eyebrow, .report-eyebrow, .module-eyebrow,
+                            .modal-header-title, .noticia-box a,
+                            .menu-admin-spo.active-ancestor > .menu-parent) {
+    color: var(--spo-accent-text);
+  }
+  /* Botões com texto branco na cor de destaque: fundo no mesmo tom de texto (≥ 7:1 com
+     branco). Inclui o .btn-primary genérico (degradê color-600 → color-400: 3,47:1 no
+     Clássico) e alinha ao AA+ o que o A3 levou só ao AA ("Baixar Excel", prévia). */
+  body:not(.theme-dark) :is(.btn-primary, .report-actions .btn:last-child,
+                            .preview-actions button:first-child) {
+    color: #ffffff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--spo-accent-text) 82%, #000000), var(--spo-accent-text));
+    border-color: transparent;
+  }
+  body:not(.theme-dark) .teto-kpi strong { color: var(--spo-accent-text); }
+  body:not(.theme-dark) .btn-secondary {
+    --bs-btn-bg: #495057;
+    --bs-btn-border-color: #495057;
+    --bs-btn-hover-bg: #3d4246;
+    --bs-btn-hover-border-color: #3d4246;
+  }
+}
+.footer .footer-line { font-size: 11px; }
+
+/* ==========================================================================
+   [jean] Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade
+   (feat/contraste-reforcado, 2026-11-12)
+   Medido (FIP 613 e Alterar Senha, 8 cores × claro/escuro × padrão/reforçado):
+   - contorno de campos, listas, filtros e botões sem preenchimento: 1,36:1 no claro e
+     1,26–1,92:1 no escuro — abaixo do AA (WCAG 1.4.11, 3:1) em 232–240 de 248 controles;
+   - o "Contraste reforçado" (Personalizar) dava números IDÊNTICOS ao padrão;
+   - no escuro, texto abaixo de 7:1: secundário #c0bfbc (6,87), destaque como texto
+     (até 3,5:1 no Roxo), números das tabelas (#6ea8ff 5,24; #ff8b8b 5,61) e botões
+     com texto escuro sobre a cor de destaque (5,23 no Roxo).
+   Regra: padrão → contorno dos controles ≥ 3:1 nos dois temas e AA+ do texto no escuro;
+   reforçado → contornos ≥ 4,5:1, contorno também nos cartões e texto secundário ≥ 9,6:1.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-control-border: #86848c; }
+  body.theme-dark {
+    --spo-control-border: #828282;
+    --muted: #d0cfcc;
+    --spo-accent-text: var(--color-200);
+  }
+  body.theme-dark:is([data-accent-preference="blue"], [data-accent-preference="red"],
+                     [data-accent-preference="purple"]) {
+    --spo-accent-text: var(--color-100);
+  }
+
+  /* Contorno dos controles (fora de hover/foco, que já têm o seu destaque) */
+  body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]),
+           select, textarea, .mf-display, .icon-btn,
+           .btn:not(.btn-primary):not(.btn-secondary):not(.btn-danger)):not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+  body .report-actions .btn:last-child:not(:hover):not(:focus) { border-color: transparent; }
+  /* No escuro estes botões do Personalizar não tinham borda nenhuma (largura 0) */
+  body :is(.visual-pref-toggle, .preference-row) { border-width: 1px; border-style: solid; }
+
+  /* AA+ do texto no escuro */
+  body.theme-dark :is(.subtitle, .eyebrow, .report-eyebrow, .module-eyebrow,
+                      .modal-header-title, .noticia-box a, .teto-kpi strong,
+                      .menu-admin-spo.active-ancestor > .menu-parent) {
+    color: var(--spo-accent-text);
+  }
+  body.theme-dark :is(.totais-row strong.pos, .fip-table td.num.pos) { color: #9cc4ff; }
+  body.theme-dark :is(.totais-row strong.neg, .fip-table td.num.neg) { color: #ffb3b3; }
+  body.theme-dark :is(.btn-primary, .report-actions .btn:last-child,
+                      .preview-actions button:first-child) {
+    color: #111111;
+    background: var(--spo-accent-text);
+    border-color: transparent;
+  }
+
+  /* Contraste reforçado (Personalizar → Preferências comuns → Contraste) */
+  body[data-visual-contrast="enhanced"] { --spo-control-border: #636169; --muted: #38363d; }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-control-border: #a6a6a6; --muted: #e2e1de; }
+  body[data-visual-contrast="enhanced"] :is(.card, .report-header, .module-header, .teto-kpi,
+                                            .noticia-box, .table-responsive) {
+    border-color: var(--spo-control-border);
+  }
+}
+
+/* ==========================================================================
+   [jean] Movimento reduzido (feat/movimento-reduzido, 2026-11-12)
+   O SPO não tinha nenhuma regra para quem pede "reduzir movimento" no sistema
+   (WCAG 2.3.3, meta AA+): 4 animações contínuas (barra, marcador e pontos da tela
+   "Carregando página…", ícone girando dos componentes), 32 transições (18 com
+   deslocamento/ampliação ao passar o mouse) e 14 rolagens suaves feitas pelo JS.
+   Com a preferência ligada: transições e animações viram instantâneas, os
+   indicadores de carregamento ficam parados (o texto "Carregando…" continua) e a
+   rolagem é imediata (no JS, ver initMovimentoReduzido no fim do main.js).
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  .app-loading-progress, .app-loading-marker, .app-loading-dot,
+  .planning-component-loading-row .bi {
+    animation: none !important;
+  }
+  .app-loading-dot { opacity: 1; }
+}
+
+/* ==========================================================================
+   [jean] AA nas telas que faltavam (fix/aa-telas-restantes, 2026-11-12)
+   Medido em uploads, cadastros e login (já com A2–A8):
+   F-A botões vermelhos .btn-danger no claro: branco sobre #ef4444→#dc2626, 3,76:1 (AA);
+   F-B no escuro, .theme-dark .btn tirava o preenchimento de .btn-danger/.btn-secondary,
+       que ficavam só com borda translúcida 1,92:1 (AA, 1.4.11);
+   F-C botão de etapa ativo (.wizard-step-btn.active): branco sobre --accent, 1,83 no
+       escuro (AA) e 5,12 no claro;
+   F-D título de seção (.form-section-title) na cor de destaque: 5,12 no claro;
+   F-E botão "+" da Meta Física: 18×18 px (AA, 2.5.8), com opacidade de 85%;
+   F-F login no claro: título e "Esqueci a senha" em --accent, 4,70:1.
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* F-A / F-B */
+  body:not(.theme-dark) .btn-danger {
+    color: #ffffff;
+    background: linear-gradient(135deg, #a51d1d, #991b1b);
+    border-color: transparent;
+  }
+  body.theme-dark .btn-danger {
+    color: #111111;
+    background: #ffb3b3;
+    border-color: transparent;
+  }
+  body.theme-dark .btn-secondary:not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+
+  /* F-C / F-D */
+  body:not(.theme-dark) .wizard-step-btn.active {
+    color: #ffffff;
+    background: var(--spo-accent-text);
+    border-color: var(--spo-accent-text);
+  }
+  body.theme-dark .wizard-step-btn.active {
+    color: #111111;
+    background: var(--spo-accent-text);
+    border-color: var(--spo-accent-text);
+  }
+  body .wizard-step-btn:not(.active):not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+  body .form-section-title { color: var(--spo-accent-text); }
+
+  /* F-E (as cores do botão já vêm do .btn-primary do A6/A7: ícone ≥ 10:1) */
+  body .meta-fisica-plus-btn {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    opacity: 1;
+  }
+
+  /* F-F: o login só carrega --accent (login-theme.js), não a paleta inteira */
+  body.login-body:not(.theme-dark) :is(.login-card h1, .login-form a) {
+    color: color-mix(in srgb, var(--accent) 50%, #000000);
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"] :is(.login-card h1, .login-form a) {
+    color: color-mix(in srgb, var(--accent) 40%, #000000);
+  }
+  /* o "Entrar" usava o tom da paleta (A6), que o login não carrega: ficava verde em
+     qualquer cor de destaque; agora acompanha o --accent escurecido, como o título */
+  body.login-body:not(.theme-dark) .login-form .btn-primary {
+    color: #ffffff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, #000000),
+                                        color-mix(in srgb, var(--accent) 50%, #000000));
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"] .login-form .btn-primary {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 34%, #000000),
+                                        color-mix(in srgb, var(--accent) 40%, #000000));
+  }
+}
+@media (pointer: coarse) {
+  body .meta-fisica-plus-btn { width: 44px; min-width: 44px; height: 44px; }
+}
+
+/* ==========================================================================
+   [jean] Gráficos acessíveis: tabela "Ver dados do gráfico" (feat/graficos-acessiveis, 2026-11-12)
+   O JS (initGraficosAcessiveis, fim do main.js) cria um <details> abaixo de cada
+   gráfico Plotly com os mesmos números em tabela.
+   ========================================================================== */
+.spo-grafico-dados { margin: 6px 0 2px; font-size: 13px; color: var(--text); }
+.spo-grafico-dados > summary { display: inline-flex; align-items: center; min-height: 24px; cursor: pointer; color: var(--spo-accent-text, var(--accent)); font-weight: 600; }
+.spo-grafico-dados-corpo { max-height: 320px; overflow: auto; margin-top: 6px; border: 1px solid var(--spo-control-border, var(--border)); border-radius: 8px; }
+.spo-grafico-tabela { width: 100%; border-collapse: collapse; }
+.spo-grafico-tabela caption { caption-side: top; padding: 6px 8px; text-align: left; font-weight: 700; color: var(--text); }
+.spo-grafico-tabela th, .spo-grafico-tabela td { padding: 4px 8px; border-top: 1px solid var(--border); text-align: left; color: var(--text); }
+.spo-grafico-tabela td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spo-grafico-tabela thead th { position: sticky; top: 0; background: var(--card); }
+.spo-grafico-tabela tfoot th, .spo-grafico-tabela tfoot td { font-weight: 700; }
+@media (pointer: coarse) { .spo-grafico-dados > summary { min-height: 44px; } }
+
+/* ==========================================================================
+   [jean] Semântica e teclado (feat/semantica-teclado, 2026-11-12)
+   "Pular para o conteúdo" (visível só no foco), texto só para leitor de tela,
+   ✓ nas opções escolhidas do Personalizar (seleção que não depende só da cor).
+   O JS fica em initSemanticaTeclado, no fim do main.js.
+   ========================================================================== */
+.spo-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.spo-pular {
+  position: fixed; top: 8px; left: 8px; z-index: 10000;
+  padding: 10px 16px; border-radius: 8px; font-weight: 700;
+  color: #ffffff; background: #1d1d1d;
+  transform: translateY(-200%);
+}
+.spo-pular:focus, .spo-pular:focus-visible { transform: none; }
+.menu-parent[role="button"] { cursor: pointer; }
+:is(.preference-row, .visual-pref-option).active { position: relative; }
+:is(.preference-row, .visual-pref-option).active::after {
+  content: "✓"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-weight: 700; color: var(--spo-accent-text, var(--accent));
+}
+/* foco levado por script (título da página ao trocar de tela, <main> pelo "Pular"): mesmo anel do A4 */
+@media (forced-colors: none) {
+  body [tabindex="-1"]:focus-visible { outline: 3px solid var(--spo-focus-ring, var(--accent)); outline-offset: 2px; }
+}
+
+/* ==========================================================================
+   [jean] Superfícies do tema (fix/superficies-tema, 2026-11-13)
+   Achado do Jean (print do filtro no escuro): peças antigas tinham cores fixas
+   de uma paleta cinza-azulada (#11171d, #1e2833, #111827, #1f2937, #0f1418) em
+   vez das variáveis do tema (cinzas neutros #1e1e1e/#242424/#3d3d3d), e as
+   caixas de seleção ficavam no azul do navegador, sem a cor de destaque.
+   Varredura no SPO aberto (30 telas, escuro): lista do filtro, botões
+   Cancelar/Aplicar, paginação (borda a ~1,1:1), "itens por página" e rodapé de
+   totais das tabelas. Os diagramas/gráficos do Contrato Visual têm paleta
+   azulada própria e intencional: ficam como estão.
+   ========================================================================== */
+.theme-dark .mf-panel {
+  background: var(--card);
+  border-color: var(--spo-control-border, var(--border));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+}
+.theme-dark .mf-search,
+.theme-dark .mf-actions { border-color: var(--border); }
+.theme-dark .mf-search { color: var(--text); }
+.theme-dark .mf-btn,
+.theme-dark .pagination button {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--spo-control-border, var(--border));
+  color: var(--text);
+}
+.theme-dark .mf-btn.ghost { background: transparent; }
+.theme-dark .page-size select,
+.theme-dark .page-size .input {
+  background: var(--card);
+  color: var(--text);
+}
+.theme-dark .table-foot {
+  background: var(--card);
+  border-top-color: var(--border);
+}
+/* caixas de seleção e opções na cor de destaque (tom com contraste no tema) */
+input[type="checkbox"],
+input[type="radio"] { accent-color: var(--spo-accent-text, var(--accent)); }
+/* no escuro, o tom de texto (quase branco) apagava a cor; o --accent tem a cor
+   do botão Aplicar e contraste ≥ 3:1 sobre o cartão nos 8 destaques */
+.theme-dark input[type="checkbox"],
+.theme-dark input[type="radio"] { accent-color: var(--accent); }
+/* bordas de controles nos dois temas: paginação, Cancelar/Aplicar e lista do
+   filtro estavam em var(--border) — 1,36:1 no claro (mínimo 3:1, WCAG 1.4.11) */
+.pagination button,
+.mf-btn:not(.primary),
+.mf-panel { border-color: var(--spo-control-border, var(--border)); }
+
+/* ==========================================================================
+   [jean] Zoom, telas estreitas e texto das tabelas (feat/zoom-reflow, 2026-11-13)
+   Medido em 30 telas a 320 px, a 640 px (200% de 1280) e com espaçamento de
+   texto ampliado (WCAG 1.4.12): nenhuma página rola de lado nem corta texto.
+   Dois achados: (1) a ≤ 420 px o cabeçalho cortava com "…" o nome do sistema e
+   a linha do usuário (data, "Logados") — agora quebram a linha; (2) o texto das
+   tabelas dos relatórios é de 8 px (títulos 10 px, filtros 8 px, paginação
+   10 px). A 12 px nas mesmas colunas as linhas dobram de altura, então ficou
+   como escolha "Texto das tabelas" no Personalizar (Compacto, padrão;
+   Intermediário, 10 px; Legível, 12 px) — atributo data-spo-table-text, gravado por initFontesPersonalizar.
+   ========================================================================== */
+@media (max-width: 420px) {
+  .topbar .subtitle,
+  .topbar .user-meta {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+body[data-spo-table-text="legible"] :is(.fip-table, .plan20-table) :is(td, th),
+body[data-spo-table-text="legible"] :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button) { font-size: 12px; }
+body[data-spo-table-text="legible"] :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn) { font-size: 12px; }
+body[data-spo-table-text="legible"] :is(.pagination button, .page-btn, .page-size select, .page-size .input) { font-size: 12px; }
+/* Intermediário: dados no tamanho dos títulos das colunas (10 px) */
+body[data-spo-table-text="medium"] :is(.fip-table, .plan20-table) :is(td, th),
+body[data-spo-table-text="medium"] :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button),
+body[data-spo-table-text="medium"] :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn),
+body[data-spo-table-text="medium"] :is(.pagination button, .page-btn, .page-size select, .page-size .input) { font-size: 10px; }
+/* o ✓ da opção escolhida (A11) não encosta no texto da descrição */
+:is(.preference-row, .visual-pref-option).active { padding-right: 36px; }
+/* a amostra do Personalizar mostra a tabela no tamanho escolhido em "Texto das
+   tabelas" (antes ficava fixa em 12 px e não reagia à escolha) */
+.spo-fontes-amostra table { font-size: 8px; }
+body[data-spo-table-text="medium"] .spo-fontes-amostra table { font-size: 10px; }
+body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px; }
+.spo-fontes-amostra caption { caption-side: top; padding: 4px 4px 2px; text-align: left; font-size: 12px; color: var(--muted); }
+
+/* ==========================================================================
+   [jean] Contornos na cor de destaque (fix/contornos-destaque, 2026-11-13)
+   O A7 deu aos contornos dos controles um cinza neutro fixo (#86848c / #828282)
+   para garantir 3:1 (WCAG 1.4.11). Funcionava, mas apagava a cor de destaque —
+   o Jean viu um "alto contraste fixo", diferente da prévia do Personalizar.
+   Agora o contorno é um tom do próprio destaque, o mais claro que passa:
+   claro → passo da paleta do destaque com ≥ 3:1 sobre #fff e #f6f5f4;
+   escuro → o destaque misturado ao cartão (65%; Roxo 85%) com ≥ 3:1 sobre
+   #242424 e #1e1e1e. "Contraste reforçado" → ≥ 4,5:1 (contas no PR).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) { --spo-control-border: var(--color-400); }
+  body:not(.theme-dark):is([data-accent-preference="teal"], [data-accent-preference="green"],
+                           [data-accent-preference="orange"]) { --spo-control-border: var(--color-500); }
+  body:not(.theme-dark)[data-accent-preference="yellow"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-accent-preference="purple"] { --spo-control-border: var(--color-300); }
+
+  body:not(.theme-dark)[data-visual-contrast="enhanced"] { --spo-control-border: var(--color-500); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"]:is([data-accent-preference="blue"], [data-accent-preference="teal"],
+      [data-accent-preference="red"]) { --spo-control-border: var(--color-600); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="orange"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="green"] { --spo-control-border: var(--color-700); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="yellow"] { --spo-control-border: var(--color-800); }
+  body:not(.theme-dark)[data-visual-contrast="enhanced"][data-accent-preference="purple"] { --spo-control-border: var(--color-400); }
+
+  body.theme-dark { --spo-control-border: color-mix(in srgb, var(--accent) 65%, var(--card)); }
+  body.theme-dark[data-accent-preference="purple"] { --spo-control-border: color-mix(in srgb, var(--accent) 85%, var(--card)); }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-control-border: var(--accent); }
+  body.theme-dark[data-visual-contrast="enhanced"][data-accent-preference="purple"] { --spo-control-border: var(--accent-strong); }
+}
+
+/* Três níveis nas linhas de opção do Personalizar (Tema, Leitura, Preferências):
+   no contraste padrão, a linha é suave (como a prévia) e só fica forte quando
+   importa — passar o mouse ou foco → tom de 3:1; selecionada/aberta → destaque
+   cheio (≥ 3:1, indicador de estado, WCAG 1.4.11) + fundo tingido + ✓.
+   No "contraste reforçado", todas ficam fortes e a selecionada continua a mais forte. */
+@media (forced-colors: none) {
+  body { --spo-option-border: color-mix(in srgb, var(--accent) 32%, var(--card)); --spo-selected-border: var(--spo-accent-text, var(--accent)); }
+  body.theme-dark { --spo-option-border: color-mix(in srgb, var(--accent) 30%, var(--card)); --spo-selected-border: var(--accent); }
+  body[data-visual-contrast="enhanced"] { --spo-option-border: var(--spo-control-border); }
+  body.theme-dark[data-visual-contrast="enhanced"] { --spo-selected-border: var(--spo-accent-text, var(--accent)); }
+
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-toggle, .visual-pref-option) {
+    border-width: 1px; border-style: solid; border-color: var(--spo-option-border);
+  }
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-toggle, .visual-pref-option):is(:hover, :focus-visible),
+  body:is([data-visual-contrast], :not([data-visual-contrast])) .visual-pref-group.is-open .visual-pref-toggle { border-color: var(--spo-control-border); }
+  body:is([data-visual-contrast], :not([data-visual-contrast])) :is(.preference-row, .visual-pref-option).active {
+    border-color: var(--spo-selected-border);
+    box-shadow: inset 0 0 0 1px var(--spo-selected-border), inset 3px 0 0 var(--spo-selected-border); /* 2 px, sem mexer no tamanho */
+  }
+}
+
+/* ==========================================================================
+   [jean] Diagramas e gráficos na cor de destaque (feat/diagramas-destaque, 2026-11-13)
+   No escuro, os diagramas ("automático" e "escuro") e a prévia usavam uma paleta
+   azul fixa (fundo #0f172a/#111827, bordas e conectores #93c5fd); o modo
+   "claro" de diagrama, um azul fixo #2563eb. Agora: fundo NEUTRO (branco puro no
+   claro, #1a1a1a no escuro — tingir o fundo apagava as séries) e bordas,
+   conectores e seleção no destaque. O alto contraste continua com as cores fixas (de propósito).
+   --spo-accent-graphic = tom do destaque com ≥ 3:1 para gráficos (WCAG 1.4.11):
+   no claro, o mesmo passo da paleta dos contornos; no escuro, o --accent.
+   Os cartões do fluxo (Mapa Conceitual e afins) ganham os três níveis dos
+   contornos: suave em repouso, forte no mouse/foco, destaque cheio selecionado.
+   O JS (paleta dos gráficos do Teto) fica em initDiagramasDestaque, no fim do main.js.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-accent-graphic-light: var(--color-400); }
+  body:is([data-accent-preference="teal"], [data-accent-preference="green"],
+          [data-accent-preference="orange"]) { --spo-accent-graphic-light: var(--color-500); }
+  body[data-accent-preference="yellow"] { --spo-accent-graphic-light: var(--color-700); }
+  body[data-accent-preference="purple"] { --spo-accent-graphic-light: var(--color-300); }
+  body { --spo-accent-graphic: var(--spo-accent-graphic-light); }
+  body.theme-dark { --spo-accent-graphic: var(--accent); }
+
+  /* diagrama escuro (automático no tema escuro, ou "escuro" escolhido) */
+  body[data-visual-diagrams][data-visual-diagram-theme="dark"]:is(.theme-dark, :not(.theme-dark)) {
+    --spo-diagram-bg: #1a1a1a; /* neutro e igual para todos os destaques: as séries saltam */
+    --spo-diagram-node-bg: #262626;
+    --spo-diagram-border: color-mix(in srgb, var(--spo-diagram-graphic, var(--accent)) 45%, #242424);
+    --spo-diagram-text: #f6f5f4;
+    --spo-diagram-muted: #d0cfcc;
+    --spo-diagram-accent: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-connector: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-selection: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-focus: var(--spo-diagram-graphic, var(--accent));
+  }
+  /* no tema claro o --accent é escuro; o diagrama escuro usa um tom claro do destaque */
+  body:not(.theme-dark)[data-visual-diagram-theme="dark"] { --spo-diagram-graphic: var(--color-300); }
+
+  /* diagrama claro (automático no tema claro, ou "claro" escolhido) */
+  body[data-visual-diagrams][data-visual-diagram-theme="light"]:is(.theme-dark, :not(.theme-dark)) {
+    --spo-diagram-bg: #ffffff; /* branco puro: sem tingir o fundo (efeito "sépia") */
+    --spo-diagram-node-bg: #ffffff;
+    --spo-diagram-border: color-mix(in srgb, var(--spo-accent-graphic-light) 45%, #ffffff);
+    --spo-diagram-text: #1d1d1d;
+    --spo-diagram-muted: #4a4950;
+    --spo-diagram-accent: var(--spo-accent-graphic-light);
+    --spo-diagram-connector: var(--spo-accent-graphic-light);
+    --spo-diagram-selection: var(--spo-accent-graphic-light);
+    --spo-diagram-focus: var(--spo-accent-graphic-light);
+  }
+
+  /* prévia do Personalizar acompanha o diagrama resolvido */
+  body[data-visual-diagrams]:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .personalizar-preview {
+    --spo-preview-diagram-bg: var(--spo-diagram-bg);
+    --spo-preview-diagram-border: var(--spo-diagram-border);
+    --spo-preview-diagram-line: color-mix(in srgb, var(--spo-diagram-connector) 70%, transparent);
+    --spo-preview-diagram-node: color-mix(in srgb, var(--spo-diagram-accent) 35%, transparent);
+    --spo-preview-diagram-node-active: var(--spo-diagram-accent);
+  }
+
+  /* cartões do fluxo em três níveis (fora do alto contraste) */
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:is(:hover, :focus-visible) {
+    border-color: var(--spo-diagram-accent);
+  }
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:focus-within:not(.is-selected):not(:focus-visible):not(:hover) {
+    border-color: var(--spo-diagram-border);
+    box-shadow: none;
+  }
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) :is(.flow-node.is-selected, .flow-node[data-diagram-state="selected"]) {
+    border-color: var(--spo-diagram-selection);
+    box-shadow: inset 0 0 0 1px var(--spo-diagram-selection), inset 3px 0 0 var(--spo-diagram-selection);
+    background: color-mix(in srgb, var(--spo-diagram-selection) 12%, var(--spo-diagram-node-bg));
+  }
+}
+
+/* ==========================================================================
+   [jean] Contraste em três níveis (feat/contraste-tres-niveis, 2026-11-13)
+   Preferências comuns → Contraste: "Suave (padrão SPO)" (valor standard, o de
+   sempre: linhas de opção e cartões clicáveis leves, seleção e foco fortes),
+   "Médio" (valor medium, novo: essas linhas e cartões com contorno ≥ 3:1 na cor
+   de destaque, cartões informativos ainda leves) e "Reforçado" (enhanced,
+   ≥ 4,5:1 e cartões contornados; os cartões clicáveis do fluxo também ficam
+   fortes). O JS só ganhou a opção medium na lista.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body[data-visual-contrast="medium"] { --spo-option-border: var(--spo-control-border); }
+  /* Verde no claro: o --color-500 dá 3,02 sobre o branco mas 2,9 sobre o fundo #f6f5f4 */
+  body:not(.theme-dark)[data-accent-preference="green"]:not([data-visual-contrast="enhanced"]) { --spo-control-border: var(--color-600); }
+  body:is([data-visual-contrast="medium"], [data-visual-contrast="enhanced"]):is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:not(.is-selected):not(:hover):not(:focus-visible) {
+    border-color: var(--spo-control-border);
+  }
+}
+
+/* ==========================================================================
+   [jean] Plano de fundo da página (feat/plano-de-fundo, 2026-11-13)
+   O fundo quase não se separava dos cartões: claro #f6f5f4 (cinza quente,
+   "rosé") × cartão #fff = 1,09:1; escuro #1e1e1e × cartão #242424 = 1,07:1.
+   Agora, igual para todos os destaques: claro #e6e9ed (cinza neutro, 1,22:1) e
+   escuro #121212 (1,21:1). Ideia listada no C13 do laboratório ("superfície/
+   plano de fundo"), nunca implementada lá. O alto contraste e as cores
+   forçadas do sistema não mudam (têm regras próprias).
+   Também: os botões das Preferências comuns tinham fundo tingido pelo destaque
+   (4%) em repouso, que no claro dava um ar creme; agora o fundo é o do cartão e
+   a tinta fica só no grupo aberto e na opção escolhida.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) {
+    --bg: #e6e9ed;
+    --body-bg: linear-gradient(180deg, #eceff2, #e6e9ed);
+    --footer-bg: #e6e9ed;
+  }
+  body.theme-dark {
+    --bg: #121212;
+    --body-bg: linear-gradient(180deg, #121212, #121212);
+    --footer-bg: #121212;
+  }
+  .visual-pref-group:not(.is-open) > .visual-pref-toggle:not(:hover) { background: transparent; }
+  /* Azul no claro: o texto de destaque (--color-700) dava 6,71:1 sobre o fundo novo; --color-800 dá 9+ */
+  body:not(.theme-dark)[data-accent-preference="blue"] { --spo-accent-text: var(--color-800); }
+}
+
+/* ==========================================================================
+   [jean] Abas e paginação (fix/abas-paginacao, 2026-11-13)
+   No escuro, o número da página ativa ficava sobre 25% da cor de destaque:
+   com o Amarelo, 6,19:1 (AA+ pede 7). Fundo a 16%, texto na cor de texto do
+   tema e borda cheia no destaque: texto 9,2–11,6:1 e borda 4,3–12:1 sobre o
+   fundo da paginação, nos 8 destaques. A página ativa continua se
+   distinguindo pela borda e pelo negrito (e por aria-current, no main.js).
+   ========================================================================== */
+body.theme-dark .pagination button.active {
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ==========================================================================
+   [jean] Listas dos filtros: opção sob o mouse no escuro (fix/esc-filtros, 2026-11-13)
+   As listas de marcar (Teto, Estrutura) pintavam a opção sob o mouse com
+   --color-100, um tom claro do destaque; no escuro, o texto (também claro)
+   ficava ilegível. No escuro, o fundo passa a 16% do destaque sobre o painel.
+   ========================================================================== */
+.theme-dark .planning-action-checklist-option:hover {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text);
+}
+
+/* ==========================================================================
+   [jean] Selo "editando" dos cadastros (fix/selo-editando, 2026-11-13)
+   O selo ("- Edição do registro …") tinha cor fixa #111827 no HTML de 5
+   parciais; no escuro ficava ilegível (era compensado com !important). A cor
+   sai do HTML e passa a seguir o texto do tema; o JS continua só trocando o
+   display.
+   ========================================================================== */
+.spo-editing-badge {
+  color: var(--text);
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+/* ==========================================================================
+   [jean] Listas nativas (<select>) na cor do tema (feat/listas-nativas, 2026-11-13)
+   A lista aberta de um <select> era desenhada pelo navegador/Windows: fundo
+   do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do
+   destaque. Com o select personalizável (appearance: base-select; Chrome e
+   Edge 135+), a lista passa a usar a superfície do tema, a borda dos
+   controles e, na opção sob o mouse ou no foco, 16% do destaque (como nas
+   listas dos filtros). A opção escolhida ganha ✓ e negrito (não só cor).
+   O campo fechado mantém as medidas (altura, borda, fundo, espaçamento); a
+   seta volta a ser fina e gira quando a lista abre. Navegadores sem suporte
+   (Firefox, Safari) ignoram o bloco e seguem com a lista nativa.
+   Só selects de uma escolha (sem multiple/size), que é o caso de todo o SPO.
+   Correção (fix/listas-nativas-longas): opções longas (até 345 caracteres na
+   Subação da Dotação) abriam a lista com 1.945 px, além da tela, e um valor
+   longo escolhido fazia o campo fechado crescer para 3 linhas (94 px). Agora
+   a lista tem no máximo 40rem (e a tela − 16 px) e o texto da opção quebra
+   linha; o campo fechado fica numa linha (40 px), com o texto cortado antes
+   da seta. A seta passa a ser desenhada no fundo do campo (não é cortada).
+   ========================================================================== */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+  select:not([multiple]):not([size])::picker(select) {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--spo-control-border, var(--border));
+    border-radius: 10px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+    padding: 4px;
+    max-height: min(60vh, 420px);
+    max-width: min(40rem, calc(100vw - 16px));
+  }
+  .theme-dark select:not([multiple]):not([size])::picker(select) {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  }
+  select:not([multiple]):not([size]) option {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+  select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--accent-rgb), 0.16);
+    color: var(--text);
+    outline: none;
+  }
+  select:not([multiple]):not([size]) option:checked { font-weight: 600; }
+  select:not([multiple]):not([size]) option:disabled { opacity: 0.55; }
+  /* campo fechado: uma linha, texto cortado antes da seta (como o nativo) */
+  select:not([multiple]):not([size]) {
+    white-space: nowrap;
+    overflow: clip;
+    overflow-clip-margin: content-box;
+    padding-inline-end: 34px;
+  }
+  /* a seta: :not(#spo-seta) só soma peso de id (não seleciona nada a mais),
+     para vencer regras antigas com "background:" que apagariam a imagem
+     (ex.: .theme-dark .page-size .input, especificidade 0,3,0) */
+  select:not([multiple]):not([size]):not(#spo-seta) {
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(-45deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px));
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+    background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  }
+  /* lista aberta: a seta vira para cima */
+  select:not([multiple]):not([size]):not(#spo-seta):open {
+    background-image:
+      linear-gradient(135deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(-135deg, transparent 50%, currentColor 50%, currentColor calc(50% + 1.5px), transparent calc(50% + 1.5px));
+  }
+  select:not([multiple]):not([size])::picker-icon { display: none; }
+  /* "Itens por página": o nativo mede pela opção mais larga ("100"), o
+     base-select pela escolhida ("20"); mínimo de 8.3em = 83 px a 10 px */
+  .page-size select:not([multiple]):not([size]) { min-width: 8.3em; }
+}
+
+/* ==========================================================================
+   [jean] Controles dos formulários: campo desabilitado e botões de decisão
+   (feat/controles-formulario, 2026-11-13)
+   (1) Campo desabilitado (ex.: "Exercício" da Etapa): fundo fixo #eef2f4 nos dois
+       temas; no escuro "acendia" (13,8:1 contra o cartão), em vez de parecer apagado.
+   (2) Botões de decisão: o AA+ (#36/#37/#39) levou o texto a 7:1 escurecendo o fundo
+       no claro (quase preto) e clareando no escuro (pastel), e eles ficaram apagados.
+       Agora: o tom MAIS VIVO de cada destaque que ainda dá 7:1 — no escuro, a cor de
+       destaque cheia com texto escuro; no claro, o tom mais claro da paleta com 7:1
+       para o texto branco. Vermelho cheio (Excluir, Desativar, Cancelar processamento)
+       idem. "Limpar Formulário" (*-clear) não é a decisão principal: vira contorno
+       vermelho, sem preenchimento, para o Salvar ficar como a ação principal.
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* (1) campo desabilitado no escuro: um degrau acima do cartão, texto apagado legível */
+  /* :not(#spo-desab) só soma peso de id: vence a regra dos contornos (#44, 0,6,2) */
+  body.theme-dark :is(.field-disabled:disabled, .form-grid input:disabled,
+                      .form-grid select:disabled, .form-grid textarea:disabled):not(#spo-desab) {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #b5b5b5;
+    /* cinza neutro: desde o #44 o --border vem tingido pelo destaque, e o campo
+       desabilitado parecia ativo (campo desabilitado não entra no 3:1 do 1.4.11) */
+    border-color: #4a4a4a;
+  }
+  /* no claro, o texto apagado ia a 4,29:1; passa a ≥ 4,5:1 */
+  body:not(.theme-dark) :is(.field-disabled:disabled, .form-grid input:disabled,
+                            .form-grid select:disabled, .form-grid textarea:disabled):not(#spo-desab) {
+    color: #5f6670;
+    border-color: #c9ced6;
+  }
+
+  /* (2) tom do botão principal por destaque */
+  body { --spo-btn-fill: var(--color-600); }
+  body:is([data-accent-preference="blue"], [data-accent-preference="teal"],
+          [data-accent-preference="red"]) { --spo-btn-fill: var(--color-700); }
+  body:is([data-accent-preference="green"], [data-accent-preference="yellow"],
+          [data-accent-preference="orange"]) { --spo-btn-fill: var(--color-800); }
+  body.theme-dark { --spo-btn-fill: var(--accent); }
+  body.theme-dark[data-accent-preference="purple"] { --spo-btn-fill: var(--accent-strong); }
+
+  body:not(.theme-dark) :is(.btn-primary, .report-actions .btn:last-child,
+                            .preview-actions button:first-child) {
+    color: #ffffff;
+    background: var(--spo-btn-fill);
+    border-color: transparent;
+  }
+  body.theme-dark :is(.btn-primary, .report-actions .btn:last-child,
+                      .preview-actions button:first-child) {
+    color: #111111;
+    background: var(--spo-btn-fill);
+    border-color: transparent;
+  }
+
+  /* mouse/foco no claro: escurecer (o brightness(1.05) original clareava e baixava
+     o texto branco para ~7,0:1 no Clássico); no escuro, clarear já aumenta o contraste */
+  body:not(.theme-dark) :is(.btn-primary, .btn-danger:not([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"])):is(:hover, :focus) {
+    filter: brightness(0.92);
+  }
+
+  /* vermelho cheio: o mais vivo com 7:1 (claro #a51d2d com branco; escuro #ff7b7b com #111) */
+  body:not(.theme-dark) .btn-danger { color: #ffffff; background: #a51d2d; border-color: transparent; }
+  body.theme-dark .btn-danger { color: #111111; background: #ff7b7b; border-color: transparent; }
+
+  /* "Limpar Formulário" (#57) e, nos modais de consulta, "Cancelar" e "Remover" (fix/botoes-filtros):
+     contorno vermelho, sem preenchimento — dispensam ou tiram um critério, não apagam dados */
+  body .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]) {
+    background: transparent;
+    color: #a51d2d;
+    border: 1.5px solid #a51d2d;
+  }
+  body .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]):is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08); }
+  body.theme-dark .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]) { color: #ffa3a3; border-color: #ffa3a3; }
+  body.theme-dark .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]):is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12); }
+  /* Secundário neutro (.btn-secondary: "Limpar" dos critérios, "Editar"…): contorno nos dois
+     temas. No claro era cinza cheio (#495057, do #39); no escuro já era contorno (regra antiga
+     + #37). Agora o claro faz como o escuro: sem fundo, texto do tema e a borda dos campos. */
+  body:not(.theme-dark) .btn-secondary {
+    --bs-btn-color: var(--text);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: var(--spo-control-border, #86848c);
+    --bs-btn-hover-color: var(--text);
+    --bs-btn-hover-bg: rgba(73, 80, 87, 0.08);
+    --bs-btn-hover-border-color: #495057;
+    --bs-btn-active-color: var(--text);
+    --bs-btn-active-bg: rgba(73, 80, 87, 0.14);
+    --bs-btn-active-border-color: #495057;
+    --bs-btn-disabled-color: #5f6670;
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: #c9ced6;
+  }
+  /* a regra .btn do SPO (border: 1px solid transparent) vence as variáveis do Bootstrap */
+  body:not(.theme-dark) .btn-secondary { border-color: var(--spo-control-border, #86848c); }
+  body:not(.theme-dark) .btn-secondary:is(:hover, :focus-visible) { border-color: #495057; }
+}
+
+/* ==========================================================================
+   [jean] Aviso de sessão já aberta no login (feat/aviso-sessao-login, 2026-11-13)
+   Substitui o window.confirm: aparece dentro do cartão de login, com texto do
+   tema e uma faixa âmbar à esquerda (não depende só da cor: tem título e ícone).
+   ========================================================================== */
+.login-sessao {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--spo-control-border, var(--border));
+  border-left: 4px solid #b45309;
+  border-radius: 10px;
+  background: rgba(180, 83, 9, 0.06);
+  color: var(--text);
+}
+.theme-dark .login-sessao { border-left-color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
+.login-sessao[hidden] { display: none; }
+.login-card .login-sessao-titulo { margin: 0 0 4px; font-weight: 700; font-size: 14px; color: var(--text); }
+.login-sessao-titulo .bi { color: #b45309; margin-right: 4px; }
+.theme-dark .login-sessao-titulo .bi { color: #fbbf24; }
+.login-card .login-sessao-texto { margin: 0 0 10px; font-size: 13px; color: var(--text); }
+.login-sessao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+/* no claro, a borda do "Cancelar" (borda dos campos) dava 2,96:1 sobre o fundo âmbar do aviso */
+body:not(.theme-dark) .login-card .login-sessao .btn-secondary { border-color: #6b7280; }
