@@ -1682,3 +1682,21 @@ A ideia constava do C13 ("superfície/plano de fundo") do laboratório do AA+, q
 - Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-fundo.2` no CSS (JS sem mudança).
+
+## Listas dos filtros: Esc fecha e opção sob o mouse legível no escuro (dev. Jean, 2026-11-13)
+
+**Problema:** as listas abertas pelos filtros só fechavam clicando fora, em Cancelar ou em Aplicar. Quem usa o teclado ficava sem saída rápida, e o foco continuava dentro da lista.
+
+**Correção (só JS, bloco `[jean] Esc fecha as listas dos filtros` no fim do `main.js`):** com uma lista aberta, Esc fecha a lista e devolve o foco ao botão que a abriu.
+- **Filtros dos relatórios (`.mf-panel`):** Esc vale como **Cancelar**. A marcação ainda não aplicada é descartada, como no botão.
+- **Listas de marcar do Teto e da Estrutura (`.planning-action-checklist-panel`):** Esc só fecha, porque a marcação já vale na hora.
+- A tecla é tratada na captura do `document`, registrada no carregamento. Ela roda antes do Esc dos avisos modais: o primeiro Esc fecha a lista, o segundo, o aviso. Sem lista aberta, o Esc não faz nada aqui.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com Esc real do teclado.
+- **FIP 613:** com uma opção desmarcada e o foco na busca da lista, Esc fecha a lista, a opção volta, o filtro continua "14101", o foco vai ao botão e `aria-expanded` vira `false`.
+- **Teto Orçamentário:** Esc fecha a lista de marcar e devolve o foco ao botão. Um segundo Esc, sem lista aberta, não faz nada.
+- Sem erro novo no console; `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+**Opção sob o mouse no escuro:** nas listas de marcar (Teto, Estrutura), a opção sob o mouse ganhava o fundo `--color-100`, um tom claro do destaque, e o texto claro do tema escuro ficava ilegível (achado do dev. Jean nas telas de teste). Correção no bloco `[jean]` do fim do `style.css`: no escuro, o fundo passa a 16% do destaque (`rgba(var(--accent-rgb), 0.16)`), com texto `var(--text)`. Medido com o mouse real sobre a opção no Teto, nos 8 destaques: de 9,21:1 (Amarelo) a 11,64:1. O claro não muda (de 12,81 a 14,83:1).
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no CSS e no JS.

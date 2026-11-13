@@ -8277,3 +8277,14 @@ body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px;
   /* Azul no claro: o texto de destaque (--color-700) dava 6,71:1 sobre o fundo novo; --color-800 dá 9+ */
   body:not(.theme-dark)[data-accent-preference="blue"] { --spo-accent-text: var(--color-800); }
 }
+
+/* ==========================================================================
+   [jean] Listas dos filtros: opção sob o mouse no escuro (fix/esc-filtros, 2026-11-13)
+   As listas de marcar (Teto, Estrutura) pintavam a opção sob o mouse com
+   --color-100, um tom claro do destaque; no escuro, o texto (também claro)
+   ficava ilegível. No escuro, o fundo passa a 16% do destaque sobre o painel.
+   ========================================================================== */
+.theme-dark .planning-action-checklist-option:hover {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text);
+}
