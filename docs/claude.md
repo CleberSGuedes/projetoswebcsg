@@ -1941,3 +1941,24 @@ Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=2026111
 - Sintaxe do script do `login.html` conferida com `node --check`. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-aviso-sessao.2` no CSS.
+
+## Padrão visual "spo-aa+" documentado (dev. Jean, 2026-11-13)
+
+**O quê:** documento novo [padrao-visual-spo-aa-plus.md](padrao-visual-spo-aa-plus.md), com as regras de cor, contraste, temas e componentes que o AA+ (#31–#61) estabeleceu. Ele vale para **toda tela nova ou alterada**. O `contrato-visual-spo.md` ganhou um link para ele.
+
+**Por quê:** as regras estavam espalhadas em 25 seções deste arquivo e em comentários do `style.css`. O `style.css` tem 303 cores literais (235 diferentes) e 111 variáveis, sem uma regra dizendo qual usar para quê. Sem o padrão escrito, cada tela nova pode reabrir diferenças, e a troca das cores fixas (N5) não teria critério.
+
+**Conteúdo:**
+1. Metas: texto 7:1, elementos que não são texto 3:1, foco, alvos, movimento, zoom.
+2. Temas, níveis de contraste e destaques.
+3. Tokens com os valores e contrastes **medidos** nos dois temas e nos níveis Suave e Reforçado.
+4. Componentes: hierarquia de botões, campos, listas, navegação.
+5. Como medir (bateria).
+6. Regras de manutenção e checklist de PR.
+7. A dívida conhecida (as cores literais por área), que é o roteiro do N5.
+
+**Próximas fases** (a combinar):
+- **B:** um teste na suíte que impede **cor literal nova** no `style.css`, comparando com uma linha de base.
+- **C:** trocar os literais pelos tokens, área por área, junto com a divisão do CSS.
+
+Sem mudança de código. Sem script de banco.
