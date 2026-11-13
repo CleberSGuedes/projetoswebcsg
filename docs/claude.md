@@ -1390,3 +1390,20 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com cliques reais no cartão: cada fonte aplicada e só ela baixada; a preferência sobrevive à recarga; "Clássica" nas tabelas continua clássica mesmo com outra fonte na interface; com 125%, nenhuma das 8 telas medidas transborda a 390 px. Ajuste junto: com o texto ampliado, a coluna "Última atualização por UO" (`.meta-uo-col`, `min-width: 190px`) e o e-mail longo passavam 6 px do cartão no celular; só nesse caso, a coluna libera a largura e o texto quebra (totais de PED, FIP 613, PLAN 20, EST EMP e NOB conferidos a 390 px em 112% e 125%). `node --check static/js/main.js` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
 
 **Depende do PR dos totais** (`fix/totais-relatorios-responsivo`): com fonte monoespaçada e 125%, os totais do FIP 613 encavalam sem aquela correção; com ela, ficam limpos (testado).
+
+## Contraste AA do botão principal dos relatórios, da prévia do Personalizar e dos números do Teto (dev. Jean, 2026-11-12)
+
+**Problema (medido nas 8 cores de destaque × claro/escuro, no ambiente do dev. Jean):** três elementos usam a cor de destaque e ficavam abaixo do mínimo AA (4,5:1) — 35 das 48 combinações:
+- **"Baixar Excel"** (`.report-actions .btn:last-child`, texto branco sobre degradê da cor de destaque): no claro o degradê começa na `--color-400` (a mais clara da paleta; no claro, `--accent-strong` = color-400 e `--accent` = color-500), de 1,47:1 (amarelo) a 5,91 (roxo), Clássico 3,47; no escuro, de 1,19 a 2,51 em **todas** as cores;
+- **Números do painel Teto** (`.teto-kpi strong`, cor `--accent-strong`): no claro, de 1,47 a 5,91 (Clássico 3,47); no escuro já passavam;
+- **Botão "Ação principal" da prévia do Personalizar** (`.preview-actions button:first-child`, branco sobre `--accent`): no claro falhava em 6 cores (amarelo 3,04); no escuro, de 1,51 a 3,02 em todas.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)` para não interferir no modo de alto contraste do sistema):** no claro, texto na cor de destaque usa `--color-700` e o botão com texto branco usa fundo `--color-800`→`--color-700` (prévia: `--color-700`); no escuro, os dois botões na cor de destaque clara passam a ter texto escuro (`#111111`). `templates/base.html`: `?v=` do CSS em `jean-contraste.2`.
+
+**Depois:** as 48 combinações passam no AA; mínimo 4,69:1 (amarelo no claro, color-700), as demais acima de 4,99. Efeito visível: no claro, os números do Teto e o "Baixar Excel" ficam num verde mais escuro (Clássico); no escuro, o "Baixar Excel" passa a texto escuro sobre o verde claro.
+
+**Junto — cores dos totais no tema claro:** os valores positivos (azul) e negativos (vermelho) dos totais (`.totais-row .pos/.neg`, ex.: "Bloqueado/Conting." e "Saldo de Dotação" do FIP 613; totais do PED e do EST EMP) apareciam na cor do texto no claro, porque `.report-data-card .totais-row strong { color: var(--text) }` é mais específica que `.totais-row .pos/.neg`; no escuro as regras `.theme-dark …` venciam. Agora `.report-data-card .totais-row strong.pos/.neg` usam `#0b3c91`/`#8b0000` no claro (10:1) e `#6ea8ff`/`#ff8b8b` no escuro, como antes. `?v=20261112.jean-contraste.2`.
+
+**Fora daqui:** o rótulo "Clássico (padrão SPO)" da paleta, que a auditoria do dev. Jean apontou, é texto só para leitor de tela (recortado em 1 px) — falso positivo, nada a corrigir. Outros botões com texto branco sobre a cor de destaque ainda não foram medidos em todas as cores.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste calculado no navegador sobre o pior ponto do degradê, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (números do Teto e "Baixar Excel", claro e escuro). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
