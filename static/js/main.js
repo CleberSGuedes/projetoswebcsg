@@ -108,7 +108,8 @@
       spacious: "ampla",
     },
     contrast: {
-      standard: "padrão",
+      standard: "suave (padrão SPO)", // [jean] três níveis de contraste: bloco no fim do style.css
+      medium: "médio",
       enhanced: "reforçado",
     },
     cards: {
