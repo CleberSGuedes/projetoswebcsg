@@ -8249,3 +8249,31 @@ body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px;
     border-color: var(--spo-control-border);
   }
 }
+
+/* ==========================================================================
+   [jean] Plano de fundo da página (feat/plano-de-fundo, 2026-11-13)
+   O fundo quase não se separava dos cartões: claro #f6f5f4 (cinza quente,
+   "rosé") × cartão #fff = 1,09:1; escuro #1e1e1e × cartão #242424 = 1,07:1.
+   Agora, igual para todos os destaques: claro #e6e9ed (cinza neutro, 1,22:1) e
+   escuro #121212 (1,21:1). Ideia listada no C13 do laboratório ("superfície/
+   plano de fundo"), nunca implementada lá. O alto contraste e as cores
+   forçadas do sistema não mudam (têm regras próprias).
+   Também: os botões das Preferências comuns tinham fundo tingido pelo destaque
+   (4%) em repouso, que no claro dava um ar creme; agora o fundo é o do cartão e
+   a tinta fica só no grupo aberto e na opção escolhida.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body:not(.theme-dark) {
+    --bg: #e6e9ed;
+    --body-bg: linear-gradient(180deg, #eceff2, #e6e9ed);
+    --footer-bg: #e6e9ed;
+  }
+  body.theme-dark {
+    --bg: #121212;
+    --body-bg: linear-gradient(180deg, #121212, #121212);
+    --footer-bg: #121212;
+  }
+  .visual-pref-group:not(.is-open) > .visual-pref-toggle:not(:hover) { background: transparent; }
+  /* Azul no claro: o texto de destaque (--color-700) dava 6,71:1 sobre o fundo novo; --color-800 dá 9+ */
+  body:not(.theme-dark)[data-accent-preference="blue"] { --spo-accent-text: var(--color-800); }
+}

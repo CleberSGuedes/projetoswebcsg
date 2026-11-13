@@ -1657,3 +1657,28 @@ Faltava um meio-termo para quem quer opções e cartões clicáveis sempre níti
 - Capturas; `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-contraste.2` no CSS e no JS.
+
+## Plano de fundo da página mais neutro e com mais separação dos cartões (dev. Jean, 2026-11-13)
+
+**Problema:** o fundo da página quase não se separava dos cartões, e tudo parecia "chapado":
+- **claro:** `#f6f5f4`, um cinza quente, levemente rosado, contra cartões `#fff`: **1,09:1**;
+- **escuro:** `#1e1e1e` contra cartões `#242424`: **1,07:1**.
+
+No claro, os botões das Preferências comuns também tinham o fundo tingido pelo destaque (4%) em repouso, o que dava um ar creme.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** fundo igual para todos os destaques.
+- **Claro:** `#e6e9ed`, cinza neutro (1,22:1 contra o cartão).
+- **Escuro:** `#121212` (1,21:1).
+- Valem para `--bg`, `--body-bg` e `--footer-bg`, inclusive na tela de login.
+- Os botões das Preferências comuns ficam sem tinta em repouso; a tinta fica no grupo aberto e na opção escolhida.
+- **Azul no claro:** o texto de destaque passa ao `--color-800`. O `--color-700` dava 6,71:1 sobre o fundo novo; agora dá 8,64:1.
+- O alto contraste e as cores forçadas do sistema não mudam.
+
+A ideia constava do C13 ("superfície/plano de fundo") do laboratório do AA+, que não chegou a ser implementado.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean. Medi todos os textos, cada um contra o fundo real atrás dele, nas telas Personalizar, PED e Teto, nos 8 destaques × 2 temas.
+- **Claro:** menor contraste de 7,6:1 (Azul, depois do ajuste: 8,03:1 ou mais).
+- **Escuro:** menor contraste de 6,19:1, no número da página ativa da paginação com o Amarelo. Esse caso é anterior a esta mudança e fica anotado.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-fundo.2` no CSS (JS sem mudança).
