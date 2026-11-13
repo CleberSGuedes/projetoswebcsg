@@ -7572,3 +7572,57 @@ html.spo-split-pressure .governanca-grid {
 .theme-dark .menu-badge-manutencao { color: #fbbf24; }
 .sidebar-collapsed .menu-badge-manutencao,
 .collapsed .menu-badge-manutencao { display: none; }
+
+/* ==========================================================================
+   [jean] Fontes e tamanho do texto escolhidos em Personalizar Temas SPO
+   (feat/fontes-personalizar, 2026-11-12)
+   Fontes hospedadas no SPO (static/fonts, licença OFL 1.1; ver static/fonts/LEIA-ME.md).
+   O navegador só baixa a fonte em uso. "Clássica (padrão SPO)" = a pilha de sempre,
+   sem nenhuma fonte baixada; é o padrão. Preferência guardada no navegador
+   (initFontesPersonalizar, no fim do main.js), aplicada como atributos no <body>:
+   data-spo-font-ui, data-spo-font-data e data-spo-text-size.
+   ========================================================================== */
+@font-face { font-family: "SPO Inter"; src: url("../fonts/inter/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible"; src: url("../fonts/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Source Sans 3"; src: url("../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO IBM Plex Sans"; src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Intel One Mono"; src: url("../fonts/intel-one-mono/intel-one-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+
+body {
+  --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+/* Fonte da interface (os campos e botões já herdam a fonte do body) */
+body[data-spo-font-ui="inter"] { font-family: "SPO Inter", var(--spo-font-classic); }
+body[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
+body[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
+
+/* Fonte de tabelas e dados: tabelas, totais e indicadores numéricos.
+   Números de largura fixa (tabular-nums) alinham os valores nas colunas. */
+/* "Clássica" nas tabelas é a fonte clássica mesmo quando a interface usa outra */
+body[data-spo-font-data="classic"]:not([data-spo-font-ui="classic"]) :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: var(--spo-font-classic);
+}
+body[data-spo-font-data="inter"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO Inter", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="plex-sans"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO IBM Plex Sans", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="intel-mono"] :is(table, .totais-row strong, [id^="teto-kpi-"]) {
+  font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace;
+}
+
+/* Tamanho do texto: amplia a área de conteúdo (como o zoom do navegador, mas sem
+   mexer no menu nem no topo); o layout responsivo se reorganiza na largura menor. */
+body[data-spo-text-size="large"] .main { zoom: 1.125; }
+body[data-spo-text-size="larger"] .main { zoom: 1.25; }
+
+/* Cartão "Fontes e tamanho" no Personalizar: reaproveita o visual das preferências comuns */
+.spo-fontes-amostra { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.spo-fontes-amostra p { margin: 0 0 4px; }
+.spo-fontes-amostra table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.spo-fontes-amostra td { padding: 2px 4px; border-top: 1px solid var(--border); }
+.spo-fontes-amostra td:last-child { text-align: right; }
+.spo-fontes-status { min-height: 1.2em; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
