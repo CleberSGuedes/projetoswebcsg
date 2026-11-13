@@ -28290,3 +28290,56 @@
     }
   }, true);
 })();
+
+/* ==========================================================================
+   [jean] Setas no menu lateral (feat/setas-menu, 2026-11-13)
+   Item P5 do inventário do AA+: no menu só o Tab percorria os itens, um a um,
+   inclusive os de grupos longos. Agora, com o foco num item do menu (padrão de
+   navegação em árvore; o Tab continua como antes):
+   ↓/↑ próximo/anterior item visível · Home/End primeiro/último ·
+   → abre o grupo (se já aberto, vai ao 1º item dele) ·
+   ← fecha o grupo (se já fechado, ou num item, volta ao grupo de cima).
+   Só age quando o foco está num .menu-item dentro de #menu e sem Ctrl/Alt/Meta.
+   ========================================================================== */
+(function initSetasMenu() {
+  const menu = document.getElementById("menu");
+  if (!menu) return;
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const itens = () => [...menu.querySelectorAll(".menu-item")].filter(visivel);
+  const grupoDe = (el) => el.closest(".menu-group");
+  const aberto = (pai) => !!(grupoDe(pai) && grupoDe(pai).classList.contains("open"));
+  const paiAcima = (el) => {
+    const grupo = el.classList.contains("menu-parent") ? grupoDe(el)?.parentElement?.closest(".menu-group") : grupoDe(el);
+    return grupo ? grupo.querySelector(":scope > .menu-parent") : null;
+  };
+  const focar = (el) => { if (el) { el.focus(); el.scrollIntoView({ block: "nearest" }); } };
+  menu.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    const atual = ev.target.closest(".menu-item");
+    if (!atual || !menu.contains(atual)) return;
+    const lista = itens();
+    const i = lista.indexOf(atual);
+    const ehPai = atual.classList.contains("menu-parent");
+    let alvo = null;
+    switch (ev.key) {
+      case "ArrowDown": alvo = lista[i + 1]; break;
+      case "ArrowUp": alvo = lista[i - 1]; break;
+      case "Home": alvo = lista[0]; break;
+      case "End": alvo = lista[lista.length - 1]; break;
+      case "ArrowRight":
+        if (!ehPai) return;
+        ev.preventDefault();
+        if (!aberto(atual)) { atual.click(); return; }
+        alvo = itens().find((el) => grupoDe(atual).querySelector(":scope > .submenu")?.contains(el));
+        break;
+      case "ArrowLeft":
+        ev.preventDefault();
+        if (ehPai && aberto(atual)) { atual.click(); return; }
+        alvo = paiAcima(atual);
+        break;
+      default: return;
+    }
+    ev.preventDefault();
+    focar(alvo);
+  });
+})();
