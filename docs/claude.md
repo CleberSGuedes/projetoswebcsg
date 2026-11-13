@@ -1737,3 +1737,29 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no 
 - `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` no CSS (JS sem mudança).
+
+## Listas nativas (`<select>`) na cor do tema (dev. Jean, 2026-11-13)
+
+**Problema:** a lista aberta de um `<select>` era desenhada pelo navegador e pelo Windows, com o fundo do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do destaque. Isso acontecia em todos os `<select>` do SPO (achado do dev. Jean na Subação). As listas montadas pelo SPO (filtros `mf-*`, listas de marcar) já seguiam o tema.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** usa o *select personalizável* (`appearance: base-select`, Chrome e Edge 135+), dentro de `@supports`.
+- **Lista aberta:** superfície do tema, borda dos controles e cantos de 10 px.
+- **Opção sob o mouse ou no foco:** 16% do destaque, como nas listas dos filtros.
+- **Opção escolhida:** ✓ e negrito, para não depender só da cor.
+- **Campo fechado:** mantém as medidas. A seta volta a ser fina, na ponta direita, e gira quando a lista abre (sem animação com movimento reduzido).
+- Vale só para `<select>` de uma escolha (sem `multiple`/`size`), que é o caso de todo o SPO.
+- Firefox e Safari ignoram o bloco e seguem com a lista nativa.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- **Campo fechado:** em 43 `<select>` de 5 telas (Subação, Dotação, Meta Física, Consulta de Estrutura, FIP 613), largura, altura, espaçamento, borda e fundo ficaram iguais com e sem o recurso.
+- **Contraste do texto das opções:**
+
+  | Tema | Em repouso | Sob o mouse (8 destaques) |
+  |---|---|---|
+  | Escuro | 14,26:1 | 9,21 a 11,64:1 |
+  | Claro | 16,86:1 | 12,99 a 14,95:1 |
+
+- **Teclado:** ↓↓ e Enter escolhem a opção, disparam um `change`, fecham a lista e devolvem o foco ao campo.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
