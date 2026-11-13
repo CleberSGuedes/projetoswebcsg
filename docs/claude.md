@@ -1540,3 +1540,25 @@ Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Boot
 **Correção (só CSS, bloco `[jean]` no fim do `style.css`):** essas peças passam a usar `var(--card)`, `var(--border)`, `var(--text)` e `var(--spo-control-border)`; caixas de seleção e opções com `accent-color` — no claro o tom escuro do destaque (`--spo-accent-text`), no escuro `--accent` (a mesma cor do botão Aplicar); selo "editando" com `var(--text)` no escuro. Os diagramas e gráficos do Contrato Visual têm paleta azulada própria e intencional e ficaram como estão.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean. Varredura em 30 telas no escuro procurando fundos/bordas azulados: antes, 8 relatórios com as peças acima; depois, nenhum (fora os diagramas). Nos 8 destaques × 2 temas: caixa marcada sobre o cartão ≥ 4,3:1 (escuro) e ≥ 8,17:1 (claro); bordas da paginação e da lista 4,04:1 (escuro) e 3,69:1 (claro). Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-superficies.1` no CSS (JS sem mudança).
+
+## Zoom, telas estreitas e "Texto das tabelas" no Personalizar (dev. Jean, 2026-11-13)
+
+**Medição:** 30 telas a 320 px de largura (WCAG 1.4.10), a 640 px (200% de uma tela de 1280, 1.4.4) e com espaçamento de texto ampliado (altura de linha 1,5, letras +0,12 em, palavras +0,16 em; 1.4.12). Nenhuma página rola de lado nem corta texto; as tabelas largas rolam dentro da própria caixa. Dois achados:
+1. a ≤ 420 px o cabeçalho cortava com "…" o nome do sistema e a linha do usuário (data e "Logados"), em todas as telas;
+2. o texto das tabelas dos relatórios (`.fip-table`, `.plan20-table`) é de **8 px**, com títulos de coluna de 10 px, filtros de 8 px e paginação de 10 px. Com 12 px nas mesmas colunas, as linhas ficam cerca de 2× mais altas (FIP 613: 65 → 143 px).
+
+**Correção:**
+- **Cabeçalho:** a ≤ 420 px o nome e a linha do usuário quebram a linha em vez de cortar (o topo passa de 83 para 107 px).
+- **Texto das tabelas:** decisão do dev. Jean — virou escolha no Personalizar, cartão "Fontes e tamanho do texto", grupo **"Texto das tabelas"**: **Compacto (padrão SPO)**, que é como hoje (8 px); **Intermediário (10 px)**, do tamanho dos títulos das colunas; ou **Legível (12 px)**, indicado para baixa visão. Nas duas opções maiores, tabelas, filtros e paginação dos relatórios mudam juntos.
+  - Mesma mecânica das fontes: `localStorage` `spo-font-preferences`, chave `table`, atributo `data-spo-table-text` no `<body>`.
+  - Mudanças: 2 linhas em `initFontesPersonalizar` (`main.js`), o grupo no `atualizar_personalizar_spo.html` e CSS em bloco `[jean]` no fim do `style.css`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Menor texto nas tabelas: 8, 10 e 12 px nos três modos, nos 9 relatórios com dados.
+- Altura média das linhas (10 primeiras, a 1366 px) nos três modos: FIP 613 48 → 59 → 75 px; PLAN 20 112 → 170 → 204; PED 175 → 215 → 255.
+- Voltando para "Compacto", tudo volta a 8 px.
+- O ✓ da opção escolhida (A11) ganhou folga para não encostar no texto da descrição.
+- A amostra do cartão mostra a tabela no tamanho escolhido em "Texto das tabelas" (antes ficava fixa em 12 px). Os dois ajustes se combinam: o "Tamanho do texto" amplia a página inteira, tabelas incluídas (ex.: Maior + Legível = 12 × 1,25 = 15 px na tela).
+- A 320 px, o cabeçalho fica sem "…" e sem rolagem lateral.
+- `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+- Sem script de banco. `templates/base.html`: `?v=20261113.jean-zoom.1` no CSS e no JS.

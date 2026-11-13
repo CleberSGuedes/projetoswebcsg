@@ -8066,3 +8066,41 @@ input[type="radio"] { accent-color: var(--spo-accent-text, var(--accent)); }
 .pagination button,
 .mf-btn:not(.primary),
 .mf-panel { border-color: var(--spo-control-border, var(--border)); }
+
+/* ==========================================================================
+   [jean] Zoom, telas estreitas e texto das tabelas (feat/zoom-reflow, 2026-11-13)
+   Medido em 30 telas a 320 px, a 640 px (200% de 1280) e com espaçamento de
+   texto ampliado (WCAG 1.4.12): nenhuma página rola de lado nem corta texto.
+   Dois achados: (1) a ≤ 420 px o cabeçalho cortava com "…" o nome do sistema e
+   a linha do usuário (data, "Logados") — agora quebram a linha; (2) o texto das
+   tabelas dos relatórios é de 8 px (títulos 10 px, filtros 8 px, paginação
+   10 px). A 12 px nas mesmas colunas as linhas dobram de altura, então ficou
+   como escolha "Texto das tabelas" no Personalizar (Compacto, padrão;
+   Intermediário, 10 px; Legível, 12 px) — atributo data-spo-table-text, gravado por initFontesPersonalizar.
+   ========================================================================== */
+@media (max-width: 420px) {
+  .topbar .subtitle,
+  .topbar .user-meta {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+body[data-spo-table-text="legible"] :is(.fip-table, .plan20-table) :is(td, th),
+body[data-spo-table-text="legible"] :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button) { font-size: 12px; }
+body[data-spo-table-text="legible"] :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn) { font-size: 12px; }
+body[data-spo-table-text="legible"] :is(.pagination button, .page-btn, .page-size select, .page-size .input) { font-size: 12px; }
+/* Intermediário: dados no tamanho dos títulos das colunas (10 px) */
+body[data-spo-table-text="medium"] :is(.fip-table, .plan20-table) :is(td, th),
+body[data-spo-table-text="medium"] :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button),
+body[data-spo-table-text="medium"] :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn),
+body[data-spo-table-text="medium"] :is(.pagination button, .page-btn, .page-size select, .page-size .input) { font-size: 10px; }
+/* o ✓ da opção escolhida (A11) não encosta no texto da descrição */
+:is(.preference-row, .visual-pref-option).active { padding-right: 36px; }
+/* a amostra do Personalizar mostra a tabela no tamanho escolhido em "Texto das
+   tabelas" (antes ficava fixa em 12 px e não reagia à escolha) */
+.spo-fontes-amostra table { font-size: 8px; }
+body[data-spo-table-text="medium"] .spo-fontes-amostra table { font-size: 10px; }
+body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px; }
+.spo-fontes-amostra caption { caption-side: top; padding: 4px 4px 2px; text-align: left; font-size: 12px; color: var(--muted); }

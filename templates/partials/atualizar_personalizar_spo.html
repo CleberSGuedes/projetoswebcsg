@@ -161,7 +161,7 @@
     <article class="card personalizar-card visual-preferences-card" id="spo-fontes-card">
       <div class="eyebrow">Leitura</div>
       <div class="card-title">Fontes e tamanho do texto</div>
-      <p class="muted">Escolha a fonte da interface, a das tabelas e dados e o tamanho do texto. Vale só neste navegador.</p>
+      <p class="muted">Escolha a fonte da interface, a das tabelas e dados, o tamanho do texto e o texto das tabelas dos relatórios. Vale só neste navegador.</p>
       <div class="visual-pref-groups">
         <div class="visual-pref-group" data-spo-font-group="ui">
           <button class="visual-pref-toggle" type="button" data-spo-font-toggle="ui" aria-expanded="false" aria-controls="spo-font-panel-ui">
@@ -243,10 +243,34 @@
             </button>
           </div>
         </div>
+        <div class="visual-pref-group" data-spo-font-group="table">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="table" aria-expanded="false" aria-controls="spo-font-panel-table">
+            <i class="bi bi-layout-text-window" aria-hidden="true"></i>
+            <span>
+              <strong>Texto das tabelas</strong>
+              <small data-spo-font-current="table">Compacto (padrão SPO)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-table" data-spo-font-panel="table" role="group" aria-label="Texto das tabelas" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="compact">
+              <i class="bi bi-list" aria-hidden="true"></i>
+              <span><strong>Compacto (padrão SPO)</strong><small>Mais linhas na tela; letra pequena (8 px).</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="medium">
+              <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
+              <span><strong>Intermediário (10 px)</strong><small>Letra um pouco maior, do tamanho dos títulos das colunas.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="legible">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+              <span><strong>Legível (12 px)</strong><small>Letra maior nas tabelas, filtros e paginação dos relatórios; linhas mais altas. Indicado para baixa visão.</small></span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
         <p>Amostra: Programação PTA 2027 — ação, produto e meta (Il1 O0 ç ã é).</p>
-        <table><tbody>
+        <table><caption>Tabela de relatório (segue "Texto das tabelas")</caption><tbody>
           <tr><td>Crédito autorizado</td><td>5.914.425.031,88</td></tr>
           <tr><td>Saldo de dotação</td><td>2.886.249.455,56</td></tr>
         </tbody></table>

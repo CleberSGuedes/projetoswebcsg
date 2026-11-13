@@ -27719,9 +27719,10 @@
     ui: { classic: "Clássica (padrão SPO)", inter: "Inter", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
     data: { classic: "Clássica (padrão SPO)", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono" },
     size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
+    table: { compact: "Compacto (padrão SPO)", medium: "Intermediário (10 px)", legible: "Legível (12 px)" },
   });
-  const DEFAULTS = Object.freeze({ ui: "classic", data: "classic", size: "default" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize" });
+  const DEFAULTS = Object.freeze({ ui: "classic", data: "classic", size: "default", table: "compact" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText" });
 
   function read() {
     const prefs = { ...DEFAULTS };
