@@ -7582,9 +7582,15 @@ html.spo-split-pressure .governanca-grid {
    25 px a mais a 1366 px). Agora as colunas se ajustam à largura disponível (2 quando
    cabem, 1 quando não) e, se rótulo e valor não couberem lado a lado, o valor desce
    para a linha de baixo. O PLAN 51 (.totais-box--wide) mantém o quadro próprio.
+   Ajuste (fix/totais-duas-colunas, 2026-11-13): o mínimo de 14rem por coluna só dava
+   2 colunas com o quadro ≥ ~470 px; com o menu aberto a 1600 px o quadro tem 467 px e
+   caía para 1 coluna (faixa de 112 → 176 px, menos espaço para a tabela). Mínimo de
+   12rem e espaços menores (colunas 12 px, rótulo/valor 6 px): 2 colunas, como na
+   produção, sempre que os pares cabem numa linha.
    ========================================================================== */
 .report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  column-gap: 12px;
   min-width: 0;
 }
 .report-data-card .relatorio-top-uo .totais-box:not(.totais-box--wide) .totais-row {
@@ -7592,7 +7598,7 @@ html.spo-split-pressure .governanca-grid {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  column-gap: 8px;
+  column-gap: 6px;
   row-gap: 0;
   min-width: 0;
 }
