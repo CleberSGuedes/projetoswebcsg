@@ -1763,3 +1763,35 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` n
 - Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
+
+## Controles dos formulários: campo desabilitado no escuro e botões de decisão mais vivos (dev. Jean, 2026-11-13)
+
+**Problemas** (achados do dev. Jean na Etapa):
+1. **Campo desabilitado** (ex.: "Exercício"): o fundo era fixo, `#eef2f4`, nos dois temas. No escuro, o campo "acendia" (13,8:1 contra o cartão) em vez de parecer apagado. A borda também vinha na cor de destaque, porque desde o #44 o `--border` é tingido.
+2. **Botões de decisão** (Salvar, Excluir, Baixar Excel…): para o texto chegar a 7:1, o AA+ (#36, #37, #39) escureceu o fundo no claro, quase preto (`#0b4c44`), e clareou no escuro, em pastel (`#a9e0d2`, `#ffb3b3`). Os botões ficaram apagados.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+- **Campo desabilitado:**
+  - no escuro, fundo `rgba(255,255,255,.05)`, um degrau acima do cartão, texto `#b5b5b5` e borda cinza neutra `#4a4a4a`;
+  - no claro, texto `#5f6670` (de 4,29 para 5,15:1) e borda `#c9ced6`;
+  - a regra leva `:not(#spo-desab)`, que só soma peso de id, para vencer a regra dos contornos (#44).
+- **Botão principal** (`.btn-primary` e equivalentes): usa o tom **mais vivo** de cada destaque que ainda dá 7:1, na variável `--spo-btn-fill`.
+  - **Claro**, com texto branco: `--color-600` (Clássico, Roxo), `--color-700` (Azul, Turquesa, Vermelho) ou `--color-800` (Verde, Amarelo, Laranja).
+  - **Escuro**, com texto `#111`: a cor de destaque cheia (`--accent`); no Roxo, `--accent-strong`.
+- **Vermelho cheio** (Excluir, Desativar, Cancelar processamento): `#a51d2d` no claro e `#ff7b7b` no escuro.
+- **"Limpar Formulário"** (`.btn-danger[id$="-clear"]`, nos 4 cadastros): contorno vermelho, sem preenchimento, para o Salvar ficar como a ação principal.
+- **Mouse e foco no claro:** o botão escurece (`brightness(.92)`) em vez de clarear, para o texto não cair abaixo de 7:1.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, na Etapa, nos 8 destaques × 2 temas, com o sistema emulado em claro e escuro.
+
+| Tema | Salvar | Excluir | Limpar (texto e contorno) | Campo desabilitado (texto) |
+|---|---|---|---|---|
+| Claro | 7,36 a 10,19:1 | 7,46:1 | 7,46:1 | 5,15:1 |
+| Escuro | 7,53 a 14,61:1 | 7,53:1 | 8,15:1 | 6,53:1 |
+
+- No escuro, o fundo do campo desabilitado fica a 1,16:1 do cartão.
+- FIP 613 conferido: o "Baixar Excel" dá 7,36:1.
+- A tela de login não muda: as regras dela vencem.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-controles.3` no CSS (JS sem mudança).
