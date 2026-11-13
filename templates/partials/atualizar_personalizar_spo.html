@@ -157,6 +157,102 @@
       </div>
     </article>
 
+    {# [jean] Fontes e tamanho do texto (feat/fontes-personalizar, 2026-11-12) #}
+    <article class="card personalizar-card visual-preferences-card" id="spo-fontes-card">
+      <div class="eyebrow">Leitura</div>
+      <div class="card-title">Fontes e tamanho do texto</div>
+      <p class="muted">Escolha a fonte da interface, a das tabelas e dados e o tamanho do texto. Vale só neste navegador.</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-spo-font-group="ui">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="ui" aria-expanded="false" aria-controls="spo-font-panel-ui">
+            <i class="bi bi-fonts" aria-hidden="true"></i>
+            <span>
+              <strong>Fonte da interface</strong>
+              <small data-spo-font-current="ui">Clássica (padrão SPO)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-ui" data-spo-font-panel="ui" role="group" aria-label="Fonte da interface" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="classic">
+              <i class="bi bi-type" aria-hidden="true"></i>
+              <span><strong>Clássica (padrão SPO)</strong><small>A fonte de sempre do SPO.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="inter">
+              <i class="bi bi-type" aria-hidden="true"></i>
+              <span><strong>Inter</strong><small>Muito legível em tamanhos pequenos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="atkinson">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+              <span><strong>Atkinson Hyperlegible</strong><small>Feita para baixa visão: letras bem distintas.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="source">
+              <i class="bi bi-type" aria-hidden="true"></i>
+              <span><strong>Source Sans 3</strong><small>Leitura confortável em textos longos.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="data">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="data" aria-expanded="false" aria-controls="spo-font-panel-data">
+            <i class="bi bi-table" aria-hidden="true"></i>
+            <span>
+              <strong>Fonte de tabelas e dados</strong>
+              <small data-spo-font-current="data">Clássica (padrão SPO)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-data" data-spo-font-panel="data" role="group" aria-label="Fonte de tabelas e dados" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="classic">
+              <i class="bi bi-type" aria-hidden="true"></i>
+              <span><strong>Clássica (padrão SPO)</strong><small>A fonte de sempre do SPO.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="inter">
+              <i class="bi bi-123" aria-hidden="true"></i>
+              <span><strong>Inter (números alinhados)</strong><small>Algarismos de mesma largura nas colunas.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="plex-sans">
+              <i class="bi bi-123" aria-hidden="true"></i>
+              <span><strong>IBM Plex Sans</strong><small>Técnica, com números alinhados.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="intel-mono">
+              <i class="bi bi-code" aria-hidden="true"></i>
+              <span><strong>Intel One Mono</strong><small>Monoespaçada feita para baixa visão; tabelas mais largas.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="size">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="size" aria-expanded="false" aria-controls="spo-font-panel-size">
+            <i class="bi bi-zoom-in" aria-hidden="true"></i>
+            <span>
+              <strong>Tamanho do texto</strong>
+              <small data-spo-font-current="size">Padrão (100%)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-size" data-spo-font-panel="size" role="group" aria-label="Tamanho do texto" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="default">
+              <i class="bi bi-fonts" aria-hidden="true"></i>
+              <span><strong>Padrão (100%)</strong><small>Tamanho atual.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="large">
+              <i class="bi bi-zoom-in" aria-hidden="true"></i>
+              <span><strong>Grande (112%)</strong><small>Amplia a área de conteúdo.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="larger">
+              <i class="bi bi-zoom-in" aria-hidden="true"></i>
+              <span><strong>Maior (125%)</strong><small>Amplia mais; o menu e o topo não mudam.</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
+        <p>Amostra: Programação PTA 2027 — ação, produto e meta (Il1 O0 ç ã é).</p>
+        <table><tbody>
+          <tr><td>Crédito autorizado</td><td>5.914.425.031,88</td></tr>
+          <tr><td>Saldo de dotação</td><td>2.886.249.455,56</td></tr>
+        </tbody></table>
+      </div>
+      <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+    </article>
     <article class="card personalizar-card personalizar-preview" id="spo-previsualizacao">
       <div class="eyebrow">Prévia</div>
       <div class="card-title">Componentes do SPO</div>

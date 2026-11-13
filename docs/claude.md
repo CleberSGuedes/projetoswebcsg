@@ -1371,3 +1371,22 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Efeito visível:** a 1024 e 1366 px o quadro passa a uma coluna (fica mais alto; no FIP 613, os 6 totais em lista), mas nenhum valor é cortado.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, dados reais já carregados (PED, FIP 613, PLAN 20, PLAN 21, NOB, EST EMP); medição automática do quadro (largura do conteúdo × largura do quadro, valor além da linha, linhas sobrepostas) em 390, 768, 1024 e 1366 px — todos sem corte nem sobreposição depois da correção; capturas antes/depois do FIP 613 em 390 e 1024 px. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+## Fontes e tamanho do texto no Personalizar Temas SPO (dev. Jean, 2026-11-12)
+
+**Motivo:** o SPO não carregava nenhuma fonte web. A pilha começava por "Cantarell", que o Windows não tem, então cada aparelho mostrava uma fonte diferente (Segoe UI, a do sistema no Mac, Roboto no Android). E os tamanhos mais usados no CSS são pequenos (12 px ×72, 11 px ×59, 10 px ×17; 8 px nas células de tabela), o que pesa contra a meta de acessibilidade AA+.
+
+**O que entra:** um cartão novo **"Fontes e tamanho do texto"** no Personalizar Temas SPO, com três escolhas guardadas no navegador (chave própria `spo-font-preferences`, como as demais preferências locais):
+- **Fonte da interface:** Clássica (padrão SPO, a pilha de sempre), Inter, Atkinson Hyperlegible (feita para baixa visão) e Source Sans 3;
+- **Fonte de tabelas e dados** (tabelas, valores dos totais e indicadores do Teto): Clássica (padrão SPO), Inter com números de largura fixa (`tabular-nums`), IBM Plex Sans e Intel One Mono (monoespaçada feita com foco em legibilidade);
+- **Tamanho do texto:** Padrão (100%), Grande (112%) e Maior (125%), com `zoom` só na área de conteúdo (`.main`); menu e topo não mudam.
+
+**O padrão não muda nada:** "Clássica + 100%" deixa o SPO como era, sem baixar nenhuma fonte.
+
+**Fontes hospedadas no SPO** (`static/fonts/`, pasta nova), não pelo Google Fonts: nenhum dado do usuário vai a terceiros. Só o subconjunto latino (cobre o português), ~180 KB no total; o navegador só baixa a fonte escolhida. Todas sob a **SIL Open Font License 1.1**, com o `OFL.txt` em cada pasta; origem (Fontsource 5.3.x via jsDelivr), bytes e sha256 de cada arquivo em `static/fonts/LEIA-ME.md`.
+
+**Arquivos:** `static/css/style.css` (bloco `[jean]` no fim: `@font-face` com nomes "SPO …", troca pelos atributos `data-spo-font-ui`, `data-spo-font-data` e `data-spo-text-size` no `<body>`); `static/js/main.js` (bloco `initFontesPersonalizar` no fim: lê e aplica a preferência em todas as telas; cliques no cartão por delegação e um `MutationObserver` para o cartão, que é carregado depois); `templates/partials/atualizar_personalizar_spo.html` (o cartão, com amostra de texto e números); `templates/base.html` (`?v=20261112.jean-fontes.2` no CSS e no JS). Nenhuma função ou regra existente foi alterada.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com cliques reais no cartão: cada fonte aplicada e só ela baixada; a preferência sobrevive à recarga; "Clássica" nas tabelas continua clássica mesmo com outra fonte na interface; com 125%, nenhuma das 8 telas medidas transborda a 390 px. Ajuste junto: com o texto ampliado, a coluna "Última atualização por UO" (`.meta-uo-col`, `min-width: 190px`) e o e-mail longo passavam 6 px do cartão no celular; só nesse caso, a coluna libera a largura e o texto quebra (totais de PED, FIP 613, PLAN 20, EST EMP e NOB conferidos a 390 px em 112% e 125%). `node --check static/js/main.js` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+**Depende do PR dos totais** (`fix/totais-relatorios-responsivo`): com fonte monoespaçada e 125%, os totais do FIP 613 encavalam sem aquela correção; com ela, ficam limpos (testado).

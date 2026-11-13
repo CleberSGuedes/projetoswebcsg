@@ -27704,3 +27704,119 @@
 
 
 
+
+/* ==========================================================================
+   [jean] Fontes e tamanho do texto (feat/fontes-personalizar, 2026-11-12)
+   Preferência local do navegador, como as demais do Personalizar Temas SPO, com
+   chave própria; aplicada em todas as telas como atributos no <body> (o CSS fica no
+   bloco [jean] do fim do style.css). O cartão do Personalizar é carregado depois,
+   por isso os cliques são tratados por delegação e o estado é sincronizado quando
+   o cartão aparece na página. Não altera nenhuma função existente.
+   ========================================================================== */
+(function initFontesPersonalizar() {
+  const STORAGE_KEY = "spo-font-preferences";
+  const OPTIONS = Object.freeze({
+    ui: { classic: "Clássica (padrão SPO)", inter: "Inter", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
+    data: { classic: "Clássica (padrão SPO)", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono" },
+    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
+  });
+  const DEFAULTS = Object.freeze({ ui: "classic", data: "classic", size: "default" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize" });
+
+  function read() {
+    const prefs = { ...DEFAULTS };
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      Object.keys(DEFAULTS).forEach((key) => {
+        if (saved && OPTIONS[key][saved[key]]) prefs[key] = saved[key];
+      });
+    } catch (err) {
+      /* preferência ilegível ou armazenamento bloqueado: fica o padrão */
+    }
+    return prefs;
+  }
+
+  function save(prefs) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    } catch (err) {
+      /* armazenamento bloqueado: vale só nesta página */
+    }
+  }
+
+  function apply(prefs) {
+    if (!document.body) return;
+    Object.keys(ATTRS).forEach((key) => {
+      document.body.dataset[ATTRS[key]] = prefs[key];
+    });
+  }
+
+  function setOpen(card, key) {
+    card.querySelectorAll("[data-spo-font-group]").forEach((group) => {
+      const open = Boolean(key) && group.dataset.spoFontGroup === key;
+      group.classList.toggle("is-open", open);
+      const toggle = group.querySelector("[data-spo-font-toggle]");
+      const panel = group.querySelector("[data-spo-font-panel]");
+      if (toggle) toggle.setAttribute("aria-expanded", String(open));
+      if (panel) panel.hidden = !open;
+    });
+  }
+
+  function sync(card) {
+    const prefs = read();
+    card.querySelectorAll("[data-spo-font-pref]").forEach((btn) => {
+      const active = prefs[btn.dataset.spoFontPref] === btn.dataset.spoFontValue;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    card.querySelectorAll("[data-spo-font-current]").forEach((target) => {
+      const key = target.dataset.spoFontCurrent;
+      target.textContent = OPTIONS[key][prefs[key]];
+    });
+  }
+
+  function prepareCard() {
+    const card = document.getElementById("spo-fontes-card");
+    if (!card || card.dataset.spoFontReady === "1") return;
+    card.dataset.spoFontReady = "1";
+    sync(card);
+    setOpen(card, "");
+  }
+
+  document.addEventListener("click", (ev) => {
+    const card = ev.target.closest && ev.target.closest("#spo-fontes-card");
+    if (!card) return;
+    const toggle = ev.target.closest("[data-spo-font-toggle]");
+    if (toggle) {
+      const key = toggle.dataset.spoFontToggle;
+      const group = card.querySelector(`[data-spo-font-group="${key}"]`);
+      setOpen(card, group && group.classList.contains("is-open") ? "" : key);
+      return;
+    }
+    const option = ev.target.closest("[data-spo-font-pref]");
+    if (!option) return;
+    const key = option.dataset.spoFontPref;
+    const value = option.dataset.spoFontValue;
+    if (!OPTIONS[key] || !OPTIONS[key][value]) return;
+    const prefs = { ...read(), [key]: value };
+    save(prefs);
+    apply(prefs);
+    sync(card);
+    setOpen(card, "");
+    const status = card.querySelector(".spo-fontes-status");
+    if (status) status.textContent = `"${OPTIONS[key][value]}" aplicada neste navegador.`;
+  });
+
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== STORAGE_KEY) return;
+    apply(read());
+    const card = document.getElementById("spo-fontes-card");
+    if (card) sync(card);
+  });
+
+  apply(read());
+  if (document.body) {
+    new MutationObserver(prepareCard).observe(document.body, { childList: true, subtree: true });
+  }
+  prepareCard();
+})();
