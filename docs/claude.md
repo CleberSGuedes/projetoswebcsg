@@ -1721,6 +1721,23 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-abas-paginacao.1` 
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no CSS e no JS.
 
+## Selo "editando" dos cadastros na cor do tema (dev. Jean, 2026-11-13)
+
+**Problema:** o selo que aparece ao lado do título nos cadastros ("- Edição do registro …", "- Aprovação do registro …") tinha a cor fixa `#111827` no HTML de 5 parciais. No escuro, ficava ilegível; até aqui, isso era compensado com uma regra `!important` no `style.css`.
+
+**Correção:**
+- **5 parciais** (`cadastrar_dotacao`, `cadastrar_est_dotacao`, `cadastrar_plan21_nger_etapa`, `cadastrar_plan21_nger_meta_fisica`, `cadastrar_plan21_nger_subacao`): o `style` do selo fica só com `display:none;`, que o JS continua trocando (`none`/`inline`). Cor, peso e margem passam para a classe `spo-editing-badge`.
+- **`style.css`:** sai a regra antiga `.theme-dark [id$="-editing-badge"] { … !important }`, e entra um bloco `[jean]` no fim com `.spo-editing-badge` (cor `var(--text)`, peso 500, margem 6 px).
+- **`templates/base.html`:** só a linha `?v=` do CSS.
+- O JS não muda.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, nas 5 telas com o selo visível.
+- **Escuro:** 14,26:1. **Claro:** 16,86:1.
+- Mesmo peso (500) e mesma margem (6 px) de antes. A cor segue o texto do tema, então vale para os 8 destaques.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` no CSS (JS sem mudança).
+
 ## Listas nativas (`<select>`) na cor do tema (dev. Jean, 2026-11-13)
 
 **Problema:** a lista aberta de um `<select>` era desenhada pelo navegador e pelo Windows, com o fundo do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do destaque. Isso acontecia em todos os `<select>` do SPO (achado do dev. Jean na Subação). As listas montadas pelo SPO (filtros `mf-*`, listas de marcar) já seguiam o tema.

@@ -8059,8 +8059,6 @@ input[type="radio"] { accent-color: var(--spo-accent-text, var(--accent)); }
    do botão Aplicar e contraste ≥ 3:1 sobre o cartão nos 8 destaques */
 .theme-dark input[type="checkbox"],
 .theme-dark input[type="radio"] { accent-color: var(--accent); }
-/* selo "editando" dos cadastros: cor fixa escura no HTML, ilegível no escuro */
-.theme-dark [id$="-editing-badge"] { color: var(--text) !important; }
 /* bordas de controles nos dois temas: paginação, Cancelar/Aplicar e lista do
    filtro estavam em var(--border) — 1,36:1 no claro (mínimo 3:1, WCAG 1.4.11) */
 .pagination button,
@@ -8301,6 +8299,19 @@ body.theme-dark .pagination button.active {
 .theme-dark .planning-action-checklist-option:hover {
   background: rgba(var(--accent-rgb), 0.16);
   color: var(--text);
+}
+
+/* ==========================================================================
+   [jean] Selo "editando" dos cadastros (fix/selo-editando, 2026-11-13)
+   O selo ("- Edição do registro …") tinha cor fixa #111827 no HTML de 5
+   parciais; no escuro ficava ilegível (era compensado com !important). A cor
+   sai do HTML e passa a seguir o texto do tema; o JS continua só trocando o
+   display.
+   ========================================================================== */
+.spo-editing-badge {
+  color: var(--text);
+  font-weight: 500;
+  margin-left: 6px;
 }
 
 /* ==========================================================================
