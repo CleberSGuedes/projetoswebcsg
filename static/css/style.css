@@ -8402,3 +8402,77 @@ body.theme-dark .pagination button.active {
      base-select pela escolhida ("20"); mínimo de 8.3em = 83 px a 10 px */
   .page-size select:not([multiple]):not([size]) { min-width: 8.3em; }
 }
+
+/* ==========================================================================
+   [jean] Controles dos formulários: campo desabilitado e botões de decisão
+   (feat/controles-formulario, 2026-11-13)
+   (1) Campo desabilitado (ex.: "Exercício" da Etapa): fundo fixo #eef2f4 nos dois
+       temas; no escuro "acendia" (13,8:1 contra o cartão), em vez de parecer apagado.
+   (2) Botões de decisão: o AA+ (#36/#37/#39) levou o texto a 7:1 escurecendo o fundo
+       no claro (quase preto) e clareando no escuro (pastel), e eles ficaram apagados.
+       Agora: o tom MAIS VIVO de cada destaque que ainda dá 7:1 — no escuro, a cor de
+       destaque cheia com texto escuro; no claro, o tom mais claro da paleta com 7:1
+       para o texto branco. Vermelho cheio (Excluir, Desativar, Cancelar processamento)
+       idem. "Limpar Formulário" (*-clear) não é a decisão principal: vira contorno
+       vermelho, sem preenchimento, para o Salvar ficar como a ação principal.
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* (1) campo desabilitado no escuro: um degrau acima do cartão, texto apagado legível */
+  /* :not(#spo-desab) só soma peso de id: vence a regra dos contornos (#44, 0,6,2) */
+  body.theme-dark :is(.field-disabled:disabled, .form-grid input:disabled,
+                      .form-grid select:disabled, .form-grid textarea:disabled):not(#spo-desab) {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #b5b5b5;
+    /* cinza neutro: desde o #44 o --border vem tingido pelo destaque, e o campo
+       desabilitado parecia ativo (campo desabilitado não entra no 3:1 do 1.4.11) */
+    border-color: #4a4a4a;
+  }
+  /* no claro, o texto apagado ia a 4,29:1; passa a ≥ 4,5:1 */
+  body:not(.theme-dark) :is(.field-disabled:disabled, .form-grid input:disabled,
+                            .form-grid select:disabled, .form-grid textarea:disabled):not(#spo-desab) {
+    color: #5f6670;
+    border-color: #c9ced6;
+  }
+
+  /* (2) tom do botão principal por destaque */
+  body { --spo-btn-fill: var(--color-600); }
+  body:is([data-accent-preference="blue"], [data-accent-preference="teal"],
+          [data-accent-preference="red"]) { --spo-btn-fill: var(--color-700); }
+  body:is([data-accent-preference="green"], [data-accent-preference="yellow"],
+          [data-accent-preference="orange"]) { --spo-btn-fill: var(--color-800); }
+  body.theme-dark { --spo-btn-fill: var(--accent); }
+  body.theme-dark[data-accent-preference="purple"] { --spo-btn-fill: var(--accent-strong); }
+
+  body:not(.theme-dark) :is(.btn-primary, .report-actions .btn:last-child,
+                            .preview-actions button:first-child) {
+    color: #ffffff;
+    background: var(--spo-btn-fill);
+    border-color: transparent;
+  }
+  body.theme-dark :is(.btn-primary, .report-actions .btn:last-child,
+                      .preview-actions button:first-child) {
+    color: #111111;
+    background: var(--spo-btn-fill);
+    border-color: transparent;
+  }
+
+  /* mouse/foco no claro: escurecer (o brightness(1.05) original clareava e baixava
+     o texto branco para ~7,0:1 no Clássico); no escuro, clarear já aumenta o contraste */
+  body:not(.theme-dark) :is(.btn-primary, .btn-danger:not([id$="-clear"])):is(:hover, :focus) {
+    filter: brightness(0.92);
+  }
+
+  /* vermelho cheio: o mais vivo com 7:1 (claro #a51d2d com branco; escuro #ff7b7b com #111) */
+  body:not(.theme-dark) .btn-danger { color: #ffffff; background: #a51d2d; border-color: transparent; }
+  body.theme-dark .btn-danger { color: #111111; background: #ff7b7b; border-color: transparent; }
+
+  /* "Limpar Formulário": contorno vermelho, sem preenchimento */
+  body .btn-danger[id$="-clear"] {
+    background: transparent;
+    color: #a51d2d;
+    border: 1.5px solid #a51d2d;
+  }
+  body .btn-danger[id$="-clear"]:is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08); }
+  body.theme-dark .btn-danger[id$="-clear"] { color: #ffa3a3; border-color: #ffa3a3; }
+  body.theme-dark .btn-danger[id$="-clear"]:is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12); }
+}
