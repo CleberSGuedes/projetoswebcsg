@@ -1763,3 +1763,26 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` n
 - Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
+
+## Listas nativas: opções longas e valor longo no campo fechado (dev. Jean, 2026-11-13)
+
+Correção da seção anterior, achada no pré-teste do roteiro da homologação, com listas reais longas: a Subação da Dotação tem 471 opções, com até 345 caracteres.
+
+**Problemas:**
+- **Lista aberta:** com opções longas, abria com **1.945 px** de largura numa janela de 1.070. O texto passava da borda direita da tela e a lista não ficava alinhada ao campo.
+- **Campo fechado:** com um valor longo escolhido, crescia para **94 px**, em 3 linhas. O nativo fica em 40 px e corta o texto.
+- **"Itens por página" dos relatórios:** ficava sem a seta e 13 px mais estreito. A seta era apagada por uma regra antiga `.theme-dark .page-size .input { background: … }`, de especificidade (0,3,0), e o nativo mede a largura pela opção mais larga, não pela escolhida.
+
+**Correção (no mesmo bloco `[jean]` do fim do `style.css`):**
+- A lista aberta tem no máximo `min(40rem, 100vw − 16px)`, e o texto da opção quebra linha, sem perder informação.
+- O campo fechado fica numa linha: `white-space: nowrap`, `overflow: clip` e `overflow-clip-margin: content-box`. O texto é cortado antes da seta, com 34 px reservados à direita.
+- A seta passa a ser desenhada no **fundo** do campo, com dois `linear-gradient` em `currentColor`, e vira para cima com a lista aberta. Assim ela não é cortada junto com o texto. A regra da seta leva `:not(#spo-seta)`, que só soma peso de id, para vencer as regras antigas com `background:`. O `::picker-icon` fica oculto.
+- "Itens por página": `min-width: 8.3em`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- **63 `<select>` de 17 telas**, nos dois temas, com o **valor mais longo** escolhido em cada um: todos com seta e com a mesma altura do nativo. A largura só muda nos "Itens por página", e depois do ajuste fica igual nos três tamanhos de "Texto das tabelas" (83, 83 e 100 px).
+- **Lista longa:** End vai à 471ª opção, Enter escolhe, a lista fecha e o foco volta ao campo.
+- **Celular** (emulado a 375 px): a lista da Etapa, com 439 opções, fica dentro da tela (95 a 370 px) e alinhada ao campo. O toque real fica para a homologação.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-longas.3` no CSS (JS sem mudança).
