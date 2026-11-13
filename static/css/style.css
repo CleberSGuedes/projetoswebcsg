@@ -7897,3 +7897,78 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
   }
   .app-loading-dot { opacity: 1; }
 }
+
+/* ==========================================================================
+   [jean] AA nas telas que faltavam (fix/aa-telas-restantes, 2026-11-12)
+   Medido em uploads, cadastros e login (já com A2–A8):
+   F-A botões vermelhos .btn-danger no claro: branco sobre #ef4444→#dc2626, 3,76:1 (AA);
+   F-B no escuro, .theme-dark .btn tirava o preenchimento de .btn-danger/.btn-secondary,
+       que ficavam só com borda translúcida 1,92:1 (AA, 1.4.11);
+   F-C botão de etapa ativo (.wizard-step-btn.active): branco sobre --accent, 1,83 no
+       escuro (AA) e 5,12 no claro;
+   F-D título de seção (.form-section-title) na cor de destaque: 5,12 no claro;
+   F-E botão "+" da Meta Física: 18×18 px (AA, 2.5.8), com opacidade de 85%;
+   F-F login no claro: título e "Esqueci a senha" em --accent, 4,70:1.
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* F-A / F-B */
+  body:not(.theme-dark) .btn-danger {
+    color: #ffffff;
+    background: linear-gradient(135deg, #a51d1d, #991b1b);
+    border-color: transparent;
+  }
+  body.theme-dark .btn-danger {
+    color: #111111;
+    background: #ffb3b3;
+    border-color: transparent;
+  }
+  body.theme-dark .btn-secondary:not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+
+  /* F-C / F-D */
+  body:not(.theme-dark) .wizard-step-btn.active {
+    color: #ffffff;
+    background: var(--spo-accent-text);
+    border-color: var(--spo-accent-text);
+  }
+  body.theme-dark .wizard-step-btn.active {
+    color: #111111;
+    background: var(--spo-accent-text);
+    border-color: var(--spo-accent-text);
+  }
+  body .wizard-step-btn:not(.active):not(:hover):not(:focus) {
+    border-color: var(--spo-control-border);
+  }
+  body .form-section-title { color: var(--spo-accent-text); }
+
+  /* F-E (as cores do botão já vêm do .btn-primary do A6/A7: ícone ≥ 10:1) */
+  body .meta-fisica-plus-btn {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    opacity: 1;
+  }
+
+  /* F-F: o login só carrega --accent (login-theme.js), não a paleta inteira */
+  body.login-body:not(.theme-dark) :is(.login-card h1, .login-form a) {
+    color: color-mix(in srgb, var(--accent) 50%, #000000);
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"] :is(.login-card h1, .login-form a) {
+    color: color-mix(in srgb, var(--accent) 40%, #000000);
+  }
+  /* o "Entrar" usava o tom da paleta (A6), que o login não carrega: ficava verde em
+     qualquer cor de destaque; agora acompanha o --accent escurecido, como o título */
+  body.login-body:not(.theme-dark) .login-form .btn-primary {
+    color: #ffffff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, #000000),
+                                        color-mix(in srgb, var(--accent) 50%, #000000));
+  }
+  body.login-body:not(.theme-dark)[data-accent-preference="yellow"] .login-form .btn-primary {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 34%, #000000),
+                                        color-mix(in srgb, var(--accent) 40%, #000000));
+  }
+}
+@media (pointer: coarse) {
+  body .meta-fisica-plus-btn { width: 44px; min-width: 44px; height: 44px; }
+}
