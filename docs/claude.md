@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-03) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-13) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 > **Estado em 10/11/2026: layout novo, menu gerado do catálogo e funcionalidades da `homologacao`/`dev/cleber` integrados na `main`** (seção 32). Novas UOs (26101, 26201 e 26202): código pronto e **bloqueado** na produção (`UOS_EXECUCAO_LIBERADAS` e `UOS_PLAN20_LIBERADAS` em `services/uo.py` = só a SEDUC; a liberação temporária da 26101 que existia na homologação **não** veio). Estado, roteiro de testes e como liberar: [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md) e seção 31.
@@ -709,7 +709,7 @@ Os três PRs de sincronização foram abertos com destino `main` (padrão do Git
 
 ## 22. Testes com as UOs 26101, 26201 e 26202 — aguardando confirmação oficial (2026-10-13 e 14)
 
-> **Atualização (2026-11-03):** o texto abaixo é o retrato de 13 e 14/10, antes dos ajustes. Os ajustes de gravação por UO, chave só da SEDUC e painéis foram feitos e estão na `homologacao`; o que mudou, o que foi testado e o que falta está na **seção 26**.
+> **Atualização (2026-11-03):** o texto abaixo é o retrato de 13 e 14/10, antes dos ajustes. Os ajustes de gravação por UO, chave só da SEDUC e painéis foram feitos e estão na `homologacao`; o que mudou, o que foi testado e o que falta está na **seção 31**.
 
 **O que é:** existe a possibilidade de o sistema passar a receber os relatórios de mais três UOs: **26101** (SECITECI), **26201** (UNEMAT) e **26202** (FAPEMAT). Antes de qualquer mudança, o usuário pediu testes com os relatórios reais dessas UOs em seis funcionalidades: Plan20, FIP 613, PED, EMP, NOB e EST EMP. A inclusão ainda depende de **confirmação oficial**.
 
@@ -1106,11 +1106,20 @@ Funcionalidade portada da branch `dev/cleber` **sem merge**: código reescrito n
 ### 28.1 O que faz
 Lê DANFEs em PDF, extrai nº da DANFE, DRE, escola e a **quantidade de cada produto de um catálogo** (por exercício) e gera um Excel consolidado (aba *Planilha Consolidada* com cores e legenda de conferência, *Dados_Extraídos* e *Auditoria_Arquivos*). Dois layouts de fornecedor: Somos (escola/DRE/COD nas Informações Complementares) e Athos (escola = destinatário, DRE em linha própria, sem código). A quantidade é montada pela distância ao código do produto na linha (`_row_around`, tolerância 1,5 pt) e conferida: quantidade x valor unitário deve bater com o total da linha, senão `QUANTIDADE_INCONSISTENTE`.
 
+Colunas de conferência do Excel:
+- *Planilha Consolidada*: coluna **"Conferência"** no fim (motivo do destaque amarelo/laranja da linha).
+- *Dados_Extraídos* e *Auditoria_Arquivos*: **"Escola (nota)"** (nome como veio no PDF), **"Origem do código"** (`nota`, `cadastro (nome + município)` ou vazio) e "Conferência".
+- Os dados do cadastro ficam em `see_processamento_arquivos.dados_extraidos_json["cadastro"]` (`origem_codigo`, `destaque`, `conferencia`).
+
 ### 28.2 Arquivos
 - `rotas/notas_see_routes.py` (blueprint `notas_see_bp`): catálogo/produtos, envio em lotes, iniciar, status, último, histórico, cancelar, download e `_run_see_processamento` (o que o worker executa).
 - `services/see_notes.py` (extração e Excel; `pdfplumber` é importado **dentro** de `extract_pdf`) e `services/see_escolas.py` (cadastro e identificação da escola).
 - `worker.py --kind see` (novo tipo; chama `_run_see_processamento`, que grava status e falha nas tabelas `see_*`). `scripts/importar_escolas_see.py`.
 - Tela: `templates/partials/notas_see.html`, `initNotasSee` em `static/js/main.js`, estilos `.see-*` no fim de `static/css/style.css` (definem `--accent-rgb` e `.see-page [hidden]`).
+  - Card **"DANFEs Processados"** no topo da página: filtros **Exercício** e **Catálogo**; mostra só a **versão atual** (último processamento concluído) de cada **catálogo ativo** e permite baixar o Excel de novo (`GET /api/notas-see/processamentos/historico?exercicio=&catalogo_id=`).
+  - Card **"Selecionar DANFEs"**: passo **"1. Catálogo a ser utilizado"** antes dos PDFs (sincronizado com o card de catálogo); os botões de pasta/arquivos ficam desabilitados até escolher um catálogo com produtos.
+  - Pergunta **"Deseja acrescentar…"** só aparece quando há PDFs novos selecionados para um catálogo já processado.
+  - Ao concluir um processamento iniciado na tela: o card de envio é **limpo** e abre um **modal** de conclusão (resumo e botão Baixar Excel).
 - Menu **Área UENs > SAGE > Notas SEE**; feature `area-uens/sage/notas-see` (grupo SAGE só visual, como o *Planejamento* dos painéis). **Só o admin (nível 1) acessa**: aparece no Painel de permissões para liberar aos demais perfis depois.
 - `requirements.txt`: `pdfplumber==0.11.7` (traz `pdfminer.six`, `Pillow`, `pypdfium2`).
 
@@ -1119,6 +1128,7 @@ Lê DANFEs em PDF, extrai nº da DANFE, DRE, escola e a **quantidade de cada pro
 
 ### 28.4 Banco
 - Oito tabelas `see_*`. **Já existiam, vazias, desde 02/10/2026** (criadas por uma versão antiga do modelo), e `db.create_all()` não altera tabela existente. `db/notas_see_schema.sql` (aplicado em 09/11/2026, tabelas vazias, conferido antes): coluna `see_catalogos.exercicio`, unicidade `uq_see_catalogo_exercicio_nome (exercicio, nome)` no lugar de `nome`, e índices `ix_see_processamentos_catalogo_status`, `ix_see_proc_arq_proc_sha`, `ix_see_ocorr_proc_codigo`. Os demais já têm índice nas colunas de ligação (chaves estrangeiras).
+- **Não usar `db/see_catalogo_exercicio.sql`.** É um script antigo (da `dev/cleber`, 01/10/2026) e **não idempotente**: faz `ADD COLUMN` e `DROP INDEX` sem conferir antes. O script certo é `db/notas_see_schema.sql` (usa `IF [NOT] EXISTS`). O arquivo antigo fica no repositório só como histórico.
 - Aprendizado: o primeiro `ALTER` deu *Lock wait timeout* porque a própria sessão da ferramenta havia feito `SELECT COUNT(*)` nessas tabelas e ainda segurava o lock de metadados. Antes de DDL: `db.session.rollback()`/`close()`.
 - Cadastro de escolas: `scripts/importar_escolas_see.py` rodado com a aba `2026` de `C:\workspace\Planilhas\Antigos\RELATÓRIO_2023_A_2026 MATRÍCULAS_2026.05.12==2026.08.24.xlsx` -> **643 registros** (630 escolas + 13 códigos de DRE). Reimportar a cada ano; o que sair da planilha fica inativo (não é apagado).
 
@@ -1152,6 +1162,8 @@ Cadastro DRE/Escola (código válido, DRE divergente, sem código só com uma es
 3. Update from Remote + Deploy HEAD + Restart. Trocar o `?v=` de `main.js`/`style.css`.
 4. Painel de permissões: liberar *SAGE - Notas SEE* aos perfis desejados (por enquanto só admin).
 5. Primeiro uso: cadastrar o catálogo (exercício + produtos), enviar uma pasta pequena e conferir 5 a 10 notas contra o PDF. Fornecedor com layout novo: processar amostra antes de confiar em DRE/escola.
+
+> **Não existe seção 29.** A numeração pula de propósito: renumerar mudaria as referências às seções 30 e 40, citadas em outros documentos e nas instruções de trabalho.
 
 ## 30. REGRA: merges entre branches fixas usam SEMPRE branch temporária (2026-10-16)
 
@@ -1203,8 +1215,8 @@ Tudo nesta seção foi feito e testado no ambiente de **homologação** (banco `
 
 ### 31.5 Teste real da 26101 na homologação
 - **FIP 613:** carga ok. Banco: 263 linhas ativas da 26101 e 1.670 da SEDUC; a carga da 26101 **não** desativou a da SEDUC; os zeros das UGs foram preservados (`0000`, `0001`). Dotação Inicial 135.070.428,00, igual ao teste de 13/10; Empenhado e Pago diferem do documento de testes porque o arquivo usado é mais novo (26/10).
-- **PED:** a 26101 carregou 29 registros e gerou 29 avisos de "chave não identificada" (ver 26.7), que eram esperados e não eram erro.
-- **EMP:** a 26101 carregou (3.214 linhas sem chave, também esperado) depois de resolvido o erro de `exceljs` (26.4).
+- **PED:** a 26101 carregou 29 registros e gerou 29 avisos de "chave não identificada" (ver 31.7), que eram esperados e não eram erro.
+- **EMP:** a 26101 carregou (3.214 linhas sem chave, também esperado) depois de resolvido o erro de `exceljs` (31.4).
 - **Ainda não testados com a 26101 na homologação:** EST EMP, NOB e Plan20.
 
 ### 31.6 Filtro de UO nos relatórios (só visualização)
@@ -1227,10 +1239,10 @@ Tudo nesta seção foi feito e testado no ambiente de **homologação** (banco `
 - **Cargas antigas sem UO gravada:** a UO é lida das linhas que a carga inseriu (`ped`/`emp` por `upload_id`); se não houver linhas (por exemplo, removidas pela Limpeza de Histórico), vale a SEDUC.
 
 ### 31.9 Pendências e cuidados
-1. **Commits:** os ajustes das seções 26.6 a 26.8 foram commitados e enviados para a `homologacao` em 2026-11-03, junto com o release do rodapé (`templates/base.html`: `RELEASE_2_2026_11_03.1` e, no commit seguinte, com o painel por UO e o layout compacto, `RELEASE_2_2026_11_03.2`). Como `rotas/home_routes.py` mistura os filtros de UO dos relatórios e o modal de avisos, o código foi em **um** commit; a documentação e o release, em outro. O `?v=` do `main.js`/`style.css` no `base.html` **não** foi trocado (continua `20261016.sync-main.2`): se alguém não vir as telas novas, limpar o cache do navegador ou trocar esse número.
+1. **Commits:** os ajustes das seções 31.6 a 31.8 foram commitados e enviados para a `homologacao` em 2026-11-03, junto com o release do rodapé (`templates/base.html`: `RELEASE_2_2026_11_03.1` e, no commit seguinte, com o painel por UO e o layout compacto, `RELEASE_2_2026_11_03.2`). Como `rotas/home_routes.py` mistura os filtros de UO dos relatórios e o modal de avisos, o código foi em **um** commit; a documentação e o release, em outro. O `?v=` do `main.js`/`style.css` no `base.html` **não** foi trocado (continua `20261016.sync-main.2`): se alguém não vir as telas novas, limpar o cache do navegador ou trocar esse número.
 2. Testar EST EMP, NOB e Plan20 com a 26101 e depois as 26201/26202 (liberar na ordem do plano: EST EMP → FIP 613 → PED → NOB → EMP); conferir após cada carga que a SEDUC não mudou.
-3. Reverter a liberação temporária da 26101 (26.1) antes de qualquer sincronização com a `main`.
-4. A coluna `uo` nas regras de chave e o cadastro de UO com "usa chave" (26.2) só serão feitos quando alguma UO nova tiver chave.
+3. Reverter a liberação temporária da 26101 (31.1) antes de qualquer sincronização com a `main`.
+4. A coluna `uo` nas regras de chave e o cadastro de UO com "usa chave" (31.2) só serão feitos quando alguma UO nova tiver chave.
 5. **Regra de trabalho confirmada nesta sessão:** commit e push só com autorização explícita do usuário para aquele conjunto de mudanças; a autorização de um não vale para o seguinte.
 
 ## 32. Integração do layout novo, da homologação e da dev/cleber na main (2026-11-10)
