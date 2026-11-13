@@ -1868,3 +1868,18 @@ Só age com o foco num `.menu-item` dentro de `#menu` e sem Ctrl, Alt ou Meta. A
 - `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no JS (CSS sem mudança).
+
+## Tela de login com o mesmo `?v=` do CSS que o restante do SPO (dev. Jean, 2026-11-13)
+
+**Problema:** o `login.html` carregava `style.css?v=20261113.jean-fundo.2`, do #47. O CSS mudou depois em vários PRs (#49–#58), mas a linha do login não acompanhou. Quem abriu a tela de login desde o #47 podia continuar vendo nela uma cópia antiga do CSS, guardada no navegador.
+
+**Correção:** o `login.html` passa a usar o **mesmo** `?v=` do `base.html` (`20261113.jean-controles.3`). As duas páginas compartilham a mesma entrada de cache do `style.css`.
+
+**Regra daqui em diante:** sempre que o `style.css` mudar, o `?v=` do CSS muda **no `base.html` e no `login.html`**, com o mesmo valor.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- A página de login servida (pedido sem cookies) traz `?v=20261113.jean-controles.3`, igual ao `base.html`; o `login-theme.js` continua em `?v=20260706.1`.
+- Visual conferido no escuro. O que muda é só o que o CSS atual já fazia para quem não tinha cópia antiga: o botão "Entrar" passa do pastel à cor de destaque, com texto escuro (10,3:1), pela regra dos botões do #57.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
