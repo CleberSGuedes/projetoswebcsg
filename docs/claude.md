@@ -1883,3 +1883,28 @@ Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no J
 - `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
 
 Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
+
+## Botões secundários em contorno: "Cancelar"/"Remover" das consultas e os cinza nos dois temas (dev. Jean, 2026-11-13)
+
+**Problema:** nas telas de Consultar (Dotação, Estorno de Dotação, Etapa, Meta Física, Subação e regra de chave), os botões **"Remover"** (tira um critério da lista) e **"Cancelar"** (fecha a consulta) eram vermelhos cheios, iguais ao **"Excluir"**, que apaga de verdade. Ações que só dispensam ficavam com o mesmo peso visual de uma ação destrutiva.
+
+**Correção (só CSS, no bloco `[jean] Controles dos formulários` do #57):** a regra do contorno vermelho, que valia para o "Limpar Formulário" (`*-clear`), passa a valer também para `*-filtro-cancel` e `*-filtro-remove`, num total de 11 botões. O "Excluir" e os outros vermelhos que apagam ou interrompem continuam cheios. No claro, o escurecer ao passar o mouse não se aplica a esses botões, que usam o fundo translúcido do contorno.
+
+**Botões cinza** (`.btn-secondary`, 31 usos: "Limpar" dos critérios, "Editar"…): eram **cheios no claro** (`#495057`, do #39) e **em contorno no escuro** (regra antiga e #37). Agora o claro faz como o escuro: sem fundo, texto do tema e a borda dos campos (`--spo-control-border`). A borda é posta direto, porque a regra `.btn` do SPO (`border: 1px solid transparent`) vence as variáveis do Bootstrap. O "Excluir" continua vermelho cheio, por decisão do dev. Jean: vermelho cheio fica para o que apaga ou interrompe.
+
+**Hierarquia que resulta:**
+- **cheio na cor de destaque:** ação principal (Salvar, Consultar, Aprovar, Imprimir);
+- **vermelho cheio:** apaga ou interrompe (Excluir, Desativar, Cancelar processamento);
+- **contorno vermelho:** dispensa ou desfaz na tela (Cancelar, Remover, Limpar Formulário);
+- **contorno neutro:** secundário (Limpar critérios, Editar).
+
+**Ficaram de fora** (parecidos, mas não são de consulta; avaliar à parte): o "Cancelar" da confirmação de salvar da Meta Física (`data-mf-confirm-action="cancelar"`) e o "Cancelar" de Alterar Senha.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, na Consultar Etapa.
+- "Remover" e "Cancelar" com texto e contorno a 7,46:1 no claro e 8,15:1 no escuro.
+- O vermelho é fixo, então vale para os 8 destaques.
+- "Adicionar" e "Consultar" continuam cheios, na cor de destaque (10,34:1 no escuro), e o "Excluir" continua vermelho cheio.
+- "Limpar" e "Editar" em contorno nos dois temas: texto a 16,86:1 no claro e 12,17:1 no escuro; borda a 3,47:1 no claro e 4,4:1 no escuro.
+- Capturas nos dois temas. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-botoes-filtros.3` no CSS (JS sem mudança).
