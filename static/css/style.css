@@ -8157,3 +8157,77 @@ body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px;
     box-shadow: inset 0 0 0 1px var(--spo-selected-border), inset 3px 0 0 var(--spo-selected-border); /* 2 px, sem mexer no tamanho */
   }
 }
+
+/* ==========================================================================
+   [jean] Diagramas e gráficos na cor de destaque (feat/diagramas-destaque, 2026-11-13)
+   No escuro, os diagramas ("automático" e "escuro") e a prévia usavam uma paleta
+   azul fixa (fundo #0f172a/#111827, bordas e conectores #93c5fd); o modo
+   "claro" de diagrama, um azul fixo #2563eb. Agora: fundo NEUTRO (branco puro no
+   claro, #1a1a1a no escuro — tingir o fundo apagava as séries) e bordas,
+   conectores e seleção no destaque. O alto contraste continua com as cores fixas (de propósito).
+   --spo-accent-graphic = tom do destaque com ≥ 3:1 para gráficos (WCAG 1.4.11):
+   no claro, o mesmo passo da paleta dos contornos; no escuro, o --accent.
+   Os cartões do fluxo (Mapa Conceitual e afins) ganham os três níveis dos
+   contornos: suave em repouso, forte no mouse/foco, destaque cheio selecionado.
+   O JS (paleta dos gráficos do Teto) fica em initDiagramasDestaque, no fim do main.js.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-accent-graphic-light: var(--color-400); }
+  body:is([data-accent-preference="teal"], [data-accent-preference="green"],
+          [data-accent-preference="orange"]) { --spo-accent-graphic-light: var(--color-500); }
+  body[data-accent-preference="yellow"] { --spo-accent-graphic-light: var(--color-700); }
+  body[data-accent-preference="purple"] { --spo-accent-graphic-light: var(--color-300); }
+  body { --spo-accent-graphic: var(--spo-accent-graphic-light); }
+  body.theme-dark { --spo-accent-graphic: var(--accent); }
+
+  /* diagrama escuro (automático no tema escuro, ou "escuro" escolhido) */
+  body[data-visual-diagrams][data-visual-diagram-theme="dark"]:is(.theme-dark, :not(.theme-dark)) {
+    --spo-diagram-bg: #1a1a1a; /* neutro e igual para todos os destaques: as séries saltam */
+    --spo-diagram-node-bg: #262626;
+    --spo-diagram-border: color-mix(in srgb, var(--spo-diagram-graphic, var(--accent)) 45%, #242424);
+    --spo-diagram-text: #f6f5f4;
+    --spo-diagram-muted: #d0cfcc;
+    --spo-diagram-accent: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-connector: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-selection: var(--spo-diagram-graphic, var(--accent));
+    --spo-diagram-focus: var(--spo-diagram-graphic, var(--accent));
+  }
+  /* no tema claro o --accent é escuro; o diagrama escuro usa um tom claro do destaque */
+  body:not(.theme-dark)[data-visual-diagram-theme="dark"] { --spo-diagram-graphic: var(--color-300); }
+
+  /* diagrama claro (automático no tema claro, ou "claro" escolhido) */
+  body[data-visual-diagrams][data-visual-diagram-theme="light"]:is(.theme-dark, :not(.theme-dark)) {
+    --spo-diagram-bg: #ffffff; /* branco puro: sem tingir o fundo (efeito "sépia") */
+    --spo-diagram-node-bg: #ffffff;
+    --spo-diagram-border: color-mix(in srgb, var(--spo-accent-graphic-light) 45%, #ffffff);
+    --spo-diagram-text: #1d1d1d;
+    --spo-diagram-muted: #4a4950;
+    --spo-diagram-accent: var(--spo-accent-graphic-light);
+    --spo-diagram-connector: var(--spo-accent-graphic-light);
+    --spo-diagram-selection: var(--spo-accent-graphic-light);
+    --spo-diagram-focus: var(--spo-accent-graphic-light);
+  }
+
+  /* prévia do Personalizar acompanha o diagrama resolvido */
+  body[data-visual-diagrams]:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .personalizar-preview {
+    --spo-preview-diagram-bg: var(--spo-diagram-bg);
+    --spo-preview-diagram-border: var(--spo-diagram-border);
+    --spo-preview-diagram-line: color-mix(in srgb, var(--spo-diagram-connector) 70%, transparent);
+    --spo-preview-diagram-node: color-mix(in srgb, var(--spo-diagram-accent) 35%, transparent);
+    --spo-preview-diagram-node-active: var(--spo-diagram-accent);
+  }
+
+  /* cartões do fluxo em três níveis (fora do alto contraste) */
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:is(:hover, :focus-visible) {
+    border-color: var(--spo-diagram-accent);
+  }
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:focus-within:not(.is-selected):not(:focus-visible):not(:hover) {
+    border-color: var(--spo-diagram-border);
+    box-shadow: none;
+  }
+  body:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) :is(.flow-node.is-selected, .flow-node[data-diagram-state="selected"]) {
+    border-color: var(--spo-diagram-selection);
+    box-shadow: inset 0 0 0 1px var(--spo-diagram-selection), inset 3px 0 0 var(--spo-diagram-selection);
+    background: color-mix(in srgb, var(--spo-diagram-selection) 12%, var(--spo-diagram-node-bg));
+  }
+}
