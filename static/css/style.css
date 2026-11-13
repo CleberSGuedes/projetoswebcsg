@@ -7730,3 +7730,35 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
     outline-offset: -3px;
   }
 }
+
+/* ==========================================================================
+   [jean] Alvos de toque (fix/alvos-de-toque, 2026-11-12)
+   Medido (FIP 613, Teto, Personalizar, Diretrizes, Alterar Senha, Início):
+   - abaixo do mínimo AA (WCAG 2.2, 2.5.8: 24 px) só o botão de recolher o menu,
+     22×22 px no desktop (em tela estreita o Contrato Responsivo já o leva a 40 px);
+   - abaixo da meta AA+ (2.5.5: 44 px) quase todos os controles: filtros das tabelas
+     32 px, paginação 29, cores do Personalizar 34, itens do menu 38, botões 34–40.
+   Regra: em qualquer tela, a área clicável do botão de recolher o menu cresce para
+   34 px sem mudar o desenho (pseudo-elemento invisível); em telas de toque
+   (pointer: coarse), os controles passam a ter no mínimo 44 px. Com mouse, a
+   densidade atual do desktop não muda.
+   ========================================================================== */
+.icon-btn.toggle-btn { position: relative; }
+.icon-btn.toggle-btn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
+
+@media (pointer: coarse) {
+  body :is(button, [role="button"], [role="tab"], a.btn, .menu-item, .mf-display,
+           select, textarea,
+           input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"])) {
+    min-height: 44px;
+  }
+  body :is(.icon-btn, .accent-swatch, .pagination button, .pagination a, .menu-item) {
+    min-width: 44px;
+  }
+  body .accent-swatch { width: 44px; height: 44px; }
+}

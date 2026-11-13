@@ -1417,3 +1417,17 @@ PLAN 51 (tela de atualizar e de relatório com o cabeçalho novo), API de dados 
 **Depois:** nas mesmas telas, todos os elementos com anel de 3 px — 85/85 no escuro e 65/65 no claro (FIP 613 e Personalizar), contraste mínimo medido 8,5:1; calculado para as 8 cores de destaque: mínimo 4,30:1 (roxo no escuro), acima dos 3:1 exigidos. Clique de mouse no "Limpar Filtros": sem anel (`:focus-visible` falso). Capturas antes/depois com o dev. Jean.
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; Tab real para o modo teclado e foco em cada elemento, esperando as transições terminarem; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+## Alvos de toque: mínimo 24 px sempre e 44 px em telas de toque (dev. Jean, 2026-11-12)
+
+**Problema (medido em FIP 613, Teto, Personalizar, Diretrizes, Alterar Senha e Início, no ambiente do dev. Jean):**
+- abaixo do mínimo AA (WCAG 2.2, 2.5.8: 24 px) só o **botão de recolher o menu**, `#sidebar-toggle`, com **22×22 px** no desktop (em tela estreita o Contrato Responsivo já o leva a 40 px);
+- abaixo da meta AA+ (2.5.5: 44 px), no celular (390 px), **quase todos os controles**: filtros das tabelas (`.mf-display`) 32 px, paginação 29, cores do Personalizar 34, ícones do menu recolhido 38, botões e campos 34–40.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+- em qualquer tela, a **área clicável** do botão de recolher o menu cresce para 34 px por um pseudo-elemento invisível (`::after` com `inset: -6px`), sem mudar o desenho (continua 22×22);
+- **só em telas de toque** (`@media (pointer: coarse)`): botões, links-botão, itens do menu, filtros, campos e listas com `min-height: 44px`; ícones, cores do Personalizar, paginação e itens do menu com `min-width: 44px`. Com mouse, a densidade do desktop não muda.
+
+**Depois:** no celular, **91 de 91** controles medidos nas 6 telas com pelo menos 44 px e nenhum abaixo de 24 px, sem transbordo horizontal; no desktop, tamanhos visuais iguais aos de antes e o botão de recolher clicável num raio de 12 px a partir do centro. Efeito visível no celular: botões e filtros mais altos; a paginação do FIP 613 passa de 2 para 3 linhas.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, emulação de celular (390 px, toque) e desktop (1366 px, mouse); capturas antes/depois (cores do Personalizar e paginação do FIP 613). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-alvos.1`.
