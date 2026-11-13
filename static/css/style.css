@@ -7703,3 +7703,30 @@ body:is([data-spo-text-size="large"], [data-spo-text-size="larger"]) .meta-uo-co
   .theme-dark .report-data-card .totais-row strong.pos { color: #6ea8ff; }
   .theme-dark .report-data-card .totais-row strong.neg { color: #ff8b8b; }
 }
+
+/* ==========================================================================
+   [jean] Foco visível padrão em todo o SPO (feat/foco-visivel, 2026-11-12)
+   Medido com teclado real: em 4 telas (FIP 613, Personalizar, Teto, Alterar Senha),
+   nenhum dos 75 elementos focáveis tinha indicador próprio com 2 px e 3:1 de contraste
+   (WCAG 2.2: 2.4.7; meta AA+ 2.4.13): o menu dependia do contorno automático do
+   navegador; o botão de recolher o menu e os botões pequenos (Limpar, Atualizar) não
+   tinham nenhum (13 regras removem o outline). Agora, no foco por teclado
+   (:focus-visible), todo controle ganha um anel de 3 px, afastado 2 px, na cor de
+   destaque com contraste garantido: color-700 no claro, --accent no escuro.
+   Clique de mouse não mostra o anel (só teclado, como manda o :focus-visible).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body { --spo-focus-ring: var(--color-700); }
+  body.theme-dark { --spo-focus-ring: var(--accent); }
+
+  body :is(a[href], button, input:not([type="hidden"]), select, textarea, summary,
+           [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible {
+    outline: 3px solid var(--spo-focus-ring);
+    outline-offset: 2px;
+  }
+  /* Itens do menu lateral ficam dentro de áreas com rolagem: o anel vai para dentro,
+     para não ser cortado pela borda do menu. */
+  body .sidebar :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline-offset: -3px;
+  }
+}
