@@ -8302,3 +8302,65 @@ body.theme-dark .pagination button.active {
   background: rgba(var(--accent-rgb), 0.16);
   color: var(--text);
 }
+
+/* ==========================================================================
+   [jean] Listas nativas (<select>) na cor do tema (feat/listas-nativas, 2026-11-13)
+   A lista aberta de um <select> era desenhada pelo navegador/Windows: fundo
+   do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do
+   destaque. Com o select personalizável (appearance: base-select; Chrome e
+   Edge 135+), a lista passa a usar a superfície do tema, a borda dos
+   controles e, na opção sob o mouse ou no foco, 16% do destaque (como nas
+   listas dos filtros). A opção escolhida ganha ✓ e negrito (não só cor).
+   O campo fechado mantém as medidas (altura, borda, fundo, espaçamento); a
+   seta volta a ser fina e gira quando a lista abre. Navegadores sem suporte
+   (Firefox, Safari) ignoram o bloco e seguem com a lista nativa.
+   Só selects de uma escolha (sem multiple/size), que é o caso de todo o SPO.
+   ========================================================================== */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+  select:not([multiple]):not([size])::picker(select) {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--spo-control-border, var(--border));
+    border-radius: 10px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+    padding: 4px;
+    max-height: min(60vh, 420px);
+  }
+  .theme-dark select:not([multiple]):not([size])::picker(select) {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  }
+  select:not([multiple]):not([size]) option {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+  }
+  select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--accent-rgb), 0.16);
+    color: var(--text);
+    outline: none;
+  }
+  select:not([multiple]):not([size]) option:checked { font-weight: 600; }
+  select:not([multiple]):not([size]) option:disabled { opacity: 0.55; }
+  select:not([multiple]):not([size])::picker-icon {
+    content: "";
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-inline-start: auto; /* seta na ponta direita, como a nativa */
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+  select:not([multiple]):not([size]):open::picker-icon {
+    transform: translateY(2px) rotate(225deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  select::picker-icon { transition: none; }
+}
