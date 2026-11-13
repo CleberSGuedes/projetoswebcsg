@@ -2071,6 +2071,28 @@ As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer si
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
 
+## Login: "Entrar" na cor de destaque e "×" do Alerta redondo no celular (dev. Jean, 2026-11-13)
+
+Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
+
+**(1) "Entrar" verde no login, em qualquer destaque claro (laranja, vermelho, azul…).**
+- **Causa:** o login carrega só parte da paleta (`login-theme.js`: `--accent`, `--accent-strong`, `color-400/500/600`). A regra do botão principal do #57 (`--spo-btn-fill`, que vem de `color-700/800`) tem a **mesma especificidade** (0,4,1) da regra do login do A9 e vem depois no `style.css`. Por isso vencia, e o `color-700/800` caía no verde do `:root`.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login claro, `--spo-btn-fill` sai do próprio `--accent` escurecido (50%; 40% no Amarelo), e o gradiente do "Entrar" ganha `:not(#spo-login)` para vencer a regra do #57. Vale também para o "Continuar e entrar" do aviso de sessão (#61). O escuro já estava certo (usa o `--accent`).
+
+**(2) "×" do Alerta da chave de planejamento oval no celular.**
+- **Causa:** em tela de toque, a regra dos alvos (#35) põe `min-height: 44px` em todo botão. O "×" (28 px, `border-radius: 50%`) virava 28×44, e o contorno de foco ficava oval.
+- **Correção:** no toque, o "×" continua com 28×28 e redondo. A área de toque passa a 44 px por um `::after` invisível (`inset: -8px`), o mesmo recurso do botão do menu.
+
+**Verificação:** SPO local.
+- Login nos 8 destaques e nos dois temas:
+  - claro: gradiente no tom do destaque, contraste do texto branco entre **9,38:1** (Verde) e **13,78:1** (Roxo);
+  - escuro: sem mudança, de 7,53:1 a 14,61:1;
+  - "Continuar e entrar" com o mesmo tom.
+- "×" com toque emulado (375 px): 28×28, `border-radius: 50%`, foco redondo, toque a 7 px da borda ainda cai no botão.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-entrar.1` nos dois. O JS continua em `?v=20261113.jean-padrao-fontes.1`.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
