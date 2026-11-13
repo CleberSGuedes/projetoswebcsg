@@ -27719,12 +27719,14 @@
 (function initFontesPersonalizar() {
   const STORAGE_KEY = "spo-font-preferences";
   const OPTIONS = Object.freeze({
-    ui: { classic: "Clássica (padrão SPO)", inter: "Inter", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
-    data: { classic: "Clássica (padrão SPO)", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono" },
+    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
+    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)" },
     size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
-    table: { compact: "Compacto (padrão SPO)", medium: "Intermediário (10 px)", legible: "Legível (12 px)" },
+    table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
   });
-  const DEFAULTS = Object.freeze({ ui: "classic", data: "classic", size: "default", table: "compact" });
+  // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
+  // Quem já salvou uma escolha no navegador continua com ela.
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible" });
   const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText" });
 
   function read() {
