@@ -37,6 +37,28 @@ mínimo, mas, no SPO, o texto deles fica ≥ 4,5:1 (§4.2). Logotipos e decoraç
 A classe `theme-dark` no `<body>` indica o tema escuro; `data-visual-contrast` (`standard`,
 `medium`, `enhanced`) e `data-accent-preference` (`classic`, `blue`, …) indicam nível e destaque.
 
+### 2.1 Tipografia
+
+Fontes **hospedadas no SPO** (`static/fonts`, licença OFL 1.1): aparecem iguais em qualquer
+computador ou celular. O navegador só baixa a fonte em uso.
+
+| Uso | Padrão SPO | Alternativas no Personalizar | Atributo no `<body>` |
+|---|---|---|---|
+| Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, Do sistema | `data-spo-font-ui` |
+| Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, Do sistema | `data-spo-font-data` |
+| Texto das tabelas dos relatórios | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
+| Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
+
+- **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
+  (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux). Não é mais o padrão.
+- A escolha de cada pessoa fica no navegador (`localStorage`, chave `spo-font-preferences`). Sem
+  escolha salva, vale o padrão acima, inclusive na tela de login (o CSS aplica a Inter quando o
+  `<body>` não tem o atributo).
+- **Troca consciente:** a Intel One Mono deixa as tabelas **mais largas** (textos longos quebram em
+  mais linhas); em troca, os números ficam alinhados e as letras, bem distintas.
+- Texto de componente novo herda a fonte do `<body>`; tabela nova deve usar as classes de tabela do
+  SPO para receber a fonte e o tamanho de dados.
+
 ## 3. Tokens (a fonte única de cor)
 
 **Regra de ouro:** em componente, **só variável** (`var(--…)`). Cor literal (`#…`, `rgb(…)`) só
@@ -204,3 +226,4 @@ PR da área, os literais viram tokens. Um teste da suíte deve impedir **literai
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
+| 2026-11-13 | §2.1 Tipografia: padrão SPO passa a Inter (interface), Intel One Mono (dados) e tabelas a 12 px; a antiga "Clássica" vira "Do sistema". |
