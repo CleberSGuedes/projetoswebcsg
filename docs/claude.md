@@ -2014,3 +2014,16 @@ Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
 - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-entrar.1` nos dois. O JS continua em `?v=20261113.jean-padrao-fontes.1`.
+
+## Login com a paleta inteira do destaque: foco dos campos na cor escolhida (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean depois do #66: com o Laranja, o "Entrar" já saía laranja, mas o **contorno de foco dos campos Email e Senha continuava verde**.
+
+- **Causa:** a mesma do #66, num ponto a mais. O `login-theme.js` só põe no `<body>` o `--accent` e os tons 400/500/600. O contorno de foco do AA+ (#34) é `--spo-focus-ring: var(--color-700)` no claro, e o 700, o 800 e o 900 caíam no verde do `:root`. O #66 tinha tratado só o botão.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login, `body.login-body[data-accent-preference=…]` recebe os tons 50–300 e 700–900 de cada destaque, com **os mesmos valores do `ACCENT_COLORS` do `main.js`**. Com isso, qualquer regra do AA+ que use esses tons fica igual no login e no resto do SPO. **Se a paleta mudar no `main.js`, mudar também aqui.** O `login-theme.js` não foi tocado.
+- **Verificação:** SPO local.
+  - Foco nos campos, clicando de verdade: o contorno sai no tom 700 de cada destaque no claro (Laranja #a33400, Azul #1a4f91, Clássico #0b4c44) e no `--accent` no escuro, de 5,66:1 a 10,26:1 sobre o cartão (mínimo exigido: 3:1).
+  - Varredura de todos os elementos do login, nos destaques não verdes e nos dois temas: nenhuma cor da paleta Clássica sobrou.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-tons.1` nos dois.
