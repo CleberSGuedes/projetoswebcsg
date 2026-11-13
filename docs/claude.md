@@ -2071,6 +2071,41 @@ As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer si
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
 
+### 41.31 Login: "Entrar" na cor de destaque e "×" do Alerta redondo no celular (dev. Jean, 2026-11-13)
+
+Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
+
+**(1) "Entrar" verde no login, em qualquer destaque claro (laranja, vermelho, azul…).**
+- **Causa:** o login carrega só parte da paleta (`login-theme.js`: `--accent`, `--accent-strong`, `color-400/500/600`). A regra do botão principal do #57 (`--spo-btn-fill`, que vem de `color-700/800`) tem a **mesma especificidade** (0,4,1) da regra do login do A9 e vem depois no `style.css`. Por isso vencia, e o `color-700/800` caía no verde do `:root`.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login claro, `--spo-btn-fill` sai do próprio `--accent` escurecido (50%; 40% no Amarelo), e o gradiente do "Entrar" ganha `:not(#spo-login)` para vencer a regra do #57. Vale também para o "Continuar e entrar" do aviso de sessão (#61). O escuro já estava certo (usa o `--accent`).
+
+**(2) "×" do Alerta da chave de planejamento oval no celular.**
+- **Causa:** em tela de toque, a regra dos alvos (#35) põe `min-height: 44px` em todo botão. O "×" (28 px, `border-radius: 50%`) virava 28×44, e o contorno de foco ficava oval.
+- **Correção:** no toque, o "×" continua com 28×28 e redondo. A área de toque passa a 44 px por um `::after` invisível (`inset: -8px`), o mesmo recurso do botão do menu.
+
+**Verificação:** SPO local.
+- Login nos 8 destaques e nos dois temas:
+  - claro: gradiente no tom do destaque, contraste do texto branco entre **9,38:1** (Verde) e **13,78:1** (Roxo);
+  - escuro: sem mudança, de 7,53:1 a 14,61:1;
+  - "Continuar e entrar" com o mesmo tom.
+- "×" com toque emulado (375 px): 28×28, `border-radius: 50%`, foco redondo, toque a 7 px da borda ainda cai no botão.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-entrar.1` nos dois. O JS continua em `?v=20261113.jean-padrao-fontes.1`.
+
+### 41.32 Login com a paleta inteira do destaque: foco dos campos na cor escolhida (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean depois do #66: com o Laranja, o "Entrar" já saía laranja, mas o **contorno de foco dos campos Email e Senha continuava verde**.
+
+- **Causa:** a mesma do #66, num ponto a mais. O `login-theme.js` só põe no `<body>` o `--accent` e os tons 400/500/600. O contorno de foco do AA+ (#34) é `--spo-focus-ring: var(--color-700)` no claro, e o 700, o 800 e o 900 caíam no verde do `:root`. O #66 tinha tratado só o botão.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login, `body.login-body[data-accent-preference=…]` recebe os tons 50–300 e 700–900 de cada destaque, com **os mesmos valores do `ACCENT_COLORS` do `main.js`**. Com isso, qualquer regra do AA+ que use esses tons fica igual no login e no resto do SPO. **Se a paleta mudar no `main.js`, mudar também aqui.** O `login-theme.js` não foi tocado.
+- **Verificação:** SPO local.
+  - Foco nos campos, clicando de verdade: o contorno sai no tom 700 de cada destaque no claro (Laranja #a33400, Azul #1a4f91, Clássico #0b4c44) e no `--accent` no escuro, de 5,66:1 a 10,26:1 sobre o cartão (mínimo exigido: 3:1).
+  - Varredura de todos os elementos do login, nos destaques não verdes e nos dois temas: nenhuma cor da paleta Clássica sobrou.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-tons.1` nos dois.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
