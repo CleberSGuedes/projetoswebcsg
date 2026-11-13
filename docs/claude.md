@@ -2071,7 +2071,7 @@ As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer si
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
 
-## Login: "Entrar" na cor de destaque e "×" do Alerta redondo no celular (dev. Jean, 2026-11-13)
+### 41.31 Login: "Entrar" na cor de destaque e "×" do Alerta redondo no celular (dev. Jean, 2026-11-13)
 
 Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
 
@@ -2093,7 +2093,7 @@ Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-entrar.1` nos dois. O JS continua em `?v=20261113.jean-padrao-fontes.1`.
 
-## Login com a paleta inteira do destaque: foco dos campos na cor escolhida (dev. Jean, 2026-11-13)
+### 41.32 Login com a paleta inteira do destaque: foco dos campos na cor escolhida (dev. Jean, 2026-11-13)
 
 Achado do dev. Jean depois do #66: com o Laranja, o "Entrar" já saía laranja, mas o **contorno de foco dos campos Email e Senha continuava verde**.
 
