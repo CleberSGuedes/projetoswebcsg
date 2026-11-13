@@ -7617,8 +7617,9 @@ html.spo-split-pressure .governanca-grid {
    [jean] Fontes e tamanho do texto escolhidos em Personalizar Temas SPO
    (feat/fontes-personalizar, 2026-11-12)
    Fontes hospedadas no SPO (static/fonts, licença OFL 1.1; ver static/fonts/LEIA-ME.md).
-   O navegador só baixa a fonte em uso. "Clássica (padrão SPO)" = a pilha de sempre,
-   sem nenhuma fonte baixada; é o padrão. Preferência guardada no navegador
+   O navegador só baixa a fonte em uso. "Do sistema" = a pilha antiga, que varia com o
+   computador. Padrão SPO desde feat/padrao-fontes (2026-11-13): Inter na interface,
+   Intel One Mono nos dados, tabelas a 12 px. Preferência guardada no navegador
    (initFontesPersonalizar, no fim do main.js), aplicada como atributos no <body>:
    data-spo-font-ui, data-spo-font-data e data-spo-text-size.
    ========================================================================== */
@@ -7632,7 +7633,8 @@ body {
   --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 /* Fonte da interface (os campos e botões já herdam a fonte do body) */
-body[data-spo-font-ui="inter"] { font-family: "SPO Inter", var(--spo-font-classic); }
+/* padrão SPO: Inter também sem escolha marcada (tela de login, e antes de o main.js rodar) */
+body:is([data-spo-font-ui="inter"], :not([data-spo-font-ui])) { font-family: "SPO Inter", var(--spo-font-classic); }
 body[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
 body[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
 

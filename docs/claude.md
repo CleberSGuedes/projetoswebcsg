@@ -1962,3 +1962,33 @@ Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=2026111
 - **C:** trocar os literais pelos tokens, área por área, junto com a divisão do CSS.
 
 Sem mudança de código. Sem script de banco.
+
+## Padrão de fontes do SPO: Inter, Intel One Mono e tabelas a 12 px (dev. Jean, 2026-11-13)
+
+**Problema:** a fonte padrão ("Clássica (padrão SPO)", a pilha `Cantarell, Segoe UI, system-ui…`) **variava com o computador**: Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux. O texto padrão das tabelas era o "Compacto", de **8 px**. O SPO não tinha identidade visual estável entre computadores e celulares, e as tabelas ficavam pequenas para ler.
+
+**Decisão do dev. Jean**, depois de comparar telas: o padrão SPO passa a ser
+- **Inter** na interface;
+- **Intel One Mono** nas tabelas e dados (monoespaçada, números alinhados; as tabelas ficam mais largas);
+- **Legível (12 px)** no texto das tabelas;
+- tamanho geral **100%**.
+
+As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer sistema.
+
+**Mudança:**
+- **`main.js`, bloco `initFontesPersonalizar`:** `DEFAULTS` passa a `{ ui: "inter", data: "intel-mono", size: "default", table: "legible" }`, e os rótulos mudam. **Quem já salvou uma escolha no navegador continua com ela.**
+- **`style.css`, bloco `[jean] Fontes`:** a Inter vale também quando o `<body>` não tem `data-spo-font-ui`. Isso cobre a tela de login, que não carrega o `main.js`, e o instante antes de o script rodar.
+- **Personalizar:**
+  - "Clássica (padrão SPO)" vira **"Do sistema"**, com a explicação de que varia com o computador;
+  - "(padrão SPO)" passa para Inter, Intel One Mono e Legível (12 px);
+  - "Compacto" passa a "Compacto (8 px)".
+- **Padrão visual:** nova §2.1, Tipografia.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, num navegador **sem escolha salva**.
+- A tela de login abre em Inter, carregada do SPO.
+- Na Início, o `<body>` já vem com `inter`, `intel-mono`, `default` e `legible`.
+- O Personalizar mostra as quatro opções do padrão marcadas.
+- No FIP 613: título em Inter, células e totais em Intel One Mono 12 px.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
