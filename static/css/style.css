@@ -8291,3 +8291,14 @@ body.theme-dark .pagination button.active {
   border-color: var(--accent);
   color: var(--text);
 }
+
+/* ==========================================================================
+   [jean] Listas dos filtros: opção sob o mouse no escuro (fix/esc-filtros, 2026-11-13)
+   As listas de marcar (Teto, Estrutura) pintavam a opção sob o mouse com
+   --color-100, um tom claro do destaque; no escuro, o texto (também claro)
+   ficava ilegível. No escuro, o fundo passa a 16% do destaque sobre o painel.
+   ========================================================================== */
+.theme-dark .planning-action-checklist-option:hover {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text);
+}
