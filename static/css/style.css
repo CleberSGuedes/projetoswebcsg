@@ -8231,3 +8231,21 @@ body[data-spo-table-text="legible"] .spo-fontes-amostra table { font-size: 12px;
     background: color-mix(in srgb, var(--spo-diagram-selection) 12%, var(--spo-diagram-node-bg));
   }
 }
+
+/* ==========================================================================
+   [jean] Contraste em três níveis (feat/contraste-tres-niveis, 2026-11-13)
+   Preferências comuns → Contraste: "Suave (padrão SPO)" (valor standard, o de
+   sempre: linhas de opção e cartões clicáveis leves, seleção e foco fortes),
+   "Médio" (valor medium, novo: essas linhas e cartões com contorno ≥ 3:1 na cor
+   de destaque, cartões informativos ainda leves) e "Reforçado" (enhanced,
+   ≥ 4,5:1 e cartões contornados; os cartões clicáveis do fluxo também ficam
+   fortes). O JS só ganhou a opção medium na lista.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body[data-visual-contrast="medium"] { --spo-option-border: var(--spo-control-border); }
+  /* Verde no claro: o --color-500 dá 3,02 sobre o branco mas 2,9 sobre o fundo #f6f5f4 */
+  body:not(.theme-dark)[data-accent-preference="green"]:not([data-visual-contrast="enhanced"]) { --spo-control-border: var(--color-600); }
+  body:is([data-visual-contrast="medium"], [data-visual-contrast="enhanced"]):is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="light"]) .flow-node:not(.is-selected):not(:hover):not(:focus-visible) {
+    border-color: var(--spo-control-border);
+  }
+}
