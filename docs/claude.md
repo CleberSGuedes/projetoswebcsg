@@ -1593,3 +1593,35 @@ Cartões que só exibem informação continuam suaves no padrão, como antes.
 | Linha selecionada | 4,3–12:1 | 7,5–13,1:1, sempre acima das outras |
 
 Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-contornos.3` no CSS (JS sem mudança).
+
+## Diagramas e gráficos na cor de destaque (dev. Jean, 2026-11-13)
+
+**Problema:** no tema escuro, os diagramas no modo "automático" ou "escuro" usavam uma **paleta azul fixa**, qualquer que fosse o destaque escolhido:
+- fundo `#0f172a`/`#111827`;
+- nós `#252b36`;
+- bordas e conectores `#93c5fd`.
+
+Isso valia para os gráficos do Teto, os cartões do fluxo (Mapa Conceitual e afins) e a prévia do Personalizar. O modo "claro" de diagrama usava um azul fixo, `#2563eb`. Além disso, a paleta dos gráficos no claro tinha cores claras demais para fundo branco: um amarelo `#f8cb2e`, a 1,6:1.
+
+**Correção:**
+- **CSS** (bloco `[jean]` no fim do `style.css`), nos diagramas resolvidos como "claro" ou "escuro" (`data-visual-diagram-theme`):
+  - **fundo neutro e igual para todos os destaques:** branco puro no claro, `#1a1a1a` no escuro, com nós `#ffffff`/`#262626`. Uma primeira versão tingia o fundo com o destaque; isso apagava as séries (efeito "sépia") e foi descartada;
+  - **só bordas, conectores, ícones e seleção seguem o destaque** (`--spo-accent-graphic`): no claro, o passo da paleta com ≥ 3:1; no escuro, o `--accent`;
+  - a prévia do Personalizar acompanha;
+  - os cartões do fluxo ganham os três níveis dos contornos: suave em repouso, forte no mouse/foco, destaque cheio (2 px) quando selecionado.
+- **JS** (bloco `initDiagramasDestaque` no fim do `main.js`): como no AA+ da v4.3.1 (`spo-aa-plus-plotly.js` do laboratório), a paleta dos gráficos passa a ser o **destaque seguido de 7 cores da v4.3.1**.
+  - No claro, tons fundos e saturados: `#0f766e`, `#1d4ed8`, `#b91c1c`, `#6d28d9`, `#0369a1`, `#334155`, `#c2410c`.
+  - No escuro, tons claros e vivos: `#5eead4`, `#93c5fd`, `#fca5a5`, `#c4b5fd`, `#67e8f9`, `#e2e8f0`, `#fb923c`.
+  - A cor mais parecida com o destaque vai para o fim, para as séries continuarem distintas.
+  - O fundo do Plotly fica transparente; o fundo vem do `.teto-chart`.
+  - Seleção, foco e conector passam para o destaque.
+  - **Função existente alterada:** `getCommonDiagramTheme` ganhou 2 linhas, que chamam `window.spoTemaDiagramaComDestaque` se ela existir; sem ela, o comportamento é o anterior.
+- **Alto contraste:** continua com as cores fixas, de propósito.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, nos 8 destaques × 2 temas, todas as séries de todos os gráficos do Teto.
+- Menor contraste de qualquer série sobre o fundo: **3,29:1** no claro e **4,82:1** no escuro (mínimo para gráficos: 3:1).
+- **Mapa Conceitual:** cartão selecionado com ≥ 3,29:1; cartões em repouso suaves.
+- Sem erro no console. Capturas antes, intermediárias (prints do dev. Jean) e depois.
+- `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-diagramas.3` no CSS e no JS.
