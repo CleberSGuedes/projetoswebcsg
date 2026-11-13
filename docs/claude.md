@@ -1432,3 +1432,35 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 ### 40.6 Publicação
 - **Produção (`main`): só durante o dia, até ~18:00, nunca à noite.** A automação roda de madrugada e precisa validar antes.
 - **Depois do deploy:** Restart no cPanel e conferência rápida (login, a tela do tema e, se mexeu em jobs, `python scripts/limpar_jobs_orfaos.py`).
+
+## Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
+
+**Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
+
+**O que mudou no DANFE da Somos** (a partir das notas de 09/2026):
+- Destinatário é sempre a SECRETARIA DE ESTADO DE EDUCACAO (não é mais a escola). A nota não traz DRE nem código da escola.
+- A escola só aparece nas Informações Complementares:
+  - `Solicitação:` em três formas: `REF. SOLICITACAO Nº <n> - <escola>`, `<n> - SECRETARIA DE ESTADO DE EDUCACAO DE MATO - <escola>` e `REF. SOLICITACAO Nº <n> - DRE <nome>` (entrega na própria DRE). O nome termina antes do texto fiscal ("NÃO INCID. ICMS ...").
+  - `Endereço de entrega: <logradouro> - <bairro> - <MUNICÍPIO> - MT - BR - <CEP>`: o município é o trecho antes de "- MT - BR".
+  - `Razão Social:` vem cortada (35 caracteres) e quase sempre é o nome do conselho (CDCE): não é usada.
+- As quebras de linha caem em qualquer ponto (até no meio do rótulo e do nome); a leitura junta as linhas antes.
+- Produto: código novo em CÓD. PROD. (`500000065xxx`) e "Cod. Legado" na linha de baixo. Já funcionava com o catálogo do 4º bimestre (códigos novos); não mudou.
+
+**Causa dos 8 valores-lixo:** a nota caía no caminho genérico de `_metadata`, cuja busca do rótulo DRE não exigia início de palavra nem parava no texto fiscal: "ALEXAN**DRE** GOMES...", "PA**DRE** AMADEU..." (endereço), "AN**DRE** ANTONIO MAGGI NÃO INCID. ICMS..." e "DRE PONTES E LACERDA NÃO INCID. ICMS...".
+
+**Correção** (`services/see_notes.py`, `services/see_escolas.py`; sem mudança de banco, rotas, worker ou tela):
+- **Layout novo** (`metadata["layout"] = "somos_solicitacao"`, função `_somos_solicitacao`): reconhecido por `Solicitação:` + `Endereço de entrega:` quando não há o bloco "ESCOLA: ... DRE: ... COD:" (Somos antigo) nem escola no destinatário + linha de DRE (Athos). Nome da escola pela Solicitação; município pelo endereço de entrega (não o CUIABÁ do destinatário). Alertas da extração nesse layout: nome e município (`CAMPO_NOME_ESCOLA_AUSENTE`, `CAMPO_MUNICIPIO_AUSENTE`); DRE e código não são cobrados da nota, vêm do cadastro.
+- **Casamento com o cadastro** (`_identificar_por_municipio`): procura nas escolas ativas do município (em todas as DREs dele). Exatamente uma com o mesmo nome (`nucleo_nome`): preenche código, nome oficial e DRE, origem `cadastro (nome + município)`. Nome parecido: `ESCOLA_SUGESTAO`. Sem escola igual ou mais de uma igual: `ESCOLA_NAO_ENCONTRADA`. A Conferência diz o que a nota traz e o que o cadastro traz (inclusive escola com o mesmo nome em outro município), sem preencher. Entrega na DRE: código da DRE no cadastro (1 a 14), origem nova `cadastro (DRE)`, e confere se o município de entrega é da DRE (`ESCOLA_MUNICIPIO_DRE_INCONSISTENTE`).
+- **Regra do usuário:** o DANFE é documento oficial; o sistema nunca corrige nem completa dado do fornecedor por aproximação. Divergência vira sugestão ou alerta na Conferência, para o fiscal decidir. Exemplo: "EE 7 DE SETEMBRO" (nota) × "EE 07 DE SETEMBRO" (cadastro, Juína) fica como sugestão (zero à esquerda não é ignorado).
+- **Município só na comparação** (`chave_municipio`): sem espaços e com D'OESTE / D OESTE / DO OESTE iguais (as notas trazem "MIRASSOL D OESTE"; o cadastro, "MIRASSOL D'OESTE"). O texto da nota não é alterado; "Escola (nota)" mostra sempre o nome da Solicitação, mesmo quando a escola é identificada.
+- **Proteção para todos os layouts:** o rótulo DRE do caminho genérico exige início de palavra (`\bD\.?R\.?E\.?`), e DRE ou escola com texto fiscal (`_TEXTO_FISCAL`: NÃO INCID, ICMS, RICMS, IPI, RIPI, LEI COMPLEMENTAR, ART. n) é descartado; a nota fica com o alerta de campo ausente.
+
+**Os três layouts valem ao mesmo tempo** (Somos antigo, Athos e Somos novo): o novo não substitui o antigo, e um mesmo processamento pode misturar notas dos dois modelos; cada nota é reconhecida pelo próprio conteúdo.
+
+**Validação** (sem gravar no banco, com o cadastro de 630 escolas):
+- 4º bimestre, 647 PDFs: itens e quantidades idênticos nota a nota (8.818, soma 339.835). 627 escolas identificadas por nome + município, 13 entregas na DRE, 1 sugestão (EE 7 DE SETEMBRO, Juína) e 6 não encontradas: EE GUSTAVO DUTRA (nota: Santo Antônio do Leverger; cadastro: Campo Verde), EE CRISTIANO ARAUJO PIRES (nota: Sorriso; cadastro: Boa Esperança do Norte), EE SAGRADO CORAÇÃO DE JESUS (Denise, mesmo caso do 3º bimestre), EE PAULO FREIRE (Barra do Bugres), EE PROFESSORA ALZIRA DA SILVA SANTOS (Juscimeira) e EE LUIZ CARLOS CECONELLO (Sinop), estas três sem cadastro. Nas 640 com código, a DRE do cadastro bateu com a pasta da DRE em 100%. Nenhum texto fiscal em DRE/escola.
+- 3º bimestre, 641 PDFs (Somos antigo + Athos): resultado **idêntico** ao anterior nota por nota (DRE, código, escola, município, alertas, itens e quantidades).
+- Pela tela (rotas reais e worker), no banco da `dev/cleber`: catálogo "4º Bimestre 2026 (teste)" (id 64, 24 produtos) e processamento novo 78 com 25 cópias; mesmo resultado da extração isolada.
+- Testes em `tests/test_notas_see.py`: textos sintéticos das três formas da Solicitação (com quebras de linha), D'OESTE, entrega na DRE, os 8 trechos-lixo, casamento (identificada, mesmo nome em outro município, sugestão, duas iguais, município fora do cadastro, DRE), amostra real do 4º bimestre (`SEE_PDFS_DIR_4BIM`) e **lote misto** 3º + 4º bimestre pelo processamento completo (cada nota no layout certo e com o mesmo resultado que teria sozinha). Os testes com PDFs são pulados se as pastas não existirem.
+
+**Operacional:** as notas do 4º bimestre já processadas em produção com o defeito devem ser **reenviadas num processamento novo** ("Não, iniciar uma nova lista"), e não com "acrescentar": o *acrescentar* copia as notas anteriores como estão e não relê os PDFs (§28.7).
