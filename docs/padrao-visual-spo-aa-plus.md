@@ -54,7 +54,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
-| Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (§3.5) | `data-spo-cvd` |
+| Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (paleta Okabe-Ito, §3.5) | `data-spo-cvd` |
 | Realce do foco ("Visão e cores") | **Padrão SPO** (anel de 3 px) | Reforçado: anel duplo (§4.4) | `data-spo-focus` |
 | Links ("Visão e cores") | **Padrão SPO** (cor de destaque e negrito) | Sempre sublinhados | `data-spo-links` |
 | Brilho do tema claro ("Visão e cores") | **Padrão SPO** | Reduzido: cartões `#eceef1`, página `#dadee4`, texto secundário `#4a4850` e texto de destaque no tom 800 (só no claro) | `data-spo-brightness` |
