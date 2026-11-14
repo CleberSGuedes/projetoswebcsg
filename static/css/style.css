@@ -8827,3 +8827,34 @@ body[data-spo-line-height="larger"] #content-area :is(p, li, dd, blockquote, .al
     .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
   line-height: 2;
 }
+
+/* ==========================================================================
+   [jean] Personalizar em tela estreita: escolha atual visível e amostra no cartão
+   (fix/personalizar-fontes-estreito, 2026-11-14; bateria WCAG 1.4.12)
+   A 375 px com "Maior (125%)" + "Mais amplo (2,0)": o resumo da escolha atual de
+   cada grupo (.visual-pref-toggle small, nowrap + reticências) ficava cortado
+   ("Inter (padrão S…", "Legível (12 px, …") e a amostra de tabela passava do
+   cartão (220 px em 182 px). O resumo passa a quebrar linha (vale também para os
+   grupos de Preferências comuns); na amostra, cada linha empilha como os totais
+   dos relatórios: o valor desce para a linha de baixo quando não cabe ao lado do rótulo.
+   ========================================================================== */
+body .visual-pref-toggle small:not(#spo-pref) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+body .spo-fontes-amostra:not(#spo-pref) { overflow-x: auto; max-width: 100%; }
+/* cada linha da amostra empilha como os totais dos relatórios (#31/#56): rótulo e valor
+   lado a lado quando cabem; se não, o valor desce para a linha de baixo, inteiro */
+body .spo-fontes-amostra tr:not(#spo-pref) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+  border-top: 1px solid var(--border);
+}
+body .spo-fontes-amostra td:not(#spo-pref) { border-top: 0; }
+body .spo-fontes-amostra td:first-child:not(#spo-pref) { flex: 0 1 auto; min-width: 0; }
+body .spo-fontes-amostra td:last-child:not(#spo-pref) { flex: 0 0 auto; margin-left: auto; white-space: nowrap; text-align: right; }
