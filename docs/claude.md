@@ -2457,3 +2457,24 @@ Pedido do dev. Jean: um colega do planejamento tem daltonismo, de tipo não info
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do `main.js` e do `login-theme.js` (`?v=20261114.jean-daltonismo.1`).
 
+## "Visão e cores": foco reforçado e links sublinhados (dev. Jean, 2026-11-14)
+
+Segundo item do cartão "Visão e cores" (plano do dev. Jean para baixa visão e navegação por teclado).
+
+- **Realce do foco** (`data-spo-focus`): Padrão SPO / Reforçado.
+  - **Padrão:** o anel de 3 px de `feat/foco-visivel` continua.
+  - **Reforçado (anel duplo):** 4 px na cor do anel de foco entre duas faixas de 2 px na cor do fundo (branco no claro, preto no escuro). O anel contrasta com a própria faixa (≥ 4,69:1 nos 8 destaques, no claro e no escuro), então aparece sobre qualquer superfície, inclusive sobre botões na cor de destaque (WCAG 2.4.13, AAA).
+  - **Áreas que cortam o que passa da borda:** o anel vai para dentro. Uma varredura de 9 telas achou os controles cortados: grupos do Personalizar (`.visual-pref-group`, 13 botões), filtros das colunas dos relatórios (`.table-responsive`, 21 no FIP 613), botões de ação das tabelas de Usuários e API e um botão de aviso modal. O anel padrão de 3 px também é cortado ali, mas esses controles têm uma faixa interna própria no foco.
+- **Links** (`data-spo-links`): Padrão SPO / Sempre sublinhados.
+  - Valem os links de texto do conteúdo e do login. Menu, abas, botões e links com cara de botão não mudam.
+  - Hoje os links de texto estão nas 4 telas institucionais (17 links). Sem a opção, eles se distinguem do texto pelo negrito; a cor sozinha dá só 1,47:1 contra o texto em volta.
+- **Verificação** (SPO local):
+  - **Tab real**, esperando a transição dos controles: 7 tipos de controle com o anel duplo (linhas do modo de aparência, cores, grupos, botões, menu, filtros das colunas, botões do relatório), no claro e no escuro, com capturas;
+  - **links:** os 17 links das telas institucionais sublinhados, e nenhum botão ou aba afetado;
+  - **Personalizar:** a opção abre, marca, grava e volta;
+  - **login:** respeita as duas escolhas, e o "Esqueci a senha" fica sublinhado;
+  - **cartão:** sem corte em 390, 820, 1080 (retrato), 1366 e 1920 px;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-foco-links.1`).
+
