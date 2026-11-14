@@ -27790,6 +27790,24 @@
   }
 
   document.addEventListener("click", (ev) => {
+    // "Restaurar padrão do laboratório" (spo-theme-reset) volta tema, destaque e preferências
+    // visuais; as fontes ficam em chave própria e também voltam ao padrão SPO (fix/restaurar-fontes)
+    if (ev.target.closest && ev.target.closest("#spo-theme-reset")) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (err) {
+        /* armazenamento bloqueado: vale só nesta página */
+      }
+      apply({ ...DEFAULTS });
+      const fontes = document.getElementById("spo-fontes-card");
+      if (fontes) {
+        sync(fontes);
+        setOpen(fontes, "");
+        const status = fontes.querySelector(".spo-fontes-status");
+        if (status) status.textContent = "Fontes e tamanhos de volta ao padrão SPO.";
+      }
+      return;
+    }
     const card = ev.target.closest && ev.target.closest("#spo-fontes-card");
     if (!card) return;
     const toggle = ev.target.closest("[data-spo-font-toggle]");
