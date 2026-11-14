@@ -2389,3 +2389,13 @@ Pergunta do dev. Jean: as opções de "Fontes e tamanho do texto" valem em todas
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-texto-tabelas.1` nos dois.
+
+## Login com as fontes e o tamanho escolhidos no Personalizar (dev. Jean, 2026-11-14)
+
+As opções de "Fontes e tamanho do texto" ficam no navegador (`localStorage`, chave `spo-font-preferences`) e eram aplicadas só pelo `main.js`, que a tela de login não carrega. Por isso o login aparecia sempre com o padrão (Inter, 100%, entrelinha 1,5), mesmo para quem escolheu outra fonte ou texto maior.
+
+- **`static/js/login-theme.js`:** lê a mesma chave e grava no `<body>` os mesmos atributos do `initFontesPersonalizar` (`data-spo-font-ui`, `-font-data`, `-text-size`, `-table-text`, `-line-height`). Valor desconhecido fica no padrão SPO. **Se as opções mudarem no `main.js`, mude também lá.**
+- **CSS** (bloco `[jean]` no fim do `style.css`): a fonte da interface já valia pelas regras do `body`. Agora o **tamanho geral** amplia o cartão de login (112% e 125%, como o `.main` nas outras telas) e a **entrelinha** vale para o texto corrido do cartão.
+- **Verificação:** o login foi aberto (sem sessão) com várias combinações, em 1280, 375 e 320 px. Os atributos ficam certos e um valor inválido volta ao padrão. A fonte aplicada é a escolhida; a entrelinha fica em 21, 24,5 e 28 px. O cartão é ampliado sem rolagem lateral nem corte, e sem escolha salva nada muda. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: só as linhas `?v=` do CSS e do `login-theme.js`. As duas ficam com `?v=20261114.jean-login-fontes.1`.
