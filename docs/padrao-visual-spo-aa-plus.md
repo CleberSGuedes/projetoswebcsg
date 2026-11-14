@@ -87,6 +87,10 @@ Regras:
   AAA; e o 1.4.12 pede que o conteúdo aguente 1,5 sem quebrar). Títulos usam 1,2–1,25.
 - Tamanhos fracionados (11,52; 12,25; 13,44; 16,71; 25,6 px) vêm de `em`/`rem` herdados: usar px da
   escala.
+- **Largura do texto corrido:** `p`, `li`, `dd` e avisos `.alert` (fora de tabelas, menus e botões)
+  com no máximo **72ch** (média medida de 84–110 caracteres por linha; decisão do dev. Jean, entre
+  o WCAG 1.4.8, que pede ≤ 80, e o uso do espaço nos cartões largos). Parágrafos seguidos com
+  **1 entrelinha** de espaço (`1lh`; decisão do dev. Jean; o AAA pediria 1,5).
 - O título da página é **negrito (700), 24 px, entrelinha 1,2** em todas as telas com cabeçalho de
   página (decisão do dev. Jean, 2026-11-13; aplicado no #76).
 - **Dados** (valores, totais, KPIs, códigos) usam a fonte de dados do §2.1, inclusive fora de
