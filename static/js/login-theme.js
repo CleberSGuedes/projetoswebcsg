@@ -33,11 +33,16 @@
 
   try {
     const visual = JSON.parse(localStorage.getItem("spo-common-visual-preferences") || "{}");
-    body.dataset.visualDensity = visual.density || "comfortable";
+    // [jean] densidade automática (feat/densidade-automatica): "auto" (padrão) pela largura da janela
+    const pref = visual.density || "auto";
+    const largura = window.innerWidth || 1280;
+    body.dataset.visualDensityPref = pref;
+    body.dataset.visualDensity = pref !== "auto" ? pref : (largura <= 720 ? "spacious" : (largura <= 1200 ? "compact" : "comfortable"));
     body.dataset.visualContrast = visual.contrast || "standard";
     body.dataset.visualCards = visual.cards || "soft";
   } catch (_) {
     body.dataset.visualDensity = "comfortable";
+    body.dataset.visualDensityPref = "comfortable";
     body.dataset.visualContrast = "standard";
     body.dataset.visualCards = "soft";
   }
