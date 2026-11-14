@@ -2496,6 +2496,16 @@ Terceiro e último item do cartão "Visão e cores" do plano do dev. Jean.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-visao-6c.1`).
 
+## Telas de Usuários no celular (dev. Jean, 2026-11-14)
+
+Achado na medição do texto 150% (seção anterior). A 360 px, no tamanho padrão, as telas de Usuários (Cadastrar, Editar, Perfil, Senha) e a API de Acessos rolavam para o lado: 580 px de conteúdo em 296 px úteis.
+
+- **Causa:** até 900 px, as telas com cabeçalho e duas colunas deviam passar a uma coluna (`.grid:has(> .module-header) { grid-template-columns: 1fr }`). Mas essa regra perdia, por especificidade, para a que define as duas colunas dessas telas (`.grid:has(> .module-header .bi-person-gear)` etc., com coluna mínima de 320 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`): a mesma regra de uma coluna até 900 px, com especificidade suficiente.
+- **Verificação:** 9 telas (as 5 de Usuários e API, FIP 613 e PLAN 51 de Atualizar, Sessão e Login, Rede de Parceiros) em 360, 390, 768, 900, 1024 e 1366 px. Até 900 px, uma coluna e nenhuma rolagem lateral. Acima disso, duas colunas, como antes; o Perfil (Permissões) segue em uma coluna até 1100 px, pela regra própria. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-usuarios-celular.1`).
+
 ## Densidade automática (dev. Jean, 2026-11-14)
 
 Decisão do dev. Jean na discussão de 14/11. Em vez de trocar o preset do Contrato Visual pelo tipo de aparelho ("Pressão operacional" no celular, "Compacto gerencial" no tablet), a densidade passa a ser escolhida pela **largura da janela**. A largura acompanha zoom, redimensionamento e janela dividida; já retrato × paisagem não diz se a tela é de celular (um monitor em retrato tem 1080 px e mouse).
