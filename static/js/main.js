@@ -27731,7 +27731,7 @@
     // largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8)
     reading: { default: "Padrão SPO (largura livre)", medium: "Intermediário (72ch)", strict: "Estrito (WCAG AAA, até 80 caracteres)" },
     // cartão "Visão e cores" (feat/graficos-daltonismo, 2026-11-14): cores dos gráficos
-    cvd: { default: "Padrão SPO", safe: "Seguras para daltonismo" },
+    cvd: { default: "Padrão SPO", safe: "Seguras para daltonismo (Okabe-Ito)" },
     // feat/foco-e-links (2026-11-14): realce do foco e links sublinhados
     focus: { default: "Padrão SPO", strong: "Reforçado (anel duplo)" },
     links: { default: "Padrão SPO", underline: "Sempre sublinhados" },

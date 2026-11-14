@@ -2526,3 +2526,19 @@ Decisão do dev. Jean na discussão de 14/11. Em vez de trocar o preset do Contr
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do JS e do `login-theme.js` (`?v=20261114.jean-densidade-auto.1`). Sem CSS novo.
 
+## "Seguras para daltonismo": o nome do método no texto da opção (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean depois de ver o cartão "Visão e cores": citar o método da paleta e dizer o que ela cobre.
+
+- **Opção:** passa a se chamar "Seguras para daltonismo (paleta Okabe-Ito)".
+- **Descrição:** Okabe e Ito, Universidade de Tóquio, 2008. Distingue-se nos três tipos de daltonismo (protanopia, deuteranopia e tritanopia) e nas formas mais leves. As listras, os pontos e os marcadores ajudam também quem não distingue cor nenhuma (monocromacia).
+- **Não há opção por tipo de daltonismo, por decisão:**
+  - quem usa nem sempre sabe o tipo;
+  - os padrões e marcadores já separam as séries sem depender da cor;
+  - cada paleta a mais teria de ser medida em claro, escuro e alto contraste.
+
+  A decisão será revista se o teste com os colegas na homologação mostrar cores que ainda se confundem.
+- **Escopo:** muda só o texto, sem mudança de comportamento. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-rotulo-daltonismo.1`).
+
