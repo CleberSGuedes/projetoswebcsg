@@ -2057,3 +2057,16 @@ Achado do dev. Jean no teste da homologação (FIP 613): o vermelho de "Bloquead
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-cores-valores.1` nos dois.
+
+## "Restaurar padrão" também volta as fontes e os tamanhos (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação: em Personalizar, "Restaurar padrão do laboratório" voltava tema, destaque e preferências visuais, mas **não** o tamanho do texto, o texto das tabelas nem as fontes.
+
+- **Causa:** as fontes (#32/#63) ficam numa chave própria do navegador (`spo-font-preferences`), que o botão `spo-theme-reset` não conhecia.
+- **Correção** (só no bloco `[jean]` `initFontesPersonalizar` do `main.js`; o código do botão não muda): ao clicar em `#spo-theme-reset`, a chave das fontes é apagada e o `<body>` volta ao padrão SPO (Inter, Intel One Mono, 100%, tabelas 12 px). O cartão de fontes mostra as opções do padrão marcadas e o aviso "Fontes e tamanhos de volta ao padrão SPO."
+- **Verificação:** SPO local, logado.
+  - Escolhidos Atkinson, "Maior (125%)" e "Compacto (8 px)". Depois do clique: `ui=inter`, `data=intel-mono`, `size=default`, `table=legible`, a chave apagada, o cartão com as quatro opções do padrão marcadas e a interface em Inter.
+  - `node --check`.
+  - `pytest` completo cinco vezes. Uma falha na 1ª rodada, logo depois de desligar o servidor local, sem o nome registrado. As quatro seguintes passaram inteiras. A mudança é só no JS, que a suíte não executa.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261113.jean-restaurar-fontes.1`. O CSS continua em `?v=20261113.jean-cores-valores.1`, e o `login.html` não muda.
