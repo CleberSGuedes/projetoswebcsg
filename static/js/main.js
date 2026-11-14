@@ -28365,3 +28365,128 @@
     focar(alvo);
   });
 })();
+
+/* ==========================================================================
+   [jean] Gráficos na escala tipográfica e legíveis em tela estreita
+   (fix/graficos-celular-escala, 2026-11-14; padrão spo-aa+ §2.2, §3.5; WCAG 1.4.12)
+   Os gráficos (Plotly) usavam Arial 11 px, legenda horizontal e margens fixas:
+   - fora da escala (mínimo 12 px) e fora da fonte escolhida no Personalizar;
+   - rótulos do 2º eixo (20%…100%) saindo do gráfico (margem direita fixa);
+   - legenda horizontal que se sobrepõe com espaçamento de texto forçado (1.4.12),
+     porque o Plotly mede o texto ao desenhar.
+   Este bloco envolve Plotly.react/newPlot e ajusta o layout de qualquer gráfico
+   antes de desenhar, sem mudar o código de cada gráfico:
+   - fonte da interface (a do <body>), mínimo 12 px no texto, eixos, legenda e notas;
+   - eixos com automargin (nenhum rótulo sai do gráfico);
+   - legenda vertical no pé do gráfico (um item por linha: nunca lado a lado);
+   - gráfico estreito (≤ 520 px): margens laterais mínimas, eixo X inclinado e
+     nomes longos da legenda quebrados entre palavras; a pizza tem automargin
+     (rótulos de fora não são cortados).
+   Ao redimensionar, o gráfico que muda de faixa (estreito/largo) é redesenhado.
+   ========================================================================== */
+(function initGraficosEscala() {
+  if (!window.Plotly || window.Plotly.__spoEscala) return;
+  const P = window.Plotly;
+  const MIN = 12;
+  const ESTREITO = 520;
+  const elDe = (gd) => (typeof gd === "string" ? document.getElementById(gd) : gd);
+  const fonteUi = () => {
+    try {
+      return getComputedStyle(document.body).fontFamily || "sans-serif";
+    } catch (err) {
+      return "sans-serif";
+    }
+  };
+  const tamanho = (f) => Math.max(MIN, Number((f && f.size) || MIN));
+
+  function ajustar(gd, layout) {
+    const el = elDe(gd);
+    const largura = el ? el.getBoundingClientRect().width : 0;
+    const estreito = largura > 0 && largura <= ESTREITO;
+    if (el) {
+      el.dataset.spoGraficoEstreito = estreito ? "1" : "0";
+      el.__spoLayoutBase = layout || {};
+    }
+    const L = { ...(layout || {}) };
+    L.font = { ...(L.font || {}), family: fonteUi(), size: tamanho(L.font) };
+    Object.keys(L).forEach((k) => {
+      if (!/^[xy]axis\d*$/.test(k) || !L[k] || typeof L[k] !== "object") return;
+      const eixo = { ...L[k], automargin: true };
+      eixo.tickfont = { ...(eixo.tickfont || {}), size: tamanho(eixo.tickfont) };
+      if (estreito && k.startsWith("xaxis") && eixo.tickangle === undefined) eixo.tickangle = -45;
+      L[k] = eixo;
+    });
+    if (L.showlegend !== false) {
+      L.legend = {
+        ...(L.legend || {}),
+        orientation: "v",
+        x: 0,
+        xanchor: "left",
+        yref: "container",
+        y: 0,
+        yanchor: "bottom",
+        font: { ...((L.legend && L.legend.font) || {}), size: tamanho(L.legend && L.legend.font) },
+      };
+    }
+    if (Array.isArray(L.annotations)) {
+      L.annotations = L.annotations.map((a) => ({ ...a, font: { ...(a.font || {}), size: tamanho(a.font) } }));
+    }
+    if (estreito) {
+      const m = L.margin || {};
+      L.margin = { ...m, l: Math.min(m.l ?? 16, 16), r: Math.min(m.r ?? 16, 16) };
+    }
+    return L;
+  }
+
+  // nomes longos de legenda quebram entre palavras no gráfico estreito (o Plotly não
+  // quebra a legenda sozinho); a pizza ganha automargin para os rótulos de fora
+  const quebrar = (texto, max) => {
+    const t = String(texto ?? "");
+    if (t.length <= max || t.includes("<br>")) return t;
+    const linhas = [];
+    let atual = "";
+    t.split(" ").forEach((p) => {
+      if (atual && (atual + " " + p).length > max) { linhas.push(atual); atual = p; } else { atual = atual ? atual + " " + p : p; }
+    });
+    if (atual) linhas.push(atual);
+    return linhas.join("<br>");
+  };
+  function ajustarDados(gd, data) {
+    const el = elDe(gd);
+    if (el) el.__spoDataBase = data;
+    if (!Array.isArray(data)) return data;
+    const largura = el ? el.getBoundingClientRect().width : 0;
+    const estreito = largura > 0 && largura <= ESTREITO;
+    const max = Math.max(14, Math.floor((largura - 48) / 8));
+    return data.map((tr) => {
+      if (!tr || typeof tr !== "object") return tr;
+      const t = { ...tr };
+      if (t.type === "pie") {
+        t.automargin = true;
+        if (estreito && Array.isArray(t.labels)) t.labels = t.labels.map((x) => quebrar(x, max));
+      } else if (estreito && typeof t.name === "string") {
+        t.name = quebrar(t.name, max);
+      }
+      return t;
+    });
+  }
+
+  const react = P.react.bind(P);
+  const newPlot = P.newPlot.bind(P);
+  P.react = (gd, data, layout, config) => react(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
+  P.newPlot = (gd, data, layout, config) => newPlot(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
+  P.__spoEscala = true;
+
+  let espera = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(espera);
+    espera = setTimeout(() => {
+      document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+        const largura = gd.getBoundingClientRect().width;
+        if (!largura || !gd.data) return;
+        const agora = largura <= ESTREITO ? "1" : "0";
+        if (gd.dataset.spoGraficoEstreito !== agora) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+      });
+    }, 250);
+  });
+})();

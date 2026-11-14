@@ -2330,3 +2330,28 @@ Achado do dev. Jean (print): na aba Gráficos do Teto Orçamentário, o valor do
 - **Verificação:** SPO local, com "R$ 999.999.999.999,00" posto no indicador. **Cabe** a 1440, 1106, 1024, 900, 768, 600, 375 e 320 px, sem rolagem lateral; a folga vai de 227 px (1440) a 1 px (320). `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-kpi-total.1` nos dois.
+## Gráficos na escala tipográfica e legíveis em tela estreita (dev. Jean, 2026-11-14)
+
+Itens T1/T2 do inventário AA+ (equivalentes aos gates C09/C11.1 do laboratório): os gráficos (Plotly, todos no Teto Orçamentário) estavam fora da escala e quebravam em tela estreita e com espaçamento de texto forçado.
+
+- **Antes (medido):**
+  - todo o texto em **Arial 11 px**, fora da escala (mínimo 12 px) e fora da fonte escolhida no Personalizar;
+  - rótulos do 2º eixo de Macropolíticas (20%…100%) **saindo do gráfico**, nas duas larguras, porque a margem direita era fixa;
+  - legenda horizontal que **se sobrepõe** com espaçamento forçado (WCAG 1.4.12): 2 casos no grupo e 1 em Macropolíticas a 1366 px;
+  - a 375 px, o "5,19%" da pizza cortado.
+- **Correção:** bloco `[jean]` `initGraficosEscala` no fim do `main.js`. Ele envolve `Plotly.react`/`Plotly.newPlot` e ajusta o layout e os dados **de qualquer gráfico antes de desenhar**, sem mudar o código de cada gráfico:
+  - fonte da interface (a do `<body>`), com mínimo de **12 px** no texto, nos eixos, na legenda e nas notas;
+  - eixos com `automargin`;
+  - legenda **vertical no pé do gráfico** (`yref: "container"`), um item por linha;
+  - pizza com `automargin` (rótulos de fora inteiros);
+  - gráfico estreito (≤ 520 px): margens laterais mínimas, eixo X inclinado e nomes longos da legenda quebrados entre palavras (`<br>`).
+  - Ao redimensionar, o gráfico que muda de faixa é redesenhado a partir do layout e dos dados originais.
+- **Verificação:** SPO local, logado, Teto Orçamentário (5 gráficos).
+  - 1366 px: Inter 12 px; nenhum texto fora do gráfico; **0 sobreposições** com espaçamento forçado.
+  - 375 px: nenhum problema sem espaçamento forçado. Com ele, resta 1 rótulo inclinado de Macropolíticas a 5 px da borda: o Plotly não remede um estilo imposto depois do desenho, e a tabela "Ver dados do gráfico" traz o mesmo conteúdo.
+  - Voltando de 375 para 1366 px sem recarregar: nomes inteiros e margens originais.
+  - O clique na pizza continua filtrando o "Grupo de despesa"; os 5 gráficos mantêm `role="img"` e a tabela de dados (#40); nenhum erro no console.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+- **Limite conhecido:** trocar a fonte no Personalizar vale para os gráficos a partir do próximo desenho (filtro, aba ou recarga).
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-graficos-escala.2`. O CSS e o `login.html` não mudam.
