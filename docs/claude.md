@@ -2526,3 +2526,32 @@ Decisão do dev. Jean na discussão de 14/11. Em vez de trocar o preset do Contr
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do JS e do `login-theme.js` (`?v=20261114.jean-densidade-auto.1`). Sem CSS novo.
 
+## Busca de telas (dev. Jean, 2026-11-14)
+
+Fase 1 da busca combinada com o dev. Jean. Para achar uma tela, era preciso percorrer o menu, que tem vários níveis e 6 itens chamados só "Consultar".
+
+- **Como abrir:** pelo item **"Buscar tela"** do menu lateral, logo abaixo de "Início" (inserido pelo JS, sem mexer no `base.html`; com o mesmo tamanho e o mesmo comportamento dos outros itens, inclusive com o menu recolhido e no menu do celular), ou pelos atalhos **Ctrl+K** (Cmd+K no Mac) e **/** (este, fora de campos de texto).
+- **Visual no padrão dos avisos do SPO:** cartão `modal-card`, título `modal-header-title` (na cor de destaque) com o subtítulo das teclas, campo `.field` com rótulo e o botão secundário **"Fechar"** no rodapé. O fundo copia o visual do `.modal-overlay` sem usar a classe: com ela, o tratamento genérico dos avisos (#41) também prendia o Tab e o foco voltava sempre ao "Fechar".
+- **O que procura** (bloco `[jean]` `initBuscaTelas` no fim do `main.js`):
+  - só as **telas do menu que a pessoa vê**: o menu já vem filtrado pelas permissões (`applyMenuPermissions` esconde com `display: none`), e a busca segue o mesmo filtro. Não muda nada no servidor;
+  - ignora acentos e maiúsculas e aceita parte da palavra. Compara com o nome, o caminho no menu e o **glossário** de siglas e assuntos (`GLOSSARIO`: empenho → EMP, PAOE → Ações/PAOE, senha → Alterar Senha, daltonismo → Personalizar, teto → Teto Financeiro e Teto Orçamentário…);
+  - cada resultado mostra o caminho ("Relatórios › Execução"), e os links externos aparecem marcados "abre em outra aba";
+  - Enter abre a tela pelo mesmo caminho do clique no menu.
+- **Telas recentes:** com a caixa vazia, aparecem as 5 últimas telas **do próprio usuário**, abertas pela busca ou pelo menu. Ficam no navegador, numa chave por conta (`spo-telas-recentes:<conta>`), e não acompanham a pessoa em outro computador.
+- **Acessibilidade:**
+  - diálogo modal (`role="dialog"`, `aria-modal`), com caixa de busca `combobox` e lista `listbox` (padrão WAI-ARIA, `aria-activedescendant`);
+  - setas escolhem, Enter abre, Esc fecha e devolve o foco a quem abriu (ou ao item "Buscar tela" do menu);
+  - o Tab fica preso no diálogo, e a quantidade de resultados é anunciada (`role="status"`);
+  - a busca fica acima dos avisos modais (camada 10001).
+- **Fase 2, com o Cleber:** glossário administrável no banco, com tela de administração e permissão própria, e registro das **buscas sem resultado**. A fase 1 deixa o glossário no mesmo formato (tela → termos) para virar dados iniciais.
+- **Verificação** (SPO local):
+  - **busca:** "empenho", "emp", "paoe", "senha", "daltonismo", "fip", "teto", "consultar" e "dotação" acham as telas certas;
+  - **teclado real:** Ctrl+K, "/", setas, Enter (abriu o Relatório EMP e o foco foi ao título), Tab preso, Esc;
+  - **resultado vazio:** "Nenhuma tela encontrada";
+  - **permissões:** escondendo o grupo de Usuários e o Teto Orçamentário como as permissões fazem, "senha" deixa de achar e "teto" acha só o Teto Financeiro;
+  - **recentes por conta:** outra conta no mesmo navegador não vê as recentes da primeira;
+  - **telas:** 12 tamanhos (celular em pé e deitado, tablets, notebooks, desktop, ultrawide, retrato, zoom 200%), com a caixa dentro da tela, sem rolagem da página e sem resultado cortado;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do CSS e do JS (`?v=20261114.jean-busca-telas.1`).
+
