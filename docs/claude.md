@@ -2399,3 +2399,23 @@ As opções de "Fontes e tamanho do texto" ficam no navegador (`localStorage`, c
 - **Verificação:** o login foi aberto (sem sessão) com várias combinações, em 1280, 375 e 320 px. Os atributos ficam certos e um valor inválido volta ao padrão. A fonte aplicada é a escolhida; a entrelinha fica em 21, 24,5 e 28 px. O cartão é ampliado sem rolagem lateral nem corte, e sem escolha salva nada muda. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: só as linhas `?v=` do CSS e do `login-theme.js`. As duas ficam com `?v=20261114.jean-login-fontes.1`.
+
+## Opção "Leitura" no Personalizar (dev. Jean, 2026-11-14)
+
+O limite fixo de 72ch do texto corrido (seção "Leitura ampliada", #92) deixava muito espaço vazio nos cartões largos. A pedido do dev. Jean, ele virou **opção**: o WCAG 1.4.8 (AAA) aceita que a apresentação seja alcançada por "um mecanismo", e o padrão volta a ser a largura livre.
+
+- **Opção "Leitura"** (cartão "Fontes e tamanho do texto", atributo `data-spo-reading`, também lida no login):
+  - **Padrão SPO:** largura livre, como antes do #92;
+  - **Intermediário:** o #92 (72ch e 1 entrelinha entre parágrafos);
+  - **Estrito (WCAG AAA):** no máximo 80 caracteres reais por linha e 1,5 entrelinha depois de cada parágrafo.
+- **Largura do Estrito, medida por fonte** (o `ch` é a largura do "0", mais larga que a média das letras): Inter 53ch, Atkinson 48ch, Source Sans 3 56ch, Do sistema 52ch. Com 80ch, o pior caso dava 117–130 caracteres; com esses valores, 78 no máximo. Fonte nova no Personalizar precisa dessa medição.
+- **Espaço entre parágrafos no Estrito:** quem reserva o espaço é o parágrafo de cima (`p:has(+ p)`), com 1,5 da própria entrelinha, e o de baixo fica sem margem. Em cartões flex/grid as margens não se sobrepõem: somar as duas dava até 3 entrelinhas, e regra só no de baixo dava 1,34 quando o de cima tinha letra maior (boas-vindas da Início).
+- **Verificação** (SPO local, contagem exata de caracteres por linha):
+  - 14 tamanhos de tela (celulares e tablets em pé e deitados, notebooks, desktop, ultrawide, monitor em retrato, zoom de 200%) na Limpeza: Estrito ≤ 78 em todos, sem rolagem lateral;
+  - Início, Sessão e Login e Contrato Visual: Estrito com ≥ 1,5 entrelinha entre parágrafos, também a 390 px;
+  - Padrão SPO com `max-width: none`;
+  - opção no Personalizar (abre, marca, grava, volta);
+  - login respeitando a escolha;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. Ficam só nas linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-leitura-opcao.1`): `templates/base.html` e `templates/login.html`. O grupo novo está em `templates/partials/atualizar_personalizar_spo.html`.

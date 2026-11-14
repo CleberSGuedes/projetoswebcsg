@@ -27725,11 +27725,13 @@
     table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
     // espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14)
     line: { default: "Padrão (1,5)", ample: "Amplo (1,75)", larger: "Mais amplo (2,0)" },
+    // largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8)
+    reading: { default: "Padrão SPO (largura livre)", medium: "Intermediário (72ch)", strict: "Estrito (WCAG AAA, até 80 caracteres)" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading" });
 
   function read() {
     const prefs = { ...DEFAULTS };
