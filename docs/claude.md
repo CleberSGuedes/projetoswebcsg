@@ -2027,3 +2027,16 @@ Achado do dev. Jean depois do #66: com o Laranja, o "Entrar" já saía laranja, 
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-tons.1` nos dois.
+
+## Título da página sem anel de foco (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação: logo depois do login, o "Bem-vindo" aparecia dentro de um quadrado.
+
+- **Causa:** o A11 leva o foco ao título da página quando uma tela abre ou quando um aviso fecha (como o Alerta da chave de planejamento logo após o login), para o leitor de tela anunciá-lo. O A12 desenhava nesse foco o mesmo anel dos controles (`body [tabindex="-1"]:focus-visible`).
+- **Correção** (bloco `[jean]` no fim do `style.css`): título (`h1`–`h3`, `[role="heading"]`, `.card-title`) e `<main>` com `tabindex="-1"` não mostram mais o anel ao receber foco. **O foco continua indo para lá**, e o leitor de tela continua anunciando. Botões, campos, abas, links e o "Pular para o conteúdo" mantêm o anel. O 2.4.7 (foco visível) vale para o que se opera pelo teclado, e título e `<main>` não são controles.
+- **Verificação:** SPO local, logado.
+  - Depois de fechar o Alerta, o foco fica no "Bem-vindo", sem anel.
+  - "Pular para o conteúdo" pelo Tab: com anel (3 px, cor de destaque). Acionado com Enter, o foco vai ao `<main>` com `:focus-visible` verdadeiro, e sem anel.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulo-foco.1` nos dois.
