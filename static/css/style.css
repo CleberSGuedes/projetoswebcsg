@@ -8809,3 +8809,21 @@ body:is([data-spo-font-data="intel-mono"], :not([data-spo-font-data])) :is(.teto
    com a Inter; 166 com a mono). 184 px cabem "R$ 99.999.999.999,99" em 14 px na
    Intel One Mono; com pouco espaço o quadro rola para o lado, como antes. */
 body .teto-qomp-grid:not(#spo-teto-tab) { --qomp-w-ano: 184px; }
+
+/* ==========================================================================
+   [jean] Espaçamento entre linhas escolhido no Personalizar
+   (feat/entrelinhas-personalizar, 2026-11-14; padrão spo-aa+ §2.1 e §2.2)
+   data-spo-line-height no <body> (gravado por initFontesPersonalizar):
+   default = 1,5 (padrão SPO, já aplicado pela escala); ample = 1,75; larger = 2,0.
+   Vale só para o texto corrido do conteúdo (parágrafos, listas, avisos, ajudas,
+   descrições, metadados); títulos, tabelas, botões e campos não mudam, para não
+   desmontar o layout. Atende ao WCAG 1.4.12 (espaçamento de texto) e 1.4.8.
+   ========================================================================== */
+body[data-spo-line-height="ample"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+    .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
+  line-height: 1.75;
+}
+body[data-spo-line-height="larger"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+    .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
+  line-height: 2;
+}

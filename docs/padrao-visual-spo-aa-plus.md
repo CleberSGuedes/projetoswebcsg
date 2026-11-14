@@ -48,6 +48,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, Do sistema | `data-spo-font-data` |
 | Texto das tabelas dos relatórios | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
+| Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
   (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux). Não é mais o padrão.
@@ -88,8 +89,9 @@ Regras:
   telas de Governança e Resultados e o Personalizar usam 500 e passam a 700 na aplicação.
 
 Aplicação (por PRs, medindo antes e depois): (1) os casos abaixo de 12 px e as descrições com
-entrelinha 1,25 (§7); (2) títulos de página iguais; (3) opção "Entrelinhas" no Personalizar; (4) a
-troca dos valores por tokens (`--spo-fs-*`, `--spo-lh-*`) na divisão do CSS. Medição completa, por
+entrelinha 1,25 (§7) — feito (#75, #82); (2) títulos de página iguais — feito (#76); (3) opção
+"Espaçamento entre linhas" no Personalizar — feito (§2.1); (4) a troca dos valores por tokens
+(`--spo-fs-*`, `--spo-lh-*`) na divisão do CSS. Medição completa, por
 tela: `docs_jean/auditoria_aa/TIPOGRAFIA_MEDICAO_2026-11-13.md` (ambiente do dev. Jean).
 
 ## 3. Tokens (a fonte única de cor)
@@ -271,4 +273,5 @@ PR da área, os literais viram tokens. Um teste da suíte deve impedir **literai
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
 | 2026-11-13 | §2.1 Tipografia: padrão SPO passa a Inter (interface), Intel One Mono (dados) e tabelas a 12 px; a antiga "Clássica" vira "Do sistema". |
+| 2026-11-14 | §2.1: opção "Espaçamento entre linhas" (1,5 / 1,75 / 2,0) no Personalizar. |
 | 2026-11-13 | §2.2 Escala tipográfica (11/12/14/15–16/20/24 px; entrelinha 1,5 no texto) a partir da medição de 66 telas; casos fora da escala no §7. Só documentação: a aplicação vem em PRs seguintes. |

@@ -2257,3 +2257,20 @@ Achado do dev. Jean: algumas telas não seguiam o cabeçalho da maioria do SPO, 
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco, sem mudança de CSS ou JS (o `?v=` não muda). `base.html`/`login.html` não mudam.
+
+## Personalizar: opção "Espaçamento entre linhas" (dev. Jean, 2026-11-14)
+
+Passo 3 do plano de tipografia (padrão spo-aa+ §2.2): o usuário escolhe a entrelinha do texto corrido.
+
+- **Personalizar Temas SPO**, cartão "Fontes e tamanho do texto": novo grupo **"Espaçamento entre linhas"** com **Padrão (1,5)**, **Amplo (1,75)** e **Mais amplo (2,0)**, na mesma marcação dos outros grupos de fontes.
+- **`main.js`, bloco `[jean]` `initFontesPersonalizar`:** a opção entra em `OPTIONS`, `DEFAULTS` (`line: "default"`) e `ATTRS` (`data-spo-line-height` no `<body>`). Ela fica no navegador, na mesma chave das fontes (`spo-font-preferences`), e o **"Restaurar padrão"** (#72) volta para 1,5 sem código novo, porque restaura todo o `DEFAULTS`.
+- **`style.css`, bloco `[jean]`:** com `ample`/`larger`, o texto corrido do conteúdo (`p`, `li`, `dd`, `blockquote`, `.alert`, `.muted`, `small`, metadados da "Última atualização", descrições dos cartões de Governança, dica da Início) passa a 1,75/2,0. **Títulos, tabelas, botões, rótulos e campos não mudam**, para não desmontar o layout. A regra usa `:not(#spo-entrelinha)` para vencer a do passo 1 (#75).
+- Atende ao WCAG 1.4.12 (espaçamento de texto, AA) e ao 1.4.8 (apresentação visual, AAA).
+- **Verificação:** SPO local, logado.
+  - Escolhendo cada opção no próprio cartão: subtítulo, `p.muted` e amostra a 1,5 / 1,75 / 2,0; título (1,2), célula de tabela (1,5) e botões sem mudança.
+  - "Restaurar padrão": volta a "Padrão (1,5)" e apaga a escolha salva.
+  - Com "Mais amplo (2,0)": FIP 613 (com dados), Teto Orçamentário, Meta Física e Limpeza de Histórico sem texto cortado e sem rolagem lateral. O botão "+" da Meta Física tem o mesmo recorte de 4 px com a opção no padrão, que já existia e não tem relação com esta mudança.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+- **Padrão spo-aa+:** a §2.1 ganhou a linha da opção, e a §2.2 marca os passos 1–3 da aplicação como feitos.
+
+Sem script de banco. `templates/base.html`: só as linhas `?v=` do CSS e do JS, agora `?v=20261114.jean-entrelinhas.1`. `templates/login.html`: só o `?v=` do CSS.

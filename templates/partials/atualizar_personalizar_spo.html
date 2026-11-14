@@ -272,6 +272,31 @@
             </button>
           </div>
         </div>
+        {# [jean] Espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="line">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="line" aria-expanded="false" aria-controls="spo-font-panel-line">
+            <i class="bi bi-text-paragraph" aria-hidden="true"></i>
+            <span>
+              <strong>Espaçamento entre linhas</strong>
+              <small data-spo-font-current="line">Padrão (1,5)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-line" data-spo-font-panel="line" role="group" aria-label="Espaçamento entre linhas" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="default">
+              <i class="bi bi-text-left" aria-hidden="true"></i>
+              <span><strong>Padrão (1,5)</strong><small>Espaçamento padrão SPO no texto corrido.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="ample">
+              <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
+              <span><strong>Amplo (1,75)</strong><small>Mais espaço entre as linhas de descrições, ajudas e avisos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="larger">
+              <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+              <span><strong>Mais amplo (2,0)</strong><small>O maior espaçamento; indicado para leitura com baixa visão ou dislexia. Títulos e tabelas não mudam.</small></span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
         <p>Amostra: Programação PTA 2027 — ação, produto e meta (Il1 O0 ç ã é).</p>
