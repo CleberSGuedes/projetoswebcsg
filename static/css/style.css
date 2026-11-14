@@ -8770,3 +8770,42 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
     border-color: var(--spo-control-border, #86848c);
   }
 }
+
+/* ==========================================================================
+   [jean] Teto Orçamentário, aba Tabelas: fonte de dados e escala tipográfica
+   (fix/teto-tabelas-tipografia, 2026-11-14; padrão spo-aa+ §2.1 e §2.2)
+   Medição da aba Tabelas: valores em Inter (o padrão de dados é Intel One Mono,
+   como o KPI da aba Gráficos) e textos em 10,5–11,5 px, com entrelinha 1,3 nos
+   nomes do quadro comparativo. Os valores passam a seguir a fonte de dados escolhida
+   no Personalizar (data-spo-font-data); os textos vão a 12 px e entrelinha 1,5.
+   ========================================================================== */
+body[data-spo-font-data="classic"]:not([data-spo-font-ui="classic"]) :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: var(--spo-font-classic);
+}
+body[data-spo-font-data="inter"] :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO Inter", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="plex-sans"] :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO IBM Plex Sans", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body:is([data-spo-font-data="intel-mono"], :not([data-spo-font-data])) :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace;
+}
+@media (forced-colors: none) {
+  body :is(.teto-qomp-delta, .teto-qomp-year-head .yr-total, .teto-rank-pct, .teto-rank-code,
+           .teto-rank-row.teto-rank-child :is(.teto-rank-code, .teto-rank-name, .teto-rank-val),
+           .teto-group-card .pct):not(#spo-teto-tab) {
+    font-size: 12px;
+  }
+  body :is(.teto-qomp-grupo-name, .teto-qomp-row.child .teto-qomp-grupo-name):not(#spo-teto-tab) {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+/* colunas de ano do comparativo (QOMP, Fonte/Grupo, Grupo por Teto): o mínimo era
+   150 px (128 px até 720 px) e cortava os valores em bilhões (112 cortes a 375 px já
+   com a Inter; 166 com a mono). 184 px cabem "R$ 99.999.999.999,99" em 14 px na
+   Intel One Mono; com pouco espaço o quadro rola para o lado, como antes. */
+body .teto-qomp-grid:not(#spo-teto-tab) { --qomp-w-ano: 184px; }

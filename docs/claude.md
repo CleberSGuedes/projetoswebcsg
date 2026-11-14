@@ -2212,3 +2212,25 @@ Achado do dev. Jean: na aba **Tabelas** do Teto Orçamentário, a barra empilhad
   - `node --check`; `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-teto-cores.1`. O CSS e o `login.html` não mudam.
+
+## Teto Orçamentário, aba Tabelas: fonte de dados e escala tipográfica (dev. Jean, 2026-11-14)
+
+Pergunta do dev. Jean: as fontes da aba **Tabelas** do Teto Orçamentário seguem o padrão? A medição mostrou que não. O passo 1 da escala (#75) mediu o Teto na aba Gráficos, que é a que abre primeiro.
+
+- **Antes (medido):**
+  - todos os valores (R$ e %) em **Inter**, quando o padrão de dados (§2.1) é a **Intel One Mono**, já usada no KPI da aba Gráficos;
+  - variações ▲/▼ do comparativo com 10,5 px (81 elementos);
+  - totais por ano, valores e % do ranking, códigos e "% do teto geral" com 11 px;
+  - nomes de tipificação com 11,5 px e nomes de grupo com 12,5 px, ambos com entrelinha 1,3.
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - os valores (`.teto-group-card .value`, `.teto-rank-val/-pct/-code`, `.teto-qomp-value/-delta`, `.yr`, `.yr-total`, `.teto-qomp-fonte-code`) seguem a **fonte de dados do Personalizar** (`data-spo-font-data`), como as tabelas e os totais dos relatórios;
+  - os textos vão a **12 px**, e os nomes do comparativo a **entrelinha 1,5**;
+  - o cabeçalho de coluna em maiúsculas e negrito ("GRUPO DE DESPESA", 11 px) fica, por ser rótulo;
+  - **colunas de ano do comparativo** (QOMP, Fonte/Grupo, Grupo por Teto): o mínimo (`--qomp-w-ano`) era 150 px, ou 128 px até 720 px de janela, e cortava valores em bilhões. A 375 px eram 112 valores cortados já com a Inter, e 166 com a mono. Passa a **184 px**, que cabe "R$ 99.999.999.999,99" em 14 px na mono. Com pouco espaço, o quadro rola para o lado, como antes.
+- **Verificação:** SPO local, logado, aba Tabelas.
+  - Depois: todos os valores em Intel One Mono, todos os textos com 12 px ou mais (fora o rótulo), entrelinha 1,5.
+  - Valores cortados: **0** a 375, 1036 e 1440 px, sem rolagem lateral da página.
+  - Os nomes longos de fonte de recurso continuam abreviados com "…", como já eram.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-teto-tipografia.1` nos dois.
