@@ -297,6 +297,31 @@
             </button>
           </div>
         </div>
+        {# [jean] Leitura: largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8) #}
+        <div class="visual-pref-group" data-spo-font-group="reading">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="reading" aria-expanded="false" aria-controls="spo-font-panel-reading">
+            <i class="bi bi-book" aria-hidden="true"></i>
+            <span>
+              <strong>Leitura</strong>
+              <small data-spo-font-current="reading">Padrão SPO (largura livre)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-reading" data-spo-font-panel="reading" role="group" aria-label="Leitura" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="default">
+              <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+              <span><strong>Padrão SPO (largura livre)</strong><small>O texto ocupa toda a largura do cartão.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="medium">
+              <i class="bi bi-text-center" aria-hidden="true"></i>
+              <span><strong>Intermediário (72ch)</strong><small>Linhas mais curtas e um espaço de uma linha entre os parágrafos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="strict">
+              <i class="bi bi-book" aria-hidden="true"></i>
+              <span><strong>Estrito (WCAG AAA)</strong><small>No máximo 80 caracteres por linha e espaço de 1,5 linha entre os parágrafos. Indicado para quem perde a linha ao ler.</small></span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
         <p>Amostra: Programação PTA 2027 — ação, produto e meta (Il1 O0 ç ã é).</p>
