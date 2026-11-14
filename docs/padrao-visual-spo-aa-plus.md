@@ -49,11 +49,13 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, Do sistema | `data-spo-font-ui` |
 | Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, Do sistema | `data-spo-font-data` |
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
-| Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
+| Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 | Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (§3.5) | `data-spo-cvd` |
 | Realce do foco ("Visão e cores") | **Padrão SPO** (anel de 3 px) | Reforçado: anel duplo (§4.4) | `data-spo-focus` |
 | Links ("Visão e cores") | **Padrão SPO** (cor de destaque e negrito) | Sempre sublinhados | `data-spo-links` |
+| Brilho do tema claro ("Visão e cores") | **Padrão SPO** | Reduzido: cartões `#eceef1`, página `#dadee4`, texto secundário `#4a4850` e texto de destaque no tom 800 (só no claro) | `data-spo-brightness` |
+| Movimento ("Visão e cores") | **Automático** (segue o `prefers-reduced-motion` do sistema) | Reduzir sempre: sem animações, transições nem rolagem suave | `data-spo-motion` |
 | Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
@@ -301,6 +303,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 - [ ] Cabeçalho de página no padrão do §4.4, com o ícone do item do menu.
 - [ ] Textos na escala do §2.2 (mínimo 12 px, entrelinha 1,5 no texto corrido); números na fonte de dados.
 - [ ] Valores positivos/negativos com as classes `pos`/`neg`, nunca cor própria.
+- [ ] Layout de colunas que muda por `@media` de largura: lembrar que a área de conteúdo pode estar ampliada (112/125/150%) e a largura útil é a da janela dividida pelo fator. Prefira `@container` ou repita o limite multiplicado (ex.: 900 px × 1,5 = 1350 px).
 - [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
 - [ ] Medido como no §5, nos dois temas, e anotado no PR.

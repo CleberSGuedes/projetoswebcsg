@@ -27721,7 +27721,7 @@
   const OPTIONS = Object.freeze({
     ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
     data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)" },
-    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
+    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)", xlarge: "Muito grande (150%)" },
     table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
     // espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14)
     line: { default: "Padrão (1,5)", ample: "Amplo (1,75)", larger: "Mais amplo (2,0)" },
@@ -27732,11 +27732,14 @@
     // feat/foco-e-links (2026-11-14): realce do foco e links sublinhados
     focus: { default: "Padrão SPO", strong: "Reforçado (anel duplo)" },
     links: { default: "Padrão SPO", underline: "Sempre sublinhados" },
+    // feat/visao-150-brilho-movimento (2026-11-14): brilho do tema claro e movimento
+    brightness: { default: "Padrão SPO", reduced: "Reduzido" },
+    motion: { auto: "Automático (segue o sistema)", reduce: "Reduzir sempre" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks", brightness: "spoBrightness", motion: "spoMotion" });
 
   function read() {
     const prefs = { ...DEFAULTS };
@@ -27875,8 +27878,10 @@
   const consulta = window.matchMedia("(prefers-reduced-motion: reduce)");
   const original = Element.prototype.scrollIntoView;
   Element.prototype.scrollIntoView = function scrollIntoViewRespeitandoMovimento(arg) {
-    if (consulta.matches && arg && typeof arg === "object" && arg.behavior === "smooth") {
-      return original.call(this, { ...arg, behavior: "auto" });
+    const reduzir = consulta.matches || (document.body && document.body.dataset.spoMotion === "reduce"); // [jean] opção do Personalizar
+    if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      // "instant": "auto" seguiria o scroll-behavior do CSS, e o <html> do SPO rola suave
+      return original.call(this, { ...arg, behavior: "instant" });
     }
     return original.apply(this, arguments);
   };
