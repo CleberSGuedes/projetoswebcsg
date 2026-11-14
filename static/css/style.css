@@ -8519,10 +8519,8 @@ body.theme-dark .pagination button.active {
 .login-card .login-sessao-titulo { margin: 0 0 4px; font-weight: 700; font-size: 14px; color: var(--text); }
 .login-sessao-titulo .bi { color: #b45309; margin-right: 4px; }
 .theme-dark .login-sessao-titulo .bi { color: #fbbf24; }
-.login-card .login-sessao-texto { margin: 0 0 10px; font-size: 13px; color: var(--text); }
-.login-sessao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
-/* no claro, a borda do "Cancelar" (borda dos campos) dava 2,96:1 sobre o fundo âmbar do aviso */
-body:not(.theme-dark) .login-card .login-sessao .btn-secondary { border-color: #6b7280; }
+/* sem botões desde feat/login-segunda-tentativa (2026-11-14): o texto fecha o aviso */
+.login-card .login-sessao-texto { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
 
 /* ==========================================================================
    [jean] Login: "Entrar" na cor de destaque; "×" do Alerta redondo no celular

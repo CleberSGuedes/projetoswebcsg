@@ -2179,3 +2179,23 @@ Prints do dev. Jean durante a revisão da tipografia.
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-superficies.1` nos dois.
+
+## Login: com sessão já aberta, a segunda tentativa de entrar encerra a outra (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: o aviso "Usuário já conectado" (#61) não precisa dos botões "Continuar e entrar"/"Cancelar". Basta avisar; se a pessoa tentar entrar de novo, a sessão anterior é encerrada e o login segue.
+
+- **Mudança, só na página de login** (`templates/login.html`):
+  - o aviso perde os botões e passa a `role="status"`, anunciado pelo leitor de tela. Texto: "Para entrar mesmo assim, clique em **Entrar** de novo: a outra sessão será encerrada";
+  - na 1ª tentativa, o servidor responde 409 e a página só mostra o aviso, com o foco no "Entrar";
+  - na nova tentativa **com o mesmo e-mail**, o pedido já vai com `force_login: true`;
+  - se o e-mail mudar, o aviso some e a tentativa vai normal;
+  - se a 2ª tentativa falhar por outro motivo (senha errada), o aviso some, fica só a mensagem de erro, e a próxima tentativa recomeça do zero;
+  - sem o aviso na página, continua a pergunta do `window.confirm`.
+- **A rota `/login`, o 409 e o `force_login` não mudam** (`rotas/auth_routes.py` e `app.py` não foram tocados), nem o fluxo sem JavaScript. A automação não é afetada.
+- **CSS:** saem as regras dos botões do aviso (`.login-sessao-acoes` e a borda do "Cancelar", ambas do #61), e o texto do aviso passa a margem 0 e entrelinha 1,5.
+- **Verificação:**
+  - o script da página rodou com um `fetch` falso (nenhum pedido ao servidor, nenhuma senha real) em quatro cenários: 409 → aviso sem `force_login`; 2ª tentativa com o mesmo e-mail → `force_login: true` e entrada; troca de e-mail → aviso some, sem forçar; senha errada na 2ª → aviso some, erro aparece, a 3ª recomeça sem forçar;
+  - `pytest` completo duas vezes seguidas;
+  - o teste com duas sessões reais fica para o teste humano: entrar com o mesmo usuário em dois navegadores.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: o aviso e o script, e o `?v=` do CSS. CSS em `?v=20261114.jean-login-tentativa.1` nos dois.
