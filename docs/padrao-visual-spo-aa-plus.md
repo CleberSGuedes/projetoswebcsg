@@ -171,7 +171,10 @@ nunca corrija um destaque dentro de um componente.
 
 Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto contraste) em
 `COMMON_DIAGRAM_THEMES` (`main.js`) e nas variáveis `--spo-diagram-*`. Regras (#40, #45):
-- fundo do gráfico **transparente** (herda o cartão); nada de fundo azul-marinho fixo;
+- fundo do gráfico **transparente** (herda o cartão); nada de fundo azul-marinho fixo. Vale também
+  no **alto contraste escuro** (fix/alto-contraste-escuro-fundo): lá só as cores das séries, o texto e
+  a moldura são as do alto contraste (séries ≥ 6,4:1 e texto 16,6:1 sobre o `#1a1a1a` do gráfico);
+  o alto contraste claro mantém o fundo branco;
 - **1ª cor de série = destaque** (tom com ≥ 3:1); as demais são **cores categóricas** para distinguir
   séries — podem ser azuis, rosas etc. de propósito;
 - todo gráfico tem resumo para leitor de tela e "Ver dados em tabela";
