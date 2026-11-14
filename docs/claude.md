@@ -2355,3 +2355,23 @@ Itens T1/T2 do inventário AA+ (equivalentes aos gates C09/C11.1 do laboratório
 - **Limite conhecido:** trocar a fonte no Personalizar vale para os gráficos a partir do próximo desenho (filtro, aba ou recarga).
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-graficos-escala.2`. O CSS e o `login.html` não mudam.
+
+## Leitura ampliada: largura do texto corrido e espaço entre parágrafos (dev. Jean, 2026-11-14)
+
+Item "leitura ampliada" do C04 do laboratório (WCAG 1.4.8, AAA): linhas de texto corrido não muito longas e parágrafos bem separados.
+
+- **Antes** (66 telas a 1440 px):
+  - 31 blocos de texto corrido em 19 telas passavam de 80 caracteres por linha (até **188**, no texto de boas-vindas da Início);
+  - 11 pares de parágrafos seguidos com 14–16 px entre eles, para entrelinha de 18 px (o critério pede ≥ 1,5 entrelinha, 27 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - texto corrido (`p`, `li`, `dd` e avisos `.alert`, fora de tabelas, menus e botões) com **`max-width: 72ch`**; o texto centralizado da Início continua centralizado;
+  - parágrafos seguidos (`p + p`) com **1 entrelinha** de espaço (`1lh`, 18 px no texto de 12 px), que acompanha a opção "Espaçamento entre linhas" do Personalizar. **Decisão do dev. Jean:** 1,5 entrelinha (o que o AAA pede, ~33 px em branco) ficava grande; 1 entrelinha separa bem e atende ao AA (1.4.12).
+- **Largura: decisão do dev. Jean.**
+  - O `ch` é a largura do "0", mais larga que a média das letras. Com 72ch, a média medida (contagem exata dos caracteres de cada linha) fica em **84–110** caracteres por linha.
+  - Ficar ≤ 80 em todos os textos exigiria ~56ch, o que deixaria metade dos cartões largos vazia a 1440 px. Foi escolhido o meio-termo, e o critério AAA fica **atendido em parte**.
+- **Verificação:**
+  - Início, Limpeza, Estratégia, Legislação e Replicar a 1440 px: média de 84–110 caracteres por linha, sem rolagem lateral;
+  - parágrafos seguidos com 18 px de margem (antes 14–16 px), ou mais onde já havia margem maior;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-leitura.1` nos dois.

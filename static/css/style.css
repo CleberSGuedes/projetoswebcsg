@@ -8877,3 +8877,30 @@ body #teto-kpi-total { white-space: nowrap; }
 @container teto-dashboard (max-width: 560px) {
   body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   [jean] Leitura ampliada: largura de linha e espaço entre parágrafos
+   (feat/leitura-ampliada, 2026-11-14; padrão spo-aa+ §2.2; WCAG 1.4.8, AAA;
+   equivale ao "leitura ampliada" do C04 do laboratório)
+   Medição de 66 telas a 1440 px: 31 blocos de texto corrido em 19 telas com mais
+   de 80 caracteres por linha (até 188, na Início); parágrafos seguidos separados
+   por 14–16 px, com entrelinha de 18 px.
+   - texto corrido (p, li, dd e avisos .alert, fora de tabelas, menus e botões):
+     no máximo 72ch (decisão do Jean, equilíbrio com o espaço dos cartões largos).
+     O "ch" é a largura do "0", mais larga que a média das letras: 72ch dão uma
+     média de ~84–110 caracteres por linha (o 1.4.8, AAA, pede ≤ 80; 56ch
+     chegariam lá, com metade do cartão vazio a 1440 px);
+     o texto centralizado da Início continua centralizado;
+   - parágrafos seguidos: espaço de 1 entrelinha (1lh; decisão do Jean: separa bem
+     sem parecer vazio; o AAA pediria 1,5), que acompanha a opção "Espaçamento
+     entre linhas" do Personalizar.
+   ========================================================================== */
+body #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+  max-width: 72ch;
+}
+body #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
+  margin-inline: auto;
+}
+body #content-area p + p:not(table *):not(#spo-leitura) {
+  margin-top: max(1em, 1lh);
+}
