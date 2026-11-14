@@ -2293,3 +2293,27 @@ Achado da bateria do WCAG 1.4.12 (espaçamento de texto), na combinação "Maior
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-pref-estreito.1` nos dois.
+
+## Padrão visual "spo-aa+": versão 2 (dev. Jean, 2026-11-14)
+
+Atualização do `docs/padrao-visual-spo-aa-plus.md` com tudo o que entrou do #62 ao #86. **Só documentação.**
+
+- **§1 Metas:** espaçamento de texto (WCAG 1.4.12) e escala tipográfica.
+- **§2.2:** títulos de página aplicados (24 px, 700, 1,2); dados fora de `<table>` usam a fonte de dados; o texto dos gráficos (Plotly, 11 px) fica como pendência.
+- **§3.3:** a tela de login completa a paleta do destaque num bloco próprio (#67). Se o `ACCENT_COLORS` mudar, mudar lá também.
+- **§3.4:** valores `pos`/`neg` com as cores novas e medidas (#70); `.alert-info` no escuro (#79).
+- **§3.5:** a cor de um grupo é a mesma em gráficos e tabelas (#81).
+- **§4.2:** campo de arquivo (#79).
+- **§4.4:**
+  - cabeçalho de página com o ícone do item do menu (#84);
+  - foco no título sem anel (#69);
+  - totais com o valor descendo inteiro e o PLAN 51 por container query (#77);
+  - quadros comparativos do Teto (#82);
+  - Personalizar (#86);
+  - login com a segunda tentativa (#80).
+- **§5 Como medir:** foco com clique real; bateria de tipografia; **bateria do WCAG 1.4.12** (estilo forçado, antes × depois, o que descartar, gráficos olhados na captura); conferência do login nos 8 destaques.
+- **§6.1 checklist:** cabeçalho padrão, escala, `pos`/`neg`, valor que desce inteiro.
+- **§6.3 exceções:** paleta do login e valores `pos`/`neg` até virarem tokens.
+- **§7 dívida:** tipografia resolvida (#75, #76, #82); restam o texto e as legendas dos gráficos, as telas de formulário sem cabeçalho, o PTA 2027, as duplicações (ícone do menu e paleta do login) e as áreas não medidas.
+
+Sem mudança de código, sem script de banco. `base.html`/`login.html` não mudam.
