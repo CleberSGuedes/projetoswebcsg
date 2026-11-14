@@ -47,13 +47,15 @@
   const fontOptions = {
     spoFontUi: ["inter", ["classic", "inter", "atkinson", "source"], "ui"],
     spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono"], "data"],
-    spoTextSize: ["default", ["default", "large", "larger"], "size"],
+    spoTextSize: ["default", ["default", "large", "larger", "xlarge"], "size"],
     spoTableText: ["legible", ["compact", "medium", "legible"], "table"],
     spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
     spoReading: ["default", ["default", "medium", "strict"], "reading"],
     spoCvd: ["default", ["default", "safe"], "cvd"],
     spoFocus: ["default", ["default", "strong"], "focus"],
     spoLinks: ["default", ["default", "underline"], "links"],
+    spoBrightness: ["default", ["default", "reduced"], "brightness"],
+    spoMotion: ["auto", ["auto", "reduce"], "motion"],
   };
   let fontPrefs = {};
   try {

@@ -2478,3 +2478,21 @@ Segundo item do cartão "Visão e cores" (plano do dev. Jean para baixa visão e
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-foco-links.1`).
 
+## "Visão e cores": texto 150%, brilho reduzido e reduzir movimento (dev. Jean, 2026-11-14)
+
+Terceiro e último item do cartão "Visão e cores" do plano do dev. Jean.
+
+- **"Muito grande (150%)"** no grupo "Tamanho do texto" (`data-spo-text-size="xlarge"`): amplia a área de conteúdo e o cartão de login, como o 112% e o 125%. Medição em 5 telas (Limpeza, Teto, Personalizar, Usuários, FIP 613) e até 14 tamanhos de tela, comparando com o tamanho padrão:
+  - **celular (< 480 px):** o 150% deixava só 240 px úteis, abaixo dos 320 px de referência do WCAG 1.4.10. A palavra "Espaçamento" passava da borda no Personalizar. Ali o 150% vale **125%**;
+  - **Teto a 360 px:** o "Teto total" (#89, sem quebra de linha, ~222 px) passava da borda. Isso **já acontecia com o 125%**. Quando o painel tem até 300 px, o valor pode quebrar entre o "R$" e o número;
+  - **telas com cabeçalho e duas colunas** (Usuários, Cadastrar, API, Permissões): o `@media` olha a largura da janela, não a da área ampliada. A 820 px e 150%, Usuários ficava com 547 px úteis em duas colunas e rolava para o lado; o mesmo valia para o 112% e o 125% em algumas larguras. Os limites de uma coluna (900, 1100 e 720 px) agora são multiplicados pelo fator de cada tamanho;
+  - **resultado:** sem rolagem lateral nova e sem texto cortado novo em nenhuma das medições.
+- **"Brilho do tema claro: Reduzido"** (`data-spo-brightness`, só no claro): cartões `#eceef1` (cerca de 15% menos luz que o branco) e página `#dadee4`. Para não perder contraste, o texto secundário escurece (`#4a4850`) e o texto de destaque passa ao tom 800. Comparação de todo o texto em 6 telas: nenhuma falha nova de AA ou AAA; o menor caso nas telas de dados continua ≥ 7:1.
+- **"Movimento: Reduzir sempre"** (`data-spo-motion`): faz o mesmo que a preferência do sistema já fazia (bloco "Movimento reduzido"), mesmo sem ela.
+  - **Medido:** de 117 elementos com transição ou animação no Teto, ficaram 0. A rolagem suave pedida pelo JS fica imediata.
+  - **Achado:** a rolagem da página é feita pelo `<html>`, que rola suave pelo CSS, e pedir `behavior: "auto"` seguia o CSS. O `initMovimentoReduzido` agora pede `"instant"`, e a regra do CSS também vale no `<html>`.
+- **Também verificados:** o Personalizar (as três opções abrem, marcam, gravam e voltam), o login (as três opções; o 150% vale 125% a 360 px, sem rolagem lateral), `pytest` completo duas vezes seguidas e `node --check`.
+- **Defeito antigo anotado, fora deste PR:** a 360 px e no tamanho padrão, Usuários, Cadastrar e API rolam para o lado. A regra que põe essas telas em uma coluna até 900 px perde, por especificidade, para a que define as duas colunas delas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-visao-6c.1`).
+
