@@ -8587,3 +8587,18 @@ body.login-body[data-accent-preference="yellow"] { --color-50: #fff9e6; --color-
 body.login-body[data-accent-preference="orange"] { --color-50: #fff3e8; --color-100: #ffe1c8; --color-200: #ffbe6f; --color-300: #ffa348; --color-700: #a33400; --color-800: #772600; --color-900: #571c00; }
 body.login-body[data-accent-preference="red"] { --color-50: #fff0f0; --color-100: #ffd7d7; --color-200: #ff7b7b; --color-300: #f66151; --color-700: #a51d2d; --color-800: #7d1824; --color-900: #5d121b; }
 body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-100: #eadcff; --color-200: #dc8add; --color-300: #c061cb; --color-700: #4e2a68; --color-800: #3d2052; --color-900: #2e183e; }
+
+/* ==========================================================================
+   [jean] Título da página sem anel de foco (fix/titulo-sem-anel-de-foco, 2026-11-13)
+   Achado do Jean na homologação: logo depois do login, o "Bem-vindo" aparecia dentro
+   de um quadrado. É o foco que o A11 leva ao título da página (ao trocar de tela ou
+   ao fechar um aviso, como o Alerta da chave) para o leitor de tela anunciá-lo; o A12
+   desenhava nele o mesmo anel dos controles. Título e <main> não são controles (o
+   2.4.7 vale para o que se opera pelo teclado): o foco continua indo para lá, mas sem
+   anel. Botões, campos, abas e links mantêm o anel.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body :is(h1, h2, h3, [role="heading"], .card-title, main)[tabindex="-1"]:focus:not(#spo-titulo) {
+    outline: none;
+  }
+}
