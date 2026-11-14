@@ -59,6 +59,38 @@ computador ou celular. O navegador só baixa a fonte em uso.
 - Texto de componente novo herda a fonte do `<body>`; tabela nova deve usar as classes de tabela do
   SPO para receber a fonte e o tamanho de dados.
 
+### 2.2 Escala tipográfica (tamanhos e entrelinhas)
+
+Medição de 2026-11-13 (66 telas, padrão de fontes SPO, 100%): **20 tamanhos diferentes nas telas** e,
+no `style.css`, **37 valores de `font-size` e 23 de `line-height`**. Nenhum texto das telas fica abaixo
+de 10 px, mas há texto de leitura em 10–11 px e descrições com entrelinha 1,25. A referência de
+hierarquia é a das telas de **Governança e Resultados** (avaliadas pelo dev. Jean como adequadas em
+títulos, subtítulos, ênfases e espaçamentos).
+
+| Passo | Tamanho | Entrelinha | Peso | Uso |
+|---|---|---|---|---|
+| Rótulo | **11 px** | 1,5 | ≥ 700, **maiúsculas** | sobretítulo da página ("RELATÓRIOS · EXECUÇÃO"), rótulo curto em maiúsculas |
+| Pequeno | **12 px** | 1,5 | 400–700 | rótulos de campo e de totais, metadados, ajuda, paginação, selos de situação, dados das tabelas |
+| Texto | **14 px** | 1,5 | 400 | texto corrido, subtítulo da página, descrição de cartão |
+| Destaque | **15–16 px** | 1,4 | 600–700 | título de cartão ou de bloco |
+| Seção | **20 px** | 1,25 | 700 | título de seção |
+| Página | **24 px** | 1,2 | 700 | título da página (`h1` ou equivalente) |
+
+Regras:
+- **Mínimo de 12 px** para qualquer texto que se lê; 11 px só no passo "Rótulo" (curto, maiúsculas,
+  negrito). O "Tamanho do texto" do Personalizar (112%, 125%) multiplica esta escala.
+- **Entrelinha 1,5** em todo texto que pode ocupar mais de uma linha (referência: WCAG 1.4.8, nível
+  AAA; e o 1.4.12 pede que o conteúdo aguente 1,5 sem quebrar). Títulos usam 1,2–1,25.
+- Tamanhos fracionados (11,52; 12,25; 13,44; 16,71; 25,6 px) vêm de `em`/`rem` herdados: usar px da
+  escala.
+- O título da página é **negrito (700)** em todas as telas (decisão do dev. Jean, 2026-11-13); hoje as
+  telas de Governança e Resultados e o Personalizar usam 500 e passam a 700 na aplicação.
+
+Aplicação (por PRs, medindo antes e depois): (1) os casos abaixo de 12 px e as descrições com
+entrelinha 1,25 (§7); (2) títulos de página iguais; (3) opção "Entrelinhas" no Personalizar; (4) a
+troca dos valores por tokens (`--spo-fs-*`, `--spo-lh-*`) na divisão do CSS. Medição completa, por
+tela: `docs_jean/auditoria_aa/TIPOGRAFIA_MEDICAO_2026-11-13.md` (ambiente do dev. Jean).
+
 ## 3. Tokens (a fonte única de cor)
 
 **Regra de ouro:** em componente, **só variável** (`var(--…)`). Cor literal (`#…`, `rgb(…)`) só
@@ -221,9 +253,21 @@ diferentes**, em 3.709 declarações (695 já usam `var(--)`); 143 regras `.them
 Ordem sugerida: na divisão do CSS (depois do AA+ na `main`), cada área vira um arquivo; no mesmo
 PR da área, os literais viram tokens. Um teste da suíte deve impedir **literais novos** (Fase B).
 
+**Tipografia** (medição de 2026-11-13, §2.2), fora da escala:
+
+| Caso | Onde | Telas |
+|---|---|---|
+| 9 px | nome do usuário e "Logados" no topo (`.user-meta`) | todas |
+| 10 px | "Itens por página" da paginação; rótulos do Teto Orçamentário; pílula de versão do Contrato Visual | 17 / 4 / 1 |
+| 10,5 px | identificadores em `<code>` (API acessos) | 1 |
+| 11 px | metadados da "Última atualização por UO" (entrelinha 1,25); selos "Ativo/Ativa"; rótulos dos totais e dos filtros; textos de ajuda | 21 / 16 / 22 / 7 |
+| entrelinha 1,25–1,35 em texto de várias linhas | descrições `muted` dos cabeçalhos (12 px); cartões de Governança (12,25 px); fonte do Teto (11 px) | 9 / 6 / 1 |
+| título da página | 23 px (43 telas, peso 700, entrelinha 1,2 ou 1,5), 24 px peso 500 (9), 22 px (1), 25,6 px (1) | — |
+
 ## 8. Histórico
 
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
 | 2026-11-13 | §2.1 Tipografia: padrão SPO passa a Inter (interface), Intel One Mono (dados) e tabelas a 12 px; a antiga "Clássica" vira "Do sistema". |
+| 2026-11-13 | §2.2 Escala tipográfica (11/12/14/15–16/20/24 px; entrelinha 1,5 no texto) a partir da medição de 66 telas; casos fora da escala no §7. Só documentação: a aplicação vem em PRs seguintes. |

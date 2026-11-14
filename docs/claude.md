@@ -2070,3 +2070,27 @@ Achado do dev. Jean no teste da homologação: em Personalizar, "Restaurar padr�
   - `pytest` completo cinco vezes. Uma falha na 1ª rodada, logo depois de desligar o servidor local, sem o nome registrado. As quatro seguintes passaram inteiras. A mudança é só no JS, que a suíte não executa.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261113.jean-restaurar-fontes.1`. O CSS continua em `?v=20261113.jean-cores-valores.1`, e o `login.html` não muda.
+
+## Padrão spo-aa+: escala tipográfica (dev. Jean, 2026-11-13)
+
+Pergunta do dev. Jean no teste da homologação: os textos pareciam pequenos e apertados em várias telas (FIP 613), e adequados nas telas de Governança e Resultados.
+
+- **Medição** (SPO local, padrão de fontes SPO, 100%): **66 telas**, uma por vez, cada uma só depois de estável; os relatórios, com a tabela preenchida.
+  - **20 tamanhos de letra** nas telas; no `style.css`, **37 valores de `font-size` e 23 de `line-height`**.
+  - Nada abaixo de 10 px dentro das telas. O topo tem o nome e o "Logados" com 9 px.
+  - Texto de leitura em 10–11 px: paginação, "Última atualização por UO", selos de situação, rótulos dos totais e dos filtros.
+  - Descrições com entrelinha 1,25–1,35.
+  - Títulos de página com 22, 23, 24 e 25,6 px, e pesos 500 e 700.
+- **Mudança, só documentação** (`docs/padrao-visual-spo-aa-plus.md`):
+  - **§2.2 Escala tipográfica**, a partir das telas de Governança e Resultados: 11 px (só rótulo em maiúsculas e negrito), 12, 14, 15–16, 20 e 24 px;
+  - entrelinha 1,5 no texto e 1,2–1,25 nos títulos;
+  - **mínimo de 12 px** para leitura;
+  - título da página em **negrito (700)** em todas as telas (decisão do dev. Jean);
+  - **§7:** o que está fora da escala, com o número de telas.
+- **Aplicação**, em PRs seguintes, medindo antes e depois:
+  1. os casos abaixo de 12 px e as descrições apertadas;
+  2. títulos de página iguais;
+  3. opção "Entrelinhas" no Personalizar;
+  4. tokens `--spo-fs-*`/`--spo-lh-*` na divisão do CSS.
+
+Sem mudança de código e sem script de banco. `base.html`/`login.html` não mudam.
