@@ -8727,3 +8727,48 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
     white-space: nowrap;
   }
 }
+
+/* ==========================================================================
+   [jean] Superfícies que ficaram fora do tema (fix/superficies-escuro-restantes, 2026-11-14)
+   Prints do Jean:
+   (1) Totais da Meta Física (.meta-fisica-resumo-card): cores fixas de tema claro
+       (fundo #f6fafc, borda #c6d8e2, texto #334155/#0f172a). No escuro, cartão aceso;
+       no claro, a borda dava 1,47:1 e o cartão 1,05:1 contra o fundo (quase some).
+       Passa aos tokens: fundo --surface, borda dos campos (--spo-control-border), texto
+       --muted/--text, divisões --border.
+   (2) "Escolher arquivo": o botão nativo do <input type="file"> nunca teve estilo e
+       ficava claro no escuro. Passa a botão em contorno, como os secundários (#60).
+   (3) Avisos .alert-info no escuro (ex.: "Regras de segurança" da Limpeza de
+       Histórico): texto fixo #0f4c4c (verde escuro) sobre fundo escuro, 1,46:1.
+       No escuro, texto --text, fundo do destaque a 10% e borda dos campos.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body .meta-fisica-resumo-card:not(#spo-sup) {
+    background: var(--surface);
+    border: 1px solid var(--spo-control-border, #86848c);
+  }
+  body .meta-fisica-resumo-table :is(th, td):not(#spo-sup) { border-bottom-color: var(--border); }
+  body .meta-fisica-resumo-table th:not(#spo-sup) { color: var(--muted); }
+  body .meta-fisica-resumo-table td:not(#spo-sup) { color: var(--text); }
+
+  body input[type="file"]::file-selector-button {
+    margin-right: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--spo-control-border, #86848c);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  body input[type="file"]:is(:hover, :focus-visible)::file-selector-button {
+    background: rgba(var(--accent-rgb), 0.12);
+  }
+
+  body.theme-dark .alert-info:not(#spo-sup) {
+    color: var(--text);
+    background: rgba(var(--accent-rgb), 0.10);
+    border-color: var(--spo-control-border, #86848c);
+  }
+}
