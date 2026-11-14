@@ -246,6 +246,10 @@
               <i class="bi bi-zoom-in" aria-hidden="true"></i>
               <span><strong>Maior (125%)</strong><small>Amplia mais; o menu e o topo não mudam.</small></span>
             </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="xlarge">
+              <i class="bi bi-zoom-in" aria-hidden="true"></i>
+              <span><strong>Muito grande (150%)</strong><small>Para baixa visão: amplia a área de conteúdo em 50%; as telas se reorganizam na largura menor.</small></span>
+            </button>
           </div>
         </div>
         <div class="visual-pref-group" data-spo-font-group="table">
@@ -397,6 +401,47 @@
             <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="underline">
               <i class="bi bi-type-underline" aria-hidden="true"></i>
               <span><strong>Sempre sublinhados</strong><small>Os links do texto ficam sublinhados, para não depender só da cor. Menu e botões não mudam.</small></span>
+            </button>
+          </div>
+        </div>
+        {# [jean] Brilho e movimento (feat/visao-150-brilho-movimento, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="brightness">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="brightness" aria-expanded="false" aria-controls="spo-font-panel-brightness">
+            <i class="bi bi-brightness-high" aria-hidden="true"></i>
+            <span>
+              <strong>Brilho do tema claro</strong>
+              <small data-spo-font-current="brightness">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-brightness" data-spo-font-panel="brightness" role="group" aria-label="Brilho do tema claro" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="default">
+              <i class="bi bi-brightness-high" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Cartões brancos sobre fundo cinza-claro.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="reduced">
+              <i class="bi bi-brightness-low" aria-hidden="true"></i>
+              <span><strong>Reduzido</strong><small>Cartões em cinza-claro, com menos luz, para quem se incomoda com o branco e não quer o tema escuro. O texto continua com o mesmo destaque. Não muda o tema escuro.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="motion">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="motion" aria-expanded="false" aria-controls="spo-font-panel-motion">
+            <i class="bi bi-pause-circle" aria-hidden="true"></i>
+            <span>
+              <strong>Movimento</strong>
+              <small data-spo-font-current="motion">Automático (segue o sistema)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-motion" data-spo-font-panel="motion" role="group" aria-label="Movimento" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="auto">
+              <i class="bi bi-gear" aria-hidden="true"></i>
+              <span><strong>Automático (segue o sistema)</strong><small>Reduz as animações quando o computador pede "reduzir movimento".</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="reduce">
+              <i class="bi bi-pause-circle" aria-hidden="true"></i>
+              <span><strong>Reduzir sempre</strong><small>Sem animações, transições nem rolagem suave no SPO, mesmo que o computador não peça. Indicado para quem sente tontura ou se distrai com movimento.</small></span>
             </button>
           </div>
         </div>
