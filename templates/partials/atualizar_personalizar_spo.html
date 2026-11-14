@@ -359,6 +359,47 @@
             </button>
           </div>
         </div>
+        {# [jean] Realce do foco e links sublinhados (feat/foco-e-links, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="focus">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="focus" aria-expanded="false" aria-controls="spo-font-panel-focus">
+            <i class="bi bi-bullseye" aria-hidden="true"></i>
+            <span>
+              <strong>Realce do foco</strong>
+              <small data-spo-font-current="focus">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-focus" data-spo-font-panel="focus" role="group" aria-label="Realce do foco" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="default">
+              <i class="bi bi-circle" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Anel de 3 px na cor de destaque em volta do item escolhido pelo teclado.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="strong">
+              <i class="bi bi-bullseye" aria-hidden="true"></i>
+              <span><strong>Reforçado (anel duplo)</strong><small>Anel mais grosso, com borda clara e escura, visível sobre qualquer fundo. Indicado para baixa visão e para quem navega pelo teclado.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="links">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="links" aria-expanded="false" aria-controls="spo-font-panel-links">
+            <i class="bi bi-link-45deg" aria-hidden="true"></i>
+            <span>
+              <strong>Links</strong>
+              <small data-spo-font-current="links">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-links" data-spo-font-panel="links" role="group" aria-label="Links" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="default">
+              <i class="bi bi-link" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Links na cor de destaque.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="underline">
+              <i class="bi bi-type-underline" aria-hidden="true"></i>
+              <span><strong>Sempre sublinhados</strong><small>Os links do texto ficam sublinhados, para não depender só da cor. Menu e botões não mudam.</small></span>
+            </button>
+          </div>
+        </div>
       </div>
       <p class="spo-fontes-status" role="status" aria-live="polite"></p>
     </article>

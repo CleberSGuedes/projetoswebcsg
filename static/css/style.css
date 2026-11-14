@@ -8979,3 +8979,41 @@ body[data-spo-reading="strict"] #content-area p:has(+ p):not(table *):not(#spo-l
 body[data-spo-reading="strict"] #content-area p + p:not(table *):not(#spo-leitura) {
   margin-top: 0;
 }
+
+/* ==========================================================================
+   [jean] Realce do foco e links sublinhados (feat/foco-e-links, 2026-11-14;
+   cartão "Visão e cores" do Personalizar; padrão spo-aa+ §2.1 e §4.4)
+   data-spo-focus e data-spo-links no <body> (initFontesPersonalizar e login-theme.js).
+   - Foco reforçado (WCAG 2.4.13, AAA): o anel padrão (3 px na cor de destaque,
+     feat/foco-visivel) vira um anel DUPLO: 4 px na cor de destaque entre duas
+     faixas de 2 px na cor do fundo (branco no claro, preto no escuro). O anel
+     contrasta com qualquer superfície, inclusive botões na própria cor de destaque.
+     A faixa interna e a externa vêm de box-shadow (o outline fica no meio).
+   - Links sublinhados (WCAG 1.4.1): links de texto do conteúdo e do login sempre
+     sublinhados; menu, abas, botões e links com aparência de botão não mudam.
+   Com "cores forçadas" do Windows, o sistema decide: nada aqui vale lá.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body[data-spo-focus="strong"] { --spo-focus-halo: #ffffff; }
+  body[data-spo-focus="strong"].theme-dark { --spo-focus-halo: #000000; }
+  body[data-spo-focus="strong"] :is(a[href], button, input:not([type="hidden"]), select, textarea, summary,
+           [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible:not(#spo-foco) {
+    outline: 4px solid var(--spo-focus-ring, var(--accent));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--spo-focus-halo), 0 0 0 8px var(--spo-focus-halo);
+  }
+  /* Dentro de áreas que cortam o que passa da borda (overflow), o anel fica para dentro:
+     menu lateral, grupos do Personalizar (.visual-pref-group), tabelas com rolagem
+     (filtros das colunas e botões de ação) e avisos modais. Medido em 9 telas. */
+  body[data-spo-focus="strong"] :is(.sidebar, .visual-pref-group, .table-responsive, .teto-table-scroll,
+       .planning-structure-table-wrap, .planning-report-table-wrap, .modal-card)
+       :is(a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible:not(#spo-foco) {
+    outline-offset: -6px;
+    box-shadow: inset 0 0 0 2px var(--spo-focus-halo), inset 0 0 0 8px var(--spo-focus-halo);
+  }
+}
+body[data-spo-links="underline"] :is(#content-area, .login-card) a[href]:not(.btn, [class*="btn"], [class*="button"], .menu-item, [role="button"], [role="tab"], [role="menuitem"], .personalizar-subnav a, .nav-link, .page-link):not(#spo-links) {
+  text-decoration: underline;
+  text-decoration-thickness: max(1px, 0.08em);
+  text-underline-offset: 0.18em;
+}
