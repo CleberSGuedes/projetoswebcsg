@@ -1,11 +1,12 @@
 <section class="personalizar-spo" id="personalizar-spo-panel">
-  <div class="page-header">
-    <div>
-      <div class="eyebrow">Ambiente administrativo</div>
+  <header class="page-header module-header">
+    <div class="module-header-copy">
+      <div class="module-eyebrow">Ambiente administrativo</div>
       <h1>{{ "Personalizar Temas SPO" if mostrar_temas else "Contrato Visual Protegido" }}</h1>
-      <p class="muted">{{ "Configure preferências visuais do ambiente." if mostrar_temas else "Gerencie presets versionados do contrato visual do SPO." }}</p>
+      <p>{{ "Configure preferências visuais do ambiente." if mostrar_temas else "Gerencie presets versionados do contrato visual do SPO." }}</p>
     </div>
-  </div>
+    <i class="bi bi-{{ 'brush' if mostrar_temas else 'shield-lock' }}" aria-hidden="true"></i>
+  </header>
 
   {% if mostrar_temas %}
   <div class="personalizar-grid" id="spo-personalizacao-comum">
