@@ -19910,7 +19910,7 @@
       }
       // Mesma paleta fixa de groupColors usada no grafico de pizza (aba
       // Graficos) - o grupo de despesa tem sempre a mesma cor no app inteiro.
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
 
       legendEl.innerHTML = groups
         .map(
@@ -19985,7 +19985,7 @@
       // groupColors do grupo-pai nas sub-linhas (mais clara via opacidade) -
       // reforca visualmente a hierarquia grupo -> tipificacao.
       const max = groups[0].valor;
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
       const nameOf = (label) => (label.includes(" - ") ? label.split(" - ").slice(1).join(" - ") : label);
 
       const rankRow = (label, valor, color, isChild) => {
@@ -20226,7 +20226,7 @@
         return;
       }
       const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
       const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
 
       const deltaChip = (curr, prevValue) => {

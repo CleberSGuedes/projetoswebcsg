@@ -2199,3 +2199,16 @@ Pedido do dev. Jean: o aviso "Usuário já conectado" (#61) não precisa dos bot
   - o teste com duas sessões reais fica para o teste humano: entrar com o mesmo usuário em dois navegadores.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: o aviso e o script, e o `?v=` do CSS. CSS em `?v=20261114.jean-login-tentativa.1` nos dois.
+
+## Teto Orçamentário: as tabelas usam as cores do tema, como os gráficos (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean: na aba **Tabelas** do Teto Orçamentário, a barra empilhada "Por grupo de despesa" (e a legenda e os pontos dos cartões) não acompanhava o tema, enquanto a aba **Gráficos** acompanhava.
+
+- **Causa:** a aba Gráficos pega as cores da paleta do tema (`getTetoChartColors()`, que usa `getCommonDiagramTheme()`, #45). Os três quadros da aba Tabelas que colorem por grupo usavam a paleta fixa `groupColors` (`#345feb`, `#048075`, `#f8cb2e`): "Por grupo de despesa" (`renderGroupSummary`), "Teto por grupo e tipificação" e o QOMP. O comentário no código já dizia "o grupo de despesa tem sempre a mesma cor no app inteiro", mas a paleta dos gráficos passou a seguir o tema e a das tabelas ficou fixa.
+- **Correção:** três linhas em `initTetoOrcamentarioDashboard` (`main.js`), uma por quadro. O `colorFor` passa a usar `getTetoChartColors().groupColors`, a mesma origem dos gráficos. A troca de tema já redesenhava as tabelas (`spo-common-visual-change` → `render()`), então nada mais precisou mudar.
+- **Verificação:** SPO local, logado.
+  - Escuro com destaque Clássico: barra, legenda e pontos com `#3dd6b7`, `#93c5fd` e `#fca5a5`, iguais à pizza da aba Gráficos.
+  - Trocando para o claro, sem recarregar: `#1f9b7e`, `#1d4ed8` e `#b91c1c`, de novo iguais à pizza.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-teto-cores.1`. O CSS e o `login.html` não mudam.
