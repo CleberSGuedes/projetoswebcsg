@@ -33,11 +33,14 @@ mínimo, mas, no SPO, o texto deles fica ≥ 4,5:1 (§4.2). Logotipos e decoraç
 | Tema | Claro, Escuro, Automático (segue o sistema) | Personalizar → Temas |
 | Nível de contraste | **Suave** (padrão SPO), **Médio** (contornos das opções e dos diagramas na cor dos controles), **Reforçado** (texto secundário mais forte e contornos dos controles na cor de destaque) | Personalizar → Preferências comuns |
 | Destaque | 8: Clássico (turquesa), Azul, Turquesa claro, Verde, Amarelo, Laranja, Vermelho, Roxo | Personalizar → Temas |
+| Densidade | **Automática** (padrão SPO): confortável acima de 1200 px, compacta de 721 a 1200 px, ampla até 720 px (pela largura da janela, que acompanha zoom e janela dividida); ou fixa: Confortável, Compacta, Ampla | Personalizar → Preferências comuns |
 | Alto contraste do Windows | `@media (forced-colors: active)`: o sistema impõe as cores; o SPO não deve brigar com ele | automático — **ainda não medido** |
 | `prefers-contrast: more` | só os diagramas reagem hoje | automático — **ainda não medido** |
 
 A classe `theme-dark` no `<body>` indica o tema escuro; `data-visual-contrast` (`standard`,
 `medium`, `enhanced`) e `data-accent-preference` (`classic`, `blue`, …) indicam nível e destaque.
+`data-visual-density` traz a densidade **em uso** (`comfortable`, `compact`, `spacious`, que é o que o
+CSS lê) e `data-visual-density-pref`, a escolha da pessoa (`auto` ou uma das três).
 
 ### 2.1 Tipografia
 
