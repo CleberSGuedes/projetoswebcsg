@@ -8673,3 +8673,57 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
     line-height: 1.2;
   }
 }
+
+/* ==========================================================================
+   [jean] Totais do PLAN 51 sem corte (fix/totais-plan51-celular, 2026-11-13)
+   O quadro do PLAN 51 (.totais-box--wide) cresce até caber tudo numa linha
+   (min-width: max-content), para os valores em bilhões, e fica numa grade de duas
+   colunas fixas ao lado dos botões (max-content auto). Quando o cartão do relatório
+   é estreito, o conjunto passava do cartão: a 375 px, quadro de 562 px num cartão
+   de 283 px; entre ~820 e ~950 px de janela, os botões saíam do cartão.
+   Medido pela largura do próprio cartão (container query), não da janela:
+   - cartão até 900 px: os botões descem para baixo do quadro ("quebra de linha
+     antes dos botões", como diz a regra original);
+   - cartão até 640 px: o quadro usa a mesma regra adaptável dos outros relatórios
+     (#31/#56): colunas que cabem e, se rótulo e valor não couberem lado a lado, o
+     valor desce de linha.
+   Cartão mais largo: o PLAN 51 não muda.
+   ========================================================================== */
+.report-data-card:has(.totais-box--wide) { container: spo-plan51 / inline-size; }
+@container spo-plan51 (max-width: 900px) {
+  .relatorio-top-uo .relatorio-top-right:not(#spo-plan51) {
+    grid-template-columns: max-content;
+    justify-items: end;
+    row-gap: 10px;
+  }
+}
+@container spo-plan51 (max-width: 640px) {
+  .relatorio-top-uo .relatorio-top-right:not(#spo-plan51) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .relatorio-top-uo .totais-box.totais-box--wide:not(#spo-plan51) {
+    min-width: 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    column-gap: 12px;
+  }
+  .relatorio-top-uo .totais-box--wide .totais-row:not(#spo-plan51) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: 6px;
+    row-gap: 0;
+    min-width: 0;
+  }
+  .relatorio-top-uo .totais-box--wide .totais-row > span { flex: 0 1 auto; min-width: 0; }
+  .relatorio-top-uo .totais-box--wide .totais-row > strong {
+    flex: 0 0 auto;
+    margin-left: auto;
+    text-align: right;
+    white-space: nowrap;
+  }
+}
