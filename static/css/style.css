@@ -9017,3 +9017,96 @@ body[data-spo-links="underline"] :is(#content-area, .login-card) a[href]:not(.bt
   text-decoration-thickness: max(1px, 0.08em);
   text-underline-offset: 0.18em;
 }
+
+/* ==========================================================================
+   [jean] Tamanho 150%, brilho reduzido e reduzir movimento
+   (feat/visao-150-brilho-movimento, 2026-11-14; cartões "Fontes e tamanho do
+   texto" e "Visão e cores" do Personalizar; padrão spo-aa+ §2.1)
+   - Muito grande (150%), data-spo-text-size="xlarge": amplia a área de conteúdo
+     (.main) e o cartão de login, como o 112% e o 125% (WCAG 1.4.4 e 1.4.10);
+   - Brilho reduzido, data-spo-brightness="reduced", só no tema claro: cartões
+     #eceef1 (cerca de 15% menos luz que o branco) e página #dadee4. Para manter o
+     contraste, o texto secundário escurece (#4a4850) e o texto na cor de
+     destaque passa ao tom 800;
+   - Reduzir movimento, data-spo-motion="reduce": o mesmo que a preferência do
+     sistema já faz (bloco "Movimento reduzido"), mesmo sem ela; a rolagem suave
+     do JS também para (initMovimentoReduzido).
+   ========================================================================== */
+body[data-spo-text-size="xlarge"] .main { zoom: 1.5; }
+body.login-body[data-spo-text-size="xlarge"] .login-card:not(#spo-login-fontes) { zoom: 1.5; }
+/* Celular (< 480 px): 150% deixaria só 240 px úteis, abaixo dos 320 px de referência do WCAG
+   1.4.10 (palavras longas passavam da borda e o Teto rolava para o lado a 360 px). Ali o
+   "Muito grande" vale 125%, o máximo que cabe sem rolagem lateral. */
+@media (max-width: 479.98px) {
+  body[data-spo-text-size="xlarge"] .main { zoom: 1.25; }
+  body.login-body[data-spo-text-size="xlarge"] .login-card:not(#spo-login-fontes) { zoom: 1.25; }
+}
+/* Teto (#89): com a área de conteúdo ampliada num celular, o painel fica com menos de 300 px e o
+   "Teto total" (sem quebra de linha, ~222 px) passava da borda — já acontecia com o 125% a 360 px.
+   Ali o valor pode quebrar entre o "R$" e o número, e a grade não força largura mínima. */
+@container teto-dashboard (max-width: 300px) {
+  body .teto-kpi-grid:not(#spo-kpi):not(#spo-kpi-estreito) { grid-template-columns: minmax(0, 1fr); }
+  body #teto-kpi-total:not(#spo-kpi-estreito) { white-space: normal; }
+}
+/* Telas com cabeçalho e duas colunas (Usuários, Permissões, API…): no tamanho padrão passam a
+   uma coluna com a janela até 900 px (Permissões até 1100; o formulário dela até 720). Com a área
+   de conteúdo ampliada, a largura útil é a da janela dividida pelo fator, mas o @media continua
+   olhando a janela: a 820 px e 150%, Usuários ficava com 547 px úteis em duas colunas e rolava para
+   o lado. Os limites abaixo são os mesmos multiplicados por 1,125 / 1,25 / 1,5. */
+@media (max-width: 1012px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="large"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1238px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 810px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 1125px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="larger"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1375px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 1350px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1650px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 1080px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+body[data-spo-text-size="xlarge"] .meta-uo-col {
+  min-width: min(190px, 100%);
+  overflow-wrap: anywhere;
+}
+@media (forced-colors: none) {
+  body[data-spo-brightness="reduced"]:not(.theme-dark) {
+    --surface: #eceef1;
+    --card: #eceef1;
+    --bg: #dadee4;
+    --body-bg: linear-gradient(180deg, #dfe3e8, #dadee4);
+    --footer-bg: #dadee4;
+    --muted: #4a4850;
+    --spo-accent-text: var(--color-800);
+  }
+}
+html:has(> body[data-spo-motion="reduce"]),
+body[data-spo-motion="reduce"] *, body[data-spo-motion="reduce"] *::before, body[data-spo-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+body[data-spo-motion="reduce"] :is(.app-loading-progress, .app-loading-marker, .app-loading-dot, .planning-component-loading-row .bi) {
+  animation: none !important;
+}
+body[data-spo-motion="reduce"] .app-loading-dot { opacity: 1; }
