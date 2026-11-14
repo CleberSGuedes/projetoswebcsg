@@ -2375,3 +2375,17 @@ Item "leitura ampliada" do C04 do laboratório (WCAG 1.4.8, AAA): linhas de text
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-leitura.1` nos dois.
+
+## "Texto das tabelas" em todas as tabelas (dev. Jean, 2026-11-14)
+
+Pergunta do dev. Jean: as opções de "Fontes e tamanho do texto" valem em todas as telas? A conferência mostrou que o **"Texto das tabelas"** (Compacto 8 px, Intermediário 10 px, Legível 12 px) só alcançava as tabelas dos **relatórios** (`.fip-table`, `.plan20-table`), os filtros e a paginação. As demais tabelas do conteúdo (consultas de cadastro, usuários, Limpeza, API, estrutura do planejamento, Meta Física, tabelas de dados dos gráficos) ficavam com 12 px nas células e 13 px nos títulos, qualquer que fosse a escolha.
+
+- **Correção** (bloco `[jean]` no fim do `style.css`): **Intermediário** e **Compacto** passam a valer para **todas as tabelas** de `#content-area`: células, títulos e o que está dentro deles (selos, links, códigos). Ficam de fora os campos e botões de formulário dentro das tabelas e a amostra do Personalizar. **Legível** (padrão) mantém o tamanho próprio delas, que já é ≥ 12 px.
+- **Verificação:** Limpeza, Usuários (editar), Programas, Meta Física, FIP 613 e Personalizar, trocando a opção:
+  - Legível: 12/13 px, como antes;
+  - Intermediário: 10 px;
+  - Compacto: 8 px;
+  - os relatórios e a amostra seguem como já eram;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-texto-tabelas.1` nos dois.

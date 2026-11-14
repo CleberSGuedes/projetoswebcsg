@@ -8904,3 +8904,21 @@ body #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint
 body #content-area p + p:not(table *):not(#spo-leitura) {
   margin-top: max(1em, 1lh);
 }
+
+/* ==========================================================================
+   [jean] "Texto das tabelas" em todas as tabelas (fix/texto-tabelas-todas, 2026-11-14)
+   A opção do Personalizar (Compacto 8 px, Intermediário 10 px, Legível 12 px)
+   só alcançava as tabelas dos relatórios (.fip-table, .plan20-table), os filtros
+   e a paginação. As demais tabelas do conteúdo (consultas de cadastro, usuários,
+   Limpeza, API, estrutura, Meta Física, tabelas de dados dos gráficos…) ficavam
+   com 12 px nas células e 13 px nos títulos, qualquer que fosse a escolha.
+   Agora Intermediário e Compacto valem para todas; Legível (padrão) mantém o
+   tamanho próprio delas, que já é ≥ 12 px. Campos e botões de formulário dentro
+   das tabelas não mudam.
+   ========================================================================== */
+body[data-spo-table-text="medium"] #content-area table:not(.fip-table, .plan20-table):not(.spo-fontes-amostra table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button), th *:not(input, select, textarea, button)) {
+  font-size: 10px;
+}
+body[data-spo-table-text="compact"] #content-area table:not(.fip-table, .plan20-table):not(.spo-fontes-amostra table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button), th *:not(input, select, textarea, button)) {
+  font-size: 8px;
+}
