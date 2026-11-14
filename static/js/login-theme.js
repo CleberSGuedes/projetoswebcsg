@@ -41,4 +41,24 @@
     body.dataset.visualContrast = "standard";
     body.dataset.visualCards = "soft";
   }
+
+  // [jean] Fontes e tamanho do texto escolhidos no Personalizar (feat/login-fontes, 2026-11-14).
+  // Mesma chave e mesmos valores do initFontesPersonalizar (main.js); valor desconhecido fica no padrão SPO.
+  const fontOptions = {
+    spoFontUi: ["inter", ["classic", "inter", "atkinson", "source"], "ui"],
+    spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono"], "data"],
+    spoTextSize: ["default", ["default", "large", "larger"], "size"],
+    spoTableText: ["legible", ["compact", "medium", "legible"], "table"],
+    spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
+  };
+  let fontPrefs = {};
+  try {
+    fontPrefs = JSON.parse(localStorage.getItem("spo-font-preferences") || "{}") || {};
+  } catch (_) {
+    fontPrefs = {};
+  }
+  Object.keys(fontOptions).forEach((attr) => {
+    const [fallback, allowed, key] = fontOptions[attr];
+    body.dataset[attr] = allowed.includes(fontPrefs[key]) ? fontPrefs[key] : fallback;
+  });
 })();
