@@ -96,13 +96,14 @@
     preview: "pré-visualizou",
   });
   const COMMON_VISUAL_DEFAULTS = Object.freeze({
-    density: "comfortable",
+    density: "auto", // [jean] densidade automática (feat/densidade-automatica): era "comfortable"
     contrast: "standard",
     cards: "soft",
     diagrams: "auto",
   });
   const COMMON_VISUAL_OPTIONS = Object.freeze({
     density: {
+      auto: "automática (pela largura da tela)", // [jean] feat/densidade-automatica
       comfortable: "confortável",
       compact: "compacta",
       spacious: "ampla",
@@ -857,7 +858,9 @@
 
   function applyCommonVisualPreferences(preferences, persist = false) {
     const current = normalizeCommonVisualPreferences(preferences);
-    document.body.dataset.visualDensity = current.density;
+    // [jean] "auto" vira confortável/compacta/ampla pela largura da janela (initDensidadeAutomatica)
+    document.body.dataset.visualDensityPref = current.density;
+    document.body.dataset.visualDensity = typeof window.spoResolverDensidade === "function" ? window.spoResolverDensidade(current.density) : current.density;
     document.body.dataset.visualContrast = current.contrast;
     document.body.dataset.visualCards = current.cards;
     document.body.dataset.visualDiagrams = current.diagrams;
@@ -28647,4 +28650,41 @@
     });
     return { resultado, falhas: resultado.filter((r) => !r.passou) };
   };
+})();
+
+/* ==========================================================================
+   [jean] Densidade automática (feat/densidade-automatica, 2026-11-14; decisão do
+   dev. Jean na discussão de 14/11, no lugar de trocar o preset do Contrato Visual
+   pelo tipo de aparelho)
+   A opção "Automática" (padrão) do grupo "Densidade visual" escolhe a densidade
+   pela LARGURA da janela, que acompanha zoom, redimensionamento e janela dividida:
+   - mais de 1200 px: confortável (o padrão SPO de antes);
+   - de 721 a 1200 px (tablet deitado, notebook pequeno, monitor em retrato,
+     janela dividida): compacta;
+   - até 720 px (celular, em pé ou deitado; zoom de 200% numa tela de 1280 px):
+     ampla.
+   O alvo de toque de 44 px continua vindo da regra de ponteiro grosso (#35).
+   As 34 regras de CSS de cada densidade são as mesmas de sempre: aqui só se
+   decide qual valor vai para data-visual-density. A escolha da pessoa fica em
+   data-visual-density-pref; quem escolheu uma densidade fixa continua com ela.
+   ========================================================================== */
+(function initDensidadeAutomatica() {
+  if (!window.matchMedia) return;
+  const estreita = window.matchMedia("(max-width: 720px)");
+  const media = window.matchMedia("(max-width: 1200px)");
+  window.spoResolverDensidade = function (pref) {
+    if (pref !== "auto") return pref;
+    if (estreita.matches) return "spacious";
+    if (media.matches) return "compact";
+    return "comfortable";
+  };
+  const atualizar = () => {
+    if (!document.body) return;
+    const pref = document.body.dataset.visualDensityPref || document.body.dataset.visualDensity;
+    if (pref !== "auto") return;
+    document.body.dataset.visualDensityPref = "auto";
+    document.body.dataset.visualDensity = window.spoResolverDensidade("auto");
+  };
+  [estreita, media].forEach((q) => (q.addEventListener ? q.addEventListener("change", atualizar) : q.addListener(atualizar)));
+  atualizar();
 })();
