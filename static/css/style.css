@@ -8858,3 +8858,22 @@ body .spo-fontes-amostra tr:not(#spo-pref) {
 body .spo-fontes-amostra td:not(#spo-pref) { border-top: 0; }
 body .spo-fontes-amostra td:first-child:not(#spo-pref) { flex: 0 1 auto; min-width: 0; }
 body .spo-fontes-amostra td:last-child:not(#spo-pref) { flex: 0 0 auto; margin-left: auto; white-space: nowrap; text-align: right; }
+
+/* ==========================================================================
+   [jean] Teto Orçamentário: indicador "Teto total" sem estourar o cartão
+   (fix/teto-kpi-total, 2026-11-14; print do Jean)
+   Os 4 indicadores dividiam a largura em partes iguais; com a fonte de dados
+   padrão (Intel One Mono, #63), "R$ 11.333.931.142,00" saía do cartão. A
+   coluna do Teto total passa a ter mínimo de 15rem, que cabe
+   "R$ 999.999.999.999,00" em 16 px negrito na mono (~222 px com o espaçamento);
+   as outras três dividem o resto. Vale também nas faixas de 2 colunas.
+   ========================================================================== */
+body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: minmax(15rem, 1.6fr) repeat(3, minmax(0, 1fr)); }
+body #teto-kpi-total { white-space: nowrap; }
+/* mesmas faixas do painel (container teto-dashboard): 2 colunas até 820 px, 1 até 560 px */
+@container teto-dashboard (max-width: 820px) {
+  body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: minmax(15rem, 1fr) minmax(0, 1fr); }
+}
+@container teto-dashboard (max-width: 560px) {
+  body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: 1fr; }
+}
