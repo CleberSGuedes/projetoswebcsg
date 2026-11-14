@@ -2274,3 +2274,22 @@ Passo 3 do plano de tipografia (padrão spo-aa+ §2.2): o usuário escolhe a ent
 - **Padrão spo-aa+:** a §2.1 ganhou a linha da opção, e a §2.2 marca os passos 1–3 da aplicação como feitos.
 
 Sem script de banco. `templates/base.html`: só as linhas `?v=` do CSS e do JS, agora `?v=20261114.jean-entrelinhas.1`. `templates/login.html`: só o `?v=` do CSS.
+
+## Personalizar em tela estreita: escolha atual visível e amostra dentro do cartão (dev. Jean, 2026-11-14)
+
+Achado da bateria do WCAG 1.4.12 (espaçamento de texto), na combinação "Maior (125%)" + "Mais amplo (2,0)" a 375 px.
+
+- **Antes:**
+  - o resumo da escolha atual de cada grupo do Personalizar (`.visual-pref-toggle small`, com `nowrap` e reticências) ficava cortado ("Inter (padrão S…", "Legível (12 px, …"), e a pessoa não via o que tinha escolhido. Com o painel a 892 px, isso já acontecia sem nenhuma combinação;
+  - a tabela de amostra das fontes ficava mais larga que o cartão (220 px em 182 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - o resumo **quebra linha** em vez de cortar. Vale para todos os grupos, inclusive os de Preferências comuns;
+  - na amostra, cada linha **empilha como os totais dos relatórios** (#31/#56): rótulo e valor lado a lado quando cabem; se não, o valor desce inteiro para a linha de baixo, alinhado à direita (sugestão do dev. Jean). A rolagem dentro da amostra (`overflow-x: auto`) fica só como reserva.
+- **Verificação:** SPO local, logado.
+  - A 375 px, com o padrão e com a combinação: 0 de 9 resumos cortados; na amostra, rótulo e valor empilhados, com o valor inteiro, sem rolagem.
+  - A 1440 px, o cartão do Personalizar tem 209 px úteis (grade de três colunas), e a amostra também empilha, com os valores inteiros.
+  - Com o painel a 892 px: 0 resumos cortados ("Intel One Mono (padrão SPO)" e "Legível (12 px, padrão SPO)" passam a duas linhas, antes cortados).
+  - Versões anteriores foram trocadas: `overflow-wrap: anywhere` quebrava as palavras letra a letra; a rolagem dentro da amostra deixava o valor cortado na borda até rolar. No resumo, `overflow-wrap: break-word` (só quebra uma palavra que não cabe sozinha na linha).
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-pref-estreito.1` nos dois.
