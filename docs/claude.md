@@ -2040,3 +2040,20 @@ Achado do dev. Jean no teste da homologação: logo depois do login, o "Bem-vind
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulo-foco.1` nos dois.
+
+## Valores em azul e vermelho mais vivos (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação (FIP 613): o vermelho de "Bloqueado/Conting." e o azul de "Saldo de Dotação" quase se confundiam com o preto.
+
+- **Onde:** as classes `pos` (azul, valor positivo) e `neg` (vermelho, valor negativo), que os relatórios põem nos totais (`.totais-row`: FIP 613, PED, EMP, NOB, EST EMP…) e nas células numéricas do FIP 613 (`.fip-table td.num`). As cores eram `#0b3c91` e `#8b0000` no claro, e `#9cc4ff`/`#ffb3b3` no escuro (A6/A9).
+- **Pedido:** as cores clássicas do Excel/VBA, `rgb(0,0,255)` e `rgb(255,0,0)`. Medido: o azul puro passa no AA+ (8,6:1 no branco), mas o vermelho puro dá só 4,0:1, abaixo do AA. **Decisão do dev. Jean:**
+  - claro: azul **`#0000ff`** e vermelho **`#a00000`**, o vermelho mais vivo que ainda passa de 7:1;
+  - escuro: azul **`#94baff`** e vermelho **`#ff9999`**, mais vivos que os pastéis anteriores e ainda ≥ 7:1 no cartão. O azul puro no escuro daria 1,9:1.
+- **Correção:** bloco `[jean]` no fim do `style.css`, com `:not(#spo-valor)` para vencer as regras antigas. O JS não muda. Os chips ▲/▼ do Teto Orçamentário (verde e vermelho de variação) não fazem parte disto.
+- **Verificação:** SPO local, FIP 613 com dados reais do banco de desenvolvimento (54 valores azuis, 17 vermelhos, contando totais e tabela).
+  - Claro: mínimo **8,37:1** (azul) e **8,20:1** (vermelho), sobre o fundo real de cada célula.
+  - Escuro: **7,71:1** e **7,38:1**.
+  - Com o mouse sobre a linha, no escuro, o fundo clareia e o contraste fica em torno de 6,4:1 (AA), como já acontecia.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-cores-valores.1` nos dois.
