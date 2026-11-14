@@ -2234,3 +2234,26 @@ Pergunta do dev. Jean: as fontes da aba **Tabelas** do Teto Orçamentário segue
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-teto-tipografia.1` nos dois.
+
+## Cabeçalho padrão (cartão + ícone do menu) em Governança e Resultados, Personalizar e Estrutura do Planejamento (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean: algumas telas não seguiam o cabeçalho da maioria do SPO, que é o título num cartão (`header.module-header`) com o ícone da tela à direita.
+
+- **Inventário** (`templates/partials/`):
+  - **sem cartão e sem ícone** (`div.page-header`): as 6 telas de Governança e Resultados (Mapa Conceitual, Estratégia e Cadeia de Valor, EAP e Políticas, Entregas-MT e OKR, Processos/Riscos/Projetos, Matrículas e Metas Físicas) e as 2 do Personalizar (Temas e Contrato Visual Protegido, no mesmo template);
+  - **cartão sem ícone**: Programas, Ações/PAOE, Produtos e Componentes da Revista (template compartilhado), Componentes, Modelos de Chave, Catálogo de Chaves e Replicar exercício.
+- **Correção, só nos templates:**
+  - Governança e Personalizar passam à marcação do cabeçalho padrão (`<header class="page-header module-header">` + `.module-header-copy` + `.module-eyebrow` + `<h1>` + `<p>` + `<i class="bi …">`). Textos e atributos não mudam, e a classe `page-header` fica por compatibilidade;
+  - na Estrutura do Planejamento, entra o `<i class="bi …">` no cartão que já existia.
+  - **O ícone é o do item do menu** (`MENU_META` em `services/features.py`). No template compartilhado da Estrutura, ele sai de um mapa por `entity`. **Se o ícone do menu mudar, mudar também no template.**
+  - Nenhum CSS novo: vale o `.module-header > i` existente, um quadrado na cor de destaque que segue o tema.
+- **Fora desta mudança:**
+  - **Programação PTA 2027**: cabeçalho próprio, com o painel de contexto à direita (tela imersiva do mockup v63r);
+  - as 11 telas de formulário e consulta sem cabeçalho de página (Meta Física, Subação, Etapa, Dotação, Estorno de Dotação, Limpeza de Histórico), que dependem de decisão do dev. Jean.
+- **Verificação:** SPO local, logado.
+  - As 16 telas comparadas com o cabeçalho do Atualizar Teto Financeiro: mesmo fundo, borda de 1 px, cantos de 18 px, espaçamento 22/24 px, ícone de 54 px igual ao do menu, título de 24 px em negrito.
+  - A 375 px: ícone de 46 px dentro do cartão, sem rolagem lateral (Estratégia, Temas, Programas, Catálogo).
+  - Os cartões da cadeia de valor da Estratégia continuam funcionando.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco, sem mudança de CSS ou JS (o `?v=` não muda). `base.html`/`login.html` não mudam.
