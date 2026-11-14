@@ -8620,3 +8620,37 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
   body.theme-dark :is(.totais-row .pos, .fip-table td.num.pos):not(#spo-valor) { color: #94baff; }
   body.theme-dark :is(.totais-row .neg, .fip-table td.num.neg):not(#spo-valor) { color: #ff9999; }
 }
+
+/* ==========================================================================
+   [jean] Escala tipográfica, passo 1: mínimo de 12 px e entrelinha 1,5
+   (fix/tipografia-minimo-12, 2026-11-13; padrão spo-aa+ §2.2 e §7)
+   Medição de 66 telas: texto de leitura em 9–11 px e descrições com entrelinha
+   1,25–1,35. Aqui sobem para 12 px e 1,5 só os casos medidos (seletores abaixo);
+   ficam em 11 px os rótulos curtos em maiúsculas e negrito (passo "Rótulo").
+   Exceção (decisão do Jean): nome/"Logados" do topo e rodapé são informação
+   secundária e ficam em 10 px (antes 9 e 11 px), com entrelinha 1,5.
+   Fora deste passo: textos dos gráficos (SVG do Plotly, configurados no JS) e os
+   títulos de página (passo 2).
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* informação secundária: topo e rodapé */
+  body :is(.user-meta, .footer .footer-line):not(#spo-tipo) { font-size: 10px; }
+  /* mínimo de 12 px */
+  body :is(.totais-row > span, .meta-uo-col > div,
+           .teto-kpi > span, .teto-filter-grid .field > span, .teto-dashboard-fonte,
+           .planning-action-checklist-toggle, .see-upload-option > span, .home-welcome-hint,
+           .visual-pref-toggle small, .contract-version-pill, td > code,
+           .planning-status, .status-badge, #meta-fisica-tbody td.muted):not(#spo-tipo) {
+    font-size: 12px;
+  }
+  /* paginação: respeita "Compacto"/"Intermediário" do texto das tabelas (Personalizar) */
+  body:is([data-spo-table-text="legible"], :not([data-spo-table-text])) :is(.page-size label, .pagination > span):not(#spo-tipo) {
+    font-size: 12px;
+  }
+  /* entrelinha 1,5 em texto que pode ocupar mais de uma linha */
+  body :is(p.muted, .muted > div, .meta-uo-col > div, .teto-dashboard-fonte, .flow-node small,
+           .contract-preview-meta em, .visual-pref-toggle small, #meta-fisica-tbody td.muted,
+           .footer .footer-line, .home-welcome-hint):not(#spo-tipo) {
+    line-height: 1.5;
+  }
+}

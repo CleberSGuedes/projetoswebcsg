@@ -2094,3 +2094,36 @@ Pergunta do dev. Jean no teste da homologação: os textos pareciam pequenos e a
   4. tokens `--spo-fs-*`/`--spo-lh-*` na divisão do CSS.
 
 Sem mudança de código e sem script de banco. `base.html`/`login.html` não mudam.
+
+## Escala tipográfica, passo 1: mínimo de 12 px e entrelinha 1,5 (dev. Jean, 2026-11-13)
+
+Primeira aplicação da escala do padrão spo-aa+ (§2.2): os textos de leitura abaixo de 12 px e as descrições com entrelinha apertada.
+
+- **Levantamento:** nas 66 telas do menu, mais o topo e o rodapé, uma tela por vez, com o padrão de fontes SPO. Foram **50 casos** fora da escala, quase todos de poucas regras:
+  - **topo:** nome e "Logados" (`.user-meta`), 9 px;
+  - **rodapé:** 11 px, entrelinha 1,35;
+  - **paginação:** "Itens por página" e reticências, 10 px;
+  - **totais:** rótulos dos totais (`.totais-row > span`), 11 px;
+  - **"Última atualização por UO":** metadados, 11 px, entrelinha 1,25;
+  - **selos "Ativo"/"Ativa"** (`.planning-status`, `.status-badge`), 11 px;
+  - **Teto Orçamentário:** KPIs, 10 px; rótulos dos filtros, 11 px; linha da fonte, 11 px / 1,25;
+  - **descrições `p.muted` dos cabeçalhos:** 12 px / 1,25;
+  - **cartões de Governança e Resultados** (`.flow-node small`): 12,25 px / 1,35;
+  - **casos isolados:** a dica da Início, a pílula de versão do Contrato Visual, `<code>` da API acessos, "Todos" dos filtros múltiplos, opções do upload de Notas SEE, ajuda da Meta Física.
+- **Correção** (bloco `[jean]` no fim do `style.css`, com `:not(#spo-tipo)`):
+  - esses seletores vão a **12 px**;
+  - **exceção, decisão do dev. Jean:** o nome e o "Logados" do topo e o rodapé são informação secundária e ficam com **10 px** (eram 9 e 11 px), também registrados no padrão §2.2;
+  - os textos de várias linhas vão a **entrelinha 1,5**;
+  - a paginação só sobe com o texto das tabelas em "Legível" (padrão), e respeita "Compacto"/"Intermediário" do Personalizar.
+- **Fora deste passo:**
+  - os rótulos curtos em maiúsculas e negrito, que ficam em 11 px (passo "Rótulo"), incluindo o cabeçalho "REGIÃO PTA/LOA" da Meta Física;
+  - os textos dos gráficos, que são SVG do Plotly configurados no JS;
+  - os títulos de página (passo 2).
+- **Verificação:** SPO local, logado.
+  - Mesmo levantamento depois da mudança: dos 50 casos, sobra 1, o cabeçalho em maiúsculas da Meta Física, no passo "Rótulo".
+  - FIP 613: totais em duas colunas a 1440 px, como antes. A 1036 px com o menu aberto, uma coluna, também como antes (conferido voltando a 11 px), e sem corte.
+  - A 375 px: o topo com 10 px cabe, sem rolagem lateral.
+  - Teto Orçamentário: KPIs e filtros sem corte a 375 e 1440 px.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-tipografia-12.1` nos dois.
