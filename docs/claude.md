@@ -2317,3 +2317,16 @@ Atualização do `docs/padrao-visual-spo-aa-plus.md` com tudo o que entrou do #6
 - **§7 dívida:** tipografia resolvida (#75, #76, #82); restam o texto e as legendas dos gráficos, as telas de formulário sem cabeçalho, o PTA 2027, as duplicações (ícone do menu e paleta do login) e as áreas não medidas.
 
 Sem mudança de código, sem script de banco. `base.html`/`login.html` não mudam.
+
+## Teto Orçamentário: indicador "Teto total" sem estourar o cartão (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean (print): na aba Gráficos do Teto Orçamentário, o valor do indicador "Teto total" ("R$ 11.333.931.142,00") saía do cartão.
+
+- **Causa:** os 4 indicadores (`.teto-kpi-grid`) dividiam a largura em partes iguais (`repeat(4, 1fr)`). Com a fonte de dados padrão (Intel One Mono, #63), mais larga, o valor não cabia.
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - a coluna do Teto total passa a ter **mínimo de 15rem**, que cabe "R$ 999.999.999.999,00" (pedido do dev. Jean) em 16 px negrito na mono, cerca de 206 px de texto mais o espaçamento;
+  - as outras três colunas dividem o resto, e o valor não quebra (`nowrap`);
+  - nas faixas do painel (container `teto-dashboard`), 2 colunas até 820 px, com o mesmo mínimo na primeira, e 1 coluna até 560 px.
+- **Verificação:** SPO local, com "R$ 999.999.999.999,00" posto no indicador. **Cabe** a 1440, 1106, 1024, 900, 768, 600, 375 e 320 px, sem rolagem lateral; a folga vai de 227 px (1440) a 1 px (320). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-kpi-total.1` nos dois.
