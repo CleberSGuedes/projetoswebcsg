@@ -27729,11 +27729,14 @@
     reading: { default: "Padrão SPO (largura livre)", medium: "Intermediário (72ch)", strict: "Estrito (WCAG AAA, até 80 caracteres)" },
     // cartão "Visão e cores" (feat/graficos-daltonismo, 2026-11-14): cores dos gráficos
     cvd: { default: "Padrão SPO", safe: "Seguras para daltonismo" },
+    // feat/foco-e-links (2026-11-14): realce do foco e links sublinhados
+    focus: { default: "Padrão SPO", strong: "Reforçado (anel duplo)" },
+    links: { default: "Padrão SPO", underline: "Sempre sublinhados" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks" });
 
   function read() {
     const prefs = { ...DEFAULTS };

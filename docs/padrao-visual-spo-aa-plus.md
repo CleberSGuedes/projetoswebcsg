@@ -52,6 +52,8 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 | Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (§3.5) | `data-spo-cvd` |
+| Realce do foco ("Visão e cores") | **Padrão SPO** (anel de 3 px) | Reforçado: anel duplo (§4.4) | `data-spo-focus` |
+| Links ("Visão e cores") | **Padrão SPO** (cor de destaque e negrito) | Sempre sublinhados | `data-spo-links` |
 | Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
@@ -245,6 +247,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 | Paginação | página ativa com borda `--accent`, negrito e `aria-current="page"` (#42, #49) |
 | Avisos modais | `role="dialog"`, foco dentro, Tab preso, Esc fecha, foco volta (#41) |
 | **Cabeçalho de página** | cartão `header.module-header` (ou `report-header`): sobretítulo `.module-eyebrow` (11 px, maiúsculas), `<h1>` 24 px negrito, descrição em `<p>`, e à direita o **ícone do item do menu** (`MENU_META`, `services/features.py`) num quadrado na cor de destaque (#84). Tela nova usa essa marcação |
+| Foco reforçado (opção) | anel de **4 px** na cor do anel de foco (`--spo-focus-ring`) entre duas faixas de 2 px na cor do fundo (branco no claro, preto no escuro): anel × faixa ≥ 4,69:1 nos 8 destaques (WCAG 2.4.13). Dentro de áreas que cortam o que passa da borda (menu, grupos do Personalizar, tabelas com rolagem, avisos modais), o anel vai **para dentro** do controle. Medir com Tab real e **esperar a transição** dos controles (~0,2 s) antes de ler o estilo |
 | Foco levado ao título | ao abrir tela ou fechar aviso, o foco vai ao `<h1>` (A11) **sem anel**: título e `<main>` não são controles (#69). Controles mantêm o anel |
 | Totais dos relatórios | 2 colunas sempre que os pares cabem numa linha; senão 1; se rótulo e valor não cabem lado a lado, o **valor desce inteiro** (#31, #56). PLAN 51: o mesmo comportamento quando o **cartão** tem até 640 px (container query `spo-plan51`; até 900 px os botões descem) (#77) |
 | Quadros comparativos do Teto | colunas de ano com mínimo de 184 px (cabe "R$ 99.999.999.999,99" em 14 px mono); com pouco espaço, o quadro rola para o lado (#82) |

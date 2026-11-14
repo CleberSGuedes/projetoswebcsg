@@ -52,6 +52,8 @@
     spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
     spoReading: ["default", ["default", "medium", "strict"], "reading"],
     spoCvd: ["default", ["default", "safe"], "cvd"],
+    spoFocus: ["default", ["default", "strong"], "focus"],
+    spoLinks: ["default", ["default", "underline"], "links"],
   };
   let fontPrefs = {};
   try {
