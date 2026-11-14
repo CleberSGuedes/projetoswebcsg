@@ -2142,3 +2142,23 @@ Segundo passo da escala do padrão spo-aa+ (§2.2): o título da página.
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulos.1` nos dois.
+
+## Totais do PLAN 51 sem corte em telas estreitas (dev. Jean, 2026-11-13)
+
+Achado na medição dos títulos (passo 2 da escala tipográfica): no celular, o quadro "Totais (filtros aplicados)" do PLAN 51 aparecia cortado à direita.
+
+- **Causa:** o quadro do PLAN 51 (`.totais-box--wide`) cresce até caber tudo numa linha (`min-width: max-content`), para os valores em bilhões. Ele fica numa grade de duas colunas fixas ao lado dos botões (`grid-template-columns: max-content auto`). Com o cartão do relatório estreito, o conjunto passava do cartão:
+  - a 375 px, quadro de 562 px num cartão de 283 px, com valores e botões cortados;
+  - entre ~820 e ~950 px de janela, os botões saíam do cartão.
+  - O #31/#56 tinha deixado o PLAN 51 de fora de propósito ("mantém o quadro próprio").
+- **Correção** (bloco `[jean]` no fim do `style.css`), medida pela **largura do próprio cartão** (container query `spo-plan51`), não da janela:
+  - cartão até 900 px: os botões descem para baixo do quadro, como diz a regra original ("quebra de linha antes dos botões");
+  - cartão até 640 px: o quadro usa a mesma regra adaptável dos outros relatórios (#31/#56), com colunas que cabem e o valor descendo de linha quando não cabe ao lado do rótulo;
+  - cartão mais largo: o PLAN 51 não muda.
+  - O `container` é declarado só no cartão que contém o `.totais-box--wide`, e os outros relatórios não são afetados.
+- **Verificação:** SPO local. O PLAN 51 está vazio no banco de desenvolvimento, então os totais foram preenchidos na página com valores de bilhões, para simular o caso real.
+  - Janelas de 375, 640, 768, 860, 960, 1100 e 1440 px: em nenhuma o quadro, um valor ou um botão passa do cartão, e não há rolagem lateral.
+  - A 1440 e 1100 px, quadro e botões lado a lado, como antes; a 1440 px, nas mesmas posições de antes.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-totais-plan51.1` nos dois.
