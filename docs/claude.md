@@ -2162,3 +2162,20 @@ Achado na medição dos títulos (passo 2 da escala tipográfica): no celular, o
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-totais-plan51.1` nos dois.
+
+## Superfícies que ficaram fora do tema: totais da Meta Física, "Escolher arquivo" e avisos no escuro (dev. Jean, 2026-11-14)
+
+Prints do dev. Jean durante a revisão da tipografia.
+
+| Caso | Causa | Antes (medido) | Depois (medido) |
+|---|---|---|---|
+| Totais da Meta Física (`.meta-fisica-resumo-card`) | cores fixas de tema claro (fundo `#f6fafc`, borda `#c6d8e2`, texto `#334155`/`#0f172a`) | **escuro:** cartão claro sobre fundo escuro; **claro:** borda 1,47:1 e cartão 1,05:1 contra o fundo (quase some) | fundo `--surface`, borda dos campos `--spo-control-border`, texto `--muted`/`--text`. **Claro:** borda 3,47:1, textos 9,29/16,86:1. **Escuro:** fundo `#242424`, borda 4,40:1, textos 9,96/14,26:1 |
+| "Escolher arquivo" (`::file-selector-button`) | o botão nativo nunca teve estilo e ficava claro no escuro | botão claro do navegador nos dois temas | botão em contorno, como os secundários (#60): borda dos campos, texto do tema, 12 px, destaque a 12% no mouse e no foco. Texto 16,86:1 (claro) e 14,26:1 (escuro), borda 3,47 e 4,40:1 |
+| Avisos `.alert-info` no escuro (ex.: "Regras de segurança" da Limpeza de Histórico) | texto fixo `#0f4c4c` (verde escuro), sem versão escura | **1,46:1** | texto `--text`, fundo do destaque a 10%, borda dos campos: **11,65:1**, borda 4,40:1. No claro, sem mudança (8,86:1) |
+
+- **Correção:** bloco `[jean]` no fim do `style.css`, com `:not(#spo-sup)` para vencer as regras antigas.
+- **Verificação:** SPO local, telas Meta Física (formulário), Atualizar FIP 613 e Limpeza de Histórico, nos dois temas.
+  - O "Escolher arquivo" ocupa praticamente o mesmo espaço do botão nativo. No campo estreito do Atualizar FIP 613 (painel a 1036 px), o texto "Nenhum arquivo escolhido" é abreviado pelo navegador, com o botão novo e também com o nativo (conferido desligando a regra).
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-superficies.1` nos dois.
