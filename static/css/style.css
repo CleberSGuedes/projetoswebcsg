@@ -8654,3 +8654,22 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
     line-height: 1.5;
   }
 }
+
+/* ==========================================================================
+   [jean] Escala tipográfica, passo 2: título da página igual em todas as telas
+   (fix/titulos-de-pagina, 2026-11-13; padrão spo-aa+ §2.2)
+   Medição das 66 telas: o título da página tinha 22, 23, 24 ou 25,6 px, peso 500
+   ou 700 e entrelinha 1,2 ou 1,5, conforme o módulo. Passa a 24 px, negrito (700,
+   decisão do Jean) e entrelinha 1,2 em todo cabeçalho de página: <h1> do conteúdo
+   e o .card-title que faz papel de título nos cabeçalhos de módulo e de relatório.
+   Telas sem cabeçalho de página (formulários de cadastro e consultas) não mudam:
+   o título delas é o do cartão do formulário.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body :is(#content-area h1, .module-header-copy > .card-title, .report-header-copy > .card-title,
+           .home-grid .card.highlight > .card-title):not(#spo-titulo-pagina) {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+}

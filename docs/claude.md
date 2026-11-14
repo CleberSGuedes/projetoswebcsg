@@ -2127,3 +2127,18 @@ Primeira aplicação da escala do padrão spo-aa+ (§2.2): os textos de leitura 
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-tipografia-12.1` nos dois.
+
+## Escala tipográfica, passo 2: título da página igual em todas as telas (dev. Jean, 2026-11-13)
+
+Segundo passo da escala do padrão spo-aa+ (§2.2): o título da página.
+
+- **Medição** das 66 telas, com o mesmo critério que o A11 usa para achar o título (o primeiro `<h1>` visível, ou o `.card-title` do cabeçalho):
+  - **55 telas com cabeçalho de página**, com títulos de 22, 23, 24 e 25,6 px, peso 500 (Governança e Resultados, Personalizar, Notas SEE) ou 700, e entrelinha 1,2 ou 1,5;
+  - **11 telas sem cabeçalho de página**: formulários e consultas de Meta Física, Subação, Etapa, Dotação e Estorno de Dotação, e a Limpeza de Histórico. Nelas o "título" é o do cartão do formulário, com 14 px.
+- **Correção** (bloco `[jean]` no fim do `style.css`): `#content-area h1`, o `.card-title` dos cabeçalhos de módulo e de relatório e o "Bem-vindo" da Início passam a **24 px, negrito (700) e entrelinha 1,2**. O peso é decisão do dev. Jean. As 11 telas sem cabeçalho não mudam: dar um cabeçalho a elas é mudança de template, que fica para outra decisão.
+- **Verificação:** SPO local, logado.
+  - Mesma medição depois: as 55 telas com 24 px / 700 / 1,2, um `<h1>` por tela, título numa linha no computador. As 11 telas de formulário sem mudança.
+  - A 375 px: o título mais longo ("PLAN 51 - Relação Detalhada de Créditos Adicionais") ocupa 5 linhas, como já ocupava com 23 px, sem corte e sem rolagem lateral.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulos.1` nos dois.
