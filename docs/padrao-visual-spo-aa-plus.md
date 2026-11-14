@@ -55,8 +55,11 @@ computador ou celular. O navegador só baixa a fonte em uso.
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
   (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux). Não é mais o padrão.
 - A escolha de cada pessoa fica no navegador (`localStorage`, chave `spo-font-preferences`). Sem
-  escolha salva, vale o padrão acima, inclusive na tela de login (o CSS aplica a Inter quando o
-  `<body>` não tem o atributo).
+  escolha salva, vale o padrão acima.
+- **Tela de login:** o `login-theme.js` lê a mesma chave e grava os mesmos atributos; lá valem a
+  fonte da interface, o tamanho geral (o cartão de login é ampliado) e a entrelinha do texto do
+  cartão. **Se as opções mudarem no `main.js` (`initFontesPersonalizar`), mude também no
+  `login-theme.js`** (como a paleta, §3.3).
 - **Troca consciente:** a Intel One Mono deixa as tabelas **mais largas** (textos longos quebram em
   mais linhas); em troca, os números ficam alinhados e as letras, bem distintas.
 - Texto de componente novo herda a fonte do `<body>`; tabela nova deve usar as classes de tabela do

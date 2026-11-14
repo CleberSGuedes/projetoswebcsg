@@ -8922,3 +8922,24 @@ body[data-spo-table-text="medium"] #content-area table:not(.fip-table, .plan20-t
 body[data-spo-table-text="compact"] #content-area table:not(.fip-table, .plan20-table):not(.spo-fontes-amostra table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button), th *:not(input, select, textarea, button)) {
   font-size: 8px;
 }
+
+/* ==========================================================================
+   [jean] Login com as fontes e o tamanho escolhidos no Personalizar
+   (feat/login-fontes, 2026-11-14; padrão spo-aa+ §2.1)
+   O login-theme.js grava no <body> os mesmos atributos do main.js
+   (data-spo-font-ui etc.). A fonte da interface já vale pelas regras do body;
+   aqui entram o tamanho do texto (o cartão faz o papel do .main) e a entrelinha
+   do texto corrido do cartão (subtítulo, avisos, ajudas).
+   ========================================================================== */
+body.login-body[data-spo-text-size="large"] .login-card:not(#spo-login-fontes) {
+  zoom: 1.125;
+}
+body.login-body[data-spo-text-size="larger"] .login-card:not(#spo-login-fontes) {
+  zoom: 1.25;
+}
+body.login-body[data-spo-line-height="ample"] .login-card :is(p, .alert, small, .muted):not(button *, label):not(#spo-login-fontes) {
+  line-height: 1.75;
+}
+body.login-body[data-spo-line-height="larger"] .login-card :is(p, .alert, small, .muted):not(button *, label):not(#spo-login-fontes) {
+  line-height: 2;
+}
