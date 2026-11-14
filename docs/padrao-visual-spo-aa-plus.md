@@ -92,8 +92,8 @@ Regras:
 - **Dados** (valores, totais, KPIs, códigos) usam a fonte de dados do §2.1, inclusive fora de
   `<table>` (ex.: aba Tabelas do Teto, #82). Componente novo que mostra número deve entrar na lista
   de seletores da fonte de dados.
-- O texto **dentro dos gráficos** (SVG do Plotly) ainda segue a configuração de cada gráfico, com
-  11 px: fora da escala, a tratar (§7).
+- O texto **dentro dos gráficos** (SVG do Plotly) usa a fonte da interface com mínimo de 12 px,
+  aplicado a todo gráfico por `initGraficosEscala` (`main.js`).
 
 Aplicação (por PRs, medindo antes e depois): (1) os casos abaixo de 12 px e as descrições com
 entrelinha 1,25 (§7) — feito (#75, #82); (2) títulos de página iguais — feito (#76); (3) opção
@@ -161,6 +161,9 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 - **1ª cor de série = destaque** (tom com ≥ 3:1); as demais são **cores categóricas** para distinguir
   séries — podem ser azuis, rosas etc. de propósito;
 - todo gráfico tem resumo para leitor de tela e "Ver dados em tabela";
+- **layout comum a todo gráfico** (`initGraficosEscala`): fonte da interface ≥ 12 px, eixos com
+  `automargin`, legenda vertical no pé, pizza com `automargin`; em gráfico estreito (≤ 520 px),
+  margens mínimas, eixo X inclinado e nomes longos da legenda quebrados entre palavras;
 - **a cor de um grupo é a mesma em gráficos e tabelas**: tabelas e cartões que colorem por categoria
   usam a mesma paleta do tema dos gráficos (`getTetoChartColors()` no Teto, #81), nunca uma paleta fixa.
 
@@ -294,8 +297,8 @@ PR da área, os literais viram tokens. Um teste da suíte deve impedir **literai
 
 **Tipografia** — a tabela abaixo é a medição de 2026-11-13. **Resolvidos:** os casos de 10–11 px e as
 entrelinhas apertadas (#75; topo e rodapé ficam em 10 px por decisão do dev. Jean), os títulos de
-página (#76) e a aba Tabelas do Teto (#82). **Restam:** o texto dentro dos gráficos (Plotly, 11 px) e
-os tokens `--spo-fs-*`/`--spo-lh-*`.
+página (#76) e a aba Tabelas do Teto (#82). **Resta:** os tokens `--spo-fs-*`/`--spo-lh-*` (o texto dos gráficos foi
+resolvido por `initGraficosEscala`).
 
 | Caso | Onde | Telas |
 |---|---|---|
@@ -310,7 +313,7 @@ os tokens `--spo-fs-*`/`--spo-lh-*`.
 
 | Ponto | Situação |
 |---|---|
-| Legendas dos gráficos (Plotly) se sobrepõem com espaçamento forçado (1.4.12) | mitigado pela tabela "Ver dados do gráfico"; correção (legenda vertical ou HTML) a decidir |
+| Legendas dos gráficos (Plotly) com espaçamento forçado (1.4.12) | **resolvido** (legenda vertical, nomes quebrados no estreito). Resta, a 375 px e só com espaçamento imposto depois do desenho, um rótulo inclinado de eixo a 5 px da borda; a tabela de dados cobre |
 | 11 telas de formulário/consulta sem cabeçalho de página (§4.4) | a decidir (mudança de template) |
 | Programação PTA 2027 com cabeçalho próprio | depende do futuro do PTA 2027 |
 | Ícone do cabeçalho repete o do `MENU_META`; paleta do login repete o `ACCENT_COLORS` | na divisão, gerar de uma fonte só |
