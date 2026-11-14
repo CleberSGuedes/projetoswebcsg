@@ -9124,3 +9124,42 @@ body[data-spo-motion="reduce"] .app-loading-dot { opacity: 1; }
   body .grid:has(> .module-header):not(#spo-usuarios-celular) { grid-template-columns: minmax(0, 1fr); }
   body .grid:has(> .module-header):not(#spo-usuarios-celular) > .module-header { grid-column: auto; }
 }
+
+/* ==========================================================================
+   [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; ver initBuscaTelas
+   no fim do main.js). Item "Buscar tela" no menu lateral, abaixo de "Início".
+   A caixa usa as classes dos avisos do SPO (modal-overlay, modal-card,
+   modal-header-title) e o campo .field; aqui só o que é próprio da busca:
+   largura, lista de resultados e a camada acima dos avisos. Opção ativa com
+   fundo e borda à esquerda (não depende só da cor).
+   ========================================================================== */
+.spo-busca-fundo { /* o mesmo fundo dos avisos (.modal-overlay), numa camada acima deles (9999) */
+  position: fixed; inset: 0; z-index: 10001;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 10vh; background: rgba(0, 0, 0, 0.45);
+}
+.spo-busca-fundo[hidden] { display: none; }
+body.spo-busca-aberta { overflow: hidden; }
+.spo-busca-caixa { width: min(640px, calc(100% - 48px)); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; }
+.spo-busca-titulo { margin: 0; line-height: 1.3; }
+.spo-busca-campo input { font-size: 14px; }
+.spo-busca-secao:not(:empty) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.spo-busca-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.spo-busca-opcao {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; padding: 6px 10px;
+  border-left: 4px solid transparent; border-radius: 8px; cursor: pointer;
+}
+.spo-busca-opcao:hover { background: rgba(var(--accent-rgb), 0.08); }
+.spo-busca-opcao[aria-selected="true"] { background: rgba(var(--accent-rgb), 0.16); border-left-color: var(--accent); }
+.spo-busca-opcao > .bi { font-size: 16px; color: var(--spo-accent-text, var(--accent)); }
+.spo-busca-texto { display: flex; flex-direction: column; min-width: 0; }
+.spo-busca-texto strong { font-size: 14px; font-weight: 600; }
+.spo-busca-texto small { font-size: 12px; color: var(--muted); overflow-wrap: break-word; }
+.spo-busca-externo { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.spo-busca-rodape { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.spo-busca-status { margin: 0; font-size: 12px; color: var(--muted); }
+@media (max-width: 600px) {
+  .spo-busca-fundo { padding: 0; }
+  .spo-busca-caixa { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
+}
