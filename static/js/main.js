@@ -27727,11 +27727,13 @@
     line: { default: "Padrão (1,5)", ample: "Amplo (1,75)", larger: "Mais amplo (2,0)" },
     // largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8)
     reading: { default: "Padrão SPO (largura livre)", medium: "Intermediário (72ch)", strict: "Estrito (WCAG AAA, até 80 caracteres)" },
+    // cartão "Visão e cores" (feat/graficos-daltonismo, 2026-11-14): cores dos gráficos
+    cvd: { default: "Padrão SPO", safe: "Seguras para daltonismo" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd" });
 
   function read() {
     const prefs = { ...DEFAULTS };
@@ -27785,12 +27787,15 @@
     });
   }
 
+  // cartões que usam estas preferências: "Fontes e tamanho do texto" e "Visão e cores"
+  const CARDS = "#spo-fontes-card, #spo-visao-card";
   function prepareCard() {
-    const card = document.getElementById("spo-fontes-card");
-    if (!card || card.dataset.spoFontReady === "1") return;
-    card.dataset.spoFontReady = "1";
-    sync(card);
-    setOpen(card, "");
+    document.querySelectorAll(CARDS).forEach((card) => {
+      if (card.dataset.spoFontReady === "1") return;
+      card.dataset.spoFontReady = "1";
+      sync(card);
+      setOpen(card, "");
+    });
   }
 
   document.addEventListener("click", (ev) => {
@@ -27803,16 +27808,16 @@
         /* armazenamento bloqueado: vale só nesta página */
       }
       apply({ ...DEFAULTS });
-      const fontes = document.getElementById("spo-fontes-card");
-      if (fontes) {
-        sync(fontes);
-        setOpen(fontes, "");
-        const status = fontes.querySelector(".spo-fontes-status");
-        if (status) status.textContent = "Fontes e tamanhos de volta ao padrão SPO.";
-      }
+      document.querySelectorAll(CARDS).forEach((c) => {
+        sync(c);
+        setOpen(c, "");
+        const status = c.querySelector(".spo-fontes-status");
+        if (status) status.textContent = c.id === "spo-visao-card" ? "Cores de volta ao padrão SPO." : "Fontes e tamanhos de volta ao padrão SPO.";
+      });
+      avisarGraficos();
       return;
     }
-    const card = ev.target.closest && ev.target.closest("#spo-fontes-card");
+    const card = ev.target.closest && ev.target.closest(CARDS);
     if (!card) return;
     const toggle = ev.target.closest("[data-spo-font-toggle]");
     if (toggle) {
@@ -27829,17 +27834,23 @@
     const prefs = { ...read(), [key]: value };
     save(prefs);
     apply(prefs);
+    if (key === "cvd") avisarGraficos();
     sync(card);
     setOpen(card, "");
     const status = card.querySelector(".spo-fontes-status");
     if (status) status.textContent = `"${OPTIONS[key][value]}" aplicada neste navegador.`;
   });
 
+  // gráficos e tabelas coloridas por grupo redesenham com a paleta nova (o Teto escuta este evento)
+  function avisarGraficos() {
+    document.dispatchEvent(new CustomEvent("spo-common-visual-change", { detail: {} }));
+  }
+
   window.addEventListener("storage", (ev) => {
     if (ev.key !== STORAGE_KEY) return;
     apply(read());
-    const card = document.getElementById("spo-fontes-card");
-    if (card) sync(card);
+    document.querySelectorAll(CARDS).forEach((c) => sync(c));
+    avisarGraficos();
   });
 
   apply(read());
@@ -28251,7 +28262,23 @@
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const distancia = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
 
-  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+  // [jean] Cores seguras para daltonismo (feat/graficos-daltonismo, 2026-11-14): paleta Okabe-Ito
+  // (Okabe & Ito, 2008), distinta nos três tipos (protanopia, deuteranopia, tritanopia). No escuro,
+  // a ordem troca o azul-escuro pelo azul-claro e o preto pelo branco. Positivo/negativo: azul ×
+  // laranja (nunca verde × vermelho). As barras e fatias ganham contorno na cor do texto (o
+  // contorno é que garante 3:1 com o fundo, WCAG 1.4.11) e padrões (initGraficosEscala).
+  const PALETA_DALTONISMO = {
+    claro: ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#56B4E9", "#CC79A7", "#F0E442", "#000000"],
+    escuro: ["#56B4E9", "#E69F00", "#009E73", "#D55E00", "#0072B2", "#CC79A7", "#F0E442", "#FFFFFF"],
+  };
+  window.spoPaletaDaltonismo = PALETA_DALTONISMO;
+  const comDaltonismo = (tema, modo) => {
+    if (document.body.dataset.spoCvd !== "safe" || modo === "system") return tema;
+    const escuro = modo === "dark" || modo === "highDark" || modo === "high";
+    const pal = escuro ? PALETA_DALTONISMO.escuro : PALETA_DALTONISMO.claro;
+    return { ...tema, palette: pal.slice(), positive: pal[0], negative: escuro ? "#E69F00" : "#D55E00", cumulative: pal[5], line: pal[5] };
+  };
+  const temaBase = (tema, modo) => {
     // [jean] alto contraste escuro (fix/alto-contraste-escuro-fundo, 2026-11-14): fundo do cartão
     // (transparente) no lugar do azul-marinho fixo; cores das séries, texto e moldura continuam as do
     // alto contraste (séries ≥ 5,77:1 e texto 14,8:1 sobre o cartão #242424).
@@ -28279,6 +28306,9 @@
       focus: destaque,
       palette: [destaque, ...resto],
     };
+  };
+  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+    return comDaltonismo(temaBase(tema, modo), modo);
   };
 })();
 
@@ -28457,10 +28487,56 @@
     if (atual) linhas.push(atual);
     return linhas.join("<br>");
   };
+  // [jean] Cores seguras para daltonismo (feat/graficos-daltonismo): além da paleta (tema dos
+  // diagramas), cada cor ganha um padrão próprio nas barras, fatias e blocos, contorno na cor do
+  // texto e, nas linhas, marcador e traço próprios. O padrão segue a COR (a mesma série tem o mesmo
+  // padrão em todos os gráficos), então a legenda também mostra a diferença sem depender da cor.
+  const PADROES = ["", "/", "\\", "x", "-", "|", "+", "."];
+  const SIMBOLOS = ["circle", "square", "diamond", "triangle-up", "x", "triangle-down", "star", "cross"];
+  const TRACOS = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot", "solid", "dash"];
+  const cvdLigado = () => document.body.dataset.spoCvd === "safe";
+  const corTexto = () => (getComputedStyle(document.body).getPropertyValue("--text") || "").trim() || "#24323d";
+  // posição da cor na paleta do modo atual (claro ou escuro): a mesma cor tem o mesmo padrão
+  const indiceCor = (cor, i) => {
+    const P = window.spoPaletaDaltonismo;
+    if (!P) return i % 8;
+    let modo = "";
+    try { modo = window.spoGetDiagramSemanticTokens().mode; } catch (err) { modo = ""; }
+    const pal = ["dark", "highDark", "high"].includes(modo) ? P.escuro : P.claro;
+    const k = pal.findIndex((c) => c.toLowerCase() === String(cor || "").toLowerCase());
+    return k >= 0 ? k : i % 8;
+  };
+  function comPadroes(t, i) {
+    const contorno = corTexto();
+    const padrao = (cor, j) => ({ shape: PADROES[indiceCor(cor, j)], fillmode: "overlay", fgcolor: contorno, fgopacity: 0.55, size: 8, solidity: 0.25 });
+    const m = { ...(t.marker || {}) };
+    if (t.type === "bar") {
+      m.pattern = Array.isArray(m.color)
+        ? { ...padrao(null, i), shape: m.color.map((c, j) => PADROES[indiceCor(c, j)]) }
+        : padrao(m.color, i);
+      m.line = { ...(m.line || {}), color: contorno, width: 1 };
+    } else if (t.type === "pie") {
+      const cores = m.colors || [];
+      m.pattern = { ...padrao(null, 0), shape: (t.values || t.labels || []).map((_, j) => PADROES[indiceCor(cores[j], j)]) };
+      m.line = { ...(m.line || {}), color: contorno, width: 1.5 };
+    } else if (t.type === "treemap") {
+      m.line = { ...(m.line || {}), color: contorno, width: 1.5 };
+    } else if (t.type === "scatter" || t.mode) {
+      const cor = (t.line && t.line.color) || m.color;
+      const k = indiceCor(cor, i);
+      m.symbol = SIMBOLOS[k];
+      m.size = Math.max(m.size || 0, 8);
+      m.line = { ...(m.line || {}), color: contorno, width: 1 };
+      return { ...t, mode: t.mode && t.mode.includes("markers") ? t.mode : `${t.mode || "lines"}+markers`, marker: m, line: { ...(t.line || {}), dash: TRACOS[k] } };
+    }
+    return { ...t, marker: m };
+  }
+
   function ajustarDados(gd, data) {
     const el = elDe(gd);
     if (el) el.__spoDataBase = data;
     if (!Array.isArray(data)) return data;
+    if (cvdLigado()) data = data.map((tr, i) => (tr && typeof tr === "object" ? comPadroes(tr, i) : tr));
     const largura = el ? el.getBoundingClientRect().width : 0;
     const estreito = largura > 0 && largura <= ESTREITO;
     const max = Math.max(14, Math.floor((largura - 48) / 8));
@@ -28495,4 +28571,72 @@
       });
     }, 250);
   });
+})();
+
+/* ==========================================================================
+   [jean] Validador da paleta segura para daltonismo (feat/graficos-daltonismo, 2026-11-14)
+   window.spoValidarPaletaDaltonismo(): para as paletas clara e escura
+   (window.spoPaletaDaltonismo), simula protanopia, deuteranopia e tritanopia
+   (matrizes de Machado, Oliveira e Fernandes, 2009, severidade total, em RGB
+   linear) e mede a diferença de cor entre cada par de séries (CIEDE2000).
+   Também mede o contraste do contorno (cor do texto) com o fundo do gráfico.
+   Uso: na ferramenta do navegador, em qualquer tela; não muda nada na página.
+   ========================================================================== */
+(function initValidadorDaltonismo() {
+  const M = {
+    normal: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+    deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+    tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.3039]],
+  };
+  const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const sim = (h, m) => { const c = rgb(h).map(lin); return m.map((l) => Math.min(1, Math.max(0, l[0] * c[0] + l[1] * c[1] + l[2] * c[2]))); };
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const contraste = (a, b) => { const x = lum(rgb(a).map(lin)), y = lum(rgb(b).map(lin)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const lab = (c) => {
+    const X = (0.4124 * c[0] + 0.3576 * c[1] + 0.1805 * c[2]) / 0.95047, Y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2], Z = (0.0193 * c[0] + 0.1192 * c[1] + 0.9505 * c[2]) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const rad = (d) => (d * Math.PI) / 180;
+  const de2000 = ([L1, a1, b1], [L2, a2, b2]) => {
+    const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2), Cb = (C1 + C2) / 2;
+    const G = 0.5 * (1 - Math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)));
+    const a1p = (1 + G) * a1, a2p = (1 + G) * a2, C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+    const h1p = ((Math.atan2(b1, a1p) * 180) / Math.PI + 360) % 360, h2p = ((Math.atan2(b2, a2p) * 180) / Math.PI + 360) % 360;
+    let dh = h2p - h1p;
+    if (C1p * C2p === 0) dh = 0; else if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+    const dLp = L2 - L1, dCp = C2p - C1p, dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(rad(dh / 2));
+    const Lbp = (L1 + L2) / 2, Cbp = (C1p + C2p) / 2;
+    let hbp = h1p + h2p;
+    if (C1p * C2p !== 0) hbp = Math.abs(h1p - h2p) <= 180 ? (h1p + h2p) / 2 : (h1p + h2p < 360 ? (h1p + h2p + 360) / 2 : (h1p + h2p - 360) / 2);
+    const T = 1 - 0.17 * Math.cos(rad(hbp - 30)) + 0.24 * Math.cos(rad(2 * hbp)) + 0.32 * Math.cos(rad(3 * hbp + 6)) - 0.2 * Math.cos(rad(4 * hbp - 63));
+    const dth = 30 * Math.exp(-(((hbp - 275) / 25) ** 2)), Rc = 2 * Math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7));
+    const Sl = 1 + (0.015 * (Lbp - 50) ** 2) / Math.sqrt(20 + (Lbp - 50) ** 2), Sc = 1 + 0.045 * Cbp, Sh = 1 + 0.015 * Cbp * T, Rt = -Math.sin(rad(2 * dth)) * Rc;
+    return Math.sqrt((dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh));
+  };
+
+  window.spoValidarPaletaDaltonismo = function (opcoes = {}) {
+    const minimoDE = opcoes.minimoDE ?? 10; // diferença mínima entre séries (o padrão desenhado ajuda além disso)
+    const fundos = { claro: opcoes.fundoClaro || "#ffffff", escuro: opcoes.fundoEscuro || "#1a1a1a" };
+    const contornos = { claro: opcoes.contornoClaro || "#24323d", escuro: opcoes.contornoEscuro || "#f8fafc" };
+    const paletas = window.spoPaletaDaltonismo || {};
+    const resultado = [];
+    Object.keys(paletas).forEach((modo) => {
+      const pal = paletas[modo];
+      Object.entries(M).forEach(([tipo, m]) => {
+        const labs = pal.map((c) => lab(sim(c, m)));
+        let pior = { de: Infinity };
+        for (let i = 0; i < pal.length; i += 1) for (let j = i + 1; j < pal.length; j += 1) {
+          const de = de2000(labs[i], labs[j]);
+          if (de < pior.de) pior = { de, a: pal[i], b: pal[j] };
+        }
+        resultado.push({ modo, tipo, menorDiferenca: Number(pior.de.toFixed(1)), par: `${pior.a} × ${pior.b}`, passou: pior.de >= minimoDE });
+      });
+      const c = contraste(contornos[modo], fundos[modo]);
+      resultado.push({ modo, tipo: "contorno × fundo", menorDiferenca: Number(c.toFixed(2)), par: `${contornos[modo]} × ${fundos[modo]}`, passou: c >= 3 });
+    });
+    return { resultado, falhas: resultado.filter((r) => !r.passou) };
+  };
 })();

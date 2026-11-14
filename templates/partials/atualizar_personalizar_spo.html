@@ -332,6 +332,36 @@
       </div>
       <p class="spo-fontes-status" role="status" aria-live="polite"></p>
     </article>
+
+    {# [jean] Visão e cores (feat/graficos-daltonismo, 2026-11-14): opções para quem tem daltonismo ou baixa visão #}
+    <article class="card personalizar-card visual-preferences-card" id="spo-visao-card">
+      <div class="eyebrow">Acessibilidade</div>
+      <div class="card-title">Visão e cores</div>
+      <p class="muted">Ajustes para daltonismo e baixa visão. Vale só neste navegador. O Windows também tem filtros de cor e lupa para todos os programas (Configurações → Acessibilidade).</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-spo-font-group="cvd">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="cvd" aria-expanded="false" aria-controls="spo-font-panel-cvd">
+            <i class="bi bi-palette" aria-hidden="true"></i>
+            <span>
+              <strong>Cores dos gráficos</strong>
+              <small data-spo-font-current="cvd">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-cvd" data-spo-font-panel="cvd" role="group" aria-label="Cores dos gráficos" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="default">
+              <i class="bi bi-bar-chart" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Cores do tema, com a cor de destaque na primeira série.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="safe">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+              <span><strong>Seguras para daltonismo</strong><small>Cores que se distinguem nos três tipos de daltonismo, com listras e pontos nas barras e fatias e marcadores diferentes nas linhas. As tabelas coloridas seguem as mesmas cores.</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+    </article>
     <article class="card personalizar-card personalizar-preview" id="spo-previsualizacao">
       <div class="eyebrow">Prévia</div>
       <div class="card-title">Componentes do SPO</div>
