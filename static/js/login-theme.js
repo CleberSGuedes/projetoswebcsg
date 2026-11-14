@@ -51,6 +51,7 @@
     spoTableText: ["legible", ["compact", "medium", "legible"], "table"],
     spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
     spoReading: ["default", ["default", "medium", "strict"], "reading"],
+    spoCvd: ["default", ["default", "safe"], "cvd"],
   };
   let fontPrefs = {};
   try {
