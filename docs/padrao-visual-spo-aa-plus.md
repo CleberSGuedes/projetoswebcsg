@@ -78,7 +78,8 @@ títulos, subtítulos, ênfases e espaçamentos).
 
 Regras:
 - **Mínimo de 12 px** para qualquer texto que se lê; 11 px só no passo "Rótulo" (curto, maiúsculas,
-  negrito). O "Tamanho do texto" do Personalizar (112%, 125%) multiplica esta escala.
+  negrito). **Exceção, informação secundária:** o nome e o "Logados" do topo (`.user-meta`) e o
+  rodapé ficam com **10 px** (decisão do dev. Jean, 2026-11-13). O "Tamanho do texto" do Personalizar (112%, 125%) multiplica esta escala.
 - **Entrelinha 1,5** em todo texto que pode ocupar mais de uma linha (referência: WCAG 1.4.8, nível
   AAA; e o 1.4.12 pede que o conteúdo aguente 1,5 sem quebrar). Títulos usam 1,2–1,25.
 - Tamanhos fracionados (11,52; 12,25; 13,44; 16,71; 25,6 px) vêm de `em`/`rem` herdados: usar px da
