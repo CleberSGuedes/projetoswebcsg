@@ -9110,3 +9110,17 @@ body[data-spo-motion="reduce"] :is(.app-loading-progress, .app-loading-marker, .
   animation: none !important;
 }
 body[data-spo-motion="reduce"] .app-loading-dot { opacity: 1; }
+
+/* ==========================================================================
+   [jean] Telas de Usuários no celular (fix/usuarios-celular, 2026-11-14;
+   WCAG 1.4.10)
+   Até 900 px, as telas com cabeçalho e duas colunas deviam passar a uma coluna
+   (.grid:has(> .module-header) { 1fr }), mas a regra perdia por especificidade
+   para a que define as duas colunas de Cadastrar, Editar, Perfil e API
+   (.grid:has(> .module-header .bi-person-gear) etc., com coluna mínima de
+   320 px): a 360 px, a tela rolava para o lado (580 px de conteúdo em 296).
+   ========================================================================== */
+@media (max-width: 900px) {
+  body .grid:has(> .module-header):not(#spo-usuarios-celular) { grid-template-columns: minmax(0, 1fr); }
+  body .grid:has(> .module-header):not(#spo-usuarios-celular) > .module-header { grid-column: auto; }
+}
