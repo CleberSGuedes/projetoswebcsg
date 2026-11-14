@@ -2496,3 +2496,23 @@ Terceiro e último item do cartão "Visão e cores" do plano do dev. Jean.
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-visao-6c.1`).
 
+## Densidade automática (dev. Jean, 2026-11-14)
+
+Decisão do dev. Jean na discussão de 14/11. Em vez de trocar o preset do Contrato Visual pelo tipo de aparelho ("Pressão operacional" no celular, "Compacto gerencial" no tablet), a densidade passa a ser escolhida pela **largura da janela**. A largura acompanha zoom, redimensionamento e janela dividida; já retrato × paisagem não diz se a tela é de celular (um monitor em retrato tem 1080 px e mouse).
+
+- **Opção nova "Automática" (padrão SPO)** no grupo "Densidade visual" do Personalizar Temas:
+  - mais de 1200 px: confortável;
+  - de 721 a 1200 px: compacta;
+  - até 720 px: ampla.
+- **Como funciona:** as 34 regras de CSS de cada densidade são as mesmas de sempre. Muda só o valor que vai para `data-visual-density`: com "Automática", o bloco `[jean]` `initDensidadeAutomatica` (fim do `main.js`) escolhe pela largura e atualiza ao redimensionar. A escolha da pessoa fica em `data-visual-density-pref`. O alvo de toque de 44 px continua vindo da regra de ponteiro grosso (#35).
+- **Código do Cleber tocado (4 linhas, marcadas `[jean]`):** a opção `auto` em `COMMON_VISUAL_OPTIONS.density`, o padrão `density: "auto"` em `COMMON_VISUAL_DEFAULTS` (era `"comfortable"`) e a linha de `applyCommonVisualPreferences` que grava a densidade (agora grava a escolhida e a em uso). O `login-theme.js` resolve do mesmo jeito.
+- **Quem já tem preferências visuais salvas no navegador** continua com a densidade gravada (em geral "confortável", o padrão antigo, porque o SPO grava todas as preferências juntas quando se muda qualquer uma). Para passar à automática, basta escolhê-la ou usar "Restaurar padrão".
+- **Verificação** (SPO local):
+  - **faixas:** os 14 tamanhos da matriz caem na faixa certa e mudam na hora ao redimensionar. Ampla: celulares em pé e zoom de 200% (640 px). Compacta: celulares deitados, tablets em pé e deitados, monitor em retrato de 1080 px. Confortável: de 1280 px em diante;
+  - **layout:** 9 telas (Início, Limpeza, Teto, FIP 613 relatório e upload, Personalizar, Usuários, Parceiros, Estrutura) a 390 px (ampla) e a 1024 px (compacta), comparadas com a confortável: nenhuma rolagem lateral nem corte novos;
+  - **Personalizar:** escolher uma densidade fixa grava e vale; voltar a "Automática" recalcula;
+  - **login:** ampla a 390, compacta a 1024 e confortável a 1440;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do JS e do `login-theme.js` (`?v=20261114.jean-densidade-auto.1`). Sem CSS novo.
+

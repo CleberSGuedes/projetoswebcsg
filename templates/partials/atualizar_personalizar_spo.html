@@ -64,11 +64,16 @@
             <i class="bi bi-layout-sidebar"></i>
             <span>
               <strong>Densidade visual</strong>
-              <small data-visual-pref-current="density">Confortável</small>
+              <small data-visual-pref-current="density">Automática (pela largura da tela)</small>
             </span>
             <i class="bi bi-chevron-down visual-pref-chevron"></i>
           </button>
           <div class="visual-pref-options" id="visual-pref-panel-density" data-visual-pref-panel="density" role="group" aria-label="Densidade visual" hidden>
+            {# [jean] densidade automática (feat/densidade-automatica, 2026-11-14) #}
+            <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="auto">
+              <i class="bi bi-aspect-ratio"></i>
+              <span><strong>Automática (padrão SPO)</strong><small>Confortável em telas largas, compacta em tablets e notebooks pequenos, ampla no celular. Acompanha o zoom e o tamanho da janela.</small></span>
+            </button>
             <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="comfortable">
               <i class="bi bi-layout-text-sidebar-reverse"></i>
               <span><strong>Confortável</strong><small>Espaço padrão de leitura.</small></span>
