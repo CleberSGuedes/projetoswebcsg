@@ -2419,3 +2419,14 @@ O limite fixo de 72ch do texto corrido (seção "Leitura ampliada", #92) deixava
   - `pytest` completo duas vezes seguidas.
 
 Sem script de banco. Ficam só nas linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-leitura-opcao.1`): `templates/base.html` e `templates/login.html`. O grupo novo está em `templates/partials/atualizar_personalizar_spo.html`.
+
+## Alto contraste escuro dos diagramas com o fundo do cartão (dev. Jean, 2026-11-14)
+
+Na conferência C07 (comparação com o laboratório), o alto contraste dos diagramas passou nos 70 pares de contraste do `spoValidateDiagramContrast()`. Mas, no tema escuro, o gráfico aparecia numa caixa azul-marinho (`#111827`/`#0f172a`) dentro do cartão cinza: a mesma "paleta azulada" que o #45 tirou dos modos claro e escuro comuns, e que ficou no alto contraste só porque ele estava fora daquele PR.
+
+- **Correção** (função `[jean]` `spoTemaDiagramaComDestaque`, 1 linha): no modo `highDark`, fundo transparente (herda o do cartão do gráfico). As cores das séries, o texto e a moldura continuam as do alto contraste. O alto contraste claro (fundo branco) e os modos comuns não mudam.
+- **Contraste sobre o fundo real** (`#1a1a1a` do quadro do gráfico): o texto fica com 16,6:1, o texto secundário com 14,1:1 e as séries com ≥ 6,47:1 (o mínimo exigido é 3:1).
+- **Verificação** no Teto Orçamentário, no tema escuro com "Diagramas: alto contraste": os 5 gráficos com fundo transparente e texto `#f8fafc`. O alto contraste claro continua com fundo branco, e os modos claro e escuro comuns continuam transparentes. A captura foi conferida, e as preferências do navegador voltaram ao estado de antes. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ac-escuro.1`).
+
