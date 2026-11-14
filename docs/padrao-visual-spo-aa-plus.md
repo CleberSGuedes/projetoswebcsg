@@ -51,6 +51,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
+| Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
   (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux). Não é mais o padrão.
@@ -90,10 +91,16 @@ Regras:
   AAA; e o 1.4.12 pede que o conteúdo aguente 1,5 sem quebrar). Títulos usam 1,2–1,25.
 - Tamanhos fracionados (11,52; 12,25; 13,44; 16,71; 25,6 px) vêm de `em`/`rem` herdados: usar px da
   escala.
-- **Largura do texto corrido:** `p`, `li`, `dd` e avisos `.alert` (fora de tabelas, menus e botões)
-  com no máximo **72ch** (média medida de 84–110 caracteres por linha; decisão do dev. Jean, entre
-  o WCAG 1.4.8, que pede ≤ 80, e o uso do espaço nos cartões largos). Parágrafos seguidos com
-  **1 entrelinha** de espaço (`1lh`; decisão do dev. Jean; o AAA pediria 1,5).
+- **Largura do texto corrido** (`p`, `li`, `dd` e avisos `.alert`, fora de tabelas, menus e botões):
+  **livre por padrão**, ocupando o cartão (decisão do dev. Jean, 14/11: o limite fixo deixava muito
+  espaço vazio). O WCAG 1.4.8 (AAA) é atendido **pelo mecanismo** da opção "Leitura" do Personalizar
+  (§2.1):
+  - **Intermediário:** 72ch (média medida de 84–110 caracteres por linha) e 1 entrelinha entre
+    parágrafos;
+  - **Estrito:** no máximo **80 caracteres reais** por linha e **1,5 entrelinha depois de cada
+    parágrafo**. O `ch` é a largura do "0", mais larga que a média das letras, então a largura é
+    **medida por fonte**: 53ch na Inter, 48ch na Atkinson, 56ch na Source Sans 3 e 52ch na do sistema
+    (pior caso medido: 78 caracteres). **Fonte nova no Personalizar precisa dessa medição.**
 - O título da página é **negrito (700), 24 px, entrelinha 1,2** em todas as telas com cabeçalho de
   página (decisão do dev. Jean, 2026-11-13; aplicado no #76).
 - **Dados** (valores, totais, KPIs, códigos) usam a fonte de dados do §2.1, inclusive fora de
