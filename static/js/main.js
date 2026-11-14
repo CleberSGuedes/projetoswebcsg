@@ -28688,3 +28688,276 @@
   [estreita, media].forEach((q) => (q.addEventListener ? q.addEventListener("change", atualizar) : q.addListener(atualizar)));
   atualizar();
 })();
+
+/* ==========================================================================
+   [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; fase 1 do plano do
+   dev. Jean; padrão spo-aa+ §4.4)
+   Item "Buscar tela" no menu lateral, logo abaixo de "Início" (inserido aqui,
+   sem mudar o base.html), e atalhos Ctrl+K e "/". A caixa segue o padrão dos
+   avisos do SPO (modal-overlay/modal-card, título na cor de destaque, campo
+   .field e botão "Fechar" secundário).
+   - Procura nas telas do MENU, que já vem filtrado pelas permissões
+     (applyMenuPermissions esconde com display: none): ninguém acha tela que não vê.
+   - Sem acentos e sem diferença de maiúsculas; acha por nome, grupo do menu e
+     GLOSSÁRIO (siglas e termos que não estão no nome). Mostra o caminho
+     ("Atualizar › Execução › EMP"), porque há vários itens com o mesmo nome.
+   - Caixa vazia: as 5 telas mais recentes DESTE usuário (no navegador, numa
+     chave por conta; não acompanha a pessoa em outro computador).
+   - Acessibilidade: diálogo modal com caixa de busca (combobox) e lista
+     (listbox) no padrão WAI-ARIA; setas, Enter, Esc; anúncio da quantidade.
+   Fase 2 (com o Cleber): glossário administrável no banco e registro das
+   buscas sem resultado.
+   ========================================================================== */
+(function initBuscaTelas() {
+  const GLOSSARIO = [
+    { rotas: ["dashboard"], termos: ["inicio", "home", "pagina inicial", "alerta"] },
+    { rotas: ["/emp"], termos: ["empenho", "empenhos", "nota de empenho"] },
+    { rotas: ["/est-emp"], termos: ["estorno de empenho", "anulacao de empenho"] },
+    { rotas: ["/nob"], termos: ["nota de obrigacao", "notas de obrigacao", "pagamento"] },
+    { rotas: ["/ped"], termos: ["pedido", "pedidos", "pedido de empenho"] },
+    { rotas: ["/fip613"], termos: ["fip", "fip 613"] },
+    { rotas: ["plan20"], termos: ["plan 20", "pta", "planejamento anual"] },
+    { rotas: ["plan21"], termos: ["plan 21", "nger"] },
+    { rotas: ["plan51"], termos: ["plan 51"] },
+    { rotas: ["teto"], termos: ["teto", "plan 23", "plan 134", "momp", "limite orcamentario"] },
+    { rotas: ["/dotacao"], termos: ["dotacao", "credito", "credito orcamentario"] },
+    { rotas: ["est-dotacao"], termos: ["estorno de dotacao", "estorno de credito"] },
+    { rotas: ["estrutura-planejamento"], termos: ["paoe", "acao", "programa", "produto", "estrutura", "uo", "ug"] },
+    { rotas: ["chave"], termos: ["chave", "chave de planejamento", "chaves"] },
+    { rotas: ["programar-pta-loa", "programacao-pta2027"], termos: ["pta", "loa", "programacao"] },
+    { rotas: ["receita-anexo10"], termos: ["receita", "anexo 10"] },
+    { rotas: ["notas-see"], termos: ["nota fiscal", "notas fiscais", "danfe", "see"] },
+    { rotas: ["meta_fisica", "matriculas-metas"], termos: ["meta", "metas", "meta fisica"] },
+    { rotas: ["usuarios/senha"], termos: ["senha", "trocar senha", "mudar senha"] },
+    { rotas: ["usuarios/"], termos: ["usuario", "usuarios", "conta"] },
+    { rotas: ["painel"], termos: ["permissao", "permissoes", "acesso", "perfil de acesso"] },
+    { rotas: ["personalizar-spo/temas"], termos: ["tema", "cores", "cor", "fonte", "letra", "tamanho do texto", "modo escuro", "acessibilidade", "daltonismo", "foco", "densidade", "leitura", "brilho"] },
+    { rotas: ["limpeza-historico"], termos: ["historico", "limpar", "cargas antigas"] },
+    { rotas: ["seguranca-sessao"], termos: ["sessao", "sessoes", "login", "seguranca"] },
+    { rotas: ["institucional/"], termos: ["institucional", "documentos", "links"] },
+  ];
+  const MAX_RECENTES = 5;
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const chaveRecentes = () => {
+    const meta = document.getElementById("user-meta");
+    const conta = meta ? (meta.dataset.email || meta.dataset.name || "") : "";
+    return conta ? `spo-telas-recentes:${norm(conta)}` : "";
+  };
+  const lerRecentes = () => {
+    const k = chaveRecentes();
+    if (!k) return [];
+    try { const v = JSON.parse(localStorage.getItem(k) || "[]"); return Array.isArray(v) ? v : []; } catch (err) { return []; }
+  };
+  const gravarRecente = (rota) => {
+    const k = chaveRecentes();
+    if (!k || !rota || rota === "logout") return;
+    const lista = [rota, ...lerRecentes().filter((r) => r !== rota)].slice(0, MAX_RECENTES);
+    try { localStorage.setItem(k, JSON.stringify(lista)); } catch (err) { /* armazenamento bloqueado */ }
+  };
+
+  // telas que a pessoa vê no menu (as escondidas pelas permissões ficam de fora)
+  const visivelNoMenu = (el) => {
+    for (let e = el; e && !(e.classList && e.classList.contains("sidebar")); e = e.parentElement) {
+      if (e.style && e.style.display === "none") return false;
+    }
+    return true;
+  };
+  function indice() {
+    const menu = document.querySelector(".sidebar");
+    if (!menu) return [];
+    return [...menu.querySelectorAll("a.menu-item[data-route]")]
+      .filter((a) => a.dataset.route !== "logout" && visivelNoMenu(a))
+      .map((a) => {
+        const nome = ((a.querySelector("span") || a).textContent || "").trim();
+        const caminho = [];
+        for (let g = a.parentElement && a.parentElement.closest(".menu-group"); g; g = g.parentElement && g.parentElement.closest(".menu-group")) {
+          const s = g.querySelector(":scope > .menu-parent span");
+          if (s && s.textContent.trim()) caminho.unshift(s.textContent.trim());
+        }
+        const rota = a.dataset.route;
+        const termos = GLOSSARIO.filter((x) => x.rotas.some((r) => rota.includes(r))).flatMap((x) => x.termos);
+        const icone = [...((a.querySelector("i") || {}).classList || [])].find((c) => c.startsWith("bi-")) || "bi-window";
+        return { a, rota, nome, caminho, icone, externo: Boolean(a.dataset.externalUrl), nNome: norm(nome), nCaminho: norm(caminho.join(" ")), nTermos: termos.map(norm) };
+      });
+  }
+  function buscar(lista, consulta) {
+    const q = norm(consulta);
+    if (!q) return [];
+    const palavras = q.split(" ");
+    return lista
+      .map((t) => {
+        const todas = palavras.every((p) => t.nNome.includes(p) || t.nCaminho.includes(p) || t.nTermos.some((x) => x.includes(p)));
+        if (!todas) return null;
+        let pontos = 10;
+        if (t.nNome === q) pontos += 200;
+        if (t.nNome.startsWith(q)) pontos += 100;
+        if (t.nNome.includes(q)) pontos += 60;
+        if (t.nTermos.some((x) => x === q)) pontos += 80;
+        if (t.nTermos.some((x) => x.startsWith(q))) pontos += 40;
+        return { t, pontos };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.pontos - a.pontos || a.t.nNome.localeCompare(b.t.nNome))
+      .map((x) => x.t);
+  }
+
+  let dialogo = null;
+  let abridor = null;
+  let resultados = [];
+  let ativo = -1;
+
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay: o tratamento genérico dos avisos (#41) também prenderia o Tab e o Esc
+    dialogo.className = "spo-busca-fundo";
+    dialogo.hidden = true;
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-busca-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-busca-titulo" class="modal-header-title spo-busca-titulo">Buscar tela</h2>',
+      '    <div class="modal-header-subtitle">Setas para escolher, Enter para abrir, Esc para fechar.</div></div>',
+      '  </div>',
+      '  <label class="field spo-busca-campo" for="spo-busca-entrada">',
+      '    <span>Nome da tela, sigla ou assunto</span>',
+      '    <input type="text" id="spo-busca-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false"',
+      '           aria-controls="spo-busca-lista" autocomplete="off" spellcheck="false" placeholder="ex.: empenho, PAOE, senha">',
+      '  </label>',
+      '  <div class="spo-busca-secao" id="spo-busca-secao" aria-hidden="true"></div>',
+      '  <ul id="spo-busca-lista" class="spo-busca-lista" role="listbox" aria-label="Telas encontradas"></ul>',
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status" role="status" aria-live="polite"></p>',
+      '    <button type="button" class="btn btn-secondary sm spo-busca-fechar">Fechar</button>',
+      '  </div>',
+      '</div>',
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    entrada.addEventListener("input", () => desenhar(entrada.value));
+    entrada.addEventListener("keydown", teclas);
+    dialogo.querySelector(".spo-busca-fechar").addEventListener("click", () => fechar());
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key === "Tab") { // foco preso no diálogo (entrada e botão de fechar)
+        const alvos = [entrada, dialogo.querySelector(".spo-busca-fechar")];
+        const i = alvos.indexOf(document.activeElement);
+        ev.preventDefault();
+        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+      }
+    });
+    dialogo.querySelector("#spo-busca-lista").addEventListener("click", (ev) => {
+      const li = ev.target.closest("[role=option]");
+      if (li) abrir(Number(li.dataset.indice));
+    });
+    return dialogo;
+  }
+
+  function desenhar(consulta) {
+    const lista = indice();
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    const ul = dialogo.querySelector("#spo-busca-lista");
+    const secao = dialogo.querySelector("#spo-busca-secao");
+    const status = dialogo.querySelector(".spo-busca-status");
+    const vazio = !norm(consulta);
+    if (vazio) {
+      resultados = lerRecentes().map((r) => lista.find((t) => t.rota === r)).filter(Boolean);
+      secao.textContent = resultados.length ? "Telas recentes" : "";
+    } else {
+      resultados = buscar(lista, consulta);
+      secao.textContent = "";
+    }
+    ativo = resultados.length ? 0 : -1;
+    ul.innerHTML = resultados.map((t, i) => [
+      `<li role="option" id="spo-busca-op-${i}" data-indice="${i}" aria-selected="${i === ativo}" class="spo-busca-opcao">`,
+      `<i class="bi ${esc(t.icone)}" aria-hidden="true"></i>`,
+      `<span class="spo-busca-texto"><strong>${esc(t.nome)}</strong>${t.caminho.length ? `<small>${esc(t.caminho.join(" › "))}</small>` : ""}</span>`,
+      t.externo ? '<span class="spo-busca-externo">abre em outra aba</span>' : "",
+      "</li>",
+    ].join("")).join("");
+    entrada.setAttribute("aria-expanded", String(resultados.length > 0));
+    if (ativo >= 0) entrada.setAttribute("aria-activedescendant", `spo-busca-op-${ativo}`); else entrada.removeAttribute("aria-activedescendant");
+    if (vazio) status.textContent = resultados.length ? `${resultados.length} ${resultados.length === 1 ? "tela recente" : "telas recentes"}.` : "Digite o nome da tela, uma sigla ou um assunto.";
+    else status.textContent = resultados.length ? `${resultados.length} ${resultados.length === 1 ? "tela encontrada" : "telas encontradas"}.` : `Nenhuma tela encontrada para "${consulta.trim()}".`;
+  }
+
+  function marcar(i) {
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    ativo = i;
+    dialogo.querySelectorAll("[role=option]").forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
+    const li = dialogo.querySelector(`#spo-busca-op-${i}`);
+    if (li) { entrada.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({ block: "nearest" }); }
+  }
+
+  function teclas(ev) {
+    const n = resultados.length;
+    if (ev.key === "ArrowDown" && n) { ev.preventDefault(); marcar((ativo + 1) % n); }
+    else if (ev.key === "ArrowUp" && n) { ev.preventDefault(); marcar((ativo - 1 + n) % n); }
+    else if (ev.key === "Enter") { ev.preventDefault(); if (ativo >= 0) abrir(ativo); }
+  }
+
+  function abrir(i) {
+    const t = resultados[i];
+    if (!t) return;
+    fechar(false);
+    gravarRecente(t.rota);
+    t.a.click(); // mesmo caminho do clique no menu (rota interna ou link externo)
+  }
+
+  function mostrar() {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para o item do menu
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-busca-menu");
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    entrada.value = "";
+    desenhar("");
+    entrada.focus();
+  }
+
+  function fechar(devolverFoco = true) {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (devolverFoco && abridor && abridor.isConnected) abridor.focus();
+  }
+
+  // telas abertas pelo menu também entram nas recentes
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest(".sidebar a.menu-item[data-route]");
+    if (a && ev.isTrusted) gravarRecente(a.dataset.route);
+  }, true);
+
+  // atalhos: Ctrl+K (ou Cmd+K) em qualquer lugar; "/" fora de campos de texto
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || !document.getElementById("user-meta")) return;
+    const campo = ev.target.closest && ev.target.closest("input, textarea, select, [contenteditable]");
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === "k" || ev.key === "K")) { ev.preventDefault(); mostrar(); }
+    else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); mostrar(); }
+  });
+
+  // item "Buscar tela" no menu lateral, logo abaixo de "Início"
+  function itemMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu || !document.getElementById("user-meta") || menu.querySelector(".spo-busca-menu")) return;
+    const inicio = menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "menu-item spo-busca-menu";
+    a.setAttribute("role", "button");
+    a.setAttribute("aria-haspopup", "dialog");
+    a.setAttribute("aria-keyshortcuts", "Control+K /");
+    a.title = "Buscar tela (Ctrl+K ou /)";
+    a.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i> <span>Buscar tela</span>';
+    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
+    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
+    if (inicio) inicio.after(a); else menu.prepend(a);
+  }
+  itemMenu();
+  window.spoBuscaTelas = { abrir: mostrar, buscar: (q) => buscar(indice(), q).map((t) => t.rota), recentes: lerRecentes };
+})();
