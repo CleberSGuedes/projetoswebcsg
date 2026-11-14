@@ -28252,6 +28252,10 @@
   const distancia = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
 
   window.spoTemaDiagramaComDestaque = function (tema, modo) {
+    // [jean] alto contraste escuro (fix/alto-contraste-escuro-fundo, 2026-11-14): fundo do cartão
+    // (transparente) no lugar do azul-marinho fixo; cores das séries, texto e moldura continuam as do
+    // alto contraste (séries ≥ 5,77:1 e texto 14,8:1 sobre o cartão #242424).
+    if (modo === "highDark") return { ...tema, panel: "rgba(0,0,0,0)", plot: "rgba(0,0,0,0)" };
     if (modo !== "light" && modo !== "dark") return tema;
     const css = getComputedStyle(document.body);
     const bruto = (css.getPropertyValue(modo === "dark" && document.body.classList.contains("theme-dark")
