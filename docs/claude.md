@@ -2430,3 +2430,30 @@ Na conferência C07 (comparação com o laboratório), o alto contraste dos diag
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ac-escuro.1`).
 
+## "Visão e cores": cores dos gráficos seguras para daltonismo (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: um colega do planejamento tem daltonismo, de tipo não informado, e a Secretaria tem política forte de apoio a pessoas com deficiência. Os gráficos do SPO (Plotly, Teto Orçamentário) distinguem séries **só pela cor**. Na simulação de deuteranopia, o azul `#1d4ed8` e o roxo `#6d28d9` da paleta padrão ficam iguais (diferença CIEDE2000 de 0,4).
+
+- **Cartão novo "Visão e cores"** no Personalizar Temas, com a opção **"Cores dos gráficos"**: Padrão SPO / Seguras para daltonismo.
+  - A preferência fica na mesma chave das fontes (`spo-font-preferences`, campo `cvd`, atributo `data-spo-cvd`) e o login também a lê.
+  - O cartão usa a mesma lógica do "Fontes e tamanho do texto" (`initFontesPersonalizar`, agora para os dois cartões). Os próximos ajustes de visão (foco, links, 150%, brilho, movimento) entram nele.
+- **Paleta** (função `[jean]` `spoTemaDiagramaComDestaque`, que já ajustava o tema dos diagramas): com a opção ligada, a paleta vira a **Okabe-Ito**, distinta nos três tipos de daltonismo.
+  - No escuro, o azul-escuro e o azul-claro trocam de lugar e o preto vira branco.
+  - Positivo/negativo da cascata passam a azul × laranja. O acumulado do Pareto usa a mesma paleta.
+  - As tabelas coloridas por grupo (aba Tabelas do Teto) seguem, porque leem o mesmo tema (`getTetoChartColors`).
+- **Padrões, contorno e marcadores** (envoltório `initGraficosEscala`):
+  - barras, fatias e blocos ganham **contorno** na cor do texto. É o contorno que garante 3:1 com o fundo (WCAG 1.4.11);
+  - barras e fatias ganham **padrão por cor**: a mesma cor tem o mesmo padrão em todos os gráficos e na legenda;
+  - linhas ganham marcador e traço próprios.
+- **Validador** `window.spoValidarPaletaDaltonismo()` (bloco `[jean]` no fim do `main.js`): simula as três deficiências (matrizes de Machado, 2009) e mede a diferença entre séries e o contraste do contorno.
+- **Verificação** (SPO local):
+  - **validador:** menor diferença entre séries 12,2 (protanopia), 11,6 (deuteranopia) e 10,9 (tritanopia); contorno com 13,1:1 no claro e 16,6:1 no escuro;
+  - **Teto, claro e escuro:** os 5 gráficos com a paleta e os padrões certos, e a aba Tabelas com as mesmas cores;
+  - **captura com deuteranopia simulada:** as três séries do gráfico por exercício continuam distintas;
+  - **cartão:** sem corte a 390, 820, 1080 (retrato), 1366 e 1920 px; a opção grava e volta ao padrão;
+  - **login:** respeita a escolha, e um valor inválido volta ao padrão;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+- **Teste humano:** na homologação, o colega com daltonismo compara o Teto com e sem a opção.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do `main.js` e do `login-theme.js` (`?v=20261114.jean-daltonismo.1`).
+

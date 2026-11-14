@@ -51,6 +51,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125% (amplia a área de conteúdo) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
+| Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (§3.5) | `data-spo-cvd` |
 | Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
@@ -182,7 +183,23 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
   `automargin`, legenda vertical no pé, pizza com `automargin`; em gráfico estreito (≤ 520 px),
   margens mínimas, eixo X inclinado e nomes longos da legenda quebrados entre palavras;
 - **a cor de um grupo é a mesma em gráficos e tabelas**: tabelas e cartões que colorem por categoria
-  usam a mesma paleta do tema dos gráficos (`getTetoChartColors()` no Teto, #81), nunca uma paleta fixa.
+  usam a mesma paleta do tema dos gráficos (`getTetoChartColors()` no Teto, #81), nunca uma paleta fixa;
+- **cores seguras para daltonismo** (opção do Personalizar, `data-spo-cvd="safe"`): paleta **Okabe-Ito**
+  (`window.spoPaletaDaltonismo`), distinta nos três tipos de daltonismo:
+  - **claro:** `#0072B2 #E69F00 #009E73 #D55E00 #56B4E9 #CC79A7 #F0E442 #000000`;
+  - **escuro:** o azul-escuro e o azul-claro trocam de lugar, e o preto vira branco;
+  - **positivo/negativo:** azul × laranja, **nunca verde × vermelho**;
+  - **contorno:** barras, fatias e blocos têm contorno na cor do texto, e é o **contorno** que dá o
+    3:1 com o fundo (WCAG 1.4.11; 13,1:1 no claro e 16,6:1 no escuro). Algumas cores de preenchimento
+    (amarelo, laranja) ficam abaixo de 3:1 sozinhas;
+  - **padrão por cor** (liso, `/`, `\`, `x`, `-`, `|`, `+`, `.`): a mesma cor tem o mesmo padrão em
+    todos os gráficos e na legenda;
+  - **linhas:** ganham marcador e traço próprios.
+
+  Menor diferença entre duas séries simuladas (CIEDE2000): 12,2 na protanopia, 11,6 na deuteranopia e
+  10,9 na tritanopia. Na paleta padrão, o azul e o roxo davam 0,4 na deuteranopia, ou seja, iguais.
+  Tudo é aplicado no tema dos diagramas e no `initGraficosEscala`: **gráfico novo que passa pelo
+  Plotly já recebe tudo isso**.
 
 ## 4. Componentes
 
@@ -261,6 +278,13 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
     ("Maior (125%)" + "Mais amplo (2,0)") a 375 px.
 11. **Login:** depois de mudar cor ou botão em componente geral, confira a tela de login nos 8
     destaques (ela carrega a paleta de outro jeito, §3.3).
+12. **Daltonismo:** `window.spoValidarPaletaDaltonismo()`, no navegador, simula protanopia,
+    deuteranopia e tritanopia e mede:
+    - a menor diferença entre séries (CIEDE2000, ≥ 10);
+    - o contraste do contorno com o fundo (≥ 3:1).
+
+    Para ver como uma pessoa com daltonismo enxerga, aplique à área de conteúdo um filtro SVG
+    `feColorMatrix` com a matriz de Machado. Tire a captura com e sem a opção.
 
 ## 6. Regras de manutenção
 
@@ -274,6 +298,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 - [ ] Cabeçalho de página no padrão do §4.4, com o ícone do item do menu.
 - [ ] Textos na escala do §2.2 (mínimo 12 px, entrelinha 1,5 no texto corrido); números na fonte de dados.
 - [ ] Valores positivos/negativos com as classes `pos`/`neg`, nunca cor própria.
+- [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
 - [ ] Medido como no §5, nos dois temas, e anotado no PR.
 
@@ -293,7 +318,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 |---|---|
 | Faixa de ambiente (`.environment-banner`, `.environment-inline`) | identidade de cada ambiente (dev/homologação) |
 | Amostras de destaque no Personalizar (`.accent-swatch`) | mostram a cor real de cada destaque |
-| Paletas de diagrama (§3.5) e `ACCENT_COLORS` | são definições de token |
+| Paletas de diagrama (§3.5), `ACCENT_COLORS` e a paleta Okabe-Ito (`PALETA_DALTONISMO`) | são definições de token |
 | Paleta do login (bloco `[jean] Login com a paleta inteira`) | cópia do `ACCENT_COLORS` para a tela que não carrega o `main.js` (§3.3) |
 | Valores `pos`/`neg` e `.alert-info` escuro (§3.4) | literais até virarem tokens no N5 |
 | Logotipo e imagens | não são interface |
