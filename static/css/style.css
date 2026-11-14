@@ -8602,3 +8602,21 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
     outline: none;
   }
 }
+
+/* ==========================================================================
+   [jean] Valores em azul e vermelho mais vivos (fix/cores-valores, 2026-11-13)
+   Achado do Jean na homologação (FIP 613): os valores positivos (azul, .pos) e
+   negativos (vermelho, .neg) dos totais e das tabelas usavam #0b3c91 e #8b0000, tão
+   escuros que se confundiam com o preto. Pedido: as cores clássicas do Excel/VBA.
+   Claro: azul puro #0000ff (8,6:1 no branco). O vermelho puro #ff0000 dá só 4,0:1
+   (abaixo do AA); fica #a00000, o mais vivo com ≥ 7:1 (8,4:1) — decisão do Jean.
+   Escuro: o azul puro daria 1,9:1; tons claros mais vivos que os pastéis de antes,
+   #94baff (7,7:1) e #ff9999 (7,4:1) sobre o cartão #242424/#262626.
+   Vale para todos os relatórios que marcam pos/neg (FIP 613, PED, EMP, NOB, EST EMP…).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body :is(.totais-row .pos, .fip-table td.num.pos):not(#spo-valor) { color: #0000ff; }
+  body :is(.totais-row .neg, .fip-table td.num.neg):not(#spo-valor) { color: #a00000; }
+  body.theme-dark :is(.totais-row .pos, .fip-table td.num.pos):not(#spo-valor) { color: #94baff; }
+  body.theme-dark :is(.totais-row .neg, .fip-table td.num.neg):not(#spo-valor) { color: #ff9999; }
+}
