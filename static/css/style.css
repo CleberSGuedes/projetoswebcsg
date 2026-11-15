@@ -9163,3 +9163,65 @@ body.spo-busca-aberta { overflow: hidden; }
   .spo-busca-fundo { padding: 0; }
   .spo-busca-caixa { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
 }
+
+/* ==========================================================================
+   [jean] Correções da bateria completa do Personalizar (fix/bateria-personalizar,
+   2026-11-14; relatório em docs_jean/auditoria_aa/BATERIA_PERSONALIZAR_2026-11-14.md)
+   66 telas × 4 perfis × 3 larguras (390, 1080, 1366). Achados reais:
+   1) Texto na cor de destaque "forte" (--accent-strong) ou no destaque puro
+      (--accent): com o Azul, 3,77:1 (números do Contrato Visual, selo e nota das
+      Permissões); com o brilho reduzido, 3,24; "Contexto ativo" (Governança) e
+      "Área UENs" (Notas SEE) com 4,1. Passam a usar --spo-accent-text, o tom de
+      texto do destaque com contraste garantido em cada destaque, claro e escuro.
+      Ícones na mesma cor (Permissões, Notas SEE) passam ao tom gráfico
+      (--spo-accent-graphic, ≥ 3:1); os da Governança seguem o tema dos diagramas.
+   2) <code> com a cor rosa do Bootstrap (#d63384): 3,45:1 no escuro (API de
+      Acessos). Passa à cor do texto.
+   3) Permissões (Perfil): duas colunas com mínimos fixos de 500 e 520 px; a
+      1366 px com o menu aberto, a área de conteúdo tem 996 px e a tela rolava
+      para o lado. Acima de 1100 px, colunas proporcionais.
+   4) Modelos de Chave: duas colunas com mínimos de 420 e 520 px, uma coluna só
+      abaixo de 1280 px. Com o texto ampliado, o limite é multiplicado pelo fator
+      (1440 / 1600 / 1920 px), como nas telas de cabeçalho (#103).
+   5) Campos de formulário (.field) não encolhiam abaixo da largura própria do
+      <input>: a 390 px com o texto ampliado, Usuários rolava 4 px para o lado (o formulário
+      tinha colunas de 210 px no mínimo).
+   ========================================================================== */
+body .contract-flow li span:not(#spo-bateria),
+body .permission-header-badge:not(#spo-bateria),
+body .permission-note:not(#spo-bateria),
+body .report-empty-state:not(#spo-bateria),
+body .teto-checklist-actions button:not(#spo-bateria),
+body .personalizar-subnav a:not(#spo-bateria),
+body .contract-rule-badge-draft:not(#spo-bateria),
+body .flow-context-label:not(#spo-bateria),
+body .see-eyebrow:not(#spo-bateria) {
+  color: var(--spo-accent-text, var(--text));
+}
+body .permission-panel-icon:not(#spo-bateria),
+body .see-file-row > i:not(#spo-bateria),
+body .pill-list li:not(#spo-bateria)::before {
+  color: var(--spo-accent-graphic, var(--accent));
+}
+body #content-area code:not(#spo-bateria) {
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.08);
+  padding: 0 .25em;
+  border-radius: 4px;
+}
+@media (min-width: 1101px) {
+  /* força abaixo das regras de texto ampliado do #103 (0,4,1), que passam a uma coluna antes;
+     acima delas e do original (0,3,0): as colunas proporcionais valem também no texto ampliado */
+  .grid:has(> .module-header .bi-shield-lock):not(.spo-bateria) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  }
+}
+@media (max-width: 1440px) { body[data-spo-text-size="large"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+@media (max-width: 1600px) { body[data-spo-text-size="larger"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+@media (max-width: 1920px) { body[data-spo-text-size="xlarge"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+body .field:not(#spo-bateria) { min-width: 0; }
+body .field :is(input, select, textarea):not(#spo-bateria) { min-width: 0; max-width: 100%; }
+/* o formulário de Usuários tinha colunas de 210 px no mínimo: no celular com texto ampliado não cabiam */
+body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield-lock, .bi-hdd-network)) > .module-card .form-grid:not(#spo-bateria) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}

@@ -307,6 +307,9 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 - [ ] Cabeçalho de página no padrão do §4.4, com o ícone do item do menu.
 - [ ] Textos na escala do §2.2 (mínimo 12 px, entrelinha 1,5 no texto corrido); números na fonte de dados.
 - [ ] Valores positivos/negativos com as classes `pos`/`neg`, nunca cor própria.
+- [ ] Texto na cor de destaque: `--spo-accent-text`; ícone na cor de destaque: `--spo-accent-graphic`. **Nunca** `--accent`/`--accent-strong` direto como cor de texto (com o Azul dá 3,77:1; com o Amarelo no claro, ~1,5).
+- [ ] Colunas sem mínimo fixo em px: `minmax(min(100%, Npx), …)` ou `minmax(0, …)`. Lembre que o texto ampliado (112/125/150%) divide a largura útil.
+- [ ] `<code>` e outros elementos com cor própria do Bootstrap: conferir no escuro e com o brilho reduzido.
 - [ ] Layout de colunas que muda por `@media` de largura: lembrar que a área de conteúdo pode estar ampliada (112/125/150%) e a largura útil é a da janela dividida pelo fator. Prefira `@container` ou repita o limite multiplicado (ex.: 900 px × 1,5 = 1350 px).
 - [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
