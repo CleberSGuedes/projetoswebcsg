@@ -49,6 +49,30 @@
       <div id="kit-aviso" class="alert alert-info kit-aviso" role="status" hidden></div>
       <div id="kit-opcoes" class="form-grid kit-opcoes"><!-- preenchido pelo kit-mockup.js --></div>
     </aside>
+    <!-- passo a passo (o mesmo do §6.4 do padrão SPO-AA+) -->
+    <details class="card kit-como-usar">
+      <summary>Como usar o kit</summary>
+      <ol>
+        <li><strong>Criar:</strong> copie este arquivo para a mesma pasta (<code>static/kit/</code>) com outro nome,
+          por exemplo <code>mockup-pta-opr.html</code>, e abra em <code>http://127.0.0.1:5000/static/kit/mockup-pta-opr.html</code>
+          (o SPO local ligado; não precisa entrar).</li>
+        <li><strong>Montar:</strong> troque só o conteúdo de <code>&lt;main id="content-area"&gt;</code>, copiando os blocos
+          de exemplo (cabeçalho, cartões, campos e botões, tabela, gráfico) e mudando os textos. Mantenha este painel e
+          o <code>&lt;script&gt;</code> do fim.</li>
+        <li><strong>CSS próprio</strong> (só se precisar): num <code>&lt;style&gt;</code> do mockup, apenas com tokens de cor
+          (<code>var(--text)</code>, <code>var(--spo-accent-text)</code>…) e tamanhos pelas variáveis
+          (<code>var(--spo-fs-texto)</code>…); nada de px nem cor escrita à mão.</li>
+        <li><strong>Revisar pelo painel:</strong> claro e escuro; dois ou três destaques (o Amarelo é o mais exigente no
+          claro); Compacto, Intermediário e Legível; 150%; a Atkinson com a "Leitura confortável"; os presets do
+          Contrato; cores seguras para daltonismo, se houver gráfico; Tab, setas e Esc; janela estreita.</li>
+        <li><strong>Levar ao SPO:</strong> o conteúdo do <code>&lt;main&gt;</code> vira o template
+          <code>templates/partials/&lt;tela&gt;.html</code>; o <code>&lt;style&gt;</code> vai para um bloco <code>[jean]</code> no fim
+          do <code>style.css</code>. Teclado nas tabelas, gráficos acessíveis, densidade e temas já vêm do SPO.</li>
+        <li><strong>Guardar:</strong> o mockup fica em <code>static/kit/</code> enquanto está em desenho; vai ao Git só junto
+          com o PR da tela.</li>
+      </ol>
+    </details>
+
     <main id="content-area" tabindex="-1">
       <div class="kit-pilha">
 
