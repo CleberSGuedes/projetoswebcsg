@@ -2932,3 +2932,15 @@ Correção (`main.js`, `ajustarDados` da escala dos gráficos, que já passa por
 Medido na tela (Teto por ADJ, 8 blocos): paleta segura para daltonismo, claro 5,19–21:1 e escuro 5,19–21:1; paleta padrão, claro 5,18–10,35:1 e escuro 5,6–17,03:1. O pior caso (5,19:1, branco sobre o azul Okabe-Ito #0072B2) passa o AA (4,5:1); o AAA (7:1) dependeria de mudar a cor do bloco, o que tiraria a paleta Okabe-Ito do padrão. `pytest` completo duas vezes seguidas; `node --check`.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-rotulos-arvore.1`).
+
+## Fonte Mulish como opção da interface (dev. Jean, 2026-11-15)
+
+O dev. Jean achou confortável a leitura de uma página em Mulish (16 px, entrelinha 1,5, texto cinza-escuro) e pediu para compará-la com a Inter no próprio SPO. Avaliação registrada no plano de tipografia (`docs_jean/PLANO_NORMALIZACAO_TIPOGRAFIA.md`): boa parte do conforto vem da composição (tamanho, entrelinha, espaço entre parágrafos, linha de ~80 caracteres); a Mulish tem I maiúsculo e l minúsculo parecidos, o que pesa num sistema com códigos e siglas, por isso entra como **opção**, não como padrão.
+
+- **Arquivos:** `static/fonts/mulish/` (`mulish-latin-wght-normal.woff2`, 29.968 bytes, e `OFL.txt`), do pacote oficial `@fontsource-variable/mulish@5.3.0` pelo jsDelivr, com sha256 no `static/fonts/LEIA-ME.md`. Nada é carregado de fora; o navegador só baixa a fonte quando ela é escolhida.
+- **Opção:** Personalizar → Fontes e tamanho do texto → Fonte da interface → "Mulish" (template, `OPTIONS.ui` no `main.js`); também no login (`login-theme.js`) e no mockup PTA/OpR (`spo-preferencias.css`). O padrão continua a Inter.
+- **"Leitura → Estrito":** largura média das letras ÷ largura do "0" medida (Mulish 0,801; Inter 0,787) dá 54ch; ficou 53ch, como a Inter, pelo lado conservador (no máximo 80 caracteres por linha). A mesma conta reproduz os valores já calibrados (Atkinson 47,7 → 48; Source Sans 3 57,8 → 56).
+
+Medido na tela: a opção aparece no Personalizar; com ela, a interface e a prévia "Fontes e tabelas" passam à Mulish (a tabela da prévia continua na fonte de dados); a fonte carrega do próprio SPO. A preferência do navegador de teste foi devolvida à Inter. O login não foi aberto (com sessão ativa ele redireciona); a mudança ali é só incluir o valor na lista aceita. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: `?v=` do CSS e do `main.js` (`20261115.jean-mulish.1`); `login.html`: `?v=` do CSS e do `login-theme.js` (idem); `index.html` do mockup: `?v=` do `spo-preferencias.css` (idem).
