@@ -9252,3 +9252,40 @@ body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield
 .spo-acessibilidade a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
 .spo-acessibilidade a abbr { text-decoration: none; }
 .spo-acessibilidade .spo-nova-aba .bi { font-size: 0.75em; margin-left: 0.2em; vertical-align: baseline; }
+
+/* ==========================================================================
+   [jean] Atalhos do teclado (feat/atalhos-teclado, 2026-11-14)
+   Ajuda no padrão da busca de telas, segundo link de pulo e a faixa de dica dos
+   componentes com setas.
+   ========================================================================== */
+.spo-atalhos-caixa { width: min(760px, calc(100% - 48px)); }
+.spo-atalhos-corpo { overflow-y: auto; min-height: 0; display: grid; gap: 14px; padding: 2px 4px 4px 2px; }
+.spo-atalhos-secao h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.spo-atalhos-secao h3 .bi { color: var(--spo-accent-graphic, var(--accent)); }
+.spo-atalhos-lista { margin: 0; display: grid; gap: 4px; }
+.spo-atalhos-lista > div { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 4px 16px; padding: 6px 8px; border-radius: 8px; background: var(--surface); }
+.spo-atalhos-lista dt { font-weight: 400; }
+.spo-atalhos-lista dd { margin: 0; }
+.spo-atalhos-nota:not([hidden]) { margin: 0; font-size: 13px; color: var(--text); }
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 1px 6px; text-align: center;
+  font: inherit; font-size: 0.86em; font-weight: 600; line-height: 1.4;
+  color: var(--text); background: var(--card, #fff);
+  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
+}
+@media (max-width: 600px) {
+  .spo-atalhos-lista > div { grid-template-columns: minmax(0, 1fr); }
+}
+.spo-pular-menu { left: 8px; }
+.spo-pular:focus + .spo-pular-menu { top: 64px; }
+.spo-dica-teclado {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9000;
+  max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 10px;
+  font-size: 13px; line-height: 1.4; text-align: center;
+  color: #ffffff; background: #1d1d1d; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.spo-dica-teclado[hidden] { display: none; }
+body.spo-busca-aberta .spo-dica-teclado { display: none; }
+#spo-teclado-card a[data-spo-atalhos] { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 600; }
+@media (max-width: 600px) { .spo-atalhos-caixa { width: 100%; } }

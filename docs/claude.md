@@ -2626,3 +2626,31 @@ Pedido do dev. Jean: depois do trabalho de visual e acessibilidade, dizer no pr�
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS `?v=20261114.jean-acessibilidade.2`, JS `?v=20261114.jean-acessibilidade.1`).
 
+## Atalhos do teclado (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: instruções de como usar o SPO só pelo teclado. O caso dele: no Mapa Conceitual as setas trocavam o cartão, mas não havia como saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
+
+- **Ajuda "Atalhos do teclado"** (bloco `[jean]` `initAtalhosTeclado` no fim do `main.js`):
+  - **visual:** diálogo no mesmo padrão da busca de telas (#106); teclas em `<kbd>`;
+  - **seções:** Navegar, Menu lateral, Abas/diagramas/mapa, Busca/avisos/filtros e Navegador;
+  - **como abre:** tecla **?**, item "Atalhos do teclado" no menu (abaixo de "Buscar tela", inserido pelo JS) e links com `data-spo-atalhos` (cartão Teclado e declaração de acessibilidade);
+  - foco no "Fechar", Tab preso entre a lista rolável e o botão, Esc fecha e o foco volta.
+- **Voltar ao menu:**
+  - **Alt+M** leva o foco ao item da tela atual no menu; se ele estiver num grupo fechado ou no menu recolhido, ao grupo visível que o contém;
+  - link de pulo **"Ir para o menu (Alt+M)"** ao lado do "Pular para o conteúdo" (#41).
+- **Cartão "Teclado" no Personalizar**, com a opção **"Atalhos de uma tecla"** (Ligados, o padrão / Desligados), atributo `data-spo-keys`:
+  - **por quê:** WCAG 2.1.4 (nível A) pede que atalhos de uma tecla só possam ser desligados (atrapalham comando de voz);
+  - desligada, barra o **/** da busca (uma condição a mais na linha do atalho em `initBuscaTelas`) e o **?** da ajuda; **Ctrl+K** e **Alt+M** continuam;
+  - entra também no `login-theme.js`, como as demais opções.
+- **Dica dos componentes com setas:** ao chegar pelo teclado ao menu, a uma aba ou a um cartão do mapa/diagrama, aparece uma faixa curta no rodapé da tela (ex.: "← → trocam o cartão · Home/End: primeiro/último · Tab sai"). O leitor de tela recebe o mesmo texto pelo `aria-describedby`.
+- **Declaração de acessibilidade:** o item do teclado ganha o link para a ajuda, e o 2.1.4 entra em "Atendido por opção".
+- **Verificação** (SPO local, teclas reais do painel):
+  - **Mapa Conceitual:** clique num cartão, → troca e mostra a dica, Alt+M vai a "Administrar SPO" (grupo que contém a tela, menu recolhido), Enter abre o menu já no Mapa Conceitual;
+  - **ajuda:** abre com o foco no "Fechar", Tab alterna lista e botão, Esc devolve o foco ao cartão. A tecla **?** foi testada por evento sintético, porque a ferramenta de teclado do painel não gera o "?";
+  - **opção:** "Desligados" pela tela grava `keys: "off"`; ? e / não abrem nada, Ctrl+K abre a busca e a ajuda mostra o aviso; voltou a "Ligados";
+  - **celular** (375 px): ajuda em tela cheia, sem rolagem lateral; dica visível; Alt+M no menu recolhido;
+  - **escuro:** teclas com texto `#f6f5f4` sobre `#242424`;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, `?v=20261114.jean-atalhos.1`).
+

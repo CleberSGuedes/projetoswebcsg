@@ -27738,11 +27738,13 @@
     // feat/visao-150-brilho-movimento (2026-11-14): brilho do tema claro e movimento
     brightness: { default: "Padrão SPO", reduced: "Reduzido" },
     motion: { auto: "Automático (segue o sistema)", reduce: "Reduzir sempre" },
+    // cartão "Teclado" (feat/atalhos-teclado, 2026-11-14; WCAG 2.1.4): atalhos de uma tecla só ("/" e "?")
+    keys: { on: "Ligados (padrão SPO)", off: "Desligados" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks", brightness: "spoBrightness", motion: "spoMotion" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto", keys: "on" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks", brightness: "spoBrightness", motion: "spoMotion", keys: "spoKeys" });
 
   function read() {
     const prefs = { ...DEFAULTS };
@@ -27796,8 +27798,8 @@
     });
   }
 
-  // cartões que usam estas preferências: "Fontes e tamanho do texto" e "Visão e cores"
-  const CARDS = "#spo-fontes-card, #spo-visao-card";
+  // cartões que usam estas preferências: "Fontes e tamanho do texto", "Visão e cores" e "Teclado"
+  const CARDS = "#spo-fontes-card, #spo-visao-card, #spo-teclado-card";
   function prepareCard() {
     document.querySelectorAll(CARDS).forEach((card) => {
       if (card.dataset.spoFontReady === "1") return;
@@ -27821,7 +27823,7 @@
         sync(c);
         setOpen(c, "");
         const status = c.querySelector(".spo-fontes-status");
-        if (status) status.textContent = c.id === "spo-visao-card" ? "Cores de volta ao padrão SPO." : "Fontes e tamanhos de volta ao padrão SPO.";
+        if (status) status.textContent = { "spo-visao-card": "Cores de volta ao padrão SPO.", "spo-teclado-card": "Teclado de volta ao padrão SPO." }[c.id] || "Fontes e tamanhos de volta ao padrão SPO.";
       });
       avisarGraficos();
       return;
@@ -28938,7 +28940,7 @@
     if (ev.defaultPrevented || !document.getElementById("user-meta")) return;
     const campo = ev.target.closest && ev.target.closest("input, textarea, select, [contenteditable]");
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === "k" || ev.key === "K")) { ev.preventDefault(); mostrar(); }
-    else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); mostrar(); }
+    else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && document.body.dataset.spoKeys !== "off") { ev.preventDefault(); mostrar(); }
   });
 
   // item "Buscar tela" no menu lateral, logo abaixo de "Início"
@@ -29010,4 +29012,238 @@
     if (menu) new MutationObserver(ajustar).observe(menu, { attributes: true, subtree: true, attributeFilter: ["style"] });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", montar); else montar();
+})();
+
+/* ==========================================================================
+   [jean] Atalhos do teclado (feat/atalhos-teclado, 2026-11-14; padrão spo-aa+ §4.4)
+   Pedido do dev. Jean: o SPO já funciona pelo teclado (#41, #59, #106), mas nada
+   dizia como. Ex.: no Mapa Conceitual as setas trocam o cartão, mas não havia como
+   saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
+   1) Ajuda "Atalhos do teclado": diálogo no padrão dos avisos, aberto pela tecla
+      "?", pelo item do menu (abaixo de "Buscar tela") e por links com
+      [data-spo-atalhos] (cartão Teclado e declaração de acessibilidade).
+   2) Alt+M leva o foco ao item da tela atual no menu (abre o menu se estiver
+      recolhido no celular); link de pulo "Ir para o menu" ao lado de "Pular
+      para o conteúdo".
+   3) WCAG 2.1.4 (A): os atalhos de UMA tecla ("/" da busca e "?") podem ser
+      desligados no Personalizar → Teclado (body[data-spo-keys="off"]). Ctrl+K e
+      Alt+M usam tecla modificadora e continuam valendo.
+   4) Dica dos componentes com setas (menu, abas, mapa e diagramas): ao chegar
+      pelo teclado, aparece uma linha curta no rodapé da tela, e o leitor de
+      tela recebe o mesmo texto (aria-describedby).
+   ========================================================================== */
+(function initAtalhosTeclado() {
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const umaTecla = () => document.body.dataset.spoKeys !== "off";
+  const emCampo = (el) => !!(el && el.closest && el.closest("input, textarea, select, [contenteditable]"));
+  const logado = () => !!document.getElementById("user-meta");
+
+  const k = (...teclas) => teclas.map((t) => `<kbd>${t}</kbd>`).join(" + ");
+  const SECOES = [
+    ["Navegar", "bi-signpost-split", [
+      [`${k("Tab")} / ${k("Shift", "Tab")}`, "Vai para o próximo / o anterior item da tela (botões, campos, links, cartões)."],
+      [`${k("Enter")} ou ${k("Espaço")}`, "Aciona o botão ou abre o item em foco."],
+      [k("Tab"), "Logo ao abrir o SPO, o primeiro Tab mostra \"Pular para o conteúdo\" e \"Ir para o menu\"."],
+      [k("Alt", "M"), "Volta ao menu lateral, no item da tela atual (abre o menu se ele estiver recolhido)."],
+      [`${k("Ctrl", "K")} ou ${k("/")}`, "Abre a busca de telas: digite parte do nome, uma sigla ou um assunto."],
+      [k("?"), "Abre esta ajuda."],
+    ]],
+    ["Menu lateral", "bi-list", [
+      [`${k("↓")} ${k("↑")}`, "Próximo / item anterior do menu."],
+      [`${k("→")} ${k("←")}`, "Abre / fecha o grupo (Relatórios, Painéis…). Num item, ← volta ao grupo."],
+      [`${k("Home")} ${k("End")}`, "Primeiro / último item."],
+      [k("Enter"), "Abre a tela; o foco vai para o título dela."],
+    ]],
+    ["Abas, diagramas e mapa conceitual", "bi-diagram-3", [
+      [`${k("←")} ${k("→")} (ou ${k("↑")} ${k("↓")})`, "Trocam a aba ou o cartão selecionado."],
+      [`${k("Home")} ${k("End")}`, "Primeira / última aba ou cartão."],
+      [k("Tab"), "Sai do componente e segue para o próximo item da tela."],
+    ]],
+    ["Busca, avisos e filtros", "bi-window-stack", [
+      [`${k("↓")} ${k("↑")} e ${k("Enter")}`, "Na busca de telas: escolhem e abrem a tela."],
+      [k("Esc"), "Fecha o aviso, a busca, esta ajuda ou a lista de um filtro (o filtro não aplicado é descartado)."],
+      [k("Tab"), "Com um aviso aberto, o foco fica dentro dele até ser fechado."],
+    ]],
+    ["No navegador", "bi-browser-chrome", [
+      [`${k("Ctrl", "+")} / ${k("Ctrl", "−")} / ${k("Ctrl", "0")}`, "Amplia / reduz / volta o zoom da página (o SPO se reorganiza até 400%)."],
+    ]],
+  ];
+
+  let dialogo = null;
+  let abridor = null;
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
+    dialogo.className = "spo-busca-fundo spo-atalhos-fundo";
+    dialogo.hidden = true;
+    const secoes = SECOES.map(([titulo, icone, linhas]) => [
+      '<section class="spo-atalhos-secao">',
+      `<h3><i class="bi ${icone}" aria-hidden="true"></i> ${titulo}</h3>`,
+      '<dl class="spo-atalhos-lista">',
+      linhas.map(([teclas, texto]) => `<div><dt>${teclas}</dt><dd>${texto}</dd></div>`).join(""),
+      "</dl></section>",
+    ].join("")).join("");
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-atalhos-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-atalhos-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Atalhos do teclado</h2>',
+      '    <div class="modal-header-subtitle">O SPO pode ser usado só pelo teclado. Esc fecha esta ajuda.</div></div>',
+      "  </div>",
+      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Lista de atalhos">${secoes}`,
+      '    <p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
+      "  </div>",
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status">Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>',
+      '    <button type="button" class="btn btn-secondary sm spo-atalhos-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    dialogo.querySelector(".spo-atalhos-fechar").addEventListener("click", () => fechar());
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key === "Tab") { // foco preso na ajuda (lista rolável e botão Fechar)
+        const alvos = [dialogo.querySelector(".spo-atalhos-corpo"), dialogo.querySelector(".spo-atalhos-fechar")];
+        const i = alvos.indexOf(document.activeElement);
+        ev.preventDefault();
+        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+      }
+    });
+    return dialogo;
+  }
+  function mostrar() {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-atalhos-menu");
+    const nota = dialogo.querySelector("[data-spo-atalhos-nota]");
+    nota.textContent = umaTecla() ? "" : "Os atalhos de uma tecla só (/ e ?) estão desligados neste navegador; Ctrl+K e Alt+M continuam valendo.";
+    nota.hidden = umaTecla();
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    dialogo.querySelector(".spo-atalhos-corpo").scrollTop = 0;
+    dialogo.querySelector(".spo-atalhos-fechar").focus();
+  }
+  function fechar() {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (abridor && abridor.isConnected) abridor.focus();
+  }
+
+  // 2) Alt+M e "Ir para o menu"
+  function irParaMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu) return;
+    const sidebar = menu.closest(".sidebar");
+    // o item da tela atual; se estiver num grupo fechado (ou no menu recolhido), o grupo visível que o contém
+    const alvo = () => {
+      const ativo = menu.querySelector(".menu-item.active[data-route]");
+      if (visivel(ativo)) return ativo;
+      for (let g = ativo && ativo.closest(".menu-group"); g; g = g.parentElement && g.parentElement.closest(".menu-group")) {
+        const pai = g.querySelector(":scope > .menu-parent");
+        if (visivel(pai)) return pai;
+      }
+      return [...menu.querySelectorAll(".menu-item")].find(visivel);
+    };
+    let item = alvo();
+    const focar = (el) => { if (el) { el.focus(); el.scrollIntoView({ block: "nearest" }); } };
+    if (!item || (sidebar && !visivel(sidebar))) {
+      const toggle = document.getElementById("sidebar-toggle");
+      if (toggle && visivel(toggle)) toggle.click();
+      requestAnimationFrame(() => requestAnimationFrame(() => focar(alvo())));
+      return;
+    }
+    focar(item);
+  }
+  const pularConteudo = document.querySelector(".spo-pular");
+  if (pularConteudo && !document.querySelector(".spo-pular-menu") && document.getElementById("menu")) {
+    const a = document.createElement("a");
+    a.className = "spo-pular spo-pular-menu";
+    a.href = "#menu";
+    a.textContent = "Ir para o menu (Alt+M)";
+    a.setAttribute("aria-keyshortcuts", "Alt+M");
+    a.addEventListener("click", (ev) => { ev.preventDefault(); irParaMenu(); });
+    pularConteudo.after(a);
+  }
+
+  // atalhos
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || !logado()) return;
+    if (ev.altKey && !ev.ctrlKey && !ev.metaKey && (ev.code === "KeyM" || ev.key === "m" || ev.key === "M")) {
+      ev.preventDefault();
+      irParaMenu();
+      return;
+    }
+    if (ev.key === "?" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !emCampo(ev.target) && umaTecla()) {
+      ev.preventDefault();
+      mostrar();
+    }
+  });
+  // links que abrem a ajuda (cartão Teclado, declaração de acessibilidade)
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest("[data-spo-atalhos]");
+    if (!a) return;
+    ev.preventDefault();
+    mostrar();
+  });
+
+  // 1) item "Atalhos do teclado" no menu, logo abaixo de "Buscar tela"
+  function itemMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu || !logado() || menu.querySelector(".spo-atalhos-menu")) return;
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "menu-item spo-atalhos-menu";
+    a.setAttribute("role", "button");
+    a.setAttribute("aria-haspopup", "dialog");
+    a.setAttribute("aria-keyshortcuts", "?");
+    a.title = "Atalhos do teclado (?)";
+    a.innerHTML = '<i class="bi bi-keyboard" aria-hidden="true"></i> <span>Atalhos do teclado</span>';
+    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
+    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
+    const antes = menu.querySelector(".spo-busca-menu") || menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
+    if (antes) antes.after(a); else menu.prepend(a);
+  }
+  itemMenu();
+
+  // 4) dica dos componentes com setas
+  const DICAS = [
+    ["#menu .menu-item", "spo-dica-menu", "↓ ↑ andam no menu · → abre o grupo, ← fecha · Enter abre a tela · Alt+M volta ao menu"],
+    ["[data-flow-node]", "spo-dica-cartoes", "← → trocam o cartão · Home/End: primeiro/último · Tab sai"],
+    ['[role="tab"]', "spo-dica-abas", "← → trocam a aba · Home/End: primeira/última · Tab segue para o conteúdo"],
+  ];
+  DICAS.forEach(([, id, texto]) => {
+    if (document.getElementById(id)) return;
+    const d = document.createElement("span");
+    d.id = id;
+    d.className = "spo-sr-only";
+    d.textContent = texto;
+    document.body.appendChild(d);
+  });
+  const faixa = document.createElement("div");
+  faixa.className = "spo-dica-teclado";
+  faixa.setAttribute("aria-hidden", "true"); // o leitor de tela recebe o texto pelo aria-describedby
+  faixa.hidden = true;
+  document.body.appendChild(faixa);
+  const tipoDe = (el) => DICAS.find(([sel]) => el.matches && el.matches(sel));
+  document.addEventListener("focusin", (ev) => {
+    const el = ev.target;
+    const tipo = el && tipoDe(el);
+    if (!tipo) { faixa.hidden = true; return; }
+    const [, id, texto] = tipo;
+    const desc = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if (!desc.includes(id)) el.setAttribute("aria-describedby", [...desc, id].join(" "));
+    let pelaTecla = false;
+    try { pelaTecla = el.matches(":focus-visible"); } catch (err) { pelaTecla = false; }
+    faixa.textContent = texto;
+    faixa.hidden = !pelaTecla;
+  });
+  document.addEventListener("focusout", (ev) => {
+    if (!ev.relatedTarget || !tipoDe(ev.relatedTarget)) faixa.hidden = true;
+  });
+
+  window.spoAtalhosTeclado = { abrir: mostrar, irParaMenu };
 })();

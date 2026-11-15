@@ -61,6 +61,7 @@
     spoLinks: ["default", ["default", "underline"], "links"],
     spoBrightness: ["default", ["default", "reduced"], "brightness"],
     spoMotion: ["auto", ["auto", "reduce"], "motion"],
+    spoKeys: ["on", ["on", "off"], "keys"],
   };
   let fontPrefs = {};
   try {
