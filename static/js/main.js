@@ -29458,3 +29458,57 @@
 
   window.spoPadraoSpoAaPlus = { abrir: mostrar };
 })();
+
+/* ==========================================================================
+   [jean] Ponte de preferências para o PTA 2027 (feat/ponte-pta2027, 2026-11-14)
+   O código original do PTA 2027 manda ao mockup só o tema e a cor de destaque
+   (readThemePayload/postTheme, que não foram alterados). Este bloco manda, numa
+   mensagem própria ("spo-preferencias"), as demais escolhas do Personalizar
+   (data-spo-* e data-visual-* do <body>) e os tons de foco e destaque calculados;
+   no mockup, assets/spo-preferencias.js grava e assets/spo-preferencias.css aplica.
+   Manda quando o mockup carrega ou pede, e a cada mudança de preferência.
+   Também recebe do mockup os atalhos do teclado (Ctrl+K, "/", "?", Alt+M), que
+   com o foco dentro do iframe não chegam a esta página.
+   ========================================================================== */
+(function initPontePta2027() {
+  const ATRIBUTOS = ["spoFontUi", "spoFontData", "spoTableText", "spoLineHeight", "spoReading", "spoCvd",
+    "spoFocus", "spoLinks", "spoBrightness", "spoMotion", "spoKeys", "visualContrast", "visualDensity"];
+  const TOKENS = ["--spo-focus-ring", "--spo-focus-halo", "--spo-accent-text", "--spo-accent-graphic"];
+  const quadro = () => document.getElementById("pta2027-frame");
+
+  function pacote() {
+    const prefs = {};
+    ATRIBUTOS.forEach((k) => { if (document.body.dataset[k]) prefs[k] = document.body.dataset[k]; });
+    // "reduzir movimento" do sistema também vale no mockup
+    try { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) prefs.spoMotion = "reduce"; } catch (err) { /* sem matchMedia */ }
+    const estilo = getComputedStyle(document.body);
+    const tokens = {};
+    TOKENS.forEach((t) => { const v = estilo.getPropertyValue(t).trim(); if (v) tokens[t] = v; });
+    if (!tokens["--spo-focus-halo"]) tokens["--spo-focus-halo"] = document.body.classList.contains("theme-dark") ? "#000000" : "#ffffff";
+    return { type: "spo-preferencias", prefs, tokens };
+  }
+  function enviar() {
+    const f = quadro();
+    if (!f || !f.contentWindow) return;
+    try { f.contentWindow.postMessage(pacote(), window.location.origin); } catch (err) { /* quadro ainda carregando */ }
+  }
+
+  window.addEventListener("message", (ev) => {
+    const f = quadro();
+    if (!f || ev.origin !== window.location.origin || ev.source !== f.contentWindow) return;
+    const tipo = ev.data && ev.data.type;
+    if (tipo === "spo-preferencias-pedido") { enviar(); return; }
+    if (tipo !== "spo-atalho") return;
+    const acao = ev.data.acao;
+    if (acao.endsWith("uma-tecla") && document.body.dataset.spoKeys === "off") return;
+    if ((acao === "busca" || acao === "busca-uma-tecla") && window.spoBuscaTelas) window.spoBuscaTelas.abrir();
+    else if (acao === "ajuda-uma-tecla" && window.spoAtalhosTeclado) window.spoAtalhosTeclado.abrir();
+    else if (acao === "menu" && window.spoAtalhosTeclado) window.spoAtalhosTeclado.irParaMenu();
+  });
+
+  // mudanças de preferência (atributos do <body>, tema) e quadro novo (a tela é carregada por partial)
+  new MutationObserver(enviar).observe(document.body, { attributes: true, attributeFilter: ["class", ...ATRIBUTOS.map((k) => "data-" + k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()))] });
+  document.addEventListener("load", (ev) => { if (ev.target && ev.target.id === "pta2027-frame") enviar(); }, true);
+  document.addEventListener("spo-common-visual-change", enviar);
+  window.spoPontePta2027 = { enviar, pacote };
+})();

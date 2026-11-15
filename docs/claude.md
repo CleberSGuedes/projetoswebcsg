@@ -2691,3 +2691,27 @@ Pedido do dev. Jean: a declaração de acessibilidade afirma o padrão "SPO-AA+"
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-padrao.1`).
 
+## Ponte de preferências para o PTA 2027 (dev. Jean, 2026-11-14)
+
+Item combinado na bateria do Personalizar: o mockup "Programação PTA 2027" (iframe `static/pta2027_v63r`) recebia só o tema e a cor de destaque (`readThemePayload`/`postTheme`, que **não foram alterados**).
+
+- **No SPO** (bloco `[jean]` `initPontePta2027` no fim do `main.js`): uma mensagem própria, `spo-preferencias`, com os atributos `data-spo-*`/`data-visual-*` do `<body>` e os tons calculados de foco e destaque (`--spo-focus-ring`, `--spo-focus-halo`, `--spo-accent-text`, `--spo-accent-graphic`). Vai quando o mockup carrega ou pede, e a cada mudança de preferência (observador próprio dos atributos; o do código original só olha `class`/`style`).
+- **No mockup** (arquivos novos, `[jean]`; o `index.html` ganhou só duas linhas, o `<link>` e o `<script>`):
+  - `assets/spo-preferencias.js`: grava os atributos no `<body>` (classe `spo-ponte`), valida os valores e os tokens;
+  - `assets/spo-preferencias.css`: fontes do SPO (o mockup pedia "Inter", que não carregava, e caía na Segoe UI), fonte e tamanho das tabelas, entrelinha, leitura (72ch/estrita), anel de foco do SPO e foco reforçado, links sublinhados, contraste médio/reforçado (no escuro, a borda segue a lógica do mockup: destaque a 42%/64%), brilho reduzido e movimento reduzido.
+- **O que fica fora:**
+  - **tamanho do texto:** já funcionava, porque o zoom da área do SPO (`.main`) amplia o iframe (medido: escala 1,25 com "Maior"). Ampliar de novo dobraria;
+  - densidade e estilo dos cartões (o mockup tem layout próprio, em px) e daltonismo nos diagramas (imagens SVG prontas);
+  - a escala tipográfica do próprio mockup (há textos de 9 a 11 px): fica para um PR de adequação do mockup ao SPO-AA+.
+- **Atalhos dentro do mockup:** com o foco no iframe, as teclas não chegavam ao SPO. Agora Ctrl+K, "/", "?" e Alt+M voltam ao SPO pela mensagem `spo-atalho` (os de uma tecla respeitam a opção "Atalhos de uma tecla"); o Esc da busca e do menu devolve o foco ao mockup.
+- **Declaração de acessibilidade:** o item do PTA 2027 em "Parcial ou em avaliação" foi atualizado.
+- **Verificação** (SPO local, perfis da bateria aplicados nos atributos, sem gravar preferências):
+  - padrão: fonte SPO Inter carregada, entrelinha 1,5, tabelas em Intel One Mono 12 px, anel `#1a4f91`;
+  - escuro + reforçado + foco reforçado: borda 64% e texto secundário mais claro, anel na cor do destaque;
+  - acessibilidade máxima (Atkinson, entrelinha 2,0, leitura estrita, links, brilho reduzido, movimento): parágrafo com 2,0 e no máximo ~48ch, cartões `#eceef1`, transições zeradas;
+  - denso (Source Sans, tabelas compactas, IBM Plex, contraste médio): tabelas a 8 px em IBM Plex Sans, borda média;
+  - teclas reais com o foco no mockup: Ctrl+K abre a busca e o Esc volta ao mockup; Alt+M vai ao menu e o Esc volta;
+  - `pytest` completo duas vezes seguidas e `node --check` nos dois scripts.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ponte.1`); o `index.html` do mockup: duas linhas novas.
+
