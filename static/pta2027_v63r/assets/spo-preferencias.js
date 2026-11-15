@@ -125,16 +125,20 @@
     if (falta <= 0) return;
     pai.scrollBy({ top: falta, behavior: suave ? "smooth" : "instant" });
   }
-  // [jean] Tela de celular, tablet ou janela dividida (fix/telas-estreitas-rolagem-janelas, pedido do
-  // dev. Jean): a janela do SPO com até 1200 px de largura (as mesmas faixas da densidade
-  // automática: compacta e ampla) ou o preset "Pressão operacional" do Contrato Visual (que realça
-  // o modo móvel e split). É onde a rolagem automática ajuda: o painel aberto costuma ficar fora da
-  // tela. Em tela larga ele abre logo abaixo do cartão, à vista.
+  // [jean] Tela de celular, tablet deitado ou janela dividida (fix/telas-estreitas-rolagem-janelas e
+  // fix/rolagem-sem-retrato, pedidos do dev. Jean): a janela do SPO com até 1200 px de largura (as
+  // faixas compacta e ampla da densidade automática) E até 1000 px de altura; o celular (até 720 px
+  // de largura) entra sempre, qualquer que seja a altura; o preset "Pressão operacional" do
+  // Contrato Visual (que realça o modo móvel e split) também. É onde a rolagem automática ajuda: a
+  // tela é estreita e baixa, e o painel aberto costuma ficar fora dela. Ficam de fora a tela larga
+  // e as telas estreitas mas altas (monitor em retrato, ~1060 × 1900; tablet em pé), onde o painel
+  // abre à vista.
   function telaEstreita() {
     try {
       const pai = window.parent !== window ? window.parent : window;
       if (pai.document.body && pai.document.body.dataset.visualContractPreset === "mobile") return true;
-      return pai.matchMedia ? pai.matchMedia("(max-width: 1200px)").matches : pai.innerWidth <= 1200;
+      const casa = (q) => (pai.matchMedia ? pai.matchMedia(q).matches : false);
+      return casa("(max-width: 720px)") || casa("(max-width: 1200px) and (max-height: 1000px)");
     } catch (err) { return false; }
   }
   // O mockup chama painel.scrollIntoView(...) dentro da função que abre; durante a chamada, o
