@@ -9336,3 +9336,54 @@ body.spo-busca-aberta .spo-dica-teclado { display: none; }
 .spo-acessibilidade a[data-spo-padrao] { font-weight: 700; }
 /* tabelas do documento: texto para leitura, na fonte da interface (não na fonte de dados das tabelas do SPO) */
 body .spo-padrao-corpo .spo-doc-tabela table:not(#spo-doc) { font-family: inherit; }
+
+/* ==========================================================================
+   [jean] Amostra das fontes no estilo da prévia "Componentes do SPO"
+   (fix/amostra-fontes, 2026-11-14; pedido do dev. Jean: a amostra não tinha o
+   mesmo acabamento da prévia). Fundo de página com um cartão em miniatura:
+   sobretítulo 11 px, título de cartão 16 px, texto 14 px, metadados 12 px e uma
+   tabela de relatório com cabeçalho (fonte e tamanho seguem "Fonte dos dados" e
+   "Texto das tabelas"; a entrelinha e a leitura seguem as opções do texto corrido).
+   ========================================================================== */
+/* a borda, os cantos e a sombra vêm da prévia (.personalizar-preview + .preview-surface, que seguem o
+   estilo dos cartões, o contraste e o contrato visual); aqui só se desfaz a grade da prévia */
+body .spo-fontes-amostra.preview-surface:not(#spo-amostra) {
+  display: block; min-height: 0; padding: 12px 14px; background: var(--card);
+  border-style: solid; border-width: var(--spo-preview-border-width);
+  border-radius: var(--spo-preview-radius); box-shadow: var(--spo-preview-shadow);
+}
+/* cor da borda com especificidade baixa (0,2,0): vence a regra antiga da amostra e perde para os
+   presets do contrato visual (body[...] .preview-surface), como na prévia */
+.spo-fontes-amostra.preview-surface { border-color: var(--spo-preview-border); }
+.spo-amostra-sobretitulo { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.5; color: var(--spo-accent-text, var(--text)); }
+.spo-amostra-titulo { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 2px 0 6px; }
+body .spo-fontes-amostra p.spo-amostra-texto:not(#spo-amostra) { font-size: 14px; margin: 0 0 4px; }
+body .spo-fontes-amostra p.spo-amostra-letras:not(#spo-amostra) { font-size: 14px; margin: 0 0 10px; letter-spacing: .04em; }
+body .spo-fontes-amostra table:not(#spo-amostra) { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.spo-fontes-amostra caption { caption-side: top; }
+.spo-fontes-amostra :is(th, td) { padding: 5px 8px; text-align: left; }
+.spo-fontes-amostra thead th { font-weight: 700; background: rgba(var(--accent-rgb), 0.08); border-bottom: 2px solid var(--border); }
+.spo-fontes-amostra tbody td { border-top: 1px solid var(--border); }
+.spo-fontes-amostra tbody tr:nth-child(even) td { background: rgba(var(--accent-rgb), 0.03); }
+.spo-fontes-amostra :is(th, td):last-child { text-align: right; white-space: nowrap; }
+
+/* [jean] Prévia dos componentes com "Cores dos gráficos: seguras para daltonismo" (fix/amostra-fontes,
+   2026-11-15; pedido do dev. Jean: a prévia não mudava). Os quatro nós do mini diagrama passam às
+   quatro primeiras cores da paleta Okabe-Ito (window.spoPaletaDaltonismo), com contorno, como nos
+   gráficos. A paleta segue o FUNDO DO DIAGRAMA (data-visual-diagram-theme, que resolve o tema e a opção
+   "Diagramas"), não o tema da página: diagrama claro = paleta clara e contorno escuro; escuro = paleta
+   escura e contorno claro. */
+body[data-spo-cvd="safe"] .personalizar-preview .preview-line::before {
+  background:
+    radial-gradient(circle at 14% 50%, #0072B2 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 40% 50%, #E69F00 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 66% 50%, #009E73 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 88% 50%, #D55E00 0 6.5px, #1f2328 7px 8.5px, transparent 9px);
+}
+body[data-spo-cvd="safe"]:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="highDark"]) .personalizar-preview .preview-line::before {
+  background:
+    radial-gradient(circle at 14% 50%, #56B4E9 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 40% 50%, #E69F00 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 66% 50%, #009E73 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 88% 50%, #D55E00 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px);
+}
