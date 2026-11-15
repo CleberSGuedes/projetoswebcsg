@@ -9850,3 +9850,10 @@ body .home-welcome-text:not(#spo-dens):not(#spo-dens-b), body .home-welcome-text
 /* [jean] feat/densidade-teste-px: a linha "Fonte: FIPLAN…" do cabeçalho do Teto é nota, não
    descrição da página: tamanho de controle (Intermediário 12, como antes) */
 body .module-header-copy > p.teto-dashboard-fonte:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-controle); }
+
+/* [jean] Navegação pelo teclado nas tabelas (feat/teclado-tabelas): anel de foco por dentro da célula
+   (por fora seria cortado pela rolagem da tabela) */
+#content-area table :is(td, th)[tabindex]:focus-visible {
+  outline: 3px solid var(--spo-focus-ring, var(--accent));
+  outline-offset: -3px;
+}

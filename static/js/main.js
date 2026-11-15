@@ -29187,6 +29187,15 @@
       [`${k("Home")} ${k("End")}`, "Primeira / última aba ou cartão."],
       [k("Tab"), "Sai do componente e segue para o próximo item da tela."],
     ]],
+    ["Tabelas", "bi-table", [
+      [k("Tab"), "Entra na tabela, na última célula visitada (na primeira vez, a primeira célula de dados); o próximo Tab já sai dela. Um clique numa célula também começa a navegação por ali."],
+      [`${k("←")} ${k("→")} ${k("↑")} ${k("↓")}`, "Anda de célula em célula (também pelo cabeçalho e pela linha dos filtros, e a partir de um filtro ou botão da célula)."],
+      [`${k("Home")} ${k("End")}`, "Primeira / última célula da linha."],
+      [`${k("Ctrl", "Home")} ${k("Ctrl", "End")}`, "Primeira / última célula da tabela."],
+      [`${k("PageUp")} ${k("PageDown")}`, "Sobe / desce 10 linhas."],
+      [k("Enter"), "Entra no campo, filtro, botão ou link da célula; Esc volta para a célula."],
+      [`${k("←")} ${k("→")}`, "Na paginação: andam pelos botões de página (Home/End: primeiro/último); ↑ ou Esc voltam para a tabela."],
+    ]],
     ["Busca, avisos e filtros", "bi-window-stack", [
       [`${k("↓")} ${k("↑")} e ${k("Enter")}`, "Na busca de telas: escolhem e abrem a tela."],
       [k("Esc"), "Fecha o aviso, a busca, esta ajuda ou a lista de um filtro (o filtro não aplicado é descartado)."],
@@ -29384,6 +29393,7 @@
     ["#menu .menu-item", "spo-dica-menu", "↓ ↑ andam no menu · → abre o grupo, ← fecha · Enter abre a tela · Esc volta para onde estava"],
     ["[data-flow-node]", "spo-dica-cartoes", "← → trocam o cartão · Home/End: primeiro/último · Tab sai"],
     ['[role="tab"]', "spo-dica-abas", "← → trocam a aba · Home/End: primeira/última · Tab segue para o conteúdo"],
+    ["#content-area table :is(td, th)[tabindex]", "spo-dica-tabela", "Setas andam pelas células · Home/End: linha · Ctrl+Home/End: tabela · PageUp/PageDown: 10 linhas · Enter entra no campo, Esc volta"],
   ];
   DICAS.forEach(([, id, texto]) => {
     if (document.getElementById(id)) return;
@@ -29708,4 +29718,221 @@
     if (op.dataset.spoFontValue === "atkinson") mostrar(op.closest("#spo-fontes-card"));
     else remover();
   });
+})();
+
+/* ==========================================================================
+   [jean] Navegação pelo teclado nas tabelas (feat/teclado-tabelas, 2026-11-15;
+   pedido do dev. Jean; padrão "grade" do WAI-ARIA, como nas planilhas da web)
+   Em toda tabela de dados da área de conteúdo:
+   - Tab entra na tabela numa célula só (a última visitada; na primeira vez, a
+     primeira célula de dados): "tabindex itinerante", leve em tabelas grandes
+     (só a célula da vez tem tabindex 0);
+   - setas andam de célula em célula (também pelo cabeçalho e pela linha dos
+     filtros); Home/End vão ao início/fim da linha; Ctrl+Home/End à primeira/
+     última célula; PageUp/PageDown sobem/descem 10 linhas;
+   - Enter entra no primeiro campo, filtro, botão ou link da célula; Esc, dentro
+     dele, volta para a célula (se o próprio controle não usou o Esc).
+   As teclas só agem com o foco na própria célula: dentro de um campo, as setas
+   seguem o comportamento de sempre. Os controles das células continuam na
+   ordem do Tab. A tabela não ganha role="grid" (o leitor de tela segue lendo-a
+   como tabela). Alt + setas não foi usado: no navegador volta/avança a página.
+   ========================================================================== */
+(function initNavegacaoTabelas() {
+  const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const area = () => document.getElementById("content-area");
+  const ehTabela = (t) => t && t.tBodies && t.tBodies.length && t.rows.length > 1 && t.getAttribute("role") !== "presentation";
+  const visivel = (el) => !!(el && el.getClientRects().length);
+
+  // controles das células que saem da ordem do Tab (alcançados pelas setas + Enter): os do cabeçalho
+  // (títulos e filtros) e os botões e links das linhas; campos de digitação das linhas continuam no Tab;
+  // nada dentro de uma lista de filtro aberta (.mf-panel) é tocado
+  const LISTAS = ".mf-panel, .planning-action-checklist-panel, .planning-action-checklist-options";
+  const ehControleDeCelula = (el) => !el.closest(LISTAS) && (!!el.closest("thead") || el.matches('button, a[href], summary, [role="button"]'));
+  function tirarDoTab(t) {
+    t.querySelectorAll(FOCAVEIS).forEach((el) => {
+      if (el.matches("td, th") || el.dataset.spoTabOrig !== undefined || !ehControleDeCelula(el)) return;
+      el.dataset.spoTabOrig = el.hasAttribute("tabindex") ? el.getAttribute("tabindex") : "";
+      el.tabIndex = -1;
+    });
+  }
+  function preparar(t) {
+    if (!ehTabela(t) || !visivel(t)) return;
+    tirarDoTab(t);
+    const corpo = t.tBodies[0];
+    const primeiraLinha = corpo && [...corpo.rows].find(visivel);
+    const primeiraDeDados = primeiraLinha && primeiraLinha.cells[0];
+    const atual = t.querySelector('td[tabindex="0"], th[tabindex="0"]');
+    if (atual) {
+      // escolha automática feita antes de os dados chegarem (só o cabeçalho): passa à 1ª célula de dados
+      if (atual.dataset.spoTabAuto && primeiraDeDados && atual !== primeiraDeDados && !corpo.contains(atual) && document.activeElement !== atual) {
+        atual.tabIndex = -1;
+        delete atual.dataset.spoTabAuto;
+        primeiraDeDados.tabIndex = 0;
+        primeiraDeDados.dataset.spoTabAuto = "1";
+      }
+      return;
+    }
+    const cabecalho = [...t.rows].find(visivel);
+    const inicio = primeiraDeDados || (cabecalho && cabecalho.cells[0]);
+    if (inicio) { inicio.tabIndex = 0; inicio.dataset.spoTabAuto = "1"; }
+  }
+  let espera = 0;
+  function prepararTodas() {
+    clearTimeout(espera);
+    espera = setTimeout(() => area()?.querySelectorAll("table").forEach(preparar), 150);
+  }
+  const alvo = area() || document.body;
+  new MutationObserver(prepararTodas).observe(alvo, { childList: true, subtree: true });
+  prepararTodas();
+
+  // a célula que recebe o foco vira a "da vez" (tabindex 0); as outras da tabela, -1
+  function tornarDaVez(cel) {
+    delete cel.dataset.spoTabAuto; // a pessoa já navegou: a escolha deixa de ser automática
+    const t = cel.closest("table");
+    t.querySelectorAll('td[tabindex="0"], th[tabindex="0"]').forEach((c) => { if (c !== cel) c.tabIndex = -1; });
+    cel.tabIndex = 0;
+  }
+  // o foco sozinho só rola o bastante para a célula aparecer em parte (voltando para a esquerda, a
+  // 1ª coluna ficava cortada e a barra não voltava ao início — achado do dev. Jean): a célula vai
+  // inteira à vista e, na 1ª coluna, a rolagem lateral volta ao começo
+  function rolagemLateral(el) {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const c = getComputedStyle(p);
+      if (/(auto|scroll)/.test(c.overflowX) && p.scrollWidth > p.clientWidth) return p;
+    }
+    return null;
+  }
+  function irPara(cel) {
+    if (!cel || !visivel(cel)) return;
+    tornarDaVez(cel);
+    cel.focus({ preventScroll: true });
+    const caixa = rolagemLateral(cel);
+    if (caixa) {
+      const rc = cel.getBoundingClientRect();
+      const rx = caixa.getBoundingClientRect();
+      if (cel.cellIndex === 0) caixa.scrollLeft = 0;
+      else if (rc.left < rx.left) caixa.scrollLeft -= rx.left - rc.left;
+      else if (rc.right > rx.right) caixa.scrollLeft += Math.min(rc.right - rx.right, rc.left - rx.left);
+    }
+    cel.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  document.addEventListener("focusin", (ev) => {
+    const cel = ev.target;
+    if (cel && cel.matches && cel.matches("#content-area table :is(td, th)[tabindex]")) tornarDaVez(cel);
+  });
+  // clicar numa célula (fora de um controle) ativa a navegação a partir dela
+  document.addEventListener("click", (ev) => {
+    const el = ev.target;
+    if (!el || !el.closest || el.closest('a[href], button, input, select, textarea, label, summary, [role="button"]') || el.closest(LISTAS)) return;
+    const cel = el.closest("td, th");
+    const t = cel && cel.closest("table");
+    if (!t || !t.closest("#content-area") || !ehTabela(t) || !visivel(cel)) return;
+    if (window.getSelection && String(window.getSelection()).length) return; // seleção de texto com o mouse
+    tornarDaVez(cel);
+    cel.focus({ preventScroll: true });
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.altKey || ev.metaKey) return;
+    const alvoEv = ev.target;
+    if (!alvoEv || !alvoEv.closest) return;
+    const cel = alvoEv.closest("td, th");
+    const t = cel && cel.closest("table");
+    if (!t || !t.closest("#content-area") || !ehTabela(t)) return;
+    // dentro de um controle da célula: Esc volta para a célula; nos botões e filtros (não nos campos de
+    // digitação, nem com a lista do filtro aberta), as setas e afins andam a partir da célula
+    if (alvoEv !== cel) {
+      if (alvoEv.closest(LISTAS)) return;
+      if (ev.key === "Escape" && !ev.ctrlKey && !ev.shiftKey) { ev.preventDefault(); irPara(cel); return; }
+      const botao = alvoEv.matches('button, a[href], summary, [role="button"]') && alvoEv.getAttribute("aria-expanded") !== "true";
+      if (!botao || !/^(Arrow(Up|Down|Left|Right)|Home|End|Page(Up|Down))$/.test(ev.key)) return;
+    }
+    // só linhas visíveis (há linhas escondidas, como a de "nenhum resultado"; o foco não entra nelas)
+    const linhas = [...t.rows].filter(visivel);
+    const r = linhas.indexOf(cel.parentElement);
+    if (r < 0) return;
+    const c = cel.cellIndex;
+    const naLinha = (ri, ci) => { const l = linhas[Math.max(0, Math.min(linhas.length - 1, ri))]; return l && l.cells[Math.max(0, Math.min(l.cells.length - 1, ci))]; };
+    let destino = null;
+    switch (ev.key) {
+      case "ArrowRight": if (!ev.ctrlKey) destino = naLinha(r, c + 1); break;
+      case "ArrowLeft": if (!ev.ctrlKey) destino = naLinha(r, c - 1); break;
+      case "ArrowDown": if (!ev.ctrlKey) destino = naLinha(r + 1, c); break;
+      case "ArrowUp": if (!ev.ctrlKey) destino = naLinha(r - 1, c); break;
+      case "Home": destino = ev.ctrlKey ? naLinha(0, 0) : naLinha(r, 0); break;
+      case "End": destino = ev.ctrlKey ? naLinha(linhas.length - 1, Infinity) : naLinha(r, Infinity); break;
+      case "PageDown": destino = naLinha(r + 10, c); break;
+      case "PageUp": destino = naLinha(r - 10, c); break;
+      case "Enter": {
+        const dentro = [...cel.querySelectorAll(FOCAVEIS)].find(visivel);
+        if (dentro) { ev.preventDefault(); dentro.focus(); }
+        return;
+      }
+      default: return;
+    }
+    if (!destino) return;
+    ev.preventDefault();
+    irPara(destino);
+  });
+})();
+
+
+// [jean] feat/teclado-tabelas: paginação das tabelas pelo teclado (achado do dev. Jean no PED: com o foco
+// num botão de página, as setas não andavam e não havia como voltar à tabela). ← → andam pelos botões
+// ativos, Home/End primeiro/último; ↑ ou Esc voltam à célula da vez da tabela. Depois de trocar de página
+// (Enter), o foco fica na paginação redesenhada (no mesmo número ou na página atual), em vez de cair no início.
+(function initTecladoPaginacao() {
+  const SEL = "#content-area .pagination button"; // a FIP 613 e outras não põem a classe page-btn nos botões
+  const botoes = (pag) => [...pag.querySelectorAll("button")].filter((b) => !b.disabled && b.getClientRects().length);
+  function tabelaDa(pag) {
+    let el = pag;
+    while (el && el.id !== "content-area") {
+      const t = el.parentElement && [...el.parentElement.querySelectorAll("table")].find((x) => x.getClientRects().length && x.tBodies.length);
+      if (t) return t;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey) return;
+    const btn = ev.target && ev.target.closest && ev.target.closest(SEL);
+    if (!btn || btn !== ev.target) return;
+    const pag = btn.closest(".pagination");
+    const lista = botoes(pag);
+    const i = lista.indexOf(btn);
+    let alvo = null;
+    if (ev.key === "ArrowLeft") alvo = lista[i - 1];
+    else if (ev.key === "ArrowRight") alvo = lista[i + 1];
+    else if (ev.key === "Home") alvo = lista[0];
+    else if (ev.key === "End") alvo = lista[lista.length - 1];
+    else if ((ev.key === "ArrowUp" || ev.key === "Escape") && !ev.shiftKey) {
+      const t = tabelaDa(pag);
+      alvo = t && (t.querySelector('td[tabindex="0"], th[tabindex="0"]') || (t.tBodies[0] && t.tBodies[0].rows[0] && t.tBodies[0].rows[0].cells[0]));
+      if (alvo && !alvo.hasAttribute("tabindex")) alvo.tabIndex = 0;
+    } else return;
+    ev.preventDefault();
+    if (alvo) { alvo.focus(); alvo.scrollIntoView({ block: "nearest", inline: "nearest" }); }
+  });
+  // a paginação é redesenhada a cada troca de página; devolve o foco a ela
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest(SEL);
+    if (!btn || document.activeElement !== btn) return;
+    const pag = btn.closest(".pagination");
+    const idPag = pag.id;
+    const rotulo = btn.textContent.trim();
+    let tentativas = 0;
+    const devolver = () => {
+      const ativo = document.activeElement;
+      if (ativo === btn && btn.isConnected) { if (++tentativas < 10) setTimeout(devolver, 200); return; } // ainda não redesenhou (carga assíncrona)
+      if (ativo && ativo !== document.body && ativo.isConnected) return; // o foco já está em outro lugar
+      const atual = (idPag && document.getElementById(idPag)) || (pag.isConnected ? pag : null);
+      if (atual) {
+        const lista = botoes(atual);
+        const destino = lista.find((b) => b.textContent.trim() === rotulo) || atual.querySelector("button.active, button[aria-current='page']") || lista[0];
+        if (destino) { destino.focus({ preventScroll: true }); return; }
+      }
+      if (++tentativas < 10) setTimeout(devolver, 200);
+    };
+    setTimeout(devolver, 0);
+  }, true);
 })();
