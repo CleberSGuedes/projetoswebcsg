@@ -22,6 +22,9 @@ body.spo-ponte { --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-
 body.spo-ponte[data-spo-font-ui="inter"] { font-family: "SPO Inter", var(--spo-font-classic); }
 body.spo-ponte[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
 body.spo-ponte[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
+/* [jean] Mulish (feat/fonte-mulish, 2026-11-15) */
+@font-face { font-family: "SPO Mulish"; src: url("../../fonts/mulish/mulish-latin-wght-normal.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
+body.spo-ponte[data-spo-font-ui="mulish"] { font-family: "SPO Mulish", var(--spo-font-classic); }
 body.spo-ponte[data-spo-font-ui="classic"] { font-family: var(--spo-font-classic); }
 
 /* Fonte e tamanho do texto das tabelas */
@@ -45,6 +48,7 @@ body.spo-ponte[data-spo-reading="medium"] main p + p:not(table *) { margin-top: 
 body.spo-ponte[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
 body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
 body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="mulish"] { --spo-leitura-estrita: 53ch; }
 body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
 body.spo-ponte[data-spo-reading="strict"] main :is(p, li, dd):not(table *, nav *, button *) { max-width: var(--spo-leitura-estrita); }
 body.spo-ponte[data-spo-reading="strict"] main p:has(+ p):not(table *) { margin-bottom: max(1.5em, 1.5lh); }

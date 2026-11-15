@@ -27722,7 +27722,7 @@
 (function initFontesPersonalizar() {
   const STORAGE_KEY = "spo-font-preferences";
   const OPTIONS = Object.freeze({
-    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
+    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3", mulish: "Mulish" },
     data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)", "atkinson-mono": "Atkinson Hyperlegible Mono" },
     size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)", xlarge: "Muito grande (150%)" },
     table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },

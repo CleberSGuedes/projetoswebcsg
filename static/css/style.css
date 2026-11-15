@@ -9596,3 +9596,17 @@ body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload
 @media (prefers-reduced-motion: reduce) {
   body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) { transform: none; }
 }
+
+/* ==========================================================================
+   [jean] Fonte Mulish como opção da interface (feat/fonte-mulish, 2026-11-15;
+   pedido do dev. Jean, para comparar com a Inter na leitura corrida)
+   Personalizar → Fontes e tamanho do texto → Fonte da interface → "Mulish".
+   Formas arredondadas e abertas; o I maiúsculo e o l minúsculo são parecidos
+   (a prévia "Fontes e tabelas" mostra "Il1 O0" para comparar). O padrão SPO
+   continua a Inter. Arquivo em static/fonts/mulish (OFL 1.1; LEIA-ME).
+   ========================================================================== */
+@font-face { font-family: "SPO Mulish"; src: url("../fonts/mulish/mulish-latin-wght-normal.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
+body[data-spo-font-ui="mulish"] { font-family: "SPO Mulish", var(--spo-font-classic); }
+/* "Leitura → Estrito": largura média das letras ÷ largura do "0" medida (Mulish 0,801; Inter 0,787) dá 54ch;
+   fica 53ch, como a Inter (lado conservador: no máximo 80 caracteres por linha) */
+body[data-spo-reading="strict"][data-spo-font-ui="mulish"] { --spo-leitura-estrita: 53ch; }
