@@ -2781,3 +2781,16 @@ Pedido do dev. Jean: os cartões do mockup estavam maiores que o padrão do SPO.
 
 Sem script de banco. `templates/base.html` sem mudança; no `index.html` do mockup, só o `?v=` do `spo-preferencias.css` (`20261114.jean-escala.1`).
 
+## Amostra das fontes na Prévia do Personalizar (dev. Jean, 2026-11-14 e 15)
+
+Pedido do dev. Jean: a amostra de "Fontes e tamanho do texto" não tinha o mesmo acabamento da prévia "Componentes do SPO" (era uma frase solta e uma tabela sem cabeçalho).
+
+- **Agora** (`templates/partials/atualizar_personalizar_spo.html`; bloco `[jean]` no fim do `style.css`): com a **mesma borda da prévia** (a amostra usa a classe `preview-surface` e o cartão, `personalizar-preview`, e por isso segue o estilo dos cartões, o contraste e o contrato visual; só a grade da prévia é desfeita), e cada passo da escala na fonte escolhida: sobretítulo 11 px, título 16 px, texto 14 px, as letras parecidas "Il1 O0 — ç ã é" numa linha própria e uma tabela de relatório com cabeçalho, linhas alternadas e valores à direita (crédito − empenhado = saldo).
+- **A amostra saiu do cartão "Fontes e tamanho do texto" e ganhou cartão próprio de prévia** (decisões do dev. Jean): "Prévia · Fontes e tabelas" (`#spo-previa-fontes`), logo depois de "Prévia · Componentes do SPO" (que não mudou), os dois com uma coluna, lado a lado quando há espaço. Uma primeira versão juntava as duas prévias num cartão de largura toda, mas ele chamava atenção demais. Na tabela, nomes curtos ("Crédito", "Empenhado", "Saldo") para as três linhas ficarem iguais.
+- **Daltonismo na prévia dos componentes** (relatado pelo dev. Jean: com "Cores dos gráficos: seguras para daltonismo" a prévia não mudava): os quatro nós do mini diagrama passam às quatro primeiras cores da paleta Okabe-Ito, com contorno, como nos gráficos. A paleta segue o fundo do diagrama (`data-visual-diagram-theme`): diagrama claro = `#0072B2 #E69F00 #009E73 #D55E00` com contorno `#1f2328`; escuro = `#56B4E9`… com contorno `#f5f5f5`.
+- **Ajustes pedidos pelo dev. Jean ao ver a primeira versão:** sem a moldura grossa (fundo de página em volta do cartão), sem a linha de metadados, "Compare as letras:" e as letras em linhas separadas, e a borda igual à da prévia.
+- As opções que já agiam na amostra continuam: fonte da interface e dos dados, tamanho, texto das tabelas, entrelinha e leitura. Em coluna estreita, o valor desce inteiro (#86).
+- **Verificação** (SPO local): tamanhos e fontes conferidos (Inter na interface, Intel One Mono nos dados); contraste do sobretítulo, metadados, legenda e cabeçalho entre 9,3 e 15,4:1 (claro) e 10 e 14,3:1 (escuro); borda igual à da prévia em 6 casos (padrão; cartões contornado e plano; contraste reforçado; presets "mobile" e "contraste" do contrato visual); os dois cartões lado a lado a 1366 px (grade de 4 colunas), 1057 px (3) e 768 px (2), empilhados a 375 px; sem rolagem lateral; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-amostra.8`).
+
