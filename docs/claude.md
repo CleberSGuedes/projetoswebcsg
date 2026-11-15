@@ -2759,3 +2759,25 @@ Pedidos do dev. Jean depois de ver o mockup:
 - **Verificação** (SPO local): menu, título, aba do navegador "Programação PTA/OpR — SPO", texto do cabeçalho, cartão sem o exercício; "Anterior" com clique real na 1ª etapa volta à tela inicial, e da 2ª volta à 1ª; busca por "orçamento para resultado" acha a tela; `pytest` completo duas vezes seguidas e `node --check`.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do JS (`?v=20261114.jean-nome-pta.1`).
+
+## Dimensões do mockup PTA/OpR na escala do SPO (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: os cartões do mockup estavam maiores que o padrão do SPO. Estudo e proposta aprovados por ele (título do cartão principal a 24 px, como o SPO).
+
+- **Medição antes** (9 vistas, 41 tipos de componente): título principal 40,6 px; cartões com espaço de 12 a 28 px e cantos de 12 a 24 px; espaço entre cartões de 8 a 32 px; campos com 46 px; "Continuar rascunho" com 65 px (quebrava em 2 linhas). **Referência:** a tela Mapa Conceitual (Governança e Resultados, a referência de hierarquia do padrão §2.2) e as regras de densidade do `style.css`.
+- **Escala aplicada** (seção "Dimensões" no fim do `static/pta2027_v63r/assets/spo-preferencias.css`, só no modo embutido; os arquivos do mockup não mudam):
+  - cartão principal como o cabeçalho de página do SPO: espaço 22/24 px, cantos 18 px, título **24 px**;
+  - títulos: página 24 · seção 20 · cartão 16 px;
+  - seções e cartões: cantos 14 px; cartões pequenos: cantos e espaço 12 px;
+  - espaço dos cartões e entre eles **pela densidade do Personalizar** (compacta 12/10, confortável 16/14, ampla 18/18): a densidade, que ainda não chegava ao mockup (#113), passa a valer nele;
+  - campos com 40–42 px (espaço 10/12, cantos 10); botões com espaço 10/14, cantos 12 e mínimo de 40 px (44 px em tela de toque); "Continuar rascunho" numa linha a partir de 600 px.
+- **Declaração de acessibilidade** e padrão §4.4 atualizados (a densidade vale no mockup).
+- **Verificação** (SPO local):
+  - medição depois nas 9 vistas: todos os tipos de componente na escala (títulos 24/20/16, cantos 14/12, campos 42 px, botões 42 px);
+  - as três densidades aplicadas na página (sem gravar): 12/10, 16/14 e 18/18 px; de volta à automática no fim;
+  - celular (375 px): nenhuma das 9 vistas com rolagem lateral; título principal em 2 linhas (eram 4);
+  - capturas de antes e depois (tela inicial e etapa 1 no computador; tela inicial no celular) nas notas do dev. Jean;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` sem mudança; no `index.html` do mockup, só o `?v=` do `spo-preferencias.css` (`20261114.jean-escala.1`).
+
