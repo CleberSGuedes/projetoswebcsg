@@ -3016,3 +3016,14 @@ Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do 
 Medido no Teto Orçamentário (5 gráficos: eixos X e Y, legenda, pizza, árvore): 10/12/13 px nas três densidades; ao voltar ao Intermediário, redesenhados em 12 px. A 390 px, no Legível, os gráficos cabem na tela e nenhum texto sai da área deles. `node --check`; `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-densidade-graficos.1`).
+
+## Densidade do texto, etapa 4: teste contra `font-size` em px (dev. Jean, 2026-11-15)
+
+Última etapa do plano de tipografia.
+- **Itens fixos em 12 px:** a regra "mínimo de 12 px" (escala, passo 1; bloco `[jean]`) tinha um id na lista e ficava mais específica que as regras da densidade; os itens dela (rótulos dos totais, linhas da atualização, rótulos dos indicadores e filtros do Teto, dica da Início, pílula de versão do Contrato, códigos em tabela, selos de situação…) passam a `var(--spo-fs-controle)` (Intermediário 12, como antes). O rótulo da paginação passa a `var(--spo-fs-dado)`. A linha "Fonte: FIPLAN…" do Teto, que é um `<p>` do cabeçalho, ganhou regra própria (controle) para não subir a 13 px como a descrição da página.
+- **Teste** `tests/test_tamanho_fonte.py` (3 testes): conta `font-size: <n>px` no `style.css` (sem comentários) por valor — 310 declarações, 27 valores em 15/11 — e reprova valor novo ou contagem que sobe; se a contagem desce (regra antiga passou à variável), pula com o aviso de baixar a referência; e confere que as três densidades definem as variáveis. Teste negativo feito: acrescentar `15px` e `19px` reprovou com "Valores novos: ['19']; contagens que subiram: ['15px: 8 -> 9']".
+- Padrão SPO-AA+: §2.2.1 com o teste e item novo no checklist do §6.1.
+
+Medido (Compacto / Intermediário / Legível): dica da Início, rótulos de filtro e indicadores do Teto, pílula do Contrato, rótulos dos totais e linhas da atualização 11/12/13; rótulo da paginação 10/12/13; "Fonte: FIPLAN…" 11/12/13; descrição da página 13 no Intermediário. `pytest` completo duas vezes seguidas (204 passam, 4 pulam).
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-teste-px.2`).
