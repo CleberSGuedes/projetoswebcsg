@@ -2922,3 +2922,13 @@ Implementação (bloco `[jean]` "Cartões dinâmicos" no fim do `style.css`): o 
 Medido na tela: cartões do Institucional com o mesmo fundo, borda, cantos, espaçamento e altura do `.flow-node` (132 px), ícone 20 px, título 14 px, descrição 12 px, nas 4 telas (4, 3, 5 e 5 cartões, todos com ícone); clique nos cantos e no centro de cada cartão cai no link; preset ativo do Contrato com o mesmo fundo, borda e barra do nó selecionado de Governança; opções das Notas SEE (desabilitadas nesta conta) no estilo de desabilitado. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-cartoes-dinamicos.2`).
+
+## Rótulos do gráfico de árvore com contraste garantido (dev. Jean, 2026-11-15)
+
+Pergunta do dev. Jean: com "Cores dos gráficos: seguras para daltonismo", nos temas claro e escuro, os textos dos gráficos do Teto Orçamentário estão adequados? Medido (contraste WCAG de cada rótulo sobre a cor do bloco): a pizza está bem (rótulos fora das fatias, na cor do texto sobre o cartão); no gráfico de árvore ("Teto por ADJ"), o Plotly escolhe o texto de dentro do bloco entre um cinza (#444) e o branco por critério próprio, e **5 dos 8 blocos ficavam abaixo de 4,5:1** no claro com a paleta Okabe-Ito: rosa 3,18, verde 3,42, vermelhão 3,87, azul-céu 4,22, laranja 4,32.
+
+Correção (`main.js`, `ajustarDados` da escala dos gráficos, que já passa por todo `Plotly.react`/`newPlot`): em todo gráfico de árvore com cores por bloco, o texto passa a ser **preto ou branco, o que der mais contraste** com a cor de cada bloco (`textfont.color` por bloco). Vale para qualquer paleta e tema.
+
+Medido na tela (Teto por ADJ, 8 blocos): paleta segura para daltonismo, claro 5,19–21:1 e escuro 5,19–21:1; paleta padrão, claro 5,18–10,35:1 e escuro 5,6–17,03:1. O pior caso (5,19:1, branco sobre o azul Okabe-Ito #0072B2) passa o AA (4,5:1); o AAA (7:1) dependeria de mudar a cor do bloco, o que tiraria a paleta Okabe-Ito do padrão. `pytest` completo duas vezes seguidas; `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-rotulos-arvore.1`).
