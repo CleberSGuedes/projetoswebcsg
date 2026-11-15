@@ -2743,3 +2743,19 @@ Continuação da ponte (#113): adequar o próprio mockup "Programação PTA 2027
 
 Sem script de banco. `templates/base.html` e `login.html`: sem mudança (a versão do CSS do mockup está no `index.html` dele, `?v=20261114.jean-mockup-aa.1`).
 
+## Tela "Programação PTA/OpR": nome, textos e ajustes da jornada (dev. Jean, 2026-11-14)
+
+Pedidos do dev. Jean depois de ver o mockup:
+
+- **Nome "Programação PTA/OpR"** (PTA = Plano de Trabalho Anual; OpR = Orçamento para Resultado), no lugar de "Programação PTA 2027":
+  - menu (`services/features.py`, só o `nome`; o `id` não muda); título da tela com as siglas em `<abbr title>` (o leitor de tela e o mouse mostram o nome por extenso); título do quadro por extenso;
+  - no Personalizar, a amostra das fontes e o item da declaração de acessibilidade;
+  - no mockup: título da página, "PTA/OpR · NOVA JORNADA DE PROGRAMAÇÃO", "PROGRAMAÇÃO PTA/OpR" e um aviso do rascunho (`pta-2027.js`);
+  - busca de telas: "opr", "plano de trabalho anual" e "orçamento para resultado" acham a tela (glossário de `initBuscaTelas`).
+- **Texto do cabeçalho** começa direto por "A jornada parte da estratégia…" (saiu "Primeira integração do mockup v63r").
+- **Exercício** fora do cartão principal ("Da estratégia à entrega pública"); o campo não era lido pelo código.
+- **"Anterior" na 1ª etapa da jornada:** o mockup desativava o botão, e não havia como voltar à tela inicial pela jornada. Agora, na 1ª etapa, ele volta à tela inicial (`returnToStrategicChain`, do próprio mockup), com o nome "Anterior: voltar à tela inicial da programação" para leitor de tela; das outras etapas, volta uma etapa, como antes (`spo-preferencias.js`).
+- **O que não muda:** rota e permissão `atualizar/governanca-resultados/programacao-pta2027` (gravadas no banco), pasta e arquivos `pta2027`, o menu antigo desativado do `base.html` (o arquivo só muda no `?v=`) e documentos históricos.
+- **Verificação** (SPO local): menu, título, aba do navegador "Programação PTA/OpR — SPO", texto do cabeçalho, cartão sem o exercício; "Anterior" com clique real na 1ª etapa volta à tela inicial, e da 2ª volta à 1ª; busca por "orçamento para resultado" acha a tela; `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do JS (`?v=20261114.jean-nome-pta.1`).
