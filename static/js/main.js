@@ -28161,6 +28161,23 @@
   function botaoFechar(dlg) {
     return [...dlg.querySelectorAll("button")].find((b) => /fechar|cancelar|^não$|^nao$/i.test((b.textContent || b.getAttribute("aria-label") || "").trim()) || /close/i.test(b.id || ""));
   }
+  // [jean] fix/busca-sobre-aviso: a busca de telas, a ajuda dos atalhos e "O padrão SPO-AA+"
+  // (.spo-busca-fundo) abrem por cima dos avisos. Enquanto uma delas estiver aberta, o aviso de
+  // baixo não toma o foco (o "Alerta" da Início aparece depois de a página carregar e roubava o
+  // foco da busca aberta com Ctrl+K) nem as teclas (o Esc fechava o aviso escondido, e não a
+  // janela da frente). Fechada a janela, o aviso volta a prender o Tab e a fechar com Esc.
+  const janelaPorCima = () => [...document.querySelectorAll(".spo-busca-fundo")].some((j) => !j.hidden);
+  // ao fechar uma dessas janelas com um aviso ainda aberto, o foco vai para o aviso (e não para
+  // quem abriu a janela, que fica atrás dele); devolve true quando cuidou do foco
+  window.spoFocarAvisoAberto = function spoFocarAvisoAberto() {
+    if (janelaPorCima()) return false;
+    const aviso = [...document.querySelectorAll(".modal-overlay[data-spo-dialogo]")].filter(visivel).pop();
+    if (!aviso) return false;
+    const alvo = [...aviso.querySelectorAll(FOCAVEIS)].find(visivel);
+    if (!alvo) return false;
+    alvo.focus({ preventScroll: true });
+    return true;
+  };
   function prepararModais() {
     document.querySelectorAll(".modal-overlay").forEach((ov) => {
       const aberto = visivel(ov);
@@ -28172,8 +28189,9 @@
         if (t) { if (!t.id) t.id = `spo-dialogo-titulo-${Date.now()}`; ov.setAttribute("aria-labelledby", t.id); }
         ov.__spoVoltar = document.activeElement;
         const primeiro = [...ov.querySelectorAll(FOCAVEIS)].find(visivel);
-        if (primeiro) primeiro.focus({ preventScroll: true });
+        if (primeiro && !janelaPorCima()) primeiro.focus({ preventScroll: true });
         ov.__spoTeclas = (ev) => {
+          if (janelaPorCima()) return;
           if (ev.key === "Escape") { const f = botaoFechar(ov); if (f) { ev.preventDefault(); f.click(); } return; }
           if (ev.key !== "Tab") return;
           const itens = [...ov.querySelectorAll(FOCAVEIS)].filter(visivel);
@@ -28956,7 +28974,7 @@
     if (!dialogo || dialogo.hidden) return;
     dialogo.hidden = true;
     document.body.classList.remove("spo-busca-aberta");
-    if (devolverFoco && abridor && abridor.isConnected) abridor.focus();
+    if (devolverFoco && !(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
   }
 
   // telas abertas pelo menu também entram nas recentes
@@ -29161,7 +29179,7 @@
     if (!dialogo || dialogo.hidden) return;
     dialogo.hidden = true;
     document.body.classList.remove("spo-busca-aberta");
-    if (abridor && abridor.isConnected) abridor.focus();
+    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
   }
 
   // 2) Alt+M e "Ir para o menu"
@@ -29466,7 +29484,7 @@
     if (!dialogo || dialogo.hidden) return;
     dialogo.hidden = true;
     document.body.classList.remove("spo-busca-aberta");
-    if (abridor && abridor.isConnected) abridor.focus();
+    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
   }
 
   document.addEventListener("click", (ev) => {
