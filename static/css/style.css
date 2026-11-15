@@ -9649,3 +9649,60 @@ body #content-area table:not(.fip-table, .plan20-table):not(#spo-tabelas) :is(td
 }
 /* amostra do Personalizar */
 body .spo-fontes-amostra table:not(#spo-dens) { font-size: var(--spo-fs-dado); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (a): Personalizar e janelas
+   (feat/densidade-personalizar, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   O Personalizar (cartões, opções, prévias, declaração) e as janelas de
+   consulta (busca de telas, ajuda dos atalhos, "O padrão SPO-AA+") passam a
+   usar as variáveis da densidade escolhida. No Intermediário (padrão):
+   rótulo 11, controle 12, texto 13, leitura 14, título 14 px; no Legível,
+   13/14/16/16; no Compacto, 11/12/13/13. Botões e campos de formulário em
+   geral ficam para a etapa dos formulários. Antes: cartões de opção em
+   12–13 px e janelas em 14–16 px (a diferença notada pelo dev. Jean).
+   ========================================================================== */
+body .personalizar-card > .eyebrow:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-sobretitulo:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .personalizar-card > .card-title:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade h2.card-title:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-titulo:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-caixa .modal-header-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body .personalizar-card > p:not(.spo-acessibilidade-rodape):not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade > p:not(.spo-acessibilidade-rodape):not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-grade li:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-grade h3:not(#spo-dens):not(#spo-dens-b),
+body :is(.visual-pref-toggle, .visual-pref-option, .preference-row) strong:not(#spo-dens):not(#spo-dens-b),
+body .spo-sugestao p:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-texto:not(#spo-dens):not(#spo-dens-b),
+body #spo-previsualizacao p:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-campo input:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-texto strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+/* seções da ajuda dos atalhos: no tamanho de título (não menores que a descrição, que é leitura) */
+body .spo-atalhos-secao h3:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-titulo); }
+body :is(.visual-pref-toggle, .visual-pref-option, .preference-row) small:not(#spo-dens):not(#spo-dens-b),
+body .spo-fontes-status:not(#spo-dens):not(#spo-dens-b),
+body .spo-fontes-amostra caption:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-rodape:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-caixa .modal-header-subtitle:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-campo > span:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-secao:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-texto small:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-status:not(#spo-dens):not(#spo-dens-b),
+body .spo-atalhos-nota:not(#spo-dens):not(#spo-dens-b),
+body .spo-atalhos-lista kbd:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .spo-atalhos-lista :is(dt, dd):not(#spo-dens):not(#spo-dens-b),
+body .spo-padrao-corpo :is(p, li, dd, td, th, blockquote):not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
+}
+/* documento SPO-AA+: títulos das seções no tamanho da leitura, em negrito (não maiores que o título
+   da janela) */
+body .spo-doc h3:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
+body .spo-doc h4:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
