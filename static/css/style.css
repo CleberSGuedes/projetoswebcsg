@@ -9741,3 +9741,38 @@ body .totais-row > span:not(#spo-dens):not(#spo-dens-b) {
 body .totais-row > strong:not(#spo-dens):not(#spo-dens-b) {
   font-size: var(--spo-fs-dado);
 }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (c): formulários e cadastros
+   (feat/densidade-formularios, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Título de cartão = título (Intermediário 14, igual a antes).
+   - Rótulos de campo e o texto dentro dos campos (input, select, textarea),
+     inclusive dentro das tabelas e dos avisos = controle (Intermediário 12,
+     igual a antes; a busca de usuários tinha 14).
+   - Botões = texto (Intermediário 13: os dos formulários tinham 14, os dos
+     relatórios já tinham 13) e legenda de grupo de campos = texto.
+   No Legível: título 16, botões 14, rótulos e campos 13; no Compacto: 13/12/11.
+   A busca de telas e os botões das janelas de consulta seguem as regras da
+   etapa (a) quando mais específicas.
+   ========================================================================== */
+body #content-area .card > .card-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body #content-area .btn:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) .btn:not(#spo-dens):not(#spo-dens-b),
+body #content-area fieldset > legend:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body #content-area .field > span:not(#spo-dens):not(#spo-dens-b),
+body #content-area .field.inline span:not(#spo-dens):not(#spo-dens-b),
+body #content-area label > span:not([class]):not(#spo-dens):not(#spo-dens-b),
+body #content-area input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(#spo-dens):not(#spo-dens-b),
+body #content-area select:not(#spo-dens):not(#spo-dens-b),
+body #content-area textarea:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) select:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) textarea:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+/* botões das janelas de consulta (busca, atalhos, SPO-AA+): também no tamanho de texto */
+body .spo-busca-caixa .btn:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-texto); }
