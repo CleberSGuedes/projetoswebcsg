@@ -9468,3 +9468,11 @@ body .protected-contract-card .contract-padrao-note a[data-spo-padrao]:not(#spo-
 body[data-spo-font-data="atkinson-mono"] :is(table, .totais-row strong, [id^="teto-kpi-"], .teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
   font-family: "SPO Atkinson Hyperlegible Mono", Consolas, "Courier New", monospace;
 }
+
+/* [jean] Movimento reduzido, cartões que sobem ao passar o mouse (fix/movimento-reduzido, 2026-11-15):
+   com a transição desligada, o deslocamento de 1–2 px continuava, só que num salto. Com "Reduzir
+   sempre" (ou o sistema pedindo), o cartão não se desloca; borda, fundo e sombra continuam marcando. */
+body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload-option, .login-form .btn-primary, .contract-preset, .flow-node):is(:hover, :focus-visible) { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  body :is(.institutional-card .noticia-box, .see-upload-option, .login-form .btn-primary, .contract-preset, .flow-node):is(:hover, :focus-visible) { transform: none; }
+}
