@@ -157,8 +157,10 @@ Decisões:
 - **Mínimo de 12 px:** vale no Legível e no Intermediário. No **Compacto**, escolhido pela pessoa,
   tabelas (10 px) e rótulos (11 px) ficam abaixo — exceção registrada, como o 10 px do topo e do rodapé.
 - **Entrelinhas** não mudam: 1,5 no texto, 1,2–1,25 nos títulos (e a opção "Espaçamento entre linhas").
-- **Componente novo** usa as variáveis, nunca um `font-size` em px escrito à mão (a etapa 4 do plano
-  transforma isso em teste).
+- **Componente novo** usa as variáveis, nunca um `font-size` em px escrito à mão. O teste
+  `tests/test_tamanho_fonte.py` guarda a contagem de `font-size` em px do `style.css` por valor (310 em
+  15/11, regras antigas) e reprova valor novo ou contagem que sobe; quando uma regra antiga passa à
+  variável, a contagem desce e o teste pede para baixar a referência.
 
 Etapas (um PR por etapa): (1) esta seção — feito; (2) criar as variáveis e trocar "Texto das tabelas"
 por "Densidade do texto", com login e mockup PTA/OpR — feito: as **tabelas já usam** `--spo-fs-dado`
@@ -177,10 +179,10 @@ dinâmicos e Início — feito: Governança (títulos = título, descrições = 
 cartões dinâmicos (título = título, texto = controle), Teto (títulos = título, rótulos = controle, valores e
 ranking = dado; **valores em destaque** um passo acima do título: indicadores +2 px, cartões por grupo +4 px)
 e Início (boas-vindas = leitura + 2 px); no Intermediário, os valores ficam como antes; (3e) gráficos —
-feito: o texto do Plotly segue `--spo-fs-dado` e redesenha ao trocar a densidade; (3)
+feito: o texto do Plotly segue `--spo-fs-dado` e redesenha ao trocar a densidade — **etapa 3 concluída**; (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
-reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR
+reprova `font-size` em px fora das variáveis — feito (`tests/test_tamanho_fonte.py`; a lista do "mínimo de 12 px" passou à variável de controle). A troca das cores literais por tokens (Fase C) vem em PR
 separado, depois. As duas mexem em regras do dev. Cleber no `style.css`; ele orientou fazer o que for
 preciso **antes** da divisão/simplificação dos arquivos monolíticos, então não há espera — cada PR
 avisa o que mudou nas regras dele. Com o Intermediário como padrão, a etapa 3 deixa
@@ -424,6 +426,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Layout de colunas que muda por `@media` de largura: lembrar que a área de conteúdo pode estar ampliada (112/125/150%) e a largura útil é a da janela dividida pelo fator. Prefira `@container` ou repita o limite multiplicado (ex.: 900 px × 1,5 = 1350 px).
 - [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
+- [ ] Tamanho de texto novo usa as variáveis da "Densidade do texto" (`var(--spo-fs-texto)`, `-dado`, `-controle`, `-leitura`, `-titulo`…; §2.2.1), nunca `font-size` em px: o `tests/test_tamanho_fonte.py` reprova.
 - [ ] Movimento novo (animação, rolagem suave, cartão que sobe ao passar o mouse) respeita "Reduzir sempre" e o sistema: no CSS, sob `body[data-spo-motion="reduce"]` e `prefers-reduced-motion`; no JS, `scrollIntoView`/`scrollTo`/`scrollBy` já viram um salto com esmaecimento da área de chegada (0,22 s, só opacidade), sozinhos (também no mockup). Troca de conteúdo sem deslocamento: esmaecer, nunca deslizar.
 - [ ] Painel que abre ao clicar num cartão (metas, eixos, detalhamento): abre logo abaixo do cartão ou do grupo dele; com "Reduzir sempre", a página só rola se o começo do painel não estiver à vista, e só até ele (sem esmaecer); o cartão aberto mostra o estado (borda na cor de destaque) e tem `aria-expanded`. Com "Automático", a rolagem suave até o painel vale só em tela estreita e baixa (até 1200 × 1000 px; celular até 720 px de largura sempre; ou preset "Pressão operacional"); em tela larga ou alta (monitor em retrato, tablet em pé), a página só rola se o começo do painel ficar fora da tela.
 - [ ] Texto **nunca** apagado com `opacity` < 1: use a cor (`--muted`, ou o desabilitado do §3.4). A opacidade derruba o contraste e escapa de medições que não a compõem (bateria 2: pílula de versão a 4,26:1, opções indisponíveis das Notas SEE a 2,2:1, dica da Início).
