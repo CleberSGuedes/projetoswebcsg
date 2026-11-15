@@ -28961,3 +28961,53 @@
   itemMenu();
   window.spoBuscaTelas = { abrir: mostrar, buscar: (q) => buscar(indice(), q).map((t) => t.rota), recentes: lerRecentes };
 })();
+
+/* ==========================================================================
+   [jean] Link "Acessibilidade" no rodapé (feat/declaracao-acessibilidade,
+   2026-11-14). Leva ao cartão "Acessibilidade do SPO" do Personalizar Temas.
+   Inserido aqui (sem mudar o base.html). Só aparece para quem tem a tela
+   Personalizar Temas no menu (as permissões escondem o item com display: none).
+   ========================================================================== */
+(function initLinkAcessibilidade() {
+  const ROTA = "atualizar/personalizar-spo/temas";
+  const itemMenu = () => document.querySelector(`.sidebar a.menu-item[data-route="${ROTA}"]`);
+  const visivel = (el) => { for (let e = el; e && !(e.classList && e.classList.contains("sidebar")); e = e.parentElement) { if (e.style && e.style.display === "none") return false; } return true; };
+  function irParaCartao() {
+    const cartao = document.getElementById("spo-acessibilidade");
+    if (!cartao) return false;
+    cartao.scrollIntoView({ block: "start" });
+    const titulo = document.getElementById("spo-acessibilidade-titulo");
+    if (titulo) titulo.focus({ preventScroll: true });
+    return true;
+  }
+  function montar() {
+    const rodape = document.querySelector(".footer");
+    if (!rodape || rodape.querySelector(".footer-acessibilidade")) return;
+    const a = document.createElement("a");
+    a.href = "#spo-acessibilidade";
+    a.className = "footer-line footer-acessibilidade";
+    a.textContent = "Acessibilidade";
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (irParaCartao()) return;
+      const item = itemMenu();
+      if (!item) return;
+      item.click();
+      let tentativas = 0;
+      // o SPO leva o foco ao título da página ao trocar de tela (#41): espera essa troca e vai ao cartão depois
+      const esperar = setInterval(() => {
+        tentativas += 1;
+        if (document.getElementById("spo-acessibilidade")) { clearInterval(esperar); setTimeout(irParaCartao, 500); }
+        else if (tentativas > 40) clearInterval(esperar);
+      }, 150);
+    });
+    const build = rodape.querySelector(".footer-build");
+    rodape.insertBefore(a, build || null);
+    const ajustar = () => { const item = itemMenu(); a.hidden = !(item && visivel(item)); };
+    ajustar();
+    // as permissões chegam depois do carregamento (applyMenuPermissions): reavalia
+    const menu = document.querySelector(".sidebar");
+    if (menu) new MutationObserver(ajustar).observe(menu, { attributes: true, subtree: true, attributeFilter: ["style"] });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", montar); else montar();
+})();
