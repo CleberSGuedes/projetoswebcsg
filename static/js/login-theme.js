@@ -53,7 +53,7 @@
     spoFontUi: ["inter", ["classic", "inter", "atkinson", "source", "mulish"], "ui"],
     spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono", "atkinson-mono"], "data"],
     spoTextSize: ["default", ["default", "large", "larger", "xlarge"], "size"],
-    spoTableText: ["legible", ["compact", "medium", "legible"], "table"],
+    spoTableText: ["medium", ["compact", "medium", "legible"], "table"],
     spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
     spoReading: ["default", ["default", "medium", "strict"], "reading"],
     spoCvd: ["default", ["default", "safe"], "cvd"],
@@ -66,8 +66,17 @@
   let fontPrefs = {};
   try {
     fontPrefs = JSON.parse(localStorage.getItem("spo-font-preferences") || "{}") || {};
+    // [jean] feat/densidade-do-texto: mesma conversão única do main.js (initFontesPersonalizar)
+    if (!localStorage.getItem("spo-densidade-v2")) {
+      const antiga = { legible: "medium", medium: "compact", compact: "compact" };
+      if (antiga[fontPrefs.table]) {
+        fontPrefs.table = antiga[fontPrefs.table];
+        localStorage.setItem("spo-font-preferences", JSON.stringify(fontPrefs));
+      }
+      localStorage.setItem("spo-densidade-v2", "1");
+    }
   } catch (_) {
-    fontPrefs = {};
+    fontPrefs = fontPrefs || {};
   }
   Object.keys(fontOptions).forEach((attr) => {
     const [fallback, allowed, key] = fontOptions[attr];
