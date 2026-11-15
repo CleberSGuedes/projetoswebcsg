@@ -118,8 +118,10 @@ Regras:
 - **Dados** (valores, totais, KPIs, códigos) usam a fonte de dados do §2.1, inclusive fora de
   `<table>` (ex.: aba Tabelas do Teto, #82). Componente novo que mostra número deve entrar na lista
   de seletores da fonte de dados.
-- O texto **dentro dos gráficos** (SVG do Plotly) usa a fonte da interface com mínimo de 12 px,
-  aplicado a todo gráfico por `initGraficosEscala` (`main.js`).
+- O texto **dentro dos gráficos** (SVG do Plotly) usa a fonte da interface e o tamanho de dado da
+  "Densidade do texto" (`--spo-fs-dado`: Compacto 10, Intermediário 12, Legível 13 px; texto pedido
+  maior que 12 px acompanha a mesma diferença), aplicado a todo gráfico por `initGraficosEscala`
+  (`main.js`); trocar a densidade redesenha os gráficos abertos.
 
 ### 2.2.1 Densidade do texto (versão 4, decisões do dev. Jean, 2026-11-15)
 
@@ -174,7 +176,8 @@ legendas de grupo = texto (botões dos formulários: 14 → 13 px no Intermediá
 dinâmicos e Início — feito: Governança (títulos = título, descrições = controle, contexto = leitura),
 cartões dinâmicos (título = título, texto = controle), Teto (títulos = título, rótulos = controle, valores e
 ranking = dado; **valores em destaque** um passo acima do título: indicadores +2 px, cartões por grupo +4 px)
-e Início (boas-vindas = leitura + 2 px); no Intermediário, os valores ficam como antes; (3)
+e Início (boas-vindas = leitura + 2 px); no Intermediário, os valores ficam como antes; (3e) gráficos —
+feito: o texto do Plotly segue `--spo-fs-dado` e redesenha ao trocar a densidade; (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR

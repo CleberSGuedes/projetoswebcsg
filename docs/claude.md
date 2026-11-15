@@ -3008,3 +3008,11 @@ Achado: a regra do "mínimo de 12 px" (escala, passo 1) tem na lista um seletor 
 Medido (Compacto / Intermediário / Legível): Início (boas-vindas 15/16/18, dica 11/12/13, Status 12/13/14); Governança (títulos 13/14/16, descrições 11/12/13, contexto 13/14/16, rótulo 11); Institucional (título 13/14/16, texto 11/12/13); Teto Gráficos (títulos 13/14/16, indicadores 11/12/13 e 15/16/18, "Ver dados" 12/13/14) e Tabelas (legenda, nome e % 11/12/13; valor por grupo 17/18/20; cabeçalho 11; ano e valor 12/13/14; células, variações e ranking 10/12/13). Nada além da borda; a 390 px (Teto, Intermediário e Legível) os valores cabem nos cartões. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-paineis.2`).
+
+## Densidade do texto, etapa 3 (e): gráficos (dev. Jean, 2026-11-15)
+
+`initGraficosEscala` (`main.js`), que já ajustava todo `Plotly.react`/`newPlot`, trocava o tamanho do texto dos gráficos por um mínimo fixo de 12 px. Agora o tamanho base é o de dado da "Densidade do texto", lido da variável `--spo-fs-dado` do `<body>` (Compacto 10, Intermediário 12, Legível 13 px); texto que o gráfico já pede maior que 12 px sobe ou desce na mesma diferença. No Intermediário fica como antes. Um observador do atributo `data-spo-table-text` redesenha os gráficos abertos quando a densidade muda no Personalizar (com os dados e o layout de base guardados pelo próprio bloco).
+
+Medido no Teto Orçamentário (5 gráficos: eixos X e Y, legenda, pizza, árvore): 10/12/13 px nas três densidades; ao voltar ao Intermediário, redesenhados em 12 px. A 390 px, no Legível, os gráficos cabem na tela e nenhum texto sai da área deles. `node --check`; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-densidade-graficos.1`).
