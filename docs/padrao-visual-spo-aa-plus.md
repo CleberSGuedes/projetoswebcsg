@@ -165,7 +165,10 @@ já nesta etapa) e o padrão passa ao **Intermediário**; (3a) Personalizar e ja
 opções, prévias, declaração, busca, ajuda dos atalhos e "O padrão SPO-AA+" usam as variáveis (sobretítulo
 = rótulo; título de cartão e de janela = título; descrição, nome de opção e itens = texto; resumo, rótulo de
 campo e status = controle; ajuda dos atalhos e documento = leitura; títulos de seção dessas janelas no
-tamanho do texto ao lado, em negrito, nunca maiores que o título da janela); (3)
+tamanho do texto ao lado, em negrito, nunca maiores que o título da janela); (3b) relatórios e cabeçalho
+de página — feito: cabeçalho de todas as telas (sobretítulo = rótulo, título = página, descrição =
+texto); "Última atualização" e "Totais" = texto em negrito; nome da UO, linhas da atualização e rótulos
+dos totais = controle; valores dos totais = dado; (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR

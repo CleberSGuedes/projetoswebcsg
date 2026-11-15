@@ -2974,3 +2974,13 @@ O Personalizar (cartões, opções, prévias, declaração) e as janelas de cons
 Antes: cartões de opção em 12–13 px e janelas em 14–16 px (a diferença notada pelo dev. Jean). Medido (Compacto / Intermediário / Legível): título de cartão e de janela 13/14/16; descrição, nome de opção, texto da prévia e da declaração 12/13/14; resumo e rodapé 11/12/13; itens da busca 12/13/14; ajuda dos atalhos e documento 13/14/16 (seções no mesmo tamanho, negrito); tabela da prévia 10/12/13. A 390 px nada passa da borda (Intermediário e Legível). Botões e campos de formulário em geral ficam para a etapa dos formulários. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-personalizar.2`).
+
+## Densidade do texto, etapa 3 (b): relatórios e cabeçalho de página (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`:
+- **Cabeçalho de página** (todas as telas, `.report-header` e `.module-header`): sobretítulo = rótulo (11 px), título = página (24 px), descrição = texto (Compacto 12 / Intermediário 13 / Legível 14). No Intermediário, os valores são os de antes.
+- **Relatórios:** "Última atualização (por UO)" e "Totais (filtros aplicados)" = texto em negrito (antes 12 px); nome da UO, linhas da atualização e rótulos dos totais = controle; valores dos totais = dado (a fonte de dados continua). Tabelas, filtros e paginação já seguiam a densidade (#131).
+
+Medido (Compacto / Intermediário / Legível), um relatório por vez: FIP 613 e PLAN20 (com dados), PLAN51 e Receita Anexo 10 (sem dados no banco de dev): descrição 12/13/14, "Última atualização" e título dos totais 12/13/14, UO e linhas 11/12/13, rótulos dos totais 11/12/13, valores 10/12/13, células 10/12/13; nada além da borda. A 390 px (PLAN20, Intermediário e Legível): nada passa da borda e os totais cabem no quadro. Botões ficam para a etapa dos formulários. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-relatorios.1`).

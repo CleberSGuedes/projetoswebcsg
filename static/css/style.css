@@ -9706,3 +9706,38 @@ body .spo-padrao-corpo :is(p, li, dd, td, th, blockquote):not(#spo-dens):not(#sp
    da janela) */
 body .spo-doc h3:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
 body .spo-doc h4:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (b): relatórios e cabeçalho de página
+   (feat/densidade-relatorios, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Cabeçalho de página (todas as telas: .report-header e .module-header):
+     sobretítulo = rótulo (11), título = página (24), descrição = texto
+     (Intermediário 13, Legível 14, Compacto 12). No Intermediário os valores
+     são os de antes.
+   - Relatórios: "Última atualização" e "Totais (filtros aplicados)" = texto
+     em negrito (antes 12 px); nome da UO, linhas da atualização e rótulos dos
+     totais = controle; valores dos totais = dado (a fonte de dados continua).
+   As tabelas, filtros e paginação já seguiam a densidade (#131).
+   ========================================================================== */
+body .report-header-copy .report-eyebrow:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy .module-eyebrow:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .report-header-copy h1:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy h1:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-pagina);
+}
+body .report-header-copy > p:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy > p:not(#spo-dens):not(#spo-dens-b),
+body .relatorio-top > .muted > div:first-child > strong:not(#spo-dens):not(#spo-dens-b),
+body .totais-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body .meta-uo-titulo:not(#spo-dens):not(#spo-dens-b),
+body .meta-uo-col > div:not(#spo-dens):not(#spo-dens-b),
+body .totais-row > span:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .totais-row > strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-dado);
+}
