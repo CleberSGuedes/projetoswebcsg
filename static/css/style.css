@@ -8639,11 +8639,13 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
            .planning-action-checklist-toggle, .see-upload-option > span, .home-welcome-hint,
            .visual-pref-toggle small, .contract-version-pill, td > code,
            .planning-status, .status-badge, #meta-fisica-tbody td.muted):not(#spo-tipo) {
-    font-size: 12px;
+    /* [jean] feat/densidade-teste-px: era 12px fixo (mais específica que as regras da densidade, por
+       causa do id da lista); agora o tamanho de controle da densidade (Intermediário 12, como antes) */
+    font-size: var(--spo-fs-controle);
   }
   /* paginação: respeita "Compacto"/"Intermediário" do texto das tabelas (Personalizar) */
   body:is([data-spo-table-text="legible"], :not([data-spo-table-text])) :is(.page-size label, .pagination > span):not(#spo-tipo) {
-    font-size: 12px;
+    font-size: var(--spo-fs-dado);
   }
   /* entrelinha 1,5 em texto que pode ocupar mais de uma linha */
   body :is(p.muted, .muted > div, .meta-uo-col > div, .teto-dashboard-fonte, .flow-node small,
@@ -9844,3 +9846,7 @@ body .teto-rank-pct:not(#spo-dens):not(#spo-dens-b) {
 body .teto-kpi > strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 2px); }
 body .teto-group-card .value:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 4px); }
 body .home-welcome-text:not(#spo-dens):not(#spo-dens-b), body .home-welcome-text strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-leitura) + 2px); }
+
+/* [jean] feat/densidade-teste-px: a linha "Fonte: FIPLAN…" do cabeçalho do Teto é nota, não
+   descrição da página: tamanho de controle (Intermediário 12, como antes) */
+body .module-header-copy > p.teto-dashboard-fonte:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-controle); }
