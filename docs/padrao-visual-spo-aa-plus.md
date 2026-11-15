@@ -1,4 +1,4 @@
-# Padrão visual "spo-aa+" do SPO
+# Padrão visual "SPO-AA+" do SPO
 
 Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **qualquer tela nova
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
@@ -303,7 +303,15 @@ O cartão **"Acessibilidade do SPO"**, no fim do Personalizar Temas, é a declar
 **SPO-AA+**. O rodapé leva a ele pelo link "Acessibilidade". Ele lista o que é atendido, o que é atendido
 por opção e o que é parcial ou está em avaliação. **A cada avaliação (bateria, teste na homologação) ou
 mudança de opção, atualize o cartão no mesmo PR.** Regra: declarar só o que foi medido.
-Contato para barreiras: nger@edu.mt.gov.br. Cada norma, critério e recurso citado tem link para a fonte
+Contato para barreiras: nger@edu.mt.gov.br.
+
+**Publicação para o usuário:** "SPO-AA+", na declaração, abre a janela "O padrão SPO-AA+"
+(`initPadraoSpoAaPlus`, fim do `main.js`). Ela tem um **resumo** escrito para quem usa o SPO (metas do §1,
+opções do §2.1 e como se verifica) e o **documento técnico completo**, lido deste arquivo pelo servidor
+(`/api/documentos/padrao-spo-aa-plus`, conversor em `services/documentos.py`). Este documento atualiza
+sozinho; o **resumo, não**: mudou uma meta do §1 ou uma opção do §2.1, atualize o `RESUMO` no mesmo PR.
+Elemento de markdown novo neste arquivo (link, bloco de código…): confira se o conversor o cobre
+(`tests/test_documentos.py`). Cada norma, critério e recurso citado tem link para a fonte
 (critérios na tradução oficial das WCAG 2.2 do W3C Brasil), abrindo em nova aba com ícone e aviso para
 leitor de tela; critério novo citado no cartão entra com o link no mesmo formato.
 
