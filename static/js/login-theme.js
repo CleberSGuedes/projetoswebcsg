@@ -51,7 +51,7 @@
   // Mesma chave e mesmos valores do initFontesPersonalizar (main.js); valor desconhecido fica no padrão SPO.
   const fontOptions = {
     spoFontUi: ["inter", ["classic", "inter", "atkinson", "source"], "ui"],
-    spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono"], "data"],
+    spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono", "atkinson-mono"], "data"],
     spoTextSize: ["default", ["default", "large", "larger", "xlarge"], "size"],
     spoTableText: ["legible", ["compact", "medium", "legible"], "table"],
     spoLineHeight: ["default", ["default", "ample", "larger"], "line"],

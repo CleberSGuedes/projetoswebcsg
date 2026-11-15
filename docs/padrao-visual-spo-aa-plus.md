@@ -4,9 +4,10 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
-> Versão 2, 2026-11-14 (a versão 1, de 13/11, cobria até o #61). Valores **medidos** no SPO da
-> `dev/jean` depois do #86, com o destaque Clássico (os outros 7 destaques seguem as mesmas regras;
-> ver §3.3). Quando uma regra mudar, atualize este documento no mesmo PR.
+> Versão 3, 2026-11-15 (a versão 2, de 14/11, cobria até o #86; a 1, de 13/11, até o #61). Valores
+> **medidos** no SPO da `dev/jean` até o #119 e conferidos pela bateria 2 (4 perfis × 66 telas × 3
+> larguras, §5), com o destaque Clássico (os outros 7 destaques seguem as mesmas regras; ver §3.3).
+> Quando uma regra mudar, atualize este documento no mesmo PR.
 
 ## 1. Metas
 
@@ -50,14 +51,14 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Uso | Padrão SPO | Alternativas no Personalizar | Atributo no `<body>` |
 |---|---|---|---|
 | Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, Do sistema | `data-spo-font-ui` |
-| Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, Do sistema | `data-spo-font-data` |
+| Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, **Atkinson Hyperlegible Mono** (monoespaçada da família Atkinson, oferecida junto com ela; bateria 2), Do sistema | `data-spo-font-data` |
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 | Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (paleta Okabe-Ito, §3.5) | `data-spo-cvd` |
 | Realce do foco ("Visão e cores") | **Padrão SPO** (anel de 3 px) | Reforçado: anel duplo (§4.4) | `data-spo-focus` |
 | Links ("Visão e cores") | **Padrão SPO** (cor de destaque e negrito) | Sempre sublinhados | `data-spo-links` |
-| Brilho do tema claro ("Visão e cores") | **Padrão SPO** | Reduzido: cartões `#eceef1`, página `#dadee4`, texto secundário `#4a4850` e texto de destaque no tom 800 (só no claro) | `data-spo-brightness` |
+| Brilho do tema claro ("Visão e cores") | **Padrão SPO** | Reduzido: cartões `#eceef1`, página `#dadee4`, texto secundário `#3e3c44` (`#38363d` com o Reforçado), texto de destaque no tom 800 e "Dispensar" em `#861523` (só no claro; bateria 2, 15/11) | `data-spo-brightness` |
 | Movimento ("Visão e cores") | **Automático** (segue o `prefers-reduced-motion` do sistema) | Reduzir sempre: sem animações, transições nem rolagem suave | `data-spo-motion` |
 | Atalhos de uma tecla ("Teclado") | **Ligados** ("/" abre a busca e "?" a ajuda, fora de campos de texto) | Desligados (WCAG 2.1.4); Ctrl+K e Alt+M continuam | `data-spo-keys` |
 | Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
@@ -168,7 +169,7 @@ nunca corrija um destaque dentro de um componente.
 | Perigo (preenchido) | `#a51d2d` / `#ff7b7b` | texto branco 7,46 | texto `#111` 7,53 | Excluir, Desativar, Cancelar processamento |
 | Perigo (contorno) | `#a51d2d` / `#ffa3a3` | texto e borda 7,46 | 8,15 | Limpar Formulário, Cancelar/Remover das consultas |
 | Aviso | âmbar `#b45309` / `#fbbf24` | faixa 4,63; ícone 4,28 | 8,28; 6,96 | faixas e ícones de aviso (o texto do aviso fica em `--text`) |
-| Desabilitado | fundo `#eef2f4`, texto `#5f6670`, borda `#c9ced6` | texto 5,15 | fundo `rgba(255,255,255,.05)`, texto `#b5b5b5` (6,53), borda `#4a4a4a` | todo `:disabled` em `.form-grid` |
+| Desabilitado | fundo `#eef2f4`, texto `#5f6670`, borda `#c9ced6` | texto 5,15 | fundo `rgba(255,255,255,.05)`, texto `#b5b5b5` (6,53), borda `#4a4a4a` | todo `:disabled` em `.form-grid` e as opções indisponíveis das Notas SEE (`.see-upload-option.is-disabled`, antes `opacity .45`) |
 | Valores positivos/negativos (classes `pos`/`neg`) | azul `#0000ff` / vermelho `#a00000` | 8,37 / 8,20 | `#94baff` / `#ff9999` (7,71 / 7,38) | totais de todos os relatórios e células do FIP 613 (#70). O vermelho puro `#ff0000` daria 4,0:1, abaixo do AA |
 | Informação (`.alert-info`) | texto `#0f4c4c` sobre fundo do destaque claro | 8,86 | texto `--text`, fundo do destaque a 10%, borda dos controles (11,65) | avisos informativos, ex.: "Regras de segurança" da Limpeza (#79) |
 
@@ -181,9 +182,12 @@ nunca corrija um destaque dentro de um componente.
 Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto contraste) em
 `COMMON_DIAGRAM_THEMES` (`main.js`) e nas variáveis `--spo-diagram-*`. Regras (#40, #45):
 - fundo do gráfico **transparente** (herda o cartão); nada de fundo azul-marinho fixo. Vale também
-  no **alto contraste escuro** (fix/alto-contraste-escuro-fundo): lá só as cores das séries, o texto e
-  a moldura são as do alto contraste (séries ≥ 6,4:1 e texto 16,6:1 sobre o `#1a1a1a` do gráfico);
-  o alto contraste claro mantém o fundo branco;
+  no **alto contraste escuro** (#100) e no **quadro em volta do gráfico** (`.teto-chart`, que pinta
+  `--spo-diagram-bg`; #119): no `highDark`, `--spo-diagram-bg` = cor do cartão (`#242424`) e
+  `--spo-diagram-node-bg` = `#262626`; só as cores das séries, o texto e a moldura são as do alto
+  contraste (texto 14,8:1). O alto contraste claro mantém o fundo branco. **Lição do #119:** ao mudar o
+  fundo de um gráfico, confira também o **contêiner** dele (o #100 deixou o gráfico transparente e o
+  azul do quadro de trás reapareceu);
 - **1ª cor de série = destaque** (tom com ≥ 3:1); as demais são **cores categóricas** para distinguir
   séries — podem ser azuis, rosas etc. de propósito;
 - todo gráfico tem resumo para leitor de tela e "Ver dados em tabela";
@@ -207,7 +211,10 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
   Menor diferença entre duas séries simuladas (CIEDE2000): 12,2 na protanopia, 11,6 na deuteranopia e
   10,9 na tritanopia. Na paleta padrão, o azul e o roxo davam 0,4 na deuteranopia, ou seja, iguais.
   Tudo é aplicado no tema dos diagramas e no `initGraficosEscala`: **gráfico novo que passa pelo
-  Plotly já recebe tudo isso**.
+  Plotly já recebe tudo isso**. A **prévia dos componentes** do Personalizar também segue a opção: os
+  nós do mini diagrama usam as quatro primeiras cores, com contorno, pela cor do fundo do diagrama
+  (`data-visual-diagram-theme`, #117).
+- **texto secundário dos nós** nos diagramas claros (`--spo-diagram-muted`): `#3e3d44` (≥ 8,9:1 em nós brancos e tingidos; antes `#4a4950`, abaixo de 7:1 no nó selecionado com o brilho reduzido; bateria 2).
 
 ## 4. Componentes
 
@@ -259,7 +266,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 | Foco levado ao título | ao abrir tela ou fechar aviso, o foco vai ao `<h1>` (A11) **sem anel**: título e `<main>` não são controles (#69). Controles mantêm o anel |
 | Totais dos relatórios | 2 colunas sempre que os pares cabem numa linha; senão 1; se rótulo e valor não cabem lado a lado, o **valor desce inteiro** (#31, #56). PLAN 51: o mesmo comportamento quando o **cartão** tem até 640 px (container query `spo-plan51`; até 900 px os botões descem) (#77) |
 | Quadros comparativos do Teto | colunas de ano com mínimo de 184 px (cabe "R$ 99.999.999.999,99" em 14 px mono); com pouco espaço, o quadro rola para o lado (#82) |
-| Personalizar | o resumo da escolha atual de cada grupo quebra linha, nunca reticências; a amostra empilha como os totais (#86) |
+| Personalizar | o resumo da escolha atual de cada grupo quebra linha, nunca reticências (#86). **Prévias** em dois cartões de uma coluna: "Componentes do SPO" e "Fontes e tabelas" (`#spo-previa-fontes`, com a mesma borda da prévia: classes `personalizar-preview`/`preview-surface`; #117). Escolher a **Atkinson Hyperlegible** oferece, toda vez, aplicar também 112%, entrelinha 1,75 e leitura 72ch ("Leitura confortável"; sobe só o que estiver abaixo; #118). Desde a bateria 2 a oferta inclui a Atkinson Hyperlegible Mono nas tabelas e dados e lista só o que falta (botão "Aplicar", "Aplicar as duas"… até "as quatro"). Opção que muda o visual deve aparecer numa das prévias |
 | Programação PTA/OpR (mockup no iframe) | recebe do SPO, na mensagem `spo-preferencias` (`initPontePta2027`), os atributos `data-spo-*`/`data-visual-*` e os tons de foco e destaque; `static/pta2027_v63r/assets/spo-preferencias.js`/`.css` aplicam fontes, tabelas, entrelinha, leitura, foco, links, contraste, brilho e movimento. O **tamanho do texto não** entra: o zoom da área do SPO já amplia o iframe. A **densidade** vale no espaço dos cartões (seção "Dimensões" do `spo-preferencias.css`); estilo dos cartões e daltonismo nos diagramas (SVG prontos) ficam fora. **Dimensões:** cartão principal = cabeçalho de página (título 24 px), títulos 24/20/16 px, cartões com cantos 14 (pequenos 12) e espaço pela densidade, campos 40 px, botões ≥ 40 px. Os atalhos do SPO digitados dentro do mockup voltam ao SPO (`spo-atalho`). **Opção nova no Personalizar:** acrescentar em `ATRIBUTOS` nos dois lados e a regra no `.css` do mockup. **SPO-AA+ no mockup:** cores (tokens `--teal`/`--muted` e literais) na seção "Cores do PTA 2027" do `spo-preferencias.css`; escala tipográfica **gerada** em `spo-escala.css` por `scripts/gerar_escala_pta2027.py` (o teste `tests/test_escala_pta2027.py` avisa se o `pta-2027.css` mudar sem gerar de novo) |
 | Login | sem diálogos nativos (`window.confirm`/`alert`). Com sessão já aberta: aviso `role="status"` sem botões; a **segunda tentativa com o mesmo e-mail** encerra a outra sessão (#61, #80). O login usa a paleta inteira do destaque (§3.3) |
 
@@ -290,7 +297,20 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
     ("Maior (125%)" + "Mais amplo (2,0)") a 375 px.
 11. **Login:** depois de mudar cor ou botão em componente geral, confira a tela de login nos 8
     destaques (ela carrega a paleta de outro jeito, §3.3).
-12. **Daltonismo:** `window.spoValidarPaletaDaltonismo()`, no navegador, simula protanopia,
+12. **Opacidade e contêineres:** componha a **opacidade** do elemento e dos ancestrais no contraste
+    (a dica de boas-vindas tinha `opacity: .7` e passava despercebida); e, ao mudar o fundo de um
+    gráfico ou diagrama, meça também o **contêiner** dele (o #100 deixou o gráfico transparente e o
+    quadro azul-marinho de trás reapareceu; #119). Procure fundos azul-marinho (`#111827`, `#0f172a`,
+    `#050816`) em toda tela.
+13. **Bateria completa (2026-11-15):** roteiro local que abre cada tela do menu num quadro, uma por
+    vez, espera os dados e mede a mesma tela a 1366, 1080 e 390 px (o quadro se apresenta como janela
+    do próprio tamanho, para não cair no modo "janela dividida"), em 4 perfis: padrão; escuro +
+    Amarelo + Reforçado + diagramas em alto contraste + foco reforçado; acessibilidade máxima
+    (Atkinson, 150%, entrelinha 2,0, leitura estrita, daltonismo, links, brilho reduzido, movimento);
+    denso (compacta, Roxo, médio, plano, Source Sans, 112%, tabelas de 8 px). Mede rolagem lateral,
+    texto cortado, contraste (AA e 7:1), azul-marinho, gráficos desenhados e erros no console. As
+    preferências de quem testa são guardadas antes e devolvidas no fim.
+14. **Daltonismo:** `window.spoValidarPaletaDaltonismo()`, no navegador, simula protanopia,
     deuteranopia e tritanopia e mede:
     - a menor diferença entre séries (CIEDE2000, ≥ 10);
     - o contraste do contorno com o fundo (≥ 3:1).
@@ -307,8 +327,9 @@ mudança de opção, atualize o cartão no mesmo PR.** Regra: declarar só o que
 Contato para barreiras: nger@edu.mt.gov.br.
 
 **Publicação para o usuário:** "SPO-AA+", na declaração, abre a janela "O padrão SPO-AA+"
-(`initPadraoSpoAaPlus`, fim do `main.js`). Ela tem um **resumo** escrito para quem usa o SPO (metas do §1,
-opções do §2.1 e como se verifica) e o **documento técnico completo**, lido deste arquivo pelo servidor
+(`initPadraoSpoAaPlus`, fim do `main.js`) só com o **resumo** escrito para quem usa o SPO (metas do §1,
+opções do §2.1 e como se verifica). O **documento técnico completo** abre pelo Contrato Visual Protegido
+(link `data-spo-padrao="tecnico"`, desde a bateria 2), lido deste arquivo pelo servidor
 (`/api/documentos/padrao-spo-aa-plus`, conversor em `services/documentos.py`). Este documento atualiza
 sozinho; o **resumo, não**: mudou uma meta do §1 ou uma opção do §2.1, atualize o `RESUMO` no mesmo PR.
 Elemento de markdown novo neste arquivo (link, bloco de código…): confira se o conversor o cobre
@@ -334,6 +355,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Layout de colunas que muda por `@media` de largura: lembrar que a área de conteúdo pode estar ampliada (112/125/150%) e a largura útil é a da janela dividida pelo fator. Prefira `@container` ou repita o limite multiplicado (ex.: 900 px × 1,5 = 1350 px).
 - [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
+- [ ] Texto **nunca** apagado com `opacity` < 1: use a cor (`--muted`, ou o desabilitado do §3.4). A opacidade derruba o contraste e escapa de medições que não a compõem (bateria 2: pílula de versão a 4,26:1, opções indisponíveis das Notas SEE a 2,2:1, dica da Início).
+- [ ] Texto dentro de forma de tamanho fixo (círculo, pílula, selo): a forma cresce com o texto (`fit-content`, `aspect-ratio`), nunca o contrário; meça com a fonte mais larga (indicador de avanço do PTA/OpR, bateria 2).
+- [ ] Texto sobre painel **semitransparente** (tingido do destaque, degradê): meça contra o fundo da página que aparece por trás, também com o brilho reduzido.
 - [ ] Teclado: tudo alcançável com Tab; componente com setas tem dica (`DICAS`) e sai com Tab; atalho novo está na ajuda (§4.4).
 - [ ] Medido como no §5, nos dois temas, e anotado no PR.
 
@@ -392,7 +416,7 @@ resolvido por `initGraficosEscala`).
 |---|---|
 | Legendas dos gráficos (Plotly) com espaçamento forçado (1.4.12) | **resolvido** (legenda vertical, nomes quebrados no estreito). Resta, a 375 px e só com espaçamento imposto depois do desenho, um rótulo inclinado de eixo a 5 px da borda; a tabela de dados cobre |
 | 11 telas de formulário/consulta sem cabeçalho de página (§4.4) | a decidir (mudança de template) |
-| Programação PTA 2027 com cabeçalho próprio | depende do futuro do PTA 2027 |
+| Programação PTA/OpR com cabeçalho próprio | depende do futuro do mockup (dataPTA) |
 | Ícone do cabeçalho repete o do `MENU_META`; paleta do login repete o `ACCENT_COLORS` | na divisão, gerar de uma fonte só |
 | Cores forçadas do Windows, `prefers-contrast: more`, leitor de tela, Firefox/Safari | não medidos |
 
@@ -401,6 +425,7 @@ resolvido por `initGraficosEscala`).
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
+| 2026-11-15 | **Versão 3:** opções novas (leitura, daltonismo, foco, links, brilho, movimento, 150%, densidade automática, atalhos de uma tecla; §2.1); fundo do alto contraste escuro no gráfico e no quadro (§3.5); busca de telas, atalhos do teclado, Programação PTA/OpR, prévias e sugestão da Atkinson (§4.4); declaração e padrão publicados para o usuário (§5.1); bateria 2 e lições de opacidade e contêineres (§5); brilho reduzido com `--muted` `#3e3c44` e "Dispensar" `#861523`. Até o #119 e a bateria 2. |
 | 2026-11-14 | **Versão 2:** metas de espaçamento e escala (§1); dados fora de tabela e texto dos gráficos (§2.2); paleta do login (§3.3); valores `pos`/`neg` e `.alert-info` (§3.4); cor de grupo igual em gráficos e tabelas (§3.5); campo de arquivo (§4.2); cabeçalho de página com ícone do menu, foco no título, totais e PLAN 51, quadros do Teto, Personalizar e login (§4.4); baterias de tipografia, 1.4.12 e login (§5); checklist (§6.1); exceções (§6.3); dívida atualizada (§7). Até o #86. |
 | 2026-11-13 | §2.1 Tipografia: padrão SPO passa a Inter (interface), Intel One Mono (dados) e tabelas a 12 px; a antiga "Clássica" vira "Do sistema". |
 | 2026-11-14 | §2.1: opção "Espaçamento entre linhas" (1,5 / 1,75 / 2,0) no Personalizar. |

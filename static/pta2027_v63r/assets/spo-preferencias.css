@@ -14,6 +14,7 @@
 @font-face { font-family: "SPO Source Sans 3"; src: url("../../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "SPO IBM Plex Sans"; src: url("../../fonts/ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap; }
 @font-face { font-family: "SPO Intel One Mono"; src: url("../../fonts/intel-one-mono/intel-one-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible Mono"; src: url("../../fonts/atkinson-hyperlegible-mono/atkinson-hyperlegible-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
 
 body.spo-ponte { --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif; }
 
@@ -28,6 +29,7 @@ body.spo-ponte[data-spo-font-data="classic"] table { font-family: var(--spo-font
 body.spo-ponte[data-spo-font-data="inter"] table { font-family: "SPO Inter", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
 body.spo-ponte[data-spo-font-data="plex-sans"] table { font-family: "SPO IBM Plex Sans", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
 body.spo-ponte[data-spo-font-data="intel-mono"] table { font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace; }
+body.spo-ponte[data-spo-font-data="atkinson-mono"] table { font-family: "SPO Atkinson Hyperlegible Mono", Consolas, "Courier New", monospace; }
 body.spo-ponte[data-spo-table-text="legible"] table :is(th, td) { font-size: 12px; }
 body.spo-ponte[data-spo-table-text="medium"] table :is(th, td) { font-size: 10px; }
 body.spo-ponte[data-spo-table-text="compact"] table :is(th, td) { font-size: 8px; }
@@ -233,3 +235,21 @@ body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) {
 @media (pointer: coarse) {
   body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) { min-height: 44px; }
 }
+
+/* [jean] bateria 2 (fix/bateria-personalizar-2): "×" de remover no brilho reduzido (#a51d2d dava 6,42:1 no #eceef1) */
+body.spo-ponte.embedded-mode[data-spo-brightness="reduced"]:not(.dark) .remove-row { color: #861523 !important; border-color: #861523 !important; }
+
+/* [jean] Indicador de avanço do tamanho do texto (bateria 2, 2026-11-15): o círculo fixo
+   (68/62 px) ficava menor que "concluído" com a escala de 12 px; agora cresce com o texto. */
+body.spo-ponte.embedded-mode .progress-ring{
+  box-sizing:border-box!important;
+  width:fit-content!important;
+  max-width:max-content;
+  height:auto!important;
+  min-width:68px;
+  aspect-ratio:1;
+  padding:0 .4em;
+  align-content:center;
+  line-height:1.1;
+}
+body.spo-ponte.embedded-mode .progress-ring span{ margin-top:0; white-space:nowrap; }
