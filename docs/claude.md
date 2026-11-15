@@ -2994,3 +2994,17 @@ Cuidado registrado: a regra dos campos dos avisos (`.modal-card input`) é mais 
 Medido (Compacto / Intermediário / Legível) em Usuários, Meta Física e Dotação: título de cartão 13/14/16; rótulos e campos 11/12/13; botões 12/13/14; busca de usuários 11/12/13; busca de telas sem mudança (campo 13, "Fechar" 13). A 390 px (Meta Física, Intermediário e Legível) nada passa da borda. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-formularios.3`).
+
+## Densidade do texto, etapa 3 (d): painéis, cartões dinâmicos e Início (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`:
+- **Governança e Resultados:** título dos cartões do fluxo e do contexto = título; descrição dos cartões = controle; sobretítulo do contexto = rótulo; texto do contexto e dos cartões = leitura.
+- **Cartões dinâmicos** (Institucional, Notas SEE, presets do Contrato): título = título; texto = controle.
+- **Teto Orçamentário:** títulos dos quadros e "Filtros" = título; rótulos dos indicadores, legendas, nomes e percentuais = controle; cabeçalhos do quadro comparativo = rótulo; valores, totais do ano, variações e ranking = dado; ano e valor do quadro e "Ver dados do gráfico" = texto; valores em destaque um passo acima do título (indicadores do alto + 2 px; cartões por grupo + 4 px).
+- **Início:** texto de boas-vindas = leitura + 2 px (Intermediário 16; era 16,8); dica e sessões = controle; texto do Status = texto.
+
+Achado: a regra do "mínimo de 12 px" (escala, passo 1) tem na lista um seletor com id (`#meta-fisica-tbody td.muted`), o que a deixa mais específica que as regras da densidade para os itens dela que não ganham contexto extra; a dica da Início ficava fixa em 12 px e recebeu um seletor mais específico. Os demais itens dessa lista que ainda não seguem a densidade (filtros do Teto fora de `.field`, `.teto-dashboard-fonte`, `.contract-version-pill`, `td > code`, `.planning-status`, `.status-badge`) ficam para a etapa 4.
+
+Medido (Compacto / Intermediário / Legível): Início (boas-vindas 15/16/18, dica 11/12/13, Status 12/13/14); Governança (títulos 13/14/16, descrições 11/12/13, contexto 13/14/16, rótulo 11); Institucional (título 13/14/16, texto 11/12/13); Teto Gráficos (títulos 13/14/16, indicadores 11/12/13 e 15/16/18, "Ver dados" 12/13/14) e Tabelas (legenda, nome e % 11/12/13; valor por grupo 17/18/20; cabeçalho 11; ano e valor 12/13/14; células, variações e ranking 10/12/13). Nada além da borda; a 390 px (Teto, Intermediário e Legível) os valores cabem nos cartões. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-paineis.2`).
