@@ -2654,3 +2654,16 @@ Pedido do dev. Jean: instruções de como usar o SPO só pelo teclado. O caso de
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, `?v=20261114.jean-atalhos.1`).
 
+## Alt+M: anel visível e Esc para sair do menu (dev. Jean, 2026-11-14)
+
+Correção do "Atalhos do teclado" (#110), relatada pelo dev. Jean depois de testar:
+
+- **"O Alt+M só funciona depois da ?":** um registro das teclas no navegador mostrou que o SPO recebia e tratava todos os Alt+M. O foco ia ao menu, mas **sem anel e sem a dica**. O Chrome só mostra o `:focus-visible` quando a última ação foi uma tecla "comum": depois de um clique de mouse, foco movido por combinação com Alt/Ctrl fica sem anel. Depois da **?** (tecla comum), o anel aparecia.
+  - **Correção:** o foco levado por atalho passa por `focarComAnel` (`focus({ focusVisible: true })` + classe `spo-foco-atalho`, com anel igual ao do teclado, inclusive no foco reforçado), e a dica aparece.
+- **"O Esc não fecha esse menu":** não havia saída do menu pelo teclado.
+  - **Correção:** com o foco no menu, **Esc** devolve o foco para onde a pessoa estava antes do Alt+M (ou ao título da tela) e fecha o menu se ele estiver aberto por cima da tela. Os diálogos (busca, ajuda) continuam tratando o próprio Esc antes.
+- A ajuda e a dica do menu dizem "Esc volta para onde você estava".
+- **Verificação** (teclas reais, SPO local, menu recolhido): clique de mouse num cartão do Mapa Conceitual → Alt+M → "Administrar SPO" com anel de 3 px e dica → Esc → foco de volta no cartão, com anel. Também Alt+M → Enter (menu aberto por cima) → ↓ → Esc → menu recolhido e foco no cartão. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-alt-m.1`).
+
