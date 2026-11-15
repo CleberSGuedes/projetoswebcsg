@@ -59,6 +59,29 @@
   nomearBotoes();
   new MutationObserver(nomearBotoes).observe(document.body, { childList: true, subtree: true });
 
+  // "Anterior" na 1ª etapa da jornada (feat/nome-pta, pedido do dev. Jean): o mockup desativava o
+  // botão (disabled = state.step === 0) e não havia como voltar à tela inicial ("Da estratégia à
+  // entrega pública") pela jornada. Agora, na 1ª etapa, ele volta para lá (returnToStrategicChain,
+  // do próprio mockup). O state e a função são globais do pta-2027.js.
+  const anterior = document.getElementById("previous-step");
+  const naPrimeira = () => typeof state !== "undefined" && state.step === 0;
+  if (anterior) {
+    const ajustar = () => {
+      if (anterior.disabled && naPrimeira()) anterior.disabled = false;
+      if (naPrimeira()) anterior.setAttribute("aria-label", "Anterior: voltar à tela inicial da programação");
+      else anterior.removeAttribute("aria-label");
+    };
+    new MutationObserver(ajustar).observe(anterior, { attributes: true, attributeFilter: ["disabled"] });
+    new MutationObserver(ajustar).observe(document.body, { attributes: true, attributeFilter: ["data-pta2027-step"] });
+    ajustar();
+    anterior.addEventListener("click", (ev) => {
+      if (!naPrimeira() || typeof returnToStrategicChain !== "function") return;
+      ev.stopImmediatePropagation();
+      returnToStrategicChain();
+      window.parent.postMessage({ type: "pta2027-scroll-top" }, ORIGEM);
+    }, true);
+  }
+
   // pede as preferências assim que carrega (o SPO também manda a cada mudança)
   window.parent.postMessage({ type: "spo-preferencias-pedido" }, ORIGEM);
 })();

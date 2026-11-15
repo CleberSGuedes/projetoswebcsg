@@ -28727,6 +28727,7 @@
     { rotas: ["estrutura-planejamento"], termos: ["paoe", "acao", "programa", "produto", "estrutura", "uo", "ug"] },
     { rotas: ["chave"], termos: ["chave", "chave de planejamento", "chaves"] },
     { rotas: ["programar-pta-loa", "programacao-pta2027"], termos: ["pta", "loa", "programacao"] },
+    { rotas: ["programacao-pta2027"], termos: ["opr", "pta/opr", "plano de trabalho anual", "orcamento para resultado", "orcamento por resultado"] },
     { rotas: ["receita-anexo10"], termos: ["receita", "anexo 10"] },
     { rotas: ["notas-see"], termos: ["nota fiscal", "notas fiscais", "danfe", "see"] },
     { rotas: ["meta_fisica", "matriculas-metas"], termos: ["meta", "metas", "meta fisica"] },

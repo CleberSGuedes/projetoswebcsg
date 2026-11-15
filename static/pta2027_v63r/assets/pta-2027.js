@@ -1287,7 +1287,7 @@ function restoreDraftState(raw){
  if(!saved||typeof saved!=="object")return {ok:false,message:"O rascunho local está vazio ou incompleto."};
  const macroCode=saved.macro?.code||saved.macroCode;
  const macro=macros.find(m=>m.code===macroCode);
- if(!macro)return {ok:false,message:"O rascunho local não combina mais com o catálogo atual do PTA 2027."};
+ if(!macro)return {ok:false,message:"O rascunho local não combina mais com o catálogo atual do PTA/OpR."};
  const savedAxis=Array.isArray(saved.axis)?saved.axis:[];
  const axis=macro.axes.find(a=>a[1]===savedAxis[1]||a[2]===savedAxis[2]||a[0]===savedAxis[0]);
  if(!axis)return {ok:false,message:"O eixo salvo no rascunho não foi localizado no catálogo atual."};
