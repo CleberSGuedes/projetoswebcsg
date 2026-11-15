@@ -4,6 +4,8 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
+> Versão 4, 2026-11-15: escala tipográfica com **"Densidade do texto"** (Compacto, Intermediário,
+> Legível) para a interface inteira e passo **Leitura** (§2.2); a aplicação vem em PRs seguintes.
 > Versão 3, 2026-11-15 (a versão 2, de 14/11, cobria até o #86; a 1, de 13/11, até o #61). Valores
 > **medidos** no SPO da `dev/jean` até o #119 e conferidos pela bateria 2 (4 perfis × 66 telas × 3
 > larguras, §5), com o destaque Clássico (os outros 7 destaques seguem as mesmas regras; ver §3.3).
@@ -52,7 +54,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 |---|---|---|---|
 | Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, **Mulish** (formas arredondadas, leitura corrida; I e l parecidos — em avaliação, 15/11), Do sistema | `data-spo-font-ui` |
 | Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, **Atkinson Hyperlegible Mono** (monoespaçada da família Atkinson, oferecida junto com ela; bateria 2), Do sistema | `data-spo-font-data` |
-| Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
+| Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) — **será substituída pela "Densidade do texto" (§2.2, versão 4)** | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 | Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (paleta Okabe-Ito, §3.5) | `data-spo-cvd` |
@@ -109,7 +111,7 @@ Regras:
     parágrafos;
   - **Estrito:** no máximo **80 caracteres reais** por linha e **1,5 entrelinha depois de cada
     parágrafo**. O `ch` é a largura do "0", mais larga que a média das letras, então a largura é
-    **medida por fonte**: 53ch na Inter, 48ch na Atkinson, 56ch na Source Sans 3 e 52ch na do sistema
+    **medida por fonte**: 53ch na Inter e na Mulish, 48ch na Atkinson, 56ch na Source Sans 3 e 52ch na do sistema
     (pior caso medido: 78 caracteres). **Fonte nova no Personalizar precisa dessa medição.**
 - O título da página é **negrito (700), 24 px, entrelinha 1,2** em todas as telas com cabeçalho de
   página (decisão do dev. Jean, 2026-11-13; aplicado no #76).
@@ -118,6 +120,52 @@ Regras:
   de seletores da fonte de dados.
 - O texto **dentro dos gráficos** (SVG do Plotly) usa a fonte da interface com mínimo de 12 px,
   aplicado a todo gráfico por `initGraficosEscala` (`main.js`).
+
+### 2.2.1 Densidade do texto (versão 4, decisões do dev. Jean, 2026-11-15)
+
+Medição de 15/11 (Chrome, 100%, Inter): o SPO tinha **dois registros de texto** na mesma tela — telas de
+trabalho e cartões de opção em **12 px** (rótulos, campos, células, resumos) e janelas e prévias (busca,
+atalhos, "O padrão SPO-AA+", "Fontes e tabelas") em **14–16 px**. O passo "Texto" (14 px) quase não era
+usado fora das janelas, por isso o 100% parecia pequeno. No CSS, 330 declarações de `font-size` com 25
+valores, sem variável comum. Plano completo: `docs_jean/PLANO_NORMALIZACAO_TIPOGRAFIA.md` (ambiente do
+dev. Jean).
+
+Decisões:
+1. **Compacto / Intermediário / Legível** deixam de ser só o "Texto das tabelas" e passam a ser a
+   **"Densidade do texto"** da interface inteira: cada opção escolhe um conjunto de valores para as
+   variáveis abaixo.
+2. O **padrão SPO é o Legível** (a escala desta seção cumprida de verdade nas telas de trabalho).
+3. No **Compacto**, as tabelas ficam com **10 px** (sai o 8 px).
+4. Novo passo **Leitura**: texto de janelas de ajuda, documentos (SPO-AA+), declaração e avisos longos,
+   **16 px** no Legível.
+
+| Variável (CSS) | Uso | Compacto | Intermediário | **Legível (padrão)** |
+|---|---|---|---|---|
+| `--spo-fs-dado` | células de tabela, paginação, totais | 10 px | 12 px | **13 px** |
+| `--spo-fs-controle` | rótulos de campo, campos, resumo das opções, metadados | 11 px | 12 px | **13 px** |
+| `--spo-fs-texto` | texto corrido, descrições, itens de lista, nome de opção | 12 px | 13 px | **14 px** |
+| `--spo-fs-leitura` | janelas de ajuda, documentos, declaração, avisos longos | 13 px | 14 px | **16 px** |
+| `--spo-fs-titulo` | título de cartão e de janela | 13 px | 14 px | **16 px** |
+| `--spo-fs-rotulo` | sobretítulo em maiúsculas | 11 px | 11 px | **11 px** |
+| `--spo-fs-secao` / `--spo-fs-pagina` | título de seção / de página | 20 / 24 px | 20 / 24 px | **20 / 24 px** |
+
+- O **"Tamanho do texto"** (112/125/150%) continua por cima de tudo, como hoje (amplia a área).
+- **Mínimo de 12 px:** vale no Legível e no Intermediário. No **Compacto**, escolhido pela pessoa,
+  tabelas (10 px) e rótulos (11 px) ficam abaixo — exceção registrada, como o 10 px do topo e do rodapé.
+- **Entrelinhas** não mudam: 1,5 no texto, 1,2–1,25 nos títulos (e a opção "Espaçamento entre linhas").
+- **Componente novo** usa as variáveis, nunca um `font-size` em px escrito à mão (a etapa 4 do plano
+  transforma isso em teste).
+
+Etapas (um PR por etapa): (1) esta seção — feito; (2) criar as variáveis com os valores de hoje (nada
+muda na tela) e trocar "Texto das tabelas" por "Densidade do texto", com login e mockup PTA/OpR; (3)
+migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
+Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
+reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR
+separado, depois. As duas mexem em regras do dev. Cleber no `style.css`; ele orientou fazer o que for
+preciso **antes** da divisão/simplificação dos arquivos monolíticos, então não há espera — cada PR
+avisa o que mudou nas regras dele. Quando a
+etapa 3 chegar às telas, o texto fica um pouco maior para todos (12 → 13–14 px nas telas de trabalho):
+avisar os colegas da homologação.
 
 Aplicação (por PRs, medindo antes e depois): (1) os casos abaixo de 12 px e as descrições com
 entrelinha 1,25 (§7) — feito (#75, #82); (2) títulos de página iguais — feito (#76); (3) opção
@@ -428,6 +476,7 @@ resolvido por `initGraficosEscala`).
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
+| 2026-11-15 | **Versão 4:** §2.2 "Densidade do texto" (Compacto/Intermediário/Legível para a interface inteira; padrão Legível; Compacto com tabelas de 10 px; passo Leitura de 16 px) e as variáveis `--spo-fs-*`; §2.1 Mulish na largura do "Estrito". Só documentação: a aplicação vem nas etapas 2–4. |
 | 2026-11-15 | §4.4: **cartão dinâmico** (o `.flow-node` de Governança) como sistema visual dos cartões clicáveis: Institucional, envio das Notas SEE e presets do Contrato Visual. |
 | 2026-11-15 | **Versão 3:** opções novas (leitura, daltonismo, foco, links, brilho, movimento, 150%, densidade automática, atalhos de uma tecla; §2.1); fundo do alto contraste escuro no gráfico e no quadro (§3.5); busca de telas, atalhos do teclado, Programação PTA/OpR, prévias e sugestão da Atkinson (§4.4); declaração e padrão publicados para o usuário (§5.1); bateria 2 e lições de opacidade e contêineres (§5); brilho reduzido com `--muted` `#3e3c44` e "Dispensar" `#861523`. Até o #119 e a bateria 2. |
 | 2026-11-14 | **Versão 2:** metas de espaçamento e escala (§1); dados fora de tabela e texto dos gráficos (§2.2); paleta do login (§3.3); valores `pos`/`neg` e `.alert-info` (§3.4); cor de grupo igual em gráficos e tabelas (§3.5); campo de arquivo (§4.2); cabeçalho de página com ícone do menu, foco no título, totais e PLAN 51, quadros do Teto, Personalizar e login (§4.4); baterias de tipografia, 1.4.12 e login (§5); checklist (§6.1); exceções (§6.3); dívida atualizada (§7). Até o #86. |
