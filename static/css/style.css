@@ -9396,3 +9396,22 @@ body[data-spo-cvd="safe"]:is([data-visual-diagram-theme="dark"], [data-visual-di
 }
 .spo-sugestao p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
 .spo-sugestao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ==========================================================================
+   [jean] Alto contraste escuro sem azul-marinho também no QUADRO dos gráficos
+   (fix/alto-contraste-escuro-quadro, 2026-11-15; relatado pelo dev. Jean: "o azul voltou")
+   O #100 deixou transparente o fundo do gráfico Plotly no modo highDark (tema escuro +
+   Diagramas: alto contraste), mas o quadro em volta (.teto-chart) pinta --spo-diagram-bg,
+   que nesse modo ainda era o azul-marinho #111827; com o gráfico transparente, o azul
+   aparecia de novo. Agora, como decidido no #100: fundo do cartão no quadro, nós dos
+   diagramas (Mapa Conceitual e afins) no cinza neutro do escuro comum e a prévia do
+   Personalizar igual; cores das séries, texto e bordas do alto contraste não mudam
+   (texto #f8fafc: 15,1:1 sobre #242424).
+   ========================================================================== */
+body[data-visual-diagram-theme="highDark"] {
+  --spo-diagram-bg: var(--card, #242424);
+  --spo-diagram-node-bg: #262626;
+}
+body[data-visual-diagram-theme="highDark"] .personalizar-preview {
+  --spo-preview-diagram-bg: var(--card, #242424);
+}
