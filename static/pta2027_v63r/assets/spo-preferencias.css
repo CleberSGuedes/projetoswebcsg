@@ -186,3 +186,50 @@ body.spo-ponte.embedded-mode.dark .remove-row:is(:hover, :focus-visible) { backg
   body.spo-ponte select:not([multiple]):not([size])::picker-icon { color: var(--muted); transition: rotate .15s; }
   body.spo-ponte select:not([multiple]):not([size]):open::picker-icon { rotate: 180deg; }
 }
+
+/* ==========================================================================
+   [jean] Dimensões do mockup na escala do SPO (feat/escala-mockup-pta, 2026-11-14;
+   proposta aprovada pelo dev. Jean: docs_jean/auditoria_aa/PROPOSTA_ESCALA_MOCKUP_PTA_2026-11-14.md)
+   Medido em 9 vistas: título principal 40,6 px, cartões com espaço de 12 a 28 px e cantos de
+   12 a 24 px, campos de 46 px. Agora, como o SPO (referência: Mapa Conceitual):
+   - cartão principal = cabeçalho de página: espaço 22/24, cantos 18, título 24 px;
+   - títulos: página 24 · seção 20 · cartão 16 px;
+   - espaço dos cartões e entre eles pela DENSIDADE do Personalizar (compacta 12/10,
+     confortável 16/14, ampla 18/18; o mesmo data-visual-density que a ponte já manda);
+   - cantos: seções e cartões 14 px, cartões pequenos 12 px;
+   - campos 40 px (espaço 10/12, cantos 10); botões espaço 10/14, cantos 12, mínimo 40 px
+     (44 px em tela de toque).
+   ========================================================================== */
+body.spo-ponte { --pta-pad: 16px; --pta-gap: 14px; }
+body.spo-ponte[data-visual-density="compact"] { --pta-pad: 12px; --pta-gap: 10px; }
+body.spo-ponte[data-visual-density="spacious"] { --pta-pad: 18px; --pta-gap: 18px; }
+
+body.spo-ponte.embedded-mode .hero { padding: 22px 24px !important; border-radius: 18px !important; gap: 20px !important; }
+body.spo-ponte.embedded-mode main h1 { font-size: 24px !important; line-height: 1.2 !important; font-weight: 700 !important; }
+body.spo-ponte.embedded-mode main h2 { font-size: 20px !important; line-height: 1.25 !important; }
+body.spo-ponte.embedded-mode main h3 { font-size: 16px !important; line-height: 1.3 !important; }
+body.spo-ponte.embedded-mode .hero p { font-size: 14px !important; }
+
+body.spo-ponte.embedded-mode :is(.macro-section, .strategy-bridge, .risk-bridge, .step-content,
+    .identity-card, .process-lane, .policy-expansion, .eap-map-card, .vector-diagram-card) {
+  padding: var(--pta-pad) !important; border-radius: 14px !important;
+}
+body.spo-ponte.embedded-mode :is(.macro-card, .pillar, .policy-option, .summary-item, .eap-map-node,
+    .key-card, .quality-card, .context-item, .nested-program-block, .component-picker) {
+  padding: 12px !important; border-radius: 12px !important;
+}
+body.spo-ponte.embedded-mode :is(.identity-grid, .value-chain, .policy-list, .form-grid) { gap: var(--pta-gap) !important; }
+body.spo-ponte.embedded-mode .eap-map-flow { padding: var(--pta-pad) !important; border-radius: 14px !important; }
+body.spo-ponte.embedded-mode :is(.risk-grid > article, .eap-map-branch > section) { padding: 12px !important; border-radius: 12px !important; }
+/* "Continuar rascunho" quebrava em 2 linhas (63 px) na coluna estreita do cartão principal */
+@media (min-width: 600px) { body.spo-ponte.embedded-mode .hero-actions .secondary-button { white-space: nowrap; } }
+
+body.spo-ponte.embedded-mode main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  padding: 10px 12px !important; border-radius: 10px !important;
+}
+body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) {
+  padding: 10px 14px !important; border-radius: 12px !important; min-height: 40px;
+}
+@media (pointer: coarse) {
+  body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) { min-height: 44px; }
+}
