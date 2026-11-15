@@ -1,0 +1,88 @@
+/* ==========================================================================
+   [jean] Ponte de preferências do SPO para o PTA 2027 (feat/ponte-pta2027, 2026-11-14)
+   O SPO manda as escolhas do "Personalizar Temas SPO" (mensagem "spo-preferencias");
+   o spo-preferencias.js grava no <body> os mesmos atributos data-spo-* do SPO, e este
+   arquivo aplica o que faz sentido no mockup. Tema e cor de destaque continuam vindo
+   do código original (applySpoHostTheme). Não muda nada fora do modo embutido.
+   - Tamanho do texto: NÃO entra aqui. O zoom da área do SPO (.main) já amplia o iframe
+     inteiro (medido: escala 1,25 com "Maior"); ampliar de novo dobraria.
+   - Densidade e estilo dos cartões: o mockup tem layout próprio, em px fixos; ficam fora.
+   - Daltonismo: os diagramas do mockup são imagens SVG prontas; ficam fora (em avaliação).
+   ========================================================================== */
+@font-face { font-family: "SPO Inter"; src: url("../../fonts/inter/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible"; src: url("../../fonts/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Source Sans 3"; src: url("../../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO IBM Plex Sans"; src: url("../../fonts/ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Intel One Mono"; src: url("../../fonts/intel-one-mono/intel-one-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+
+body.spo-ponte { --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif; }
+
+/* Fonte da interface (o mockup pedia "Inter", que não carregava: caía na Segoe UI) */
+body.spo-ponte[data-spo-font-ui="inter"] { font-family: "SPO Inter", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="classic"] { font-family: var(--spo-font-classic); }
+
+/* Fonte e tamanho do texto das tabelas */
+body.spo-ponte[data-spo-font-data="classic"] table { font-family: var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-data="inter"] table { font-family: "SPO Inter", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
+body.spo-ponte[data-spo-font-data="plex-sans"] table { font-family: "SPO IBM Plex Sans", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
+body.spo-ponte[data-spo-font-data="intel-mono"] table { font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace; }
+body.spo-ponte[data-spo-table-text="legible"] table :is(th, td) { font-size: 12px; }
+body.spo-ponte[data-spo-table-text="medium"] table :is(th, td) { font-size: 10px; }
+body.spo-ponte[data-spo-table-text="compact"] table :is(th, td) { font-size: 8px; }
+
+/* Entrelinha do texto corrido (padrão SPO 1,5) */
+body.spo-ponte main :is(p, li, dd, small):not(table *, button *) { line-height: 1.5; }
+body.spo-ponte[data-spo-line-height="ample"] main :is(p, li, dd, small):not(table *, button *) { line-height: 1.75; }
+body.spo-ponte[data-spo-line-height="larger"] main :is(p, li, dd, small):not(table *, button *) { line-height: 2; }
+
+/* Leitura: largura do texto corrido e espaço entre parágrafos (WCAG 1.4.8) */
+body.spo-ponte[data-spo-reading="medium"] main :is(p, li, dd):not(table *, nav *, button *) { max-width: 72ch; }
+body.spo-ponte[data-spo-reading="medium"] main p + p:not(table *) { margin-top: max(1em, 1lh); }
+body.spo-ponte[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
+body.spo-ponte[data-spo-reading="strict"] main :is(p, li, dd):not(table *, nav *, button *) { max-width: var(--spo-leitura-estrita); }
+body.spo-ponte[data-spo-reading="strict"] main p:has(+ p):not(table *) { margin-bottom: max(1.5em, 1.5lh); }
+body.spo-ponte[data-spo-reading="strict"] main p + p:not(table *) { margin-top: 0; }
+
+/* Foco visível no padrão do SPO (cor do anel enviada pelo SPO) e foco reforçado */
+body.spo-ponte :is(a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 3px solid var(--spo-focus-ring, var(--teal-dark));
+  outline-offset: 2px;
+}
+body.spo-ponte[data-spo-focus="strong"] :is(a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline-width: 4px;
+  box-shadow: 0 0 0 2px var(--spo-focus-halo, #fff), 0 0 0 8px var(--spo-focus-halo, #fff);
+}
+
+/* Links sempre sublinhados */
+body.spo-ponte[data-spo-links="underline"] main a[href]:not([class*="button"], [class*="btn"], [role="button"], [role="tab"]) {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Contraste médio e reforçado: bordas e texto secundário mais fortes */
+body.spo-ponte[data-visual-contrast="medium"] { --line: #b9c7cd; }
+body.spo-ponte.dark[data-visual-contrast="medium"] { --line: #4d636b; }
+body.spo-ponte[data-visual-contrast="enhanced"] { --line: #8fa1a9; --muted: #3f4d55; }
+body.spo-ponte.dark[data-visual-contrast="enhanced"] { --line: #6b828a; --muted: #cbd8dc; }
+/* no modo embutido escuro, o mockup fixa --line e --muted com !important (borda = destaque a 24%):
+   médio e reforçado seguem a mesma lógica, com mais opacidade */
+body.spo-ponte.embedded-mode.dark[data-visual-contrast="medium"] { --line: rgba(var(--spo-accent-rgb, 66, 223, 192), .42) !important; }
+body.spo-ponte.embedded-mode.dark[data-visual-contrast="enhanced"] { --line: rgba(var(--spo-accent-rgb, 66, 223, 192), .64) !important; --muted: #d3e2e1 !important; }
+
+/* Brilho reduzido (só no tema claro): menos branco, texto com o mesmo destaque */
+body.spo-ponte[data-spo-brightness="reduced"]:not(.dark) { --bg: #dadee4; --surface: #eceef1; --soft: #e3e6ea; --muted: #4a4850; }
+
+/* Movimento reduzido (opção do SPO ou do sistema) */
+html:has(> body.spo-ponte[data-spo-motion="reduce"]) { scroll-behavior: auto; }
+body.spo-ponte[data-spo-motion="reduce"] *, body.spo-ponte[data-spo-motion="reduce"] *::before, body.spo-ponte[data-spo-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:has(> body.spo-ponte) { scroll-behavior: auto; }
+}
