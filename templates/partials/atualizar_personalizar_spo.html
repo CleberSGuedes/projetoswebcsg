@@ -453,6 +453,36 @@
       </div>
       <p class="spo-fontes-status" role="status" aria-live="polite"></p>
     </article>
+
+    {# [jean] Teclado (feat/atalhos-teclado, 2026-11-14): ajuda dos atalhos e atalhos de uma tecla (WCAG 2.1.4) #}
+    <article class="card personalizar-card visual-preferences-card" id="spo-teclado-card">
+      <div class="eyebrow">Acessibilidade</div>
+      <div class="card-title">Teclado</div>
+      <p class="muted">O SPO pode ser usado só pelo teclado. <a href="#" data-spo-atalhos>Ver os atalhos do teclado</a> (ou tecle <kbd>?</kbd>). <kbd>Alt</kbd> + <kbd>M</kbd> volta ao menu, e <kbd>Ctrl</kbd> + <kbd>K</kbd> busca uma tela.</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-spo-font-group="keys">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="keys" aria-expanded="false" aria-controls="spo-font-panel-keys">
+            <i class="bi bi-keyboard" aria-hidden="true"></i>
+            <span>
+              <strong>Atalhos de uma tecla</strong>
+              <small data-spo-font-current="keys">Ligados (padrão SPO)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-keys" data-spo-font-panel="keys" role="group" aria-label="Atalhos de uma tecla" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="keys" data-spo-font-value="on">
+              <i class="bi bi-keyboard" aria-hidden="true"></i>
+              <span><strong>Ligados (padrão SPO)</strong><small>"/" abre a busca de telas e "?" abre a ajuda do teclado, fora dos campos de texto.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="keys" data-spo-font-value="off">
+              <i class="bi bi-slash-circle" aria-hidden="true"></i>
+              <span><strong>Desligados</strong><small>Para quem usa comando de voz ou digita sem querer fora dos campos. Ctrl+K (busca) e Alt+M (menu) continuam valendo.</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+    </article>
     <article class="card personalizar-card personalizar-preview" id="spo-previsualizacao">
       <div class="eyebrow">Prévia</div>
       <div class="card-title">Componentes do SPO</div>
@@ -490,7 +520,7 @@
           <h3 id="spo-a11y-atendido"><i class="bi bi-check-circle" aria-hidden="true"></i> Atendido</h3>
           <ul>
             <li>Contraste de textos e de componentes (WCAG <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#contrast-minimum" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.3">1.4.3<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a> e <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#non-text-contrast" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.11">1.4.11<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), nos temas claro e escuro e nas 8 cores de destaque.</li>
-            <li>Foco visível em todos os controles e navegação completa pelo teclado (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#keyboard" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.1.1">2.1.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#focus-visible" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.4.7">2.4.7<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
+            <li>Foco visível em todos os controles e navegação completa pelo teclado (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#keyboard" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.1.1">2.1.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#focus-visible" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.4.7">2.4.7<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>); veja os <a href="#" data-spo-atalhos>atalhos do teclado</a>.</li>
             <li>Gráficos com resumo para leitor de tela e tabela com os dados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#non-text-content" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.1.1">1.1.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
             <li>Telas que se reorganizam em celular e com zoom de 200%, sem rolagem lateral (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#resize-text" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.4">1.4.4<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#reflow" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.10">1.4.10<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
             <li>Espaçamento de texto ajustável sem perda de conteúdo (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#text-spacing" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.12">1.4.12<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
@@ -503,6 +533,7 @@
             <li>Leitura com no máximo 80 caracteres por linha e espaço entre parágrafos (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#visual-presentation" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.8">1.4.8<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Leitura → Estrito".</li>
             <li>Foco reforçado, com anel duplo (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#focus-appearance" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.4.13">2.4.13<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Realce do foco".</li>
             <li>Sem animações (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#animation-from-interactions" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.3.3">2.3.3<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Movimento → Reduzir sempre".</li>
+            <li>Atalhos de uma tecla só podem ser desligados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#character-key-shortcuts" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.1.4">2.1.4<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>): "Teclado → Atalhos de uma tecla".</li>
             <li>Links sempre sublinhados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#use-of-color" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.1">1.4.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>): "Links".</li>
             <li>Além da norma: cores dos gráficos para daltonismo (paleta <a href="https://jfly.uni-koeln.de/color/" target="_blank" rel="noopener noreferrer" title="Color Universal Design, de Masataka Okabe e Kei Ito">Okabe-Ito<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), texto até 150%, entrelinha até 2,0, fontes legíveis (<a href="https://www.brailleinstitute.org/freefont/" target="_blank" rel="noopener noreferrer" title="Braille Institute">Atkinson Hyperlegible<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), brilho reduzido e densidade automática.</li>
           </ul>
