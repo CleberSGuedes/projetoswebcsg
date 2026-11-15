@@ -49,6 +49,16 @@
     window.parent.postMessage({ type: "spo-atalho", acao }, ORIGEM);
   });
 
+  // botão "×" de remover linha (feat/mockup-pta2027-aa-plus): o leitor de tela lia só "×"
+  function nomearBotoes() {
+    document.querySelectorAll(".remove-row:not([aria-label])").forEach((b) => {
+      b.setAttribute("aria-label", "Remover linha");
+      b.title = "Remover linha";
+    });
+  }
+  nomearBotoes();
+  new MutationObserver(nomearBotoes).observe(document.body, { childList: true, subtree: true });
+
   // pede as preferências assim que carrega (o SPO também manda a cada mudança)
   window.parent.postMessage({ type: "spo-preferencias-pedido" }, ORIGEM);
 })();

@@ -2715,3 +2715,31 @@ Item combinado na bateria do Personalizar: o mockup "Programação PTA 2027" (if
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ponte.1`); o `index.html` do mockup: duas linhas novas.
 
+## Mockup PTA 2027 no padrão SPO-AA+ (dev. Jean, 2026-11-14)
+
+Continuação da ponte (#113): adequar o próprio mockup "Programação PTA 2027" ao padrão. Nada foi mudado nos arquivos originais do mockup; tudo vale só no modo embutido com a ponte (`body.spo-ponte`).
+
+- **Medição antes** (vista inicial, Azul, claro): 65 de 97 textos abaixo de 7:1 (4,5–5,3:1) e 31 abaixo de 12 px. No escuro, o mockup original já tinha textos de 2,2 a 4,2:1.
+- **Cores** (`static/pta2027_v63r/assets/spo-preferencias.css`, seções "Cores do PTA 2027" e "Tema escuro"):
+  - **claro:** `--teal`, `--teal-dark` e `--spo-accent-deep` passam ao tom de texto do destaque do SPO (`--spo-accent-text`), o mesmo dos botões principais do SPO; texto secundário `#3f4e52` (8,3:1), com variações para brilho reduzido e contraste reforçado; 5 cores literais do mockup (×, avisos, "Não definida", textos semitransparentes) trocadas;
+  - **escuro, como o SPO:** texto no destaque usa o tom claro do destaque; botões e marcadores com fundo no destaque passam a texto `#111111`; badges numerados sobre o tingido do destaque e o texto do cartão selecionado na cor do texto;
+  - abas inativas na cor do texto (Vermelho e Roxo davam 6,9:1 sobre o tingido).
+- **Tamanho do texto:** `static/pta2027_v63r/assets/spo-escala.css`, **gerado** por `scripts/gerar_escala_pta2027.py`:
+  - 72 regras do mockup com fonte de 8 a 11 px passam a 12 px, e a 11 px nos rótulos em maiúsculas;
+  - mesma especificidade da regra original (`:where`), vencendo por carregar depois, para não encolher as regras do mockup que aumentam o tamanho num caso;
+  - teste `tests/test_escala_pta2027.py`: o arquivo gravado tem de ser igual ao gerado (se o `pta-2027.css` mudar, rode o script de novo) e nenhuma regra gerada fica abaixo de 11 px nem soma especificidade.
+  - O `<small>` sem tamanho próprio vai a 12 px (`:where`, as regras do mockup vencem).
+- **Alvos:** as caixas de marcar das etapas 3 e 4 tinham o rótulo clicável com 19 px de altura; agora 24 px (WCAG 2.5.8).
+- **Pedidos do dev. Jean depois de ver o mockup:**
+  - **listas suspensas:** a lista aberta era a do Windows (opção marcada no azul do sistema). Agora, como no SPO (listas nativas, #54/#55): superfície do tema, opção sob o mouse com 16% do destaque, ✓ e negrito na escolhida, seta que vira ao abrir. O campo fechado continua o do mockup. Firefox e Safari seguem com a lista nativa;
+  - **botão "×" de remover linha:** passa ao nível "Dispensar" do SPO (padrão §4.1): contorno vermelho , sem preenchimento (no escuro ), "×" a 18 px; e ganha o nome "Remover linha" para leitor de tela (antes lia só "×").
+- **`index.html` do mockup:** mais um `<link>` (o `spo-escala.css`, antes do `spo-preferencias.css`).
+- **Declaração de acessibilidade:** o item do PTA 2027 passa a dizer o que foi medido e o que falta (teclado e leitor de tela dentro do mockup).
+- **Verificação** (SPO local; o destaque e o tema foram simulados só na página, sem gravar, e restaurados no fim):
+  - **bateria de cores:** 12 vistas (inicial, EAP, visão estratégica, visão processual, política, pilar e as 6 etapas da jornada) × 8 destaques × claro/escuro = 192 medições, 1.039 textos por combinação. Depois das últimas correções, os 4 piores casos (Vermelho e Roxo no claro, Clássico e Amarelo no escuro) foram medidos de novo: aba inativa ≥ 11,07:1 e cartão selecionado ≥ 7,14:1;
+  - **tamanho:** nenhum texto abaixo de 12 px, fora os rótulos em maiúsculas de 11 px;
+  - **celular** (375 px): nenhuma das 9 vistas com rolagem lateral; rótulos das caixas de marcar com 24 px;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: sem mudança (a versão do CSS do mockup está no `index.html` dele, `?v=20261114.jean-mockup-aa.1`).
+
