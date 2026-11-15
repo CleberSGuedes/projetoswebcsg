@@ -9289,3 +9289,11 @@ kbd {
 body.spo-busca-aberta .spo-dica-teclado { display: none; }
 #spo-teclado-card a[data-spo-atalhos] { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 600; }
 @media (max-width: 600px) { .spo-atalhos-caixa { width: 100%; } }
+
+/* [jean] fix/alt-m-foco: anel no foco levado por atalho (Alt+M, Esc no menu), mesmo depois de um clique */
+@media (forced-colors: none) {
+  body .spo-foco-atalho:focus:not(#spo-foco) { outline: 3px solid var(--spo-focus-ring, var(--accent)); outline-offset: 2px; }
+  body .sidebar .spo-foco-atalho:focus:not(#spo-foco) { outline-offset: -3px; }
+  body[data-spo-focus="strong"] .spo-foco-atalho:focus:not(#spo-foco) { outline-width: 4px; box-shadow: 0 0 0 2px var(--spo-focus-halo), 0 0 0 8px var(--spo-focus-halo); }
+  body[data-spo-focus="strong"] .sidebar .spo-foco-atalho:focus:not(#spo-foco) { outline-offset: -6px; box-shadow: inset 0 0 0 2px var(--spo-focus-halo), inset 0 0 0 8px var(--spo-focus-halo); }
+}
