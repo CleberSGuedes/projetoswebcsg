@@ -100,3 +100,60 @@ def test_css_do_kit_segue_o_padrao():
     css = re.sub(r"/\*.*?\*/", "", (KIT / "kit-mockup.css").read_text(encoding="utf-8"), flags=re.S)
     assert not re.search(r"font-size\s*:\s*[0-9.]+px", css), "kit-mockup.css: tamanho em px; use var(--spo-fs-*)"
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css), "kit-mockup.css: cor literal; use os tokens (§3)"
+
+
+# ---- feat/kit-previas: prévias do Personalizar e gráficos
+
+GRAFICOS = ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"]
+TEMPLATE_PERSONALIZAR = RAIZ / "templates" / "partials" / "atualizar_personalizar_spo.html"
+
+
+def _sem_espacos(texto: str) -> str:
+    return re.sub(r"\s+", " ", texto).replace("> <", "><").strip()
+
+
+def _bloco_div(html: str, abertura: str) -> str:
+    """Do `<div ...>` de abertura até o </div> que o fecha (contando divs)."""
+    i = html.index(abertura)
+    nivel = 0
+    for m in re.finditer(r"<div\b|</div>", html[i:]):
+        nivel += 1 if m.group(0) == "<div" else -1
+        if nivel == 0:
+            return html[i: i + m.end()]
+    raise AssertionError(f"div sem fecho: {abertura}")
+
+
+def test_previas_do_kit_iguais_as_do_personalizar():
+    tpl = TEMPLATE_PERSONALIZAR.read_text(encoding="utf-8")
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    for abertura in ('<div class="preview-surface">', '<div class="spo-fontes-amostra preview-surface"'):
+        original = _sem_espacos(_bloco_div(tpl, abertura))
+        copia = _sem_espacos(_bloco_div(kit, abertura))
+        assert copia == original, (
+            f"a prévia {abertura!r} do kit de mockup não é mais igual à do Personalizar "
+            "(templates/partials/atualizar_personalizar_spo.html): copie a marcação nova para o kit")
+
+
+def test_graficos_lidos_do_main_js():
+    main = _main()
+    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
+    assert "const COMMON_DIAGRAM_THEMES = Object.freeze({" in main and "const COMMON_DIAGRAM_THEMES = Object.freeze({" in kit_js
+    for nome in GRAFICOS:
+        bloco = _trecho(main, f"(function {nome}() {{", True)
+        fim = main.index(bloco) + len(bloco)
+        assert main[fim:fim + 4] == ")();", f"{nome}: o kit espera a função fechada por '}})();'"
+        assert f'"{nome}"' in kit_js, f"o kit de mockup não lê o {nome}"
+    # o initGraficosEscala só pode depender destas funções globais (o kit dá a segunda)
+    escala = _trecho(main, "(function initGraficosEscala() {", True)
+    globais = set(re.findall(r"window\.(spo\w+)", escala))
+    assert globais <= {"spoPaletaDaltonismo", "spoGetDiagramSemanticTokens"}, (
+        f"o initGraficosEscala passou a usar {sorted(globais)}: o kit de mockup precisa oferecer essas funções")
+    assert "window.spoTemaDiagramaComDestaque" in _trecho(main, "(function initDiagramasDestaque() {", True)
+
+
+def test_kit_usa_o_mesmo_plotly_do_spo():
+    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    plotly = re.search(r'<script src="(https://cdn\.plot\.ly/[^"]+)"', base)
+    assert plotly, "base.html sem o Plotly"
+    assert plotly.group(1) in kit, f"o kit de mockup deve carregar o mesmo Plotly do SPO ({plotly.group(1)})"
