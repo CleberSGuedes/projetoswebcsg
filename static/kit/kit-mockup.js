@@ -4,9 +4,12 @@
 //  - ACCENT_COLORS (os 8 destaques), DEFAULT_ACCENT, COMMON_VISUAL_OPTIONS/DEFAULTS;
 //  - OPTIONS e DEFAULTS do initFontesPersonalizar (as opções do Personalizar);
 //  - initNavegacaoTabelas e initTecladoPaginacao (navegação pelo teclado nas tabelas);
-//  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO).
+//  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
+//  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
+//    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
+//    Pressão operacional (feat/kit-contrato, pedido do dev. Jean).
 // Ao abrir, o kit usa as preferências vigentes no SPO deste navegador (como qualquer tela do SPO);
-// "Padrão SPO" volta ao padrão. Nada é gravado.
+// "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes. Nada é gravado.
 // O tests/test_kit_mockup.py confere que esses trechos continuam no main.js e que a extração funciona.
 (function kitMockup() {
   "use strict";
@@ -44,7 +47,11 @@
     const sugestao = trecho(fonte, "(function initSugestaoAtkinson() {", true);
     const botao = sugestao.match(/const BOTAO = (\[[^\]]*\]);/);
     if (!botao) throw new Error("BOTAO da sugestão Atkinson não encontrado no main.js");
+    const chaveContrato = fonte.match(/const PROTECTED_CONTRACT_STATE_KEY = "([^"]+)"/);
+    if (!chaveContrato) throw new Error("PROTECTED_CONTRACT_STATE_KEY não encontrado no main.js");
     return {
+      presets: objeto(fonte, "const PROTECTED_CONTRACT_PRESETS = Object.freeze({"),
+      chaveContrato: chaveContrato[1],
       sugestao: {
         ordem: objeto(sugestao, "const ORDEM = {"),
         alvo: objeto(sugestao, "const ALVO = {"),
@@ -79,7 +86,7 @@
   let estado = null;
 
   function padrao() {
-    return { tema: "light", destaque: spo.destaquePadrao, ...spo.visualPadrao, ...spo.fontesPadrao };
+    return { tema: "light", destaque: spo.destaquePadrao, preset: "default", ...spo.visualPadrao, ...spo.fontesPadrao };
   }
 
   function lerJson(chave) {
@@ -87,7 +94,7 @@
   }
 
   // as escolhas gravadas pelo SPO neste navegador (mesma origem); só leitura
-  function minhas() {
+  function vigentes() {
     const p = padrao();
     let tema = null;
     let destaque = null;
@@ -99,6 +106,10 @@
     GRUPOS_VISUAL.forEach(([k]) => { if (spo.visual[k][visual[k]]) p[k] = visual[k]; });
     const fontes = lerJson("spo-font-preferences");
     Object.keys(spo.fontes).forEach((k) => { if (spo.fontes[k][fontes[k]]) p[k] = fontes[k]; });
+    // preset do Contrato como o getStoredProtectedContractPreset do main.js: prévia, senão rascunho, senão ativo
+    const contrato = lerJson(spo.chaveContrato);
+    const preset = contrato.preview || contrato.draft || contrato.active;
+    if (spo.presets[preset]) p.preset = preset;
     return p;
   }
 
@@ -135,6 +146,9 @@
     body.dataset.visualDensity = densidadeEmUso(estado.density);
     body.dataset.visualContrast = estado.contrast;
     body.dataset.visualCards = estado.cards;
+    // como o setProtectedContractVisualPreset do main.js: no <html> e no <body>
+    document.documentElement.dataset.visualContractPreset = estado.preset;
+    body.dataset.visualContractPreset = estado.preset;
     // como o getResolvedCommonDiagramMode do main.js (sem as cores forçadas do Windows)
     const escuro = body.classList.contains("theme-dark");
     const maisContraste = !!(window.matchMedia && window.matchMedia("(prefers-contrast: more)").matches);
@@ -206,10 +220,12 @@
     const destaques = {};
     Object.entries(spo.destaques).forEach(([k, d]) => { destaques[k] = d.label || k; });
     campo("destaque", "Cor de destaque", destaques);
+    const presets = {};
+    Object.entries(spo.presets).forEach(([k, p]) => { presets[k] = p.label || k; });
+    campo("preset", "Preset do Contrato Visual", presets);
     GRUPOS_VISUAL.forEach(([k, r]) => campo(k, r, spo.visual[k]));
     GRUPOS_FONTES.forEach(([k, r]) => { if (spo.fontes[k]) campo(k, r, spo.fontes[k]); });
     document.getElementById("kit-padrao").addEventListener("click", () => { removerOferta(); estado = padrao(); aplicar(); });
-    document.getElementById("kit-minhas").addEventListener("click", () => { removerOferta(); estado = minhas(); aplicar(); });
     window.addEventListener("resize", () => { body.dataset.visualDensity = densidadeEmUso(estado.density); });
   }
 
@@ -387,7 +403,7 @@
     .then((r) => { if (!r.ok) throw new Error(`main.js: HTTP ${r.status}`); return r.text(); })
     .then((fonte) => {
       spo = lerMainJs(fonte);
-      estado = minhas(); // as preferências vigentes no SPO deste navegador (sem nenhuma, é o padrão SPO)
+      estado = vigentes(); // as preferências vigentes no SPO deste navegador (sem nenhuma, é o padrão SPO)
       montarPainel();
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
