@@ -20,6 +20,11 @@ com a licença original), pelo jsDelivr: `https://cdn.jsdelivr.net/npm/<pacote>@
 | ibm-plex-sans | `@fontsource-variable/ibm-plex-sans@5.3.0` | `OFL.txt` | 4429 | `d0283623ef57e722fd0eb688a8041589670c608ab780cd3612d06ba6f153d3fd` |
 | intel-one-mono | `@fontsource-variable/intel-one-mono@5.3.0` | `intel-one-mono-latin-wght-normal.woff2` | 20824 | `82d17b2912498c1b3b317e45f38be2b7d37bf7ef5df7654d2d03c969447c3bc6` |
 | intel-one-mono | `@fontsource-variable/intel-one-mono@5.3.0` | `OFL.txt` | 5770 | `3a9cbbb9eb7ae866ff2d9f0a029ee41085758d58217f492e081e15d7e09d7696` |
+| atkinson-hyperlegible-mono | `@fontsource-variable/atkinson-hyperlegible-mono@5.3.0` | `atkinson-hyperlegible-mono-latin-wght-normal.woff2` | 17752 | `2706b1ee4f452e744ea91f7e4908cbde9c5d35521bf5ffffc71a382a2de89613` |
+| atkinson-hyperlegible-mono | `@fontsource-variable/atkinson-hyperlegible-mono@5.3.0` | `OFL.txt` (o `LICENSE` do pacote) | 4609 | `05327050630a640eb824c8fcb7de8b2e605600d8863e4f531ca7c348239916c6` |
+
+A Atkinson Hyperlegible Mono foi baixada em 2026-11-15 (bateria 2 do Personalizar, pedido do dev. Jean), do
+mesmo jeito; é a monoespaçada da família Atkinson do Braille Institute (Google Fonts, OFL 1.1).
 
 Uso: escolha em **Personalizar Temas SPO** (fonte da interface e fonte de tabelas e dados). O navegador só
 baixa a fonte escolhida. "Clássica (padrão SPO)" usa as fontes do sistema, sem baixar nada.
