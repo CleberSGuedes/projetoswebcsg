@@ -9297,3 +9297,42 @@ body.spo-busca-aberta .spo-dica-teclado { display: none; }
   body[data-spo-focus="strong"] .spo-foco-atalho:focus:not(#spo-foco) { outline-width: 4px; box-shadow: 0 0 0 2px var(--spo-focus-halo), 0 0 0 8px var(--spo-focus-halo); }
   body[data-spo-focus="strong"] .sidebar .spo-foco-atalho:focus:not(#spo-foco) { outline-offset: -6px; box-shadow: inset 0 0 0 2px var(--spo-focus-halo), inset 0 0 0 8px var(--spo-focus-halo); }
 }
+
+/* ==========================================================================
+   [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
+   Janela do resumo e do documento técnico (texto lido do servidor, classe .spo-doc).
+   ========================================================================== */
+/* tamanho de janela de consulta, não de tela: no computador até 720 px e 72% da altura; no celular,
+   cartão com margens (a página continua aparecendo em volta), e não tela cheia como a busca */
+.spo-padrao-caixa { width: min(720px, calc(100% - 48px)); max-height: min(72vh, 680px); }
+@media (max-width: 600px) {
+  .spo-busca-fundo.spo-padrao-fundo { padding: 16px; align-items: center; }
+  .spo-busca-caixa.spo-padrao-caixa { width: 100%; height: auto; max-height: 72vh; border-radius: 14px; }
+  .spo-padrao-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .spo-busca-caixa.spo-padrao-caixa .spo-busca-rodape { flex-wrap: nowrap; }
+  .spo-busca-caixa.spo-padrao-caixa .spo-busca-rodape .btn { white-space: normal; text-align: center; flex: 1 1 auto; justify-content: center; }
+}
+.spo-padrao-corpo { overflow-y: auto; min-height: 0; padding: 2px 8px 8px 2px; line-height: 1.5; }
+.spo-padrao-corpo:focus-visible { outline-offset: -3px; }
+.spo-padrao-caixa .spo-busca-rodape { flex-wrap: wrap; }
+.spo-padrao-status { flex: 1 1 12em; }
+.spo-doc h3 { margin: 18px 0 8px; font-size: 16px; font-weight: 700; line-height: 1.3; }
+.spo-doc h3:first-child { margin-top: 4px; }
+.spo-doc h4 { margin: 14px 0 6px; font-size: 14px; font-weight: 700; }
+.spo-doc p, .spo-doc ul, .spo-doc ol, .spo-doc blockquote { margin: 0 0 10px; }
+.spo-doc ul, .spo-doc ol { padding-left: 22px; }
+.spo-doc li { margin: 3px 0; }
+.spo-doc li.spo-doc-marcar { list-style: none; margin-left: -18px; }
+.spo-doc blockquote { padding: 8px 12px; border-left: 4px solid var(--spo-accent-graphic, var(--accent)); background: var(--surface); border-radius: 0 8px 8px 0; }
+.spo-doc code { color: var(--text); background: rgba(var(--accent-rgb), 0.08); padding: 0 .25em; border-radius: 4px; font-size: 0.92em; overflow-wrap: anywhere; }
+.spo-doc a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.spo-doc-tabela { overflow-x: auto; margin: 0 0 12px; border: 1px solid var(--border); border-radius: 8px; }
+.spo-doc-tabela table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.spo-doc-tabela th, .spo-doc-tabela td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; min-width: 8em; }
+.spo-doc-tabela th { font-weight: 700; background: var(--surface); }
+.spo-doc-tabela tr:last-child td { border-bottom: 0; }
+.spo-doc-sumario { margin: 0 0 14px; padding: 10px 14px; border: 1px dashed var(--border); border-radius: 8px; }
+.spo-doc-sumario ol { margin: 6px 0 0; columns: 2 16em; }
+.spo-acessibilidade a[data-spo-padrao] { font-weight: 700; }
+/* tabelas do documento: texto para leitura, na fonte da interface (não na fonte de dados das tabelas do SPO) */
+body .spo-padrao-corpo .spo-doc-tabela table:not(#spo-doc) { font-family: inherit; }
