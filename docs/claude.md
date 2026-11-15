@@ -2571,3 +2571,30 @@ Pedido do dev. Jean depois de ver o cartão "Visão e cores": citar o método da
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-rotulo-daltonismo.2`).
 
+## Correções da bateria completa do Personalizar (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: depois dos ajustes do dia, conferir que o SPO reconhece e aplica todas as opções do "Personalizar Temas SPO" em todas as telas.
+
+- **Fase 1:** as 17 opções e 56 combinações de opção e valor, escolhidas pela própria tela, ficaram gravadas, aplicadas e com o efeito esperado. O login aplica o perfil completo, e "Restaurar padrão" volta tudo.
+- **Fase 2:** 66 telas × 4 perfis (padrão; escuro com Amarelo e reforçado; acessibilidade máxima; denso com Roxo) × 3 larguras (390, 1080, 1366), num total de 792 medições. Não houve nenhum erro no console, e os gráficos desenharam todos. Relatório completo nas notas do dev. Jean (`BATERIA_PERSONALIZAR_2026-11-14.md`).
+
+**Achados reais e correções** (bloco `[jean]` no fim do `style.css`):
+
+1. **Texto na cor de destaque "forte" ou pura:**
+   - **onde:** números das etapas do Contrato Visual, selo e nota das Permissões, aviso de relatório vazio, botões da lista do Teto, submenu do Personalizar, selo de rascunho, "Contexto ativo" da Governança e "Área UENs" das Notas SEE;
+   - **contraste antes:** com o Azul, 3,77:1; com o brilho reduzido, 3,24; com o Amarelo no claro, ~1,5;
+   - **correção:** passam a `--spo-accent-text`, e os ícones de Permissões e Notas SEE a `--spo-accent-graphic`;
+   - **conferido:** 8 destaques × claro, escuro e brilho reduzido, com pior caso de 5,92:1 (Amarelo com brilho reduzido); os demais ficaram ≥ 7,18.
+2. **`<code>` com o rosa do Bootstrap (`#d63384`):** 3,45:1 no escuro (API de Acessos). Passa à cor do texto, com fundo leve.
+3. **Permissões (Usuários → Perfil):** duas colunas com mínimos fixos de 500 e 520 px. A 1366 px com o menu aberto, rolava para o lado. Acima de 1100 px, as colunas passam a ser proporcionais, com força abaixo das regras de texto ampliado do #103 (que passam a uma coluna antes).
+4. **Modelos de Chave:** colunas com mínimos de 420 e 520 px, uma coluna só abaixo de 1280 px. Com o texto ampliado, o limite é multiplicado pelo fator (1440/1600/1920 px).
+5. **Formulários de Usuários:** colunas de 210 px no mínimo e campos que não encolhiam. No celular com texto ampliado, a tela rolava 4 px. Agora `minmax(min(100%, 210px), 1fr)`, e `.field` pode encolher.
+
+**Verificação:**
+- Perfil a 1366 px sem rolagem nos 4 tamanhos de texto e em uma coluna a 1080 px;
+- Modelos de Chave sem rolagem nos 4 tamanhos;
+- as 4 telas de Usuários a 390 px sem rolagem, no padrão e com 150%;
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-bateria.1`).
+
