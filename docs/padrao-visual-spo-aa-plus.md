@@ -59,6 +59,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 | Links ("Visão e cores") | **Padrão SPO** (cor de destaque e negrito) | Sempre sublinhados | `data-spo-links` |
 | Brilho do tema claro ("Visão e cores") | **Padrão SPO** | Reduzido: cartões `#eceef1`, página `#dadee4`, texto secundário `#4a4850` e texto de destaque no tom 800 (só no claro) | `data-spo-brightness` |
 | Movimento ("Visão e cores") | **Automático** (segue o `prefers-reduced-motion` do sistema) | Reduzir sempre: sem animações, transições nem rolagem suave | `data-spo-motion` |
+| Atalhos de uma tecla ("Teclado") | **Ligados** ("/" abre a busca e "?" a ajuda, fora de campos de texto) | Desligados (WCAG 2.1.4); Ctrl+K e Alt+M continuam | `data-spo-keys` |
 | Leitura (largura do texto corrido e espaço entre parágrafos) | **Padrão SPO (largura livre)** | Intermediário (72ch, 1 entrelinha entre parágrafos), Estrito (WCAG AAA: até 80 caracteres por linha, 1,5 entrelinha depois de cada parágrafo) | `data-spo-reading` |
 
 - **"Do sistema"** é a pilha antiga (`Cantarell, Segoe UI, system-ui…`): **varia com o computador**
@@ -253,6 +254,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 | Avisos modais | `role="dialog"`, foco dentro, Tab preso, Esc fecha, foco volta (#41) |
 | **Cabeçalho de página** | cartão `header.module-header` (ou `report-header`): sobretítulo `.module-eyebrow` (11 px, maiúsculas), `<h1>` 24 px negrito, descrição em `<p>`, e à direita o **ícone do item do menu** (`MENU_META`, `services/features.py`) num quadrado na cor de destaque (#84). Tela nova usa essa marcação |
 | Busca de telas | item **"Buscar tela"** no menu lateral, abaixo de "Início", e atalhos **Ctrl+K** e **/**. A busca é um diálogo modal no visual dos avisos (`modal-card`, título na cor de destaque, campo `.field`, botão "Fechar"), com caixa de busca `combobox` + lista `listbox` (WAI-ARIA). Fica centralizada no desktop e em tela cheia no celular, acima dos avisos modais. Cada resultado mostra o **caminho no menu**. A opção ativa tem fundo e borda à esquerda, para não depender só da cor. Quem ganha a lista são as telas do menu já filtrado pelas permissões, mais o **glossário** de siglas (`GLOSSARIO` em `initBuscaTelas`). **Tela nova no menu:** se o nome não diz o assunto, acrescente os termos no glossário |
+| Atalhos do teclado | ajuda no item **"Atalhos do teclado"** do menu (abaixo de "Buscar tela"), na tecla **?** e em links com `data-spo-atalhos`; mesmo visual da busca. **Alt+M** leva ao item da tela atual no menu (ou ao grupo visível que o contém) e há o link de pulo "Ir para o menu". Componente com setas mostra uma **dica** no rodapé ao receber foco pelo teclado (`DICAS` em `initAtalhosTeclado`, com `aria-describedby`). **Atalho novo:** entra na lista `SECOES` da ajuda; se for de uma tecla só, respeita `data-spo-keys="off"` (WCAG 2.1.4). **Componente novo com setas:** entra em `DICAS` |
 | Foco reforçado (opção) | anel de **4 px** na cor do anel de foco (`--spo-focus-ring`) entre duas faixas de 2 px na cor do fundo (branco no claro, preto no escuro): anel × faixa ≥ 4,69:1 nos 8 destaques (WCAG 2.4.13). Dentro de áreas que cortam o que passa da borda (menu, grupos do Personalizar, tabelas com rolagem, avisos modais), o anel vai **para dentro** do controle. Medir com Tab real e **esperar a transição** dos controles (~0,2 s) antes de ler o estilo |
 | Foco levado ao título | ao abrir tela ou fechar aviso, o foco vai ao `<h1>` (A11) **sem anel**: título e `<main>` não são controles (#69). Controles mantêm o anel |
 | Totais dos relatórios | 2 colunas sempre que os pares cabem numa linha; senão 1; se rótulo e valor não cabem lado a lado, o **valor desce inteiro** (#31, #56). PLAN 51: o mesmo comportamento quando o **cartão** tem até 640 px (container query `spo-plan51`; até 900 px os botões descem) (#77) |
@@ -323,6 +325,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Layout de colunas que muda por `@media` de largura: lembrar que a área de conteúdo pode estar ampliada (112/125/150%) e a largura útil é a da janela dividida pelo fator. Prefira `@container` ou repita o limite multiplicado (ex.: 900 px × 1,5 = 1350 px).
 - [ ] Gráfico novo pelo Plotly (passa pelo `initGraficosEscala`) e com as cores do tema dos diagramas, para seguir a opção de daltonismo; cor que distingue informação nunca é a única pista (padrão, marcador, rótulo).
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
+- [ ] Teclado: tudo alcançável com Tab; componente com setas tem dica (`DICAS`) e sai com Tab; atalho novo está na ajuda (§4.4).
 - [ ] Medido como no §5, nos dois temas, e anotado no PR.
 
 ### 6.2 CSS e cache
