@@ -9476,3 +9476,17 @@ body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload
 @media (prefers-reduced-motion: reduce) {
   body :is(.institutional-card .noticia-box, .see-upload-option, .login-form .btn-primary, .contract-preset, .flow-node):is(:hover, :focus-visible) { transform: none; }
 }
+
+/* ==========================================================================
+   [jean] Janelas no celular (fix/telas-estreitas-rolagem-janelas, 2026-11-15;
+   pedido do dev. Jean): a busca de telas e a ajuda dos atalhos ocupavam a tela
+   inteira até 600 px; agora são cartões com margem, como a janela do padrão
+   SPO-AA+ (a página continua aparecendo em volta). A busca fica no alto (o
+   teclado virtual sobe por baixo e não cobre o campo); a ajuda, no centro.
+   ========================================================================== */
+@media (max-width: 600px) {
+  .spo-busca-fundo:not(.spo-padrao-fundo) { padding: 16px; }
+  .spo-busca-caixa:not(.spo-padrao-caixa) { width: 100%; height: auto; max-height: 72vh; border-radius: 14px; }
+  .spo-busca-fundo.spo-atalhos-fundo { align-items: center; }
+  .spo-busca-caixa:not(.spo-padrao-caixa) .spo-busca-rodape { flex-wrap: nowrap; }
+}
