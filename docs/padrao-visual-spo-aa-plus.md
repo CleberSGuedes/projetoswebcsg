@@ -161,7 +161,11 @@ Decisões:
 Etapas (um PR por etapa): (1) esta seção — feito; (2) criar as variáveis e trocar "Texto das tabelas"
 por "Densidade do texto", com login e mockup PTA/OpR — feito: as **tabelas já usam** `--spo-fs-dado`
 (Legível 13 / Intermediário 12 / Compacto 10 px; decisão do dev. Jean de aplicar os valores novos nelas
-já nesta etapa) e o padrão passa ao **Intermediário**; (3)
+já nesta etapa) e o padrão passa ao **Intermediário**; (3a) Personalizar e janelas — feito: cartões,
+opções, prévias, declaração, busca, ajuda dos atalhos e "O padrão SPO-AA+" usam as variáveis (sobretítulo
+= rótulo; título de cartão e de janela = título; descrição, nome de opção e itens = texto; resumo, rótulo de
+campo e status = controle; ajuda dos atalhos e documento = leitura; títulos de seção dessas janelas no
+tamanho do texto ao lado, em negrito, nunca maiores que o título da janela); (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR
