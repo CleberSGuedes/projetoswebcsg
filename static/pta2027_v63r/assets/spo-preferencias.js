@@ -82,6 +82,110 @@
     }, true);
   }
 
+  // [jean] Movimento reduzido (fix/movimento-reduzido, 2026-11-15): o mockup chama
+  // scrollIntoView({ behavior: "smooth" }) em 4 pontos, e o ajuste do main.js não vale dentro do
+  // iframe. Com "Reduzir sempre" (data-spo-motion, recebido do SPO) ou o sistema pedindo, a rolagem
+  // suave vira imediata; sem a preferência, nada muda.
+  (function movimentoReduzido() {
+    const consulta = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+    // a chegada esmaece (0,35 → 1 em 0,22 s), como no SPO, só quando algo de fato se moveu;
+    // o mockup rola a página do SPO (o iframe não tem rolagem própria), por isso se mede o alvo
+    const esmaecer = (el) => {
+      if (!el || typeof el.animate !== "function") return;
+      try { el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" }); } catch (err) { /* sem Web Animations */ }
+    };
+    const imediata = (fn) => function rolagemRespeitandoMovimento(arg) {
+      const reduzir = consulta.matches || document.body.dataset.spoMotion === "reduce";
+      if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
+        const alvo = this instanceof Element && this !== document.documentElement && this !== document.body ? this : document.body;
+        const antes = alvo.getBoundingClientRect().top + (window.parent !== window ? window.frameElement?.getBoundingClientRect().top || 0 : 0);
+        const resultado = fn.call(this, { ...arg, behavior: "instant" });
+        const depois = alvo.getBoundingClientRect().top + (window.parent !== window ? window.frameElement?.getBoundingClientRect().top || 0 : 0);
+        if (Math.abs(depois - antes) > 2) esmaecer(alvo);
+        return resultado;
+      }
+      return fn.apply(this, arguments);
+    };
+    ["scrollIntoView", "scrollTo", "scroll", "scrollBy"].forEach((nome) => {
+      if (typeof Element.prototype[nome] === "function") Element.prototype[nome] = imediata(Element.prototype[nome]);
+      if (nome !== "scrollIntoView" && typeof window[nome] === "function") window[nome] = imediata(window[nome]);
+    });
+  })();
+
+  // [jean] Rolagem ao abrir um detalhamento (eixos da macropolítica, metas do pilar), com
+  // "Reduzir sempre": nenhuma, se o começo do painel (título + 1ª linha, ~170 px) já está na tela;
+  // senão, só o bastante para mostrá-lo, de uma vez e sem esmaecer. Rolar o painel inteiro para a
+  // tela (block: "nearest"/"center") movia a página até 275 px em tela baixa (paisagem) e
+  // esmaecia o painel a cada clique (a "cintilância" do grupo C, cuja lista é maior que a tela).
+  // O mockup rola a página do SPO (o iframe não tem rolagem própria).
+  function rolarSoOComeco(painel) {
+    const pai = window.parent !== window ? window.parent : window;
+    const topoFrame = pai !== window && window.frameElement ? window.frameElement.getBoundingClientRect().top : 0;
+    const falta = topoFrame + painel.getBoundingClientRect().top + 170 - pai.innerHeight;
+    if (falta <= 0) return;
+    pai.scrollBy({ top: falta, behavior: "instant" });
+  }
+  // O mockup chama painel.scrollIntoView(...) dentro da função que abre; durante a chamada, o
+  // scrollIntoView daquele painel vira rolarSoOComeco (o pta-2027.js não muda). Só com "Reduzir
+  // sempre" (ou o sistema pedindo): no "Automático" fica a rolagem suave original do mockup
+  // (pedido do dev. Jean: nesse modo a rolagem guia o olho até o que abriu).
+  function comRolagemContida(painel, fn) {
+    return function abrirComRolagemContida() {
+      const reduzir = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || document.body.dataset.spoMotion === "reduce";
+      if (!reduzir) return fn.apply(this, arguments);
+      painel.scrollIntoView = () => rolarSoOComeco(painel);
+      try { return fn.apply(this, arguments); } finally { delete painel.scrollIntoView; }
+    };
+  }
+  const metas = document.getElementById("pillar-goals");
+  if (metas && typeof window.expandPillarGoals === "function") window.expandPillarGoals = comRolagemContida(metas, window.expandPillarGoals);
+
+  // [jean] Eixos junto da macropolítica (fix/movimento-reduzido, pedido do dev. Jean, 2026-11-15):
+  // com os grupos de macropolíticas um embaixo do outro (até 1180 px), a lista de eixos abria no
+  // fim do último grupo, até ~1000 px abaixo do cartão clicado, e a página saltava até lá
+  // (block: "center"). Agora ela abre logo abaixo do grupo do cartão, como as metas dos pilares, e
+  // com "Reduzir sempre" só rola até o começo da lista (rolarSoOComeco). O lugar vale nos dois
+  // modos de movimento (no "Automático", a rolagem suave original percorreria ~1000 px). O
+  // pta-2027.js não muda: expandMacro e renderMacros são globais e são envolvidas aqui; antes de
+  // redesenhar os grupos, a caixa volta ao lugar original (o redesenho apagaria a caixa).
+  (function eixosJuntoDaMacro() {
+    const caixa = document.getElementById("policy-expansion");
+    if (!caixa || typeof window.expandMacro !== "function" || typeof window.renderMacros !== "function") return;
+    const marcador = document.createComment(" lugar original de #policy-expansion ");
+    caixa.parentNode.insertBefore(marcador, caixa);
+    const devolver = () => { if (caixa.previousSibling !== marcador) marcador.after(caixa); };
+    const empilhados = (cadeia) => getComputedStyle(cadeia).gridTemplateColumns.trim().split(/\s+/).length === 1;
+
+    const abrirOriginal = comRolagemContida(caixa, window.expandMacro);
+    window.expandMacro = function expandirJuntoDoGrupo(index) {
+      const cartao = document.querySelector(`.macro-card[data-macro="${index}"]`);
+      const grupo = cartao && cartao.closest(".process-lane");
+      const cadeia = grupo && grupo.parentElement;
+      if (grupo && cadeia && empilhados(cadeia)) grupo.after(caixa);
+      else devolver();
+      return abrirOriginal.apply(this, arguments);
+    };
+
+    const redesenharOriginal = window.renderMacros;
+    window.renderMacros = function redesenharComACaixaNoLugar() {
+      devolver();
+      return redesenharOriginal.apply(this, arguments);
+    };
+  })();
+
+  // [jean] Cartões que abrem um detalhamento (pilares, macropolíticas, processos da Visão
+  // processual): o selecionado só se via pela cor; agora o leitor de tela também ouve
+  // "expandido/recolhido" (aria-expanded, pela classe .active que o próprio mockup põe).
+  const sincronizarExpandidos = () => {
+    document.querySelectorAll(".pillar, .macro-card, .process-summary-card").forEach((b) => {
+      const aberto = b.classList.contains("active") ? "true" : "false";
+      if (b.getAttribute("aria-expanded") !== aberto) b.setAttribute("aria-expanded", aberto);
+    });
+  };
+  document.addEventListener("click", () => setTimeout(sincronizarExpandidos, 0));
+  new MutationObserver(sincronizarExpandidos).observe(document.body, { childList: true, subtree: true });
+  sincronizarExpandidos();
+
   // pede as preferências assim que carrega (o SPO também manda a cada mudança)
   window.parent.postMessage({ type: "spo-preferencias-pedido" }, ORIGEM);
 })();
