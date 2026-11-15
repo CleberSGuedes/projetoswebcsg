@@ -28592,6 +28592,32 @@
     return { ...t, marker: m };
   }
 
+  // [jean] fix/rotulos-arvore-contraste: o Plotly escolhe o texto de dentro dos blocos do gráfico de
+  // árvore entre um cinza (#444) e o branco por um critério próprio, e 5 dos 8 blocos da paleta segura
+  // para daltonismo ficavam abaixo de 4,5:1 (rosa 3,18; verde 3,42; vermelhão 3,87). Agora, para cada
+  // bloco, o texto é preto ou branco, o que tiver mais contraste com a cor do bloco (pior caso 5,19:1,
+  // no azul Okabe-Ito); vale para qualquer paleta e tema.
+  const luminancia = (cor) => {
+    const s = String(cor || "").trim();
+    let rgb = null;
+    const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const h = hex[1].length === 3 ? hex[1].split("").map((c) => c + c).join("") : hex[1];
+      rgb = [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16));
+    } else {
+      const m = s.match(/rgba?\(([^)]+)\)/i);
+      if (m) rgb = m[1].split(",").slice(0, 3).map((x) => parseFloat(x));
+    }
+    if (!rgb || rgb.some((x) => Number.isNaN(x))) return null;
+    const v = rgb.map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  };
+  const textoSobre = (cor) => {
+    const l = luminancia(cor);
+    if (l === null) return undefined;
+    return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? "#000000" : "#ffffff";
+  };
+
   function ajustarDados(gd, data) {
     const el = elDe(gd);
     if (el) el.__spoDataBase = data;
@@ -28603,6 +28629,10 @@
     return data.map((tr) => {
       if (!tr || typeof tr !== "object") return tr;
       const t = { ...tr };
+      if (t.type === "treemap" && t.marker && Array.isArray(t.marker.colors)) {
+        const cores = t.marker.colors.map(textoSobre);
+        if (cores.every(Boolean)) t.textfont = { ...(t.textfont || {}), color: cores };
+      }
       if (t.type === "pie") {
         t.automargin = true;
         if (estreito && Array.isArray(t.labels)) t.labels = t.labels.map((x) => quebrar(x, max));
