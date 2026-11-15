@@ -332,13 +332,6 @@
           </div>
         </div>
       </div>
-      <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
-        <p>Amostra: Programação PTA/OpR — ação, produto e meta (Il1 O0 ç ã é).</p>
-        <table><caption>Tabela de relatório (segue "Texto das tabelas")</caption><tbody>
-          <tr><td>Crédito autorizado</td><td>5.914.425.031,88</td></tr>
-          <tr><td>Saldo de dotação</td><td>2.886.249.455,56</td></tr>
-        </tbody></table>
-      </div>
       <p class="spo-fontes-status" role="status" aria-live="polite"></p>
     </article>
 
@@ -506,6 +499,29 @@
       </div>
       <div class="personalizar-actions">
         <button class="secondary-button" type="button" id="spo-theme-reset">Restaurar padrão do laboratório</button>
+      </div>
+    </article>
+
+    {# [jean] Prévia das fontes e tabelas (fix/amostra-fontes, 2026-11-15; decisão do dev. Jean): a amostra
+       saiu do cartão "Fontes e tamanho do texto" e ganhou cartão próprio, ao lado da prévia dos componentes;
+       usa a mesma borda dela (as variáveis --spo-preview-* vêm da classe personalizar-preview do cartão) #}
+    <article class="card personalizar-card personalizar-preview" id="spo-previa-fontes">
+      <div class="eyebrow">Prévia</div>
+      <div class="card-title">Fontes e tabelas</div>
+      <div class="spo-fontes-amostra preview-surface" role="group" aria-label="Amostra das fontes escolhidas">
+        <div class="spo-amostra-sobretitulo">Amostra · Planejamento</div>
+        <div class="spo-amostra-titulo">Programação PTA/OpR</div>
+        <p class="spo-amostra-texto">Ação, produto e meta da programação anual. Compare as letras:</p>
+        <p class="spo-amostra-letras">Il1 O0 — ç ã é</p>
+        <table>
+          <caption>Tabela de relatório (segue "Texto das tabelas")</caption>
+          <thead><tr><th scope="col">Item</th><th scope="col">Valor (R$)</th></tr></thead>
+          <tbody>
+            <tr><td>Crédito</td><td>5.914.425.031,88</td></tr>
+            <tr><td>Empenhado</td><td>3.028.175.576,32</td></tr>
+            <tr><td>Saldo</td><td>2.886.249.455,56</td></tr>
+          </tbody>
+        </table>
       </div>
     </article>
 
