@@ -33,6 +33,8 @@ MARCADORES = [
     "const SEM_VALOR = {",
     "const NOMES = {",
     "const BOTAO = [",
+    # presets do Contrato Visual Protegido (feat/kit-contrato)
+    "const PROTECTED_CONTRACT_PRESETS = Object.freeze({",
 ]
 # opções do Personalizar que não fazem sentido no kit (não há atalhos de uma tecla nele)
 FORA_DO_KIT = {"keys"}
@@ -69,6 +71,9 @@ def test_marcadores_estao_no_main_js_e_no_kit():
     for m in ("const ORDEM = {", "const ALVO = {", "const SEM_VALOR = {", "const NOMES = {"):
         assert m in sugestao, f"a regra da oferta Atkinson saiu do initSugestaoAtkinson: {m}"
     assert re.search(r"const BOTAO = \[[^\]]*\];", sugestao), "BOTAO da oferta Atkinson mudou de forma"
+    assert re.search(r'const PROTECTED_CONTRACT_STATE_KEY = "[^"]+"', main), (
+        "PROTECTED_CONTRACT_STATE_KEY mudou de forma no main.js (o kit lê dele o preset vigente)")
+    assert 'body.dataset.visualContractPreset' in main, "o SPO deixou de aplicar o preset por data-visual-contract-preset"
 
 
 def test_trechos_do_teclado_sao_funcoes_completas():

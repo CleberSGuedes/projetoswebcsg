@@ -3053,3 +3053,11 @@ Pedido do dev. Jean: garantir que as próximas funcionalidades sigam o padrão S
 - **Dois achados do kit** (registrados no §7 do padrão, a decidir): título/descrição de `module-card`, texto corrido de cartão e `.alert` não acompanham a densidade do texto; `pos`/`neg` só pintam nos totais e na tabela do FIP 613.
 
 Testado no SPO local: Atkinson → oferta das cinco opções, "Aplicar as cinco" (Atkinson Mono, 112%, 1,75, 72ch, Legível; foco volta à fonte da interface; `localStorage` intacto), "Agora não", sem oferta quando já está tudo no sugerido; aviso a 12 px dos botões; tema escuro + Roxo + Legível; densidades 10/12/13 nas tabelas, filtros e paginação; 150% (zoom 1,5); Atkinson; Tab entra na tabela, End, ↑ ao filtro, Enter abre a lista, Esc fecha e devolve o foco ao filtro, Aplicar filtra (10 linhas) e atualiza o total; paginação → → Enter (foco no 3), Esc volta à célula. Nenhum arquivo do SPO mudou além da documentação: `style.css`, `main.js`, `base.html` e `login.html` intactos (sem `?v=` novo).
+
+### Kit de mockup: presets do Contrato Visual (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean no teste do kit: o kit não trazia os presets do Contrato Visual Protegido (Compacto gerencial, Contraste técnico, Pressão operacional), que mudam o visual tanto quanto o Personalizar (`data-visual-contract-preset`, mais de 100 regras no `style.css`).
+- Seletor "Preset do Contrato Visual" no painel do kit, com a lista lida do `PROTECTED_CONTRACT_PRESETS` do `main.js`; aplicado no `<html>` e no `<body>`, como o `setProtectedContractVisualPreset`. O preset vigente vem da chave `PROTECTED_CONTRACT_STATE_KEY` (prévia, senão rascunho, senão ativo, como o `getStoredProtectedContractPreset`). Nada é gravado.
+- Saiu o botão "As minhas preferências": com o kit abrindo nas preferências vigentes, recarregar a página faz o mesmo.
+- O kit continua separado do Contrato (papéis diferentes: o Contrato aplica o visual do SPO, com permissão; o kit é o ponto de partida de tela nova, sem login, e não muda nada). Integração futura a combinar com o dev. Cleber: uma aba "Componentes" no Contrato abrindo o próprio kit (§6.4 do padrão).
+- `tests/test_kit_mockup.py`: marcador dos presets, forma da `PROTECTED_CONTRACT_STATE_KEY` e o atributo `data-visual-contract-preset` no `main.js`.
