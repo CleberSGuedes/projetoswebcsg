@@ -77,6 +77,67 @@ body.spo-ponte.embedded-mode.dark[data-visual-contrast="enhanced"] { --line: rgb
 /* Brilho reduzido (só no tema claro): menos branco, texto com o mesmo destaque */
 body.spo-ponte[data-spo-brightness="reduced"]:not(.dark) { --bg: #dadee4; --surface: #eceef1; --soft: #e3e6ea; --muted: #4a4850; }
 
+/* ==========================================================================
+   [jean] Cores do PTA 2027 no padrão SPO-AA+, tema claro (feat/mockup-pta2027-aa-plus)
+   Medido na vista inicial: 65 de 97 textos abaixo de 7:1.
+   - Destaque usado como cor de TEXTO (--teal, --teal-dark, --spo-accent-deep): com o Azul,
+     4,77:1 e 5,27:1. Passam ao tom de texto do destaque do SPO (--spo-accent-text, que a ponte
+     manda), o mesmo dos botões principais do SPO; o texto branco sobre o destaque (abas e
+     botões ativos, 4,46–4,77:1) também passa de 7:1. O mockup grava o --teal no <html>
+     (applySpoHostTheme), por isso o !important.
+   - Texto secundário (--muted #5c6f74, 5,05:1 no fundo do mockup): #3f4e52 (8,3:1; ≥ 7,4 nos
+     fundos tingidos); com brilho reduzido, #384649 (7,26 no fundo #dadee4); reforçado, #2f3b3f.
+   ========================================================================== */
+html:has(> body.spo-ponte.embedded-mode:not(.dark)),
+body.spo-ponte.embedded-mode:not(.dark) {
+  --teal: var(--spo-accent-text, #086b64) !important;
+  --teal-dark: var(--spo-accent-text, #086b64) !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) { --spo-accent-deep: var(--spo-accent-text, #086b64) !important; --muted: #3f4e52 !important; }
+body.spo-ponte.embedded-mode:not(.dark)[data-spo-brightness="reduced"] { --muted: #384649 !important; }
+body.spo-ponte.embedded-mode:not(.dark)[data-visual-contrast="enhanced"] { --muted: #2f3b3f !important; }
+/* cores literais do mockup abaixo de 7:1 (medidas nas vistas e nas 6 etapas da jornada) */
+body.spo-ponte.embedded-mode:not(.dark) .validation-grid .summary-item.neutral strong { color: #36504a; } /* 4,52 → 8,4 */
+body.spo-ponte.embedded-mode:not(.dark) .validation-grid .summary-item.warning :is(small, strong) { color: #6b4000; } /* 4,86 e 5,57 → 8,3 */
+body.spo-ponte.embedded-mode:not(.dark) .diagram-float-toggle { color: var(--text); }                    /* texto a 62%: 3,99 */
+body.spo-ponte.embedded-mode:not(.dark) :is(.vector-head .secondary-button, .concept-actions .secondary-button[id^="export-"]) { color: var(--teal-dark); } /* a 74%: 4,78 */
+/* ==========================================================================
+   [jean] Tema escuro (medido: 2,2 a 4,2:1 em todas as vistas, já no mockup original)
+   Como o SPO no escuro: texto na cor de destaque usa o tom de texto do destaque do escuro
+   (--spo-accent-text, claro); botões e marcadores com fundo no destaque passam a texto
+   #111111 (o fundo, agora claro, segue o --teal). O --spo-accent-deep continua como está,
+   porque é fundo do cartão da chave (.key-card, com texto branco); os textos que o usavam
+   como cor passam ao tom de texto do destaque.
+   ========================================================================== */
+html:has(> body.spo-ponte.embedded-mode.dark),
+body.spo-ponte.embedded-mode.dark {
+  --teal: var(--spo-accent-text, #7fd6cb) !important;
+  --teal-dark: var(--spo-accent-text, #7fd6cb) !important;
+}
+body.spo-ponte.embedded-mode.dark :is(.primary-button, .start-policy, .tree-step.active i, .tree-step.complete i,
+    .view-tab.active, .context-components-panel li, .concept-button:hover, .concept-button.active, .concept-branches b,
+    .eap-map-flow article span, .eap-map-flow .eap-map-node span, .eap-layer-node span,
+    .macro-card:hover .macro-number, .macro-card.active .macro-number) { color: #111111 !important; }
+body.spo-ponte.embedded-mode.dark .context-components-panel li::before { color: #111111 !important; }
+/* badges numerados sobre fundo tingido do destaque: com o Amarelo, o tom de texto do destaque dava
+   5,5–6,2:1 contra o próprio tingido; no escuro, ficam na cor do texto */
+body.spo-ponte.embedded-mode.dark :is(.macro-card:not(:hover):not(.active) .macro-number, .policy-expansion .policy-icon,
+    .component-options b) { color: var(--text) !important; }
+body.spo-ponte.embedded-mode.dark :is(.region-readonly-grid label.selected, .context-goal-toggle.open, .bridge-title h2, .section-heading h2, .process-lane h3,
+    .policy-expansion .expansion-head h3, .policy-expansion .policy-option strong, .eap-summary strong, .eap-summary span,
+    .eyebrow, .text-button, .context-item-button em, .context-indicator-card em, .quality-card b, .eap-table th,
+    .eap-table code, .process-pill) { color: var(--spo-accent-text, #7fd6cb) !important; }
+body.spo-ponte.embedded-mode.dark .key-card p { color: var(--text) !important; }                                   /* #bfd0cf: 6,87 */
+body.spo-ponte.embedded-mode.dark .validation-grid .summary-item.warning small { color: #ffd59b !important; }    /* #f2b766: 5,97 */
+/* bateria 8 destaques × claro/escuro: aba inativa sobre o tingido do destaque (Vermelho e Roxo no claro:
+   6,86 e 6,95) e "eixo(s) de execução" no cartão de política selecionado (escuro: 6,07–6,74) */
+body.spo-ponte.embedded-mode .view-tab:not(.active) { color: var(--text) !important; }
+body.spo-ponte.embedded-mode.dark .macro-card:is(.active, :hover) small { color: var(--text) !important; }
+/* caixas de marcar das etapas 3 e 4: o rótulo clicável tinha 19 px de altura (alvo mínimo 24 px, WCAG 2.5.8) */
+body.spo-ponte label:has(> input[type="checkbox"], > input[type="radio"]) { min-height: 24px; }
+/* <small> sem tamanho próprio (o navegador o deixa em 11,67 px): 12 px; regras do mockup vencem */
+:where(body.spo-ponte small) { font-size: max(12px, 0.86em); }
+
 /* Movimento reduzido (opção do SPO ou do sistema) */
 html:has(> body.spo-ponte[data-spo-motion="reduce"]) { scroll-behavior: auto; }
 body.spo-ponte[data-spo-motion="reduce"] *, body.spo-ponte[data-spo-motion="reduce"] *::before, body.spo-ponte[data-spo-motion="reduce"] *::after {
@@ -85,4 +146,43 @@ body.spo-ponte[data-spo-motion="reduce"] *, body.spo-ponte[data-spo-motion="redu
 }
 @media (prefers-reduced-motion: reduce) {
   html:has(> body.spo-ponte) { scroll-behavior: auto; }
+}
+
+/* ==========================================================================
+   [jean] Botão "×" de remover linha e listas suspensas no padrão SPO
+   (feat/mockup-pta2027-aa-plus; pedido do dev. Jean depois de ver o mockup)
+   - "×" (.remove-row): tirar uma linha é "Dispensar" no SPO (padrão §4.1): contorno
+     vermelho, sem preenchimento (era fundo rosado sem borda, "×" a 4,99:1). O nome
+     para leitor de tela ("Remover linha") vem do spo-preferencias.js.
+   - Listas suspensas: a lista aberta era a do Windows (opção marcada no azul do sistema).
+     Como no SPO (feat/listas-nativas): lista na superfície do tema, opção sob o mouse com
+     16% do destaque, a escolhida em negrito, até 40rem e quebra de linha. O campo fechado
+     continua o do mockup (seta nativa). Firefox e Safari seguem com a lista nativa.
+   ========================================================================== */
+body.spo-ponte.embedded-mode .remove-row { background: transparent !important; color: #a51d2d !important; border: 1.5px solid #a51d2d !important; font-size: 18px; line-height: 1; }
+body.spo-ponte.embedded-mode .remove-row:is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08) !important; }
+body.spo-ponte.embedded-mode.dark .remove-row { color: #ffa3a3 !important; border-color: #ffa3a3 !important; }
+body.spo-ponte.embedded-mode.dark .remove-row:is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12) !important; }
+@supports (appearance: base-select) {
+  body.spo-ponte select:not([multiple]):not([size]),
+  body.spo-ponte select:not([multiple]):not([size])::picker(select) { appearance: base-select; }
+  body.spo-ponte select:not([multiple]):not([size])::picker(select) {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--spo-native-border, var(--line)); border-radius: 10px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18); padding: 4px;
+    max-height: min(60vh, 420px); max-width: min(40rem, calc(100vw - 16px));
+  }
+  body.spo-ponte.dark select:not([multiple]):not([size])::picker(select) { background: #202a2b; box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55); }
+  body.spo-ponte select:not([multiple]):not([size]) option {
+    padding: 6px 10px; border-radius: 6px; background: transparent; color: var(--text);
+    white-space: normal; overflow-wrap: anywhere; line-height: 1.35;
+  }
+  body.spo-ponte select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--spo-accent-rgb, 8, 59, 54), 0.16); color: var(--text); outline: none;
+  }
+  body.spo-ponte select:not([multiple]):not([size]) option:checked { font-weight: 600; }
+  body.spo-ponte select:not([multiple]):not([size]) option:disabled { opacity: 0.55; }
+  body.spo-ponte select:not([multiple]):not([size]) { white-space: nowrap; overflow: clip; overflow-clip-margin: content-box; }
+  body.spo-ponte select:not([multiple]):not([size])::picker-icon { color: var(--muted); transition: rotate .15s; }
+  body.spo-ponte select:not([multiple]):not([size]):open::picker-icon { rotate: 180deg; }
 }
