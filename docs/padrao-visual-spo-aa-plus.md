@@ -54,7 +54,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 |---|---|---|---|
 | Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, **Mulish** (formas arredondadas, leitura corrida; I e l parecidos — em avaliação, 15/11), Do sistema | `data-spo-font-ui` |
 | Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, **Atkinson Hyperlegible Mono** (monoespaçada da família Atkinson, oferecida junto com ela; bateria 2), Do sistema | `data-spo-font-data` |
-| Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) — **será substituída pela "Densidade do texto" (§2.2, versão 4)** | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
+| **Densidade do texto** (antes "Texto das tabelas"; §2.2.1). Nesta fase vale nas tabelas do conteúdo, filtros e paginação; as demais telas passam a segui-la por etapas | **Intermediário** (tabelas 12 px) | Legível (13 px; entra na "Leitura confortável" da Atkinson), Compacto (10 px) | `data-spo-table-text` (nome mantido; a escolha gravada antes é convertida para a de mesmo tamanho) |
 | Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
 | Espaçamento entre linhas (texto corrido) | **Padrão (1,5)** | Amplo (1,75), Mais amplo (2,0); títulos, tabelas, botões e campos não mudam | `data-spo-line-height` |
 | Cores dos gráficos (cartão **"Visão e cores"**) | **Padrão SPO** | Seguras para daltonismo (paleta Okabe-Ito, §3.5) | `data-spo-cvd` |
@@ -134,20 +134,22 @@ Decisões:
 1. **Compacto / Intermediário / Legível** deixam de ser só o "Texto das tabelas" e passam a ser a
    **"Densidade do texto"** da interface inteira: cada opção escolhe um conjunto de valores para as
    variáveis abaixo.
-2. O **padrão SPO é o Legível** (a escala desta seção cumprida de verdade nas telas de trabalho).
+2. O **padrão SPO é o Intermediário** (decisão do dev. Jean depois de testar as três densidades no FIP 613
+   e as telas no Intermediário, 15/11; a primeira decisão era o Legível). O **Legível** fica para quem
+   precisa de letra maior e entra na sugestão "Leitura confortável" da Atkinson.
 3. No **Compacto**, as tabelas ficam com **10 px** (sai o 8 px).
 4. Novo passo **Leitura**: texto de janelas de ajuda, documentos (SPO-AA+), declaração e avisos longos,
    **16 px** no Legível.
 
-| Variável (CSS) | Uso | Compacto | Intermediário | **Legível (padrão)** |
+| Variável (CSS) | Uso | Compacto | **Intermediário (padrão)** | Legível |
 |---|---|---|---|---|
-| `--spo-fs-dado` | células de tabela, paginação, totais | 10 px | 12 px | **13 px** |
-| `--spo-fs-controle` | rótulos de campo, campos, resumo das opções, metadados | 11 px | 12 px | **13 px** |
-| `--spo-fs-texto` | texto corrido, descrições, itens de lista, nome de opção | 12 px | 13 px | **14 px** |
-| `--spo-fs-leitura` | janelas de ajuda, documentos, declaração, avisos longos | 13 px | 14 px | **16 px** |
-| `--spo-fs-titulo` | título de cartão e de janela | 13 px | 14 px | **16 px** |
-| `--spo-fs-rotulo` | sobretítulo em maiúsculas | 11 px | 11 px | **11 px** |
-| `--spo-fs-secao` / `--spo-fs-pagina` | título de seção / de página | 20 / 24 px | 20 / 24 px | **20 / 24 px** |
+| `--spo-fs-dado` | células de tabela, paginação, totais | 10 px | **12 px** | 13 px |
+| `--spo-fs-controle` | rótulos de campo, campos, resumo das opções, metadados | 11 px | **12 px** | 13 px |
+| `--spo-fs-texto` | texto corrido, descrições, itens de lista, nome de opção | 12 px | **13 px** | 14 px |
+| `--spo-fs-leitura` | janelas de ajuda, documentos, declaração, avisos longos | 13 px | **14 px** | 16 px |
+| `--spo-fs-titulo` | título de cartão e de janela | 13 px | **14 px** | 16 px |
+| `--spo-fs-rotulo` | sobretítulo em maiúsculas | 11 px | **11 px** | 11 px |
+| `--spo-fs-secao` / `--spo-fs-pagina` | título de seção / de página | 20 / 24 px | **20 / 24 px** | 20 / 24 px |
 
 - O **"Tamanho do texto"** (112/125/150%) continua por cima de tudo, como hoje (amplia a área).
 - **Mínimo de 12 px:** vale no Legível e no Intermediário. No **Compacto**, escolhido pela pessoa,
@@ -156,16 +158,18 @@ Decisões:
 - **Componente novo** usa as variáveis, nunca um `font-size` em px escrito à mão (a etapa 4 do plano
   transforma isso em teste).
 
-Etapas (um PR por etapa): (1) esta seção — feito; (2) criar as variáveis com os valores de hoje (nada
-muda na tela) e trocar "Texto das tabelas" por "Densidade do texto", com login e mockup PTA/OpR; (3)
+Etapas (um PR por etapa): (1) esta seção — feito; (2) criar as variáveis e trocar "Texto das tabelas"
+por "Densidade do texto", com login e mockup PTA/OpR — feito: as **tabelas já usam** `--spo-fs-dado`
+(Legível 13 / Intermediário 12 / Compacto 10 px; decisão do dev. Jean de aplicar os valores novos nelas
+já nesta etapa) e o padrão passa ao **Intermediário**; (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR
 separado, depois. As duas mexem em regras do dev. Cleber no `style.css`; ele orientou fazer o que for
 preciso **antes** da divisão/simplificação dos arquivos monolíticos, então não há espera — cada PR
-avisa o que mudou nas regras dele. Quando a
-etapa 3 chegar às telas, o texto fica um pouco maior para todos (12 → 13–14 px nas telas de trabalho):
-avisar os colegas da homologação.
+avisa o que mudou nas regras dele. Com o Intermediário como padrão, a etapa 3 deixa
+o texto das telas de trabalho em 12–13 px (perto do de hoje) e as janelas em 14 px: o ganho é a
+coerência entre elas.
 
 Aplicação (por PRs, medindo antes e depois): (1) os casos abaixo de 12 px e as descrições com
 entrelinha 1,25 (§7) — feito (#75, #82); (2) títulos de página iguais — feito (#76); (3) opção

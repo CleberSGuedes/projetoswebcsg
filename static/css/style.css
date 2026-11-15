@@ -9610,3 +9610,42 @@ body[data-spo-font-ui="mulish"] { font-family: "SPO Mulish", var(--spo-font-clas
 /* "Leitura → Estrito": largura média das letras ÷ largura do "0" medida (Mulish 0,801; Inter 0,787) dá 54ch;
    fica 53ch, como a Inter (lado conservador: no máximo 80 caracteres por linha) */
 body[data-spo-reading="strict"][data-spo-font-ui="mulish"] { --spo-leitura-estrita: 53ch; }
+
+/* ==========================================================================
+   [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15; etapa 2 do
+   plano de tipografia; padrão SPO-AA+ v4 §2.2.1)
+   A opção "Texto das tabelas" vira "Densidade do texto" (mesmo atributo
+   data-spo-table-text e mesmos valores compact / medium / legible, para não
+   perder a escolha já gravada). Cada densidade define as variáveis da escala;
+   nesta etapa só as tabelas passam a usá-las (dado: Compacto 10, Intermediário
+   12, Legível 13 px — antes 8 / 10 / 12; a escolha gravada é convertida para
+   a densidade de mesmo tamanho, uma vez só, no main.js e no login-theme.js). Rótulos, campos, texto, leitura e
+   títulos seguem nas próximas etapas, começando pelo Personalizar.
+   Padrão SPO: Intermediário (decisão do dev. Jean depois de testar as três no
+   FIP 613); o Legível entra na "Leitura confortável" da Atkinson. Sem atributo
+   (antes do main.js) vale o Intermediário.
+   ========================================================================== */
+body {
+  --spo-fs-dado: 12px; --spo-fs-controle: 12px; --spo-fs-texto: 13px; --spo-fs-leitura: 14px;
+  --spo-fs-titulo: 14px; --spo-fs-rotulo: 11px; --spo-fs-secao: 20px; --spo-fs-pagina: 24px;
+}
+body[data-spo-table-text="legible"] {
+  --spo-fs-dado: 13px; --spo-fs-controle: 13px; --spo-fs-texto: 14px; --spo-fs-leitura: 16px; --spo-fs-titulo: 16px;
+}
+body[data-spo-table-text="compact"] {
+  --spo-fs-dado: 10px; --spo-fs-controle: 11px; --spo-fs-texto: 12px; --spo-fs-leitura: 13px; --spo-fs-titulo: 13px;
+}
+/* tabelas dos relatórios, filtros de múltipla escolha e paginação */
+body :is(.fip-table, .plan20-table) :is(td, th):not(#spo-dens),
+body :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button):not(#spo-dens),
+body :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn):not(#spo-dens),
+body :is(.pagination button, .page-btn, .page-size select, .page-size .input, .page-size label, .pagination > span):not(#spo-dens) {
+  font-size: var(--spo-fs-dado);
+}
+/* demais tabelas do conteúdo (cadastros, usuários, Limpeza, API, estrutura, Meta Física, dados dos
+   gráficos…); campos e botões de formulário dentro delas não mudam */
+body #content-area table:not(.fip-table, .plan20-table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button, .bi), th *:not(input, select, textarea, button, .bi)):not(#spo-dens) {
+  font-size: var(--spo-fs-dado);
+}
+/* amostra do Personalizar */
+body .spo-fontes-amostra table:not(#spo-dens) { font-size: var(--spo-fs-dado); }
