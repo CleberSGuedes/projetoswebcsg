@@ -1,0 +1,70 @@
+/* [jean] feat/kit-mockup (2026-11-15) — só o painel e a moldura do Kit de mockup SPO-AA+.
+   Tudo o que é tela (cabeçalho, cartões, campos, botões, tabela) vem do style.css do SPO.
+   Mesmas regras do padrão: só tokens de cor e tamanhos pelas variáveis da "Densidade do texto". */
+
+.kit-mockup-body {
+  background: var(--bg);
+}
+
+.kit-pulo {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 20;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--spo-accent-text, var(--text));
+  font-weight: 700;
+}
+.kit-pulo:focus { top: 12px; }
+
+.kit-painel {
+  margin: 16px var(--spo-layout-content-padding, 18px) 0;
+  padding: 16px;
+}
+.kit-painel-topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.kit-painel h2 {
+  margin: 4px 0;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+}
+.kit-painel-ajuda {
+  margin: 0;
+  font-size: var(--spo-fs-controle);
+}
+.kit-painel-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.kit-opcoes {
+  margin-top: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+}
+.kit-aviso { margin: 12px 0 0; }
+
+.kit-pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.kit-secao {
+  margin: 0 0 8px;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+  color: var(--spo-accent-text, var(--text));
+}
+
+/* espaço entre blocos dentro de um cartão (o .alert do SPO não tem margem própria: quem dá o espaço é a tela) */
+.kit-pilha .module-card > .alert,
+.kit-pilha .module-card .actions + .alert { margin-top: 12px; }
+
+/* oferta "Leitura confortável" no painel: ocupa a linha inteira da grade, logo abaixo da fonte da interface */
+.kit-opcoes > .spo-sugestao { grid-column: 1 / -1; }

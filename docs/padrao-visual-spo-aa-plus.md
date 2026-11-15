@@ -413,6 +413,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 
 ### 6.1 Ao criar ou mudar uma tela
 
+- [ ] **Desde o primeiro mockup:** a tela nova começa do **Kit de mockup SPO-AA+** (§6.4), com as classes
+      dele, e é vista no kit nos dois temas, em mais de um destaque, nas três densidades do texto e a 150%
+      antes de virar código. Nada fica para "ajustar ao padrão depois".
 - [ ] Nenhuma cor literal em componente; use os tokens (§3). Precisa de cor nova? Crie um token
       (definido por tema) e registre aqui.
 - [ ] Botões na hierarquia do §4.1; campos, listas e navegação como no §4.
@@ -457,6 +460,32 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 | Valores `pos`/`neg` e `.alert-info` escuro (§3.4) | literais até virarem tokens no N5 |
 | Logotipo e imagens | não são interface |
 
+### 6.4 Kit de mockup SPO-AA+
+
+`static/kit/mockup-spo-aa-plus.html` (com `kit-mockup.css` e `kit-mockup.js`): página de partida de toda
+tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mockup-spo-aa-plus.html`.
+- Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
+  opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
+  (`initNavegacaoTabelas`, `initTecladoPaginacao`) e a regra da oferta "Leitura confortável" da Atkinson
+  (`initSugestaoAtkinson`): **nada é cópia**, o kit acompanha o SPO sozinho.
+  Aberto do disco (`file://`), o navegador bloqueia a leitura do `main.js`; o kit avisa e fica no padrão.
+- Painel **"Preferências do kit"**: tema, destaque, densidade visual, contraste, estilo dos cartões, diagramas e
+  todas as opções do cartão "Fontes" e "Visão e cores" do Personalizar, **com as mesmas regras**
+  (escolher a Atkinson abre a oferta "Leitura confortável", como no Personalizar). O kit **abre com as
+  preferências vigentes** no SPO deste navegador; o que mudar vale só na página (nada é gravado);
+  "Padrão SPO" volta ao padrão e "As minhas preferências" recarrega as do SPO.
+- Componentes de exemplo, com a marcação real: cabeçalho de página, cartão `module-card`, cartões
+  dinâmicos (`flow-node`), formulário (campos, desabilitado, hierarquia dos botões), aviso `alert-info`
+  e relatório com totais, filtros `.mf-*`, `pos`/`neg`, navegação pelo teclado e paginação.
+- **Como usar:** copie o arquivo para o mockup novo, troque o conteúdo de exemplo e mantenha as classes.
+  CSS novo segue o §6.1 (tokens e `var(--spo-fs-*)`). O kit também **mede o próprio SPO**: componente
+  que não muda ao trocar a densidade ou o tema no painel é dívida (§7).
+- Regra nova do Personalizar que liga uma opção a outra (como a oferta da Atkinson): o kit precisa
+  reproduzi-la, lendo do `main.js`, para continuar mostrando o comportamento exato do SPO.
+- `tests/test_kit_mockup.py` reprova se os trechos que o kit lê do `main.js` mudarem de nome ou de forma,
+  se o Personalizar ganhar opção que o kit não mostra (`GRUPOS_FONTES` no `kit-mockup.js`) e se o CSS do
+  kit escrever px ou cor literal. **Opção nova no Personalizar:** acrescentar no `GRUPOS_FONTES`.
+
 ## 7. Dívida conhecida (roteiro do N5)
 
 Medição de 2026-11-13 no `style.css` (fora dos blocos `[jean]`): **303 cores literais, 235
@@ -494,6 +523,8 @@ resolvido por `initGraficosEscala`).
 | Programação PTA/OpR com cabeçalho próprio | depende do futuro do mockup (dataPTA) |
 | Ícone do cabeçalho repete o do `MENU_META`; paleta do login repete o `ACCENT_COLORS` | na divisão, gerar de uma fonte só |
 | Cores forçadas do Windows, `prefers-contrast: more`, leitor de tela, Firefox/Safari | não medidos |
+| **Achado do kit de mockup (15/11):** componentes comuns fora da "Densidade do texto" — título do cartão `.module-card-title h2` (15 px fixo), descrição dele (12), texto corrido e listas de cartão (14, herdado do `body`) e avisos `.alert` (14) | a decidir: passar a `--spo-fs-titulo`/`-controle`/`-texto`/`-leitura` (no Intermediário, o título vai de 15 a 14 e o texto de cartão de 14 a 13 em todas as telas que os usam) |
+| **Achado do kit de mockup (15/11):** `pos`/`neg` só pintam nos totais (`.totais-row`) e na tabela do FIP 613 (`.fip-table td.num`); numa tabela nova, o negativo fica sem cor | a decidir: regra geral para `td.num.pos/.neg` do conteúdo |
 
 ## 8. Histórico
 
