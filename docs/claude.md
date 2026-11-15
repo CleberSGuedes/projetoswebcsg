@@ -2892,3 +2892,13 @@ Pergunta do dev. Jean depois do #122: num monitor Full HD em retrato (~1060 × 1
 Medido com o mockup dentro de uma página (com `meta viewport`, como o SPO), macropolítica 01 no meio da tela, "Automático": 1060 × 1900 (retrato) não rola; 800 × 1280 (tablet em pé) não rola; 1100 × 650 (janela dividida/notebook pequeno) rolagem suave de 342 px; 440 × 956 (iPhone 16 Pro Max) rolagem suave de 844 px; 1500 × 650 só 27 px (o começo do painel). `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `index.html` do mockup: só o `?v=` do `spo-preferencias.js` (`20261115.jean-sem-retrato.1`).
+
+## Janela dividida sem largura mínima (dev. Jean, 2026-11-15)
+
+O dev. Jean testou o SPO no Chrome com o modo de aparelho do DevTools (iPhone 393 × 852 e 440 × 956) e no painel estreito do app, e a página inteira (topo, conteúdo, cartões e o quadro do PTA/OpR) passava da borda. Causa: o modo "split sob pressão" do contrato visual de 2026-07 (`syncSplitPressureMode` no `main.js`; `html.spo-split-pressure` no `style.css`). Ele liga com a área da página até 480 px dentro de uma janela de navegador pelo menos 180 px mais larga (pensado para o Chrome com a janela dividida) e fixava `--spo-operational-min-width` em 560 px (520 com o preset "Pressão operacional"), com rolagem lateral. No celular de verdade não liga (janela e página têm a mesma largura); liga no DevTools e no painel estreito. Não veio dos PRs #121–#124.
+
+Decisão do dev. Jean: desligar a largura mínima. Bloco `[jean]` no fim do `style.css`: com `spo-split-pressure`, `--spo-operational-min-width` vai a 0 (inclusive com o preset "Pressão operacional"), a página não rola para o lado e o quadro do PTA/OpR acompanha a largura. A classe continua sendo posta pelo JS (que não mudou); a página se reorganiza como no celular (WCAG 1.4.10; padrão SPO-AA+: sem rolagem lateral a 320 px).
+
+Medido no Chrome do dev. Jean (sessão dele, tema escuro, destaque roxo), com o SPO em quadros de 393 e 440 px dentro da janela de 1080 px (o modo liga): antes, a página tinha 560 px e 12+ elementos passavam da borda; agora, Início e Programação PTA/OpR com a largura do quadro, nenhum elemento além da borda, e o mockup do PTA/OpR com 276 e 323 px, sem rolagem lateral. Também a 390 px (a largura das baterias do SPO) e a 320 px (WCAG 1.4.10): nada além da borda; mockup com 273 e 203 px. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-sem-largura-minima.1`).
