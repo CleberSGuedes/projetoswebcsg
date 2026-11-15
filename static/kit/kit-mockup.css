@@ -68,3 +68,11 @@
 
 /* oferta "Leitura confortável" no painel: ocupa a linha inteira da grade, logo abaixo da fonte da interface */
 .kit-opcoes > .spo-sugestao { grid-column: 1 / -1; }
+
+/* prévias do Personalizar e gráficos lado a lado quando cabem (colunas sem mínimo fixo: §6.1) */
+.kit-previas,
+.kit-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
