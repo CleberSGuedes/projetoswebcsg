@@ -27882,14 +27882,43 @@
   if (!window.matchMedia || !Element.prototype.scrollIntoView) return;
   const consulta = window.matchMedia("(prefers-reduced-motion: reduce)");
   const original = Element.prototype.scrollIntoView;
+  // [jean] fix/movimento-reduzido (2026-11-15; pedido do dev. Jean): o salto imediato trocava a tela
+  // de uma vez ("flash"). Como no "Reduzir movimento" do iPhone/Mac, a chegada esmaece (opacidade
+  // de 0,35 a 1 em 0,22 s, sem deslocamento), só quando a página de fato se moveu.
+  const areaPrincipal = () => document.getElementById("content-area") || document.querySelector(".main") || document.body;
+  const esmaecer = (el) => {
+    if (!el || typeof el.animate !== "function") return;
+    try { el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" }); } catch (err) { /* sem Web Animations */ }
+  };
   Element.prototype.scrollIntoView = function scrollIntoViewRespeitandoMovimento(arg) {
     const reduzir = consulta.matches || (document.body && document.body.dataset.spoMotion === "reduce"); // [jean] opção do Personalizar
     if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
       // "instant": "auto" seguiria o scroll-behavior do CSS, e o <html> do SPO rola suave
-      return original.call(this, { ...arg, behavior: "instant" });
+      const antes = this.getBoundingClientRect().top;
+      const resultado = original.call(this, { ...arg, behavior: "instant" });
+      if (Math.abs(this.getBoundingClientRect().top - antes) > 2) esmaecer(this);
+      return resultado;
     }
     return original.apply(this, arguments);
   };
+  // [jean] fix/movimento-reduzido (2026-11-15): scrollTo/scrollBy({ behavior: "smooth" }) também
+  // (a edição de Etapa rolava suave até o topo mesmo com "Reduzir sempre"); vale para chamadas futuras.
+  const imediata = (fn) => function rolagemRespeitandoMovimento(arg) {
+    const reduzir = consulta.matches || (document.body && document.body.dataset.spoMotion === "reduce");
+    if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      const pagina = this === window || this === document.documentElement || this === document.body || this === document.scrollingElement;
+      const caixa = pagina ? (document.scrollingElement || document.documentElement) : this;
+      const antes = [caixa.scrollTop, caixa.scrollLeft];
+      const resultado = fn.call(this, { ...arg, behavior: "instant" });
+      if (Math.abs(caixa.scrollTop - antes[0]) > 2 || Math.abs(caixa.scrollLeft - antes[1]) > 2) esmaecer(pagina ? areaPrincipal() : this);
+      return resultado;
+    }
+    return fn.apply(this, arguments);
+  };
+  ["scrollTo", "scroll", "scrollBy"].forEach((nome) => {
+    if (typeof window[nome] === "function") window[nome] = imediata(window[nome]);
+    if (typeof Element.prototype[nome] === "function") Element.prototype[nome] = imediata(Element.prototype[nome]);
+  });
 })();
 
 /* ==========================================================================
