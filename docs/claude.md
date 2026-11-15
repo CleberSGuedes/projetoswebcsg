@@ -2910,3 +2910,15 @@ O dev. Jean notou, no Personalizar, que o cartão "Acessibilidade do SPO" pareci
 Decisão do dev. Jean: igual aos outros cartões. No bloco `[jean]` da Declaração (`style.css`): título 14 px, abertura e itens 12 px (entrelinha 1,5), títulos internos ("Atendido"…) 13 px; rodapé continua 12 px; a cor do texto não muda. Medido na tela: Declaração 14/12/13/12 px, igual ao cartão "Fontes e tamanho do texto" (14/12/13/12). `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-declaracao-tamanhos.1`).
+
+## Cartões dinâmicos no padrão de Governança e Resultados (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: os cartões das telas do Institucional (Diretrizes e Procedimentos, Repositório de Arquivos, Legislação e Normas, Rede de Parceiros) não seguiam o padrão dos cartões dinâmicos de Governança e Resultados; fazer uma varredura e aplicar esse sistema visual aos cartões dinâmicos do SPO (o mockup PTA/OpR será revisto depois).
+
+Varredura (cartões clicáveis com ícone/título/descrição): `.noticia-box` do Institucional (17 cartões em 4 telas, sem ícone, só o texto do link clicável), `.see-upload-option` das Notas SEE (2, borda tracejada, centralizados), `.contract-preset` do Contrato Visual (4, cantos de 8 px). Ficaram de fora as linhas de opção (Personalizar, replicar exercício), que são listas, e os cartões informativos (não clicáveis).
+
+Implementação (bloco `[jean]` "Cartões dinâmicos" no fim do `style.css`): o desenho do `.flow-node` medido na tela — fundo, borda e textos pelas variáveis dos diagramas (`--spo-diagram-*`, que seguem a opção "Diagramas" e o alto contraste), cantos de 12 px, espaçamento de 12 px, altura mínima de 132 px, ícone de 20 px na cor de destaque, título 14 px negrito, descrição 12 px; mouse/foco: borda na cor de destaque; selecionado (preset escolhido na prévia, `.active`): borda, barra de 3 px à esquerda e fundo tingido; o preset ativo local (`.contract-preset-active-local`) só ganha a borda na cor de seleção, para não se confundir com a prévia; contraste Médio/Reforçado e preset "Contraste técnico": contorno no tom de controle (≥ 3:1), como o `.flow-node`; opção desabilitada das Notas SEE continua no estilo da bateria 2; movimento reduzido sem levantar. No Institucional, os 4 templates ganharam um ícone por cartão (Bootstrap Icons, `aria-hidden`) e o link do texto cobre o cartão inteiro (`a::after` com `inset: 0`; um só ponto de Tab; anel de foco no cartão).
+
+Medido na tela: cartões do Institucional com o mesmo fundo, borda, cantos, espaçamento e altura do `.flow-node` (132 px), ícone 20 px, título 14 px, descrição 12 px, nas 4 telas (4, 3, 5 e 5 cartões, todos com ícone); clique nos cantos e no centro de cada cartão cai no link; preset ativo do Contrato com o mesmo fundo, borda e barra do nó selecionado de Governança; opções das Notas SEE (desabilitadas nesta conta) no estilo de desabilitado. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-cartoes-dinamicos.2`).
