@@ -2884,3 +2884,11 @@ Correção (`main.js`):
 Medido no SPO local: aviso aberto → Ctrl+K → o Tab fica na busca, o Esc fecha a busca e o foco vai ao aviso, outro Esc fecha o aviso; Ctrl+K logo depois de carregar (o aviso aparece depois) → o foco continua no campo da busca, Esc fecha a busca e o foco vai ao aviso; o mesmo com a ajuda dos atalhos; sem aviso, o foco volta para onde estava. Sem erro no console. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-busca-aviso.1`).
+
+## Rolagem automática do mockup sem o monitor em retrato (dev. Jean, 2026-11-15)
+
+Pergunta do dev. Jean depois do #122: num monitor Full HD em retrato (~1060 × 1900 com o navegador maximizado), a regra "até 1200 px de largura" ligava a rolagem automática do mockup PTA/OpR. Lá a tela é estreita mas muito alta, e o painel aberto quase sempre cabe à vista. Decisão: a regra passa a olhar também a altura. Com "Movimento: Automático", a rolagem suave ao abrir metas e eixos vale com a janela do SPO até 1200 px de largura **e** até 1000 px de altura; o celular (até 720 px de largura) entra sempre, qualquer que seja a altura; o preset "Pressão operacional" também. Ficam de fora a tela larga, o monitor em retrato e o tablet em pé (nesses, a página só rola se o começo do painel ficar fora da tela, e só até ele). `spo-preferencias.js`, `telaEstreita()`.
+
+Medido com o mockup dentro de uma página (com `meta viewport`, como o SPO), macropolítica 01 no meio da tela, "Automático": 1060 × 1900 (retrato) não rola; 800 × 1280 (tablet em pé) não rola; 1100 × 650 (janela dividida/notebook pequeno) rolagem suave de 342 px; 440 × 956 (iPhone 16 Pro Max) rolagem suave de 844 px; 1500 × 650 só 27 px (o começo do painel). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `index.html` do mockup: só o `?v=` do `spo-preferencias.js` (`20261115.jean-sem-retrato.1`).
