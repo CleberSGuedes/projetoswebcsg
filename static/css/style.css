@@ -9232,7 +9232,11 @@ body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield
    link "Acessibilidade" no rodapé (inserido pelo JS) que leva até ele.
    ========================================================================== */
 .personalizar-grid > .spo-acessibilidade { grid-column: 1 / -1; }
-.spo-acessibilidade h2.card-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; }
+/* tamanhos iguais aos dos outros cartões do Personalizar (fix/declaracao-tamanhos, 2026-11-15, pedido
+   do dev. Jean): título 14 px como o .card-title deles (era 18), abertura e itens 12 px como a descrição
+   e o resumo das opções (eram 14), títulos internos 13 px como o nome das opções (eram 14) */
+.spo-acessibilidade h2.card-title { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.spo-acessibilidade > p, .spo-acessibilidade-grade li { font-size: 12px; line-height: 1.5; }
 .spo-acessibilidade h2.card-title:focus { outline: none; }
 .spo-acessibilidade-grade {
   display: grid; gap: 16px; margin: 12px 0;
@@ -9241,7 +9245,7 @@ body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield
 .spo-acessibilidade-grade section {
   padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
 }
-.spo-acessibilidade-grade h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+.spo-acessibilidade-grade h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; font-weight: 700; }
 .spo-acessibilidade-grade h3 .bi { color: var(--spo-accent-graphic, var(--accent)); }
 .spo-acessibilidade-grade ul { margin: 0; padding-left: 18px; }
 .spo-acessibilidade-grade li { margin: 4px 0; }
