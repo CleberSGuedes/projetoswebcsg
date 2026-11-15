@@ -2902,3 +2902,11 @@ Decisão do dev. Jean: desligar a largura mínima. Bloco `[jean]` no fim do `sty
 Medido no Chrome do dev. Jean (sessão dele, tema escuro, destaque roxo), com o SPO em quadros de 393 e 440 px dentro da janela de 1080 px (o modo liga): antes, a página tinha 560 px e 12+ elementos passavam da borda; agora, Início e Programação PTA/OpR com a largura do quadro, nenhum elemento além da borda, e o mockup do PTA/OpR com 276 e 323 px, sem rolagem lateral. Também a 390 px (a largura das baterias do SPO) e a 320 px (WCAG 1.4.10): nada além da borda; mockup com 273 e 203 px. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-sem-largura-minima.1`).
+
+## Declaração de acessibilidade com os tamanhos dos outros cartões (dev. Jean, 2026-11-15)
+
+O dev. Jean notou, no Personalizar, que o cartão "Acessibilidade do SPO" parecia ter letra maior que os vizinhos e perguntou se faltava fixar o tamanho em px (como no "Texto das tabelas"). Avaliação: os tamanhos do SPO já são todos em px; as opções 112/125/150% ampliam a área de conteúdo inteira (`zoom` no `.main`), na mesma proporção. A diferença era de valor: a Declaração usava o passo "Texto" da escala (título 18 px, abertura/itens 14 px, títulos internos 14 px), e os outros cartões usam título 14 px (`.card-title`), descrição 12 px (`p.muted`), nome da opção 13 px e resumo 12 px.
+
+Decisão do dev. Jean: igual aos outros cartões. No bloco `[jean]` da Declaração (`style.css`): título 14 px, abertura e itens 12 px (entrelinha 1,5), títulos internos ("Atendido"…) 13 px; rodapé continua 12 px; a cor do texto não muda. Medido na tela: Declaração 14/12/13/12 px, igual ao cartão "Fontes e tamanho do texto" (14/12/13/12). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-declaracao-tamanhos.1`).
