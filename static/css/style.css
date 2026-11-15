@@ -9776,3 +9776,71 @@ body .modal-card:not(.spo-busca-caixa) textarea:not(#spo-dens):not(#spo-dens-b) 
 }
 /* botões das janelas de consulta (busca, atalhos, SPO-AA+): também no tamanho de texto */
 body .spo-busca-caixa .btn:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-texto); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (d): painéis, cartões dinâmicos e Início
+   (feat/densidade-paineis, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Governança e Resultados: título dos cartões do fluxo e do contexto =
+     título; descrição dos cartões = controle; sobretítulo do contexto =
+     rótulo; texto do contexto e dos cartões = leitura (a referência de
+     hierarquia do padrão: no Intermediário fica como estava).
+   - Cartões dinâmicos (Institucional, Notas SEE, presets do Contrato):
+     título = título, texto = controle.
+   - Teto Orçamentário: títulos dos quadros = título; rótulos, legendas e nomes
+     = controle; cabeçalhos do quadro comparativo = rótulo; valores, totais,
+     variações e ranking = dado; ano e valor do quadro = texto. Valores em
+     destaque um passo acima do título: indicadores do alto (+2 px) e cartões
+     por grupo (+4 px) — Intermediário 16 e 18 px, como antes.
+   - Início: texto de boas-vindas = leitura + 2 px (Intermediário 16; era
+     16,8); dica e sessões = controle; texto do Status = texto.
+   ========================================================================== */
+body .flow-context-label:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-row.teto-qomp-head > .teto-qomp-cell:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .teto-panel h2:not(#spo-dens):not(#spo-dens-b),
+body .teto-filter-heading strong:not(#spo-dens):not(#spo-dens-b),
+body .flow-node strong:not(#spo-dens):not(#spo-dens-b),
+body .flow-context-panel strong:not(#spo-dens):not(#spo-dens-b),
+body .institutional-card .noticia-box h5:not(#spo-dens):not(#spo-dens-b),
+body .see-upload-option > strong:not(#spo-dens):not(#spo-dens-b),
+body .contract-preset > strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body .flow-context-panel p:not(#spo-dens):not(#spo-dens-b),
+body .governanca-card p:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
+}
+body .spo-grafico-dados > summary:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-year-head .yr:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-value:not(#spo-dens):not(#spo-dens-b),
+body .home-status-card > p:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body .flow-node small:not(#spo-dens):not(#spo-dens-b),
+body .teto-kpi > span:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-legend span:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-card .name:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-card .pct:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-sub:not(#spo-dens):not(#spo-dens-b),
+body .institutional-card .noticia-box :is(small:not(#spo-dens):not(#spo-dens-b),
+body p):not(#spo-dens):not(#spo-dens-b),
+body .see-upload-option > span:not(#spo-dens):not(#spo-dens-b),
+body .contract-preset > span:not(#spo-dens):not(#spo-dens-b),
+body .home-welcome-card .home-welcome-hint:not(#spo-dens):not(#spo-dens-b),
+body .home-session-status:not(#spo-dens):not(#spo-dens-b),
+body .home-session-status li:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .teto-qomp-year-head .yr-total:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-row:not(.teto-qomp-head) > .teto-qomp-cell:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-delta:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-code:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-name:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-val:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-pct:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-dado);
+}
+body .teto-kpi > strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 2px); }
+body .teto-group-card .value:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 4px); }
+body .home-welcome-text:not(#spo-dens):not(#spo-dens-b), body .home-welcome-text strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-leitura) + 2px); }
