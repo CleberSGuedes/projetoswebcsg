@@ -148,7 +148,10 @@ body.spo-ponte[data-spo-motion="reduce"] *, body.spo-ponte[data-spo-motion="redu
 }
 @media (prefers-reduced-motion: reduce) {
   html:has(> body.spo-ponte) { scroll-behavior: auto; }
+  body.spo-ponte :is(.macro-card, .pillar, .eap-layer-node, .policy-expansion .policy-option):is(:hover, .active, .open) { transform: none !important; }
 }
+/* cartões que sobem 1–3 px ao passar o mouse: parados (fix/movimento-reduzido, 2026-11-15) */
+body.spo-ponte[data-spo-motion="reduce"] :is(.macro-card, .pillar, .eap-layer-node, .policy-expansion .policy-option):is(:hover, .active, .open) { transform: none !important; }
 
 /* ==========================================================================
    [jean] Botão "×" de remover linha e listas suspensas no padrão SPO
@@ -253,3 +256,52 @@ body.spo-ponte.embedded-mode .progress-ring{
   line-height:1.1;
 }
 body.spo-ponte.embedded-mode .progress-ring span{ margin-top:0; white-space:nowrap; }
+
+/* [jean] Visão processual (fix/movimento-reduzido, pedido do dev. Jean, 2026-11-15): os cartões
+   "Processos de suporte/gerenciais/finalísticos" abrem o detalhamento, mas no tema claro não
+   mostravam a seleção (a regra geral do modo embutido, com !important, apagava o :hover/.active).
+   Em teste, eles seguem o desenho dos cartões do "Mapa EAP" (.eap-map-node): fundo claro, borda
+   fina e, ao passar o mouse ou selecionado, borda na cor de destaque com sombra leve. No escuro,
+   o pta-2027.css já trata os dois cartões juntos (só o raio muda aqui). */
+body.spo-ponte.embedded-mode .process-summary-card { border-radius: 12px !important; }
+body.spo-ponte.embedded-mode:not(.dark) .process-summary-card {
+  background: linear-gradient(180deg, #fbfefe, #f4fbfa) !important;
+  border: 1px solid #d7e8eb !important;
+  box-shadow: none !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) .process-summary-card:is(:hover, .active) {
+  border-color: var(--teal) !important;
+  box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
+}
+
+/* [jean] Contexto ativo em coluna estreita (fix/movimento-reduzido, pedido do dev. Jean,
+   2026-11-15): com a escala de 12 px, "N componente(s) disponível(is)" e "N vinculado(s) nesta
+   programação" lado a lado mediam 196 px numa coluna de 183 px; a grade do painel seguia essa
+   largura e a lista inteira passava 13 px da borda (cartões cortados, cabeçalho sobre a borda). */
+body.spo-ponte .context-components-panel { grid-template-columns: minmax(0, 1fr); }
+body.spo-ponte .context-components-head { flex-wrap: wrap; row-gap: 4px; }
+body.spo-ponte .context-components-head span { margin-left: auto; }
+body.spo-ponte .context-components-panel li { overflow-wrap: anywhere; }
+/* o painel aberto (componentes ou metas) tinha margin-top: -10px e subia 10 px sobre o cartão
+   "Política PAOE"/"Pilar" (os cartões têm 8 px de margem): agora fica colado, dividindo a borda */
+body.spo-ponte #context-cards .context-item-button.open { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+body.spo-ponte #context-cards .context-item-button.open + :is(.context-components-panel, .context-goals-panel) {
+  margin-top: -1px !important; border-top-left-radius: 0 !important; border-top-right-radius: 0 !important;
+}
+/* as metas do painel "Pilar / Metas PEE" tinham fundo tingido, barra de 3 px à esquerda e raio de
+   12 px, diferentes dos cartões dos componentes e dos indicadores (fundo claro, borda fina, raio
+   de 10 px), e a meta aberta ficava igual à fechada. Agora seguem os componentes; aberta ou com o
+   mouse em cima, borda na cor de destaque e sombra leve (como os cartões do Mapa EAP). */
+body.spo-ponte.embedded-mode #context-cards .context-goal-card {
+  border-width: 1px !important; border-radius: 10px !important; padding: 10px !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card {
+  background: var(--spo-native-surface) !important;
+  border-color: var(--spo-native-border) !important; box-shadow: none !important;
+}
+body.spo-ponte.embedded-mode #context-cards .context-goal-card:is(:hover, .open) {
+  border-color: var(--teal) !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card:is(:hover, .open) {
+  box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
+}
