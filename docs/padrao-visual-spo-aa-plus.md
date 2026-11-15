@@ -467,13 +467,20 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
 - Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
   (`initNavegacaoTabelas`, `initTecladoPaginacao`) e a regra da oferta "Leitura confortável" da Atkinson
-  (`initSugestaoAtkinson`): **nada é cópia**, o kit acompanha o SPO sozinho.
+  (`initSugestaoAtkinson`) e os **presets do Contrato Visual Protegido** (`PROTECTED_CONTRACT_PRESETS`:
+  Padrão SPO, Compacto gerencial, Contraste técnico, Pressão operacional): **nada é cópia**, o kit
+  acompanha o SPO sozinho.
   Aberto do disco (`file://`), o navegador bloqueia a leitura do `main.js`; o kit avisa e fica no padrão.
 - Painel **"Preferências do kit"**: tema, destaque, densidade visual, contraste, estilo dos cartões, diagramas e
   todas as opções do cartão "Fontes" e "Visão e cores" do Personalizar, **com as mesmas regras**
   (escolher a Atkinson abre a oferta "Leitura confortável", como no Personalizar). O kit **abre com as
-  preferências vigentes** no SPO deste navegador; o que mudar vale só na página (nada é gravado);
-  "Padrão SPO" volta ao padrão e "As minhas preferências" recarrega as do SPO.
+  preferências vigentes** no SPO deste navegador, inclusive o preset do Contrato; o que mudar vale só
+  na página (nada é gravado); "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes.
+- **Kit × Contrato Visual Protegido:** papéis diferentes. O Contrato é a ferramenta de administração que
+  **aplica** o visual do SPO (presets, presets personalizados, auditoria, pacotes), dentro do SPO e com
+  permissão; o kit é o **ponto de partida** de uma tela nova, fora do login, e não muda nada. O kit cobre os
+  presets do Contrato para que o mockup seja visto em todas as combinações. Integração futura a combinar
+  com o dev. Cleber: uma aba "Componentes" no Contrato que abra o próprio kit.
 - Componentes de exemplo, com a marcação real: cabeçalho de página, cartão `module-card`, cartões
   dinâmicos (`flow-node`), formulário (campos, desabilitado, hierarquia dos botões), aviso `alert-info`
   e relatório com totais, filtros `.mf-*`, `pos`/`neg`, navegação pelo teclado e paginação.
