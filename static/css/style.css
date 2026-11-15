@@ -9513,3 +9513,86 @@ html.spo-split-pressure body { --spo-operational-min-width: 0px; }
 html.spo-split-pressure { overflow-x: hidden; }
 html.spo-split-pressure .main { overflow-x: clip; }
 html.spo-split-pressure .pta2027-frame { min-width: 0; width: 100%; }
+
+/* ==========================================================================
+   [jean] Cartões dinâmicos no padrão de Governança e Resultados
+   (feat/cartoes-dinamicos, 2026-11-15; pedido do dev. Jean)
+   O cartão do fluxo de Governança e Resultados (.flow-node) passa a ser o
+   sistema visual dos cartões clicáveis do SPO (o mockup PTA/OpR fica para
+   depois): fundo, borda e textos com as cores dos diagramas (--spo-diagram-*,
+   que seguem a opção "Diagramas" e o alto contraste), cantos de 12 px,
+   espaçamento de 12 px, ícone de 20 px na cor de destaque no alto, título de
+   14 px em negrito e descrição de 12 px; com o mouse ou o foco, borda na cor de
+   destaque; selecionado, borda e barra de 3 px à esquerda na cor de seleção e
+   fundo tingido. Aplicado a:
+   - Institucional (Diretrizes, Repositório, Legislação, Parceiros): os cartões
+     ganharam ícone e passam a abrir o documento com um clique em qualquer
+     parte (o link do texto cobre o cartão; continua um só ponto de Tab);
+   - Notas SEE: "Selecionar pasta" e "Selecionar arquivos";
+   - Contrato Visual Protegido: os presets (o ativo = selecionado).
+   ========================================================================== */
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 12px;
+  text-align: left;
+  color: var(--spo-diagram-text, var(--text));
+  background: var(--spo-diagram-node-bg, var(--card));
+  border: 1px solid var(--spo-diagram-border, rgba(var(--accent-rgb), 0.24));
+  border-radius: 12px;
+  box-shadow: none;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset) > i {
+  color: var(--spo-diagram-selection, var(--accent));
+  font-size: 20px;
+  line-height: 1;
+}
+body .institutional-card .noticia-box h5 { margin: 0; font-size: 14px; line-height: 1.3; }
+body :is(.see-upload-option, .contract-preset) > strong { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
+body .institutional-card .noticia-box :is(small, p),
+body :is(.see-upload-option, .contract-preset) > span {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--spo-diagram-muted, var(--muted));
+}
+body .institutional-card .noticia-box p { color: var(--spo-diagram-text, var(--text)); }
+/* o cartão inteiro abre o documento: o link do texto estende a área de clique sobre o cartão */
+body .institutional-card .noticia-box a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+body .institutional-card .noticia-box a:focus-visible { outline: none; }
+body .institutional-card .noticia-box:has(a:focus-visible) {
+  outline: 3px solid var(--spo-focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) {
+  border-color: var(--spo-diagram-accent, var(--accent));
+  transform: translateY(-1px);
+}
+/* .active = preset escolhido na prévia (aria-pressed): o "selecionado" completo; o ativo local
+   (.contract-preset-active-local) só ganha a borda na cor de seleção, como antes, para os dois
+   não se confundirem quando são presets diferentes */
+body .contract-preset.contract-preset-active-local:not(.active) { border-color: var(--spo-diagram-selection, var(--accent)); }
+body .contract-preset.active {
+  border-color: var(--spo-diagram-selection, var(--accent));
+  box-shadow: inset 0 0 0 1px var(--spo-diagram-selection, var(--accent)), inset 3px 0 0 var(--spo-diagram-selection, var(--accent));
+  background: color-mix(in srgb, var(--spo-diagram-selection, var(--accent)) 12%, var(--spo-diagram-node-bg, var(--card)));
+}
+body .contract-preset.contract-preset-draft-local { border-style: dashed; }
+/* contraste Médio/Reforçado e preset "Contraste técnico": contorno ≥ 3:1, como o .flow-node */
+body:is([data-visual-contrast="medium"], [data-visual-contrast="enhanced"], [data-visual-contract-preset="contrast"])
+  :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):not(.active):not(.contract-preset-active-local):not(:hover):not(:focus-within) {
+  border-color: var(--spo-control-border, var(--border));
+}
+/* Notas SEE: opção indisponível continua no estilo de desabilitado (bateria 2) e sem levantar */
+body .see-upload-option.is-disabled:not(#spo-bat2) { transform: none; border-color: var(--border); }
+/* movimento reduzido: sem levantar (o bloco do #121 já cobre estes cartões; repetido aqui pela especificidade) */
+body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) { transform: none; }
+}
