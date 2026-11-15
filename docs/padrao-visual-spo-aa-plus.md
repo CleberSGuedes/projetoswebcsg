@@ -145,7 +145,7 @@ Decisões:
 |---|---|---|---|---|
 | `--spo-fs-dado` | células de tabela, paginação, totais | 10 px | **12 px** | 13 px |
 | `--spo-fs-controle` | rótulos de campo, campos, resumo das opções, metadados | 11 px | **12 px** | 13 px |
-| `--spo-fs-texto` | texto corrido, descrições, itens de lista, nome de opção | 12 px | **13 px** | 14 px |
+| `--spo-fs-texto` | texto corrido, descrições, itens de lista, nome de opção, **botões**, legenda de grupo de campos | 12 px | **13 px** | 14 px |
 | `--spo-fs-leitura` | janelas de ajuda, documentos, declaração, avisos longos | 13 px | **14 px** | 16 px |
 | `--spo-fs-titulo` | título de cartão e de janela | 13 px | **14 px** | 16 px |
 | `--spo-fs-rotulo` | sobretítulo em maiúsculas | 11 px | **11 px** | 11 px |
@@ -168,7 +168,9 @@ campo e status = controle; ajuda dos atalhos e documento = leitura; títulos de 
 tamanho do texto ao lado, em negrito, nunca maiores que o título da janela); (3b) relatórios e cabeçalho
 de página — feito: cabeçalho de todas as telas (sobretítulo = rótulo, título = página, descrição =
 texto); "Última atualização" e "Totais" = texto em negrito; nome da UO, linhas da atualização e rótulos
-dos totais = controle; valores dos totais = dado; (3)
+dos totais = controle; valores dos totais = dado; (3c) formulários e cadastros — feito: título de cartão =
+título; rótulos de campo e o texto dentro dos campos (também nas tabelas e nos avisos) = controle; botões e
+legendas de grupo = texto (botões dos formulários: 14 → 13 px no Intermediário); (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR

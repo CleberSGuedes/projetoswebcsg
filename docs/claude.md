@@ -2984,3 +2984,13 @@ Bloco `[jean]` no fim do `style.css`:
 Medido (Compacto / Intermediário / Legível), um relatório por vez: FIP 613 e PLAN20 (com dados), PLAN51 e Receita Anexo 10 (sem dados no banco de dev): descrição 12/13/14, "Última atualização" e título dos totais 12/13/14, UO e linhas 11/12/13, rótulos dos totais 11/12/13, valores 10/12/13, células 10/12/13; nada além da borda. A 390 px (PLAN20, Intermediário e Legível): nada passa da borda e os totais cabem no quadro. Botões ficam para a etapa dos formulários. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-relatorios.1`).
+
+## Densidade do texto, etapa 3 (c): formulários e cadastros (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`: título de cartão do conteúdo = título (Intermediário 14, igual a antes); rótulos de campo (`.field > span`, `.field.inline span`) e o texto dentro de `input`/`select`/`textarea` do conteúdo e dos avisos (inclusive nas tabelas) = controle (Intermediário 12, igual a antes; a busca de usuários tinha 14); botões (`.btn` do conteúdo, dos avisos e das janelas de consulta) e legendas de grupo de campos = texto (Intermediário 13: os dos formulários tinham 14, os dos relatórios já tinham 13). O padrão SPO-AA+ §2.2.1 ganhou os botões na linha `--spo-fs-texto`.
+
+Cuidado registrado: a regra dos campos dos avisos (`.modal-card input`) é mais específica que a do campo da busca de telas (etapa a) e o baixaria de 13 para 12 px; as janelas de consulta ficam fora dela (`.modal-card:not(.spo-busca-caixa)`), e os botões delas ganharam regra própria (texto).
+
+Medido (Compacto / Intermediário / Legível) em Usuários, Meta Física e Dotação: título de cartão 13/14/16; rótulos e campos 11/12/13; botões 12/13/14; busca de usuários 11/12/13; busca de telas sem mudança (campo 13, "Fechar" 13). A 390 px (Meta Física, Intermediário e Legível) nada passa da borda. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-formularios.3`).
