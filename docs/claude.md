@@ -2667,3 +2667,27 @@ Correção do "Atalhos do teclado" (#110), relatada pelo dev. Jean depois de tes
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-alt-m.1`).
 
+## O padrão SPO-AA+ para o usuário: resumo e documento técnico no servidor (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: a declaração de acessibilidade afirma o padrão "SPO-AA+"; o usuário precisa poder ver o que ele é, e o documento técnico, já consolidado, deve ficar disponível no servidor e se atualizar a cada ajuste.
+
+- **Janela "O padrão SPO-AA+"** (bloco `[jean]` `initPadraoSpoAaPlus` no fim do `main.js`), no visual da busca e da ajuda dos atalhos. Abre por links com `data-spo-padrao` (hoje: "SPO-AA+" na declaração). Duas vistas:
+  - **Resumo**, escrito para quem usa o SPO: o que o padrão garante em todas as telas (metas do §1 do documento técnico), o que se pode ajustar no Personalizar e como é verificado. **Mantido à mão:** mudou uma meta ou opção, atualizar o `RESUMO` no mesmo PR (regra no §5.1 do documento);
+  - **Documento técnico completo**, lido do servidor, com sumário que rola dentro da janela.
+- **Rota nova** `GET /api/documentos/<nome>` (`rotas/documentos_routes.py`, blueprint `documentos_bp`, só acrescentado ao `rotas/__init__.py`; `login_required`):
+  - devolve `titulo`, `html` e `sumario` do documento convertido; nome desconhecido → 404; arquivo ilegível → 503;
+  - hoje só `padrao-spo-aa-plus` → `docs/padrao-visual-spo-aa-plus.md`. Como o deploy copia o repositório, cada PR que muda o documento atualiza o que o usuário vê.
+- **Conversor de markdown próprio** (`services/documentos.py`), para não acrescentar dependência no servidor:
+  - cobre títulos, parágrafos, listas (aninhadas, numeradas, de marcar), citações, tabelas, `código`, **negrito** e links http(s);
+  - todo texto é escapado; links só http/https, abrindo em nova aba;
+  - testes em `tests/test_documentos.py` (7), inclusive o documento real: HTML balanceado e sem markdown cru.
+- **Nome padronizado:** o documento técnico passa a "SPO-AA+" no título (o arquivo continua `padrao-visual-spo-aa-plus.md`).
+- **Verificação** (SPO local):
+  - API: 200 com 9 seções e 16 tabelas; nome desconhecido → 404;
+  - janela: abre pelo link da declaração com o foco no título; vista técnica com sumário (o link leva à seção e dá o foco a ela); Tab preso; Esc fecha e devolve o foco ao link;
+  - tamanho (ajuste pedido pelo dev. Jean, que achou a primeira versão grande demais): no computador, até 720 px de largura e 72% da altura (720 × 608 px numa janela de 1139 × 845); no celular, **cartão com margens** (343 × 585 px em 375 × 812), e não tela cheia como a busca, com os dois botões lado a lado; tabelas largas rolam dentro do próprio quadro, sem rolagem lateral da página;
+  - contraste: texto 16,9:1 (claro) e 14,3:1 (escuro); links do sumário 10,5 e 12,9;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-padrao.1`).
+

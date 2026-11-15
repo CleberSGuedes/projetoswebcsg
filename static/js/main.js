@@ -29290,3 +29290,171 @@
 
   window.spoAtalhosTeclado = { abrir: mostrar, irParaMenu };
 })();
+
+/* ==========================================================================
+   [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
+   Pedido do dev. Jean: a declaração de acessibilidade cita o padrão "SPO-AA+";
+   o usuário precisa poder ver o que ele é. Links com [data-spo-padrao] abrem
+   uma janela no visual da busca e da ajuda, com duas vistas:
+   - Resumo (aqui, para quem usa o SPO): o que o padrão garante, o que se pode
+     ajustar e como é verificado. Mudou uma meta no documento técnico? Atualize
+     este resumo no mesmo PR (padrão §5.1).
+   - Documento técnico completo: lido do servidor (/api/documentos/padrao-spo-aa-plus,
+     que converte o docs/padrao-visual-spo-aa-plus.md), com sumário; atualiza
+     sozinho a cada PR que muda o documento.
+   ========================================================================== */
+(function initPadraoSpoAaPlus() {
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const FOCAVEIS = "a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  const lista = (itens) => `<ul>${itens.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+  const RESUMO = [
+    '<p>O <strong>SPO-AA+</strong> é o padrão de acessibilidade e de visual do SPO. Ele parte das <strong>WCAG 2.2, nível AA</strong> (a referência internacional, também adotada pelo eMAG) e vai além em pontos escolhidos — é o "+" do nome.</p>',
+    '<h3>O que o SPO garante em todas as telas</h3>',
+    lista([
+      "Texto com contraste de pelo menos <strong>7:1</strong> com o fundo (o nível AA pede 4,5:1; 7:1 é o nível AAA).",
+      "Bordas de campos, ícones que informam e o anel de foco com pelo menos <strong>3:1</strong>.",
+      "Foco sempre visível e tudo alcançável pelo teclado (<a href=\"#\" data-spo-atalhos>atalhos do teclado</a>).",
+      "Alvos de toque de no mínimo 24 px, e 44 px em telas de toque.",
+      "Sem corte nem rolagem lateral em telas de 320 px de largura e com zoom de 200%.",
+      "Nenhum texto se perde com o espaçamento de texto ampliado.",
+      "Texto de leitura com no mínimo 12 px e entrelinha 1,5.",
+      "Informação nunca só pela cor: sempre há título, ícone, negrito ou ✓ junto.",
+      "O pedido de \"reduzir movimento\" do computador é respeitado.",
+    ]),
+    '<h3>O que você pode ajustar</h3>',
+    "<p>Em <strong>Personalizar Temas SPO</strong>, vale só no seu navegador:</p>",
+    lista([
+      "tema claro, escuro ou automático, e 8 cores de destaque;",
+      "contraste (suave, médio ou reforçado), densidade e estilo dos cartões;",
+      "fontes, tamanho do texto até 150%, entrelinha, largura de leitura e texto das tabelas;",
+      "cores dos gráficos para daltonismo, foco reforçado, links sublinhados, brilho reduzido e movimento;",
+      "atalhos de uma tecla do teclado.",
+    ]),
+    '<h3>Como é verificado</h3>',
+    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
+  ].join("");
+
+  let dialogo = null;
+  let abridor = null;
+  let documento = null; // cache da sessão da página
+
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
+    dialogo.className = "spo-busca-fundo spo-padrao-fundo";
+    dialogo.hidden = true;
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-padrao-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-padrao-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-padrao-titulo" class="modal-header-title spo-busca-titulo" tabindex="-1">O padrão SPO-AA+</h2>',
+      '    <div class="modal-header-subtitle" id="spo-padrao-sub">Resumo para quem usa o SPO. Esc fecha.</div></div>',
+      "  </div>",
+      `  <div class="spo-padrao-corpo spo-doc" tabindex="0" role="region" aria-labelledby="spo-padrao-titulo">${RESUMO}</div>`,
+      '  <div class="spo-busca-rodape">',
+      '    <button type="button" class="btn btn-secondary sm spo-padrao-trocar" data-vista="tecnico">Ler o documento técnico completo</button>',
+      '    <p class="spo-busca-status spo-padrao-status" role="status" aria-live="polite"></p>',
+      '    <button type="button" class="btn btn-secondary sm spo-padrao-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    dialogo.querySelector(".spo-padrao-fechar").addEventListener("click", () => fechar());
+    dialogo.querySelector(".spo-padrao-trocar").addEventListener("click", (ev) => trocar(ev.currentTarget.dataset.vista));
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("click", (ev) => { // sumário do documento: rola dentro da janela
+      const a = ev.target.closest && ev.target.closest('a[href^="#doc-"]');
+      if (!a) return;
+      ev.preventDefault();
+      const alvo = dialogo.querySelector(a.getAttribute("href"));
+      if (alvo) { alvo.setAttribute("tabindex", "-1"); alvo.scrollIntoView({ block: "start" }); alvo.focus({ preventScroll: true }); }
+    });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key !== "Tab") return;
+      const alvos = [...dialogo.querySelectorAll(FOCAVEIS)].filter(visivel);
+      if (!alvos.length) return;
+      const i = alvos.indexOf(document.activeElement);
+      ev.preventDefault();
+      const j = i < 0 ? 0 : (i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length;
+      alvos[j].focus();
+    });
+    return dialogo;
+  }
+
+  async function carregarDocumento() {
+    if (documento) return documento;
+    const resp = await fetch("/api/documentos/padrao-spo-aa-plus", { credentials: "same-origin" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    documento = await resp.json();
+    return documento;
+  }
+
+  async function trocar(vista) {
+    const corpo = dialogo.querySelector(".spo-padrao-corpo");
+    const botao = dialogo.querySelector(".spo-padrao-trocar");
+    const sub = dialogo.querySelector("#spo-padrao-sub");
+    const status = dialogo.querySelector(".spo-padrao-status");
+    const titulo = dialogo.querySelector("#spo-padrao-titulo");
+    if (vista === "resumo") {
+      corpo.innerHTML = RESUMO;
+      titulo.textContent = "O padrão SPO-AA+";
+      sub.textContent = "Resumo para quem usa o SPO. Esc fecha.";
+      botao.textContent = "Ler o documento técnico completo";
+      botao.dataset.vista = "tecnico";
+      status.textContent = "";
+      corpo.scrollTop = 0;
+      titulo.focus();
+      return;
+    }
+    status.textContent = "Carregando o documento técnico…";
+    botao.disabled = true;
+    try {
+      const doc = await carregarDocumento();
+      const sumario = doc.sumario.length
+        ? `<nav class="spo-doc-sumario" aria-label="Sumário"><strong>Sumário</strong><ol>${doc.sumario.map((s) => `<li><a href="#${s.id}">${s.titulo.replace(/^[\d.]+\s*/, "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</a></li>`).join("")}</ol></nav>`
+        : "";
+      corpo.innerHTML = sumario + doc.html;
+      titulo.textContent = "Padrão SPO-AA+: documento técnico";
+      sub.textContent = "Regras para quem desenvolve o SPO, lidas do servidor. Esc fecha.";
+      botao.textContent = "Voltar ao resumo";
+      botao.dataset.vista = "resumo";
+      status.textContent = "Documento técnico carregado.";
+      corpo.scrollTop = 0;
+      titulo.focus();
+    } catch (err) {
+      status.textContent = "Não foi possível carregar o documento técnico agora. Tente de novo em instantes.";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  function mostrar() {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    trocar("resumo");
+  }
+
+  function fechar() {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (abridor && abridor.isConnected) abridor.focus();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest("[data-spo-padrao]");
+    if (!a) return;
+    ev.preventDefault();
+    mostrar();
+  });
+  // links da ajuda dos atalhos dentro do resumo: fecha esta janela antes
+  document.addEventListener("click", (ev) => {
+    if (dialogo && !dialogo.hidden && ev.target.closest && ev.target.closest(".spo-padrao-caixa [data-spo-atalhos]")) fechar();
+  }, true);
+
+  window.spoPadraoSpoAaPlus = { abrir: mostrar };
+})();
