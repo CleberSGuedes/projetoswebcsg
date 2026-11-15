@@ -2944,3 +2944,11 @@ O dev. Jean achou confortável a leitura de uma página em Mulish (16 px, entrel
 Medido na tela: a opção aparece no Personalizar; com ela, a interface e a prévia "Fontes e tabelas" passam à Mulish (a tabela da prévia continua na fonte de dados); a fonte carrega do próprio SPO. A preferência do navegador de teste foi devolvida à Inter. O login não foi aberto (com sessão ativa ele redireciona); a mudança ali é só incluir o valor na lista aceita. `pytest` completo duas vezes seguidas.
 
 Sem script de banco. `templates/base.html`: `?v=` do CSS e do `main.js` (`20261115.jean-mulish.1`); `login.html`: `?v=` do CSS e do `login-theme.js` (idem); `index.html` do mockup: `?v=` do `spo-preferencias.css` (idem).
+
+## Padrão SPO-AA+ versão 4: "Densidade do texto" (dev. Jean, 2026-11-15)
+
+Só documentação (etapa 1 do plano de normalização da tipografia). O dev. Jean notou que o 100% parecia pequeno: as janelas (busca, atalhos, "O padrão SPO-AA+") e a prévia "Fontes e tabelas" ficavam maiores que os cartões de opção. Medição: telas de trabalho e cartões em 12 px; janelas e prévias em 14–16 px; 330 `font-size` com 25 valores, sem variável comum.
+
+Decisões do dev. Jean, registradas no `docs/padrao-visual-spo-aa-plus.md` §2.2 (versão 4): Compacto/Intermediário/Legível passam a ser a "Densidade do texto" da interface inteira; padrão Legível; Compacto com tabelas de 10 px (sai o 8 px); passo novo "Leitura" de 16 px no Legível (janelas de ajuda, documentos, declaração). Variáveis `--spo-fs-dado`, `-controle`, `-texto`, `-leitura`, `-titulo`, `-rotulo`, `-secao`, `-pagina`, com os valores das três densidades. Etapas seguintes: (2) variáveis com os valores de hoje e a opção "Densidade do texto"; (3) migração das telas por grupo, começando pelo Personalizar (a Fase C das cores vem em PR separado, depois; o dev. Cleber orientou fazer as mudanças antes da divisão do código); (4) teste contra `font-size` em px fora das variáveis. §2.1: Mulish com 53ch no "Leitura → Estrito".
+
+Sem mudança de código. `pytest` completo duas vezes seguidas (o documento é lido pela rota `/api/documentos/padrao-spo-aa-plus`).
