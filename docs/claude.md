@@ -2794,3 +2794,15 @@ Pedido do dev. Jean: a amostra de "Fontes e tamanho do texto" não tinha o mesmo
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-amostra.8`).
 
+## Sugestão "Leitura confortável" ao escolher a Atkinson (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: quem escolhe a Atkinson Hyperlegible tende a precisar também de texto maior, linhas mais espaçadas e linhas mais curtas (o site da fonte a mostra em tamanho grande). Decidido com ele: **sugerir, não mudar sozinho** (cada opção do Personalizar faz uma coisa só; e há quem escolha a Atkinson só pelas letras distintas, sem precisar de texto maior).
+
+- **Comportamento** (bloco `[jean]` `initSugestaoAtkinson` no fim do `main.js`): ao escolher a Atkinson na "Fonte da interface", aparece abaixo dela a oferta de aplicar também **texto Grande (112%)**, **entrelinha Ampla (1,75)** e **leitura Intermediária (72ch)**:
+  - **"Aplicar as três":** sobe só o que estiver abaixo do sugerido (quem já usa 125% continua em 125%), clicando nos próprios botões do cartão (grava e aplica pelo mesmo caminho); o aviso do cartão diz o que mudou; o foco volta para "Fonte da interface";
+  - **"Agora não":** só fecha a sugestão desta vez;
+  - aparece **toda vez** que a Atkinson é escolhida (inclusive depois de trocar de fonte, de "Restaurar padrão" ou de recarregar), exceto se as três opções já estiverem no sugerido ou acima; some se outra fonte for escolhida. (A primeira versão lembrava o "Agora não" no navegador e não oferecia mais; o dev. Jean pediu que oferecesse sempre.)
+  - anunciada ao leitor de tela (`role="status"`), sem tirar o foco de onde a pessoa está.
+- **Verificação** (SPO local, preferências do dev. Jean guardadas antes e devolvidas depois): aparece abaixo da fonte; aplicar grava 112%/1,75/72ch e mostra o aviso; reaparece depois de "Agora não", de trocar de fonte e de recarregar; não aparece com as três já aplicadas; com 125% já escolhido, não reduz (só entrelinha e leitura sobem); `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `login.html`: só as linhas `?v=` (CSS `?v=20261115.jean-atkinson.1`, JS `?v=20261115.jean-atkinson.2`).

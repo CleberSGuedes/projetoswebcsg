@@ -9387,3 +9387,12 @@ body[data-spo-cvd="safe"]:is([data-visual-diagram-theme="dark"], [data-visual-di
     radial-gradient(circle at 66% 50%, #009E73 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
     radial-gradient(circle at 88% 50%, #D55E00 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px);
 }
+
+/* [jean] Sugestão "Leitura confortável" ao escolher a Atkinson (feat/sugestao-atkinson, 2026-11-15) */
+.spo-sugestao {
+  margin: 8px 0; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); border-left: 4px solid var(--spo-accent-graphic, var(--accent));
+  background: rgba(var(--accent-rgb), 0.06);
+}
+.spo-sugestao p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
+.spo-sugestao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
