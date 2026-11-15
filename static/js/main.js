@@ -28514,7 +28514,23 @@
       return "sans-serif";
     }
   };
-  const tamanho = (f) => Math.max(MIN, Number((f && f.size) || MIN));
+  // [jean] feat/densidade-graficos (2026-11-15; padrão SPO-AA+ v4 §2.2.1): o texto dos gráficos segue a
+  // "Densidade do texto" — tamanho base = --spo-fs-dado (Compacto 10, Intermediário 12, Legível 13 px);
+  // texto que o gráfico já pede maior que 12 px sobe ou desce na mesma diferença. No Intermediário fica
+  // como antes (mínimo de 12 px).
+  const base = () => {
+    try {
+      const v = parseFloat(getComputedStyle(document.body).getPropertyValue("--spo-fs-dado"));
+      return Number.isFinite(v) && v > 0 ? v : MIN;
+    } catch (err) {
+      return MIN;
+    }
+  };
+  const tamanho = (f) => {
+    const b = base();
+    const pedido = Number((f && f.size) || 0);
+    return pedido > MIN ? pedido + (b - MIN) : b;
+  };
 
   function ajustar(gd, layout) {
     const el = elDe(gd);
@@ -28669,6 +28685,18 @@
   P.react = (gd, data, layout, config) => react(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
   P.newPlot = (gd, data, layout, config) => newPlot(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
   P.__spoEscala = true;
+
+  // trocar a densidade no Personalizar redesenha os gráficos já abertos
+  let densidade = document.body ? document.body.dataset.spoTableText : "";
+  if (document.body) {
+    new MutationObserver(() => {
+      if (document.body.dataset.spoTableText === densidade) return;
+      densidade = document.body.dataset.spoTableText;
+      document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+        if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+      });
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text"] });
+  }
 
   let espera = 0;
   window.addEventListener("resize", () => {
