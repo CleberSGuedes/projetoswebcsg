@@ -29513,3 +29513,68 @@
   document.addEventListener("spo-common-visual-change", enviar);
   window.spoPontePta2027 = { enviar, pacote };
 })();
+
+/* ==========================================================================
+   [jean] Sugestão "Leitura confortável" ao escolher a Atkinson Hyperlegible
+   (feat/sugestao-atkinson, 2026-11-15; pedido do dev. Jean, com a opção "sugestão,
+   não automático" decidida com ele). Ao escolher a Atkinson na "Fonte da interface",
+   aparece, abaixo dela, a oferta de também aplicar texto Grande (112%), entrelinha
+   Ampla (1,75) e leitura Intermediária (72ch). Nada muda sem o clique:
+   - "Aplicar as três": sobe só o que estiver abaixo do sugerido (não reduz quem já
+     usa mais), pelos próprios botões do cartão (mesmo caminho do clique, grava e
+     aplica); cada opção continua ajustável depois;
+   - "Agora não": só fecha a sugestão desta vez.
+   Aparece TODA VEZ que a Atkinson é escolhida (pedido do dev. Jean: a primeira
+   versão lembrava o "Agora não" e não oferecia mais), exceto se as três opções já
+   estiverem no sugerido ou acima (não há o que oferecer).
+   ========================================================================== */
+(function initSugestaoAtkinson() {
+  const ORDEM = { size: ["default", "large", "larger", "xlarge"], line: ["default", "ample", "larger"], reading: ["default", "medium", "strict"] };
+  const ALVO = { size: "large", line: "ample", reading: "medium" };
+  const ATR = { size: "spoTextSize", line: "spoLineHeight", reading: "spoReading" };
+  const abaixo = (k) => ORDEM[k].indexOf(document.body.dataset[ATR[k]] || "default") < ORDEM[k].indexOf(ALVO[k]);
+  const faltando = () => Object.keys(ALVO).filter(abaixo);
+
+  function remover() { document.getElementById("spo-sugestao-atkinson")?.remove(); }
+
+  function mostrar(card) {
+    remover();
+    if (!faltando().length) return;
+    const grupo = card.querySelector('[data-spo-font-group="ui"]');
+    if (!grupo) return;
+    const caixa = document.createElement("div");
+    caixa.id = "spo-sugestao-atkinson";
+    caixa.className = "spo-sugestao";
+    caixa.setAttribute("role", "status");
+    caixa.innerHTML = [
+      '<p><strong>Leitura confortável:</strong> quer aplicar também texto <strong>Grande (112%)</strong>, entrelinha <strong>Ampla (1,75)</strong> e leitura <strong>Intermediária (72ch)</strong>? Cada opção continua ajustável depois.</p>',
+      '<div class="spo-sugestao-acoes">',
+      '<button type="button" class="btn btn-primary sm" data-sugestao="aplicar">Aplicar as três</button>',
+      '<button type="button" class="btn btn-secondary sm" data-sugestao="dispensar">Agora não</button>',
+      '</div>',
+    ].join("");
+    grupo.after(caixa);
+    caixa.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-sugestao]");
+      if (!b) return;
+      if (b.dataset.sugestao === "aplicar") {
+        const mudou = faltando();
+        mudou.forEach((k) => card.querySelector('[data-spo-font-pref="' + k + '"][data-spo-font-value="' + ALVO[k] + '"]')?.click());
+        const nomes = { size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)" };
+        const status = card.querySelector(".spo-fontes-status");
+        if (status) status.textContent = "Leitura confortável aplicada neste navegador: " + mudou.map((k) => nomes[k]).join(", ") + ".";
+      }
+      // o foco volta para a opção "Fonte da interface" (a caixa vai sumir)
+      card.querySelector('[data-spo-font-toggle="ui"]')?.focus();
+      remover();
+    });
+  }
+
+  // depois do clique tratado pelo initFontesPersonalizar (registrado antes)
+  document.addEventListener("click", (ev) => {
+    const op = ev.target.closest && ev.target.closest('#spo-fontes-card [data-spo-font-pref="ui"]');
+    if (!op) return;
+    if (op.dataset.spoFontValue === "atkinson") mostrar(op.closest("#spo-fontes-card"));
+    else remover();
+  });
+})();
