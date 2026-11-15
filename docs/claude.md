@@ -2872,3 +2872,15 @@ Medido: mockup dentro de uma página (iframe de 1004 px), cartão no meio e no p
 Achado sem relação, para um `fix/` à parte: abrir a busca com Ctrl+K enquanto um aviso modal está aberto (o "Alerta" da Início) deixa o foco no botão do aviso, atrás da busca, e o Esc não fecha nenhum dos dois.
 
 Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-janelas-celular.1`); `index.html` do mockup: só o `?v=` do `spo-preferencias.js` (`20261115.jean-janelas-celular.1`).
+
+## Busca de telas e ajuda dos atalhos por cima de um aviso (dev. Jean, 2026-11-15)
+
+Achado no teste do celular (#122): abrir a busca com Ctrl+K com um aviso modal aberto (o "Alerta" da Início, que aparece depois de a página carregar) deixava o foco no botão do aviso, atrás da busca, e o Esc não fechava a janela da frente. Causa: o tratamento geral dos avisos (`prepararModais`, #41) levava o foco para o aviso quando ele aparecia e, com a captura do teclado no `document`, tomava o Esc e o Tab, sem saber que a busca, a ajuda dos atalhos e "O padrão SPO-AA+" (`.spo-busca-fundo`) abrem por cima dos avisos.
+
+Correção (`main.js`):
+- enquanto uma dessas janelas estiver aberta (`janelaPorCima()`), o aviso de baixo não toma o foco ao aparecer e não trata as teclas;
+- ao fechar a janela com um aviso ainda aberto, o foco vai para o aviso (`window.spoFocarAvisoAberto`, chamado pelo `fechar()` das três janelas), e não para quem abriu a janela, que fica atrás dele; sem aviso, o foco volta para quem abriu, como antes.
+
+Medido no SPO local: aviso aberto → Ctrl+K → o Tab fica na busca, o Esc fecha a busca e o foco vai ao aviso, outro Esc fecha o aviso; Ctrl+K logo depois de carregar (o aviso aparece depois) → o foco continua no campo da busca, Esc fecha a busca e o foco vai ao aviso; o mesmo com a ajuda dos atalhos; sem aviso, o foco volta para onde estava. Sem erro no console. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-busca-aviso.1`).
