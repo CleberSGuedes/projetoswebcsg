@@ -27723,7 +27723,7 @@
   const STORAGE_KEY = "spo-font-preferences";
   const OPTIONS = Object.freeze({
     ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
-    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)" },
+    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)", "atkinson-mono": "Atkinson Hyperlegible Mono" },
     size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)", xlarge: "Muito grande (150%)" },
     table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
     // espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14)
@@ -29302,7 +29302,9 @@
      este resumo no mesmo PR (padrão §5.1).
    - Documento técnico completo: lido do servidor (/api/documentos/padrao-spo-aa-plus,
      que converte o docs/padrao-visual-spo-aa-plus.md), com sumário; atualiza
-     sozinho a cada PR que muda o documento.
+     sozinho a cada PR que muda o documento. Desde a bateria 2 (2026-11-15) abre
+     só pelo Contrato Visual Protegido ([data-spo-padrao="tecnico"]); a janela
+     aberta pela declaração mostra só o resumo (pedido do dev. Jean).
    ========================================================================== */
 (function initPadraoSpoAaPlus() {
   const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
@@ -29353,7 +29355,6 @@
       "  </div>",
       `  <div class="spo-padrao-corpo spo-doc" tabindex="0" role="region" aria-labelledby="spo-padrao-titulo">${RESUMO}</div>`,
       '  <div class="spo-busca-rodape">',
-      '    <button type="button" class="btn btn-secondary sm spo-padrao-trocar" data-vista="tecnico">Ler o documento técnico completo</button>',
       '    <p class="spo-busca-status spo-padrao-status" role="status" aria-live="polite"></p>',
       '    <button type="button" class="btn btn-secondary sm spo-padrao-fechar">Fechar</button>',
       "  </div>",
@@ -29361,7 +29362,6 @@
     ].join("\n");
     document.body.appendChild(dialogo);
     dialogo.querySelector(".spo-padrao-fechar").addEventListener("click", () => fechar());
-    dialogo.querySelector(".spo-padrao-trocar").addEventListener("click", (ev) => trocar(ev.currentTarget.dataset.vista));
     dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
     dialogo.addEventListener("click", (ev) => { // sumário do documento: rola dentro da janela
       const a = ev.target.closest && ev.target.closest('a[href^="#doc-"]');
@@ -29393,7 +29393,6 @@
 
   async function trocar(vista) {
     const corpo = dialogo.querySelector(".spo-padrao-corpo");
-    const botao = dialogo.querySelector(".spo-padrao-trocar");
     const sub = dialogo.querySelector("#spo-padrao-sub");
     const status = dialogo.querySelector(".spo-padrao-status");
     const titulo = dialogo.querySelector("#spo-padrao-titulo");
@@ -29401,42 +29400,37 @@
       corpo.innerHTML = RESUMO;
       titulo.textContent = "O padrão SPO-AA+";
       sub.textContent = "Resumo para quem usa o SPO. Esc fecha.";
-      botao.textContent = "Ler o documento técnico completo";
-      botao.dataset.vista = "tecnico";
       status.textContent = "";
       corpo.scrollTop = 0;
       titulo.focus();
       return;
     }
+    corpo.innerHTML = "";
+    titulo.textContent = "Padrão SPO-AA+: documento técnico";
+    sub.textContent = "Regras para quem desenvolve o SPO, lidas do servidor. Esc fecha.";
     status.textContent = "Carregando o documento técnico…";
-    botao.disabled = true;
+    titulo.focus();
     try {
       const doc = await carregarDocumento();
       const sumario = doc.sumario.length
         ? `<nav class="spo-doc-sumario" aria-label="Sumário"><strong>Sumário</strong><ol>${doc.sumario.map((s) => `<li><a href="#${s.id}">${s.titulo.replace(/^[\d.]+\s*/, "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</a></li>`).join("")}</ol></nav>`
         : "";
       corpo.innerHTML = sumario + doc.html;
-      titulo.textContent = "Padrão SPO-AA+: documento técnico";
-      sub.textContent = "Regras para quem desenvolve o SPO, lidas do servidor. Esc fecha.";
-      botao.textContent = "Voltar ao resumo";
-      botao.dataset.vista = "resumo";
       status.textContent = "Documento técnico carregado.";
       corpo.scrollTop = 0;
       titulo.focus();
     } catch (err) {
       status.textContent = "Não foi possível carregar o documento técnico agora. Tente de novo em instantes.";
-    } finally {
-      botao.disabled = false;
     }
   }
 
-  function mostrar() {
+  function mostrar(vista = "resumo") {
     montar();
     if (!dialogo.hidden) return;
     abridor = document.activeElement;
     dialogo.hidden = false;
     document.body.classList.add("spo-busca-aberta");
-    trocar("resumo");
+    trocar(vista);
   }
 
   function fechar() {
@@ -29450,7 +29444,7 @@
     const a = ev.target.closest && ev.target.closest("[data-spo-padrao]");
     if (!a) return;
     ev.preventDefault();
-    mostrar();
+    mostrar(a.dataset.spoPadrao === "tecnico" ? "tecnico" : "resumo");
   });
   // links da ajuda dos atalhos dentro do resumo: fecha esta janela antes
   document.addEventListener("click", (ev) => {
@@ -29519,7 +29513,9 @@
    (feat/sugestao-atkinson, 2026-11-15; pedido do dev. Jean, com a opção "sugestão,
    não automático" decidida com ele). Ao escolher a Atkinson na "Fonte da interface",
    aparece, abaixo dela, a oferta de também aplicar texto Grande (112%), entrelinha
-   Ampla (1,75) e leitura Intermediária (72ch). Nada muda sem o clique:
+   Ampla (1,75) e leitura Intermediária (72ch) e, desde a bateria 2 (2026-11-15), a
+   Atkinson Hyperlegible Mono nas tabelas e dados; a oferta lista só o que falta.
+   Nada muda sem o clique:
    - "Aplicar as três": sobe só o que estiver abaixo do sugerido (não reduz quem já
      usa mais), pelos próprios botões do cartão (mesmo caminho do clique, grava e
      aplica); cada opção continua ajustável depois;
@@ -29533,13 +29529,19 @@
   const ALVO = { size: "large", line: "ample", reading: "medium" };
   const ATR = { size: "spoTextSize", line: "spoLineHeight", reading: "spoReading" };
   const abaixo = (k) => ORDEM[k].indexOf(document.body.dataset[ATR[k]] || "default") < ORDEM[k].indexOf(ALVO[k]);
-  const faltando = () => Object.keys(ALVO).filter(abaixo);
+  // a fonte dos dados não tem "acima": falta enquanto não for a Atkinson Mono
+  const faltando = () => [...(document.body.dataset.spoFontData === "atkinson-mono" ? [] : ["data"]), ...Object.keys(ALVO).filter(abaixo)];
+  const NOMES = { data: "a <strong>Atkinson Hyperlegible Mono</strong> nas tabelas e dados", size: "texto <strong>Grande (112%)</strong>", line: "entrelinha <strong>Ampla (1,75)</strong>", reading: "leitura <strong>Intermediária (72ch)</strong>" };
+  const VALOR = { data: "atkinson-mono", ...ALVO };
+  const BOTAO = ["", "Aplicar", "Aplicar as duas", "Aplicar as três", "Aplicar as quatro"];
+  const lista = (itens) => (itens.length < 2 ? itens.join("") : itens.slice(0, -1).join(", ") + " e " + itens[itens.length - 1]);
 
   function remover() { document.getElementById("spo-sugestao-atkinson")?.remove(); }
 
   function mostrar(card) {
     remover();
-    if (!faltando().length) return;
+    const falta = faltando();
+    if (!falta.length) return;
     const grupo = card.querySelector('[data-spo-font-group="ui"]');
     if (!grupo) return;
     const caixa = document.createElement("div");
@@ -29547,9 +29549,9 @@
     caixa.className = "spo-sugestao";
     caixa.setAttribute("role", "status");
     caixa.innerHTML = [
-      '<p><strong>Leitura confortável:</strong> quer aplicar também texto <strong>Grande (112%)</strong>, entrelinha <strong>Ampla (1,75)</strong> e leitura <strong>Intermediária (72ch)</strong>? Cada opção continua ajustável depois.</p>',
+      '<p><strong>Leitura confortável:</strong> quer aplicar também ' + lista(falta.map((k) => NOMES[k])) + '? ' + (falta.length > 1 ? 'Cada opção continua ajustável depois.' : 'A opção continua ajustável depois.') + '</p>',
       '<div class="spo-sugestao-acoes">',
-      '<button type="button" class="btn btn-primary sm" data-sugestao="aplicar">Aplicar as três</button>',
+      '<button type="button" class="btn btn-primary sm" data-sugestao="aplicar">' + BOTAO[falta.length] + '</button>',
       '<button type="button" class="btn btn-secondary sm" data-sugestao="dispensar">Agora não</button>',
       '</div>',
     ].join("");
@@ -29559,8 +29561,8 @@
       if (!b) return;
       if (b.dataset.sugestao === "aplicar") {
         const mudou = faltando();
-        mudou.forEach((k) => card.querySelector('[data-spo-font-pref="' + k + '"][data-spo-font-value="' + ALVO[k] + '"]')?.click());
-        const nomes = { size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)" };
+        mudou.forEach((k) => card.querySelector('[data-spo-font-pref="' + k + '"][data-spo-font-value="' + VALOR[k] + '"]')?.click());
+        const nomes = { data: "Atkinson Hyperlegible Mono nas tabelas e dados", size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)" };
         const status = card.querySelector(".spo-fontes-status");
         if (status) status.textContent = "Leitura confortável aplicada neste navegador: " + mudou.map((k) => nomes[k]).join(", ") + ".";
       }
