@@ -170,7 +170,11 @@ de página — feito: cabeçalho de todas as telas (sobretítulo = rótulo, tít
 texto); "Última atualização" e "Totais" = texto em negrito; nome da UO, linhas da atualização e rótulos
 dos totais = controle; valores dos totais = dado; (3c) formulários e cadastros — feito: título de cartão =
 título; rótulos de campo e o texto dentro dos campos (também nas tabelas e nos avisos) = controle; botões e
-legendas de grupo = texto (botões dos formulários: 14 → 13 px no Intermediário); (3)
+legendas de grupo = texto (botões dos formulários: 14 → 13 px no Intermediário); (3d) painéis, cartões
+dinâmicos e Início — feito: Governança (títulos = título, descrições = controle, contexto = leitura),
+cartões dinâmicos (título = título, texto = controle), Teto (títulos = título, rótulos = controle, valores e
+ranking = dado; **valores em destaque** um passo acima do título: indicadores +2 px, cartões por grupo +4 px)
+e Início (boas-vindas = leitura + 2 px); no Intermediário, os valores ficam como antes; (3)
 migrar as telas por grupo, medindo antes e depois, **começando pelo Personalizar** (decisão do dev.
 Jean), depois janelas, relatórios e tabelas, formulários, painéis e Início, gráficos; (4) teste que
 reprova `font-size` em px fora das variáveis. A troca das cores literais por tokens (Fase C) vem em PR
