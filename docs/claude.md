@@ -2598,3 +2598,31 @@ Pedido do dev. Jean: depois dos ajustes do dia, conferir que o SPO reconhece e a
 
 Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-bateria.1`).
 
+## Declaração de acessibilidade "SPO-AA+" (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: depois do trabalho de visual e acessibilidade, dizer no próprio sistema quais padrões o SPO atende, inteiros ou em parte.
+
+- **Cartão "Acessibilidade do SPO"**, no fim do Personalizar Temas, ocupando a largura inteira (`templates/partials/atualizar_personalizar_spo.html`):
+  - **padrão SPO-AA+:** WCAG 2.2 nível AA como meta mínima e critérios AAA oferecidos como opção. Segue também o eMAG, em atenção à Lei Brasileira de Inclusão (Lei 13.146/2015). O texto diz que é uma declaração do que foi verificado, não uma certificação;
+  - **três blocos:**
+    - **Atendido**, com os critérios WCAG citados;
+    - **Atendido por opção**, com o nome de cada opção da página;
+    - **Parcial ou em avaliação**: leitor de tela, Firefox e Safari, cores forçadas, o mockup PTA 2027 e listas nativas no celular;
+  - **links para as fontes, abrindo em nova aba** (ícone ↗ e "(abre em nova aba)" para leitor de tela; `rel="noopener noreferrer"`):
+    - WCAG 2.2 e cada critério citado (1.1.1, 1.4.1, 1.4.3…) na **tradução oficial do W3C Brasil** (`w3c.br/traducoes/wcag/wcag22-pt-BR/#<critério>`), que leva direto ao critério em português;
+    - eMAG (`emag.governoeletronico.gov.br`), Lei 13.146/2015 (Planalto), paleta Okabe-Ito (Color Universal Design) e fonte Atkinson Hyperlegible (Braille Institute);
+  - **como foi avaliado:** a bateria de 14/11 e o teste com os colegas na homologação;
+  - **contato para barreiras:** nger@edu.mt.gov.br.
+- **Link "Acessibilidade" no rodapé** (bloco `[jean]` `initLinkAcessibilidade` no fim do `main.js`, inserido pelo JS):
+  - abre o Personalizar Temas e leva o foco ao título do cartão; já estando na tela, só rola até ele;
+  - aparece só para quem tem a tela Personalizar Temas no menu, porque as permissões escondem o item e quem não a vê não veria o cartão.
+- **Manutenção:** a cada avaliação ou opção nova, atualizar o cartão no mesmo PR (padrão visual §5.1).
+- **Verificação** (SPO local):
+  - **link pelo rodapé:** a partir da Início e no próprio Personalizar, com o foco no título do cartão;
+  - **permissões:** escondendo o item do menu como as permissões fazem, o link some;
+  - **celular:** a 390 px, os blocos em uma coluna, sem rolagem lateral;
+  - **links:** os 19 externos com nova aba e aviso, contraste 10,53:1; endereços conferidos (todos respondem; o critério cai no texto certo da tradução);
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS `?v=20261114.jean-acessibilidade.2`, JS `?v=20261114.jean-acessibilidade.1`).
+

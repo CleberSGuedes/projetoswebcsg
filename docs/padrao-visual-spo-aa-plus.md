@@ -295,6 +295,16 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
     Para ver como uma pessoa com daltonismo enxerga, aplique à área de conteúdo um filtro SVG
     `feColorMatrix` com a matriz de Machado. Tire a captura com e sem a opção.
 
+## 5.1 Declaração de acessibilidade
+
+O cartão **"Acessibilidade do SPO"**, no fim do Personalizar Temas, é a declaração pública do padrão
+**SPO-AA+**. O rodapé leva a ele pelo link "Acessibilidade". Ele lista o que é atendido, o que é atendido
+por opção e o que é parcial ou está em avaliação. **A cada avaliação (bateria, teste na homologação) ou
+mudança de opção, atualize o cartão no mesmo PR.** Regra: declarar só o que foi medido.
+Contato para barreiras: nger@edu.mt.gov.br. Cada norma, critério e recurso citado tem link para a fonte
+(critérios na tradução oficial das WCAG 2.2 do W3C Brasil), abrindo em nova aba com ícone e aviso para
+leitor de tela; critério novo citado no cartão entra com o link no mesmo formato.
+
 ## 6. Regras de manutenção
 
 ### 6.1 Ao criar ou mudar uma tela

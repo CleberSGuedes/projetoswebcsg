@@ -9225,3 +9225,30 @@ body .field :is(input, select, textarea):not(#spo-bateria) { min-width: 0; max-w
 body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield-lock, .bi-hdd-network)) > .module-card .form-grid:not(#spo-bateria) {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
 }
+
+/* ==========================================================================
+   [jean] Declaração de acessibilidade (feat/declaracao-acessibilidade, 2026-11-14)
+   Cartão "Acessibilidade do SPO" no fim do Personalizar, na largura inteira;
+   link "Acessibilidade" no rodapé (inserido pelo JS) que leva até ele.
+   ========================================================================== */
+.personalizar-grid > .spo-acessibilidade { grid-column: 1 / -1; }
+.spo-acessibilidade h2.card-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; }
+.spo-acessibilidade h2.card-title:focus { outline: none; }
+.spo-acessibilidade-grade {
+  display: grid; gap: 16px; margin: 12px 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+.spo-acessibilidade-grade section {
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+}
+.spo-acessibilidade-grade h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+.spo-acessibilidade-grade h3 .bi { color: var(--spo-accent-graphic, var(--accent)); }
+.spo-acessibilidade-grade ul { margin: 0; padding-left: 18px; }
+.spo-acessibilidade-grade li { margin: 4px 0; }
+.spo-acessibilidade a[href^="mailto"] { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.footer .footer-acessibilidade { color: inherit; text-decoration: underline; text-underline-offset: 0.18em; cursor: pointer; }
+
+/* [jean] Links da declaração de acessibilidade: abrem em nova aba, com ícone e aviso para leitor de tela */
+.spo-acessibilidade a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.spo-acessibilidade a abbr { text-decoration: none; }
+.spo-acessibilidade .spo-nova-aba .bi { font-size: 0.75em; margin-left: 0.2em; vertical-align: baseline; }
