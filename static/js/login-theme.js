@@ -50,7 +50,7 @@
   // [jean] Fontes e tamanho do texto escolhidos no Personalizar (feat/login-fontes, 2026-11-14).
   // Mesma chave e mesmos valores do initFontesPersonalizar (main.js); valor desconhecido fica no padrão SPO.
   const fontOptions = {
-    spoFontUi: ["inter", ["classic", "inter", "atkinson", "source"], "ui"],
+    spoFontUi: ["inter", ["classic", "inter", "atkinson", "source", "mulish"], "ui"],
     spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono", "atkinson-mono"], "data"],
     spoTextSize: ["default", ["default", "large", "larger", "xlarge"], "size"],
     spoTableText: ["legible", ["compact", "medium", "legible"], "table"],

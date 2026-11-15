@@ -50,7 +50,7 @@ computador ou celular. O navegador só baixa a fonte em uso.
 
 | Uso | Padrão SPO | Alternativas no Personalizar | Atributo no `<body>` |
 |---|---|---|---|
-| Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, Do sistema | `data-spo-font-ui` |
+| Interface (textos, menus, botões, campos) | **Inter** | Atkinson Hyperlegible, Source Sans 3, **Mulish** (formas arredondadas, leitura corrida; I e l parecidos — em avaliação, 15/11), Do sistema | `data-spo-font-ui` |
 | Tabelas e dados (tabelas, totais, KPIs) | **Intel One Mono** (monoespaçada, números alinhados) | Inter com números alinhados, IBM Plex Sans, **Atkinson Hyperlegible Mono** (monoespaçada da família Atkinson, oferecida junto com ela; bateria 2), Do sistema | `data-spo-font-data` |
 | Texto das tabelas (todas as tabelas do conteúdo; Legível mantém o tamanho próprio, ≥ 12 px, das tabelas fora dos relatórios) | **Legível (12 px)** | Intermediário (10 px), Compacto (8 px) | `data-spo-table-text` |
 | Tamanho geral | **100%** | 112%, 125%, 150% (amplia a área de conteúdo; em tela com menos de 480 px, o 150% vale 125%) | `data-spo-text-size` |
