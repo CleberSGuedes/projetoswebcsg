@@ -118,22 +118,36 @@
   // tela (block: "nearest"/"center") movia a página até 275 px em tela baixa (paisagem) e
   // esmaecia o painel a cada clique (a "cintilância" do grupo C, cuja lista é maior que a tela).
   // O mockup rola a página do SPO (o iframe não tem rolagem própria).
-  function rolarSoOComeco(painel) {
+  function rolarSoOComeco(painel, suave) {
     const pai = window.parent !== window ? window.parent : window;
     const topoFrame = pai !== window && window.frameElement ? window.frameElement.getBoundingClientRect().top : 0;
     const falta = topoFrame + painel.getBoundingClientRect().top + 170 - pai.innerHeight;
     if (falta <= 0) return;
-    pai.scrollBy({ top: falta, behavior: "instant" });
+    pai.scrollBy({ top: falta, behavior: suave ? "smooth" : "instant" });
+  }
+  // [jean] Tela de celular, tablet ou janela dividida (fix/telas-estreitas-rolagem-janelas, pedido do
+  // dev. Jean): a janela do SPO com até 1200 px de largura (as mesmas faixas da densidade
+  // automática: compacta e ampla) ou o preset "Pressão operacional" do Contrato Visual (que realça
+  // o modo móvel e split). É onde a rolagem automática ajuda: o painel aberto costuma ficar fora da
+  // tela. Em tela larga ele abre logo abaixo do cartão, à vista.
+  function telaEstreita() {
+    try {
+      const pai = window.parent !== window ? window.parent : window;
+      if (pai.document.body && pai.document.body.dataset.visualContractPreset === "mobile") return true;
+      return pai.matchMedia ? pai.matchMedia("(max-width: 1200px)").matches : pai.innerWidth <= 1200;
+    } catch (err) { return false; }
   }
   // O mockup chama painel.scrollIntoView(...) dentro da função que abre; durante a chamada, o
-  // scrollIntoView daquele painel vira rolarSoOComeco (o pta-2027.js não muda). Só com "Reduzir
-  // sempre" (ou o sistema pedindo): no "Automático" fica a rolagem suave original do mockup
-  // (pedido do dev. Jean: nesse modo a rolagem guia o olho até o que abriu).
+  // scrollIntoView daquele painel é trocado (o pta-2027.js não muda):
+  // - "Reduzir sempre" (ou o sistema pedindo): rolarSoOComeco, de uma vez;
+  // - "Automático" em tela estreita: a rolagem suave original do mockup (guia o olho até o que abriu);
+  // - "Automático" em tela larga: nenhuma rolagem, a não ser que o começo do painel fique fora da
+  //   tela; então rolarSoOComeco, suave (para o clique não parecer sem efeito).
   function comRolagemContida(painel, fn) {
     return function abrirComRolagemContida() {
       const reduzir = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || document.body.dataset.spoMotion === "reduce";
-      if (!reduzir) return fn.apply(this, arguments);
-      painel.scrollIntoView = () => rolarSoOComeco(painel);
+      if (!reduzir && telaEstreita()) return fn.apply(this, arguments);
+      painel.scrollIntoView = () => rolarSoOComeco(painel, !reduzir);
       try { return fn.apply(this, arguments); } finally { delete painel.scrollIntoView; }
     };
   }
