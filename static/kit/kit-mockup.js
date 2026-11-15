@@ -7,7 +7,10 @@
 //  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
 //  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
 //    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
-//    Pressão operacional (feat/kit-contrato, pedido do dev. Jean).
+//    Pressão operacional (feat/kit-contrato, pedido do dev. Jean);
+//  - os gráficos (feat/kit-previas): COMMON_DIAGRAM_THEMES e os blocos initDiagramasDestaque (destaque e
+//    daltonismo), initGraficosAcessiveis (resumo e tabela de dados) e initGraficosEscala (fonte, densidade,
+//    padrões do daltonismo, tela estreita), com o mesmo Plotly do base.html.
 // Ao abrir, o kit usa as preferências vigentes no SPO deste navegador (como qualquer tela do SPO);
 // "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes. Nada é gravado.
 // O tests/test_kit_mockup.py confere que esses trechos continuam no main.js e que a extração funciona.
@@ -49,7 +52,10 @@
     if (!botao) throw new Error("BOTAO da sugestão Atkinson não encontrado no main.js");
     const chaveContrato = fonte.match(/const PROTECTED_CONTRACT_STATE_KEY = "([^"]+)"/);
     if (!chaveContrato) throw new Error("PROTECTED_CONTRACT_STATE_KEY não encontrado no main.js");
+    const bloco = (nome) => `${trecho(fonte, `(function ${nome}() {`, true)})();`;
     return {
+      diagramas: objeto(fonte, "const COMMON_DIAGRAM_THEMES = Object.freeze({"),
+      graficos: ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"].map(bloco),
       presets: objeto(fonte, "const PROTECTED_CONTRACT_PRESETS = Object.freeze({"),
       chaveContrato: chaveContrato[1],
       sugestao: {
@@ -158,6 +164,40 @@
       : (estado.diagrams === "auto" ? (escuro ? "dark" : "light") : estado.diagrams);
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
     opcoes.querySelectorAll("select[data-kit-pref]").forEach((s) => { s.value = estado[s.dataset.kitPref]; });
+    desenharGraficos();
+  }
+
+  // ---------------------------------------------------------------- gráficos
+  // Tema como o getCommonDiagramTheme do main.js: paleta do modo dos diagramas (data-visual-diagram-theme),
+  // passada pelo spoTemaDiagramaComDestaque (destaque e daltonismo, do initDiagramasDestaque). O layout
+  // segue o plotLayout dos gráficos do Teto; fonte, tamanho, legenda e padrões vêm do initGraficosEscala.
+  let graficosProntos = false;
+  function temaDosDiagramas() {
+    const modo = body.dataset.visualDiagramTheme || "light";
+    const base = spo.diagramas[modo] || spo.diagramas.light;
+    return typeof window.spoTemaDiagramaComDestaque === "function" ? window.spoTemaDiagramaComDestaque(base, modo) : base;
+  }
+  function desenharGraficos() {
+    if (!graficosProntos || !window.Plotly) return;
+    const t = temaDosDiagramas();
+    const eixo = { gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.axis, tickfont: { color: t.text } };
+    const layout = (extra) => ({
+      margin: { t: 20, r: 24, b: 70, l: 70 }, paper_bgcolor: t.panel, plot_bgcolor: t.plot,
+      font: { family: "Arial, sans-serif", size: 11, color: t.text }, separators: ",.",
+      legend: { font: { color: t.text } }, xaxis: eixo, yaxis: eixo, ...extra,
+    });
+    const config = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d"] };
+    const grupos = ["1 - Pessoal e Encargos Sociais", "3 - Outras Despesas Correntes", "4 - Investimentos"];
+    window.Plotly.react("kit-grafico-pizza", [{
+      type: "pie", labels: grupos, values: [3850000000, 2410000000, 275000000],
+      textinfo: "percent", textposition: "outside",
+      marker: { colors: grupos.map((_, i) => t.palette[i % t.palette.length]), line: { color: t.border, width: 1 } },
+    }], layout({ margin: { t: 8, r: 20, b: 80, l: 20 }, legend: { orientation: "h", y: -0.18, font: { color: t.text } } }), config);
+    const regioes = ["Baixada Cuiabana", "Norte", "Sul", "Oeste", "Leste"];
+    window.Plotly.react("kit-grafico-barras", [
+      { type: "bar", name: "Empenhado", x: regioes, y: [412, 285, 330, 198, 240], marker: { color: t.palette[0], line: { color: t.border, width: 1 } } },
+      { type: "bar", name: "Liquidado", x: regioes, y: [356, 230, 301, 150, 205], marker: { color: t.palette[1], line: { color: t.border, width: 1 } } },
+    ], layout({ barmode: "group", yaxis: { ...eixo, title: { text: "R$ milhões", font: { color: t.text } } } }), config);
   }
 
   // ---------------------------------------------------------------- oferta "Leitura confortável"
@@ -407,6 +447,15 @@
       montarPainel();
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
+      if (window.Plotly) {
+        // o initGraficosEscala pergunta o modo dos diagramas por esta função do main.js
+        window.spoGetDiagramSemanticTokens = () => ({ mode: body.dataset.visualDiagramTheme || "light", tokens: {} });
+        spo.graficos.forEach((codigo) => new Function(codigo)());
+        graficosProntos = true;
+        desenharGraficos();
+      } else {
+        avisar("O Plotly não carregou (sem internet?): os gráficos de exemplo ficam vazios.");
+      }
     })
     .catch((err) => {
       avisar(`Não foi possível ler o main.js do SPO (${err.message}). Abra o kit pelo SPO local `

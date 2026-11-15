@@ -3061,3 +3061,12 @@ Pedido do dev. Jean no teste do kit: o kit não trazia os presets do Contrato Vi
 - Saiu o botão "As minhas preferências": com o kit abrindo nas preferências vigentes, recarregar a página faz o mesmo.
 - O kit continua separado do Contrato (papéis diferentes: o Contrato aplica o visual do SPO, com permissão; o kit é o ponto de partida de tela nova, sem login, e não muda nada). Integração futura a combinar com o dev. Cleber: uma aba "Componentes" no Contrato abrindo o próprio kit (§6.4 do padrão).
 - `tests/test_kit_mockup.py`: marcador dos presets, forma da `PROTECTED_CONTRACT_STATE_KEY` e o atributo `data-visual-contract-preset` no `main.js`.
+
+### Kit de mockup: prévias do Personalizar e gráficos (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: com todas as opções do Personalizar no kit, mostrar também as prévias e um gráfico, para ver os temas aplicados.
+- **Prévias** "Componentes do SPO" e "Fontes e tabelas" com a mesma marcação do `atualizar_personalizar_spo.html` (sem o resumo e o botão de restaurar, que dependem do Personalizar); `tests/test_kit_mockup.py` compara a marcação das duas amostras com a do template.
+- **Gráficos** de pizza ("Teto por grupo de despesa") e de barras agrupadas ("Execução por região") nos painéis do Teto (`.teto-panel`, `.teto-chart`), com o mesmo Plotly do `base.html` (3.0.1). O tema vem como no `getCommonDiagramTheme`: `COMMON_DIAGRAM_THEMES[data-visual-diagram-theme]` passado pelo `spoTemaDiagramaComDestaque` (do `initDiagramasDestaque`); o kit lê e roda também o `initGraficosAcessiveis` (resumo e "Ver dados em tabela") e o `initGraficosEscala` (fonte, densidade, padrões do daltonismo, tela estreita), dando a ele o `spoGetDiagramSemanticTokens` (só o modo). Layout como o `plotLayout` do Teto. Redesenha a cada mudança no painel.
+- Testes novos: prévias iguais às do template; blocos dos gráficos completos e o `initGraficosEscala` sem depender de outra função global; mesmo Plotly do `base.html`.
+
+Testado no SPO local: padrão (1ª cor = destaque Clássico `#1f9b7e`, fonte Inter 12 px, resumo `role="img"` e tabela de dados); escuro + Azul + daltonismo + Legível (paleta Okabe-Ito do escuro, padrões de hachura, texto 13 px, amostra das tabelas a 13 px).

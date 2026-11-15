@@ -481,9 +481,13 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   permissão; o kit é o **ponto de partida** de uma tela nova, fora do login, e não muda nada. O kit cobre os
   presets do Contrato para que o mockup seja visto em todas as combinações. Integração futura a combinar
   com o dev. Cleber: uma aba "Componentes" no Contrato que abra o próprio kit.
-- Componentes de exemplo, com a marcação real: cabeçalho de página, cartão `module-card`, cartões
-  dinâmicos (`flow-node`), formulário (campos, desabilitado, hierarquia dos botões), aviso `alert-info`
-  e relatório com totais, filtros `.mf-*`, `pos`/`neg`, navegação pelo teclado e paginação.
+- Componentes de exemplo, com a marcação real: cabeçalho de página, cartão `module-card`, **as duas
+  prévias do Personalizar** ("Componentes do SPO" e "Fontes e tabelas", mesma marcação do template),
+  **gráficos** de pizza e de barras (Plotly do SPO com o tema dos diagramas, o destaque, o daltonismo, a
+  escala e a tabela de dados: `COMMON_DIAGRAM_THEMES`, `initDiagramasDestaque`, `initGraficosAcessiveis` e
+  `initGraficosEscala` lidos do `main.js`), cartões dinâmicos (`flow-node`), formulário (campos,
+  desabilitado, hierarquia dos botões), aviso `alert-info` e relatório com totais, filtros `.mf-*`,
+  `pos`/`neg`, navegação pelo teclado e paginação.
 - **Como usar:** copie o arquivo para o mockup novo, troque o conteúdo de exemplo e mantenha as classes.
   CSS novo segue o §6.1 (tokens e `var(--spo-fs-*)`). O kit também **mede o próprio SPO**: componente
   que não muda ao trocar a densidade ou o tema no painel é dívida (§7).
@@ -491,7 +495,9 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   reproduzi-la, lendo do `main.js`, para continuar mostrando o comportamento exato do SPO.
 - `tests/test_kit_mockup.py` reprova se os trechos que o kit lê do `main.js` mudarem de nome ou de forma,
   se o Personalizar ganhar opção que o kit não mostra (`GRUPOS_FONTES` no `kit-mockup.js`) e se o CSS do
-  kit escrever px ou cor literal. **Opção nova no Personalizar:** acrescentar no `GRUPOS_FONTES`.
+  kit escrever px ou cor literal; também se a marcação das prévias do Personalizar mudar sem ir para o kit,
+  se os blocos dos gráficos mudarem de forma ou passarem a depender de outra função global e se o Plotly
+  do kit não for o mesmo do `base.html`. **Opção nova no Personalizar:** acrescentar no `GRUPOS_FONTES`.
 
 ## 7. Dívida conhecida (roteiro do N5)
 
