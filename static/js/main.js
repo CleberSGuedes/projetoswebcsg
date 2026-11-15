@@ -27725,7 +27725,7 @@
     ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3", mulish: "Mulish" },
     data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)", "atkinson-mono": "Atkinson Hyperlegible Mono" },
     size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)", xlarge: "Muito grande (150%)" },
-    table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
+    table: { compact: "Compacto", medium: "Intermediário (padrão SPO)", legible: "Legível" },
     // espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14)
     line: { default: "Padrão (1,5)", ample: "Amplo (1,75)", larger: "Mais amplo (2,0)" },
     // largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8)
@@ -27743,10 +27743,31 @@
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto", keys: "on" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "medium", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto", keys: "on" });
   const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks", brightness: "spoBrightness", motion: "spoMotion", keys: "spoKeys" });
 
+  // [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15): a escolha antiga "Texto das tabelas"
+  // gravada vira a densidade de MESMO tamanho nas tabelas, uma vez só: Legível antigo (12 px) →
+  // Intermediário (12 px, o novo padrão SPO); Intermediário antigo (10 px) → Compacto (10 px); Compacto
+  // antigo (8 px) → Compacto (10 px). Marca "spo-densidade-v2" para não converter de novo.
+  const MARCA_DENSIDADE = "spo-densidade-v2";
+  const DENSIDADE_ANTIGA = { legible: "medium", medium: "compact", compact: "compact" };
+  function converterDensidade() {
+    try {
+      if (localStorage.getItem(MARCA_DENSIDADE)) return;
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved && DENSIDADE_ANTIGA[saved.table]) {
+        saved.table = DENSIDADE_ANTIGA[saved.table];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      }
+      localStorage.setItem(MARCA_DENSIDADE, "1");
+    } catch (err) {
+      /* armazenamento bloqueado: nada a converter */
+    }
+  }
+
   function read() {
+    converterDensidade();
     const prefs = { ...DEFAULTS };
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -29406,7 +29427,7 @@
     lista([
       "tema claro, escuro ou automático, e 8 cores de destaque;",
       "contraste (suave, médio ou reforçado), densidade e estilo dos cartões;",
-      "fontes, tamanho do texto até 150%, entrelinha, largura de leitura e texto das tabelas;",
+      "fontes, tamanho do texto até 150%, densidade do texto, entrelinha e largura de leitura;",
       "cores dos gráficos para daltonismo, foco reforçado, links sublinhados, brilho reduzido e movimento;",
       "atalhos de uma tecla do teclado.",
     ]),
@@ -29602,15 +29623,18 @@
    estiverem no sugerido ou acima (não há o que oferecer).
    ========================================================================== */
 (function initSugestaoAtkinson() {
-  const ORDEM = { size: ["default", "large", "larger", "xlarge"], line: ["default", "ample", "larger"], reading: ["default", "medium", "strict"] };
-  const ALVO = { size: "large", line: "ample", reading: "medium" };
-  const ATR = { size: "spoTextSize", line: "spoLineHeight", reading: "spoReading" };
-  const abaixo = (k) => ORDEM[k].indexOf(document.body.dataset[ATR[k]] || "default") < ORDEM[k].indexOf(ALVO[k]);
+  // [jean] feat/densidade-do-texto: a densidade Legível entra na "Leitura confortável" (o padrão SPO é o
+  // Intermediário; o Legível fica para quem escolhe a Atkinson, decisão do dev. Jean)
+  const ORDEM = { size: ["default", "large", "larger", "xlarge"], line: ["default", "ample", "larger"], reading: ["default", "medium", "strict"], table: ["compact", "medium", "legible"] };
+  const ALVO = { size: "large", line: "ample", reading: "medium", table: "legible" };
+  const ATR = { size: "spoTextSize", line: "spoLineHeight", reading: "spoReading", table: "spoTableText" };
+  const SEM_VALOR = { size: "default", line: "default", reading: "default", table: "medium" };
+  const abaixo = (k) => ORDEM[k].indexOf(document.body.dataset[ATR[k]] || SEM_VALOR[k]) < ORDEM[k].indexOf(ALVO[k]);
   // a fonte dos dados não tem "acima": falta enquanto não for a Atkinson Mono
   const faltando = () => [...(document.body.dataset.spoFontData === "atkinson-mono" ? [] : ["data"]), ...Object.keys(ALVO).filter(abaixo)];
-  const NOMES = { data: "a <strong>Atkinson Hyperlegible Mono</strong> nas tabelas e dados", size: "texto <strong>Grande (112%)</strong>", line: "entrelinha <strong>Ampla (1,75)</strong>", reading: "leitura <strong>Intermediária (72ch)</strong>" };
+  const NOMES = { data: "a <strong>Atkinson Hyperlegible Mono</strong> nas tabelas e dados", size: "texto <strong>Grande (112%)</strong>", line: "entrelinha <strong>Ampla (1,75)</strong>", reading: "leitura <strong>Intermediária (72ch)</strong>", table: "densidade do texto <strong>Legível</strong>" };
   const VALOR = { data: "atkinson-mono", ...ALVO };
-  const BOTAO = ["", "Aplicar", "Aplicar as duas", "Aplicar as três", "Aplicar as quatro"];
+  const BOTAO = ["", "Aplicar", "Aplicar as duas", "Aplicar as três", "Aplicar as quatro", "Aplicar as cinco"];
   const lista = (itens) => (itens.length < 2 ? itens.join("") : itens.slice(0, -1).join(", ") + " e " + itens[itens.length - 1]);
 
   function remover() { document.getElementById("spo-sugestao-atkinson")?.remove(); }
@@ -29639,7 +29663,7 @@
       if (b.dataset.sugestao === "aplicar") {
         const mudou = faltando();
         mudou.forEach((k) => card.querySelector('[data-spo-font-pref="' + k + '"][data-spo-font-value="' + VALOR[k] + '"]')?.click());
-        const nomes = { data: "Atkinson Hyperlegible Mono nas tabelas e dados", size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)" };
+        const nomes = { data: "Atkinson Hyperlegible Mono nas tabelas e dados", size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)", table: "densidade do texto Legível" };
         const status = card.querySelector(".spo-fontes-status");
         if (status) status.textContent = "Leitura confortável aplicada neste navegador: " + mudou.map((k) => nomes[k]).join(", ") + ".";
       }

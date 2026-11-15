@@ -33,9 +33,10 @@ body.spo-ponte[data-spo-font-data="inter"] table { font-family: "SPO Inter", var
 body.spo-ponte[data-spo-font-data="plex-sans"] table { font-family: "SPO IBM Plex Sans", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
 body.spo-ponte[data-spo-font-data="intel-mono"] table { font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace; }
 body.spo-ponte[data-spo-font-data="atkinson-mono"] table { font-family: "SPO Atkinson Hyperlegible Mono", Consolas, "Courier New", monospace; }
-body.spo-ponte[data-spo-table-text="legible"] table :is(th, td) { font-size: 12px; }
-body.spo-ponte[data-spo-table-text="medium"] table :is(th, td) { font-size: 10px; }
-body.spo-ponte[data-spo-table-text="compact"] table :is(th, td) { font-size: 8px; }
+/* [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15; padrão SPO-AA+ v4 §2.2.1): tabelas 13/12/10 px */
+body.spo-ponte[data-spo-table-text="legible"] table :is(th, td) { font-size: 13px; }
+body.spo-ponte[data-spo-table-text="medium"] table :is(th, td) { font-size: 12px; }
+body.spo-ponte[data-spo-table-text="compact"] table :is(th, td) { font-size: 10px; }
 
 /* Entrelinha do texto corrido (padrão SPO 1,5) */
 body.spo-ponte main :is(p, li, dd, small):not(table *, button *) { line-height: 1.5; }
