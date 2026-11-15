@@ -2806,3 +2806,13 @@ Pedido do dev. Jean: quem escolhe a Atkinson Hyperlegible tende a precisar tamb�
 - **Verificação** (SPO local, preferências do dev. Jean guardadas antes e devolvidas depois): aparece abaixo da fonte; aplicar grava 112%/1,75/72ch e mostra o aviso; reaparece depois de "Agora não", de trocar de fonte e de recarregar; não aparece com as três já aplicadas; com 125% já escolhido, não reduz (só entrelinha e leitura sobem); `pytest` completo duas vezes seguidas e `node --check`.
 
 Sem script de banco. `templates/base.html` e `login.html`: só as linhas `?v=` (CSS `?v=20261115.jean-atkinson.1`, JS `?v=20261115.jean-atkinson.2`).
+
+## Alto contraste escuro sem azul-marinho também no quadro dos gráficos (dev. Jean, 2026-11-15)
+
+Relatado pelo dev. Jean: no tema escuro com "Diagramas: alto contraste", o gráfico "Teto por grupo de despesa" voltou a aparecer sobre azul-marinho, depois da correção do #100.
+
+- **Causa:** o #100 deixou transparente o fundo do gráfico Plotly no modo `highDark`, mas o **quadro** em volta (`.teto-chart`) pinta `--spo-diagram-bg`, que nesse modo ainda era `#111827`. Com o gráfico transparente, aparecia o azul do quadro.
+- **Correção** (bloco `[jean]` no fim do `style.css`), com a mesma decisão do #100: no `highDark`, `--spo-diagram-bg` = fundo do cartão (`--card`, `#242424`), `--spo-diagram-node-bg` = cinza neutro do escuro comum (`#262626`, nós do Mapa Conceitual e afins) e a prévia do Personalizar igual. Cores das séries, texto e bordas do alto contraste não mudam.
+- **Verificação** (SPO local, Teto Orçamentário, modo aplicado só na página): quadro do gráfico com a mesma cor do cartão (`rgb(36, 36, 36)`); texto do alto contraste 14,8:1; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`?v=20261115.jean-ac-quadro.1`).
