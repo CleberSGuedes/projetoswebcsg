@@ -29044,7 +29044,7 @@
       [`${k("Tab")} / ${k("Shift", "Tab")}`, "Vai para o próximo / o anterior item da tela (botões, campos, links, cartões)."],
       [`${k("Enter")} ou ${k("Espaço")}`, "Aciona o botão ou abre o item em foco."],
       [k("Tab"), "Logo ao abrir o SPO, o primeiro Tab mostra \"Pular para o conteúdo\" e \"Ir para o menu\"."],
-      [k("Alt", "M"), "Volta ao menu lateral, no item da tela atual (abre o menu se ele estiver recolhido)."],
+      [k("Alt", "M"), "Vai ao menu lateral, no item da tela atual (abre o menu se ele estiver recolhido). No menu, Esc volta para onde você estava."],
       [`${k("Ctrl", "K")} ou ${k("/")}`, "Abre a busca de telas: digite parte do nome, uma sigla ou um assunto."],
       [k("?"), "Abre esta ajuda."],
     ]],
@@ -29053,6 +29053,7 @@
       [`${k("→")} ${k("←")}`, "Abre / fecha o grupo (Relatórios, Painéis…). Num item, ← volta ao grupo."],
       [`${k("Home")} ${k("End")}`, "Primeiro / último item."],
       [k("Enter"), "Abre a tela; o foco vai para o título dela."],
+      [k("Esc"), "Sai do menu e volta para onde você estava na tela."],
     ]],
     ["Abas, diagramas e mapa conceitual", "bi-diagram-3", [
       [`${k("←")} ${k("→")} (ou ${k("↑")} ${k("↓")})`, "Trocam a aba ou o cartão selecionado."],
@@ -29134,10 +29135,26 @@
   }
 
   // 2) Alt+M e "Ir para o menu"
+  // fix/alt-m-foco: o Chrome só mostra o anel (:focus-visible) quando a última ação foi uma
+  // tecla "comum"; depois de um clique, o Alt+M movia o foco sem anel nem dica. O foco levado
+  // por atalho ganha a classe spo-foco-atalho (anel igual ao do teclado) e a dica aparece.
+  // Esc no menu devolve o foco para onde a pessoa estava (e fecha o menu se ele estiver aberto por cima da tela).
+  let voltaDoMenu = null;
+  let focoPorAtalho = false;
+  function focarComAnel(el) {
+    if (!el) return;
+    focoPorAtalho = true;
+    el.classList.add("spo-foco-atalho");
+    el.addEventListener("blur", () => el.classList.remove("spo-foco-atalho"), { once: true });
+    try { el.focus({ focusVisible: true }); } catch (err) { el.focus(); }
+    focoPorAtalho = false;
+  }
   function irParaMenu() {
     const menu = document.getElementById("menu");
     if (!menu) return;
     const sidebar = menu.closest(".sidebar");
+    const atual = document.activeElement;
+    if (atual && atual !== document.body && !(sidebar && sidebar.contains(atual))) voltaDoMenu = atual;
     // o item da tela atual; se estiver num grupo fechado (ou no menu recolhido), o grupo visível que o contém
     const alvo = () => {
       const ativo = menu.querySelector(".menu-item.active[data-route]");
@@ -29149,7 +29166,7 @@
       return [...menu.querySelectorAll(".menu-item")].find(visivel);
     };
     let item = alvo();
-    const focar = (el) => { if (el) { el.focus(); el.scrollIntoView({ block: "nearest" }); } };
+    const focar = (el) => { if (el) { focarComAnel(el); el.scrollIntoView({ block: "nearest" }); } };
     if (!item || (sidebar && !visivel(sidebar))) {
       const toggle = document.getElementById("sidebar-toggle");
       if (toggle && visivel(toggle)) toggle.click();
@@ -29168,6 +29185,32 @@
     a.addEventListener("click", (ev) => { ev.preventDefault(); irParaMenu(); });
     pularConteudo.after(a);
   }
+
+  // Esc com o foco no menu: volta para onde estava (Alt+M de novo faz o mesmo caminho de ida)
+  function sairDoMenu() {
+    const sidebar = document.querySelector(".sidebar");
+    // menu aberto por cima da tela (pelo Alt+M, pelo Enter num grupo com o menu recolhido ou no celular): fecha
+    if (sidebar && sidebar.classList.contains("open")) {
+      const toggle = document.getElementById("sidebar-toggle");
+      if (toggle) toggle.click();
+    }
+    faixa.hidden = true;
+    let alvo = voltaDoMenu && voltaDoMenu.isConnected && visivel(voltaDoMenu) ? voltaDoMenu : null;
+    if (!alvo) {
+      const main = document.getElementById("content-area");
+      alvo = main && ([...main.querySelectorAll("h1, [role='heading'][aria-level='1']")].find(visivel) || main);
+      if (alvo && !alvo.hasAttribute("tabindex")) alvo.setAttribute("tabindex", "-1");
+    }
+    voltaDoMenu = null;
+    if (alvo) focarComAnel(alvo);
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar || !sidebar.contains(document.activeElement)) return;
+    ev.preventDefault();
+    sairDoMenu();
+  });
 
   // atalhos
   document.addEventListener("keydown", (ev) => {
@@ -29211,7 +29254,7 @@
 
   // 4) dica dos componentes com setas
   const DICAS = [
-    ["#menu .menu-item", "spo-dica-menu", "↓ ↑ andam no menu · → abre o grupo, ← fecha · Enter abre a tela · Alt+M volta ao menu"],
+    ["#menu .menu-item", "spo-dica-menu", "↓ ↑ andam no menu · → abre o grupo, ← fecha · Enter abre a tela · Esc volta para onde estava"],
     ["[data-flow-node]", "spo-dica-cartoes", "← → trocam o cartão · Home/End: primeiro/último · Tab sai"],
     ['[role="tab"]', "spo-dica-abas", "← → trocam a aba · Home/End: primeira/última · Tab segue para o conteúdo"],
   ];
@@ -29236,8 +29279,8 @@
     const [, id, texto] = tipo;
     const desc = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
     if (!desc.includes(id)) el.setAttribute("aria-describedby", [...desc, id].join(" "));
-    let pelaTecla = false;
-    try { pelaTecla = el.matches(":focus-visible"); } catch (err) { pelaTecla = false; }
+    let pelaTecla = focoPorAtalho;
+    try { pelaTecla = pelaTecla || el.matches(":focus-visible"); } catch (err) { /* navegador sem :focus-visible */ }
     faixa.textContent = texto;
     faixa.hidden = !pelaTecla;
   });
