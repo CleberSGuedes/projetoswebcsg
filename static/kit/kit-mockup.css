@@ -101,3 +101,19 @@
 }
 /* nome da regra em negrito sem <strong> (o .flow-context-panel strong é o título do painel) */
 .kit-regra-nome { font-weight: 700; }
+
+/* catálogo de padrões: moldura do kit em volta de cada exemplo recortado do template */
+.kit-catalogo {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.kit-padrao-titulo {
+  margin: 0;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+}
+.kit-padrao-onde {
+  margin: 2px 0 10px;
+  font-size: var(--spo-fs-controle);
+}
