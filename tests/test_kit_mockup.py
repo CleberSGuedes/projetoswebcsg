@@ -187,3 +187,49 @@ def test_kit_usa_o_mesmo_plotly_do_spo():
     plotly = re.search(r'<script src="(https://cdn\.plot\.ly/[^"]+)"', base)
     assert plotly, "base.html sem o Plotly"
     assert plotly.group(1) in kit, f"o kit de mockup deve carregar o mesmo Plotly do SPO ({plotly.group(1)})"
+
+
+# ---- feat/kit-catalogo: catálogo de padrões (exemplos recortados dos templates de origem)
+
+PARTIALS = RAIZ / "templates" / "partials"
+CATALOGO = [
+    ("atualizar_governanca_resultados_eap_politicas.html", '<div class="governanca-grid semantic-flow-grid"', "div"),
+    ("atualizar_governanca_resultados_eap_politicas.html", '<div class="flow-context-panel"', "div"),
+    ("atualizar_governanca_resultados_mapa.html", '<article class="card governanca-card">', "article"),
+    ("atualizar_governanca_resultados_mapa.html", '<div class="governanca-grid">', "div"),
+    ("institucional_diretrizes.html", '<div class="noticia-box">', "div"),
+    ("paineis_teto_orcamentario.html", '<div class="teto-kpi-grid">', "div"),
+    ("notas_see.html", '<div class="see-upload-options">', "div"),
+]
+
+
+def _bloco(html: str, abertura: str, tag: str) -> str:
+    i = html.index(abertura)
+    nivel = 0
+    for m in re.finditer(rf"<{tag}\b|</{tag}>", html[i:]):
+        nivel += -1 if m.group(0).startswith("</") else 1
+        if nivel == 0:
+            return html[i: i + m.end()]
+    raise AssertionError(f"<{tag}> sem fecho: {abertura}")
+
+
+def test_catalogo_igual_aos_templates():
+    kit = _sem_espacos((KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8"))
+    diferentes = []
+    for arquivo, abertura, tag in CATALOGO:
+        original = _sem_espacos(_bloco((PARTIALS / arquivo).read_text(encoding="utf-8"), abertura, tag))
+        if original not in kit:
+            diferentes.append(f"{arquivo}: {abertura}")
+    assert not diferentes, (
+        "o catálogo de padrões do kit de mockup não é mais igual aos templates (copie a marcação nova para o "
+        f"kit): {diferentes}")
+
+
+def test_fluxos_de_governanca_lidos_do_main_js():
+    main = _main()
+    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
+    marcador = "function initGovernancaSemanticFlows() {"
+    assert marcador in main and marcador in kit_js, "o kit lê o initGovernancaSemanticFlows do main.js"
+    bloco = _trecho(main, marcador, True)
+    globais = set(re.findall(r"\b(init[A-Z]\w+|spo[A-Z]\w+)\(", bloco)) - {"initGovernancaSemanticFlows"}
+    assert not globais, f"o initGovernancaSemanticFlows passou a chamar {sorted(globais)}: o kit precisa delas"

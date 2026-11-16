@@ -10,7 +10,8 @@
 //    Pressão operacional (feat/kit-contrato, pedido do dev. Jean);
 //  - os gráficos (feat/kit-previas): COMMON_DIAGRAM_THEMES e os blocos initDiagramasDestaque (destaque e
 //    daltonismo), initGraficosAcessiveis (resumo e tabela de dados) e initGraficosEscala (fonte, densidade,
-//    padrões do daltonismo, tela estreita), com o mesmo Plotly do base.html.
+//    padrões do daltonismo, tela estreita), com o mesmo Plotly do base.html;
+//  - o initGovernancaSemanticFlows (cartões dinâmicos com painel de contexto do catálogo de padrões).
 // Ao abrir, o kit usa as preferências vigentes no SPO deste navegador (como qualquer tela do SPO);
 // "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes. Nada é gravado.
 // O tests/test_kit_mockup.py confere que esses trechos continuam no main.js e que a extração funciona.
@@ -54,6 +55,8 @@
     if (!chaveContrato) throw new Error("PROTECTED_CONTRACT_STATE_KEY não encontrado no main.js");
     const bloco = (nome) => `${trecho(fonte, `(function ${nome}() {`, true)})();`;
     return {
+      fluxos: `${trecho(fonte, "function initGovernancaSemanticFlows() {", true)}
+initGovernancaSemanticFlows();`,
       diagramas: objeto(fonte, "const COMMON_DIAGRAM_THEMES = Object.freeze({"),
       graficos: ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"].map(bloco),
       presets: objeto(fonte, "const PROTECTED_CONTRACT_PRESETS = Object.freeze({"),
@@ -349,19 +352,9 @@
   });
 
   // ---------------------------------------------------------------- conteúdo de exemplo
-  // cartões dinâmicos: um selecionado por vez
-  document.querySelectorAll("[data-kit-cartoes]").forEach((grupo) => {
-    grupo.addEventListener("click", (ev) => {
-      const cartao = ev.target.closest(".flow-node");
-      if (!cartao) return;
-      grupo.querySelectorAll(".flow-node").forEach((c) => {
-        c.setAttribute("aria-pressed", String(c === cartao));
-        c.classList.toggle("is-selected", c === cartao);
-      });
-    });
-    const primeiro = grupo.querySelector('.flow-node[aria-pressed="true"]');
-    if (primeiro) primeiro.classList.add("is-selected");
-  });
+  // catálogo: os indicadores do Teto vêm zerados no template (o JavaScript da tela preenche); valores de exemplo
+  [["teto-kpi-total", "R$ 6.535.243.129,00"], ["teto-kpi-fontes", "12"], ["teto-kpi-grupos", "3"], ["teto-kpi-paoes", "41"]]
+    .forEach(([id, valor]) => { const el = document.getElementById(id); if (el) el.textContent = valor; });
 
   // tabela: dados fictícios, filtros de lista e paginação no padrão dos relatórios
   const COLUNAS = ["uo", "programa", "acao", "regiao", "situacao", "valor", "saldo"];
@@ -518,6 +511,7 @@
       montarPainel();
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
+      new Function(spo.fluxos)();
       if (window.Plotly) {
         // o initGraficosEscala pergunta o modo dos diagramas por esta função do main.js
         window.spoGetDiagramSemanticTokens = () => ({ mode: body.dataset.visualDiagramTheme || "light", tokens: {} });
