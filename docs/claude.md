@@ -3127,3 +3127,16 @@ Segunda trava da avaliação "o padrão resiste a ampliações?": os testes do C
 - **`main.js`:** `.style.color/background/backgroundColor/borderColor/outlineColor/fill/stroke = "…"` e `setProperty("color"…)` só com `var(--…)` (hoje: 4 `borderColor = "var(--primary)"`; a sonda `probe.style.color = name` usa variável e não conta); `.style.fontSize = "…"` nunca; HTML montado com `style="…"` só sem cor (`#…`, `rgb(…)`, `hsl(…)`) ou tamanho escritos à mão — valor calculado (`${colorFor(…)}`, a cor do grupo vinda da paleta do tema, §3.5) e `var(--…)` são aceitos (4 casos no Teto).
 - Conferido com cópias de segurança: reprova cor nova e `font-size` novo no template, `.style.color = "#ff0000"` e `style="color:#123456"` em HTML do JS; aceita variável e margem no template e `${cor}`/`var(--text)` no JS. Arquivos devolvidos idênticos.
 - Padrão: §6.1 (item do `style=`) e §7 (os 6 antigos como dívida).
+
+### Kit de mockup sem cópias de lógica (dev. Jean, 2026-11-15)
+
+Último item da avaliação "o padrão resiste a ampliações?": o kit tinha pequenas cópias de lógica do `main.js` que podiam divergir sem aviso. Agora usa as funções do SPO (lidas do `main.js` e montadas com os dados que o kit já lê):
+- **Destaque:** `applyAccentColor` (rodada com `persist = false`; recebe `ACCENT_COLORS`/`DEFAULT_ACCENT`); saiu o `aplicarDestaque` do kit.
+- **Densidade automática:** o bloco `initDensidadeAutomatica` (`window.spoResolverDensidade` e o acompanhamento da largura); saiu o `densidadeEmUso`.
+- **Modo dos diagramas:** `getResolvedCommonDiagramMode` com `normalizeCommonVisualPreferences`, `getSystemPrefersMoreContrast`, `getSystemForcedColorsActive` e as duas `matchMedia` (`systemContrastQuery`, `systemForcedColorsQuery`). Com cores forçadas do Windows ela devolve "system", e o kit desenha com a paleta clara (o tema "system" é montado por outra função).
+- **"Última atualização por UO":** o trecho do `AMAZON_TZ` até o `renderUltimasAtualizacoes` (fuso de Manaus, datas, escape), chamado com dados de exemplo.
+- **Topo do relatório recortado do `relatorios_fip613.html`** (mesmos `id`s: `fip613-relatorio-meta`, `tot-*`, botões), entrando na lista `CATALOGO` do teste; o kit preenche os totais como o JS do FIP (crédito e teto sem cor; bloqueado e saldo com `pos`/`neg`).
+- **Ainda reproduzido, com teste de equivalência:** o filtro de lista dos relatórios (o SPO tem uma cópia do `buildFilter` em cada relatório; o teste confere as classes e os textos dos dois lados).
+- `tests/test_kit_mockup.py` (+3): as assinaturas lidas continuam no `main.js` e o kit as pede; as funções lidas não passaram a chamar outras do SPO (provado: uma chamada falsa a `syncThemeControls` dentro do `applyAccentColor` reprova); equivalência dos filtros.
+
+Testado no kit: Clássico/Azul, claro/escuro, diagramas automático/alto contraste, densidade automática/ampla, "Padrão SPO" volta tudo; "Última atualização" escrita pela função do SPO (horário no fuso de Manaus); totais do FIP; fluxos, gráficos e teclado intactos; console sem erros.

@@ -473,8 +473,12 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
   (`initNavegacaoTabelas`, `initTecladoPaginacao`) e a regra da oferta "Leitura confortável" da Atkinson
   (`initSugestaoAtkinson`) e os **presets do Contrato Visual Protegido** (`PROTECTED_CONTRACT_PRESETS`:
-  Padrão SPO, Compacto gerencial, Contraste técnico, Pressão operacional): **nada é cópia**, o kit
-  acompanha o SPO sozinho.
+  Padrão SPO, Compacto gerencial, Contraste técnico, Pressão operacional), e roda as **funções do SPO** para
+  aplicar o destaque (`applyAccentColor`, sem gravar), a densidade automática (`initDensidadeAutomatica`),
+  o modo dos diagramas (`getResolvedCommonDiagramMode`) e a "Última atualização por UO"
+  (`renderUltimasAtualizacoes`): **nada é cópia**, o kit acompanha o SPO sozinho. O que o kit ainda
+  reproduz (o filtro de lista dos relatórios, que no SPO é copiado em cada relatório, e o comportamento dos
+  cartões do Personalizar, sem gravar) tem teste de equivalência ou segue as funções `sync*` do SPO.
   Aberto do disco (`file://`), o navegador bloqueia a leitura do `main.js`; o kit avisa e fica no padrão.
 - Painel **"Preferências do kit"** com **os próprios cartões do Personalizar** (Tema, Cor de destaque,
   Preferências comuns, Fontes e tamanho do texto, Visão e cores — mesma marcação do template, descrições

@@ -56,6 +56,13 @@
     const chaveContrato = fonte.match(/const PROTECTED_CONTRACT_STATE_KEY = "([^"]+)"/);
     if (!chaveContrato) throw new Error("PROTECTED_CONTRACT_STATE_KEY não encontrado no main.js");
     const bloco = (nome) => `${trecho(fonte, `(function ${nome}() {`, true)})();`;
+    // funções de dentro do bloco principal do main.js, pela assinatura inteira (o trecho começa nela)
+    const funcao = (assinatura) => trecho(fonte, assinatura, true);
+    const linha = (nome) => {
+      const m = fonte.match(new RegExp(`const ${nome} = [^;]+;`));
+      if (!m) throw new Error(`${nome} não encontrado no main.js`);
+      return m[0];
+    };
     return {
       fluxos: `${trecho(fonte, "function initGovernancaSemanticFlows() {", true)}
 initGovernancaSemanticFlows();`,
@@ -63,6 +70,22 @@ initGovernancaSemanticFlows();`,
       diagramas: objeto(fonte, "const COMMON_DIAGRAM_THEMES = Object.freeze({"),
       graficos: ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"].map(bloco),
       presets: objeto(fonte, "const PROTECTED_CONTRACT_PRESETS = Object.freeze({"),
+      // [jean] feat/kit-sem-copias: destaque, densidade automática e modo dos diagramas pelas funções do SPO
+      // (antes o kit tinha cópias delas)
+      fonteDestaque: funcao("function applyAccentColor(accent, persist = true) {"),
+      densidadeAuto: bloco("initDensidadeAutomatica"),
+      // "Última atualização por UO" dos relatórios: do fuso de Manaus até o renderUltimasAtualizacoes
+      fonteUltimas: (() => {
+        const i = fonte.indexOf("const AMAZON_TZ = ");
+        const marca = "const renderUltimasAtualizacoes = (meta, data) => {";
+        const j = fonte.indexOf(marca);
+        if (i < 0 || j < i) throw new Error("renderUltimasAtualizacoes não encontrado no main.js");
+        return `${fonte.slice(i, j)}${trecho(fonte, marca, true)};\nreturn renderUltimasAtualizacoes;`;
+      })(),
+      fonteModoDiagramas: [linha("systemContrastQuery"), linha("systemForcedColorsQuery"),
+        funcao("function getSystemPrefersMoreContrast() {"), funcao("function getSystemForcedColorsActive() {"),
+        funcao("function normalizeCommonVisualPreferences(raw = {}) {"),
+        funcao("function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {")].join(";\n"),
       chaveContrato: chaveContrato[1],
       sugestao: {
         ordem: objeto(sugestao, "const ORDEM = {"),
@@ -121,44 +144,32 @@ initGovernancaSemanticFlows();`,
     return tema === "dark";
   }
 
-  // como o applyAccentColor do main.js
-  function aplicarDestaque(chave) {
-    const paleta = spo.destaques[chave] || spo.destaques[spo.destaquePadrao];
-    const alvos = [document.documentElement, body];
-    const pôr = (nome, valor) => alvos.forEach((a) => a.style.setProperty(nome, valor));
-    Object.entries(paleta.vars).forEach(([n, v]) => pôr(n, v));
-    pôr("--accent", "var(--color-500)");
-    pôr("--accent-strong", "var(--color-400)");
-    pôr("--lab-accent", "var(--color-400)");
-    if (body.classList.contains("theme-dark")) Object.entries(paleta.dark).forEach(([n, v]) => pôr(n, v));
-    body.dataset.accentPreference = chave;
-  }
-
-  // como o login-theme.js: densidade "auto" pela largura da janela
-  function densidadeEmUso(pref) {
-    if (pref !== "auto") return pref;
-    const largura = window.innerWidth || 1280;
-    return largura <= 720 ? "spacious" : (largura <= 1200 ? "compact" : "comfortable");
+  // applyAccentColor do main.js (com persist = false: não grava) e getResolvedCommonDiagramMode, montados com
+  // os dados que o kit já leu; a densidade automática vem do initDensidadeAutomatica (window.spoResolverDensidade)
+  let aplicarDestaque = null;
+  let modoDiagramas = null;
+  function montarFuncoesDoSpo() {
+    aplicarDestaque = new Function("ACCENT_COLORS", "DEFAULT_ACCENT", `${spo.fonteDestaque};\nreturn applyAccentColor;`)(spo.destaques, spo.destaquePadrao);
+    modoDiagramas = new Function("COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES",
+      `${spo.fonteModoDiagramas};\nreturn getResolvedCommonDiagramMode;`)(spo.visualPadrao, spo.visual, spo.diagramas);
+    new Function(spo.densidadeAuto)();
   }
 
   function aplicar() {
     body.classList.toggle("theme-dark", temaEscuro(estado.tema));
     body.dataset.themePreference = estado.tema;
-    aplicarDestaque(estado.destaque);
+    aplicarDestaque(estado.destaque, false);
     body.dataset.visualDensityPref = estado.density;
-    body.dataset.visualDensity = densidadeEmUso(estado.density);
+    body.dataset.visualDensity = typeof window.spoResolverDensidade === "function" ? window.spoResolverDensidade(estado.density) : estado.density;
     body.dataset.visualContrast = estado.contrast;
     body.dataset.visualCards = estado.cards;
     // como o setProtectedContractVisualPreset do main.js: no <html> e no <body>
     document.documentElement.dataset.visualContractPreset = estado.preset;
     body.dataset.visualContractPreset = estado.preset;
-    // como o getResolvedCommonDiagramMode do main.js (sem as cores forçadas do Windows)
-    const escuro = body.classList.contains("theme-dark");
-    const maisContraste = !!(window.matchMedia && window.matchMedia("(prefers-contrast: more)").matches);
+    // modo dos diagramas pela função do SPO (com cores forçadas do Windows ela devolve "system"; o kit então
+    // desenha com a paleta clara, porque o tema "system" é montado por outra função do main.js)
     body.dataset.visualDiagrams = estado.diagrams;
-    body.dataset.visualDiagramTheme = estado.diagrams === "high" || (estado.diagrams === "auto" && maisContraste)
-      ? (escuro ? "highDark" : "highLight")
-      : (estado.diagrams === "auto" ? (escuro ? "dark" : "light") : estado.diagrams);
+    body.dataset.visualDiagramTheme = modoDiagramas({ ...spo.visualPadrao, density: estado.density, contrast: estado.contrast, cards: estado.cards, diagrams: estado.diagrams });
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
     sincronizar();
     desenharGraficos();
@@ -342,7 +353,6 @@ initGovernancaSemanticFlows();`,
       estado = padrao();
       aplicar();
     });
-    window.addEventListener("resize", () => { body.dataset.visualDensity = densidadeEmUso(estado.density); });
   }
 
   const recolher = document.getElementById("kit-recolher");
@@ -401,7 +411,24 @@ initGovernancaSemanticFlows();`,
         ? `<td class="num${c === "saldo" ? (l[c] < 0 ? " neg" : (l[c] > 0 ? " pos" : "")) : ""}">${moeda(l[c])}</td>`
         : `<td>${esc(l[c])}</td>`)).join("")}</tr>`).join("")
       : `<tr><td colspan="${COLUNAS.length}" class="muted">Nenhum resultado com estes filtros.</td></tr>`;
-    document.getElementById("kit-total").textContent = moeda(dados.reduce((s, l) => s + l.valor, 0));
+    // totais do topo (recortado do FIP 613), preenchidos como o JavaScript da tela: no FIP, crédito e teto ficam
+    // sem cor e bloqueado e saldo recebem pos/neg pelo sinal
+    const tot = (id, texto, sinal) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = texto;
+      el.classList.remove("pos", "neg");
+      if (sinal > 0) el.classList.add("pos");
+      if (sinal < 0) el.classList.add("neg");
+    };
+    const credito = dados.reduce((s, l) => s + l.valor, 0);
+    const saldo = Math.round(credito * 0.29 * 100) / 100; // saldo de dotação de exemplo (positivo, como costuma ser)
+    tot("tot-paoe", new Set(dados.map((l) => l.acao)).size > 1 ? "Vários PAOEs" : (dados[0] ? dados[0].acao.split(" - ")[0] : "-"));
+    tot("tot-grupo", "1*3*4");
+    tot("tot-cred-autorizado", moeda(credito));
+    tot("tot-bloqueado", moeda(-201449949.07), -1);
+    tot("tot-teto", moeda(credito - 201449949.07));
+    tot("tot-saldo-dotacao", moeda(saldo), Math.sign(saldo));
     paginacao.innerHTML = "";
     const botao = (rotulo, destino, desligado, ativo) => {
       const b = document.createElement("button");
@@ -510,6 +537,11 @@ initGovernancaSemanticFlows();`,
     .then((r) => { if (!r.ok) throw new Error(`main.js: HTTP ${r.status}`); return r.text(); })
     .then((fonte) => {
       spo = lerMainJs(fonte);
+      montarFuncoesDoSpo();
+      new Function(spo.fonteUltimas)()(document.getElementById("fip613-relatorio-meta"), {
+        ultimas_por_uo: [{ rotulo: "14101 - SEDUC", user_email: "usuario.exemplo@spo-dev.test",
+          uploaded_at: "2026-11-15T13:59:25", data_arquivo: "2026-11-15T09:14:00" }],
+      });
       estado = vigentes(); // as preferências vigentes no SPO deste navegador (sem nenhuma, é o padrão SPO)
       montarPainel();
       aplicar();
