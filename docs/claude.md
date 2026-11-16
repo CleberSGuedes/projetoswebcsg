@@ -3119,3 +3119,11 @@ Avaliação pedida pelo dev. Jean (o kit e o SPO resistem a ampliações?): o ta
 - Conferido que reprova: cor nova (`#1a5fb4`) e mais um uso de cor existente (`#ffffff`; o comando de atualizar também recusou); e que aceita: token novo definido com cor e usado por `var()`.
 - Cores por nome (`white`, `black`…) não são contadas.
 - Padrão: regra de ouro (§3), checklist (§6.1) e roteiro do N5 (§7) atualizados.
+
+## Teste contra cor e tamanho em style="…" nos templates e no JS (dev. Jean, 2026-11-15)
+
+Segunda trava da avaliação "o padrão resiste a ampliações?": os testes do CSS (`test_cor_literal.py`, `test_tamanho_fonte.py`) não veem o que é escrito direto na marcação. `tests/test_style_inline.py`:
+- **Templates** (`templates/**/*.html`, sem comentários Jinja): declarações de cor (`color`, `background`, `border*`, `outline`, `fill`, `stroke`, `box-shadow`) e de texto (`font`, `font-size`, `font-family`, `line-height`) dentro de `style="…"`; definição de variável (`--swatch`, as amostras do Personalizar, §6.3) não conta. Medição: só **6** antigas — links "Esqueci a senha"/"Voltar ao login" (`login.html`, `forgot_password.html`, `reset_password.html`; do dev. Cleber), título "UO …" do aviso da Início (`dashboard.html`) e o bloco monoespaçado de Acessos à API (2) — em `REFERENCIA`, por arquivo. Reprova arquivo novo ou contagem que sobe; quando desce, pede para baixar (skip).
+- **`main.js`:** `.style.color/background/backgroundColor/borderColor/outlineColor/fill/stroke = "…"` e `setProperty("color"…)` só com `var(--…)` (hoje: 4 `borderColor = "var(--primary)"`; a sonda `probe.style.color = name` usa variável e não conta); `.style.fontSize = "…"` nunca; HTML montado com `style="…"` só sem cor (`#…`, `rgb(…)`, `hsl(…)`) ou tamanho escritos à mão — valor calculado (`${colorFor(…)}`, a cor do grupo vinda da paleta do tema, §3.5) e `var(--…)` são aceitos (4 casos no Teto).
+- Conferido com cópias de segurança: reprova cor nova e `font-size` novo no template, `.style.color = "#ff0000"` e `style="color:#123456"` em HTML do JS; aceita variável e margem no template e `${cor}`/`var(--text)` no JS. Arquivos devolvidos idênticos.
+- Padrão: §6.1 (item do `style=`) e §7 (os 6 antigos como dívida).
