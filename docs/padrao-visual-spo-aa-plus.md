@@ -493,7 +493,10 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   `COMMON_DIAGRAM_THEMES`, `initDiagramasDestaque`, `initGraficosAcessiveis` e `initGraficosEscala` lidos
   do `main.js`): mostram o efeito de cada escolha.
 - Na tela de exemplo, componentes com a marcação real: cabeçalho de página, cartão `module-card`,
-  cartões dinâmicos (`flow-node`), formulário (campos,
+  o **catálogo de padrões** (cada exemplo recortado do template de origem: cartões dinâmicos com painel de
+  contexto e fluxo com setas de Governança e Resultados — com o comportamento do `initGovernancaSemanticFlows`
+  lido do `main.js` —, cartões de painel, cartão de documento do Institucional, indicadores do Teto e
+  opções de envio das Notas SEE; os cartões do mockup PTA/OpR entram quando ele for integrado), formulário (campos,
   desabilitado, hierarquia dos botões), aviso `alert-info` e uma **tela de relatório** com a marcação dos
   relatórios do SPO (FIP 613, PLAN20, PED): `report-header`, cartão `report-data-card`, topo
   `relatorio-top relatorio-top-uo` com "Última atualização por UO" (o HTML do `renderUltimasAtualizacoes`),
@@ -525,7 +528,9 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   template precisam ser copiados para o kit) e se o CSS do
   kit escrever px ou cor literal; também se a marcação das prévias do Personalizar mudar sem ir para o kit,
   se os blocos dos gráficos mudarem de forma ou passarem a depender de outra função global e se o Plotly
-  do kit não for o mesmo do `base.html`. **Opção nova no Personalizar:** copiar o cartão do template para o
+  do kit não for o mesmo do `base.html`; e se um exemplo do catálogo deixar de ser igual ao template de
+  origem. **Padrão novo de cartão no SPO:** acrescentar ao catálogo (recorte do template + linha na lista
+  `CATALOGO` do teste). **Opção nova no Personalizar:** copiar o cartão do template para o
   painel do kit (o teste aponta qual).
 
 ## 7. Dívida conhecida (roteiro do N5)
