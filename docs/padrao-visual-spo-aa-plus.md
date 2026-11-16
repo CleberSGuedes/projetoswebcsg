@@ -422,7 +422,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Nenhuma cor literal em componente; use os tokens (§3). Precisa de cor nova? Crie um token
       (definido por tema) e registre aqui. O `tests/test_cor_literal.py` reprova cor escrita à mão.
 - [ ] Botões na hierarquia do §4.1; campos, listas e navegação como no §4.
-- [ ] Nada de `style="color:…"`/`background` no HTML (#52).
+- [ ] Nada de `style="color:…"`/`background`/`font-size` no HTML (#52) nem cor ou tamanho escritos à mão pelo
+      JS (`.style.color = "#…"`, `style="color:#…"` em HTML montado): o `tests/test_style_inline.py` reprova
+      (valor calculado da paleta do tema, `${…}`, e `var(--…)` podem).
 - [ ] Nada de `window.alert`/`confirm`/`prompt` (bloqueados em alguns navegadores; #61).
 - [ ] Cabeçalho de página no padrão do §4.4, com o ícone do item do menu.
 - [ ] Textos na escala do §2.2 (mínimo 12 px, entrelinha 1,5 no texto corrido); números na fonte de dados.
@@ -583,6 +585,7 @@ resolvido por `initGraficosEscala`).
 | Programação PTA/OpR com cabeçalho próprio | depende do futuro do mockup (dataPTA) |
 | Ícone do cabeçalho repete o do `MENU_META`; paleta do login repete o `ACCENT_COLORS` | na divisão, gerar de uma fonte só |
 | Cores forçadas do Windows, `prefers-contrast: more`, leitor de tela, Firefox/Safari | não medidos |
+| `style="…"` antigos com tamanho de texto (15/11; travados pelo `tests/test_style_inline.py`): links "Esqueci a senha"/"Voltar ao login" (12 px) no login e nas telas de senha (templates do dev. Cleber), título "UO …" do aviso da Início (0,95rem) e o bloco monoespaçado de Acessos à API (12 px) | migrar para classes com as variáveis da densidade; ao migrar, baixar a `REFERENCIA` do teste |
 | **Achado do kit de mockup (15/11):** componentes comuns fora da "Densidade do texto" — título do cartão `.module-card-title h2` (15 px fixo), descrição dele (12), texto corrido e listas de cartão (14, herdado do `body`) e avisos `.alert` (14) | **resolvido** (`fix/densidade-cartoes-pos-neg`): título = `--spo-fs-titulo`, descrição = `-controle`, texto e listas = `-texto`, avisos = `-leitura` (os da Limpeza de Histórico têm tamanho próprio). No Intermediário, título 15 → 14 e texto do cartão 14 → 13 nas 11 telas com cartão de seção |
 | **Achado do kit de mockup (15/11):** `pos`/`neg` só pintam nos totais (`.totais-row`) e na tabela do FIP 613 (`.fip-table td.num`); numa tabela nova, o negativo fica sem cor | **resolvido**: tokens `--spo-positive`/`--spo-negative` e regra para qualquer `td.num.pos/.neg` do conteúdo (§3.4) |
 
