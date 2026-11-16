@@ -8611,12 +8611,17 @@ body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-
    Escuro: o azul puro daria 1,9:1; tons claros mais vivos que os pastéis de antes,
    #94baff (7,7:1) e #ff9999 (7,4:1) sobre o cartão #242424/#262626.
    Vale para todos os relatórios que marcam pos/neg (FIP 613, PED, EMP, NOB, EST EMP…).
+   [jean] fix/densidade-cartoes-pos-neg (2026-11-15; achado do kit de mockup): as cores viram os
+   tokens --spo-positive/--spo-negative (padrão SPO-AA+ §3.4) e valem em QUALQUER célula numérica
+   do conteúdo (td.num.pos/.neg), não só na tabela do FIP 613 — tabela nova que marca o sinal
+   já sai colorida, como manda o §6.1.
    ========================================================================== */
+body { --spo-positive: #0000ff; --spo-negative: #a00000; }
+body.theme-dark { --spo-positive: #94baff; --spo-negative: #ff9999; }
 @media (forced-colors: none) {
-  body :is(.totais-row .pos, .fip-table td.num.pos):not(#spo-valor) { color: #0000ff; }
-  body :is(.totais-row .neg, .fip-table td.num.neg):not(#spo-valor) { color: #a00000; }
-  body.theme-dark :is(.totais-row .pos, .fip-table td.num.pos):not(#spo-valor) { color: #94baff; }
-  body.theme-dark :is(.totais-row .neg, .fip-table td.num.neg):not(#spo-valor) { color: #ff9999; }
+  body :is(.totais-row .pos, .fip-table td.num.pos, #content-area td.num.pos):not(#spo-valor) { color: var(--spo-positive); }
+  body :is(.totais-row .neg, .fip-table td.num.neg, #content-area td.num.neg):not(#spo-valor) { color: var(--spo-negative); }
+  body #content-area td.num:is(.pos, .neg):not(#spo-valor) { font-weight: 600; }
 }
 
 /* ==========================================================================
@@ -9856,4 +9861,23 @@ body .module-header-copy > p.teto-dashboard-fonte:not(#spo-dens):not(#spo-dens-b
 #content-area table :is(td, th)[tabindex]:focus-visible {
   outline: 3px solid var(--spo-focus-ring, var(--accent));
   outline-offset: -3px;
+}
+
+/* ==========================================================================
+   [jean] Componentes comuns na "Densidade do texto" (fix/densidade-cartoes-pos-neg, 2026-11-15;
+   achado do kit de mockup, padrão SPO-AA+ §2.2.1 e §7). Com a densidade trocada no kit, estes não
+   mudavam: título do cartão de seção (15 px fixo), a descrição dele (12 px fixo), o texto corrido e as
+   listas do cartão e os avisos (14 px, herdados do body). No Intermediário (padrão SPO): título 15 → 14,
+   texto do cartão 14 → 13; descrição (12) e avisos (14) ficam como estavam. Os avisos da Limpeza de
+   Histórico têm tamanho próprio e ficam de fora.
+   ========================================================================== */
+body #content-area .module-card-title h2:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-titulo); }
+body #content-area .module-card-title p:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-controle); }
+body #content-area .module-card > p:not(#spo-dens):not(#spo-dens-b),
+body #content-area .module-card > ul > li:not(#spo-dens):not(#spo-dens-b),
+body #content-area .module-card > ol > li:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body #content-area .alert:not(.limpeza-regras):not(.limpeza-pendente):not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
 }
