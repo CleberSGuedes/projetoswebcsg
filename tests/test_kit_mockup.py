@@ -200,6 +200,8 @@ CATALOGO = [
     ("institucional_diretrizes.html", '<div class="noticia-box">', "div"),
     ("paineis_teto_orcamentario.html", '<div class="teto-kpi-grid">', "div"),
     ("notas_see.html", '<div class="see-upload-options">', "div"),
+    # feat/kit-sem-copias: topo do relatório (Última atualização, totais e botões) recortado do FIP 613
+    ("relatorios_fip613.html", '<div class="actions relatorio-top relatorio-top-uo">', "div"),
 ]
 
 
@@ -249,3 +251,70 @@ def test_kit_abre_o_documento_do_padrao():
     assert 'data-spo-padrao="tecnico"' in kit and "data-spo-padrao>" in kit, "o kit perdeu os botões do padrão"
     assert "docs/padrao-visual-spo-aa-plus.md" in kit, "o kit deve apontar o arquivo-fonte do padrão"
     assert (RAIZ / "docs" / "padrao-visual-spo-aa-plus.md").exists()
+
+
+# ---- feat/kit-sem-copias: o kit usa as funções do SPO em vez de cópias delas
+
+# assinatura no main.js -> como o kit-mockup.js a pede
+FUNCOES_LIDAS = {
+    "function applyAccentColor(accent, persist = true) {": "function applyAccentColor(accent, persist = true) {",
+    "(function initDensidadeAutomatica() {": '"initDensidadeAutomatica"',
+    "const systemContrastQuery = ": 'linha("systemContrastQuery")',
+    "const systemForcedColorsQuery = ": 'linha("systemForcedColorsQuery")',
+    "function getSystemPrefersMoreContrast() {": "function getSystemPrefersMoreContrast() {",
+    "function getSystemForcedColorsActive() {": "function getSystemForcedColorsActive() {",
+    "function normalizeCommonVisualPreferences(raw = {}) {": "function normalizeCommonVisualPreferences(raw = {}) {",
+    "function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {":
+        "function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {",
+    "const AMAZON_TZ = ": "const AMAZON_TZ = ",
+    "const renderUltimasAtualizacoes = (meta, data) => {": "const renderUltimasAtualizacoes = (meta, data) => {",
+}
+# o que o kit entrega a essas funções (o resto tem de estar dentro do trecho lido)
+FORNECIDOS = {"ACCENT_COLORS", "DEFAULT_ACCENT", "COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES"}
+
+
+def test_funcoes_do_spo_lidas_pelo_kit():
+    main = _main()
+    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
+    for assinatura, pedido in FUNCOES_LIDAS.items():
+        assert assinatura in main, f"o kit de mockup lê do main.js: {assinatura!r} (mudou de nome ou de forma)"
+        assert pedido in kit_js, f"o kit-mockup.js deixou de pedir {pedido!r}"
+
+
+def test_funcoes_lidas_nao_dependem_de_outras_do_spo():
+    main = _main()
+    # todas as funções nomeadas do main.js (as que um trecho lido poderia chamar sem o kit ter)
+    nomeadas = set(re.findall(r"\bfunction\s+([A-Za-z_]\w*)\s*\(", main)) | set(
+        re.findall(r"\bconst\s+([A-Za-z_]\w*)\s*=\s*(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>", main))
+    trechos = {
+        "applyAccentColor": _trecho(main, "function applyAccentColor(accent, persist = true) {", True),
+        "getResolvedCommonDiagramMode": _trecho(main, "function getResolvedCommonDiagramMode(preferences = readCommonVisualPreferences()) {", True),
+        "normalizeCommonVisualPreferences": _trecho(main, "function normalizeCommonVisualPreferences(raw = {}) {", True),
+    }
+    lidas = {"applyAccentColor", "getResolvedCommonDiagramMode", "normalizeCommonVisualPreferences",
+             "getSystemPrefersMoreContrast", "getSystemForcedColorsActive", "readCommonVisualPreferences"}
+    for nome, codigo in trechos.items():
+        corpo = codigo[codigo.index("{"):]  # sem a assinatura (o valor padrão do parâmetro não é chamado pelo kit)
+        chamadas = set(re.findall(r"\b([A-Za-z_]\w*)\s*\(", corpo)) & nomeadas
+        locais = set(re.findall(r"\b(?:const|let|function)\s+([A-Za-z_]\w*)", corpo))  # definidos no próprio trecho
+        extras = chamadas - lidas - FORNECIDOS - locais
+        assert not extras, f"{nome} passou a chamar {sorted(extras)}: o kit de mockup precisa ler essas funções também"
+    # o renderUltimasAtualizacoes só usa o que está entre AMAZON_TZ e ele
+    i, j = main.index("const AMAZON_TZ = "), main.index("const renderUltimasAtualizacoes = (meta, data) => {")
+    bloco = main[i:j] + _trecho(main, "const renderUltimasAtualizacoes = (meta, data) => {", True)
+    definidos = set(re.findall(r"\bconst\s+([A-Za-z_]\w*)", bloco))
+    chamadas = set(re.findall(r"\b([A-Za-z_]\w*)\s*\(", bloco)) & nomeadas
+    assert chamadas <= definidos, f"renderUltimasAtualizacoes passou a usar {sorted(chamadas - definidos)} de fora do trecho"
+
+
+def test_filtros_de_lista_do_kit_equivalentes_aos_do_spo():
+    """O kit reproduz o filtro de lista dos relatórios (o SPO tem uma cópia do buildFilter em cada relatório):
+    as classes e os textos dos dois lados têm de ser os mesmos."""
+    main = _main()
+    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
+    pecas = ['"mf-wrapper"', '"mf-display"', '"mf-panel"', '"mf-search"', '"mf-options"', '"mf-option"',
+             '"mf-actions"', '"mf-btn ghost"', '"mf-btn primary"', '"Buscar..."', '"Cancelar"', '"Aplicar"', '"(Todos)"']
+    faltam_main = [p for p in pecas if p not in main]
+    faltam_kit = [p for p in pecas if p not in kit_js and p.replace('"', "") not in kit_js]
+    assert not faltam_main, f"o filtro de lista do SPO mudou ({faltam_main}): atualize o filtro do kit de mockup"
+    assert not faltam_kit, f"o filtro de lista do kit não segue mais o do SPO: {faltam_kit}"
