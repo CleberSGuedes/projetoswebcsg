@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SPO — PTA 2027 pela Cadeia Estratégica de Programação</title>
+  <title>SPO — PTA/OpR pela Cadeia Estratégica de Programação</title>
   <link rel="stylesheet" href="assets/pta-2027.css?v=20260701.pta-mobile-contract-1">
+  <link rel="stylesheet" href="assets/spo-escala.css?v=20261114.jean-mockup-aa.1"><!-- [jean] escala SPO-AA+ (gerado) -->
+  <link rel="stylesheet" href="assets/spo-preferencias.css?v=20261115.jean-densidade.1"><!-- [jean] preferências do SPO -->
 </head>
 <body>
   <script>
@@ -31,12 +33,11 @@
     <section id="value-view" class="value-view">
       <div class="hero">
         <div>
-          <span class="eyebrow">PTA 2027 · NOVA JORNADA DE PROGRAMAÇÃO</span>
+          <span class="eyebrow"><abbr title="Plano de Trabalho Anual">PTA</abbr>/<abbr title="Orçamento para Resultado">OpR</abbr> · NOVA JORNADA DE PROGRAMAÇÃO</span>
           <h1>Da estratégia à entrega pública</h1>
-          <p>Comece pelo valor que a SEDUC pretende gerar. A estrutura programática, a chave de planejamento e o orçamento serão construídos ao longo da jornada.</p>
+          <p>Comece pelo valor que a política pretende gerar. A estrutura programática, a chave de planejamento e o orçamento serão construídos ao longo da jornada.</p>
         </div>
         <div class="hero-actions">
-          <label><span>Exercício</span><select><option>2027</option></select></label>
           <button class="secondary-button" id="resume-button" type="button">Continuar rascunho</button>
         </div>
       </div>
@@ -208,7 +209,7 @@
     <section id="wizard-view" class="wizard-view hidden">
       <aside class="journey-panel">
         <button id="back-to-map" class="text-button" type="button">← Voltar à cadeia estratégica</button>
-        <div class="journey-heading"><span>PROGRAMAÇÃO PTA 2027</span><strong id="journey-title">Nova programação</strong></div>
+        <div class="journey-heading"><span>PROGRAMAÇÃO <abbr title="Plano de Trabalho Anual">PTA</abbr>/<abbr title="Orçamento para Resultado">OpR</abbr></span><strong id="journey-title">Nova programação</strong></div>
         <nav id="journey-tree" class="journey-tree" aria-label="Etapas da programação"></nav>
         <div class="journey-help"><strong>A lógica foi invertida.</strong><p>Você descreve a entrega pública. O SPO organiza a estrutura técnica necessária.</p></div>
       </aside>
@@ -250,6 +251,7 @@
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="assets/eap-data.js"></script>
-  <script src="assets/pta-2027.js?v=20260701.lab-visual-4"></script>
+  <script src="assets/pta-2027.js?v=20261114.jean-nome-pta.1"></script>
+  <script src="assets/spo-preferencias.js?v=20261115.jean-sem-retrato.1"></script><!-- [jean] preferências do SPO -->
 </body>
 </html>

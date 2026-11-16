@@ -1433,7 +1433,1885 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Produção (`main`): só durante o dia, até ~18:00, nunca à noite.** A automação roda de madrugada e precisa validar antes.
 - **Depois do deploy:** Restart no cPanel e conferência rápida (login, a tela do tema e, se mexeu em jobs, `python scripts/limpar_jobs_orfaos.py`).
 
-## Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
+## 41. AA+ (acessibilidade) — dev. Jean (2026-11-13)
+
+As subseções vêm dos PRs #31 a #63 da `dev/jean`, na ordem em que entraram.
+
+### 41.1 Totais dos relatórios de execução sem corte nem sobreposição (dev. Jean, 2026-11-12)
+
+**Problema (medido no ambiente do dev. Jean):** o quadro "Totais (filtros aplicados)" de PED, FIP 613, PLAN 20, EMP, EST EMP e NOB tinha duas colunas fixas (`.relatorio-top-uo .totais-box`, linhas com `minmax(90px, 130px) minmax(0, 1fr)`) e valores com `white-space: nowrap`. O conteúdo ficava mais largo que o quadro em quase todas as larguras:
+- 390 px (celular): o quadro saía do cartão e era cortado (`.card.plan20-card` 342 px de conteúdo em 296; FIP 613 359/296; PLAN 20 366/296; EST EMP 349/296); na tela, "2026Valor PED: 19.23…" encavalado e valores cortados;
+- 1024 px: 352–376 px de conteúdo num quadro de 281 px, com os valores invadindo a coluna vizinha;
+- 1366 px: até 25 px a mais. NOB e PLAN 21 já cabiam.
+
+**Correção (só CSS, bloco `[jean]` no fim do `static/css/style.css`):** o quadro usa `grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr))` (duas colunas quando cabem, uma quando não) e cada linha vira flex com quebra: rótulo à esquerda, valor à direita, e o valor desce para a linha de baixo se os dois não couberem lado a lado. O PLAN 51 (`.totais-box--wide`) mantém o quadro próprio. `templates/base.html`: `?v=20261112.jean-totais.1` só no link do CSS.
+
+**Efeito visível:** a 1024 e 1366 px o quadro passa a uma coluna (fica mais alto; no FIP 613, os 6 totais em lista), mas nenhum valor é cortado.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, dados reais já carregados (PED, FIP 613, PLAN 20, PLAN 21, NOB, EST EMP); medição automática do quadro (largura do conteúdo × largura do quadro, valor além da linha, linhas sobrepostas) em 390, 768, 1024 e 1366 px — todos sem corte nem sobreposição depois da correção; capturas antes/depois do FIP 613 em 390 e 1024 px. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+### 41.2 Fontes e tamanho do texto no Personalizar Temas SPO (dev. Jean, 2026-11-12)
+
+**Motivo:** o SPO não carregava nenhuma fonte web. A pilha começava por "Cantarell", que o Windows não tem, então cada aparelho mostrava uma fonte diferente (Segoe UI, a do sistema no Mac, Roboto no Android). E os tamanhos mais usados no CSS são pequenos (12 px ×72, 11 px ×59, 10 px ×17; 8 px nas células de tabela), o que pesa contra a meta de acessibilidade AA+.
+
+**O que entra:** um cartão novo **"Fontes e tamanho do texto"** no Personalizar Temas SPO, com três escolhas guardadas no navegador (chave própria `spo-font-preferences`, como as demais preferências locais):
+- **Fonte da interface:** Clássica (padrão SPO, a pilha de sempre), Inter, Atkinson Hyperlegible (feita para baixa visão) e Source Sans 3;
+- **Fonte de tabelas e dados** (tabelas, valores dos totais e indicadores do Teto): Clássica (padrão SPO), Inter com números de largura fixa (`tabular-nums`), IBM Plex Sans e Intel One Mono (monoespaçada feita com foco em legibilidade);
+- **Tamanho do texto:** Padrão (100%), Grande (112%) e Maior (125%), com `zoom` só na área de conteúdo (`.main`); menu e topo não mudam.
+
+**O padrão não muda nada:** "Clássica + 100%" deixa o SPO como era, sem baixar nenhuma fonte.
+
+**Fontes hospedadas no SPO** (`static/fonts/`, pasta nova), não pelo Google Fonts: nenhum dado do usuário vai a terceiros. Só o subconjunto latino (cobre o português), ~180 KB no total; o navegador só baixa a fonte escolhida. Todas sob a **SIL Open Font License 1.1**, com o `OFL.txt` em cada pasta; origem (Fontsource 5.3.x via jsDelivr), bytes e sha256 de cada arquivo em `static/fonts/LEIA-ME.md`.
+
+**Arquivos:** `static/css/style.css` (bloco `[jean]` no fim: `@font-face` com nomes "SPO …", troca pelos atributos `data-spo-font-ui`, `data-spo-font-data` e `data-spo-text-size` no `<body>`); `static/js/main.js` (bloco `initFontesPersonalizar` no fim: lê e aplica a preferência em todas as telas; cliques no cartão por delegação e um `MutationObserver` para o cartão, que é carregado depois); `templates/partials/atualizar_personalizar_spo.html` (o cartão, com amostra de texto e números); `templates/base.html` (`?v=20261112.jean-fontes.2` no CSS e no JS). Nenhuma função ou regra existente foi alterada.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com cliques reais no cartão: cada fonte aplicada e só ela baixada; a preferência sobrevive à recarga; "Clássica" nas tabelas continua clássica mesmo com outra fonte na interface; com 125%, nenhuma das 8 telas medidas transborda a 390 px. Ajuste junto: com o texto ampliado, a coluna "Última atualização por UO" (`.meta-uo-col`, `min-width: 190px`) e o e-mail longo passavam 6 px do cartão no celular; só nesse caso, a coluna libera a largura e o texto quebra (totais de PED, FIP 613, PLAN 20, EST EMP e NOB conferidos a 390 px em 112% e 125%). `node --check static/js/main.js` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+**Depende do PR dos totais** (`fix/totais-relatorios-responsivo`): com fonte monoespaçada e 125%, os totais do FIP 613 encavalam sem aquela correção; com ela, ficam limpos (testado).
+
+### 41.3 Contraste AA do botão principal dos relatórios, da prévia do Personalizar e dos números do Teto (dev. Jean, 2026-11-12)
+
+**Problema (medido nas 8 cores de destaque × claro/escuro, no ambiente do dev. Jean):** três elementos usam a cor de destaque e ficavam abaixo do mínimo AA (4,5:1) — 35 das 48 combinações:
+- **"Baixar Excel"** (`.report-actions .btn:last-child`, texto branco sobre degradê da cor de destaque): no claro o degradê começa na `--color-400` (a mais clara da paleta; no claro, `--accent-strong` = color-400 e `--accent` = color-500), de 1,47:1 (amarelo) a 5,91 (roxo), Clássico 3,47; no escuro, de 1,19 a 2,51 em **todas** as cores;
+- **Números do painel Teto** (`.teto-kpi strong`, cor `--accent-strong`): no claro, de 1,47 a 5,91 (Clássico 3,47); no escuro já passavam;
+- **Botão "Ação principal" da prévia do Personalizar** (`.preview-actions button:first-child`, branco sobre `--accent`): no claro falhava em 6 cores (amarelo 3,04); no escuro, de 1,51 a 3,02 em todas.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)` para não interferir no modo de alto contraste do sistema):** no claro, texto na cor de destaque usa `--color-700` e o botão com texto branco usa fundo `--color-800`→`--color-700` (prévia: `--color-700`); no escuro, os dois botões na cor de destaque clara passam a ter texto escuro (`#111111`). `templates/base.html`: `?v=` do CSS em `jean-contraste.2`.
+
+**Depois:** as 48 combinações passam no AA; mínimo 4,69:1 (amarelo no claro, color-700), as demais acima de 4,99. Efeito visível: no claro, os números do Teto e o "Baixar Excel" ficam num verde mais escuro (Clássico); no escuro, o "Baixar Excel" passa a texto escuro sobre o verde claro.
+
+**Junto — cores dos totais no tema claro:** os valores positivos (azul) e negativos (vermelho) dos totais (`.totais-row .pos/.neg`, ex.: "Bloqueado/Conting." e "Saldo de Dotação" do FIP 613; totais do PED e do EST EMP) apareciam na cor do texto no claro, porque `.report-data-card .totais-row strong { color: var(--text) }` é mais específica que `.totais-row .pos/.neg`; no escuro as regras `.theme-dark …` venciam. Agora `.report-data-card .totais-row strong.pos/.neg` usam `#0b3c91`/`#8b0000` no claro (10:1) e `#6ea8ff`/`#ff8b8b` no escuro, como antes. `?v=20261112.jean-contraste.2`.
+
+**Fora daqui:** o rótulo "Clássico (padrão SPO)" da paleta, que a auditoria do dev. Jean apontou, é texto só para leitor de tela (recortado em 1 px) — falso positivo, nada a corrigir. Outros botões com texto branco sobre a cor de destaque ainda não foram medidos em todas as cores.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste calculado no navegador sobre o pior ponto do degradê, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (números do Teto e "Baixar Excel", claro e escuro). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+### 41.4 Foco visível padrão em todo o SPO (dev. Jean, 2026-11-12)
+
+**Problema (medido com teclado real, no ambiente do dev. Jean):** em 4 telas (FIP 613, Personalizar Temas, painel Teto, Alterar Senha), **nenhum dos 75 elementos focáveis** tinha indicador de foco próprio com 2 px e contraste 3:1 (WCAG 2.2: 2.4.7; meta AA+ 2.4.13). O menu dependia do contorno automático do navegador (fino e diferente em cada navegador); o botão de recolher o menu (`.icon-btn:focus { outline: none }`) e os botões pequenos (Limpar Filtros, Atualizar) não mostravam nada. Há 13 regras no CSS que removem o `outline` e 21 regras de foco, cada uma para um componente.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)`):** no foco por teclado (`:focus-visible`), todo controle (links, botões, campos, `summary`, `[tabindex]`, `[role=button]`, `[role=tab]`) ganha um anel de **3 px, afastado 2 px**, na cor de destaque com contraste garantido: `--color-700` no claro e `--accent` no escuro (variável `--spo-focus-ring`). No menu lateral o anel fica por dentro (`outline-offset: -3px`) para não ser cortado. Clique de mouse não mostra o anel. A especificidade (`body :is(...):focus-visible`) vence as regras antigas que tiravam o contorno; a busca do Painel de Permissões, que tem foco no contêiner com `!important`, continua como está. `templates/base.html`: `?v=20261112.jean-foco.1`.
+
+**Depois:** nas mesmas telas, todos os elementos com anel de 3 px — 85/85 no escuro e 65/65 no claro (FIP 613 e Personalizar), contraste mínimo medido 8,5:1; calculado para as 8 cores de destaque: mínimo 4,30:1 (roxo no escuro), acima dos 3:1 exigidos. Clique de mouse no "Limpar Filtros": sem anel (`:focus-visible` falso). Capturas antes/depois com o dev. Jean.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; Tab real para o modo teclado e foco em cada elemento, esperando as transições terminarem; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+### 41.5 Alvos de toque: mínimo 24 px sempre e 44 px em telas de toque (dev. Jean, 2026-11-12)
+
+**Problema (medido em FIP 613, Teto, Personalizar, Diretrizes, Alterar Senha e Início, no ambiente do dev. Jean):**
+- abaixo do mínimo AA (WCAG 2.2, 2.5.8: 24 px) só o **botão de recolher o menu**, `#sidebar-toggle`, com **22×22 px** no desktop (em tela estreita o Contrato Responsivo já o leva a 40 px);
+- abaixo da meta AA+ (2.5.5: 44 px), no celular (390 px), **quase todos os controles**: filtros das tabelas (`.mf-display`) 32 px, paginação 29, cores do Personalizar 34, ícones do menu recolhido 38, botões e campos 34–40.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+- em qualquer tela, a **área clicável** do botão de recolher o menu cresce para 34 px por um pseudo-elemento invisível (`::after` com `inset: -6px`), sem mudar o desenho (continua 22×22);
+- **só em telas de toque** (`@media (pointer: coarse)`): botões, links-botão, itens do menu, filtros, campos e listas com `min-height: 44px`; ícones, cores do Personalizar, paginação e itens do menu com `min-width: 44px`. Com mouse, a densidade do desktop não muda.
+
+**Depois:** no celular, **91 de 91** controles medidos nas 6 telas com pelo menos 44 px e nenhum abaixo de 24 px, sem transbordo horizontal; no desktop, tamanhos visuais iguais aos de antes e o botão de recolher clicável num raio de 12 px a partir do centro. Efeito visível no celular: botões e filtros mais altos; a paginação do FIP 613 passa de 2 para 3 linhas.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, emulação de celular (390 px, toque) e desktop (1366 px, mouse); capturas antes/depois (cores do Personalizar e paginação do FIP 613). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-alvos.1`.
+
+### 41.6 Contraste AA+ (7:1) no tema claro (dev. Jean, 2026-11-12)
+
+**Problema (medido em 10 telas no tema claro, no ambiente do dev. Jean):** 256 textos abaixo de 7:1 (meta AA+, WCAG 1.4.6), quase todos por duas cores:
+- **cinza secundário `--muted: #5e5c64`** — 210 textos (rótulos, "muted", rodapé), mínimo 5,46:1 no fundo esverdeado do Personalizar;
+- **cor de destaque como texto** (`--accent`, `#0f7c68` no Clássico) — 34 textos (subtítulo do topo, `.eyebrow`/`.report-eyebrow`/`.module-eyebrow`, links das Diretrizes, título de modal), mínimo 4,8:1; nas outras cores bem pior (Amarelo 1,9:1).
+
+Casos isolados: `.text-muted` do Bootstrap (6,78), botão cinza "Fechar" do Bootstrap (4,69), "Administrar SPO" com submenu aberto (`--accent-strong` = color-400, 3,45:1) e o **`.btn-primary` genérico** (degradê `--color-600` → `--color-400`, texto branco: 3,47:1 no Clássico, abaixo até do AA).
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, só no tema claro, dentro de `@media (forced-colors: none)`):**
+- `--muted` e `--bs-secondary-color` = **`#48464e`** (≥ 7,7:1 em todos os fundos claros medidos);
+- variável **`--spo-accent-text`**: o tom mais claro de cada paleta que passa de 7:1 — `--color-700` (Clássico, Azul, Roxo), `--color-800` (Ciano, Verde, Laranja, Vermelho), `--color-900` (Amarelo), escolhido pelo `body[data-accent-preference]`; usada no texto de `.subtitle`, `.eyebrow`, `.report-eyebrow`, `.module-eyebrow`, `.modal-header-title`, links de `.noticia-box`, "Administrar SPO" aberto e números do Teto;
+- botões com texto branco na cor de destaque (`.btn-primary`, "Baixar Excel", prévia do Personalizar): fundo em degradê desse mesmo tom;
+- `.btn-secondary` (Bootstrap): `#495057`;
+- rodapé (`.footer .footer-line`): de 9,2 para **11 px** (nos dois temas).
+
+**Depois:** 0 textos abaixo de 7:1 nas 8 telas medidas, **com as 8 cores de destaque** (1.141 textos por cor; degradês medidos no pior ponto). **Efeito visível (identidade):** no claro, textos secundários um pouco mais escuros; subtítulo, títulos pequenos e links num tom mais fechado da cor de destaque (no Amarelo, um tom ocre escuro); botões principais mais escuros. O tema escuro não muda (exceto o tamanho do rodapé).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de todo texto visível, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (Diretrizes no Clássico, rodapé, Alterar Senha no Amarelo). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-aaplus.1`.
+
+**Pendente (tema escuro, AA+):** azul/vermelho dos números nas tabelas (`td.num.pos/.neg`, 6,3 e 6,7:1) e números do Teto (6,0:1) ficam um pouco abaixo de 7:1 no escuro.
+
+### 41.7 Contornos de controles (AA), AA+ no escuro e "Contraste reforçado" de verdade (dev. Jean, 2026-11-12)
+
+**Problema (medido em FIP 613, Alterar Senha, Personalizar e Teto, 8 cores de destaque × claro/escuro × contraste padrão/reforçado, no ambiente do dev. Jean):**
+- **contorno dos controles** (campos, listas, filtros `.mf-display`, botões sem preenchimento) abaixo do **AA** (WCAG 1.4.11, 3:1): 1,36:1 no claro e 1,26–1,92:1 no escuro — 232 a 240 de 248 controles; os botões de preferência do Personalizar não tinham borda nenhuma no escuro;
+- o **"Contraste reforçado"** (Personalizar → Preferências comuns → Contraste) dava números **idênticos** ao padrão: só mexia em sombras de alguns componentes;
+- no **escuro**, texto abaixo de 7:1 (meta AA+): secundário `#c0bfbc` (6,87), cor de destaque como texto (até 3,5:1 no Roxo), azul/vermelho dos números (`#6ea8ff` 5,24; `#ff8b8b` 5,61), números do Teto e "Administrar SPO" aberto (`--accent-strong`), botões com texto escuro sobre a cor de destaque (5,23 no Roxo).
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`, dentro de `@media (forced-colors: none)`):**
+- variável **`--spo-control-border`** no contorno dos controles, fora de hover/foco: `#86848c` no claro (3,2:1) e `#828282` no escuro (3,3:1); os botões de preferência ganham borda de 1 px;
+- escuro: `--muted` `#d0cfcc`; `--spo-accent-text` = `--color-200` (`--color-100` em Azul, Vermelho e Roxo) nos títulos pequenos, subtítulo, links, números do Teto e "Administrar SPO" aberto; números azul `#9cc4ff` e vermelho `#ffb3b3`; botões principais com texto escuro sobre esse tom claro;
+- **reforçado**: contorno `#636169` (claro) / `#a6a6a6` (escuro), ≥ 4,5:1, também nos cartões, cabeçalhos e tabelas; texto secundário `#38363d` (claro) / `#e2e1de` (escuro), ≥ 9,6:1.
+
+**Depois:** nas 4 telas × 8 cores × 2 temas × 2 modos (6.248 textos e 344 controles por combinação de tema): **0 textos abaixo de 7:1**; contornos ≥ 3,7:1 no padrão e ≥ 4,9:1 no reforçado. **Efeito visível:** contornos de campos e filtros mais marcados nos dois temas; no escuro, títulos pequenos, links e números um pouco mais claros; o reforçado agora se percebe (contornos fortes nos cartões e texto secundário quase na cor do principal).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean; contraste de texto (pior ponto dos degradês) e de contorno/preenchimento dos controles contra o fundo de fora, com as 8 paletas aplicadas como a `applyAccentColor` faz; capturas antes/depois (filtros do FIP 613, claro e escuro, e o reforçado). `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-reforcado.1`.
+
+### 41.8 Movimento reduzido (dev. Jean, 2026-11-12)
+
+**Problema:** o SPO não tinha nenhuma regra para quem pede "reduzir movimento" no sistema operacional (WCAG 2.3.3, meta AA+; `prefers-reduced-motion`): 4 animações contínuas (barra, marcador e pontos da tela "Carregando página…", ícone girando de `.planning-component-loading-row`), 32 transições no CSS (18 com deslocamento ou ampliação ao passar o mouse) e 14 rolagens suaves pedidas pelo JS (`scrollIntoView({ behavior: "smooth" })`), que o CSS sozinho não desliga.
+
+**Correção:**
+- `static/css/style.css`, bloco `[jean]` no fim, dentro de `@media (prefers-reduced-motion: reduce)`: transições e animações instantâneas (`0.01ms`, uma vez), rolagem `auto`; os indicadores de carregamento ficam parados (`animation: none`; barra em 34%, pontos visíveis) — o texto "Carregando…" continua;
+- `static/js/main.js`, bloco `initMovimentoReduzido` no fim: com a preferência ligada, `scrollIntoView` com `behavior: "smooth"` vira `"auto"` (o resto do pedido, como `block`, fica igual); sem a preferência, nada muda. Nenhuma chamada existente foi alterada.
+- `templates/base.html`: `?v=20261112.jean-movimento.1` no CSS e no JS.
+
+**Verificação** (o navegador do teste não simula a preferência, então em três partes): regra carregada com a condição `(prefers-reduced-motion: reduce)`; com o corpo da regra aplicado na página, elementos com transição/animação na Início caem de 100 para 0 e a barra/pontos de carregamento param; a lógica do JS testada com a preferência simulada (`smooth` → `auto`; sem a preferência e chamadas sem objeto, intactas) e a rolagem real funcionando; navegação por 4 telas sem erro no console. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+### 41.9 AA nas telas que faltavam: botões vermelhos, etapas, títulos de seção, botão "+" e login (dev. Jean, 2026-11-12)
+
+**Problema (medido em uploads, cadastros e login, já com as correções de acessibilidade anteriores, no ambiente do dev. Jean):**
+- **botões vermelhos `.btn-danger`** (Cancelar, Remover, Excluir, Limpar Formulário) no claro: texto branco sobre `#ef4444`→`#dc2626`, **3,76:1** (abaixo do AA);
+- no **escuro**, a regra `.theme-dark .btn` tirava o preenchimento de `.btn-danger` e `.btn-secondary`: ficavam só com borda translúcida **1,92:1** (abaixo do AA, 1.4.11), e o "Excluir" ficava igual ao "Editar";
+- **botão de etapa ativo** do formulário de Subação (`.wizard-step-btn.active`): branco sobre `--accent`, **1,83:1** no escuro e 5,12 no claro;
+- **título de seção** (`.form-section-title`) na cor de destaque: 5,12 no claro;
+- **botão "+" de adicionar linha** da Meta Física: **18×18 px** (abaixo de 24, 2.5.8) e com opacidade 85%;
+- **login** no claro: título e "Esqueci a senha" em `--accent`, 4,70:1; e o "Entrar" (depois do AA+ no claro) ficava verde em qualquer cor de destaque, porque o login só carrega o `--accent`, não a paleta inteira.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** `.btn-danger` `#a51d1d`→`#991b1b` no claro (≥ 7,5:1 com branco) e preenchido `#ffb3b3` com texto escuro no escuro; `.btn-secondary` com `--spo-control-border` no escuro; etapa ativa e título de seção no `--spo-accent-text` (fundo ou texto, como os demais) e etapas inativas com contorno de controle; botão "+" com 24×24 px (44 no toque) e opacidade 1; login com `--accent` escurecido por `color-mix` (50%, ou 40% no Amarelo) no título, no link e no "Entrar". `templates/base.html` e `templates/login.html`: `?v=20261112.jean-telas.1` (o login ainda estava em `20261002.sync-main.1`).
+
+**Depois:** as 7 telas (FIP 613 e EMP de Atualizar; Dotação formulário/consulta; Meta Física formulário/consulta; Subação) **sem nenhum texto abaixo de 7:1, contorno abaixo de 3:1 ou alvo abaixo de 24 px, nas 8 cores × claro/escuro**; ícone do "+" ≥ 10:1; login ≥ 9:1 no Clássico e no Amarelo. Efeito visível: vermelho mais escuro no claro; no escuro, botões vermelhos voltam a ser vermelhos (rosa claro).
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o usuário de teste recebendo acesso temporário às telas (só visualização; nada enviado; acesso revogado ao final); capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+### 41.10 Gráficos acessíveis: resumo para leitor de tela e tabela de dados (dev. Jean, 2026-11-12)
+
+**Problema:** os 5 gráficos Plotly do painel Teto Orçamentário (grupo de despesa, ADJ, Pareto de macropolíticas, ação/PAOE, exercício × grupo) não tinham **nenhuma alternativa em texto** (WCAG 1.1.1, **nível A**): sem nome, sem descrição, sem tabela; o leitor de tela lia só fragmentos do desenho ("74,4%20,4%5,19%", "417244918040…").
+
+**Correção (bloco `initGraficosAcessiveis` no fim do `static/js/main.js`, CSS em bloco `[jean]` no fim do `style.css`; o código dos gráficos não foi alterado):** para cada gráfico Plotly (`.js-plotly-plot`), lendo os dados do próprio gráfico (`gd.data`):
+- `role="img"` + `aria-label` com título (o `h2` do painel), tipo, número de itens, maior item (ou maior valor e série, com várias séries) e total — por exemplo: "Teto por grupo de despesa. Gráfico de pizza com 3 itens. Maior: 1 - Pessoal e Encargos Sociais, R$ 8.430.673.401,00. Total: R$ 11.333.931.142,00…";
+- logo abaixo, um `<details>` **"Ver dados do gráfico em tabela"** com os mesmos números (uma coluna por série, `% do total` quando há uma série só, linha de total; `caption`, `th scope`); percentuais do eixo secundário (Pareto) como %;
+- atualiza sozinho quando o gráfico é redesenhado (filtros, tema), por `MutationObserver` com assinatura dos dados — sem laço com a própria tabela.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean: na árvore de acessibilidade os 5 gráficos aparecem como imagem com nome; somas conferidas (pizza = indicador "Teto total"; exercício: soma dos grupos = "Total Geral"); filtro "4 - Investimentos" atualiza resumo e tabela; teclado: foco no "Ver dados…" com anel visível e Enter abre; contraste mínimo 9,85:1 (claro) e 10,56:1 (escuro); a 390 px a página não transborda (tabelas largas rolam na própria caixa). `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261112.jean-graficos.1` no CSS e no JS.
+
+### 41.11 Semântica e teclado: menu operável, título da aba, "Pular para o conteúdo", avisos modais, abas e filtros (dev. Jean, 2026-11-12)
+
+**Problema (medido com teclado real, no ambiente do dev. Jean):**
+- **o menu não era operável pelo teclado** (WCAG 2.1.1, **nível A**): os grupos (Administrar SPO, Institucional, Relatórios, Painéis, Usuários e os subgrupos) são `<div class="menu-item menu-parent">` sem foco; na Início o Tab só passava por "Expandir menu → Início → Sair → Fechar". Quem usa só o teclado não chegava a nenhum relatório;
+- o **título da aba** era sempre "SPO" (2.4.2, A);
+- sem **"Pular para o conteúdo"** (2.4.1);
+- ao trocar de tela o foco ficava no menu e nada anunciava a página nova; Início e Teto **sem título principal**;
+- **avisos modais** (`.modal-overlay`) sem `role="dialog"`/`aria-modal`, sem levar o foco para dentro nem prendê-lo, sem Esc;
+- **abas** Gráficos/Tabelas do Teto sem `aria-controls` nem setas;
+- **filtros** que abrem lista (`.mf-display`, `.planning-action-checklist-toggle`) sem `aria-expanded` (4.1.2).
+
+**Correção (bloco `initSemanticaTeclado` no fim do `static/js/main.js`; CSS em bloco `[jean]`; nenhuma função existente alterada):**
+- grupos do menu com `role="button"`, `tabindex="0"`, `aria-controls` e `aria-expanded` sincronizado; Enter/Espaço disparam o mesmo clique que já abre/fecha;
+- a cada troca de tela (filhos do `<main id="content-area">`): título da aba "‹título› — SPO" (sem `h1`, o nome do item do menu), título principal (`h1`, ou `role="heading" aria-level="1"` no título visível), foco no título e aviso "Página carregada: …" (`role="status"`); com um aviso modal aberto, o foco não sai dele;
+- "Pular para o conteúdo" como primeiro item do Tab (visível só no foco), levando ao `<main>`;
+- avisos modais: `role="dialog"`, `aria-modal`, `aria-labelledby` no título, foco no primeiro controle, Tab preso, Esc aciona "Fechar/Cancelar", e o foco volta a quem abriu (ou ao título da página);
+- abas (`role="tablist"`): `aria-controls`/`role="tabpanel"`, `tabindex` itinerante, setas/Home/End;
+- filtros: `aria-haspopup` e `aria-expanded` conforme a lista aberta;
+- ✓ nas opções escolhidas do Personalizar (a seleção já tinha `aria-pressed` e uma barra; agora também o sinal);
+- o mesmo anel de foco do A4 para elementos focados por script (`[tabindex="-1"]`).
+- `templates/base.html`: `?v=20261112.jean-teclado.1` no CSS e no JS.
+
+**Verificação (teclado real):** Tab: "Pular para o conteúdo → Expandir menu → Início → Administrar SPO → Institucional → Relatórios → Painéis…"; Enter em Relatórios → Execução → FIP 613 abre a tela, foco no `h1`, aba "FIP 613 — SPO", aviso "Página carregada: FIP 613"; modal de pendências da Início: foco dentro (3 de 3 aberturas), Tab preso, Esc fecha e o foco vai ao título; abas do Teto com setas; filtros com `aria-expanded` correto. Dois ajustes no caminho: a troca de tela roubava o foco do modal aberto; e o "devolver foco" de um aviso fechado tirava o foco de outro aviso aberto — corrigidos. `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco.
+
+**Fora daqui:** Esc nas listas dos filtros e navegação por setas dentro do menu (o Tab já percorre tudo); telas de cadastro com modais próprios não foram exercitadas uma a uma.
+
+### 41.12 Superfícies do tema: filtros, paginação e caixas de seleção (dev. Jean, 2026-11-13)
+
+**Problema:** peças antigas tinham cores fixas de uma paleta cinza-azulada em vez das variáveis do tema (cinzas neutros `#1e1e1e`/`#242424`/`#3d3d3d`): lista aberta do filtro (`.mf-panel`, `#11171d`), Cancelar/Aplicar (`.mf-btn`, `#1e2833`), paginação e "itens por página" (`#111827`, borda `#1f2937`, a ~1,1:1 sobre o cartão) e rodapé de totais das tabelas (`.table-foot`, `#0f1418`). No escuro a lista do filtro parecia de outro sistema. As caixas de seleção não tinham `accent-color` e ficavam no azul do navegador nos dois temas (só a árvore de permissões tinha cor própria). No claro, as bordas da paginação, de Cancelar e da lista do filtro ficavam em 1,36:1 (mínimo 3:1, WCAG 1.4.11). O selo "editando" dos cadastros tem `color:#111827` no HTML, ilegível no escuro.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** essas peças passam a usar `var(--card)`, `var(--border)`, `var(--text)` e `var(--spo-control-border)`; caixas de seleção e opções com `accent-color` — no claro o tom escuro do destaque (`--spo-accent-text`), no escuro `--accent` (a mesma cor do botão Aplicar); selo "editando" com `var(--text)` no escuro. Os diagramas e gráficos do Contrato Visual têm paleta azulada própria e intencional e ficaram como estão.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean. Varredura em 30 telas no escuro procurando fundos/bordas azulados: antes, 8 relatórios com as peças acima; depois, nenhum (fora os diagramas). Nos 8 destaques × 2 temas: caixa marcada sobre o cartão ≥ 4,3:1 (escuro) e ≥ 8,17:1 (claro); bordas da paginação e da lista 4,04:1 (escuro) e 3,69:1 (claro). Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-superficies.1` no CSS (JS sem mudança).
+
+### 41.13 Zoom, telas estreitas e "Texto das tabelas" no Personalizar (dev. Jean, 2026-11-13)
+
+**Medição:** 30 telas a 320 px de largura (WCAG 1.4.10), a 640 px (200% de uma tela de 1280, 1.4.4) e com espaçamento de texto ampliado (altura de linha 1,5, letras +0,12 em, palavras +0,16 em; 1.4.12). Nenhuma página rola de lado nem corta texto; as tabelas largas rolam dentro da própria caixa. Dois achados:
+1. a ≤ 420 px o cabeçalho cortava com "…" o nome do sistema e a linha do usuário (data e "Logados"), em todas as telas;
+2. o texto das tabelas dos relatórios (`.fip-table`, `.plan20-table`) é de **8 px**, com títulos de coluna de 10 px, filtros de 8 px e paginação de 10 px. Com 12 px nas mesmas colunas, as linhas ficam cerca de 2× mais altas (FIP 613: 65 → 143 px).
+
+**Correção:**
+- **Cabeçalho:** a ≤ 420 px o nome e a linha do usuário quebram a linha em vez de cortar (o topo passa de 83 para 107 px).
+- **Texto das tabelas:** decisão do dev. Jean — virou escolha no Personalizar, cartão "Fontes e tamanho do texto", grupo **"Texto das tabelas"**: **Compacto (padrão SPO)**, que é como hoje (8 px); **Intermediário (10 px)**, do tamanho dos títulos das colunas; ou **Legível (12 px)**, indicado para baixa visão. Nas duas opções maiores, tabelas, filtros e paginação dos relatórios mudam juntos.
+  - Mesma mecânica das fontes: `localStorage` `spo-font-preferences`, chave `table`, atributo `data-spo-table-text` no `<body>`.
+  - Mudanças: 2 linhas em `initFontesPersonalizar` (`main.js`), o grupo no `atualizar_personalizar_spo.html` e CSS em bloco `[jean]` no fim do `style.css`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Menor texto nas tabelas: 8, 10 e 12 px nos três modos, nos 9 relatórios com dados.
+- Altura média das linhas (10 primeiras, a 1366 px) nos três modos: FIP 613 48 → 59 → 75 px; PLAN 20 112 → 170 → 204; PED 175 → 215 → 255.
+- Voltando para "Compacto", tudo volta a 8 px.
+- O ✓ da opção escolhida (A11) ganhou folga para não encostar no texto da descrição.
+- A amostra do cartão mostra a tabela no tamanho escolhido em "Texto das tabelas" (antes ficava fixa em 12 px). Os dois ajustes se combinam: o "Tamanho do texto" amplia a página inteira, tabelas incluídas (ex.: Maior + Legível = 12 × 1,25 = 15 px na tela).
+- A 320 px, o cabeçalho fica sem "…" e sem rolagem lateral.
+- `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+- Sem script de banco. `templates/base.html`: `?v=20261113.jean-zoom.1` no CSS e no JS.
+
+### 41.14 Contornos dos controles na cor de destaque, em três níveis (dev. Jean, 2026-11-13)
+
+**Problema:** para garantir 3:1 nos contornos (WCAG 1.4.11), um bloco anterior (contornos de controles, AA) usou um **cinza neutro fixo** (`--spo-control-border`: `#86848c` no claro, `#828282` no escuro) em todos os controles, inclusive nas linhas de opção do Personalizar. Isso trouxe dois efeitos:
+- a cor de destaque sumiu dos controles; a prévia do Personalizar seguia o destaque, os cartões ao lado não;
+- com todas as linhas contornadas com força, a **selecionada** quase não se distinguia das outras.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+1. **Campos, filtros e botões secundários** (onde a borda é o próprio controle): `--spo-control-border` vira um tom do destaque, o mais claro que passa em 3:1.
+   - Claro: um passo da paleta — `--color-400` (Clássico, Azul, Vermelho), `--color-500` (Ciano, Verde, Laranja), `--color-700` (Amarelo), `--color-300` (Roxo).
+   - Escuro: `color-mix(in srgb, var(--accent) 65%, var(--card))`; no Roxo, 85%.
+   - "Contraste reforçado": ≥ 4,5:1 (claro `--color-400`…`--color-800` conforme o destaque; escuro `--accent`, Roxo `--accent-strong`).
+2. **Linhas de opção** (`.preference-row`, `.visual-pref-toggle`, `.visual-pref-option`), em três níveis:
+   - **em repouso:** suave, no tom da prévia (`--spo-option-border`, destaque a ~30% sobre o cartão). Ícone, texto e seta já identificam o controle;
+   - **mouse, foco ou grupo aberto:** `--spo-control-border` (≥ 3:1);
+   - **selecionada:** destaque cheio (`--spo-selected-border`), com 2 px por `box-shadow`, sem mudar o tamanho; continua com o fundo tingido e o ✓.
+
+   As linhas de opção saíram da regra geral de contorno daquele bloco anterior.
+3. **"Contraste reforçado":** todas as linhas ficam fortes (≥ 4,5:1), e a selecionada continua a mais forte.
+
+Cartões que só exibem informação continuam suaves no padrão, como antes.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, no Personalizar, nos 8 destaques × 2 temas, medido contra o cartão e o fundo da página.
+
+| Elemento | Contraste padrão | Contraste reforçado |
+|---|---|---|
+| Campos, filtros e botões | 3,02–5,91:1 | 4,51–12,01:1 |
+| Linha em repouso | 1,17–2,36:1 (suave, de propósito) | ≥ 4,7:1 |
+| Linha selecionada | 4,3–12:1 | 7,5–13,1:1, sempre acima das outras |
+
+Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam. Sem script de banco. `templates/base.html`: `?v=20261113.jean-contornos.3` no CSS (JS sem mudança).
+
+### 41.15 Diagramas e gráficos na cor de destaque (dev. Jean, 2026-11-13)
+
+**Problema:** no tema escuro, os diagramas no modo "automático" ou "escuro" usavam uma **paleta azul fixa**, qualquer que fosse o destaque escolhido:
+- fundo `#0f172a`/`#111827`;
+- nós `#252b36`;
+- bordas e conectores `#93c5fd`.
+
+Isso valia para os gráficos do Teto, os cartões do fluxo (Mapa Conceitual e afins) e a prévia do Personalizar. O modo "claro" de diagrama usava um azul fixo, `#2563eb`. Além disso, a paleta dos gráficos no claro tinha cores claras demais para fundo branco: um amarelo `#f8cb2e`, a 1,6:1.
+
+**Correção:**
+- **CSS** (bloco `[jean]` no fim do `style.css`), nos diagramas resolvidos como "claro" ou "escuro" (`data-visual-diagram-theme`):
+  - **fundo neutro e igual para todos os destaques:** branco puro no claro, `#1a1a1a` no escuro, com nós `#ffffff`/`#262626`. Uma primeira versão tingia o fundo com o destaque; isso apagava as séries (efeito "sépia") e foi descartada;
+  - **só bordas, conectores, ícones e seleção seguem o destaque** (`--spo-accent-graphic`): no claro, o passo da paleta com ≥ 3:1; no escuro, o `--accent`;
+  - a prévia do Personalizar acompanha;
+  - os cartões do fluxo ganham os três níveis dos contornos: suave em repouso, forte no mouse/foco, destaque cheio (2 px) quando selecionado.
+- **JS** (bloco `initDiagramasDestaque` no fim do `main.js`): como no AA+ da v4.3.1 (`spo-aa-plus-plotly.js` do laboratório), a paleta dos gráficos passa a ser o **destaque seguido de 7 cores da v4.3.1**.
+  - No claro, tons fundos e saturados: `#0f766e`, `#1d4ed8`, `#b91c1c`, `#6d28d9`, `#0369a1`, `#334155`, `#c2410c`.
+  - No escuro, tons claros e vivos: `#5eead4`, `#93c5fd`, `#fca5a5`, `#c4b5fd`, `#67e8f9`, `#e2e8f0`, `#fb923c`.
+  - A cor mais parecida com o destaque vai para o fim, para as séries continuarem distintas.
+  - O fundo do Plotly fica transparente; o fundo vem do `.teto-chart`.
+  - Seleção, foco e conector passam para o destaque.
+  - **Função existente alterada:** `getCommonDiagramTheme` ganhou 2 linhas, que chamam `window.spoTemaDiagramaComDestaque` se ela existir; sem ela, o comportamento é o anterior.
+- **Alto contraste:** continua com as cores fixas, de propósito.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, nos 8 destaques × 2 temas, todas as séries de todos os gráficos do Teto.
+- Menor contraste de qualquer série sobre o fundo: **3,29:1** no claro e **4,82:1** no escuro (mínimo para gráficos: 3:1).
+- **Mapa Conceitual:** cartão selecionado com ≥ 3,29:1; cartões em repouso suaves.
+- Sem erro no console. Capturas antes, intermediárias (prints do dev. Jean) e depois.
+- `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-diagramas.3` no CSS e no JS.
+
+### 41.16 Contraste em três níveis: Suave (padrão SPO), Médio e Reforçado (dev. Jean, 2026-11-13)
+
+**Problema:** a preferência "Contraste" (Personalizar → Preferências comuns) tinha só dois níveis:
+- **Padrão:** linhas de opção e cartões clicáveis com contorno leve, e só a seleção e o foco fortes;
+- **Reforçado:** tudo com ≥ 4,5:1.
+
+Faltava um meio-termo para quem quer opções e cartões clicáveis sempre nítidos, sem o peso do Reforçado.
+
+**Correção:**
+- **`static/js/main.js`:** em `COMMON_VISUAL_OPTIONS.contrast` (lista que já existia), o rótulo de `standard` passa a "suave (padrão SPO)" e entra o valor novo `medium` ("médio").
+  - O valor gravado do padrão continua `standard`, então quem já tinha a preferência salva não vê mudança.
+  - Nada mais no JS foi alterado; `normalizeCommonVisualPreferences` aceita o valor novo porque lê essa lista.
+- **`templates/partials/atualizar_personalizar_spo.html`:** botão "Médio" e descrição nova do "Suave (padrão SPO)".
+- **CSS** (bloco `[jean]` no fim do `style.css`): no Médio, as linhas de opção e os cartões clicáveis do fluxo (Mapa Conceitual e afins) usam `--spo-control-border` (≥ 3:1 na cor de destaque); os cartões informativos continuam leves.
+  - No Reforçado, os cartões do fluxo também ficam fortes; antes ficavam leves.
+  - Verde no claro: o contorno passa ao `--color-600`, porque o `--color-500` dava 2,9:1 sobre o fundo `#f6f5f4`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Escolha pelo controle real: grava `contrast: "medium"` e o resumo mostra "médio".
+- Medido nos 3 níveis × 8 destaques × 2 temas:
+
+| Nível | Linhas de opção em repouso | Cartões do Mapa em repouso | Seleção |
+|---|---|---|---|
+| Suave | 1,33–2,4:1 (leve, de propósito) | leve | 4,3–12:1 |
+| Médio | 3,13–5,84:1 | 3,41–5,91:1 | 4,3–12:1 |
+| Reforçado | 4,7–11,9:1 | 5,12–12:1 | sempre a mais forte |
+
+- Campos e filtros: ≥ 3,17:1 no Suave e no Médio.
+- Capturas; `node --check` ok; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-contraste.2` no CSS e no JS.
+
+### 41.17 Plano de fundo da página mais neutro e com mais separação dos cartões (dev. Jean, 2026-11-13)
+
+**Problema:** o fundo da página quase não se separava dos cartões, e tudo parecia "chapado":
+- **claro:** `#f6f5f4`, um cinza quente, levemente rosado, contra cartões `#fff`: **1,09:1**;
+- **escuro:** `#1e1e1e` contra cartões `#242424`: **1,07:1**.
+
+No claro, os botões das Preferências comuns também tinham o fundo tingido pelo destaque (4%) em repouso, o que dava um ar creme.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** fundo igual para todos os destaques.
+- **Claro:** `#e6e9ed`, cinza neutro (1,22:1 contra o cartão).
+- **Escuro:** `#121212` (1,21:1).
+- Valem para `--bg`, `--body-bg` e `--footer-bg`, inclusive na tela de login.
+- Os botões das Preferências comuns ficam sem tinta em repouso; a tinta fica no grupo aberto e na opção escolhida.
+- **Azul no claro:** o texto de destaque passa ao `--color-800`. O `--color-700` dava 6,71:1 sobre o fundo novo; agora dá 8,64:1.
+- O alto contraste e as cores forçadas do sistema não mudam.
+
+A ideia constava do C13 ("superfície/plano de fundo") do laboratório do AA+, que não chegou a ser implementado.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean. Medi todos os textos, cada um contra o fundo real atrás dele, nas telas Personalizar, PED e Teto, nos 8 destaques × 2 temas.
+- **Claro:** menor contraste de 7,6:1 (Azul, depois do ajuste: 8,03:1 ou mais).
+- **Escuro:** menor contraste de 6,19:1, no número da página ativa da paginação com o Amarelo. Esse caso é anterior a esta mudança e fica anotado.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-fundo.2` no CSS (JS sem mudança).
+
+### 41.18 Abas pelo teclado e página ativa da paginação (dev. Jean, 2026-11-13)
+
+**Problemas:**
+- **Abas do Contrato Visual Protegido:** cada seta andava **duas** abas (de Presets, → ia para "Editor local"). As abas já tinham `role="tab"` e tratavam as setas (`initProtectedContractTabs`); o bloco de teclado do AA+ (`[jean] Semântica e teclado`) tratava a mesma tecla de novo.
+- **Consulta de Estrutura (Cadastros / Vínculos):** as abas não diziam ao leitor de tela o que controlavam. Usam `data-report-view` e mostram a mesma tabela; o bloco do AA+ só liga `aria-controls` por `data-view`.
+- **Paginação no escuro:** o número da página ativa ficava sobre 25% da cor de destaque. Com o Amarelo, **6,19:1** (o AA+ pede 7:1). A página ativa só se distinguia pela cor.
+
+**Correção:**
+- `main.js`, bloco `[jean] Semântica e teclado`: o tratamento das setas sai quando a tela já tratou a tecla (`ev.defaultPrevented`). Nova função `marcarPaginaAtual`: `aria-current="page"` no botão `.active` de toda `.pagination`.
+- `relatorios_estrutura_planejamento.html`: as abas ganham `id` e `aria-controls="planning-report-panel"`; o cartão da tabela vira `role="tabpanel"`, rotulado pelo título que muda com a consulta (`#planning-report-title`).
+- `style.css`, bloco `[jean]` no fim: no escuro, a página ativa fica com fundo a 16% do destaque, texto `var(--text)` e borda `var(--accent)`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- Contrato Visual: → quatro vezes passa por Regras, Editor, Pacote e Auditoria e volta a Presets; ←, Home, End, ↑ e ↓ andam uma aba.
+- Consulta de Estrutura: abas ligadas ao painel; → troca para Vínculos ("Função × Programa") e volta.
+- Paginação no escuro, 8 destaques: texto da página ativa de **9,21:1** (Amarelo) a 11,64:1; borda de 4,30:1 (Roxo) a 12,01:1 sobre o fundo da paginação; `aria-current` só na ativa. O claro não muda.
+- `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-abas-paginacao.1` no CSS e no JS.
+
+### 41.19 Listas dos filtros: Esc fecha e opção sob o mouse legível no escuro (dev. Jean, 2026-11-13)
+
+**Problema:** as listas abertas pelos filtros só fechavam clicando fora, em Cancelar ou em Aplicar. Quem usa o teclado ficava sem saída rápida, e o foco continuava dentro da lista.
+
+**Correção (só JS, bloco `[jean] Esc fecha as listas dos filtros` no fim do `main.js`):** com uma lista aberta, Esc fecha a lista e devolve o foco ao botão que a abriu.
+- **Filtros dos relatórios (`.mf-panel`):** Esc vale como **Cancelar**. A marcação ainda não aplicada é descartada, como no botão.
+- **Listas de marcar do Teto e da Estrutura (`.planning-action-checklist-panel`):** Esc só fecha, porque a marcação já vale na hora.
+- A tecla é tratada na captura do `document`, registrada no carregamento. Ela roda antes do Esc dos avisos modais: o primeiro Esc fecha a lista, o segundo, o aviso. Sem lista aberta, o Esc não faz nada aqui.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com Esc real do teclado.
+- **FIP 613:** com uma opção desmarcada e o foco na busca da lista, Esc fecha a lista, a opção volta, o filtro continua "14101", o foco vai ao botão e `aria-expanded` vira `false`.
+- **Teto Orçamentário:** Esc fecha a lista de marcar e devolve o foco ao botão. Um segundo Esc, sem lista aberta, não faz nada.
+- Sem erro novo no console; `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+**Opção sob o mouse no escuro:** nas listas de marcar (Teto, Estrutura), a opção sob o mouse ganhava o fundo `--color-100`, um tom claro do destaque, e o texto claro do tema escuro ficava ilegível (achado do dev. Jean nas telas de teste). Correção no bloco `[jean]` do fim do `style.css`: no escuro, o fundo passa a 16% do destaque (`rgba(var(--accent-rgb), 0.16)`), com texto `var(--text)`. Medido com o mouse real sobre a opção no Teto, nos 8 destaques: de 9,21:1 (Amarelo) a 11,64:1. O claro não muda (de 12,81 a 14,83:1).
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-esc-filtros.1` no CSS e no JS.
+
+### 41.20 Selo "editando" dos cadastros na cor do tema (dev. Jean, 2026-11-13)
+
+**Problema:** o selo que aparece ao lado do título nos cadastros ("- Edição do registro …", "- Aprovação do registro …") tinha a cor fixa `#111827` no HTML de 5 parciais. No escuro, ficava ilegível; até aqui, isso era compensado com uma regra `!important` no `style.css`.
+
+**Correção:**
+- **5 parciais** (`cadastrar_dotacao`, `cadastrar_est_dotacao`, `cadastrar_plan21_nger_etapa`, `cadastrar_plan21_nger_meta_fisica`, `cadastrar_plan21_nger_subacao`): o `style` do selo fica só com `display:none;`, que o JS continua trocando (`none`/`inline`). Cor, peso e margem passam para a classe `spo-editing-badge`.
+- **`style.css`:** sai a regra antiga `.theme-dark [id$="-editing-badge"] { … !important }`, e entra um bloco `[jean]` no fim com `.spo-editing-badge` (cor `var(--text)`, peso 500, margem 6 px).
+- **`templates/base.html`:** só a linha `?v=` do CSS.
+- O JS não muda.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, nas 5 telas com o selo visível.
+- **Escuro:** 14,26:1. **Claro:** 16,86:1.
+- Mesmo peso (500) e mesma margem (6 px) de antes. A cor segue o texto do tema, então vale para os 8 destaques.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-selo-editando.1` no CSS (JS sem mudança).
+
+### 41.21 Listas nativas (`<select>`) na cor do tema (dev. Jean, 2026-11-13)
+
+**Problema:** a lista aberta de um `<select>` era desenhada pelo navegador e pelo Windows, com o fundo do sistema e a opção sob o mouse no azul "Highlight", fora do tema e do destaque. Isso acontecia em todos os `<select>` do SPO (achado do dev. Jean na Subação). As listas montadas pelo SPO (filtros `mf-*`, listas de marcar) já seguiam o tema.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):** usa o *select personalizável* (`appearance: base-select`, Chrome e Edge 135+), dentro de `@supports`.
+- **Lista aberta:** superfície do tema, borda dos controles e cantos de 10 px.
+- **Opção sob o mouse ou no foco:** 16% do destaque, como nas listas dos filtros.
+- **Opção escolhida:** ✓ e negrito, para não depender só da cor.
+- **Campo fechado:** mantém as medidas. A seta volta a ser fina, na ponta direita, e gira quando a lista abre (sem animação com movimento reduzido).
+- Vale só para `<select>` de uma escolha (sem `multiple`/`size`), que é o caso de todo o SPO.
+- Firefox e Safari ignoram o bloco e seguem com a lista nativa.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- **Campo fechado:** em 43 `<select>` de 5 telas (Subação, Dotação, Meta Física, Consulta de Estrutura, FIP 613), largura, altura, espaçamento, borda e fundo ficaram iguais com e sem o recurso.
+- **Contraste do texto das opções:**
+
+  | Tema | Em repouso | Sob o mouse (8 destaques) |
+  |---|---|---|
+  | Escuro | 14,26:1 | 9,21 a 11,64:1 |
+  | Claro | 16,86:1 | 12,99 a 14,95:1 |
+
+- **Teclado:** ↓↓ e Enter escolhem a opção, disparam um `change`, fecham a lista e devolvem o foco ao campo.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-nativas.2` no CSS (JS sem mudança).
+
+### 41.22 Listas nativas: opções longas e valor longo no campo fechado (dev. Jean, 2026-11-13)
+
+Correção da seção anterior, achada no pré-teste do roteiro da homologação, com listas reais longas: a Subação da Dotação tem 471 opções, com até 345 caracteres.
+
+**Problemas:**
+- **Lista aberta:** com opções longas, abria com **1.945 px** de largura numa janela de 1.070. O texto passava da borda direita da tela e a lista não ficava alinhada ao campo.
+- **Campo fechado:** com um valor longo escolhido, crescia para **94 px**, em 3 linhas. O nativo fica em 40 px e corta o texto.
+- **"Itens por página" dos relatórios:** ficava sem a seta e 13 px mais estreito. A seta era apagada por uma regra antiga `.theme-dark .page-size .input { background: … }`, de especificidade (0,3,0), e o nativo mede a largura pela opção mais larga, não pela escolhida.
+
+**Correção (no mesmo bloco `[jean]` do fim do `style.css`):**
+- A lista aberta tem no máximo `min(40rem, 100vw − 16px)`, e o texto da opção quebra linha, sem perder informação.
+- O campo fechado fica numa linha: `white-space: nowrap`, `overflow: clip` e `overflow-clip-margin: content-box`. O texto é cortado antes da seta, com 34 px reservados à direita.
+- A seta passa a ser desenhada no **fundo** do campo, com dois `linear-gradient` em `currentColor`, e vira para cima com a lista aberta. Assim ela não é cortada junto com o texto. A regra da seta leva `:not(#spo-seta)`, que só soma peso de id, para vencer as regras antigas com `background:`. O `::picker-icon` fica oculto.
+- "Itens por página": `min-width: 8.3em`.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- **63 `<select>` de 17 telas**, nos dois temas, com o **valor mais longo** escolhido em cada um: todos com seta e com a mesma altura do nativo. A largura só muda nos "Itens por página", e depois do ajuste fica igual nos três tamanhos de "Texto das tabelas" (83, 83 e 100 px).
+- **Lista longa:** End vai à 471ª opção, Enter escolhe, a lista fecha e o foco volta ao campo.
+- **Celular** (emulado a 375 px): a lista da Etapa, com 439 opções, fica dentro da tela (95 a 370 px) e alinhada ao campo. O toque real fica para a homologação.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-listas-longas.3` no CSS (JS sem mudança).
+
+### 41.23 Totais dos relatórios de execução em duas colunas sempre que cabem (dev. Jean, 2026-11-13)
+
+**Problema** (apontado pelo Cleber, comparando com a produção): no FIP 613, o quadro "Totais (filtros aplicados)" aparecia em **uma coluna de 6 linhas**, e na produção aparece em duas. O A2 (#31) trocou as duas colunas fixas por colunas que se ajustam à largura, com mínimo de **14rem** por coluna. Assim, duas colunas só cabiam com o quadro a partir de ~470 px. A 1.600 px com o menu aberto o quadro tem **467 px**: caía para 1 coluna e a faixa crescia de 112 para **176 px**, tirando espaço da tabela.
+
+**Correção (só CSS, no bloco `[jean] Totais dos relatórios` do `style.css`):**
+- mínimo de **12rem** por coluna;
+- espaço entre colunas de 12 px (era 20);
+- espaço entre rótulo e valor de 6 px (era 8).
+
+O par mais largo ("Bloqueado/Conting.:" com o valor) precisa de ~199 px, e cada coluna passa a ter ~200. Quando duas colunas não cabem, continua em uma, com o valor descendo para a linha de baixo se preciso: o comportamento do A2, sem cortar valores.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com dados reais (Créd. Autorizado 5.914.425.031,88).
+
+| Largura | Menu | Colunas | Observação |
+|---|---|---|---|
+| 1.920 e 1.600 px | aberto ou fechado | **2** | nos 6 relatórios (FIP 613, PED, PLAN 20, EMP, EST EMP, NOB), sem valor cortado nem quebrado. A 1.600 com o menu aberto, a faixa voltou a 112 px. |
+| 1.366 px | fechado | **2** | |
+| 1.366 px | aberto | 1 | o quadro tem 317 px, e duas colunas cortariam os valores, como antes do A2 |
+| 1.024 e 390 px | — | 1 | sem corte e sem rolagem lateral |
+
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-totais-colunas.1` no CSS (JS sem mudança).
+
+### 41.24 Controles dos formulários: campo desabilitado no escuro e botões de decisão mais vivos (dev. Jean, 2026-11-13)
+
+**Problemas** (achados do dev. Jean na Etapa):
+1. **Campo desabilitado** (ex.: "Exercício"): o fundo era fixo, `#eef2f4`, nos dois temas. No escuro, o campo "acendia" (13,8:1 contra o cartão) em vez de parecer apagado. A borda também vinha na cor de destaque, porque desde o #44 o `--border` é tingido.
+2. **Botões de decisão** (Salvar, Excluir, Baixar Excel…): para o texto chegar a 7:1, o AA+ (#36, #37, #39) escureceu o fundo no claro, quase preto (`#0b4c44`), e clareou no escuro, em pastel (`#a9e0d2`, `#ffb3b3`). Os botões ficaram apagados.
+
+**Correção (só CSS, bloco `[jean]` no fim do `style.css`):**
+- **Campo desabilitado:**
+  - no escuro, fundo `rgba(255,255,255,.05)`, um degrau acima do cartão, texto `#b5b5b5` e borda cinza neutra `#4a4a4a`;
+  - no claro, texto `#5f6670` (de 4,29 para 5,15:1) e borda `#c9ced6`;
+  - a regra leva `:not(#spo-desab)`, que só soma peso de id, para vencer a regra dos contornos (#44).
+- **Botão principal** (`.btn-primary` e equivalentes): usa o tom **mais vivo** de cada destaque que ainda dá 7:1, na variável `--spo-btn-fill`.
+  - **Claro**, com texto branco: `--color-600` (Clássico, Roxo), `--color-700` (Azul, Turquesa, Vermelho) ou `--color-800` (Verde, Amarelo, Laranja).
+  - **Escuro**, com texto `#111`: a cor de destaque cheia (`--accent`); no Roxo, `--accent-strong`.
+- **Vermelho cheio** (Excluir, Desativar, Cancelar processamento): `#a51d2d` no claro e `#ff7b7b` no escuro.
+- **"Limpar Formulário"** (`.btn-danger[id$="-clear"]`, nos 4 cadastros): contorno vermelho, sem preenchimento, para o Salvar ficar como a ação principal.
+- **Mouse e foco no claro:** o botão escurece (`brightness(.92)`) em vez de clarear, para o texto não cair abaixo de 7:1.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, na Etapa, nos 8 destaques × 2 temas, com o sistema emulado em claro e escuro.
+
+| Tema | Salvar | Excluir | Limpar (texto e contorno) | Campo desabilitado (texto) |
+|---|---|---|---|---|
+| Claro | 7,36 a 10,19:1 | 7,46:1 | 7,46:1 | 5,15:1 |
+| Escuro | 7,53 a 14,61:1 | 7,53:1 | 8,15:1 | 6,53:1 |
+
+- No escuro, o fundo do campo desabilitado fica a 1,16:1 do cartão.
+- FIP 613 conferido: o "Baixar Excel" dá 7,36:1.
+- A tela de login não muda: as regras dela vencem.
+- Capturas antes/depois. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-controles.3` no CSS (JS sem mudança).
+
+### 41.25 Setas no menu lateral (dev. Jean, 2026-11-13)
+
+**Problema:** no menu lateral, só o Tab percorria os itens, um a um, inclusive os de grupos longos (Relatórios → Execução tem 9 itens). Era o item P5 do inventário do AA+.
+
+**Correção (só JS, bloco `[jean] Setas no menu lateral` no fim do `main.js`):** com o foco num item do menu, as setas seguem o padrão de navegação em árvore. O Tab continua como antes.
+
+| Tecla | O que faz |
+|---|---|
+| **↓ / ↑** | próximo ou anterior item visível |
+| **Home / End** | primeiro e último item |
+| **→** | num grupo fechado, abre; num grupo aberto, vai ao 1º item dele |
+| **←** | num grupo aberto, fecha; num item ou grupo fechado, volta ao grupo de cima |
+
+Só age com o foco num `.menu-item` dentro de `#menu` e sem Ctrl, Alt ou Meta. Abrir e fechar usa o mesmo clique de sempre, então o `aria-expanded` do #41 continua certo.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, com o teclado de verdade, com o menu recolhido e expandido.
+- Relatórios: → abre, → vai a Planejamento, ↓ Execução, → abre, → FIP 613, ↓ PED, ← Execução, ← fecha, ← Relatórios, ← fecha.
+- Administrar SPO: → abre e → vai a Personalizar SPO.
+- ↓ ↑ Home End no menu todo (Início … Sair).
+- O Tab continua igual (Início → Administrar SPO → Programar PTA/LOA).
+- Com um aviso modal aberto, as setas não agem, porque o foco fica no aviso.
+- A página não rola com as setas.
+- `node --check static/js/main.js`; `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html`: `?v=20261113.jean-setas-menu.1` no JS (CSS sem mudança).
+
+### 41.26 Tela de login com o mesmo `?v=` do CSS que o restante do SPO (dev. Jean, 2026-11-13)
+
+**Problema:** o `login.html` carregava `style.css?v=20261113.jean-fundo.2`, do #47. O CSS mudou depois em vários PRs (#49–#58), mas a linha do login não acompanhou. Quem abriu a tela de login desde o #47 podia continuar vendo nela uma cópia antiga do CSS, guardada no navegador.
+
+**Correção:** o `login.html` passa a usar o **mesmo** `?v=` do `base.html` (`20261113.jean-controles.3`). As duas páginas compartilham a mesma entrada de cache do `style.css`.
+
+**Regra daqui em diante:** sempre que o `style.css` mudar, o `?v=` do CSS muda **no `base.html` e no `login.html`**, com o mesmo valor.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
+- A página de login servida (pedido sem cookies) traz `?v=20261113.jean-controles.3`, igual ao `base.html`; o `login-theme.js` continua em `?v=20260706.1`.
+- Visual conferido no escuro. O que muda é só o que o CSS atual já fazia para quem não tinha cópia antiga: o botão "Entrar" passa do pastel à cor de destaque, com texto escuro (10,3:1), pela regra dos botões do #57.
+- `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. Só a linha `?v=` do CSS no `templates/login.html`.
+
+### 41.27 Botões secundários em contorno: "Cancelar"/"Remover" das consultas e os cinza nos dois temas (dev. Jean, 2026-11-13)
+
+**Problema:** nas telas de Consultar (Dotação, Estorno de Dotação, Etapa, Meta Física, Subação e regra de chave), os botões **"Remover"** (tira um critério da lista) e **"Cancelar"** (fecha a consulta) eram vermelhos cheios, iguais ao **"Excluir"**, que apaga de verdade. Ações que só dispensam ficavam com o mesmo peso visual de uma ação destrutiva.
+
+**Correção (só CSS, no bloco `[jean] Controles dos formulários` do #57):** a regra do contorno vermelho, que valia para o "Limpar Formulário" (`*-clear`), passa a valer também para `*-filtro-cancel` e `*-filtro-remove`, num total de 11 botões. O "Excluir" e os outros vermelhos que apagam ou interrompem continuam cheios. No claro, o escurecer ao passar o mouse não se aplica a esses botões, que usam o fundo translúcido do contorno.
+
+**Botões cinza** (`.btn-secondary`, 31 usos: "Limpar" dos critérios, "Editar"…): eram **cheios no claro** (`#495057`, do #39) e **em contorno no escuro** (regra antiga e #37). Agora o claro faz como o escuro: sem fundo, texto do tema e a borda dos campos (`--spo-control-border`). A borda é posta direto, porque a regra `.btn` do SPO (`border: 1px solid transparent`) vence as variáveis do Bootstrap. O "Excluir" continua vermelho cheio, por decisão do dev. Jean: vermelho cheio fica para o que apaga ou interrompe.
+
+**Hierarquia que resulta:**
+- **cheio na cor de destaque:** ação principal (Salvar, Consultar, Aprovar, Imprimir);
+- **vermelho cheio:** apaga ou interrompe (Excluir, Desativar, Cancelar processamento);
+- **contorno vermelho:** dispensa ou desfaz na tela (Cancelar, Remover, Limpar Formulário);
+- **contorno neutro:** secundário (Limpar critérios, Editar).
+
+**Ficaram de fora** (parecidos, mas não são de consulta; avaliar à parte): o "Cancelar" da confirmação de salvar da Meta Física (`data-mf-confirm-action="cancelar"`) e o "Cancelar" de Alterar Senha.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, na Consultar Etapa.
+- "Remover" e "Cancelar" com texto e contorno a 7,46:1 no claro e 8,15:1 no escuro.
+- O vermelho é fixo, então vale para os 8 destaques.
+- "Adicionar" e "Consultar" continuam cheios, na cor de destaque (10,34:1 no escuro), e o "Excluir" continua vermelho cheio.
+- "Limpar" e "Editar" em contorno nos dois temas: texto a 16,86:1 no claro e 12,17:1 no escuro; borda a 3,47:1 no claro e 4,4:1 no escuro.
+- Capturas nos dois temas. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-botoes-filtros.3` no CSS (JS sem mudança).
+
+### 41.28 Login: aviso de sessão já aberta na própria página, no lugar do `window.confirm` (dev. Jean, 2026-11-13)
+
+**Problema:** quando o usuário já tem uma sessão ativa, o `POST /login` responde **409** e a tela perguntava "Deseja continuar?" com `window.confirm`. Num navegador que bloqueia diálogos (o painel do app Claude, alguns navegadores corporativos ou extensões), a resposta vira "não" e o login **parava sem aviso**: a pessoa digitava a senha e nada acontecia.
+
+**Correção (só no `login.html` e no CSS; o servidor não muda):**
+- **Aviso dentro do cartão de login** (`#login-sessao`, `role="alertdialog"`), com título "Usuário já conectado", ícone e uma faixa âmbar. Ele explica que, ao continuar, a outra sessão será encerrada: o servidor troca o token da sessão, então isso é o que acontece de fato.
+- **Botões** "Continuar e entrar" e "Cancelar".
+- **Foco:** vai para "Continuar e entrar" quando o aviso abre. **Esc** ou "Cancelar" fecham o aviso e devolvem o foco à senha.
+- Com o aviso aberto, "Entrar" não manda outro pedido.
+- **"Continuar"** manda o mesmo pedido de antes, com `force_login: true`. A rota `/login`, a resposta 409 e o fluxo sem JS (`flash`) não mudam; por isso a automação que usa o login não é afetada.
+- Se o aviso não existir na página, o código volta ao `window.confirm`.
+- **CSS:** bloco `[jean]` no fim do `style.css`. No claro, a borda do "Cancelar" dentro do aviso fica `#6b7280`, porque a borda dos campos dava 2,96:1 sobre o fundo âmbar.
+
+**Verificação:** SPO local, com a tela de login aberta num quadro isolado e as respostas do servidor **simuladas** (409 e depois "ok"). Nenhuma senha foi usada.
+- O 409 abre o aviso, com o foco em "Continuar".
+- "Entrar" com o aviso aberto não manda pedido.
+- Esc e "Cancelar" fecham o aviso e devolvem o foco à senha.
+- "Continuar" manda 1 pedido com `force_login` e segue para o destino.
+- **Contraste:**
+
+  | | Escuro | Claro |
+  |---|---|---|
+  | Título e texto | 10,68:1 | 14,38:1 |
+  | Ícone | 6,96:1 | 4,28:1 |
+  | Faixa | 8,28:1 | 4,63:1 |
+  | "Continuar" | 10,34:1 | 7,36:1 |
+  | "Cancelar": texto | 9,09:1 | 14,38:1 |
+  | "Cancelar": borda | 3,29:1 | 4,12:1 |
+
+- Sintaxe do script do `login.html` conferida com `node --check`. `pytest` completo duas vezes seguidas: 192 passam, 4 pulam.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-aviso-sessao.2` no CSS.
+
+### 41.29 Padrão visual "spo-aa+" documentado (dev. Jean, 2026-11-13)
+
+**O quê:** documento novo [padrao-visual-spo-aa-plus.md](padrao-visual-spo-aa-plus.md), com as regras de cor, contraste, temas e componentes que o AA+ (#31–#61) estabeleceu. Ele vale para **toda tela nova ou alterada**. O `contrato-visual-spo.md` ganhou um link para ele.
+
+**Por quê:** as regras estavam espalhadas em 25 seções deste arquivo e em comentários do `style.css`. O `style.css` tem 303 cores literais (235 diferentes) e 111 variáveis, sem uma regra dizendo qual usar para quê. Sem o padrão escrito, cada tela nova pode reabrir diferenças, e a troca das cores fixas (N5) não teria critério.
+
+**Conteúdo:**
+1. Metas: texto 7:1, elementos que não são texto 3:1, foco, alvos, movimento, zoom.
+2. Temas, níveis de contraste e destaques.
+3. Tokens com os valores e contrastes **medidos** nos dois temas e nos níveis Suave e Reforçado.
+4. Componentes: hierarquia de botões, campos, listas, navegação.
+5. Como medir (bateria).
+6. Regras de manutenção e checklist de PR.
+7. A dívida conhecida (as cores literais por área), que é o roteiro do N5.
+
+**Próximas fases** (a combinar):
+- **B:** um teste na suíte que impede **cor literal nova** no `style.css`, comparando com uma linha de base.
+- **C:** trocar os literais pelos tokens, área por área, junto com a divisão do CSS.
+
+Sem mudança de código. Sem script de banco.
+
+### 41.30 Padrão de fontes do SPO: Inter, Intel One Mono e tabelas a 12 px (dev. Jean, 2026-11-13)
+
+**Problema:** a fonte padrão ("Clássica (padrão SPO)", a pilha `Cantarell, Segoe UI, system-ui…`) **variava com o computador**: Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux. O texto padrão das tabelas era o "Compacto", de **8 px**. O SPO não tinha identidade visual estável entre computadores e celulares, e as tabelas ficavam pequenas para ler.
+
+**Decisão do dev. Jean**, depois de comparar telas: o padrão SPO passa a ser
+- **Inter** na interface;
+- **Intel One Mono** nas tabelas e dados (monoespaçada, números alinhados; as tabelas ficam mais largas);
+- **Legível (12 px)** no texto das tabelas;
+- tamanho geral **100%**.
+
+As duas fontes já eram hospedadas no SPO (#32) e aparecem iguais em qualquer sistema.
+
+**Mudança:**
+- **`main.js`, bloco `initFontesPersonalizar`:** `DEFAULTS` passa a `{ ui: "inter", data: "intel-mono", size: "default", table: "legible" }`, e os rótulos mudam. **Quem já salvou uma escolha no navegador continua com ela.**
+- **`style.css`, bloco `[jean] Fontes`:** a Inter vale também quando o `<body>` não tem `data-spo-font-ui`. Isso cobre a tela de login, que não carrega o `main.js`, e o instante antes de o script rodar.
+- **Personalizar:**
+  - "Clássica (padrão SPO)" vira **"Do sistema"**, com a explicação de que varia com o computador;
+  - "(padrão SPO)" passa para Inter, Intel One Mono e Legível (12 px);
+  - "Compacto" passa a "Compacto (8 px)".
+- **Padrão visual:** nova §2.1, Tipografia.
+
+**Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean, num navegador **sem escolha salva**.
+- A tela de login abre em Inter, carregada do SPO.
+- Na Início, o `<body>` já vem com `inter`, `intel-mono`, `default` e `legible`.
+- O Personalizar mostra as quatro opções do padrão marcadas.
+- No FIP 613: título em Inter, células e totais em Intel One Mono 12 px.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: `?v=20261113.jean-padrao-fontes.1` no CSS; `base.html`: o mesmo no JS.
+
+### 41.31 Login: "Entrar" na cor de destaque e "×" do Alerta redondo no celular (dev. Jean, 2026-11-13)
+
+Dois defeitos achados pelo Cleber na homologação, depois do lote AA+.
+
+**(1) "Entrar" verde no login, em qualquer destaque claro (laranja, vermelho, azul…).**
+- **Causa:** o login carrega só parte da paleta (`login-theme.js`: `--accent`, `--accent-strong`, `color-400/500/600`). A regra do botão principal do #57 (`--spo-btn-fill`, que vem de `color-700/800`) tem a **mesma especificidade** (0,4,1) da regra do login do A9 e vem depois no `style.css`. Por isso vencia, e o `color-700/800` caía no verde do `:root`.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login claro, `--spo-btn-fill` sai do próprio `--accent` escurecido (50%; 40% no Amarelo), e o gradiente do "Entrar" ganha `:not(#spo-login)` para vencer a regra do #57. Vale também para o "Continuar e entrar" do aviso de sessão (#61). O escuro já estava certo (usa o `--accent`).
+
+**(2) "×" do Alerta da chave de planejamento oval no celular.**
+- **Causa:** em tela de toque, a regra dos alvos (#35) põe `min-height: 44px` em todo botão. O "×" (28 px, `border-radius: 50%`) virava 28×44, e o contorno de foco ficava oval.
+- **Correção:** no toque, o "×" continua com 28×28 e redondo. A área de toque passa a 44 px por um `::after` invisível (`inset: -8px`), o mesmo recurso do botão do menu.
+
+**Verificação:** SPO local.
+- Login nos 8 destaques e nos dois temas:
+  - claro: gradiente no tom do destaque, contraste do texto branco entre **9,38:1** (Verde) e **13,78:1** (Roxo);
+  - escuro: sem mudança, de 7,53:1 a 14,61:1;
+  - "Continuar e entrar" com o mesmo tom.
+- "×" com toque emulado (375 px): 28×28, `border-radius: 50%`, foco redondo, toque a 7 px da borda ainda cai no botão.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-entrar.1` nos dois. O JS continua em `?v=20261113.jean-padrao-fontes.1`.
+
+### 41.32 Login com a paleta inteira do destaque: foco dos campos na cor escolhida (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean depois do #66: com o Laranja, o "Entrar" já saía laranja, mas o **contorno de foco dos campos Email e Senha continuava verde**.
+
+- **Causa:** a mesma do #66, num ponto a mais. O `login-theme.js` só põe no `<body>` o `--accent` e os tons 400/500/600. O contorno de foco do AA+ (#34) é `--spo-focus-ring: var(--color-700)` no claro, e o 700, o 800 e o 900 caíam no verde do `:root`. O #66 tinha tratado só o botão.
+- **Correção** (bloco `[jean]` no fim do `style.css`): no login, `body.login-body[data-accent-preference=…]` recebe os tons 50–300 e 700–900 de cada destaque, com **os mesmos valores do `ACCENT_COLORS` do `main.js`**. Com isso, qualquer regra do AA+ que use esses tons fica igual no login e no resto do SPO. **Se a paleta mudar no `main.js`, mudar também aqui.** O `login-theme.js` não foi tocado.
+- **Verificação:** SPO local.
+  - Foco nos campos, clicando de verdade: o contorno sai no tom 700 de cada destaque no claro (Laranja #a33400, Azul #1a4f91, Clássico #0b4c44) e no `--accent` no escuro, de 5,66:1 a 10,26:1 sobre o cartão (mínimo exigido: 3:1).
+  - Varredura de todos os elementos do login, nos destaques não verdes e nos dois temas: nenhuma cor da paleta Clássica sobrou.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-login-tons.1` nos dois.
+
+### 41.33 Título da página sem anel de foco (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação: logo depois do login, o "Bem-vindo" aparecia dentro de um quadrado.
+
+- **Causa:** o A11 leva o foco ao título da página quando uma tela abre ou quando um aviso fecha (como o Alerta da chave de planejamento logo após o login), para o leitor de tela anunciá-lo. O A12 desenhava nesse foco o mesmo anel dos controles (`body [tabindex="-1"]:focus-visible`).
+- **Correção** (bloco `[jean]` no fim do `style.css`): título (`h1`–`h3`, `[role="heading"]`, `.card-title`) e `<main>` com `tabindex="-1"` não mostram mais o anel ao receber foco. **O foco continua indo para lá**, e o leitor de tela continua anunciando. Botões, campos, abas, links e o "Pular para o conteúdo" mantêm o anel. O 2.4.7 (foco visível) vale para o que se opera pelo teclado, e título e `<main>` não são controles.
+- **Verificação:** SPO local, logado.
+  - Depois de fechar o Alerta, o foco fica no "Bem-vindo", sem anel.
+  - "Pular para o conteúdo" pelo Tab: com anel (3 px, cor de destaque). Acionado com Enter, o foco vai ao `<main>` com `:focus-visible` verdadeiro, e sem anel.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulo-foco.1` nos dois.
+
+### 41.34 Valores em azul e vermelho mais vivos (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação (FIP 613): o vermelho de "Bloqueado/Conting." e o azul de "Saldo de Dotação" quase se confundiam com o preto.
+
+- **Onde:** as classes `pos` (azul, valor positivo) e `neg` (vermelho, valor negativo), que os relatórios põem nos totais (`.totais-row`: FIP 613, PED, EMP, NOB, EST EMP…) e nas células numéricas do FIP 613 (`.fip-table td.num`). As cores eram `#0b3c91` e `#8b0000` no claro, e `#9cc4ff`/`#ffb3b3` no escuro (A6/A9).
+- **Pedido:** as cores clássicas do Excel/VBA, `rgb(0,0,255)` e `rgb(255,0,0)`. Medido: o azul puro passa no AA+ (8,6:1 no branco), mas o vermelho puro dá só 4,0:1, abaixo do AA. **Decisão do dev. Jean:**
+  - claro: azul **`#0000ff`** e vermelho **`#a00000`**, o vermelho mais vivo que ainda passa de 7:1;
+  - escuro: azul **`#94baff`** e vermelho **`#ff9999`**, mais vivos que os pastéis anteriores e ainda ≥ 7:1 no cartão. O azul puro no escuro daria 1,9:1.
+- **Correção:** bloco `[jean]` no fim do `style.css`, com `:not(#spo-valor)` para vencer as regras antigas. O JS não muda. Os chips ▲/▼ do Teto Orçamentário (verde e vermelho de variação) não fazem parte disto.
+- **Verificação:** SPO local, FIP 613 com dados reais do banco de desenvolvimento (54 valores azuis, 17 vermelhos, contando totais e tabela).
+  - Claro: mínimo **8,37:1** (azul) e **8,20:1** (vermelho), sobre o fundo real de cada célula.
+  - Escuro: **7,71:1** e **7,38:1**.
+  - Com o mouse sobre a linha, no escuro, o fundo clareia e o contraste fica em torno de 6,4:1 (AA), como já acontecia.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-cores-valores.1` nos dois.
+
+### 41.35 "Restaurar padrão" também volta as fontes e os tamanhos (dev. Jean, 2026-11-13)
+
+Achado do dev. Jean no teste da homologação: em Personalizar, "Restaurar padrão do laboratório" voltava tema, destaque e preferências visuais, mas **não** o tamanho do texto, o texto das tabelas nem as fontes.
+
+- **Causa:** as fontes (#32/#63) ficam numa chave própria do navegador (`spo-font-preferences`), que o botão `spo-theme-reset` não conhecia.
+- **Correção** (só no bloco `[jean]` `initFontesPersonalizar` do `main.js`; o código do botão não muda): ao clicar em `#spo-theme-reset`, a chave das fontes é apagada e o `<body>` volta ao padrão SPO (Inter, Intel One Mono, 100%, tabelas 12 px). O cartão de fontes mostra as opções do padrão marcadas e o aviso "Fontes e tamanhos de volta ao padrão SPO."
+- **Verificação:** SPO local, logado.
+  - Escolhidos Atkinson, "Maior (125%)" e "Compacto (8 px)". Depois do clique: `ui=inter`, `data=intel-mono`, `size=default`, `table=legible`, a chave apagada, o cartão com as quatro opções do padrão marcadas e a interface em Inter.
+  - `node --check`.
+  - `pytest` completo cinco vezes. Uma falha na 1ª rodada, logo depois de desligar o servidor local, sem o nome registrado. As quatro seguintes passaram inteiras. A mudança é só no JS, que a suíte não executa.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261113.jean-restaurar-fontes.1`. O CSS continua em `?v=20261113.jean-cores-valores.1`, e o `login.html` não muda.
+
+### 41.36 Padrão spo-aa+: escala tipográfica (dev. Jean, 2026-11-13)
+
+Pergunta do dev. Jean no teste da homologação: os textos pareciam pequenos e apertados em várias telas (FIP 613), e adequados nas telas de Governança e Resultados.
+
+- **Medição** (SPO local, padrão de fontes SPO, 100%): **66 telas**, uma por vez, cada uma só depois de estável; os relatórios, com a tabela preenchida.
+  - **20 tamanhos de letra** nas telas; no `style.css`, **37 valores de `font-size` e 23 de `line-height`**.
+  - Nada abaixo de 10 px dentro das telas. O topo tem o nome e o "Logados" com 9 px.
+  - Texto de leitura em 10–11 px: paginação, "Última atualização por UO", selos de situação, rótulos dos totais e dos filtros.
+  - Descrições com entrelinha 1,25–1,35.
+  - Títulos de página com 22, 23, 24 e 25,6 px, e pesos 500 e 700.
+- **Mudança, só documentação** (`docs/padrao-visual-spo-aa-plus.md`):
+  - **§2.2 Escala tipográfica**, a partir das telas de Governança e Resultados: 11 px (só rótulo em maiúsculas e negrito), 12, 14, 15–16, 20 e 24 px;
+  - entrelinha 1,5 no texto e 1,2–1,25 nos títulos;
+  - **mínimo de 12 px** para leitura;
+  - título da página em **negrito (700)** em todas as telas (decisão do dev. Jean);
+  - **§7:** o que está fora da escala, com o número de telas.
+- **Aplicação**, em PRs seguintes, medindo antes e depois:
+  1. os casos abaixo de 12 px e as descrições apertadas;
+  2. títulos de página iguais;
+  3. opção "Entrelinhas" no Personalizar;
+  4. tokens `--spo-fs-*`/`--spo-lh-*` na divisão do CSS.
+
+Sem mudança de código e sem script de banco. `base.html`/`login.html` não mudam.
+
+### 41.37 Escala tipográfica, passo 1: mínimo de 12 px e entrelinha 1,5 (dev. Jean, 2026-11-13)
+
+Primeira aplicação da escala do padrão spo-aa+ (§2.2): os textos de leitura abaixo de 12 px e as descrições com entrelinha apertada.
+
+- **Levantamento:** nas 66 telas do menu, mais o topo e o rodapé, uma tela por vez, com o padrão de fontes SPO. Foram **50 casos** fora da escala, quase todos de poucas regras:
+  - **topo:** nome e "Logados" (`.user-meta`), 9 px;
+  - **rodapé:** 11 px, entrelinha 1,35;
+  - **paginação:** "Itens por página" e reticências, 10 px;
+  - **totais:** rótulos dos totais (`.totais-row > span`), 11 px;
+  - **"Última atualização por UO":** metadados, 11 px, entrelinha 1,25;
+  - **selos "Ativo"/"Ativa"** (`.planning-status`, `.status-badge`), 11 px;
+  - **Teto Orçamentário:** KPIs, 10 px; rótulos dos filtros, 11 px; linha da fonte, 11 px / 1,25;
+  - **descrições `p.muted` dos cabeçalhos:** 12 px / 1,25;
+  - **cartões de Governança e Resultados** (`.flow-node small`): 12,25 px / 1,35;
+  - **casos isolados:** a dica da Início, a pílula de versão do Contrato Visual, `<code>` da API acessos, "Todos" dos filtros múltiplos, opções do upload de Notas SEE, ajuda da Meta Física.
+- **Correção** (bloco `[jean]` no fim do `style.css`, com `:not(#spo-tipo)`):
+  - esses seletores vão a **12 px**;
+  - **exceção, decisão do dev. Jean:** o nome e o "Logados" do topo e o rodapé são informação secundária e ficam com **10 px** (eram 9 e 11 px), também registrados no padrão §2.2;
+  - os textos de várias linhas vão a **entrelinha 1,5**;
+  - a paginação só sobe com o texto das tabelas em "Legível" (padrão), e respeita "Compacto"/"Intermediário" do Personalizar.
+- **Fora deste passo:**
+  - os rótulos curtos em maiúsculas e negrito, que ficam em 11 px (passo "Rótulo"), incluindo o cabeçalho "REGIÃO PTA/LOA" da Meta Física;
+  - os textos dos gráficos, que são SVG do Plotly configurados no JS;
+  - os títulos de página (passo 2).
+- **Verificação:** SPO local, logado.
+  - Mesmo levantamento depois da mudança: dos 50 casos, sobra 1, o cabeçalho em maiúsculas da Meta Física, no passo "Rótulo".
+  - FIP 613: totais em duas colunas a 1440 px, como antes. A 1036 px com o menu aberto, uma coluna, também como antes (conferido voltando a 11 px), e sem corte.
+  - A 375 px: o topo com 10 px cabe, sem rolagem lateral.
+  - Teto Orçamentário: KPIs e filtros sem corte a 375 e 1440 px.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-tipografia-12.1` nos dois.
+
+### 41.38 Escala tipográfica, passo 2: título da página igual em todas as telas (dev. Jean, 2026-11-13)
+
+Segundo passo da escala do padrão spo-aa+ (§2.2): o título da página.
+
+- **Medição** das 66 telas, com o mesmo critério que o A11 usa para achar o título (o primeiro `<h1>` visível, ou o `.card-title` do cabeçalho):
+  - **55 telas com cabeçalho de página**, com títulos de 22, 23, 24 e 25,6 px, peso 500 (Governança e Resultados, Personalizar, Notas SEE) ou 700, e entrelinha 1,2 ou 1,5;
+  - **11 telas sem cabeçalho de página**: formulários e consultas de Meta Física, Subação, Etapa, Dotação e Estorno de Dotação, e a Limpeza de Histórico. Nelas o "título" é o do cartão do formulário, com 14 px.
+- **Correção** (bloco `[jean]` no fim do `style.css`): `#content-area h1`, o `.card-title` dos cabeçalhos de módulo e de relatório e o "Bem-vindo" da Início passam a **24 px, negrito (700) e entrelinha 1,2**. O peso é decisão do dev. Jean. As 11 telas sem cabeçalho não mudam: dar um cabeçalho a elas é mudança de template, que fica para outra decisão.
+- **Verificação:** SPO local, logado.
+  - Mesma medição depois: as 55 telas com 24 px / 700 / 1,2, um `<h1>` por tela, título numa linha no computador. As 11 telas de formulário sem mudança.
+  - A 375 px: o título mais longo ("PLAN 51 - Relação Detalhada de Créditos Adicionais") ocupa 5 linhas, como já ocupava com 23 px, sem corte e sem rolagem lateral.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-titulos.1` nos dois.
+
+### 41.39 Totais do PLAN 51 sem corte em telas estreitas (dev. Jean, 2026-11-13)
+
+Achado na medição dos títulos (passo 2 da escala tipográfica): no celular, o quadro "Totais (filtros aplicados)" do PLAN 51 aparecia cortado à direita.
+
+- **Causa:** o quadro do PLAN 51 (`.totais-box--wide`) cresce até caber tudo numa linha (`min-width: max-content`), para os valores em bilhões. Ele fica numa grade de duas colunas fixas ao lado dos botões (`grid-template-columns: max-content auto`). Com o cartão do relatório estreito, o conjunto passava do cartão:
+  - a 375 px, quadro de 562 px num cartão de 283 px, com valores e botões cortados;
+  - entre ~820 e ~950 px de janela, os botões saíam do cartão.
+  - O #31/#56 tinha deixado o PLAN 51 de fora de propósito ("mantém o quadro próprio").
+- **Correção** (bloco `[jean]` no fim do `style.css`), medida pela **largura do próprio cartão** (container query `spo-plan51`), não da janela:
+  - cartão até 900 px: os botões descem para baixo do quadro, como diz a regra original ("quebra de linha antes dos botões");
+  - cartão até 640 px: o quadro usa a mesma regra adaptável dos outros relatórios (#31/#56), com colunas que cabem e o valor descendo de linha quando não cabe ao lado do rótulo;
+  - cartão mais largo: o PLAN 51 não muda.
+  - O `container` é declarado só no cartão que contém o `.totais-box--wide`, e os outros relatórios não são afetados.
+- **Verificação:** SPO local. O PLAN 51 está vazio no banco de desenvolvimento, então os totais foram preenchidos na página com valores de bilhões, para simular o caso real.
+  - Janelas de 375, 640, 768, 860, 960, 1100 e 1440 px: em nenhuma o quadro, um valor ou um botão passa do cartão, e não há rolagem lateral.
+  - A 1440 e 1100 px, quadro e botões lado a lado, como antes; a 1440 px, nas mesmas posições de antes.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261113.jean-totais-plan51.1` nos dois.
+
+### 41.40 Superfícies que ficaram fora do tema: totais da Meta Física, "Escolher arquivo" e avisos no escuro (dev. Jean, 2026-11-14)
+
+Prints do dev. Jean durante a revisão da tipografia.
+
+| Caso | Causa | Antes (medido) | Depois (medido) |
+|---|---|---|---|
+| Totais da Meta Física (`.meta-fisica-resumo-card`) | cores fixas de tema claro (fundo `#f6fafc`, borda `#c6d8e2`, texto `#334155`/`#0f172a`) | **escuro:** cartão claro sobre fundo escuro; **claro:** borda 1,47:1 e cartão 1,05:1 contra o fundo (quase some) | fundo `--surface`, borda dos campos `--spo-control-border`, texto `--muted`/`--text`. **Claro:** borda 3,47:1, textos 9,29/16,86:1. **Escuro:** fundo `#242424`, borda 4,40:1, textos 9,96/14,26:1 |
+| "Escolher arquivo" (`::file-selector-button`) | o botão nativo nunca teve estilo e ficava claro no escuro | botão claro do navegador nos dois temas | botão em contorno, como os secundários (#60): borda dos campos, texto do tema, 12 px, destaque a 12% no mouse e no foco. Texto 16,86:1 (claro) e 14,26:1 (escuro), borda 3,47 e 4,40:1 |
+| Avisos `.alert-info` no escuro (ex.: "Regras de segurança" da Limpeza de Histórico) | texto fixo `#0f4c4c` (verde escuro), sem versão escura | **1,46:1** | texto `--text`, fundo do destaque a 10%, borda dos campos: **11,65:1**, borda 4,40:1. No claro, sem mudança (8,86:1) |
+
+- **Correção:** bloco `[jean]` no fim do `style.css`, com `:not(#spo-sup)` para vencer as regras antigas.
+- **Verificação:** SPO local, telas Meta Física (formulário), Atualizar FIP 613 e Limpeza de Histórico, nos dois temas.
+  - O "Escolher arquivo" ocupa praticamente o mesmo espaço do botão nativo. No campo estreito do Atualizar FIP 613 (painel a 1036 px), o texto "Nenhum arquivo escolhido" é abreviado pelo navegador, com o botão novo e também com o nativo (conferido desligando a regra).
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-superficies.1` nos dois.
+
+### 41.41 Login: com sessão já aberta, a segunda tentativa de entrar encerra a outra (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: o aviso "Usuário já conectado" (#61) não precisa dos botões "Continuar e entrar"/"Cancelar". Basta avisar; se a pessoa tentar entrar de novo, a sessão anterior é encerrada e o login segue.
+
+- **Mudança, só na página de login** (`templates/login.html`):
+  - o aviso perde os botões e passa a `role="status"`, anunciado pelo leitor de tela. Texto: "Para entrar mesmo assim, clique em **Entrar** de novo: a outra sessão será encerrada";
+  - na 1ª tentativa, o servidor responde 409 e a página só mostra o aviso, com o foco no "Entrar";
+  - na nova tentativa **com o mesmo e-mail**, o pedido já vai com `force_login: true`;
+  - se o e-mail mudar, o aviso some e a tentativa vai normal;
+  - se a 2ª tentativa falhar por outro motivo (senha errada), o aviso some, fica só a mensagem de erro, e a próxima tentativa recomeça do zero;
+  - sem o aviso na página, continua a pergunta do `window.confirm`.
+- **A rota `/login`, o 409 e o `force_login` não mudam** (`rotas/auth_routes.py` e `app.py` não foram tocados), nem o fluxo sem JavaScript. A automação não é afetada.
+- **CSS:** saem as regras dos botões do aviso (`.login-sessao-acoes` e a borda do "Cancelar", ambas do #61), e o texto do aviso passa a margem 0 e entrelinha 1,5.
+- **Verificação:**
+  - o script da página rodou com um `fetch` falso (nenhum pedido ao servidor, nenhuma senha real) em quatro cenários: 409 → aviso sem `force_login`; 2ª tentativa com o mesmo e-mail → `force_login: true` e entrada; troca de e-mail → aviso some, sem forçar; senha errada na 2ª → aviso some, erro aparece, a 3ª recomeça sem forçar;
+  - `pytest` completo duas vezes seguidas;
+  - o teste com duas sessões reais fica para o teste humano: entrar com o mesmo usuário em dois navegadores.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: o aviso e o script, e o `?v=` do CSS. CSS em `?v=20261114.jean-login-tentativa.1` nos dois.
+
+### 41.42 Teto Orçamentário: as tabelas usam as cores do tema, como os gráficos (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean: na aba **Tabelas** do Teto Orçamentário, a barra empilhada "Por grupo de despesa" (e a legenda e os pontos dos cartões) não acompanhava o tema, enquanto a aba **Gráficos** acompanhava.
+
+- **Causa:** a aba Gráficos pega as cores da paleta do tema (`getTetoChartColors()`, que usa `getCommonDiagramTheme()`, #45). Os três quadros da aba Tabelas que colorem por grupo usavam a paleta fixa `groupColors` (`#345feb`, `#048075`, `#f8cb2e`): "Por grupo de despesa" (`renderGroupSummary`), "Teto por grupo e tipificação" e o QOMP. O comentário no código já dizia "o grupo de despesa tem sempre a mesma cor no app inteiro", mas a paleta dos gráficos passou a seguir o tema e a das tabelas ficou fixa.
+- **Correção:** três linhas em `initTetoOrcamentarioDashboard` (`main.js`), uma por quadro. O `colorFor` passa a usar `getTetoChartColors().groupColors`, a mesma origem dos gráficos. A troca de tema já redesenhava as tabelas (`spo-common-visual-change` → `render()`), então nada mais precisou mudar.
+- **Verificação:** SPO local, logado.
+  - Escuro com destaque Clássico: barra, legenda e pontos com `#3dd6b7`, `#93c5fd` e `#fca5a5`, iguais à pizza da aba Gráficos.
+  - Trocando para o claro, sem recarregar: `#1f9b7e`, `#1d4ed8` e `#b91c1c`, de novo iguais à pizza.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-teto-cores.1`. O CSS e o `login.html` não mudam.
+
+### 41.43 Teto Orçamentário, aba Tabelas: fonte de dados e escala tipográfica (dev. Jean, 2026-11-14)
+
+Pergunta do dev. Jean: as fontes da aba **Tabelas** do Teto Orçamentário seguem o padrão? A medição mostrou que não. O passo 1 da escala (#75) mediu o Teto na aba Gráficos, que é a que abre primeiro.
+
+- **Antes (medido):**
+  - todos os valores (R$ e %) em **Inter**, quando o padrão de dados (§2.1) é a **Intel One Mono**, já usada no KPI da aba Gráficos;
+  - variações ▲/▼ do comparativo com 10,5 px (81 elementos);
+  - totais por ano, valores e % do ranking, códigos e "% do teto geral" com 11 px;
+  - nomes de tipificação com 11,5 px e nomes de grupo com 12,5 px, ambos com entrelinha 1,3.
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - os valores (`.teto-group-card .value`, `.teto-rank-val/-pct/-code`, `.teto-qomp-value/-delta`, `.yr`, `.yr-total`, `.teto-qomp-fonte-code`) seguem a **fonte de dados do Personalizar** (`data-spo-font-data`), como as tabelas e os totais dos relatórios;
+  - os textos vão a **12 px**, e os nomes do comparativo a **entrelinha 1,5**;
+  - o cabeçalho de coluna em maiúsculas e negrito ("GRUPO DE DESPESA", 11 px) fica, por ser rótulo;
+  - **colunas de ano do comparativo** (QOMP, Fonte/Grupo, Grupo por Teto): o mínimo (`--qomp-w-ano`) era 150 px, ou 128 px até 720 px de janela, e cortava valores em bilhões. A 375 px eram 112 valores cortados já com a Inter, e 166 com a mono. Passa a **184 px**, que cabe "R$ 99.999.999.999,99" em 14 px na mono. Com pouco espaço, o quadro rola para o lado, como antes.
+- **Verificação:** SPO local, logado, aba Tabelas.
+  - Depois: todos os valores em Intel One Mono, todos os textos com 12 px ou mais (fora o rótulo), entrelinha 1,5.
+  - Valores cortados: **0** a 375, 1036 e 1440 px, sem rolagem lateral da página.
+  - Os nomes longos de fonte de recurso continuam abreviados com "…", como já eram.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-teto-tipografia.1` nos dois.
+
+### 41.44 Cabeçalho padrão (cartão + ícone do menu) em Governança e Resultados, Personalizar e Estrutura do Planejamento (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean: algumas telas não seguiam o cabeçalho da maioria do SPO, que é o título num cartão (`header.module-header`) com o ícone da tela à direita.
+
+- **Inventário** (`templates/partials/`):
+  - **sem cartão e sem ícone** (`div.page-header`): as 6 telas de Governança e Resultados (Mapa Conceitual, Estratégia e Cadeia de Valor, EAP e Políticas, Entregas-MT e OKR, Processos/Riscos/Projetos, Matrículas e Metas Físicas) e as 2 do Personalizar (Temas e Contrato Visual Protegido, no mesmo template);
+  - **cartão sem ícone**: Programas, Ações/PAOE, Produtos e Componentes da Revista (template compartilhado), Componentes, Modelos de Chave, Catálogo de Chaves e Replicar exercício.
+- **Correção, só nos templates:**
+  - Governança e Personalizar passam à marcação do cabeçalho padrão (`<header class="page-header module-header">` + `.module-header-copy` + `.module-eyebrow` + `<h1>` + `<p>` + `<i class="bi …">`). Textos e atributos não mudam, e a classe `page-header` fica por compatibilidade;
+  - na Estrutura do Planejamento, entra o `<i class="bi …">` no cartão que já existia.
+  - **O ícone é o do item do menu** (`MENU_META` em `services/features.py`). No template compartilhado da Estrutura, ele sai de um mapa por `entity`. **Se o ícone do menu mudar, mudar também no template.**
+  - Nenhum CSS novo: vale o `.module-header > i` existente, um quadrado na cor de destaque que segue o tema.
+- **Fora desta mudança:**
+  - **Programação PTA 2027**: cabeçalho próprio, com o painel de contexto à direita (tela imersiva do mockup v63r);
+  - as 11 telas de formulário e consulta sem cabeçalho de página (Meta Física, Subação, Etapa, Dotação, Estorno de Dotação, Limpeza de Histórico), que dependem de decisão do dev. Jean.
+- **Verificação:** SPO local, logado.
+  - As 16 telas comparadas com o cabeçalho do Atualizar Teto Financeiro: mesmo fundo, borda de 1 px, cantos de 18 px, espaçamento 22/24 px, ícone de 54 px igual ao do menu, título de 24 px em negrito.
+  - A 375 px: ícone de 46 px dentro do cartão, sem rolagem lateral (Estratégia, Temas, Programas, Catálogo).
+  - Os cartões da cadeia de valor da Estratégia continuam funcionando.
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco, sem mudança de CSS ou JS (o `?v=` não muda). `base.html`/`login.html` não mudam.
+
+### 41.45 Personalizar: opção "Espaçamento entre linhas" (dev. Jean, 2026-11-14)
+
+Passo 3 do plano de tipografia (padrão spo-aa+ §2.2): o usuário escolhe a entrelinha do texto corrido.
+
+- **Personalizar Temas SPO**, cartão "Fontes e tamanho do texto": novo grupo **"Espaçamento entre linhas"** com **Padrão (1,5)**, **Amplo (1,75)** e **Mais amplo (2,0)**, na mesma marcação dos outros grupos de fontes.
+- **`main.js`, bloco `[jean]` `initFontesPersonalizar`:** a opção entra em `OPTIONS`, `DEFAULTS` (`line: "default"`) e `ATTRS` (`data-spo-line-height` no `<body>`). Ela fica no navegador, na mesma chave das fontes (`spo-font-preferences`), e o **"Restaurar padrão"** (#72) volta para 1,5 sem código novo, porque restaura todo o `DEFAULTS`.
+- **`style.css`, bloco `[jean]`:** com `ample`/`larger`, o texto corrido do conteúdo (`p`, `li`, `dd`, `blockquote`, `.alert`, `.muted`, `small`, metadados da "Última atualização", descrições dos cartões de Governança, dica da Início) passa a 1,75/2,0. **Títulos, tabelas, botões, rótulos e campos não mudam**, para não desmontar o layout. A regra usa `:not(#spo-entrelinha)` para vencer a do passo 1 (#75).
+- Atende ao WCAG 1.4.12 (espaçamento de texto, AA) e ao 1.4.8 (apresentação visual, AAA).
+- **Verificação:** SPO local, logado.
+  - Escolhendo cada opção no próprio cartão: subtítulo, `p.muted` e amostra a 1,5 / 1,75 / 2,0; título (1,2), célula de tabela (1,5) e botões sem mudança.
+  - "Restaurar padrão": volta a "Padrão (1,5)" e apaga a escolha salva.
+  - Com "Mais amplo (2,0)": FIP 613 (com dados), Teto Orçamentário, Meta Física e Limpeza de Histórico sem texto cortado e sem rolagem lateral. O botão "+" da Meta Física tem o mesmo recorte de 4 px com a opção no padrão, que já existia e não tem relação com esta mudança.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+- **Padrão spo-aa+:** a §2.1 ganhou a linha da opção, e a §2.2 marca os passos 1–3 da aplicação como feitos.
+
+Sem script de banco. `templates/base.html`: só as linhas `?v=` do CSS e do JS, agora `?v=20261114.jean-entrelinhas.1`. `templates/login.html`: só o `?v=` do CSS.
+
+### 41.46 Personalizar em tela estreita: escolha atual visível e amostra dentro do cartão (dev. Jean, 2026-11-14)
+
+Achado da bateria do WCAG 1.4.12 (espaçamento de texto), na combinação "Maior (125%)" + "Mais amplo (2,0)" a 375 px.
+
+- **Antes:**
+  - o resumo da escolha atual de cada grupo do Personalizar (`.visual-pref-toggle small`, com `nowrap` e reticências) ficava cortado ("Inter (padrão S…", "Legível (12 px, …"), e a pessoa não via o que tinha escolhido. Com o painel a 892 px, isso já acontecia sem nenhuma combinação;
+  - a tabela de amostra das fontes ficava mais larga que o cartão (220 px em 182 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - o resumo **quebra linha** em vez de cortar. Vale para todos os grupos, inclusive os de Preferências comuns;
+  - na amostra, cada linha **empilha como os totais dos relatórios** (#31/#56): rótulo e valor lado a lado quando cabem; se não, o valor desce inteiro para a linha de baixo, alinhado à direita (sugestão do dev. Jean). A rolagem dentro da amostra (`overflow-x: auto`) fica só como reserva.
+- **Verificação:** SPO local, logado.
+  - A 375 px, com o padrão e com a combinação: 0 de 9 resumos cortados; na amostra, rótulo e valor empilhados, com o valor inteiro, sem rolagem.
+  - A 1440 px, o cartão do Personalizar tem 209 px úteis (grade de três colunas), e a amostra também empilha, com os valores inteiros.
+  - Com o painel a 892 px: 0 resumos cortados ("Intel One Mono (padrão SPO)" e "Legível (12 px, padrão SPO)" passam a duas linhas, antes cortados).
+  - Versões anteriores foram trocadas: `overflow-wrap: anywhere` quebrava as palavras letra a letra; a rolagem dentro da amostra deixava o valor cortado na borda até rolar. No resumo, `overflow-wrap: break-word` (só quebra uma palavra que não cabe sozinha na linha).
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-pref-estreito.1` nos dois.
+
+### 41.47 Padrão visual "spo-aa+": versão 2 (dev. Jean, 2026-11-14)
+
+Atualização do `docs/padrao-visual-spo-aa-plus.md` com tudo o que entrou do #62 ao #86. **Só documentação.**
+
+- **§1 Metas:** espaçamento de texto (WCAG 1.4.12) e escala tipográfica.
+- **§2.2:** títulos de página aplicados (24 px, 700, 1,2); dados fora de `<table>` usam a fonte de dados; o texto dos gráficos (Plotly, 11 px) fica como pendência.
+- **§3.3:** a tela de login completa a paleta do destaque num bloco próprio (#67). Se o `ACCENT_COLORS` mudar, mudar lá também.
+- **§3.4:** valores `pos`/`neg` com as cores novas e medidas (#70); `.alert-info` no escuro (#79).
+- **§3.5:** a cor de um grupo é a mesma em gráficos e tabelas (#81).
+- **§4.2:** campo de arquivo (#79).
+- **§4.4:**
+  - cabeçalho de página com o ícone do item do menu (#84);
+  - foco no título sem anel (#69);
+  - totais com o valor descendo inteiro e o PLAN 51 por container query (#77);
+  - quadros comparativos do Teto (#82);
+  - Personalizar (#86);
+  - login com a segunda tentativa (#80).
+- **§5 Como medir:** foco com clique real; bateria de tipografia; **bateria do WCAG 1.4.12** (estilo forçado, antes × depois, o que descartar, gráficos olhados na captura); conferência do login nos 8 destaques.
+- **§6.1 checklist:** cabeçalho padrão, escala, `pos`/`neg`, valor que desce inteiro.
+- **§6.3 exceções:** paleta do login e valores `pos`/`neg` até virarem tokens.
+- **§7 dívida:** tipografia resolvida (#75, #76, #82); restam o texto e as legendas dos gráficos, as telas de formulário sem cabeçalho, o PTA 2027, as duplicações (ícone do menu e paleta do login) e as áreas não medidas.
+
+Sem mudança de código, sem script de banco. `base.html`/`login.html` não mudam.
+
+### 41.48 Teto Orçamentário: indicador "Teto total" sem estourar o cartão (dev. Jean, 2026-11-14)
+
+Achado do dev. Jean (print): na aba Gráficos do Teto Orçamentário, o valor do indicador "Teto total" ("R$ 11.333.931.142,00") saía do cartão.
+
+- **Causa:** os 4 indicadores (`.teto-kpi-grid`) dividiam a largura em partes iguais (`repeat(4, 1fr)`). Com a fonte de dados padrão (Intel One Mono, #63), mais larga, o valor não cabia.
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - a coluna do Teto total passa a ter **mínimo de 15rem**, que cabe "R$ 999.999.999.999,00" (pedido do dev. Jean) em 16 px negrito na mono, cerca de 206 px de texto mais o espaçamento;
+  - as outras três colunas dividem o resto, e o valor não quebra (`nowrap`);
+  - nas faixas do painel (container `teto-dashboard`), 2 colunas até 820 px, com o mesmo mínimo na primeira, e 1 coluna até 560 px.
+- **Verificação:** SPO local, com "R$ 999.999.999.999,00" posto no indicador. **Cabe** a 1440, 1106, 1024, 900, 768, 600, 375 e 320 px, sem rolagem lateral; a folga vai de 227 px (1440) a 1 px (320). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-kpi-total.1` nos dois.
+### 41.49 Gráficos na escala tipográfica e legíveis em tela estreita (dev. Jean, 2026-11-14)
+
+Itens T1/T2 do inventário AA+ (equivalentes aos gates C09/C11.1 do laboratório): os gráficos (Plotly, todos no Teto Orçamentário) estavam fora da escala e quebravam em tela estreita e com espaçamento de texto forçado.
+
+- **Antes (medido):**
+  - todo o texto em **Arial 11 px**, fora da escala (mínimo 12 px) e fora da fonte escolhida no Personalizar;
+  - rótulos do 2º eixo de Macropolíticas (20%…100%) **saindo do gráfico**, nas duas larguras, porque a margem direita era fixa;
+  - legenda horizontal que **se sobrepõe** com espaçamento forçado (WCAG 1.4.12): 2 casos no grupo e 1 em Macropolíticas a 1366 px;
+  - a 375 px, o "5,19%" da pizza cortado.
+- **Correção:** bloco `[jean]` `initGraficosEscala` no fim do `main.js`. Ele envolve `Plotly.react`/`Plotly.newPlot` e ajusta o layout e os dados **de qualquer gráfico antes de desenhar**, sem mudar o código de cada gráfico:
+  - fonte da interface (a do `<body>`), com mínimo de **12 px** no texto, nos eixos, na legenda e nas notas;
+  - eixos com `automargin`;
+  - legenda **vertical no pé do gráfico** (`yref: "container"`), um item por linha;
+  - pizza com `automargin` (rótulos de fora inteiros);
+  - gráfico estreito (≤ 520 px): margens laterais mínimas, eixo X inclinado e nomes longos da legenda quebrados entre palavras (`<br>`).
+  - Ao redimensionar, o gráfico que muda de faixa é redesenhado a partir do layout e dos dados originais.
+- **Verificação:** SPO local, logado, Teto Orçamentário (5 gráficos).
+  - 1366 px: Inter 12 px; nenhum texto fora do gráfico; **0 sobreposições** com espaçamento forçado.
+  - 375 px: nenhum problema sem espaçamento forçado. Com ele, resta 1 rótulo inclinado de Macropolíticas a 5 px da borda: o Plotly não remede um estilo imposto depois do desenho, e a tabela "Ver dados do gráfico" traz o mesmo conteúdo.
+  - Voltando de 375 para 1366 px sem recarregar: nomes inteiros e margens originais.
+  - O clique na pizza continua filtrando o "Grupo de despesa"; os 5 gráficos mantêm `role="img"` e a tabela de dados (#40); nenhum erro no console.
+  - `node --check`; `pytest` completo duas vezes seguidas.
+- **Limite conhecido:** trocar a fonte no Personalizar vale para os gráficos a partir do próximo desenho (filtro, aba ou recarga).
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS, agora `?v=20261114.jean-graficos-escala.2`. O CSS e o `login.html` não mudam.
+
+### 41.50 Leitura ampliada: largura do texto corrido e espaço entre parágrafos (dev. Jean, 2026-11-14)
+
+Item "leitura ampliada" do C04 do laboratório (WCAG 1.4.8, AAA): linhas de texto corrido não muito longas e parágrafos bem separados.
+
+- **Antes** (66 telas a 1440 px):
+  - 31 blocos de texto corrido em 19 telas passavam de 80 caracteres por linha (até **188**, no texto de boas-vindas da Início);
+  - 11 pares de parágrafos seguidos com 14–16 px entre eles, para entrelinha de 18 px (o critério pede ≥ 1,5 entrelinha, 27 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`):
+  - texto corrido (`p`, `li`, `dd` e avisos `.alert`, fora de tabelas, menus e botões) com **`max-width: 72ch`**; o texto centralizado da Início continua centralizado;
+  - parágrafos seguidos (`p + p`) com **1 entrelinha** de espaço (`1lh`, 18 px no texto de 12 px), que acompanha a opção "Espaçamento entre linhas" do Personalizar. **Decisão do dev. Jean:** 1,5 entrelinha (o que o AAA pede, ~33 px em branco) ficava grande; 1 entrelinha separa bem e atende ao AA (1.4.12).
+- **Largura: decisão do dev. Jean.**
+  - O `ch` é a largura do "0", mais larga que a média das letras. Com 72ch, a média medida (contagem exata dos caracteres de cada linha) fica em **84–110** caracteres por linha.
+  - Ficar ≤ 80 em todos os textos exigiria ~56ch, o que deixaria metade dos cartões largos vazia a 1440 px. Foi escolhido o meio-termo, e o critério AAA fica **atendido em parte**.
+- **Verificação:**
+  - Início, Limpeza, Estratégia, Legislação e Replicar a 1440 px: média de 84–110 caracteres por linha, sem rolagem lateral;
+  - parágrafos seguidos com 18 px de margem (antes 14–16 px), ou mais onde já havia margem maior;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-leitura.1` nos dois.
+
+### 41.51 "Texto das tabelas" em todas as tabelas (dev. Jean, 2026-11-14)
+
+Pergunta do dev. Jean: as opções de "Fontes e tamanho do texto" valem em todas as telas? A conferência mostrou que o **"Texto das tabelas"** (Compacto 8 px, Intermediário 10 px, Legível 12 px) só alcançava as tabelas dos **relatórios** (`.fip-table`, `.plan20-table`), os filtros e a paginação. As demais tabelas do conteúdo (consultas de cadastro, usuários, Limpeza, API, estrutura do planejamento, Meta Física, tabelas de dados dos gráficos) ficavam com 12 px nas células e 13 px nos títulos, qualquer que fosse a escolha.
+
+- **Correção** (bloco `[jean]` no fim do `style.css`): **Intermediário** e **Compacto** passam a valer para **todas as tabelas** de `#content-area`: células, títulos e o que está dentro deles (selos, links, códigos). Ficam de fora os campos e botões de formulário dentro das tabelas e a amostra do Personalizar. **Legível** (padrão) mantém o tamanho próprio delas, que já é ≥ 12 px.
+- **Verificação:** Limpeza, Usuários (editar), Programas, Meta Física, FIP 613 e Personalizar, trocando a opção:
+  - Legível: 12/13 px, como antes;
+  - Intermediário: 10 px;
+  - Compacto: 8 px;
+  - os relatórios e a amostra seguem como já eram;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS, agora `?v=20261114.jean-texto-tabelas.1` nos dois.
+
+### 41.52 Login com as fontes e o tamanho escolhidos no Personalizar (dev. Jean, 2026-11-14)
+
+As opções de "Fontes e tamanho do texto" ficam no navegador (`localStorage`, chave `spo-font-preferences`) e eram aplicadas só pelo `main.js`, que a tela de login não carrega. Por isso o login aparecia sempre com o padrão (Inter, 100%, entrelinha 1,5), mesmo para quem escolheu outra fonte ou texto maior.
+
+- **`static/js/login-theme.js`:** lê a mesma chave e grava no `<body>` os mesmos atributos do `initFontesPersonalizar` (`data-spo-font-ui`, `-font-data`, `-text-size`, `-table-text`, `-line-height`). Valor desconhecido fica no padrão SPO. **Se as opções mudarem no `main.js`, mude também lá.**
+- **CSS** (bloco `[jean]` no fim do `style.css`): a fonte da interface já valia pelas regras do `body`. Agora o **tamanho geral** amplia o cartão de login (112% e 125%, como o `.main` nas outras telas) e a **entrelinha** vale para o texto corrido do cartão.
+- **Verificação:** o login foi aberto (sem sessão) com várias combinações, em 1280, 375 e 320 px. Os atributos ficam certos e um valor inválido volta ao padrão. A fonte aplicada é a escolhida; a entrelinha fica em 21, 24,5 e 28 px. O cartão é ampliado sem rolagem lateral nem corte, e sem escolha salva nada muda. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do CSS. `templates/login.html`: só as linhas `?v=` do CSS e do `login-theme.js`. As duas ficam com `?v=20261114.jean-login-fontes.1`.
+
+### 41.53 Opção "Leitura" no Personalizar (dev. Jean, 2026-11-14)
+
+O limite fixo de 72ch do texto corrido (seção "Leitura ampliada", #92) deixava muito espaço vazio nos cartões largos. A pedido do dev. Jean, ele virou **opção**: o WCAG 1.4.8 (AAA) aceita que a apresentação seja alcançada por "um mecanismo", e o padrão volta a ser a largura livre.
+
+- **Opção "Leitura"** (cartão "Fontes e tamanho do texto", atributo `data-spo-reading`, também lida no login):
+  - **Padrão SPO:** largura livre, como antes do #92;
+  - **Intermediário:** o #92 (72ch e 1 entrelinha entre parágrafos);
+  - **Estrito (WCAG AAA):** no máximo 80 caracteres reais por linha e 1,5 entrelinha depois de cada parágrafo.
+- **Largura do Estrito, medida por fonte** (o `ch` é a largura do "0", mais larga que a média das letras): Inter 53ch, Atkinson 48ch, Source Sans 3 56ch, Do sistema 52ch. Com 80ch, o pior caso dava 117–130 caracteres; com esses valores, 78 no máximo. Fonte nova no Personalizar precisa dessa medição.
+- **Espaço entre parágrafos no Estrito:** quem reserva o espaço é o parágrafo de cima (`p:has(+ p)`), com 1,5 da própria entrelinha, e o de baixo fica sem margem. Em cartões flex/grid as margens não se sobrepõem: somar as duas dava até 3 entrelinhas, e regra só no de baixo dava 1,34 quando o de cima tinha letra maior (boas-vindas da Início).
+- **Verificação** (SPO local, contagem exata de caracteres por linha):
+  - 14 tamanhos de tela (celulares e tablets em pé e deitados, notebooks, desktop, ultrawide, monitor em retrato, zoom de 200%) na Limpeza: Estrito ≤ 78 em todos, sem rolagem lateral;
+  - Início, Sessão e Login e Contrato Visual: Estrito com ≥ 1,5 entrelinha entre parágrafos, também a 390 px;
+  - Padrão SPO com `max-width: none`;
+  - opção no Personalizar (abre, marca, grava, volta);
+  - login respeitando a escolha;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. Ficam só nas linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-leitura-opcao.1`): `templates/base.html` e `templates/login.html`. O grupo novo está em `templates/partials/atualizar_personalizar_spo.html`.
+
+### 41.54 Alto contraste escuro dos diagramas com o fundo do cartão (dev. Jean, 2026-11-14)
+
+Na conferência C07 (comparação com o laboratório), o alto contraste dos diagramas passou nos 70 pares de contraste do `spoValidateDiagramContrast()`. Mas, no tema escuro, o gráfico aparecia numa caixa azul-marinho (`#111827`/`#0f172a`) dentro do cartão cinza: a mesma "paleta azulada" que o #45 tirou dos modos claro e escuro comuns, e que ficou no alto contraste só porque ele estava fora daquele PR.
+
+- **Correção** (função `[jean]` `spoTemaDiagramaComDestaque`, 1 linha): no modo `highDark`, fundo transparente (herda o do cartão do gráfico). As cores das séries, o texto e a moldura continuam as do alto contraste. O alto contraste claro (fundo branco) e os modos comuns não mudam.
+- **Contraste sobre o fundo real** (`#1a1a1a` do quadro do gráfico): o texto fica com 16,6:1, o texto secundário com 14,1:1 e as séries com ≥ 6,47:1 (o mínimo exigido é 3:1).
+- **Verificação** no Teto Orçamentário, no tema escuro com "Diagramas: alto contraste": os 5 gráficos com fundo transparente e texto `#f8fafc`. O alto contraste claro continua com fundo branco, e os modos claro e escuro comuns continuam transparentes. A captura foi conferida, e as preferências do navegador voltaram ao estado de antes. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ac-escuro.1`).
+
+### 41.55 "Visão e cores": cores dos gráficos seguras para daltonismo (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: um colega do planejamento tem daltonismo, de tipo não informado, e a Secretaria tem política forte de apoio a pessoas com deficiência. Os gráficos do SPO (Plotly, Teto Orçamentário) distinguem séries **só pela cor**. Na simulação de deuteranopia, o azul `#1d4ed8` e o roxo `#6d28d9` da paleta padrão ficam iguais (diferença CIEDE2000 de 0,4).
+
+- **Cartão novo "Visão e cores"** no Personalizar Temas, com a opção **"Cores dos gráficos"**: Padrão SPO / Seguras para daltonismo.
+  - A preferência fica na mesma chave das fontes (`spo-font-preferences`, campo `cvd`, atributo `data-spo-cvd`) e o login também a lê.
+  - O cartão usa a mesma lógica do "Fontes e tamanho do texto" (`initFontesPersonalizar`, agora para os dois cartões). Os próximos ajustes de visão (foco, links, 150%, brilho, movimento) entram nele.
+- **Paleta** (função `[jean]` `spoTemaDiagramaComDestaque`, que já ajustava o tema dos diagramas): com a opção ligada, a paleta vira a **Okabe-Ito**, distinta nos três tipos de daltonismo.
+  - No escuro, o azul-escuro e o azul-claro trocam de lugar e o preto vira branco.
+  - Positivo/negativo da cascata passam a azul × laranja. O acumulado do Pareto usa a mesma paleta.
+  - As tabelas coloridas por grupo (aba Tabelas do Teto) seguem, porque leem o mesmo tema (`getTetoChartColors`).
+- **Padrões, contorno e marcadores** (envoltório `initGraficosEscala`):
+  - barras, fatias e blocos ganham **contorno** na cor do texto. É o contorno que garante 3:1 com o fundo (WCAG 1.4.11);
+  - barras e fatias ganham **padrão por cor**: a mesma cor tem o mesmo padrão em todos os gráficos e na legenda;
+  - linhas ganham marcador e traço próprios.
+- **Validador** `window.spoValidarPaletaDaltonismo()` (bloco `[jean]` no fim do `main.js`): simula as três deficiências (matrizes de Machado, 2009) e mede a diferença entre séries e o contraste do contorno.
+- **Verificação** (SPO local):
+  - **validador:** menor diferença entre séries 12,2 (protanopia), 11,6 (deuteranopia) e 10,9 (tritanopia); contorno com 13,1:1 no claro e 16,6:1 no escuro;
+  - **Teto, claro e escuro:** os 5 gráficos com a paleta e os padrões certos, e a aba Tabelas com as mesmas cores;
+  - **captura com deuteranopia simulada:** as três séries do gráfico por exercício continuam distintas;
+  - **cartão:** sem corte a 390, 820, 1080 (retrato), 1366 e 1920 px; a opção grava e volta ao padrão;
+  - **login:** respeita a escolha, e um valor inválido volta ao padrão;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+- **Teste humano:** na homologação, o colega com daltonismo compara o Teto com e sem a opção.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do `main.js` e do `login-theme.js` (`?v=20261114.jean-daltonismo.1`).
+
+### 41.56 "Visão e cores": foco reforçado e links sublinhados (dev. Jean, 2026-11-14)
+
+Segundo item do cartão "Visão e cores" (plano do dev. Jean para baixa visão e navegação por teclado).
+
+- **Realce do foco** (`data-spo-focus`): Padrão SPO / Reforçado.
+  - **Padrão:** o anel de 3 px de `feat/foco-visivel` continua.
+  - **Reforçado (anel duplo):** 4 px na cor do anel de foco entre duas faixas de 2 px na cor do fundo (branco no claro, preto no escuro). O anel contrasta com a própria faixa (≥ 4,69:1 nos 8 destaques, no claro e no escuro), então aparece sobre qualquer superfície, inclusive sobre botões na cor de destaque (WCAG 2.4.13, AAA).
+  - **Áreas que cortam o que passa da borda:** o anel vai para dentro. Uma varredura de 9 telas achou os controles cortados: grupos do Personalizar (`.visual-pref-group`, 13 botões), filtros das colunas dos relatórios (`.table-responsive`, 21 no FIP 613), botões de ação das tabelas de Usuários e API e um botão de aviso modal. O anel padrão de 3 px também é cortado ali, mas esses controles têm uma faixa interna própria no foco.
+- **Links** (`data-spo-links`): Padrão SPO / Sempre sublinhados.
+  - Valem os links de texto do conteúdo e do login. Menu, abas, botões e links com cara de botão não mudam.
+  - Hoje os links de texto estão nas 4 telas institucionais (17 links). Sem a opção, eles se distinguem do texto pelo negrito; a cor sozinha dá só 1,47:1 contra o texto em volta.
+- **Verificação** (SPO local):
+  - **Tab real**, esperando a transição dos controles: 7 tipos de controle com o anel duplo (linhas do modo de aparência, cores, grupos, botões, menu, filtros das colunas, botões do relatório), no claro e no escuro, com capturas;
+  - **links:** os 17 links das telas institucionais sublinhados, e nenhum botão ou aba afetado;
+  - **Personalizar:** a opção abre, marca, grava e volta;
+  - **login:** respeita as duas escolhas, e o "Esqueci a senha" fica sublinhado;
+  - **cartão:** sem corte em 390, 820, 1080 (retrato), 1366 e 1920 px;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-foco-links.1`).
+
+### 41.57 "Visão e cores": texto 150%, brilho reduzido e reduzir movimento (dev. Jean, 2026-11-14)
+
+Terceiro e último item do cartão "Visão e cores" do plano do dev. Jean.
+
+- **"Muito grande (150%)"** no grupo "Tamanho do texto" (`data-spo-text-size="xlarge"`): amplia a área de conteúdo e o cartão de login, como o 112% e o 125%. Medição em 5 telas (Limpeza, Teto, Personalizar, Usuários, FIP 613) e até 14 tamanhos de tela, comparando com o tamanho padrão:
+  - **celular (< 480 px):** o 150% deixava só 240 px úteis, abaixo dos 320 px de referência do WCAG 1.4.10. A palavra "Espaçamento" passava da borda no Personalizar. Ali o 150% vale **125%**;
+  - **Teto a 360 px:** o "Teto total" (#89, sem quebra de linha, ~222 px) passava da borda. Isso **já acontecia com o 125%**. Quando o painel tem até 300 px, o valor pode quebrar entre o "R$" e o número;
+  - **telas com cabeçalho e duas colunas** (Usuários, Cadastrar, API, Permissões): o `@media` olha a largura da janela, não a da área ampliada. A 820 px e 150%, Usuários ficava com 547 px úteis em duas colunas e rolava para o lado; o mesmo valia para o 112% e o 125% em algumas larguras. Os limites de uma coluna (900, 1100 e 720 px) agora são multiplicados pelo fator de cada tamanho;
+  - **resultado:** sem rolagem lateral nova e sem texto cortado novo em nenhuma das medições.
+- **"Brilho do tema claro: Reduzido"** (`data-spo-brightness`, só no claro): cartões `#eceef1` (cerca de 15% menos luz que o branco) e página `#dadee4`. Para não perder contraste, o texto secundário escurece (`#4a4850`) e o texto de destaque passa ao tom 800. Comparação de todo o texto em 6 telas: nenhuma falha nova de AA ou AAA; o menor caso nas telas de dados continua ≥ 7:1.
+- **"Movimento: Reduzir sempre"** (`data-spo-motion`): faz o mesmo que a preferência do sistema já fazia (bloco "Movimento reduzido"), mesmo sem ela.
+  - **Medido:** de 117 elementos com transição ou animação no Teto, ficaram 0. A rolagem suave pedida pelo JS fica imediata.
+  - **Achado:** a rolagem da página é feita pelo `<html>`, que rola suave pelo CSS, e pedir `behavior: "auto"` seguia o CSS. O `initMovimentoReduzido` agora pede `"instant"`, e a regra do CSS também vale no `<html>`.
+- **Também verificados:** o Personalizar (as três opções abrem, marcam, gravam e voltam), o login (as três opções; o 150% vale 125% a 360 px, sem rolagem lateral), `pytest` completo duas vezes seguidas e `node --check`.
+- **Defeito antigo anotado, fora deste PR:** a 360 px e no tamanho padrão, Usuários, Cadastrar e API rolam para o lado. A regra que põe essas telas em uma coluna até 900 px perde, por especificidade, para a que define as duas colunas delas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, todos `?v=20261114.jean-visao-6c.1`).
+
+### 41.58 Telas de Usuários no celular (dev. Jean, 2026-11-14)
+
+Achado na medição do texto 150% (seção anterior). A 360 px, no tamanho padrão, as telas de Usuários (Cadastrar, Editar, Perfil, Senha) e a API de Acessos rolavam para o lado: 580 px de conteúdo em 296 px úteis.
+
+- **Causa:** até 900 px, as telas com cabeçalho e duas colunas deviam passar a uma coluna (`.grid:has(> .module-header) { grid-template-columns: 1fr }`). Mas essa regra perdia, por especificidade, para a que define as duas colunas dessas telas (`.grid:has(> .module-header .bi-person-gear)` etc., com coluna mínima de 320 px).
+- **Correção** (bloco `[jean]` no fim do `style.css`): a mesma regra de uma coluna até 900 px, com especificidade suficiente.
+- **Verificação:** 9 telas (as 5 de Usuários e API, FIP 613 e PLAN 51 de Atualizar, Sessão e Login, Rede de Parceiros) em 360, 390, 768, 900, 1024 e 1366 px. Até 900 px, uma coluna e nenhuma rolagem lateral. Acima disso, duas colunas, como antes; o Perfil (Permissões) segue em uma coluna até 1100 px, pela regra própria. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-usuarios-celular.1`).
+
+### 41.59 Densidade automática (dev. Jean, 2026-11-14)
+
+Decisão do dev. Jean na discussão de 14/11. Em vez de trocar o preset do Contrato Visual pelo tipo de aparelho ("Pressão operacional" no celular, "Compacto gerencial" no tablet), a densidade passa a ser escolhida pela **largura da janela**. A largura acompanha zoom, redimensionamento e janela dividida; já retrato × paisagem não diz se a tela é de celular (um monitor em retrato tem 1080 px e mouse).
+
+- **Opção nova "Automática" (padrão SPO)** no grupo "Densidade visual" do Personalizar Temas:
+  - mais de 1200 px: confortável;
+  - de 721 a 1200 px: compacta;
+  - até 720 px: ampla.
+- **Como funciona:** as 34 regras de CSS de cada densidade são as mesmas de sempre. Muda só o valor que vai para `data-visual-density`: com "Automática", o bloco `[jean]` `initDensidadeAutomatica` (fim do `main.js`) escolhe pela largura e atualiza ao redimensionar. A escolha da pessoa fica em `data-visual-density-pref`. O alvo de toque de 44 px continua vindo da regra de ponteiro grosso (#35).
+- **Código do Cleber tocado (4 linhas, marcadas `[jean]`):** a opção `auto` em `COMMON_VISUAL_OPTIONS.density`, o padrão `density: "auto"` em `COMMON_VISUAL_DEFAULTS` (era `"comfortable"`) e a linha de `applyCommonVisualPreferences` que grava a densidade (agora grava a escolhida e a em uso). O `login-theme.js` resolve do mesmo jeito.
+- **Quem já tem preferências visuais salvas no navegador** continua com a densidade gravada (em geral "confortável", o padrão antigo, porque o SPO grava todas as preferências juntas quando se muda qualquer uma). Para passar à automática, basta escolhê-la ou usar "Restaurar padrão".
+- **Verificação** (SPO local):
+  - **faixas:** os 14 tamanhos da matriz caem na faixa certa e mudam na hora ao redimensionar. Ampla: celulares em pé e zoom de 200% (640 px). Compacta: celulares deitados, tablets em pé e deitados, monitor em retrato de 1080 px. Confortável: de 1280 px em diante;
+  - **layout:** 9 telas (Início, Limpeza, Teto, FIP 613 relatório e upload, Personalizar, Usuários, Parceiros, Estrutura) a 390 px (ampla) e a 1024 px (compacta), comparadas com a confortável: nenhuma rolagem lateral nem corte novos;
+  - **Personalizar:** escolher uma densidade fixa grava e vale; voltar a "Automática" recalcula;
+  - **login:** ampla a 390, compacta a 1024 e confortável a 1440;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do JS e do `login-theme.js` (`?v=20261114.jean-densidade-auto.1`). Sem CSS novo.
+
+### 41.60 Busca de telas (dev. Jean, 2026-11-14)
+
+Fase 1 da busca combinada com o dev. Jean. Para achar uma tela, era preciso percorrer o menu, que tem vários níveis e 6 itens chamados só "Consultar".
+
+- **Como abrir:** pelo item **"Buscar tela"** do menu lateral, logo abaixo de "Início" (inserido pelo JS, sem mexer no `base.html`; com o mesmo tamanho e o mesmo comportamento dos outros itens, inclusive com o menu recolhido e no menu do celular), ou pelos atalhos **Ctrl+K** (Cmd+K no Mac) e **/** (este, fora de campos de texto).
+- **Visual no padrão dos avisos do SPO:** cartão `modal-card`, título `modal-header-title` (na cor de destaque) com o subtítulo das teclas, campo `.field` com rótulo e o botão secundário **"Fechar"** no rodapé. O fundo copia o visual do `.modal-overlay` sem usar a classe: com ela, o tratamento genérico dos avisos (#41) também prendia o Tab e o foco voltava sempre ao "Fechar".
+- **O que procura** (bloco `[jean]` `initBuscaTelas` no fim do `main.js`):
+  - só as **telas do menu que a pessoa vê**: o menu já vem filtrado pelas permissões (`applyMenuPermissions` esconde com `display: none`), e a busca segue o mesmo filtro. Não muda nada no servidor;
+  - ignora acentos e maiúsculas e aceita parte da palavra. Compara com o nome, o caminho no menu e o **glossário** de siglas e assuntos (`GLOSSARIO`: empenho → EMP, PAOE → Ações/PAOE, senha → Alterar Senha, daltonismo → Personalizar, teto → Teto Financeiro e Teto Orçamentário…);
+  - cada resultado mostra o caminho ("Relatórios › Execução"), e os links externos aparecem marcados "abre em outra aba";
+  - Enter abre a tela pelo mesmo caminho do clique no menu.
+- **Telas recentes:** com a caixa vazia, aparecem as 5 últimas telas **do próprio usuário**, abertas pela busca ou pelo menu. Ficam no navegador, numa chave por conta (`spo-telas-recentes:<conta>`), e não acompanham a pessoa em outro computador.
+- **Acessibilidade:**
+  - diálogo modal (`role="dialog"`, `aria-modal`), com caixa de busca `combobox` e lista `listbox` (padrão WAI-ARIA, `aria-activedescendant`);
+  - setas escolhem, Enter abre, Esc fecha e devolve o foco a quem abriu (ou ao item "Buscar tela" do menu);
+  - o Tab fica preso no diálogo, e a quantidade de resultados é anunciada (`role="status"`);
+  - a busca fica acima dos avisos modais (camada 10001).
+- **Fase 2, com o Cleber:** glossário administrável no banco, com tela de administração e permissão própria, e registro das **buscas sem resultado**. A fase 1 deixa o glossário no mesmo formato (tela → termos) para virar dados iniciais.
+- **Verificação** (SPO local):
+  - **busca:** "empenho", "emp", "paoe", "senha", "daltonismo", "fip", "teto", "consultar" e "dotação" acham as telas certas;
+  - **teclado real:** Ctrl+K, "/", setas, Enter (abriu o Relatório EMP e o foco foi ao título), Tab preso, Esc;
+  - **resultado vazio:** "Nenhuma tela encontrada";
+  - **permissões:** escondendo o grupo de Usuários e o Teto Orçamentário como as permissões fazem, "senha" deixa de achar e "teto" acha só o Teto Financeiro;
+  - **recentes por conta:** outra conta no mesmo navegador não vê as recentes da primeira;
+  - **telas:** 12 tamanhos (celular em pé e deitado, tablets, notebooks, desktop, ultrawide, retrato, zoom 200%), com a caixa dentro da tela, sem rolagem da página e sem resultado cortado;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` do CSS e do JS (`?v=20261114.jean-busca-telas.1`).
+
+### 41.61 "Seguras para daltonismo": o nome do método no texto da opção (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean depois de ver o cartão "Visão e cores": citar o método da paleta e dizer o que ela cobre.
+
+- **Opção:** passa a se chamar "Seguras para daltonismo (paleta Okabe-Ito)".
+- **Descrição:** Okabe e Ito, Universidade de Tóquio, 2008. Distingue-se nos três tipos de daltonismo (protanopia, deuteranopia e tritanopia) e nas formas mais leves. As listras, os pontos e os marcadores ajudam também quem não distingue cor nenhuma (monocromacia).
+- **Não há opção por tipo de daltonismo, por decisão:**
+  - quem usa nem sempre sabe o tipo;
+  - os padrões e marcadores já separam as séries sem depender da cor;
+  - cada paleta a mais teria de ser medida em claro, escuro e alto contraste.
+
+  A decisão será revista se o teste com os colegas na homologação mostrar cores que ainda se confundem.
+- **Escopo:** muda só o texto, sem mudança de comportamento. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-rotulo-daltonismo.2`).
+
+### 41.62 Correções da bateria completa do Personalizar (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: depois dos ajustes do dia, conferir que o SPO reconhece e aplica todas as opções do "Personalizar Temas SPO" em todas as telas.
+
+- **Fase 1:** as 17 opções e 56 combinações de opção e valor, escolhidas pela própria tela, ficaram gravadas, aplicadas e com o efeito esperado. O login aplica o perfil completo, e "Restaurar padrão" volta tudo.
+- **Fase 2:** 66 telas × 4 perfis (padrão; escuro com Amarelo e reforçado; acessibilidade máxima; denso com Roxo) × 3 larguras (390, 1080, 1366), num total de 792 medições. Não houve nenhum erro no console, e os gráficos desenharam todos. Relatório completo nas notas do dev. Jean (`BATERIA_PERSONALIZAR_2026-11-14.md`).
+
+**Achados reais e correções** (bloco `[jean]` no fim do `style.css`):
+
+1. **Texto na cor de destaque "forte" ou pura:**
+   - **onde:** números das etapas do Contrato Visual, selo e nota das Permissões, aviso de relatório vazio, botões da lista do Teto, submenu do Personalizar, selo de rascunho, "Contexto ativo" da Governança e "Área UENs" das Notas SEE;
+   - **contraste antes:** com o Azul, 3,77:1; com o brilho reduzido, 3,24; com o Amarelo no claro, ~1,5;
+   - **correção:** passam a `--spo-accent-text`, e os ícones de Permissões e Notas SEE a `--spo-accent-graphic`;
+   - **conferido:** 8 destaques × claro, escuro e brilho reduzido, com pior caso de 5,92:1 (Amarelo com brilho reduzido); os demais ficaram ≥ 7,18.
+2. **`<code>` com o rosa do Bootstrap (`#d63384`):** 3,45:1 no escuro (API de Acessos). Passa à cor do texto, com fundo leve.
+3. **Permissões (Usuários → Perfil):** duas colunas com mínimos fixos de 500 e 520 px. A 1366 px com o menu aberto, rolava para o lado. Acima de 1100 px, as colunas passam a ser proporcionais, com força abaixo das regras de texto ampliado do #103 (que passam a uma coluna antes).
+4. **Modelos de Chave:** colunas com mínimos de 420 e 520 px, uma coluna só abaixo de 1280 px. Com o texto ampliado, o limite é multiplicado pelo fator (1440/1600/1920 px).
+5. **Formulários de Usuários:** colunas de 210 px no mínimo e campos que não encolhiam. No celular com texto ampliado, a tela rolava 4 px. Agora `minmax(min(100%, 210px), 1fr)`, e `.field` pode encolher.
+
+**Verificação:**
+- Perfil a 1366 px sem rolagem nos 4 tamanhos de texto e em uma coluna a 1080 px;
+- Modelos de Chave sem rolagem nos 4 tamanhos;
+- as 4 telas de Usuários a 390 px sem rolagem, no padrão e com 150%;
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-bateria.1`).
+
+### 41.63 Declaração de acessibilidade "SPO-AA+" (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: depois do trabalho de visual e acessibilidade, dizer no próprio sistema quais padrões o SPO atende, inteiros ou em parte.
+
+- **Cartão "Acessibilidade do SPO"**, no fim do Personalizar Temas, ocupando a largura inteira (`templates/partials/atualizar_personalizar_spo.html`):
+  - **padrão SPO-AA+:** WCAG 2.2 nível AA como meta mínima e critérios AAA oferecidos como opção. Segue também o eMAG, em atenção à Lei Brasileira de Inclusão (Lei 13.146/2015). O texto diz que é uma declaração do que foi verificado, não uma certificação;
+  - **três blocos:**
+    - **Atendido**, com os critérios WCAG citados;
+    - **Atendido por opção**, com o nome de cada opção da página;
+    - **Parcial ou em avaliação**: leitor de tela, Firefox e Safari, cores forçadas, o mockup PTA 2027 e listas nativas no celular;
+  - **links para as fontes, abrindo em nova aba** (ícone ↗ e "(abre em nova aba)" para leitor de tela; `rel="noopener noreferrer"`):
+    - WCAG 2.2 e cada critério citado (1.1.1, 1.4.1, 1.4.3…) na **tradução oficial do W3C Brasil** (`w3c.br/traducoes/wcag/wcag22-pt-BR/#<critério>`), que leva direto ao critério em português;
+    - eMAG (`emag.governoeletronico.gov.br`), Lei 13.146/2015 (Planalto), paleta Okabe-Ito (Color Universal Design) e fonte Atkinson Hyperlegible (Braille Institute);
+  - **como foi avaliado:** a bateria de 14/11 e o teste com os colegas na homologação;
+  - **contato para barreiras:** nger@edu.mt.gov.br.
+- **Link "Acessibilidade" no rodapé** (bloco `[jean]` `initLinkAcessibilidade` no fim do `main.js`, inserido pelo JS):
+  - abre o Personalizar Temas e leva o foco ao título do cartão; já estando na tela, só rola até ele;
+  - aparece só para quem tem a tela Personalizar Temas no menu, porque as permissões escondem o item e quem não a vê não veria o cartão.
+- **Manutenção:** a cada avaliação ou opção nova, atualizar o cartão no mesmo PR (padrão visual §5.1).
+- **Verificação** (SPO local):
+  - **link pelo rodapé:** a partir da Início e no próprio Personalizar, com o foco no título do cartão;
+  - **permissões:** escondendo o item do menu como as permissões fazem, o link some;
+  - **celular:** a 390 px, os blocos em uma coluna, sem rolagem lateral;
+  - **links:** os 19 externos com nova aba e aviso, contraste 10,53:1; endereços conferidos (todos respondem; o critério cai no texto certo da tradução);
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS `?v=20261114.jean-acessibilidade.2`, JS `?v=20261114.jean-acessibilidade.1`).
+
+### 41.64 Atalhos do teclado (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: instruções de como usar o SPO só pelo teclado. O caso dele: no Mapa Conceitual as setas trocavam o cartão, mas não havia como saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
+
+- **Ajuda "Atalhos do teclado"** (bloco `[jean]` `initAtalhosTeclado` no fim do `main.js`):
+  - **visual:** diálogo no mesmo padrão da busca de telas (#106); teclas em `<kbd>`;
+  - **seções:** Navegar, Menu lateral, Abas/diagramas/mapa, Busca/avisos/filtros e Navegador;
+  - **como abre:** tecla **?**, item "Atalhos do teclado" no menu (abaixo de "Buscar tela", inserido pelo JS) e links com `data-spo-atalhos` (cartão Teclado e declaração de acessibilidade);
+  - foco no "Fechar", Tab preso entre a lista rolável e o botão, Esc fecha e o foco volta.
+- **Voltar ao menu:**
+  - **Alt+M** leva o foco ao item da tela atual no menu; se ele estiver num grupo fechado ou no menu recolhido, ao grupo visível que o contém;
+  - link de pulo **"Ir para o menu (Alt+M)"** ao lado do "Pular para o conteúdo" (#41).
+- **Cartão "Teclado" no Personalizar**, com a opção **"Atalhos de uma tecla"** (Ligados, o padrão / Desligados), atributo `data-spo-keys`:
+  - **por quê:** WCAG 2.1.4 (nível A) pede que atalhos de uma tecla só possam ser desligados (atrapalham comando de voz);
+  - desligada, barra o **/** da busca (uma condição a mais na linha do atalho em `initBuscaTelas`) e o **?** da ajuda; **Ctrl+K** e **Alt+M** continuam;
+  - entra também no `login-theme.js`, como as demais opções.
+- **Dica dos componentes com setas:** ao chegar pelo teclado ao menu, a uma aba ou a um cartão do mapa/diagrama, aparece uma faixa curta no rodapé da tela (ex.: "← → trocam o cartão · Home/End: primeiro/último · Tab sai"). O leitor de tela recebe o mesmo texto pelo `aria-describedby`.
+- **Declaração de acessibilidade:** o item do teclado ganha o link para a ajuda, e o 2.1.4 entra em "Atendido por opção".
+- **Verificação** (SPO local, teclas reais do painel):
+  - **Mapa Conceitual:** clique num cartão, → troca e mostra a dica, Alt+M vai a "Administrar SPO" (grupo que contém a tela, menu recolhido), Enter abre o menu já no Mapa Conceitual;
+  - **ajuda:** abre com o foco no "Fechar", Tab alterna lista e botão, Esc devolve o foco ao cartão. A tecla **?** foi testada por evento sintético, porque a ferramenta de teclado do painel não gera o "?";
+  - **opção:** "Desligados" pela tela grava `keys: "off"`; ? e / não abrem nada, Ctrl+K abre a busca e a ajuda mostra o aviso; voltou a "Ligados";
+  - **celular** (375 px): ajuda em tela cheia, sem rolagem lateral; dica visível; Alt+M no menu recolhido;
+  - **escuro:** teclas com texto `#f6f5f4` sobre `#242424`;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS, JS e `login-theme.js`, `?v=20261114.jean-atalhos.1`).
+
+### 41.65 Alt+M: anel visível e Esc para sair do menu (dev. Jean, 2026-11-14)
+
+Correção do "Atalhos do teclado" (#110), relatada pelo dev. Jean depois de testar:
+
+- **"O Alt+M só funciona depois da ?":** um registro das teclas no navegador mostrou que o SPO recebia e tratava todos os Alt+M. O foco ia ao menu, mas **sem anel e sem a dica**. O Chrome só mostra o `:focus-visible` quando a última ação foi uma tecla "comum": depois de um clique de mouse, foco movido por combinação com Alt/Ctrl fica sem anel. Depois da **?** (tecla comum), o anel aparecia.
+  - **Correção:** o foco levado por atalho passa por `focarComAnel` (`focus({ focusVisible: true })` + classe `spo-foco-atalho`, com anel igual ao do teclado, inclusive no foco reforçado), e a dica aparece.
+- **"O Esc não fecha esse menu":** não havia saída do menu pelo teclado.
+  - **Correção:** com o foco no menu, **Esc** devolve o foco para onde a pessoa estava antes do Alt+M (ou ao título da tela) e fecha o menu se ele estiver aberto por cima da tela. Os diálogos (busca, ajuda) continuam tratando o próprio Esc antes.
+- A ajuda e a dica do menu dizem "Esc volta para onde você estava".
+- **Verificação** (teclas reais, SPO local, menu recolhido): clique de mouse num cartão do Mapa Conceitual → Alt+M → "Administrar SPO" com anel de 3 px e dica → Esc → foco de volta no cartão, com anel. Também Alt+M → Enter (menu aberto por cima) → ↓ → Esc → menu recolhido e foco no cartão. `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-alt-m.1`).
+
+### 41.66 O padrão SPO-AA+ para o usuário: resumo e documento técnico no servidor (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: a declaração de acessibilidade afirma o padrão "SPO-AA+"; o usuário precisa poder ver o que ele é, e o documento técnico, já consolidado, deve ficar disponível no servidor e se atualizar a cada ajuste.
+
+- **Janela "O padrão SPO-AA+"** (bloco `[jean]` `initPadraoSpoAaPlus` no fim do `main.js`), no visual da busca e da ajuda dos atalhos. Abre por links com `data-spo-padrao` (hoje: "SPO-AA+" na declaração). Duas vistas:
+  - **Resumo**, escrito para quem usa o SPO: o que o padrão garante em todas as telas (metas do §1 do documento técnico), o que se pode ajustar no Personalizar e como é verificado. **Mantido à mão:** mudou uma meta ou opção, atualizar o `RESUMO` no mesmo PR (regra no §5.1 do documento);
+  - **Documento técnico completo**, lido do servidor, com sumário que rola dentro da janela.
+- **Rota nova** `GET /api/documentos/<nome>` (`rotas/documentos_routes.py`, blueprint `documentos_bp`, só acrescentado ao `rotas/__init__.py`; `login_required`):
+  - devolve `titulo`, `html` e `sumario` do documento convertido; nome desconhecido → 404; arquivo ilegível → 503;
+  - hoje só `padrao-spo-aa-plus` → `docs/padrao-visual-spo-aa-plus.md`. Como o deploy copia o repositório, cada PR que muda o documento atualiza o que o usuário vê.
+- **Conversor de markdown próprio** (`services/documentos.py`), para não acrescentar dependência no servidor:
+  - cobre títulos, parágrafos, listas (aninhadas, numeradas, de marcar), citações, tabelas, `código`, **negrito** e links http(s);
+  - todo texto é escapado; links só http/https, abrindo em nova aba;
+  - testes em `tests/test_documentos.py` (7), inclusive o documento real: HTML balanceado e sem markdown cru.
+- **Nome padronizado:** o documento técnico passa a "SPO-AA+" no título (o arquivo continua `padrao-visual-spo-aa-plus.md`).
+- **Verificação** (SPO local):
+  - API: 200 com 9 seções e 16 tabelas; nome desconhecido → 404;
+  - janela: abre pelo link da declaração com o foco no título; vista técnica com sumário (o link leva à seção e dá o foco a ela); Tab preso; Esc fecha e devolve o foco ao link;
+  - tamanho (ajuste pedido pelo dev. Jean, que achou a primeira versão grande demais): no computador, até 720 px de largura e 72% da altura (720 × 608 px numa janela de 1139 × 845); no celular, **cartão com margens** (343 × 585 px em 375 × 812), e não tela cheia como a busca, com os dois botões lado a lado; tabelas largas rolam dentro do próprio quadro, sem rolagem lateral da página;
+  - contraste: texto 16,9:1 (claro) e 14,3:1 (escuro); links do sumário 10,5 e 12,9;
+  - `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `templates/login.html`: só as linhas `?v=` (CSS e JS, `?v=20261114.jean-padrao.1`).
+
+### 41.67 Ponte de preferências para o PTA 2027 (dev. Jean, 2026-11-14)
+
+Item combinado na bateria do Personalizar: o mockup "Programação PTA 2027" (iframe `static/pta2027_v63r`) recebia só o tema e a cor de destaque (`readThemePayload`/`postTheme`, que **não foram alterados**).
+
+- **No SPO** (bloco `[jean]` `initPontePta2027` no fim do `main.js`): uma mensagem própria, `spo-preferencias`, com os atributos `data-spo-*`/`data-visual-*` do `<body>` e os tons calculados de foco e destaque (`--spo-focus-ring`, `--spo-focus-halo`, `--spo-accent-text`, `--spo-accent-graphic`). Vai quando o mockup carrega ou pede, e a cada mudança de preferência (observador próprio dos atributos; o do código original só olha `class`/`style`).
+- **No mockup** (arquivos novos, `[jean]`; o `index.html` ganhou só duas linhas, o `<link>` e o `<script>`):
+  - `assets/spo-preferencias.js`: grava os atributos no `<body>` (classe `spo-ponte`), valida os valores e os tokens;
+  - `assets/spo-preferencias.css`: fontes do SPO (o mockup pedia "Inter", que não carregava, e caía na Segoe UI), fonte e tamanho das tabelas, entrelinha, leitura (72ch/estrita), anel de foco do SPO e foco reforçado, links sublinhados, contraste médio/reforçado (no escuro, a borda segue a lógica do mockup: destaque a 42%/64%), brilho reduzido e movimento reduzido.
+- **O que fica fora:**
+  - **tamanho do texto:** já funcionava, porque o zoom da área do SPO (`.main`) amplia o iframe (medido: escala 1,25 com "Maior"). Ampliar de novo dobraria;
+  - densidade e estilo dos cartões (o mockup tem layout próprio, em px) e daltonismo nos diagramas (imagens SVG prontas);
+  - a escala tipográfica do próprio mockup (há textos de 9 a 11 px): fica para um PR de adequação do mockup ao SPO-AA+.
+- **Atalhos dentro do mockup:** com o foco no iframe, as teclas não chegavam ao SPO. Agora Ctrl+K, "/", "?" e Alt+M voltam ao SPO pela mensagem `spo-atalho` (os de uma tecla respeitam a opção "Atalhos de uma tecla"); o Esc da busca e do menu devolve o foco ao mockup.
+- **Declaração de acessibilidade:** o item do PTA 2027 em "Parcial ou em avaliação" foi atualizado.
+- **Verificação** (SPO local, perfis da bateria aplicados nos atributos, sem gravar preferências):
+  - padrão: fonte SPO Inter carregada, entrelinha 1,5, tabelas em Intel One Mono 12 px, anel `#1a4f91`;
+  - escuro + reforçado + foco reforçado: borda 64% e texto secundário mais claro, anel na cor do destaque;
+  - acessibilidade máxima (Atkinson, entrelinha 2,0, leitura estrita, links, brilho reduzido, movimento): parágrafo com 2,0 e no máximo ~48ch, cartões `#eceef1`, transições zeradas;
+  - denso (Source Sans, tabelas compactas, IBM Plex, contraste médio): tabelas a 8 px em IBM Plex Sans, borda média;
+  - teclas reais com o foco no mockup: Ctrl+K abre a busca e o Esc volta ao mockup; Alt+M vai ao menu e o Esc volta;
+  - `pytest` completo duas vezes seguidas e `node --check` nos dois scripts.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do JS (`?v=20261114.jean-ponte.1`); o `index.html` do mockup: duas linhas novas.
+
+### 41.68 Mockup PTA 2027 no padrão SPO-AA+ (dev. Jean, 2026-11-14)
+
+Continuação da ponte (#113): adequar o próprio mockup "Programação PTA 2027" ao padrão. Nada foi mudado nos arquivos originais do mockup; tudo vale só no modo embutido com a ponte (`body.spo-ponte`).
+
+- **Medição antes** (vista inicial, Azul, claro): 65 de 97 textos abaixo de 7:1 (4,5–5,3:1) e 31 abaixo de 12 px. No escuro, o mockup original já tinha textos de 2,2 a 4,2:1.
+- **Cores** (`static/pta2027_v63r/assets/spo-preferencias.css`, seções "Cores do PTA 2027" e "Tema escuro"):
+  - **claro:** `--teal`, `--teal-dark` e `--spo-accent-deep` passam ao tom de texto do destaque do SPO (`--spo-accent-text`), o mesmo dos botões principais do SPO; texto secundário `#3f4e52` (8,3:1), com variações para brilho reduzido e contraste reforçado; 5 cores literais do mockup (×, avisos, "Não definida", textos semitransparentes) trocadas;
+  - **escuro, como o SPO:** texto no destaque usa o tom claro do destaque; botões e marcadores com fundo no destaque passam a texto `#111111`; badges numerados sobre o tingido do destaque e o texto do cartão selecionado na cor do texto;
+  - abas inativas na cor do texto (Vermelho e Roxo davam 6,9:1 sobre o tingido).
+- **Tamanho do texto:** `static/pta2027_v63r/assets/spo-escala.css`, **gerado** por `scripts/gerar_escala_pta2027.py`:
+  - 72 regras do mockup com fonte de 8 a 11 px passam a 12 px, e a 11 px nos rótulos em maiúsculas;
+  - mesma especificidade da regra original (`:where`), vencendo por carregar depois, para não encolher as regras do mockup que aumentam o tamanho num caso;
+  - teste `tests/test_escala_pta2027.py`: o arquivo gravado tem de ser igual ao gerado (se o `pta-2027.css` mudar, rode o script de novo) e nenhuma regra gerada fica abaixo de 11 px nem soma especificidade.
+  - O `<small>` sem tamanho próprio vai a 12 px (`:where`, as regras do mockup vencem).
+- **Alvos:** as caixas de marcar das etapas 3 e 4 tinham o rótulo clicável com 19 px de altura; agora 24 px (WCAG 2.5.8).
+- **Pedidos do dev. Jean depois de ver o mockup:**
+  - **listas suspensas:** a lista aberta era a do Windows (opção marcada no azul do sistema). Agora, como no SPO (listas nativas, #54/#55): superfície do tema, opção sob o mouse com 16% do destaque, ✓ e negrito na escolhida, seta que vira ao abrir. O campo fechado continua o do mockup. Firefox e Safari seguem com a lista nativa;
+  - **botão "×" de remover linha:** passa ao nível "Dispensar" do SPO (padrão §4.1): contorno vermelho , sem preenchimento (no escuro ), "×" a 18 px; e ganha o nome "Remover linha" para leitor de tela (antes lia só "×").
+- **`index.html` do mockup:** mais um `<link>` (o `spo-escala.css`, antes do `spo-preferencias.css`).
+- **Declaração de acessibilidade:** o item do PTA 2027 passa a dizer o que foi medido e o que falta (teclado e leitor de tela dentro do mockup).
+- **Verificação** (SPO local; o destaque e o tema foram simulados só na página, sem gravar, e restaurados no fim):
+  - **bateria de cores:** 12 vistas (inicial, EAP, visão estratégica, visão processual, política, pilar e as 6 etapas da jornada) × 8 destaques × claro/escuro = 192 medições, 1.039 textos por combinação. Depois das últimas correções, os 4 piores casos (Vermelho e Roxo no claro, Clássico e Amarelo no escuro) foram medidos de novo: aba inativa ≥ 11,07:1 e cartão selecionado ≥ 7,14:1;
+  - **tamanho:** nenhum texto abaixo de 12 px, fora os rótulos em maiúsculas de 11 px;
+  - **celular** (375 px): nenhuma das 9 vistas com rolagem lateral; rótulos das caixas de marcar com 24 px;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: sem mudança (a versão do CSS do mockup está no `index.html` dele, `?v=20261114.jean-mockup-aa.1`).
+
+### 41.69 Tela "Programação PTA/OpR": nome, textos e ajustes da jornada (dev. Jean, 2026-11-14)
+
+Pedidos do dev. Jean depois de ver o mockup:
+
+- **Nome "Programação PTA/OpR"** (PTA = Plano de Trabalho Anual; OpR = Orçamento para Resultado), no lugar de "Programação PTA 2027":
+  - menu (`services/features.py`, só o `nome`; o `id` não muda); título da tela com as siglas em `<abbr title>` (o leitor de tela e o mouse mostram o nome por extenso); título do quadro por extenso;
+  - no Personalizar, a amostra das fontes e o item da declaração de acessibilidade;
+  - no mockup: título da página, "PTA/OpR · NOVA JORNADA DE PROGRAMAÇÃO", "PROGRAMAÇÃO PTA/OpR" e um aviso do rascunho (`pta-2027.js`);
+  - busca de telas: "opr", "plano de trabalho anual" e "orçamento para resultado" acham a tela (glossário de `initBuscaTelas`).
+- **Texto do cabeçalho** começa direto por "A jornada parte da estratégia…" (saiu "Primeira integração do mockup v63r").
+- **Exercício** fora do cartão principal ("Da estratégia à entrega pública"); o campo não era lido pelo código.
+- **"Anterior" na 1ª etapa da jornada:** o mockup desativava o botão, e não havia como voltar à tela inicial pela jornada. Agora, na 1ª etapa, ele volta à tela inicial (`returnToStrategicChain`, do próprio mockup), com o nome "Anterior: voltar à tela inicial da programação" para leitor de tela; das outras etapas, volta uma etapa, como antes (`spo-preferencias.js`).
+- **O que não muda:** rota e permissão `atualizar/governanca-resultados/programacao-pta2027` (gravadas no banco), pasta e arquivos `pta2027`, o menu antigo desativado do `base.html` (o arquivo só muda no `?v=`) e documentos históricos.
+- **Verificação** (SPO local): menu, título, aba do navegador "Programação PTA/OpR — SPO", texto do cabeçalho, cartão sem o exercício; "Anterior" com clique real na 1ª etapa volta à tela inicial, e da 2ª volta à 1ª; busca por "orçamento para resultado" acha a tela; `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do JS (`?v=20261114.jean-nome-pta.1`).
+
+### 41.70 Dimensões do mockup PTA/OpR na escala do SPO (dev. Jean, 2026-11-14)
+
+Pedido do dev. Jean: os cartões do mockup estavam maiores que o padrão do SPO. Estudo e proposta aprovados por ele (título do cartão principal a 24 px, como o SPO).
+
+- **Medição antes** (9 vistas, 41 tipos de componente): título principal 40,6 px; cartões com espaço de 12 a 28 px e cantos de 12 a 24 px; espaço entre cartões de 8 a 32 px; campos com 46 px; "Continuar rascunho" com 65 px (quebrava em 2 linhas). **Referência:** a tela Mapa Conceitual (Governança e Resultados, a referência de hierarquia do padrão §2.2) e as regras de densidade do `style.css`.
+- **Escala aplicada** (seção "Dimensões" no fim do `static/pta2027_v63r/assets/spo-preferencias.css`, só no modo embutido; os arquivos do mockup não mudam):
+  - cartão principal como o cabeçalho de página do SPO: espaço 22/24 px, cantos 18 px, título **24 px**;
+  - títulos: página 24 · seção 20 · cartão 16 px;
+  - seções e cartões: cantos 14 px; cartões pequenos: cantos e espaço 12 px;
+  - espaço dos cartões e entre eles **pela densidade do Personalizar** (compacta 12/10, confortável 16/14, ampla 18/18): a densidade, que ainda não chegava ao mockup (#113), passa a valer nele;
+  - campos com 40–42 px (espaço 10/12, cantos 10); botões com espaço 10/14, cantos 12 e mínimo de 40 px (44 px em tela de toque); "Continuar rascunho" numa linha a partir de 600 px.
+- **Declaração de acessibilidade** e padrão §4.4 atualizados (a densidade vale no mockup).
+- **Verificação** (SPO local):
+  - medição depois nas 9 vistas: todos os tipos de componente na escala (títulos 24/20/16, cantos 14/12, campos 42 px, botões 42 px);
+  - as três densidades aplicadas na página (sem gravar): 12/10, 16/14 e 18/18 px; de volta à automática no fim;
+  - celular (375 px): nenhuma das 9 vistas com rolagem lateral; título principal em 2 linhas (eram 4);
+  - capturas de antes e depois (tela inicial e etapa 1 no computador; tela inicial no celular) nas notas do dev. Jean;
+  - `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` sem mudança; no `index.html` do mockup, só o `?v=` do `spo-preferencias.css` (`20261114.jean-escala.1`).
+
+### 41.71 Amostra das fontes na Prévia do Personalizar (dev. Jean, 2026-11-14 e 15)
+
+Pedido do dev. Jean: a amostra de "Fontes e tamanho do texto" não tinha o mesmo acabamento da prévia "Componentes do SPO" (era uma frase solta e uma tabela sem cabeçalho).
+
+- **Agora** (`templates/partials/atualizar_personalizar_spo.html`; bloco `[jean]` no fim do `style.css`): com a **mesma borda da prévia** (a amostra usa a classe `preview-surface` e o cartão, `personalizar-preview`, e por isso segue o estilo dos cartões, o contraste e o contrato visual; só a grade da prévia é desfeita), e cada passo da escala na fonte escolhida: sobretítulo 11 px, título 16 px, texto 14 px, as letras parecidas "Il1 O0 — ç ã é" numa linha própria e uma tabela de relatório com cabeçalho, linhas alternadas e valores à direita (crédito − empenhado = saldo).
+- **A amostra saiu do cartão "Fontes e tamanho do texto" e ganhou cartão próprio de prévia** (decisões do dev. Jean): "Prévia · Fontes e tabelas" (`#spo-previa-fontes`), logo depois de "Prévia · Componentes do SPO" (que não mudou), os dois com uma coluna, lado a lado quando há espaço. Uma primeira versão juntava as duas prévias num cartão de largura toda, mas ele chamava atenção demais. Na tabela, nomes curtos ("Crédito", "Empenhado", "Saldo") para as três linhas ficarem iguais.
+- **Daltonismo na prévia dos componentes** (relatado pelo dev. Jean: com "Cores dos gráficos: seguras para daltonismo" a prévia não mudava): os quatro nós do mini diagrama passam às quatro primeiras cores da paleta Okabe-Ito, com contorno, como nos gráficos. A paleta segue o fundo do diagrama (`data-visual-diagram-theme`): diagrama claro = `#0072B2 #E69F00 #009E73 #D55E00` com contorno `#1f2328`; escuro = `#56B4E9`… com contorno `#f5f5f5`.
+- **Ajustes pedidos pelo dev. Jean ao ver a primeira versão:** sem a moldura grossa (fundo de página em volta do cartão), sem a linha de metadados, "Compare as letras:" e as letras em linhas separadas, e a borda igual à da prévia.
+- As opções que já agiam na amostra continuam: fonte da interface e dos dados, tamanho, texto das tabelas, entrelinha e leitura. Em coluna estreita, o valor desce inteiro (#86).
+- **Verificação** (SPO local): tamanhos e fontes conferidos (Inter na interface, Intel One Mono nos dados); contraste do sobretítulo, metadados, legenda e cabeçalho entre 9,3 e 15,4:1 (claro) e 10 e 14,3:1 (escuro); borda igual à da prévia em 6 casos (padrão; cartões contornado e plano; contraste reforçado; presets "mobile" e "contraste" do contrato visual); os dois cartões lado a lado a 1366 px (grade de 4 colunas), 1057 px (3) e 768 px (2), empilhados a 375 px; sem rolagem lateral; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`?v=20261114.jean-amostra.8`).
+
+### 41.72 Sugestão "Leitura confortável" ao escolher a Atkinson (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: quem escolhe a Atkinson Hyperlegible tende a precisar também de texto maior, linhas mais espaçadas e linhas mais curtas (o site da fonte a mostra em tamanho grande). Decidido com ele: **sugerir, não mudar sozinho** (cada opção do Personalizar faz uma coisa só; e há quem escolha a Atkinson só pelas letras distintas, sem precisar de texto maior).
+
+- **Comportamento** (bloco `[jean]` `initSugestaoAtkinson` no fim do `main.js`): ao escolher a Atkinson na "Fonte da interface", aparece abaixo dela a oferta de aplicar também **texto Grande (112%)**, **entrelinha Ampla (1,75)** e **leitura Intermediária (72ch)**:
+  - **"Aplicar as três":** sobe só o que estiver abaixo do sugerido (quem já usa 125% continua em 125%), clicando nos próprios botões do cartão (grava e aplica pelo mesmo caminho); o aviso do cartão diz o que mudou; o foco volta para "Fonte da interface";
+  - **"Agora não":** só fecha a sugestão desta vez;
+  - aparece **toda vez** que a Atkinson é escolhida (inclusive depois de trocar de fonte, de "Restaurar padrão" ou de recarregar), exceto se as três opções já estiverem no sugerido ou acima; some se outra fonte for escolhida. (A primeira versão lembrava o "Agora não" no navegador e não oferecia mais; o dev. Jean pediu que oferecesse sempre.)
+  - anunciada ao leitor de tela (`role="status"`), sem tirar o foco de onde a pessoa está.
+- **Verificação** (SPO local, preferências do dev. Jean guardadas antes e devolvidas depois): aparece abaixo da fonte; aplicar grava 112%/1,75/72ch e mostra o aviso; reaparece depois de "Agora não", de trocar de fonte e de recarregar; não aparece com as três já aplicadas; com 125% já escolhido, não reduz (só entrelinha e leitura sobem); `pytest` completo duas vezes seguidas e `node --check`.
+
+Sem script de banco. `templates/base.html` e `login.html`: só as linhas `?v=` (CSS `?v=20261115.jean-atkinson.1`, JS `?v=20261115.jean-atkinson.2`).
+
+### 41.73 Alto contraste escuro sem azul-marinho também no quadro dos gráficos (dev. Jean, 2026-11-15)
+
+Relatado pelo dev. Jean: no tema escuro com "Diagramas: alto contraste", o gráfico "Teto por grupo de despesa" voltou a aparecer sobre azul-marinho, depois da correção do #100.
+
+- **Causa:** o #100 deixou transparente o fundo do gráfico Plotly no modo `highDark`, mas o **quadro** em volta (`.teto-chart`) pinta `--spo-diagram-bg`, que nesse modo ainda era `#111827`. Com o gráfico transparente, aparecia o azul do quadro.
+- **Correção** (bloco `[jean]` no fim do `style.css`), com a mesma decisão do #100: no `highDark`, `--spo-diagram-bg` = fundo do cartão (`--card`, `#242424`), `--spo-diagram-node-bg` = cinza neutro do escuro comum (`#262626`, nós do Mapa Conceitual e afins) e a prévia do Personalizar igual. Cores das séries, texto e bordas do alto contraste não mudam.
+- **Verificação** (SPO local, Teto Orçamentário, modo aplicado só na página): quadro do gráfico com a mesma cor do cartão (`rgb(36, 36, 36)`); texto do alto contraste 14,8:1; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`?v=20261115.jean-ac-quadro.1`).
+
+### 41.74 Bateria 2 do Personalizar: correções e documentação técnica conferida (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: depois de reaparecer um defeito já corrigido (o azul-marinho do alto contraste escuro, #119), repetir a bateria completa do Personalizar em todas as telas, de forma automatizada, corrigir o que fosse achado e conferir a documentação técnica.
+
+- **Bateria** (roteiro local, fora do Git; método no padrão §5, itens 12 e 13):
+  - **Fase 2, telas:** 66 telas do menu × 4 perfis (padrão; escuro + Amarelo + Reforçado + diagramas em alto contraste + foco reforçado; acessibilidade máxima com brilho reduzido; denso com Roxo) × 3 larguras (1366, 1080, 390) = 792 medições, uma tela por vez, a mesma tela nas três larguras; mede rolagem lateral, texto cortado, contraste (AA e 7:1), fundos azul-marinho, gráficos desenhados e erros no console. Duas rodadas completas (a segunda compondo a **opacidade**, que a primeira não via) e uma conferência das 24 telas com achados.
+  - **Fase 1, opções:** as 33 opções de "Fontes e tamanho do texto", "Visão e cores" e "Teclado" e as 14 das preferências comuns, clicadas pela tela: gravadas e aplicadas; sugestão da Atkinson aparece toda vez; prévias acompanham daltonismo e fontes. Também: busca de telas, ajuda dos atalhos, janela do padrão, link "Acessibilidade", "Ir para o menu", rota do documento técnico e o mockup PTA/OpR por dentro (brilho reduzido).
+  - **Sem achado:** nenhum texto abaixo do AA no fim, nenhum azul-marinho (a correção do #119 vale em todas as telas), nenhum gráfico sem desenhar, nenhum texto cortado, nenhum erro no console.
+- **Correções** (blocos `[jean]` no fim do `style.css`; uma regra no `spo-preferencias.css` do mockup):
+  1. **Brilho reduzido, texto secundário:** `--muted` de `#4a4850` para `#3e3c44` (painéis semitransparentes mostravam o fundo `#dadee4`: 6,3–6,98:1 → ≥ 7,58); com o Reforçado, volta a valer `#38363d` (o brilho reduzido o anulava).
+  2. **Brilho reduzido, "Dispensar":** vermelho `#861523` (era `#a51d2d`, 6,42:1 no cartão `#eceef1`); também no "×" do mockup.
+  3. **Início:** texto e dica de boas-vindas (cartão de degradê transparente; `--muted` e `opacity .7`) passam ao texto principal, sem opacidade.
+  4. **Contrato Visual Protegido:** `<em>` das prévias no texto principal (escuro + Amarelo: 6,65 → 7,98); pílula de versão sem `opacity .72` (4,26:1).
+  5. **Notas SEE:** opções de envio indisponíveis no estilo de desabilitado do padrão (§3.4) em vez de `opacity .45` (2,2:1 → 5,15 claro / 6,53 escuro).
+  6. **Diagramas claros:** texto secundário dos nós (`--spo-diagram-muted`) `#3e3d44`.
+  7. **Programação PTA/OpR (mockup), achados do dev. Jean na conferência:** o indicador de avanço (círculo fixo de 68/62 px) ficava menor que "concluído" na escala de 12 px; agora acompanha o texto (`fit-content` + `aspect-ratio: 1`, mínimo 68 px; ~80 px, folga de 1,5 px nas três larguras e nas cinco fontes). Texto do cartão inicial: "o valor que a **política** pretende gerar" (era "a SEDUC").
+  8. **Prévia "Fontes e tabelas":** a legenda da tabela quebra antes de "(segue \"Texto das tabelas\")".
+  9. **Documento técnico do SPO-AA+ sai da janela da declaração e vai para o Contrato Visual Protegido** (pedido do dev. Jean): a janela aberta por "SPO-AA+" mostra só o resumo; o Contrato ganhou a linha "Regras de acessibilidade e de visual que todo preset respeita: documento técnico do padrão SPO-AA+" (`data-spo-padrao="tecnico"`, link no destaque e sublinhado), que abre a mesma janela já no documento. Sem o botão de alternar entre as vistas.
+  10. **Atkinson Hyperlegible Mono** (pedido do dev. Jean): nova opção em "Fonte de tabelas e dados" — a monoespaçada da família Atkinson (Braille Institute, OFL 1.1, 17,7 KB, baixada do pacote `@fontsource-variable/atkinson-hyperlegible-mono@5.3.0` como as demais; `static/fonts/LEIA-ME.md`). Mesmos alvos da Intel One Mono (tabelas, totais, KPIs e valores do Teto), também no login (`login-theme.js`) e no mockup PTA/OpR. A sugestão "Leitura confortável" (#118) passa a oferecer a combinação inteira — Atkinson Mono nos dados + texto Grande + entrelinha Ampla + leitura 72ch — listando só o que falta ("Aplicar", "Aplicar as duas"… "Aplicar as quatro"). Medida em 22 telas com tabelas × 3 larguras com Atkinson + Atkinson Mono + 150% + entrelinha 2,0 (sem rolagem lateral, corte, contraste abaixo de 7:1 nem erro no console).
+- **Não reproduzido:** Processos, Riscos e Projetos rolou para o lado a 390 px numa medição da primeira rodada (perfil de acessibilidade máxima); não se repetiu em quatro tentativas nem nas rodadas seguintes.
+- **Documentação técnica** (`docs/padrao-visual-spo-aa-plus.md`, **versão 3**): fundo do alto contraste escuro no gráfico e no quadro (§3.5), prévias e sugestão da Atkinson (§4.4), valores do brilho reduzido (§2.1), desabilitado das Notas SEE (§3.4), texto secundário dos nós (§3.5), método da bateria e lições de opacidade e contêineres (§5), dois itens novos no checklist (§6.1), dívida e histórico (§7, §8). A declaração de acessibilidade diz que a bateria foi repetida em 15/11.
+- `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só as linhas `?v=` (CSS `20261115.jean-atkinson-mono.1` nos dois; JS `20261115.jean-atkinson-mono.1` no `base.html`; `login-theme.js` `20261115.jean-atkinson-mono.1` no `login.html`); `index.html` do mockup: o `?v=` do `spo-preferencias.css` (`20261115.jean-atkinson-mono.1`) e o texto do cartão inicial.
+
+### 41.75 Movimento reduzido: rolagem, cartões parados e aberturas do mockup PTA/OpR (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: a opção "Movimento" (Personalizar → Visão e cores) parecia não ter efeito. Avaliação: ela funciona, mas o SPO tem pouco movimento — indicadores de carregamento, abertura do menu lateral, rolagem suave e transições curtas de cor —, então o efeito é discreto; a descrição da opção fica como está (vale para animações que vierem com painéis novos). Dois pontos escapavam:
+- **Rolagem suave por `scrollTo`/`scrollBy`:** o `initMovimentoReduzido` só tratava o `scrollIntoView`; a edição de Etapa (`window.scrollTo({ behavior: "smooth" })`) rolava suave mesmo com "Reduzir sempre". Agora `window` e `Element` (`scrollTo`, `scroll`, `scrollBy`) também viram rolagem imediata quando a opção (ou o sistema) pede; vale para chamadas futuras.
+- **Mockup PTA/OpR:** o ajuste do `main.js` não vale dentro do iframe; o `spo-preferencias.js` do mockup ganhou o mesmo tratamento (4 chamadas a `scrollIntoView` suaves no `pta-2027.js`, que não foi tocado).
+- **Chegada com esmaecimento** (pedido do dev. Jean depois de testar: o salto imediato trocava a tela de uma vez, como um "flash", ao abrir os eixos de uma macropolítica e ao ir para o "Direcionamento estratégico"): com "Reduzir sempre" (ou o sistema pedindo), a página continua indo direto ao destino e a área de chegada esmaece (opacidade 0,35 → 1 em 0,22 s, Web Animations, sem deslocamento) — como o "Reduzir movimento" do iPhone/Mac. Esmaece o alvo do `scrollIntoView`, ou a área de conteúdo (`#content-area`) quando a página inteira rola por `scrollTo`; nada esmaece se a página não se moveu. Mesmo tratamento no mockup.
+- **Cartões que sobem 1–3 px ao passar o mouse** (notícias da Início, opções de envio das Notas SEE, "Entrar" do login, presets do Contrato Visual, nós dos diagramas; no mockup, macropolíticas, pilares, nós da EAP e políticas): com a transição desligada o salto continuava; agora ficam parados (borda, fundo e sombra continuam marcando).
+
+- **Aberturas do mockup PTA/OpR** (testes do dev. Jean em tela baixa, "paisagem"), só no `spo-preferencias.js`/`.css` do mockup:
+  - **Eixos junto da macropolítica (nos dois modos):** com os grupos A/B/C um embaixo do outro (até 1180 px), a lista de eixos abria no fim do último grupo, até ~1000 px abaixo do cartão clicado. Agora `#policy-expansion` vai para logo depois do grupo do cartão (`expandMacro` envolvida); antes do `renderMacros` (que redesenha os grupos e apagaria a caixa) ela volta ao lugar original. Em tela larga, com os grupos lado a lado, nada muda.
+  - **Rolagem contida (só com "Reduzir sempre"):** ao abrir eixos ou metas de um pilar, o mockup rolava o painel inteiro para a tela (`block: "center"`/`"nearest"`), até 275 px em tela baixa, e cada rolagem esmaecia o painel (a "cintilância" do grupo C, cuja lista é maior que a tela). Agora a página não rola se o começo do painel (título + 1ª linha, ~170 px) já está à vista; senão, rola de uma vez só até ele, sem esmaecer (`rolarSoOComeco`). Com "Automático" fica a rolagem suave original (pedido do dev. Jean: nesse modo ela guia o olho até o que abriu).
+  - **Cartões da Visão processual:** no tema claro não mostravam a seleção (a regra geral do modo embutido, com `!important`, apagava o `:hover`/`.active`). Em teste, seguem o desenho dos cartões do Mapa EAP: fundo claro, borda fina; aberto ou com o mouse em cima, borda na cor de destaque e sombra leve.
+  - **Contexto ativo em coluna estreita:** com a escala de 12 px, o cabeçalho dos componentes media 196 px numa coluna de 183 px e a lista passava 13 px da borda; agora o cabeçalho quebra a linha e a grade fica presa à coluna. O painel aberto (componentes ou metas) tinha `margin-top: -10px` e subia sobre o cartão; agora fica colado a ele, dividindo a borda. As metas desse painel seguem o desenho dos componentes (sem a barra lateral e o fundo tingido); a aberta ganha a borda na cor de destaque.
+  - **Leitor de tela:** pilares, macropolíticas e processos dizem "expandido/recolhido" (`aria-expanded`, pela classe `.active` que o mockup já põe).
+
+Medido com a aba na frente: com "Reduzir sempre", `scrollTo` e `scrollIntoView` chegam ao destino no primeiro quadro (no SPO e no mockup) e o cartão fica com `transform: none`; macropolítica → eixos esmaece a área dos eixos (`.policy-expansion`), "Programar" → "Direcionamento estratégico" esmaece a área do PTA, a volta ao topo esmaece a área de conteúdo, e sem movimento real nada esmaece; com "Automático", a rolagem continua suave (76 px no primeiro quadro) e o cartão sobe 1–2 px como antes. No mockup (iframe numa página, 1129 × 560): macropolítica 01 com os eixos a 180 px do cartão (antes ~1000 px); com "Reduzir sempre", rolagem imediata de 291 px (pilar), 348 px (macro 01) e 206 px (macro 10), sem esmaecer, e nenhuma quando o começo do painel já está à vista; com "Automático", rolagem suave (~60 px nos primeiros 60 ms). Contexto ativo a 1300 × 650: nenhum elemento além da borda, painel colado (1 px de encontro). Cartão selecionado da Visão processual com a mesma borda e sombra de um nó aberto do Mapa EAP. Sem erro no console. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só as linhas `?v=` (`20261115.jean-movimento.1`); `index.html` do mockup: só os `?v=` do `spo-preferencias.css` e do `.js` (`20261115.jean-movimento.7`); o `main.js` também está em `.2`.
+
+### 41.76 Telas estreitas: rolagem automática do mockup e janelas no celular (dev. Jean, 2026-11-15)
+
+Pedidos do dev. Jean depois de testar os dois modos de movimento e o celular no Chrome (iPhone 16 Pro Max 440 × 956, iPhone 393 × 852 e menores):
+- **Rolagem automática do mockup PTA/OpR só em tela estreita.** O ganho da rolagem suave ao abrir as metas de um pilar ou os eixos de uma macropolítica aparece no celular e na janela dividida, onde o painel costuma abrir fora da tela. Agora, com "Movimento: Automático", a rolagem suave original do mockup só vale quando a janela do SPO tem até 1200 px de largura (as faixas compacta e ampla da densidade automática) ou com o preset "Pressão operacional" do Contrato Visual (`data-visual-contract-preset="mobile"`, que realça o modo móvel e split). Em tela larga, a página não rola; só se o começo do painel ficar fora da tela é que ela rola, suave, até ele (para o clique não parecer sem efeito). Com "Reduzir sempre", nada muda (rolagem contida e imediata do #121). O mockup lê a largura e o preset na página do SPO (mesma origem); `spo-preferencias.js`, `telaEstreita()` e `comRolagemContida()`.
+- **Janelas no celular sem tela cheia.** Até 600 px, a busca de telas e a ajuda dos atalhos ocupavam a tela inteira; a janela "O padrão SPO-AA+" já era um cartão com margem. Agora as três seguem o cartão: 16 px de margem, cantos de 14 px, até 72% da altura. A busca fica no alto (o teclado virtual sobe por baixo e não cobre o campo); a ajuda, no centro. Só CSS (bloco no fim do `style.css`).
+
+Medido: mockup dentro de uma página (iframe de 1004 px), cartão no meio e no pé da tela. Com "Automático" a 1500 px: pilar no meio 0 px, macropolítica no meio 27 px; no pé, 285 e 342 px (só até o começo do painel). A 1100 px: rolagem suave original (327–657 px). "Reduzir sempre": igual nas duas larguras (0–348 px, imediata). Janelas a 393 × 852: busca de 16 a 377 px na horizontal, no alto (16 px); ajuda centralizada (119 a 733 px); a 320 × 640, sem rolagem lateral e com o "Fechar" dentro do cartão. `pytest` completo duas vezes seguidas.
+
+Achado sem relação, para um `fix/` à parte: abrir a busca com Ctrl+K enquanto um aviso modal está aberto (o "Alerta" da Início) deixa o foco no botão do aviso, atrás da busca, e o Esc não fecha nenhum dos dois.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-janelas-celular.1`); `index.html` do mockup: só o `?v=` do `spo-preferencias.js` (`20261115.jean-janelas-celular.1`).
+
+### 41.77 Busca de telas e ajuda dos atalhos por cima de um aviso (dev. Jean, 2026-11-15)
+
+Achado no teste do celular (#122): abrir a busca com Ctrl+K com um aviso modal aberto (o "Alerta" da Início, que aparece depois de a página carregar) deixava o foco no botão do aviso, atrás da busca, e o Esc não fechava a janela da frente. Causa: o tratamento geral dos avisos (`prepararModais`, #41) levava o foco para o aviso quando ele aparecia e, com a captura do teclado no `document`, tomava o Esc e o Tab, sem saber que a busca, a ajuda dos atalhos e "O padrão SPO-AA+" (`.spo-busca-fundo`) abrem por cima dos avisos.
+
+Correção (`main.js`):
+- enquanto uma dessas janelas estiver aberta (`janelaPorCima()`), o aviso de baixo não toma o foco ao aparecer e não trata as teclas;
+- ao fechar a janela com um aviso ainda aberto, o foco vai para o aviso (`window.spoFocarAvisoAberto`, chamado pelo `fechar()` das três janelas), e não para quem abriu a janela, que fica atrás dele; sem aviso, o foco volta para quem abriu, como antes.
+
+Medido no SPO local: aviso aberto → Ctrl+K → o Tab fica na busca, o Esc fecha a busca e o foco vai ao aviso, outro Esc fecha o aviso; Ctrl+K logo depois de carregar (o aviso aparece depois) → o foco continua no campo da busca, Esc fecha a busca e o foco vai ao aviso; o mesmo com a ajuda dos atalhos; sem aviso, o foco volta para onde estava. Sem erro no console. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-busca-aviso.1`).
+
+### 41.78 Rolagem automática do mockup sem o monitor em retrato (dev. Jean, 2026-11-15)
+
+Pergunta do dev. Jean depois do #122: num monitor Full HD em retrato (~1060 × 1900 com o navegador maximizado), a regra "até 1200 px de largura" ligava a rolagem automática do mockup PTA/OpR. Lá a tela é estreita mas muito alta, e o painel aberto quase sempre cabe à vista. Decisão: a regra passa a olhar também a altura. Com "Movimento: Automático", a rolagem suave ao abrir metas e eixos vale com a janela do SPO até 1200 px de largura **e** até 1000 px de altura; o celular (até 720 px de largura) entra sempre, qualquer que seja a altura; o preset "Pressão operacional" também. Ficam de fora a tela larga, o monitor em retrato e o tablet em pé (nesses, a página só rola se o começo do painel ficar fora da tela, e só até ele). `spo-preferencias.js`, `telaEstreita()`.
+
+Medido com o mockup dentro de uma página (com `meta viewport`, como o SPO), macropolítica 01 no meio da tela, "Automático": 1060 × 1900 (retrato) não rola; 800 × 1280 (tablet em pé) não rola; 1100 × 650 (janela dividida/notebook pequeno) rolagem suave de 342 px; 440 × 956 (iPhone 16 Pro Max) rolagem suave de 844 px; 1500 × 650 só 27 px (o começo do painel). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `index.html` do mockup: só o `?v=` do `spo-preferencias.js` (`20261115.jean-sem-retrato.1`).
+
+### 41.79 Janela dividida sem largura mínima (dev. Jean, 2026-11-15)
+
+O dev. Jean testou o SPO no Chrome com o modo de aparelho do DevTools (iPhone 393 × 852 e 440 × 956) e no painel estreito do app, e a página inteira (topo, conteúdo, cartões e o quadro do PTA/OpR) passava da borda. Causa: o modo "split sob pressão" do contrato visual de 2026-07 (`syncSplitPressureMode` no `main.js`; `html.spo-split-pressure` no `style.css`). Ele liga com a área da página até 480 px dentro de uma janela de navegador pelo menos 180 px mais larga (pensado para o Chrome com a janela dividida) e fixava `--spo-operational-min-width` em 560 px (520 com o preset "Pressão operacional"), com rolagem lateral. No celular de verdade não liga (janela e página têm a mesma largura); liga no DevTools e no painel estreito. Não veio dos PRs #121–#124.
+
+Decisão do dev. Jean: desligar a largura mínima. Bloco `[jean]` no fim do `style.css`: com `spo-split-pressure`, `--spo-operational-min-width` vai a 0 (inclusive com o preset "Pressão operacional"), a página não rola para o lado e o quadro do PTA/OpR acompanha a largura. A classe continua sendo posta pelo JS (que não mudou); a página se reorganiza como no celular (WCAG 1.4.10; padrão SPO-AA+: sem rolagem lateral a 320 px).
+
+Medido no Chrome do dev. Jean (sessão dele, tema escuro, destaque roxo), com o SPO em quadros de 393 e 440 px dentro da janela de 1080 px (o modo liga): antes, a página tinha 560 px e 12+ elementos passavam da borda; agora, Início e Programação PTA/OpR com a largura do quadro, nenhum elemento além da borda, e o mockup do PTA/OpR com 276 e 323 px, sem rolagem lateral. Também a 390 px (a largura das baterias do SPO) e a 320 px (WCAG 1.4.10): nada além da borda; mockup com 273 e 203 px. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-sem-largura-minima.1`).
+
+### 41.80 Declaração de acessibilidade com os tamanhos dos outros cartões (dev. Jean, 2026-11-15)
+
+O dev. Jean notou, no Personalizar, que o cartão "Acessibilidade do SPO" parecia ter letra maior que os vizinhos e perguntou se faltava fixar o tamanho em px (como no "Texto das tabelas"). Avaliação: os tamanhos do SPO já são todos em px; as opções 112/125/150% ampliam a área de conteúdo inteira (`zoom` no `.main`), na mesma proporção. A diferença era de valor: a Declaração usava o passo "Texto" da escala (título 18 px, abertura/itens 14 px, títulos internos 14 px), e os outros cartões usam título 14 px (`.card-title`), descrição 12 px (`p.muted`), nome da opção 13 px e resumo 12 px.
+
+Decisão do dev. Jean: igual aos outros cartões. No bloco `[jean]` da Declaração (`style.css`): título 14 px, abertura e itens 12 px (entrelinha 1,5), títulos internos ("Atendido"…) 13 px; rodapé continua 12 px; a cor do texto não muda. Medido na tela: Declaração 14/12/13/12 px, igual ao cartão "Fontes e tamanho do texto" (14/12/13/12). `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-declaracao-tamanhos.1`).
+
+### 41.81 Cartões dinâmicos no padrão de Governança e Resultados (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: os cartões das telas do Institucional (Diretrizes e Procedimentos, Repositório de Arquivos, Legislação e Normas, Rede de Parceiros) não seguiam o padrão dos cartões dinâmicos de Governança e Resultados; fazer uma varredura e aplicar esse sistema visual aos cartões dinâmicos do SPO (o mockup PTA/OpR será revisto depois).
+
+Varredura (cartões clicáveis com ícone/título/descrição): `.noticia-box` do Institucional (17 cartões em 4 telas, sem ícone, só o texto do link clicável), `.see-upload-option` das Notas SEE (2, borda tracejada, centralizados), `.contract-preset` do Contrato Visual (4, cantos de 8 px). Ficaram de fora as linhas de opção (Personalizar, replicar exercício), que são listas, e os cartões informativos (não clicáveis).
+
+Implementação (bloco `[jean]` "Cartões dinâmicos" no fim do `style.css`): o desenho do `.flow-node` medido na tela — fundo, borda e textos pelas variáveis dos diagramas (`--spo-diagram-*`, que seguem a opção "Diagramas" e o alto contraste), cantos de 12 px, espaçamento de 12 px, altura mínima de 132 px, ícone de 20 px na cor de destaque, título 14 px negrito, descrição 12 px; mouse/foco: borda na cor de destaque; selecionado (preset escolhido na prévia, `.active`): borda, barra de 3 px à esquerda e fundo tingido; o preset ativo local (`.contract-preset-active-local`) só ganha a borda na cor de seleção, para não se confundir com a prévia; contraste Médio/Reforçado e preset "Contraste técnico": contorno no tom de controle (≥ 3:1), como o `.flow-node`; opção desabilitada das Notas SEE continua no estilo da bateria 2; movimento reduzido sem levantar. No Institucional, os 4 templates ganharam um ícone por cartão (Bootstrap Icons, `aria-hidden`) e o link do texto cobre o cartão inteiro (`a::after` com `inset: 0`; um só ponto de Tab; anel de foco no cartão).
+
+Medido na tela: cartões do Institucional com o mesmo fundo, borda, cantos, espaçamento e altura do `.flow-node` (132 px), ícone 20 px, título 14 px, descrição 12 px, nas 4 telas (4, 3, 5 e 5 cartões, todos com ícone); clique nos cantos e no centro de cada cartão cai no link; preset ativo do Contrato com o mesmo fundo, borda e barra do nó selecionado de Governança; opções das Notas SEE (desabilitadas nesta conta) no estilo de desabilitado. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-cartoes-dinamicos.2`).
+
+### 41.82 Rótulos do gráfico de árvore com contraste garantido (dev. Jean, 2026-11-15)
+
+Pergunta do dev. Jean: com "Cores dos gráficos: seguras para daltonismo", nos temas claro e escuro, os textos dos gráficos do Teto Orçamentário estão adequados? Medido (contraste WCAG de cada rótulo sobre a cor do bloco): a pizza está bem (rótulos fora das fatias, na cor do texto sobre o cartão); no gráfico de árvore ("Teto por ADJ"), o Plotly escolhe o texto de dentro do bloco entre um cinza (#444) e o branco por critério próprio, e **5 dos 8 blocos ficavam abaixo de 4,5:1** no claro com a paleta Okabe-Ito: rosa 3,18, verde 3,42, vermelhão 3,87, azul-céu 4,22, laranja 4,32.
+
+Correção (`main.js`, `ajustarDados` da escala dos gráficos, que já passa por todo `Plotly.react`/`newPlot`): em todo gráfico de árvore com cores por bloco, o texto passa a ser **preto ou branco, o que der mais contraste** com a cor de cada bloco (`textfont.color` por bloco). Vale para qualquer paleta e tema.
+
+Medido na tela (Teto por ADJ, 8 blocos): paleta segura para daltonismo, claro 5,19–21:1 e escuro 5,19–21:1; paleta padrão, claro 5,18–10,35:1 e escuro 5,6–17,03:1. O pior caso (5,19:1, branco sobre o azul Okabe-Ito #0072B2) passa o AA (4,5:1); o AAA (7:1) dependeria de mudar a cor do bloco, o que tiraria a paleta Okabe-Ito do padrão. `pytest` completo duas vezes seguidas; `node --check`.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-rotulos-arvore.1`).
+
+### 41.83 Fonte Mulish como opção da interface (dev. Jean, 2026-11-15)
+
+O dev. Jean achou confortável a leitura de uma página em Mulish (16 px, entrelinha 1,5, texto cinza-escuro) e pediu para compará-la com a Inter no próprio SPO. Avaliação registrada no plano de tipografia (`docs_jean/PLANO_NORMALIZACAO_TIPOGRAFIA.md`): boa parte do conforto vem da composição (tamanho, entrelinha, espaço entre parágrafos, linha de ~80 caracteres); a Mulish tem I maiúsculo e l minúsculo parecidos, o que pesa num sistema com códigos e siglas, por isso entra como **opção**, não como padrão.
+
+- **Arquivos:** `static/fonts/mulish/` (`mulish-latin-wght-normal.woff2`, 29.968 bytes, e `OFL.txt`), do pacote oficial `@fontsource-variable/mulish@5.3.0` pelo jsDelivr, com sha256 no `static/fonts/LEIA-ME.md`. Nada é carregado de fora; o navegador só baixa a fonte quando ela é escolhida.
+- **Opção:** Personalizar → Fontes e tamanho do texto → Fonte da interface → "Mulish" (template, `OPTIONS.ui` no `main.js`); também no login (`login-theme.js`) e no mockup PTA/OpR (`spo-preferencias.css`). O padrão continua a Inter.
+- **"Leitura → Estrito":** largura média das letras ÷ largura do "0" medida (Mulish 0,801; Inter 0,787) dá 54ch; ficou 53ch, como a Inter, pelo lado conservador (no máximo 80 caracteres por linha). A mesma conta reproduz os valores já calibrados (Atkinson 47,7 → 48; Source Sans 3 57,8 → 56).
+
+Medido na tela: a opção aparece no Personalizar; com ela, a interface e a prévia "Fontes e tabelas" passam à Mulish (a tabela da prévia continua na fonte de dados); a fonte carrega do próprio SPO. A preferência do navegador de teste foi devolvida à Inter. O login não foi aberto (com sessão ativa ele redireciona); a mudança ali é só incluir o valor na lista aceita. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: `?v=` do CSS e do `main.js` (`20261115.jean-mulish.1`); `login.html`: `?v=` do CSS e do `login-theme.js` (idem); `index.html` do mockup: `?v=` do `spo-preferencias.css` (idem).
+
+### 41.84 Padrão SPO-AA+ versão 4: "Densidade do texto" (dev. Jean, 2026-11-15)
+
+Só documentação (etapa 1 do plano de normalização da tipografia). O dev. Jean notou que o 100% parecia pequeno: as janelas (busca, atalhos, "O padrão SPO-AA+") e a prévia "Fontes e tabelas" ficavam maiores que os cartões de opção. Medição: telas de trabalho e cartões em 12 px; janelas e prévias em 14–16 px; 330 `font-size` com 25 valores, sem variável comum.
+
+Decisões do dev. Jean, registradas no `docs/padrao-visual-spo-aa-plus.md` §2.2 (versão 4): Compacto/Intermediário/Legível passam a ser a "Densidade do texto" da interface inteira; padrão Legível; Compacto com tabelas de 10 px (sai o 8 px); passo novo "Leitura" de 16 px no Legível (janelas de ajuda, documentos, declaração). Variáveis `--spo-fs-dado`, `-controle`, `-texto`, `-leitura`, `-titulo`, `-rotulo`, `-secao`, `-pagina`, com os valores das três densidades. Etapas seguintes: (2) variáveis com os valores de hoje e a opção "Densidade do texto"; (3) migração das telas por grupo, começando pelo Personalizar (a Fase C das cores vem em PR separado, depois; o dev. Cleber orientou fazer as mudanças antes da divisão do código); (4) teste contra `font-size` em px fora das variáveis. §2.1: Mulish com 53ch no "Leitura → Estrito".
+
+Sem mudança de código. `pytest` completo duas vezes seguidas (o documento é lido pela rota `/api/documentos/padrao-spo-aa-plus`).
+
+### 41.85 "Densidade do texto" no lugar de "Texto das tabelas" (dev. Jean, 2026-11-15)
+
+Etapa 2 do plano de tipografia (padrão SPO-AA+ v4 §2.2.1). A opção do Personalizar "Texto das tabelas" vira **"Densidade do texto"** (Compacto / Intermediário / Legível), com o mesmo atributo `data-spo-table-text` e os mesmos valores (`compact`/`medium`/`legible`), para não perder a escolha já gravada no navegador (login e ponte do mockup seguem iguais).
+
+- **Padrão SPO: Intermediário.** O dev. Jean testou as três densidades no FIP 613 e as demais telas no Intermediário e decidiu: o Intermediário é o padrão; o Legível fica para quem precisa de letra maior e entra na "Leitura confortável" da Atkinson (`initSugestaoAtkinson`, agora com cinco ajustes).
+- **Conversão da escolha gravada** (uma vez só, marca `spo-densidade-v2` no `localStorage`, no `main.js` e no `login-theme.js`): a densidade de mesmo tamanho nas tabelas — Legível antigo (12 px) → Intermediário (12), Intermediário antigo (10) → Compacto (10), Compacto antigo (8) → Compacto (10). Testado com armazenamento simulado (sem escolha, cada valor antigo, segunda execução).
+- **Variáveis** (bloco `[jean]` no fim do `style.css`), definidas no `body` por densidade: `--spo-fs-dado` 13/12/10 px, `--spo-fs-controle` 13/12/11, `--spo-fs-texto` 14/13/12, `--spo-fs-leitura` 16/14/13, `--spo-fs-titulo` 16/14/13, `--spo-fs-rotulo` 11, `--spo-fs-secao` 20, `--spo-fs-pagina` 24 (Legível/Intermediário/Compacto). Sem atributo vale o Intermediário.
+- **Tabelas já nos valores novos** (decisão do dev. Jean): tabelas dos relatórios, filtros de múltipla escolha, paginação, demais tabelas do conteúdo e a amostra do Personalizar usam `--spo-fs-dado` — Legível 13 px (antes 12), Intermediário 12 (antes 10), Compacto 10 (antes 8). As regras antigas por densidade ficaram no arquivo, sobrepostas pelo bloco novo (`:not(#spo-dens)`). Mockup PTA/OpR: tabelas 13/12/10 no `spo-preferencias.css`.
+- **Textos da opção:** "Compacto — tabelas com 10 px", "Intermediário (padrão SPO) — tabelas com 12 px…", "Legível — tabelas com 13 px…; indicado para baixa visão (entra na Leitura confortável da Atkinson)"; legenda da amostra e resumo do SPO-AA+ ajustados.
+
+Medido na tela (densidade Legível, antes da troca do padrão): FIP 613, PLAN20 e Usuários com células e títulos em 13 px; paginação e filtros em 13 px; 10 primeiras linhas 9% mais altas que com 12 px (FIP 613 1.046 × 958 px; PLAN20 2.138 × 1.966 px), largura da tabela igual (a tabela rola dentro do próprio quadro, como antes); a 390 px nada passa da borda da página. Uma tela por vez, esperando os dados. `pytest` completo duas vezes seguidas; `node --check`.
+
+Sem script de banco. `templates/base.html`: `?v=` do CSS e do `main.js` (`20261115.jean-densidade.2`); `login.html`: `?v=` do CSS e do `login-theme.js` (idem); `index.html` do mockup: `?v=` do `spo-preferencias.css` (`20261115.jean-densidade.1`). Depois da troca do padrão: Personalizar com "Intermediário (padrão SPO)", amostra em 12 px e a sugestão da Atkinson com os cinco ajustes.
+
+### 41.86 Densidade do texto, etapa 3 (a): Personalizar e janelas (dev. Jean, 2026-11-15)
+
+O Personalizar (cartões, opções, prévias, declaração) e as janelas de consulta (busca de telas, ajuda dos atalhos, "O padrão SPO-AA+") passam a usar as variáveis da "Densidade do texto" (bloco `[jean]` no fim do `style.css`): sobretítulo = rótulo; título de cartão e de janela = título; descrição, nome de opção, itens e itens da busca = texto; resumo das opções, rótulos de campo, subtítulos e status = controle; ajuda dos atalhos e documento SPO-AA+ = leitura. Títulos de seção dessas janelas: na ajuda dos atalhos, tamanho de título; no documento, tamanho da leitura em negrito — nunca maiores que o título da janela (primeira versão deixava a seção dos atalhos menor que a descrição e a do documento maior que o título da janela; corrigido antes do PR).
+
+Antes: cartões de opção em 12–13 px e janelas em 14–16 px (a diferença notada pelo dev. Jean). Medido (Compacto / Intermediário / Legível): título de cartão e de janela 13/14/16; descrição, nome de opção, texto da prévia e da declaração 12/13/14; resumo e rodapé 11/12/13; itens da busca 12/13/14; ajuda dos atalhos e documento 13/14/16 (seções no mesmo tamanho, negrito); tabela da prévia 10/12/13. A 390 px nada passa da borda (Intermediário e Legível). Botões e campos de formulário em geral ficam para a etapa dos formulários. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-personalizar.2`).
+
+### 41.87 Densidade do texto, etapa 3 (b): relatórios e cabeçalho de página (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`:
+- **Cabeçalho de página** (todas as telas, `.report-header` e `.module-header`): sobretítulo = rótulo (11 px), título = página (24 px), descrição = texto (Compacto 12 / Intermediário 13 / Legível 14). No Intermediário, os valores são os de antes.
+- **Relatórios:** "Última atualização (por UO)" e "Totais (filtros aplicados)" = texto em negrito (antes 12 px); nome da UO, linhas da atualização e rótulos dos totais = controle; valores dos totais = dado (a fonte de dados continua). Tabelas, filtros e paginação já seguiam a densidade (#131).
+
+Medido (Compacto / Intermediário / Legível), um relatório por vez: FIP 613 e PLAN20 (com dados), PLAN51 e Receita Anexo 10 (sem dados no banco de dev): descrição 12/13/14, "Última atualização" e título dos totais 12/13/14, UO e linhas 11/12/13, rótulos dos totais 11/12/13, valores 10/12/13, células 10/12/13; nada além da borda. A 390 px (PLAN20, Intermediário e Legível): nada passa da borda e os totais cabem no quadro. Botões ficam para a etapa dos formulários. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-relatorios.1`).
+
+### 41.88 Densidade do texto, etapa 3 (c): formulários e cadastros (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`: título de cartão do conteúdo = título (Intermediário 14, igual a antes); rótulos de campo (`.field > span`, `.field.inline span`) e o texto dentro de `input`/`select`/`textarea` do conteúdo e dos avisos (inclusive nas tabelas) = controle (Intermediário 12, igual a antes; a busca de usuários tinha 14); botões (`.btn` do conteúdo, dos avisos e das janelas de consulta) e legendas de grupo de campos = texto (Intermediário 13: os dos formulários tinham 14, os dos relatórios já tinham 13). O padrão SPO-AA+ §2.2.1 ganhou os botões na linha `--spo-fs-texto`.
+
+Cuidado registrado: a regra dos campos dos avisos (`.modal-card input`) é mais específica que a do campo da busca de telas (etapa a) e o baixaria de 13 para 12 px; as janelas de consulta ficam fora dela (`.modal-card:not(.spo-busca-caixa)`), e os botões delas ganharam regra própria (texto).
+
+Medido (Compacto / Intermediário / Legível) em Usuários, Meta Física e Dotação: título de cartão 13/14/16; rótulos e campos 11/12/13; botões 12/13/14; busca de usuários 11/12/13; busca de telas sem mudança (campo 13, "Fechar" 13). A 390 px (Meta Física, Intermediário e Legível) nada passa da borda. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-formularios.3`).
+
+### 41.89 Densidade do texto, etapa 3 (d): painéis, cartões dinâmicos e Início (dev. Jean, 2026-11-15)
+
+Bloco `[jean]` no fim do `style.css`:
+- **Governança e Resultados:** título dos cartões do fluxo e do contexto = título; descrição dos cartões = controle; sobretítulo do contexto = rótulo; texto do contexto e dos cartões = leitura.
+- **Cartões dinâmicos** (Institucional, Notas SEE, presets do Contrato): título = título; texto = controle.
+- **Teto Orçamentário:** títulos dos quadros e "Filtros" = título; rótulos dos indicadores, legendas, nomes e percentuais = controle; cabeçalhos do quadro comparativo = rótulo; valores, totais do ano, variações e ranking = dado; ano e valor do quadro e "Ver dados do gráfico" = texto; valores em destaque um passo acima do título (indicadores do alto + 2 px; cartões por grupo + 4 px).
+- **Início:** texto de boas-vindas = leitura + 2 px (Intermediário 16; era 16,8); dica e sessões = controle; texto do Status = texto.
+
+Achado: a regra do "mínimo de 12 px" (escala, passo 1) tem na lista um seletor com id (`#meta-fisica-tbody td.muted`), o que a deixa mais específica que as regras da densidade para os itens dela que não ganham contexto extra; a dica da Início ficava fixa em 12 px e recebeu um seletor mais específico. Os demais itens dessa lista que ainda não seguem a densidade (filtros do Teto fora de `.field`, `.teto-dashboard-fonte`, `.contract-version-pill`, `td > code`, `.planning-status`, `.status-badge`) ficam para a etapa 4.
+
+Medido (Compacto / Intermediário / Legível): Início (boas-vindas 15/16/18, dica 11/12/13, Status 12/13/14); Governança (títulos 13/14/16, descrições 11/12/13, contexto 13/14/16, rótulo 11); Institucional (título 13/14/16, texto 11/12/13); Teto Gráficos (títulos 13/14/16, indicadores 11/12/13 e 15/16/18, "Ver dados" 12/13/14) e Tabelas (legenda, nome e % 11/12/13; valor por grupo 17/18/20; cabeçalho 11; ano e valor 12/13/14; células, variações e ranking 10/12/13). Nada além da borda; a 390 px (Teto, Intermediário e Legível) os valores cabem nos cartões. `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-paineis.2`).
+
+### 41.90 Densidade do texto, etapa 3 (e): gráficos (dev. Jean, 2026-11-15)
+
+`initGraficosEscala` (`main.js`), que já ajustava todo `Plotly.react`/`newPlot`, trocava o tamanho do texto dos gráficos por um mínimo fixo de 12 px. Agora o tamanho base é o de dado da "Densidade do texto", lido da variável `--spo-fs-dado` do `<body>` (Compacto 10, Intermediário 12, Legível 13 px); texto que o gráfico já pede maior que 12 px sobe ou desce na mesma diferença. No Intermediário fica como antes. Um observador do atributo `data-spo-table-text` redesenha os gráficos abertos quando a densidade muda no Personalizar (com os dados e o layout de base guardados pelo próprio bloco).
+
+Medido no Teto Orçamentário (5 gráficos: eixos X e Y, legenda, pizza, árvore): 10/12/13 px nas três densidades; ao voltar ao Intermediário, redesenhados em 12 px. A 390 px, no Legível, os gráficos cabem na tela e nenhum texto sai da área deles. `node --check`; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: só a linha `?v=` do `main.js` (`20261115.jean-densidade-graficos.1`).
+
+### 41.91 Densidade do texto, etapa 4: teste contra `font-size` em px (dev. Jean, 2026-11-15)
+
+Última etapa do plano de tipografia.
+- **Itens fixos em 12 px:** a regra "mínimo de 12 px" (escala, passo 1; bloco `[jean]`) tinha um id na lista e ficava mais específica que as regras da densidade; os itens dela (rótulos dos totais, linhas da atualização, rótulos dos indicadores e filtros do Teto, dica da Início, pílula de versão do Contrato, códigos em tabela, selos de situação…) passam a `var(--spo-fs-controle)` (Intermediário 12, como antes). O rótulo da paginação passa a `var(--spo-fs-dado)`. A linha "Fonte: FIPLAN…" do Teto, que é um `<p>` do cabeçalho, ganhou regra própria (controle) para não subir a 13 px como a descrição da página.
+- **Teste** `tests/test_tamanho_fonte.py` (3 testes): conta `font-size: <n>px` no `style.css` (sem comentários) por valor — 310 declarações, 27 valores em 15/11 — e reprova valor novo ou contagem que sobe; se a contagem desce (regra antiga passou à variável), pula com o aviso de baixar a referência; e confere que as três densidades definem as variáveis. Teste negativo feito: acrescentar `15px` e `19px` reprovou com "Valores novos: ['19']; contagens que subiram: ['15px: 8 -> 9']".
+- Padrão SPO-AA+: §2.2.1 com o teste e item novo no checklist do §6.1.
+
+Medido (Compacto / Intermediário / Legível): dica da Início, rótulos de filtro e indicadores do Teto, pílula do Contrato, rótulos dos totais e linhas da atualização 11/12/13; rótulo da paginação 10/12/13; "Fonte: FIPLAN…" 11/12/13; descrição da página 13 no Intermediário. `pytest` completo duas vezes seguidas (204 passam, 4 pulam).
+
+Sem script de banco. `templates/base.html` e `login.html`: só a linha `?v=` do CSS (`20261115.jean-densidade-teste-px.2`).
+
+### 41.92 Navegação pelo teclado nas tabelas (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: navegação otimizada pelo teclado nas tabelas (ele sugeriu Alt + setas). Alt + ← / → no navegador volta/avança a página (a pessoa sairia da tela por engano), por isso foi usado o padrão "grade" do WAI-ARIA, o das planilhas da web — `initNavegacaoTabelas` no fim do `main.js`:
+- **Tab** entra na tabela numa célula só, a última visitada (na primeira vez, a primeira célula de dados): tabindex itinerante, leve em tabelas grandes (só a célula da vez tem `tabindex="0"`; as outras ganham `-1` quando visitadas). Um observador da área de conteúdo prepara as tabelas desenhadas depois (troca de página, filtro); se a escolha automática foi feita antes de os dados chegarem (só o cabeçalho), ela passa à primeira célula de dados.
+- **Setas** de célula em célula (também cabeçalho e linha dos filtros); **Home/End** na linha; **Ctrl+Home/End** primeira/última célula; **PageUp/PageDown** 10 linhas; **Enter** foca o primeiro controle da célula (filtro, campo, botão, link); **Esc**, dentro dele, volta para a célula. Só linhas visíveis (a linha escondida de "nenhum resultado" recebia a marca e tirava a tabela do Tab — corrigido antes do PR).
+- **A tabela é uma parada só do Tab** (achado do dev. Jean no PED: o Tab atravessava os 64 filtros do cabeçalho e saía para a barra lateral): os botões, links e filtros das células (no cabeçalho, também os campos) ganham `tabindex="-1"` (o valor original fica em `data-spo-tab-orig`) e são alcançados por setas + Enter. Campos de digitação das linhas de dados continuam no Tab; nada dentro de uma lista de filtro (`.mf-panel`, checklists) é tocado.
+- **Paginação** (achado do dev. Jean no PED: com o foco num botão de página, as setas não andavam e não havia como voltar à tabela): `initTecladoPaginacao`, para os botões de toda `.pagination` do conteúdo (as 20 telas usam o mesmo contêiner; a FIP 613 não usa a classe `.page-btn` nos botões — a primeira versão só a reconhecia, achado do dev. Jean). ← → andam pelos botões ativos, Home/End primeiro/último, ↑ ou Esc voltam à célula da vez da tabela do mesmo cartão. A paginação é redesenhada a cada troca de página e o foco caía no início da página; agora ele volta ao mesmo número (ou à página atual).
+- **Clique numa célula** (fora de um controle e sem texto selecionado) torna-a a da vez e começa a navegação por ali.
+- **Setas a partir de um filtro ou botão da célula** (com a lista fechada) andam como se o foco estivesse na célula — da linha dos filtros, ↓ desce para os dados. Dentro de um campo de digitação, ou com a lista do filtro aberta, as setas continuam do campo/da lista. A tabela não ganha `role="grid"`.
+- **Rolagem lateral:** o foco sozinho só rolava o bastante para a célula aparecer em parte — voltando para a esquerda, a 1ª coluna ficava cortada e a barra não voltava ao início (achado do dev. Jean no teste). Agora a célula vai inteira à vista e, na 1ª coluna, a rolagem lateral volta ao começo (Usuários a 1000 px: → até a última coluna rola 110 px; ← até a 1ª volta a 0; Home também).
+- Anel de foco por dentro da célula (`outline-offset: -3px`; por fora seria cortado pela rolagem). Seção "Tabelas" na ajuda dos atalhos e dica na faixa de teclado.
+
+Testado com teclas de verdade: PED (Tab do "Baixar Excel" cai na 1ª célula de dados e o próximo Tab vai ao "itens por página"; ↑ até os filtros, Enter no filtro, ↓ volta aos dados; Enter de novo abre a lista, Tab vai à busca, ↓ fica na lista, Esc fecha e devolve ao filtro; clique numa célula e → ↓ a partir dela; paginação: → até o 2, Enter troca a página e o foco fica no 2, ←, End, ↑ volta à célula da vez, Esc também; o mesmo na FIP 613); FIP 613 (26 controles fora do Tab, nenhum visível sobrando nele; início na 1ª célula de dados; → ↓; End rola até a última coluna; Ctrl+Home; ↓ até os filtros, Enter abre o foco no filtro e Esc volta à célula; PageDown/PageUp 10 linhas) e Usuários (Ctrl+End na última célula visível; Tab sai; Shift+Tab volta à mesma célula). Ajuda dos atalhos com a seção nova; console sem erros. `node --check`; `pytest` completo duas vezes seguidas.
+
+Sem script de banco. `templates/base.html`: `?v=` do CSS e do `main.js` (`20261115.jean-teclado-tabelas.1` e `.8`); `login.html`: `?v=` do CSS.
+
+### 41.93 Kit de mockup SPO-AA+ (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: garantir que as próximas funcionalidades sigam o padrão SPO-AA+ **desde o primeiro mockup**. Novo `static/kit/mockup-spo-aa-plus.html` (+ `kit-mockup.css`, `kit-mockup.js`), descrito no §6.4 do `docs/padrao-visual-spo-aa-plus.md`; item novo no topo do checklist §6.1.
+- Usa o próprio `style.css` e lê do `main.js` (por `fetch` + extração do trecho) a paleta `ACCENT_COLORS`, as opções do Personalizar e as funções de teclado das tabelas: não há cópia para manter. Abre pelo SPO local sem login (`/static/kit/mockup-spo-aa-plus.html`).
+- Painel com as opções **e as regras** do Personalizar: escolher a Atkinson abre a mesma oferta "Leitura confortável" (constantes lidas do `initSugestaoAtkinson`); abre com as preferências vigentes do SPO neste navegador (pedido do dev. Jean no teste: o kit deve reproduzir o comportamento exato do SPO); o que mudar vale só na página, nada gravado. Componentes de exemplo com a marcação real (cabeçalho, `module-card`, `flow-node`, formulário, `alert-info`, relatório com filtros `.mf-*`, teclado e paginação).
+- `tests/test_kit_mockup.py` (4 testes): marcadores do `main.js` que o kit lê (inclusive a regra da oferta da Atkinson); funções de teclado completas; toda opção do Personalizar aparece no kit; CSS do kit sem px nem cor literal.
+- **Dois achados do kit** (registrados no §7 do padrão, a decidir): título/descrição de `module-card`, texto corrido de cartão e `.alert` não acompanham a densidade do texto; `pos`/`neg` só pintam nos totais e na tabela do FIP 613.
+
+Testado no SPO local: Atkinson → oferta das cinco opções, "Aplicar as cinco" (Atkinson Mono, 112%, 1,75, 72ch, Legível; foco volta à fonte da interface; `localStorage` intacto), "Agora não", sem oferta quando já está tudo no sugerido; aviso a 12 px dos botões; tema escuro + Roxo + Legível; densidades 10/12/13 nas tabelas, filtros e paginação; 150% (zoom 1,5); Atkinson; Tab entra na tabela, End, ↑ ao filtro, Enter abre a lista, Esc fecha e devolve o foco ao filtro, Aplicar filtra (10 linhas) e atualiza o total; paginação → → Enter (foco no 3), Esc volta à célula. Nenhum arquivo do SPO mudou além da documentação: `style.css`, `main.js`, `base.html` e `login.html` intactos (sem `?v=` novo).
+
+#### Kit de mockup: presets do Contrato Visual (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean no teste do kit: o kit não trazia os presets do Contrato Visual Protegido (Compacto gerencial, Contraste técnico, Pressão operacional), que mudam o visual tanto quanto o Personalizar (`data-visual-contract-preset`, mais de 100 regras no `style.css`).
+- Seletor "Preset do Contrato Visual" no painel do kit, com a lista lida do `PROTECTED_CONTRACT_PRESETS` do `main.js`; aplicado no `<html>` e no `<body>`, como o `setProtectedContractVisualPreset`. O preset vigente vem da chave `PROTECTED_CONTRACT_STATE_KEY` (prévia, senão rascunho, senão ativo, como o `getStoredProtectedContractPreset`). Nada é gravado.
+- Saiu o botão "As minhas preferências": com o kit abrindo nas preferências vigentes, recarregar a página faz o mesmo.
+- O kit continua separado do Contrato (papéis diferentes: o Contrato aplica o visual do SPO, com permissão; o kit é o ponto de partida de tela nova, sem login, e não muda nada). Integração futura a combinar com o dev. Cleber: uma aba "Componentes" no Contrato abrindo o próprio kit (§6.4 do padrão).
+- `tests/test_kit_mockup.py`: marcador dos presets, forma da `PROTECTED_CONTRACT_STATE_KEY` e o atributo `data-visual-contract-preset` no `main.js`.
+
+#### Kit de mockup: prévias do Personalizar e gráficos (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: com todas as opções do Personalizar no kit, mostrar também as prévias e um gráfico, para ver os temas aplicados.
+- **Prévias** "Componentes do SPO" e "Fontes e tabelas" com a mesma marcação do `atualizar_personalizar_spo.html` (sem o resumo e o botão de restaurar, que dependem do Personalizar); `tests/test_kit_mockup.py` compara a marcação das duas amostras com a do template.
+- **Gráficos** de pizza ("Teto por grupo de despesa") e de barras agrupadas ("Execução por região") nos painéis do Teto (`.teto-panel`, `.teto-chart`), com o mesmo Plotly do `base.html` (3.0.1). O tema vem como no `getCommonDiagramTheme`: `COMMON_DIAGRAM_THEMES[data-visual-diagram-theme]` passado pelo `spoTemaDiagramaComDestaque` (do `initDiagramasDestaque`); o kit lê e roda também o `initGraficosAcessiveis` (resumo e "Ver dados em tabela") e o `initGraficosEscala` (fonte, densidade, padrões do daltonismo, tela estreita), dando a ele o `spoGetDiagramSemanticTokens` (só o modo). Layout como o `plotLayout` do Teto. Redesenha a cada mudança no painel.
+- Testes novos: prévias iguais às do template; blocos dos gráficos completos e o `initGraficosEscala` sem depender de outra função global; mesmo Plotly do `base.html`.
+
+Testado no SPO local: padrão (1ª cor = destaque Clássico `#1f9b7e`, fonte Inter 12 px, resumo `role="img"` e tabela de dados); escuro + Azul + daltonismo + Legível (paleta Okabe-Ito do escuro, padrões de hachura, texto 13 px, amostra das tabelas a 13 px).
+
+#### Kit de mockup: painel com os controles do SPO (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: os controles do próprio SPO (cartões do Personalizar) são melhores para escolher as combinações do que as 17 caixas de seleção genéricas do painel do kit.
+- O painel passou a ter os cartões do Personalizar — Tema, Cor de destaque, Preferências comuns, Fontes e tamanho do texto, Visão e cores — com a mesma marcação do `atualizar_personalizar_spo.html` (sem os comentários Jinja), e um cartão "Preset do Contrato Visual" com a grade `contract-preset-grid` do template. Ficou de fora só o cartão Teclado (o kit não tem atalhos).
+- O painel tem a classe `personalizar-spo` (como a tela do Personalizar), que define as variáveis de raio, sombra e espaço dos cartões.
+- O `kit-mockup.js` dá o comportamento do SPO sem gravar nada: escolha com `.active`/`aria-pressed` (`syncThemeControls`, `syncCommonVisualControls`, `sync` do `initFontesPersonalizar`, presets do Contrato), resumo do grupo com o rótulo da opção, um grupo aberto por vez, o grupo fecha ao escolher, status "… aplicada nesta página". A oferta "Leitura confortável" fica logo abaixo do grupo "Fonte da interface", como no SPO, e o foco volta ao botão dele.
+- Saíram as caixas de seleção e a lista `GRUPOS_FONTES`. O teste agora compara cada cartão do painel com o do template (e a grade de presets); conferido que reprova quando a cópia diverge.
+
+Testado no SPO local, com cliques de verdade: abrir "Fonte da interface", escolher a Atkinson (grupo fecha, resumo e status atualizados, oferta abaixo do grupo), "Aplicar as cinco" (cinco resumos atualizados, foco de volta, `localStorage` intacto); escuro, Roxo (pizza na cor do destaque), contraste reforçado, preset Compacto gerencial; "Padrão SPO" volta tudo.
+- Posição (pedido do dev. Jean no teste): as prévias e os gráficos saíram da tela de exemplo e ficam logo abaixo dos cartões de preferências, dentro do painel (`#kit-previas-bloco`), porque mostram o efeito das escolhas; o "Recolher" esconde os dois.
+- Retorno do dev. Jean no teste: o título "Preferências do kit" era um `h2` de 14 px solto no fundo, fora do padrão — virou o cabeçalho de página do SPO (`module-header`: sobretítulo, `h1` 24 px, descrição, ícone `bi-brush`, como o do Personalizar), com os botões "Padrão SPO" e "Recolher" abaixo da descrição. E a grade de presets copiada do Contrato era grande e sem função — virou cartões dinâmicos (`flow-node`, um por preset, com ícone) e o painel de contexto (`flow-context-panel`) logo abaixo, mostrando escopo, estado, regras e detalhes do preset escolhido (dados do `PROTECTED_CONTRACT_PRESETS`, os mesmos do "Catálogo protegido" do Contrato). Os estilos do mockup PTA/OpR (contexto ativo, mapa EAP) ficam para quando ele entrar no SPO; o cartão dinâmico é o padrão do SPO que já cumpre o papel. O cartão ocupa a linha inteira da grade. Nomes das regras em `span` negrito (o `.flow-context-panel strong` é o título do painel).
+- Retorno do dev. Jean: o topo da "Tabela de relatório" do kit não seguia o dos relatórios (FIP 613, PLAN20). Virou uma tela de relatório com a marcação deles: `report-page` > `report-header` (sobretítulo, `h1`, descrição, ícone) e o cartão `report-data-card` com `card-title`, o topo `relatorio-top relatorio-top-uo` — à esquerda "Última atualização por UO" com o mesmo HTML que o `renderUltimasAtualizacoes` escreve (UO, enviado por, upload, data do download; e-mail fictício), à direita os totais (`totais-box`, valores `neg`/`pos`) e os botões "Limpar Filtros"/"Baixar Excel" — e o `report-empty-state`. Saíram o título de seção solto e a linha de ajuda (o teclado está no "Como usar" e na ajuda dos atalhos).
+
+#### Kit de mockup: catálogo de padrões (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: além dos cartões padrão, o kit deve mostrar os outros padrões de cartão do SPO (os do mockup PTA/OpR entram quando ele for integrado com os bancos novos).
+- Seção "Catálogo de padrões" na tela de exemplo do kit, no lugar dos três cartões dinâmicos de antes. Cada exemplo é **recortado do template de origem** (o gerador cortou o bloco inteiro; nada redigitado) e o kit só põe a moldura (nome do padrão e onde é usado): cartões dinâmicos com painel de contexto (`atualizar_governanca_resultados_eap_politicas.html`), fluxo com setas e painel de contexto e cartões de painel (`…_mapa.html`), cartão de documento (`noticia-box` do `institucional_diretrizes.html`, dentro de um `institutional-card`), indicadores (`teto-kpi-grid` do `paineis_teto_orcamentario.html`, com valores de exemplo postos pelo kit, como o JS da tela faz) e opções de envio (`see-upload-options` do `notas_see.html`, dentro de um `see-card`).
+- Comportamento dos fluxos de Governança: o kit lê do `main.js` e roda o `initGovernancaSemanticFlows` (seleção, painel de contexto, setas/Home/End, painel embutido no celular), com os dois painéis marcados com `data-governanca-flow-panel` como nas telas.
+- Fora do catálogo, já no kit: cabeçalho de página, `module-card`, prévias do Personalizar, gráficos, formulário, tela de relatório com totais. Ficou de fora o cartão de status da Início (`home-status-card`, montado com Jinja e dados da sessão).
+- `tests/test_kit_mockup.py` (+2): cada exemplo do catálogo igual ao template de origem (lista `CATALOGO`); o `initGovernancaSemanticFlows` sem chamar outras funções do `main.js`.
+
+Testado no SPO local: os dois fluxos ligados (`data-flow-bound`), o padrão de cada um selecionado e o contexto escrito; clique em "Vínculos oficiais" e → passa a "Histórico anual" com o contexto atualizado; indicadores com os valores de exemplo; console sem erros.
+
+### 41.94 Achados do kit de mockup resolvidos: densidade dos cartões e pos/neg (dev. Jean, 2026-11-15)
+
+O kit de mockup (§6.4 do padrão) mediu o próprio SPO e achou dois pontos fora do padrão; o dev. Jean pediu para resolver.
+1. **Componentes comuns fora da "Densidade do texto"** (medido no kit trocando a densidade: estes não mudavam). Bloco `[jean]` novo no fim do `style.css`, com o mesmo truque de especificidade da densidade (`:not(#spo-dens):not(#spo-dens-b)`): `.module-card-title h2` (15 px fixo) → `--spo-fs-titulo`; `.module-card-title p` (12 fixo) → `--spo-fs-controle`; `.module-card > p` e `> ul/ol > li` (14 herdado do `body`) → `--spo-fs-texto`; `#content-area .alert` (14 herdado) → `--spo-fs-leitura`, menos `.limpeza-regras`/`.limpeza-pendente`, que têm 13 px próprios. **No Intermediário (padrão):** título do cartão 15 → 14 e texto do cartão 14 → 13 nas 11 telas com `module-card-title` (Atualizar EMP/NOB/PED/FIP 613/EST EMP/PLAN20/PLAN51/Teto/Receita, Segurança da sessão, Correção de chave); descrição e avisos ficam iguais. Compacto 13/11/12/13; Legível 16/13/14/16.
+2. **`pos`/`neg` só no FIP 613 e nos totais:** o bloco `[jean] Valores em azul e vermelho mais vivos` passou a definir os tokens `--spo-positive`/`--spo-negative` (claro `#0000ff`/`#a00000`, escuro `#94baff`/`#ff9999`, os mesmos valores) e a pintar qualquer `#content-area td.num.pos/.neg` (negrito 600), além dos totais e do FIP 613. Nenhuma tabela além do FIP marca o sinal hoje: muda só para telas novas (e o kit, cujo "Saldo" passou a marcar `pos`/`neg`).
+
+Medido no kit (as mesmas classes das telas): título 13/14/16, descrição 11/12/13, texto e listas 12/13/14, aviso 13/14/16 (Compacto/Intermediário/Legível); célula positiva `rgb(0,0,255)` e negativa `rgb(160,0,0)` no claro, `rgb(148,186,255)` e `rgb(255,153,153)` no escuro; totais sem mudança. Conferido também no SPO local, com o dev. Jean logado: Atualizar EMP com os mesmos valores do kit (título 13/14/16, descrição 11/12/13, texto 12/13/14); Limpeza de Histórico com os avisos próprios em 13 px nas três densidades; FIP 613 sem mudança (53 células positivas `rgb(0,0,255)` e 16 negativas `rgb(160,0,0)`, negrito 600; totais 700; no escuro `rgb(148,186,255)`/`rgb(255,153,153)`). `?v=` do CSS `20261115.jean-densidade-cartoes.1` no `base.html` e no `login.html`. `tests/test_tamanho_fonte.py` sem mudança (nenhum px novo).
+
+#### Kit de mockup: o documento do padrão SPO-AA+ dentro do kit (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean: o documento técnico do padrão tem de estar no kit, para consulta do usuário e do agente que for verificar as configurações.
+- Botões "O padrão SPO-AA+" e "Documento técnico" no cabeçalho do kit (`data-spo-padrao`, `data-spo-padrao="tecnico"`), abrindo **a mesma janela do SPO**: o kit lê e roda o `initPadraoSpoAaPlus` do `main.js` (resumo; documento técnico convertido do `.md` pela rota `/api/documentos/padrao-spo-aa-plus`, com sumário). A rota continua exigindo login (o documento é para quem desenvolve).
+- No SPO (bloco `[jean] O padrão SPO-AA+` do `main.js`): o pedido do documento manda `X-Requested-With`, então sem sessão a rota responde 401 em vez de redirecionar para o login, e a janela diz "entre no SPO neste navegador e abra de novo" (antes: "tente de novo em instantes", que não ajudava). Vale também para sessão expirada no SPO.
+- Para o agente: o comentário do topo do kit e o passo 0 do "Como usar" apontam `docs/padrao-visual-spo-aa-plus.md` (§6.1 checklist, §6.4 kit).
+- `tests/test_kit_mockup.py` (+1): o kit lê o `initPadraoSpoAaPlus`, que ainda lê a rota; botões e caminho do arquivo-fonte presentes.
+
+Testado: clique de verdade em "Documento técnico" no kit (logado): janela aberta, sumário com 9 seções, foco no título, Esc fecha; pedido sem sessão com `X-Requested-With` responde 401. `?v=` do `main.js`: `20261115.jean-kit-documento.1`.
+
+### 41.95 Teste contra cor literal no style.css — Fase B (dev. Jean, 2026-11-15)
+
+Avaliação pedida pelo dev. Jean (o kit e o SPO resistem a ampliações?): o tamanho em px já estava travado (`test_tamanho_fonte.py`), a cor não — tela nova podia escrever `#1a5fb4` e nada reprovava. É a Fase B do roteiro do N5 (padrão §7).
+- `tests/test_cor_literal.py`: conta as cores literais do `style.css` (hexadecimal e `rgb/rgba/hsl/hsla` com números; `rgba(var(--accent-rgb), .16)` não conta) **fora de definição de token** (`--nome: …` fica de fora: é onde a cor deve estar), sem comentários. Hoje: **376 cores, 191 valores**. A referência fica em `tests/referencia_cor_literal.json` (gerada pelo próprio teste). Reprova valor novo e contagem que sobe; quando desce, o segundo teste avisa (skip) para baixar a referência com `python tests/test_cor_literal.py` — que se recusa se a contagem subiu (exceção nova do §6.3 só com `--forcar`).
+- Conferido que reprova: cor nova (`#1a5fb4`) e mais um uso de cor existente (`#ffffff`; o comando de atualizar também recusou); e que aceita: token novo definido com cor e usado por `var()`.
+- Cores por nome (`white`, `black`…) não são contadas.
+- Padrão: regra de ouro (§3), checklist (§6.1) e roteiro do N5 (§7) atualizados.
+
+### 41.96 Teste contra cor e tamanho em style="…" nos templates e no JS (dev. Jean, 2026-11-15)
+
+Segunda trava da avaliação "o padrão resiste a ampliações?": os testes do CSS (`test_cor_literal.py`, `test_tamanho_fonte.py`) não veem o que é escrito direto na marcação. `tests/test_style_inline.py`:
+- **Templates** (`templates/**/*.html`, sem comentários Jinja): declarações de cor (`color`, `background`, `border*`, `outline`, `fill`, `stroke`, `box-shadow`) e de texto (`font`, `font-size`, `font-family`, `line-height`) dentro de `style="…"`; definição de variável (`--swatch`, as amostras do Personalizar, §6.3) não conta. Medição: só **6** antigas — links "Esqueci a senha"/"Voltar ao login" (`login.html`, `forgot_password.html`, `reset_password.html`; do dev. Cleber), título "UO …" do aviso da Início (`dashboard.html`) e o bloco monoespaçado de Acessos à API (2) — em `REFERENCIA`, por arquivo. Reprova arquivo novo ou contagem que sobe; quando desce, pede para baixar (skip).
+- **`main.js`:** `.style.color/background/backgroundColor/borderColor/outlineColor/fill/stroke = "…"` e `setProperty("color"…)` só com `var(--…)` (hoje: 4 `borderColor = "var(--primary)"`; a sonda `probe.style.color = name` usa variável e não conta); `.style.fontSize = "…"` nunca; HTML montado com `style="…"` só sem cor (`#…`, `rgb(…)`, `hsl(…)`) ou tamanho escritos à mão — valor calculado (`${colorFor(…)}`, a cor do grupo vinda da paleta do tema, §3.5) e `var(--…)` são aceitos (4 casos no Teto).
+- Conferido com cópias de segurança: reprova cor nova e `font-size` novo no template, `.style.color = "#ff0000"` e `style="color:#123456"` em HTML do JS; aceita variável e margem no template e `${cor}`/`var(--text)` no JS. Arquivos devolvidos idênticos.
+- Padrão: §6.1 (item do `style=`) e §7 (os 6 antigos como dívida).
+
+#### Kit de mockup sem cópias de lógica (dev. Jean, 2026-11-15)
+
+Último item da avaliação "o padrão resiste a ampliações?": o kit tinha pequenas cópias de lógica do `main.js` que podiam divergir sem aviso. Agora usa as funções do SPO (lidas do `main.js` e montadas com os dados que o kit já lê):
+- **Destaque:** `applyAccentColor` (rodada com `persist = false`; recebe `ACCENT_COLORS`/`DEFAULT_ACCENT`); saiu o `aplicarDestaque` do kit.
+- **Densidade automática:** o bloco `initDensidadeAutomatica` (`window.spoResolverDensidade` e o acompanhamento da largura); saiu o `densidadeEmUso`.
+- **Modo dos diagramas:** `getResolvedCommonDiagramMode` com `normalizeCommonVisualPreferences`, `getSystemPrefersMoreContrast`, `getSystemForcedColorsActive` e as duas `matchMedia` (`systemContrastQuery`, `systemForcedColorsQuery`). Com cores forçadas do Windows ela devolve "system", e o kit desenha com a paleta clara (o tema "system" é montado por outra função).
+- **"Última atualização por UO":** o trecho do `AMAZON_TZ` até o `renderUltimasAtualizacoes` (fuso de Manaus, datas, escape), chamado com dados de exemplo.
+- **Topo do relatório recortado do `relatorios_fip613.html`** (mesmos `id`s: `fip613-relatorio-meta`, `tot-*`, botões), entrando na lista `CATALOGO` do teste; o kit preenche os totais como o JS do FIP (crédito e teto sem cor; bloqueado e saldo com `pos`/`neg`).
+- **Ainda reproduzido, com teste de equivalência:** o filtro de lista dos relatórios (o SPO tem uma cópia do `buildFilter` em cada relatório; o teste confere as classes e os textos dos dois lados).
+- `tests/test_kit_mockup.py` (+3): as assinaturas lidas continuam no `main.js` e o kit as pede; as funções lidas não passaram a chamar outras do SPO (provado: uma chamada falsa a `syncThemeControls` dentro do `applyAccentColor` reprova); equivalência dos filtros.
+
+Testado no kit: Clássico/Azul, claro/escuro, diagramas automático/alto contraste, densidade automática/ampla, "Padrão SPO" volta tudo; "Última atualização" escrita pela função do SPO (horário no fuso de Manaus); totais do FIP; fluxos, gráficos e teclado intactos; console sem erros.
+
+### 41.97 Bateria 3: SPO e kit de mockup (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean para fechar a rodada: bateria geral automatizada das opções de tema/personalização no SPO e no kit, com inventário e correções. Medição de contraste (AA 4,5:1 e AA+ 7:1), rolagem lateral, texto cortado, gráficos e erros de console, em 1366, 1080 e 390 px, uma tela por vez (roteiro local, fora do Git).
+- **Kit:** todas as opções do painel, uma a uma, nos dois temas e em três larguras, mais os grupos abertos — 318 medições, duas vezes (antes e depois das correções).
+- **SPO:** 18 telas em 5 perfis de preferências (270 medições), 7 telas com "Diagramas" no modo oposto ao tema (42) e a "fase 1" (cada opção do Personalizar clicada pela tela: 35 + 14, todas aplicam e gravam; prévias e oferta da Atkinson).
+- **Achados e correções:**
+  1. *Cartão de documento do Institucional* com "Diagramas" no modo oposto ao tema: fundo pelos diagramas e título, legenda e link pelo tema, 1,0–1,6:1. No bloco `[jean]` dos cartões dinâmicos: `h5` e `small`/`.text-muted` nas cores dos diagramas; o link passa a `--spo-diagram-text` sublinhado só quando os modos divergem.
+  2. *Preset selecionado do Contrato Visual* no tema escuro: `.theme-dark .contract-preset.active` (0,3,0) vencia a regra do cartão dinâmico e, com "Diagramas: claro", a descrição ficava a 1,12:1. A regra ganhou `:not(#spo-preset)`.
+  3. *Kit:* `<code>` fora do `#content-area` ("Como usar", painel) com a cor rosa do Bootstrap (4,5:1 no claro, 3,45:1 no escuro); regra própria no `kit-mockup.css`.
+  4. *Kit:* os presets do Contrato (marcação do Contrato) entraram no catálogo, comparados com o template, para o kit cobrir o componente do achado 2.
+- Depois das correções: kit 318/318 sem achados; Contrato e Institucional limpos nos perfis de diagramas opostos e no de alto contraste. As opções desabilitadas das Notas SEE (5,15/6,53:1) são o estilo de desabilitado do §3.4, não defeito.
+- Padrão §6.1: item novo (quem usa as cores dos diagramas usa em tudo; medir com os diagramas no modo oposto ao tema). `?v=` do CSS: `20261115.jean-bateria-3.1` (`base.html` e `login.html`).
+- Fora desta bateria: teclado/foco (testados à mão), leitor de tela, cores forçadas, Firefox/Safari e as telas fora da amostra (os relatórios pesados EMP, NOB e EST EMP ficaram de fora para não carregar o banco).
+
+### 41.98 ✓ na cor de destaque ativa (dev. Jean, 2026-11-16)
+
+Gate C10 do AA+ v3.1 do laboratório, com o desenho confirmado na comparação visual de 16/11 (o laboratório reabilitado por cópia tinha o ✓). No Personalizar, a amostra da cor escolhida tinha um anel na **própria cor da amostra**: nas cores claras ele ficava abaixo de 3:1 com o cartão (5 de 16 combinações; Amarelo no claro 1,47:1), e a escolha dependia só da cor (WCAG 1.4.1 e 1.4.11).
+- Bloco `[jean]` no fim do `style.css`, no **desenho do laboratório** (preferido pelo dev. Jean depois de comparar):
+  - amostra de **44 px** (alvo do AA+; antes 34 px, e 44 px só no toque), com o halo claro na cor da amostra e o ponto na cor real (regras de base inalteradas);
+  - escolhida: **anel suave na própria cor** (55%, com vão na cor do cartão), agora decorativo, e o `::after` vira um **selo neutro com ✓** (fundo `--card`, borda `--border`, ✓ em `--text`, `--spo-fs-rotulo`) no canto inferior direito. Quem carrega o estado é o ✓.
+  - Dois desenhos anteriores foram descartados na conferência do dev. Jean: anel e selo na cor do texto (pesado) e anel em `--spo-selected-border` (destoava do laboratório).
+  - `:not(#spo-check)` vence `.accent-swatch.active` e a regra de alvos do AA+. Com cores forçadas do Windows, contorno e selo em `Highlight`.
+- Medido nos 8 destaques × 2 temas (marcando a amostra só na página, com as transições desligadas): **✓ a 16,86:1 (claro) e 14,26:1 (escuro)** em todos; anel de 1,25 a 4,19:1 e borda do selo de 1,36 a 1,43:1, suaves de propósito (decorativos). Antes, o anel era a única marca, de 1,47 a 6,05:1. O kit de mockup mostra o mesmo (usa o `style.css`).
+- `?v=` do CSS: `20261116.jean-cor-ativa-check.3` (`base.html`, `login.html` e o kit de mockup).
+- **Kit de mockup com o `?v=` do SPO:** o kit carregava `../css/style.css` sem versão, e o navegador continuou mostrando as amostras antigas do cache. O link do kit passou a levar o mesmo `?v=` do `base.html`, e `test_kit_carrega_o_style_css_da_mesma_versao_do_spo` (`tests/test_kit_mockup.py`) reprova quando os dois divergem: **ao mudar o `?v=` do CSS, mudar também em `static/kit/mockup-spo-aa-plus.html`**.
+- Junto, no ambiente local do dev. Jean (sem código): a etiqueta de ambiente voltou ao topo com `APP_ENV_LABEL`/`APP_ENV_CLASS` no `.env` local — o mecanismo do `app.py` já existia.
+
+### 41.99 Linha separadora nos gráficos (dev. Jean, 2026-11-16)
+
+Vinda da comparação visual com o laboratório v4.3.1 (16/11): lá as fatias, os blocos e as barras tinham um vão entre si, nos dois temas. No Teto, os grupos 1 e 4 da paleta clara são dois azuis; sem o vão, a pizza e as barras viravam um bloco só (duas cores vizinhas abaixo de 3:1 entre si, WCAG 1.4.11).
+- `initGraficosEscala` (`main.js`), função `comSeparador`: pizza, árvore (treemap), sunburst e barras ganham `marker.line` de **1 px** no modo normal (claro e escuro) e de **2 px com os diagramas em alto contraste** (`highLight`/`highDark`, também no automático quando o sistema pede mais contraste) **ou com o "Contraste: Reforçado"** (`data-visual-contrast="enhanced"`), na **cor do fundo do próprio gráfico**. Trocar o contraste redesenha os gráficos abertos (o observador que já redesenhava na troca de densidade passou a olhar também o `data-visual-contrast`). Uma primeira versão com 2 px nas fatias e blocos ficou mais pesada que a do laboratório (conferência do dev. Jean). O fundo vem do layout (`plot_bgcolor` nas barras, `paper_bgcolor` nos outros) e, quando ele é transparente (caso do Teto), do primeiro ancestral com fundo pintado (o quadro `.teto-chart`). Assim acompanha o tema dos diagramas, que pode estar no modo oposto ao da página. O `react`/`newPlot` envolvidos passaram a montar o layout antes dos dados, para o separador ler o fundo.
+- Linhas, pontos e cascata (PAOE) ficam sem: as barras do cascata já não se tocam.
+- Com as **cores seguras para daltonismo** continua o contorno na cor do texto (`comPadroes`), mais forte.
+- Conferido no kit de mockup, nos temas claro e escuro e com os diagramas claro, escuro e em alto contraste (inclusive no modo oposto ao tema): a linha tem exatamente a cor do quadro nas 8 combinações (2 temas × 4 modos dos diagramas), com 2 px só em alto contraste; e nos 3 níveis de contraste × 2 temas, com 2 px só no Reforçado. No SPO real, os 5 gráficos do Teto Orçamentário (pizza, árvore, dois de barras e o cascata). Padrão §3.5: item novo.
+- `?v=` do `main.js`: `20261116.jean-graficos-separador.4` (`base.html`). CSS sem mudança.
+
+### 41.100 Avisos modais no celular: cartão com margem (dev. Cleber, 2026-11-16)
+
+**Problema:** no celular (Moto Edge 50 Fusion, Firefox no Android), na homologação, os avisos modais ocupavam a tela inteira e o "×" de fechar ficava fora da área visível: não dava para fechar o "Alerta" da chave de planejamento na Início. A busca de telas e a ajuda dos atalhos já tinham sido resolvidas no #124 (cartões com margem), mas os outros avisos ficaram de fora.
+
+**Causa** (medida no navegador do app a 360 × 740 e 390 × 844):
+- Todo aviso usa o mesmo mecanismo: `.modal-overlay` (`position: fixed; inset: 0`, centralizado) com um cartão dentro, e `prepararModais` (`main.js`) cuida de foco, Tab e Esc.
+- O **Alerta da Início não usa `.modal-card`**, e sim `.emp-record-card`, que só tinha largura: sem altura máxima e sem rolagem. O "×" é `position: absolute` no topo do cartão. A 360 × 740 o cartão tinha 779 px: começava em −19 px e o "×" ficava em −8 a 20 px, cortado; o overlay não rola, então não havia como alcançá-lo (só o Esc fechava). O #66 só tinha deixado o "×" redondo e com área de toque de 44 px.
+- O `.modal-card` comum tinha `max-height: 85vh` e rolava o cartão inteiro: cabeçalho e rodapé rolavam junto, e o "Fechar" ficava no fim da rolagem (a 390 × 844, nas pendências da Início, a 1.133 px dentro de um cartão de 717 px). Os avisos desse tipo não têm "×". Além disso `vh` não acompanha a barra de endereço do navegador do celular (hipótese: o navegador do app não tem barra dinâmica, então isso fica a confirmar no aparelho).
+- O CSS não tinha `dvh`, `svh` nem `env(safe-area-inset-*)`.
+
+**Regra aplicada** (só CSS, bloco `[cleber]` no fim do `style.css`, dentro de `@media (max-width: 600px), (max-height: 560px)`: celular em pé ou deitado; no computador nada muda):
+- todo `.modal-overlay`, menos o "Carregando" (`.app-loading-overlay`), passa a ter a altura visível (`height: 100vh` e, em seguida, `100dvh`) e margem de 16 px somada às áreas seguras (`max(16px, env(safe-area-inset-*))`, com `padding: 16px` de reserva);
+- `.modal-card` e `.emp-record-card` ficam com `width: 100%`, `max-height: 100%` do overlay (a altura visível de verdade) e `overflow-y: auto`: o cartão cabe na tela e rola por dentro;
+- o cabeçalho (`.modal-header`) e o rodapé (`.modal-footer`, `.see-done-footer`) ficam fixos (`position: sticky`, com fundo `var(--surface)`): nos avisos sem "×" o "Fechar" fica sempre visível, sem rolar até o fim;
+- no Alerta, o "×" (`.emp-record-close-icon`) fica fixo no topo do cartão enquanto ele rola, sem ocupar linha (margens negativas); a área de toque de 44 px e o foco visível do #66 continuam;
+- o `top`/`bottom` do `sticky` conta a partir da área de conteúdo, sem o padding do cartão; por isso os valores negativos (−20, −18 e −6 px), que deixam cabeçalho, rodapé e "×" rentes à borda;
+- só `var(--…)`: sem cor literal, sem `font-size` em px e sem `style="…"` (`test_cor_literal`, `test_tamanho_fonte` e `test_style_inline` continuam passando); nenhum texto, conteúdo ou comportamento dos avisos mudou, e o `main.js` não foi tocado;
+- fora do bloco, a busca, a ajuda e "O padrão SPO-AA+" (`.spo-busca-fundo`) seguem as regras do #124.
+
+**Como testar:** na Início, com a janela em 360 × 740, 390 × 844 e 740 × 360 (celular deitado), recarregar:
+1. o Alerta fica num cartão com 16 px de margem, rola por dentro, e o "×" fica a ~11 px do topo do cartão, visível também com a rolagem no fim; um toque a 5 px do círculo ainda fecha (área de 44 px);
+2. fechado o Alerta, as pendências aparecem num cartão com margem, com o cabeçalho no topo e o "Fechar" (44 px de altura) visível sem rolar, em qualquer posição da rolagem; Esc fecha e o foco volta para a página;
+3. avisos de conclusão (Notas SEE), Limpeza de Histórico e Metas Físicas seguem a mesma regra (conferidos com o mesmo HTML montado pelo `main.js`, sem processar nada);
+4. a 1366 × 768 tudo igual ao de antes: Alerta com 900 × 483 px e "×" absoluto, `.modal-card` com `max-height: 85vh`, cabeçalho e rodapé estáticos.
+
+Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-modais-celular.1` nos três (há teste que reprova se divergirem). O `RELEASE` continua `RELEASE_2_2026_11_16.2` (ainda não publicado). Esta correção é feita em cima do lote 5 por exceção combinada (a `dev/cleber` ainda não tem o AA+) e chega à `dev/cleber` e à `dev/jean` depois, pela sincronização da `main`.
+
+### 41.101 Teto Orçamentário no celular: tabelas sem corte (dev. Cleber, 2026-11-16)
+
+**Problema** (Android, ~412 px, na homologação; Painéis/Dashboards → Teto Orçamentário → aba "Tabelas"):
+1. "Grupo 1 por Fontes" e "Grupo por Teto Total": a coluna fixa do grupo ocupava mais da metade da largura, os valores dos exercícios apareciam cortados ("R$ 4.", ".320.9") e a rolagem lateral não chegava ao fim da coluna.
+2. "Teto por grupo e tipificação da despesa" (e "Teto por fonte de recurso"): o nome do grupo sumia ("3 C", "4 Ir") e a tipificação ficava espremida contra a barra.
+3. "Quadro comparativo de Fonte/Grupo" (e o QOMP): as colunas dos exercícios não apareciam e o código da fonte saía cortado ("1540107" em vez de "15401070"), isto é, um número errado na tela.
+
+**Causa** (medida no navegador do app a 360 × 740 e 412 × 915; o cartão tem 230 e 282 px de largura útil):
+- **Quadros por exercício:** as colunas fixas (`position: sticky`) somavam 190 px (só Grupo) ou 260 px (Fonte 70 + Grupo 190), de 282 px, e ficavam por cima das colunas dos exercícios (184 px cada). Na rolagem até o fim, a última coluna ocupava de 98 a 282 px e a coluna fixa cobria de 0 a 190 px: só 92 dos 184 px apareciam. Para uma coluna fixa deixar a última coluna inteira, a conta é `coluna fixa + coluna do exercício ≤ largura do cartão`; a 360 px (230 px) isso dá menos de 58 px de coluna fixa, que não comporta nem o código da fonte.
+- **Código da fonte:** a coluna da Fonte tinha 70 px fixos (50 px de conteúdo), e o código de 8 dígitos precisa de 49 px (Intel One Mono, Compacto) a 67 px (Inter, Legível). Passando da coluna, o final ficava por baixo da coluna do Grupo (também fixa e mais alta). A fonte mais larga do AA+ agrava, mas a causa é a largura fixa.
+- **Ranking:** `.teto-rank-row` tinha 3 colunas (rótulo, barra de 70 px no mínimo, valor de 90 px no mínimo e até 147 px); o rótulo ficava com 25 a 67 px, e `.teto-rank-name` tem `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`.
+- Os outros cartões da aba (inclusive "Por grupo de despesa") não tinham corte.
+
+**Regra aplicada** (só CSS, bloco `[cleber]` no fim do `style.css`; nenhum cálculo, filtro, dado ou endpoint mudou, e o `main.js` não foi tocado). Opção "rótulo acima dos valores", aprovada pelo dev. Cleber:
+- **Quadros por exercício, só até 600 px de largura** (`@media (max-width: 600px)`): a grade passa a ter só as colunas dos exercícios, e o rótulo vai para linhas próprias acima dos valores (`grid-row` 1: código da fonte; 2: nome do grupo/tipificação; 3: valores). O rótulo ocupa a largura do quadro (`100cqw`, do `container-type: inline-size` no `.teto-qomp-scroll`) e acompanha a rolagem lateral (`position: sticky; left: 0`), inteiro e quebrando em linhas. Sem coluna fixa por cima, a rolagem chega à última coluna inteira (184 px, cabem os valores de até "R$ 99.999.999.999,99"). O cabeçalho dos exercícios (ano e total) continua alinhado com os valores, e o "Total Geral" e as faixas alternadas por fonte continuam. Os rótulos "Fonte" e "Grupo de despesa" do cabeçalho somem no celular (não têm mais coluna); a célula do código da fonte vazia (`:empty`) não ocupa linha.
+- **Se o navegador não suportar `container-type` ou `cqw`:** o `width: 100%` de reserva faz o rótulo ocupar a linha toda; ele deixa de acompanhar a rolagem lateral, mas não some nem corta.
+- **Ranking, até 600 px de largura ou com a janela baixa até 560 px de altura** (celular em pé ou deitado, onde o cartão tem ~600 px e os nomes ainda saíam cortados): o rótulo (código e nome) fica inteiro na linha de cima, quebrando em linhas, e a barra e o valor ficam na de baixo; a tipificação continua recuada.
+- Só `var(--…)`: sem cor literal, sem `font-size` em px e sem `style="…"` (`test_cor_literal`, `test_tamanho_fonte` e `test_style_inline` continuam passando). Acima desses limites nada muda.
+- Esta correção foi feita em cima da homologação (mesma exceção dos avisos modais, 41.100: a `dev/cleber` ainda não tem o AA+) e chega à `dev/cleber` e à `dev/jean` depois, pela sincronização da `main`.
+
+**Como testar:** na aba Tabelas do Teto Orçamentário, com a janela em 360 × 740, 412 × 915 e 740 × 360, nas densidades Compacto, Intermediário e Legível e com Intel One Mono e Inter (Personalizar → Fontes e tamanho do texto):
+1. nos quatro quadros por exercício, o rótulo fica inteiro acima dos valores; rolando para o lado, o rótulo acompanha e a última coluna aparece inteira (scrollWidth = 552 px com 3 exercícios); os 14 códigos de fonte têm 8 dígitos;
+2. no ranking das fontes e dos grupos, o nome aparece inteiro acima da barra e do valor;
+3. a 1366 × 768 tudo igual ao de antes (colunas fixas de 86 e 250 px, ranking de 3 colunas com reticências).
+
+Medido nas 6 combinações de densidade e fonte, a 360 × 740, 412 × 915 e 740 × 360: nenhum texto cortado, nenhum rótulo fora do cartão, última coluna inteira, valores dentro do cartão.
+
+Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-teto-celular.1` nos três (há teste que reprova se divergirem). `RELEASE_2_2026_11_16.3`.
+
+## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
 
