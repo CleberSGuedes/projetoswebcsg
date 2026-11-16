@@ -79,15 +79,6 @@
 
   // ---------------------------------------------------------------- preferências
   const TEMAS = { light: "Claro", dark: "Escuro", auto: "Automático (segue o sistema)" };
-  // ordem e rótulos dos grupos no painel (os valores e os nomes das opções vêm do main.js)
-  const GRUPOS_FONTES = [
-    ["ui", "Fonte da interface"], ["data", "Fonte de tabelas e dados"], ["size", "Tamanho do texto"],
-    ["table", "Densidade do texto"], ["line", "Espaçamento entre linhas"], ["reading", "Leitura"],
-    ["cvd", "Cores dos gráficos"], ["focus", "Realce do foco"], ["links", "Links"],
-    ["brightness", "Brilho do tema claro"], ["motion", "Movimento"],
-  ];
-  const GRUPOS_VISUAL = [["density", "Densidade visual"], ["contrast", "Contraste"], ["cards", "Estilo dos cartões"], ["diagrams", "Diagramas"]];
-
   let spo = null;
   let estado = null;
 
@@ -109,7 +100,7 @@
     if (destaque === "spo") destaque = "green";
     if (spo.destaques[destaque]) p.destaque = destaque;
     const visual = lerJson("spo-common-visual-preferences");
-    GRUPOS_VISUAL.forEach(([k]) => { if (spo.visual[k][visual[k]]) p[k] = visual[k]; });
+    Object.keys(spo.visual).forEach((k) => { if (spo.visual[k][visual[k]]) p[k] = visual[k]; });
     const fontes = lerJson("spo-font-preferences");
     Object.keys(spo.fontes).forEach((k) => { if (spo.fontes[k][fontes[k]]) p[k] = fontes[k]; });
     // preset do Contrato como o getStoredProtectedContractPreset do main.js: prévia, senão rascunho, senão ativo
@@ -163,7 +154,7 @@
       ? (escuro ? "highDark" : "highLight")
       : (estado.diagrams === "auto" ? (escuro ? "dark" : "light") : estado.diagrams);
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
-    opcoes.querySelectorAll("select[data-kit-pref]").forEach((s) => { s.value = estado[s.dataset.kitPref]; });
+    sincronizar();
     desenharGraficos();
   }
 
@@ -225,7 +216,7 @@
       + '<div class="spo-sugestao-acoes">'
       + `<button type="button" class="btn btn-primary sm" data-sugestao="aplicar">${s.botao[falta.length]}</button>`
       + '<button type="button" class="btn btn-secondary sm" data-sugestao="dispensar">Agora não</button></div>';
-    opcoes.querySelector('select[data-kit-pref="ui"]').closest(".field").after(caixa);
+    opcoes.querySelector('[data-spo-font-group="ui"]').after(caixa);
     caixa.addEventListener("click", (ev) => {
       const b = ev.target.closest("[data-sugestao]");
       if (!b) return;
@@ -233,39 +224,118 @@
         faltandoAtkinson().forEach((k) => { estado[k] = k === "data" ? "atkinson-mono" : s.alvo[k]; });
         aplicar();
       }
-      opcoes.querySelector('select[data-kit-pref="ui"]').focus();
+      opcoes.querySelector('[data-spo-font-toggle="ui"]').focus();
       removerOferta();
     });
   }
 
-  function campo(chave, rotulo, valores) {
-    const label = document.createElement("label");
-    label.className = "field";
-    const span = document.createElement("span");
-    span.textContent = rotulo;
-    const select = document.createElement("select");
-    select.dataset.kitPref = chave;
-    Object.entries(valores).forEach(([v, nome]) => select.add(new Option(nome, v)));
-    select.addEventListener("change", () => {
-      estado[chave] = select.value;
-      aplicar();
-      if (chave === "ui") { if (select.value === "atkinson") mostrarOferta(); else removerOferta(); }
+  // ---------------------------------------------------------------- painel com os cartões do Personalizar
+  // A marcação é a do template do Personalizar (copiada no HTML do kit); o comportamento é o do main.js
+  // (syncThemeControls, syncCommonVisualControls, initFontesPersonalizar, presets do Contrato): a escolha
+  // fica com .active e aria-pressed, o resumo do grupo mostra a opção escolhida, um grupo aberto por vez
+  // e o grupo fecha ao escolher. Só não grava nada.
+  function marcar(seletor, atributo, valor) {
+    opcoes.querySelectorAll(seletor).forEach((b) => {
+      const ativo = b.getAttribute(atributo) === valor;
+      b.classList.toggle("active", ativo);
+      b.setAttribute("aria-pressed", String(ativo));
     });
-    label.append(span, select);
-    opcoes.appendChild(label);
+  }
+  function sincronizar() {
+    marcar("[data-theme-choice]", "data-theme-choice", estado.tema);
+    marcar("[data-accent-choice]", "data-accent-choice", estado.destaque);
+    marcar("[data-contract-preset]", "data-contract-preset", estado.preset);
+    opcoes.querySelectorAll("[data-contract-preset]").forEach((b) => b.classList.toggle("is-selected", b.dataset.contractPreset === estado.preset));
+    contextoDoPreset();
+    opcoes.querySelectorAll("[data-visual-pref]").forEach((b) => {
+      const ativo = estado[b.dataset.visualPref] === b.dataset.visualValue;
+      b.classList.toggle("active", ativo);
+      b.setAttribute("aria-pressed", String(ativo));
+    });
+    opcoes.querySelectorAll("[data-visual-pref-current]").forEach((t) => {
+      const k = t.dataset.visualPrefCurrent;
+      t.textContent = (spo.visual[k] && spo.visual[k][estado[k]]) || estado[k] || "";
+    });
+    opcoes.querySelectorAll("[data-spo-font-pref]").forEach((b) => {
+      const ativo = estado[b.dataset.spoFontPref] === b.dataset.spoFontValue;
+      b.classList.toggle("active", ativo);
+      b.setAttribute("aria-pressed", String(ativo));
+    });
+    opcoes.querySelectorAll("[data-spo-font-current]").forEach((t) => {
+      const k = t.dataset.spoFontCurrent;
+      t.textContent = (spo.fontes[k] && spo.fontes[k][estado[k]]) || "";
+    });
+  }
+  // um grupo aberto por vez dentro de cada cartão (como setCommonVisualGroupOpen e setOpen do main.js)
+  function abrirGrupo(cartao, grupoAberto) {
+    cartao.querySelectorAll(".visual-pref-group").forEach((g) => {
+      const aberto = g === grupoAberto;
+      g.classList.toggle("is-open", aberto);
+      const toggle = g.querySelector("[data-visual-pref-toggle], [data-spo-font-toggle]");
+      const painel = g.querySelector("[data-visual-pref-panel], [data-spo-font-panel]");
+      if (toggle) toggle.setAttribute("aria-expanded", String(aberto));
+      if (painel) painel.hidden = !aberto;
+    });
+  }
+  function escolher(chave, valor) {
+    estado[chave] = valor;
+    aplicar();
+    if (chave === "ui") { if (valor === "atkinson") mostrarOferta(); else removerOferta(); }
+  }
+
+  // presets do Contrato: um cartão dinâmico por preset; o escolhido mostra embaixo escopo, estado, regras e
+  // detalhes (os mesmos dados que o Catálogo protegido do Contrato mostra)
+  const ICONES_PRESET = { default: "bi-shield-check", compact: "bi-arrows-collapse", contrast: "bi-circle-half", mobile: "bi-phone" };
+  function montarPresets() {
+    const grade = opcoes.querySelector("[data-kit-presets]");
+    grade.innerHTML = Object.entries(spo.presets).map(([k, p]) => `<button class="flow-node" type="button" data-contract-preset="${esc(k)}" aria-controls="kit-preset-contexto">`
+      + `<i class="bi ${ICONES_PRESET[k] || "bi-sliders"} governanca-icon" aria-hidden="true"></i>`
+      + `<strong>${esc(p.label || k)}</strong><small>${esc(p.summary || "")}</small></button>`).join("");
+  }
+  function contextoDoPreset() {
+    const painel = document.getElementById("kit-preset-contexto");
+    const p = spo.presets[estado.preset];
+    if (!painel || !p) return;
+    const regras = Object.entries(p.rules || {}).map(([r, v]) => `<li><span class="kit-regra-nome">${esc(r)}:</span> ${esc(v)}</li>`).join("");
+    const detalhes = (p.details || []).map((d) => `<li>${esc(d)}</li>`).join("");
+    painel.innerHTML = `<span class="flow-context-label">${esc(p.scope || "Preset")} · ${esc(p.state || "")}</span>`
+      + `<strong>${esc(p.label)}</strong><p>${esc(p.summary || "")}</p>`
+      + (regras ? `<ul class="kit-preset-regras">${regras}</ul>` : "")
+      + (detalhes ? `<ul class="kit-preset-detalhes">${detalhes}</ul>` : "");
   }
 
   function montarPainel() {
-    campo("tema", "Modo de aparência", TEMAS);
-    const destaques = {};
-    Object.entries(spo.destaques).forEach(([k, d]) => { destaques[k] = d.label || k; });
-    campo("destaque", "Cor de destaque", destaques);
-    const presets = {};
-    Object.entries(spo.presets).forEach(([k, p]) => { presets[k] = p.label || k; });
-    campo("preset", "Preset do Contrato Visual", presets);
-    GRUPOS_VISUAL.forEach(([k, r]) => campo(k, r, spo.visual[k]));
-    GRUPOS_FONTES.forEach(([k, r]) => { if (spo.fontes[k]) campo(k, r, spo.fontes[k]); });
-    document.getElementById("kit-padrao").addEventListener("click", () => { removerOferta(); estado = padrao(); aplicar(); });
+    montarPresets();
+    opcoes.querySelectorAll(".visual-pref-group").forEach((g) => abrirGrupo(g.closest(".card"), null));
+    opcoes.addEventListener("click", (ev) => {
+      const alvo = ev.target.closest("button");
+      if (!alvo || !opcoes.contains(alvo) || alvo.closest(".spo-sugestao")) return;
+      const cartao = alvo.closest(".card");
+      if (alvo.matches("[data-visual-pref-toggle], [data-spo-font-toggle]")) {
+        const grupo = alvo.closest(".visual-pref-group");
+        abrirGrupo(cartao, grupo.classList.contains("is-open") ? null : grupo);
+        return;
+      }
+      if (alvo.dataset.themeChoice) return escolher("tema", alvo.dataset.themeChoice);
+      if (alvo.dataset.accentChoice && spo.destaques[alvo.dataset.accentChoice]) return escolher("destaque", alvo.dataset.accentChoice);
+      if (alvo.dataset.contractPreset && spo.presets[alvo.dataset.contractPreset]) return escolher("preset", alvo.dataset.contractPreset);
+      if (alvo.dataset.visualPref && spo.visual[alvo.dataset.visualPref]?.[alvo.dataset.visualValue]) {
+        abrirGrupo(cartao, null);
+        return escolher(alvo.dataset.visualPref, alvo.dataset.visualValue);
+      }
+      if (alvo.dataset.spoFontPref && spo.fontes[alvo.dataset.spoFontPref]?.[alvo.dataset.spoFontValue]) {
+        abrirGrupo(cartao, null);
+        const status = cartao.querySelector(".spo-fontes-status");
+        if (status) status.textContent = `"${spo.fontes[alvo.dataset.spoFontPref][alvo.dataset.spoFontValue]}" aplicada nesta página.`;
+        return escolher(alvo.dataset.spoFontPref, alvo.dataset.spoFontValue);
+      }
+    });
+    document.getElementById("kit-padrao").addEventListener("click", () => {
+      removerOferta();
+      opcoes.querySelectorAll(".spo-fontes-status").forEach((st) => { st.textContent = ""; });
+      estado = padrao();
+      aplicar();
+    });
     window.addEventListener("resize", () => { body.dataset.visualDensity = densidadeEmUso(estado.density); });
   }
 
@@ -275,6 +345,7 @@
     recolher.setAttribute("aria-expanded", String(!aberto));
     recolher.textContent = aberto ? "Mostrar" : "Recolher";
     opcoes.hidden = aberto;
+    document.getElementById("kit-previas-bloco").hidden = aberto;
   });
 
   // ---------------------------------------------------------------- conteúdo de exemplo

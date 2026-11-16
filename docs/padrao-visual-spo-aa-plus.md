@@ -471,8 +471,14 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   Padrão SPO, Compacto gerencial, Contraste técnico, Pressão operacional): **nada é cópia**, o kit
   acompanha o SPO sozinho.
   Aberto do disco (`file://`), o navegador bloqueia a leitura do `main.js`; o kit avisa e fica no padrão.
-- Painel **"Preferências do kit"**: tema, destaque, densidade visual, contraste, estilo dos cartões, diagramas e
-  todas as opções do cartão "Fontes" e "Visão e cores" do Personalizar, **com as mesmas regras**
+- Painel **"Preferências do kit"** com **os próprios cartões do Personalizar** (Tema, Cor de destaque,
+  Preferências comuns, Fontes e tamanho do texto, Visão e cores — mesma marcação do template, descrições
+  de cada opção incluídas) e um cartão "Preset do Contrato Visual" com os presets em **cartões dinâmicos**
+  e o **painel de contexto** logo abaixo (escopo, estado, regras e detalhes do preset escolhido, lidos do
+  `PROTECTED_CONTRACT_PRESETS`), como em Governança e Resultados. O cabeçalho do painel é o cabeçalho de
+  página do SPO (§4.4). Comportamento igual ao do SPO
+  (escolha com `.active`/`aria-pressed`, resumo do grupo, um grupo aberto por vez, o grupo fecha ao
+  escolher) e **as mesmas regras**
   (escolher a Atkinson abre a oferta "Leitura confortável", como no Personalizar). O kit **abre com as
   preferências vigentes** no SPO deste navegador, inclusive o preset do Contrato; o que mudar vale só
   na página (nada é gravado); "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes.
@@ -481,13 +487,17 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   permissão; o kit é o **ponto de partida** de uma tela nova, fora do login, e não muda nada. O kit cobre os
   presets do Contrato para que o mockup seja visto em todas as combinações. Integração futura a combinar
   com o dev. Cleber: uma aba "Componentes" no Contrato que abra o próprio kit.
-- Componentes de exemplo, com a marcação real: cabeçalho de página, cartão `module-card`, **as duas
-  prévias do Personalizar** ("Componentes do SPO" e "Fontes e tabelas", mesma marcação do template),
-  **gráficos** de pizza e de barras (Plotly do SPO com o tema dos diagramas, o destaque, o daltonismo, a
-  escala e a tabela de dados: `COMMON_DIAGRAM_THEMES`, `initDiagramasDestaque`, `initGraficosAcessiveis` e
-  `initGraficosEscala` lidos do `main.js`), cartões dinâmicos (`flow-node`), formulário (campos,
-  desabilitado, hierarquia dos botões), aviso `alert-info` e relatório com totais, filtros `.mf-*`,
-  `pos`/`neg`, navegação pelo teclado e paginação.
+- Logo abaixo dos cartões de preferências (e recolhidas com eles), **as duas prévias do Personalizar**
+  ("Componentes do SPO" e "Fontes e tabelas", mesma marcação do template) e **gráficos** de pizza e de
+  barras (Plotly do SPO com o tema dos diagramas, o destaque, o daltonismo, a escala e a tabela de dados:
+  `COMMON_DIAGRAM_THEMES`, `initDiagramasDestaque`, `initGraficosAcessiveis` e `initGraficosEscala` lidos
+  do `main.js`): mostram o efeito de cada escolha.
+- Na tela de exemplo, componentes com a marcação real: cabeçalho de página, cartão `module-card`,
+  cartões dinâmicos (`flow-node`), formulário (campos,
+  desabilitado, hierarquia dos botões), aviso `alert-info` e uma **tela de relatório** com a marcação dos
+  relatórios do SPO (FIP 613, PLAN20, PED): `report-header`, cartão `report-data-card`, topo
+  `relatorio-top relatorio-top-uo` com "Última atualização por UO" (o HTML do `renderUltimasAtualizacoes`),
+  totais com `pos`/`neg` e os botões; filtros `.mf-*`, navegação pelo teclado e paginação.
 - **Como usar** (o mesmo passo a passo está na caixa "Como usar o kit", no alto da página):
   1. **Criar:** copie `mockup-spo-aa-plus.html` para a mesma pasta (`static/kit/`) com outro nome, por exemplo
      `mockup-pta-opr.html`, e abra pelo SPO local (`/static/kit/mockup-pta-opr.html`); na mesma pasta, os
@@ -511,10 +521,12 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
 - Regra nova do Personalizar que liga uma opção a outra (como a oferta da Atkinson): o kit precisa
   reproduzi-la, lendo do `main.js`, para continuar mostrando o comportamento exato do SPO.
 - `tests/test_kit_mockup.py` reprova se os trechos que o kit lê do `main.js` mudarem de nome ou de forma,
-  se o Personalizar ganhar opção que o kit não mostra (`GRUPOS_FONTES` no `kit-mockup.js`) e se o CSS do
+  se os cartões do painel deixarem de ser iguais aos do Personalizar (cartão novo ou opção nova no
+  template precisam ser copiados para o kit) e se o CSS do
   kit escrever px ou cor literal; também se a marcação das prévias do Personalizar mudar sem ir para o kit,
   se os blocos dos gráficos mudarem de forma ou passarem a depender de outra função global e se o Plotly
-  do kit não for o mesmo do `base.html`. **Opção nova no Personalizar:** acrescentar no `GRUPOS_FONTES`.
+  do kit não for o mesmo do `base.html`. **Opção nova no Personalizar:** copiar o cartão do template para o
+  painel do kit (o teste aponta qual).
 
 ## 7. Dívida conhecida (roteiro do N5)
 
