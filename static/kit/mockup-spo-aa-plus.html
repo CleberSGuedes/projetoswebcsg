@@ -12,6 +12,10 @@
   nas três densidades do texto, a 150% e com as demais opções do Personalizar.
   Aberto direto do disco (file://), o navegador bloqueia a leitura do main.js: o kit avisa e fica no
   padrão SPO sem os destaques nem o teclado das tabelas.
+
+  O padrão em si: botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no cabeçalho do kit (a mesma janela
+  do SPO; o documento técnico pede o SPO logado neste navegador). Para o agente ou quem lê o código, a fonte é
+  docs/padrao-visual-spo-aa-plus.md (seção 6.4 = o kit; 6.1 = o checklist de tela nova).
 -->
 <html lang="pt-BR">
 <head>
@@ -44,6 +48,8 @@
           <div class="kit-painel-acoes">
             <button class="btn btn-secondary sm" type="button" id="kit-padrao">Padrão SPO</button>
             <button class="btn btn-secondary sm" type="button" id="kit-recolher" aria-expanded="true" aria-controls="kit-opcoes kit-previas-bloco">Recolher</button>
+            <a class="btn btn-secondary sm" href="#" data-spo-padrao><i class="bi bi-universal-access" aria-hidden="true"></i><span>O padrão SPO-AA+</span></a>
+            <a class="btn btn-secondary sm" href="#" data-spo-padrao="tecnico"><i class="bi bi-journal-code" aria-hidden="true"></i><span>Documento técnico</span></a>
           </div>
         </div>
         <i class="bi bi-brush" aria-hidden="true"></i>
@@ -558,6 +564,9 @@
     <details class="card kit-como-usar">
       <summary>Como usar o kit</summary>
       <ol>
+        <li><strong>Consultar o padrão:</strong> os botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no alto
+          abrem a mesma janela do SPO (o documento técnico pede o SPO logado neste navegador). A fonte é
+          <code>docs/padrao-visual-spo-aa-plus.md</code>: o checklist de tela nova é o §6.1, e o kit, o §6.4.</li>
         <li><strong>Criar:</strong> copie este arquivo para a mesma pasta (<code>static/kit/</code>) com outro nome,
           por exemplo <code>mockup-pta-opr.html</code>, e abra em <code>http://127.0.0.1:5000/static/kit/mockup-pta-opr.html</code>
           (o SPO local ligado; não precisa entrar).</li>
