@@ -49,7 +49,7 @@ FEATURES = [
             {"id": "atualizar/seguranca-sessao", "nome": "Sessão e Login"},
             _group("grupo/governanca-resultados", "Governança e Resultados", [
                 {"id": "atualizar/governanca-resultados/mapa", "nome": "Mapa Conceitual"},
-                {"id": "atualizar/governanca-resultados/programacao-pta2027", "nome": "Programação PTA 2027"},
+                {"id": "atualizar/governanca-resultados/programacao-pta2027", "nome": "Programação PTA/OpR"},
                 {"id": "atualizar/governanca-resultados/estrategia", "nome": "Estratégia e Cadeia de Valor"},
                 {"id": "atualizar/governanca-resultados/eap-politicas", "nome": "EAP e Políticas"},
                 {"id": "atualizar/governanca-resultados/entregas-okr", "nome": "Entregas-MT e OKR"},

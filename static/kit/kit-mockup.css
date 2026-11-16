@@ -1,0 +1,130 @@
+/* [jean] feat/kit-mockup (2026-11-15) — só o painel e a moldura do Kit de mockup SPO-AA+.
+   Tudo o que é tela (cabeçalho, cartões, campos, botões, tabela) vem do style.css do SPO.
+   Mesmas regras do padrão: só tokens de cor e tamanhos pelas variáveis da "Densidade do texto". */
+
+.kit-mockup-body {
+  background: var(--bg);
+}
+
+.kit-pulo {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 20;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--spo-accent-text, var(--text));
+  font-weight: 700;
+}
+.kit-pulo:focus { top: 12px; }
+
+.kit-painel {
+  margin: 16px var(--spo-layout-content-padding, 18px) 0;
+  padding: 0;
+}
+.kit-painel-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+/* a grade dos cartões é a do Personalizar (.personalizar-grid); aqui só o espaço acima dela */
+.kit-opcoes { margin-top: 12px; }
+.kit-aviso { margin: 12px 0 0; }
+
+.kit-pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.kit-secao {
+  margin: 0 0 8px;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+  color: var(--spo-accent-text, var(--text));
+}
+
+/* espaço entre blocos dentro de um cartão (o .alert do SPO não tem margem própria: quem dá o espaço é a tela) */
+.kit-pilha .module-card > .alert,
+.kit-pilha .module-card .actions + .alert { margin-top: 12px; }
+
+
+/* prévias do Personalizar e gráficos lado a lado quando cabem (colunas sem mínimo fixo: §6.1) */
+.kit-previas,
+.kit-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+/* passo a passo do kit */
+.kit-como-usar {
+  margin: 12px var(--spo-layout-content-padding, 18px) 0;
+  padding: 12px 16px;
+}
+.kit-como-usar > summary {
+  cursor: pointer;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+  color: var(--spo-accent-text, var(--text));
+}
+.kit-como-usar ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--spo-fs-texto);
+  line-height: 1.5;
+}
+.kit-como-usar li + li { margin-top: 6px; }
+
+/* prévias e gráficos logo abaixo dos cartões de preferências */
+.kit-previas-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* presets do Contrato: o cartão ocupa a linha inteira da grade; cartões dinâmicos lado a lado quando cabem
+   e o painel de contexto logo abaixo (como em Governança e Resultados) */
+.kit-contrato-card { grid-column: 1 / -1; }
+.kit-presets {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  margin-top: 12px;
+}
+.kit-preset-contexto { margin-top: 12px; }
+.kit-preset-contexto ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--spo-fs-controle);
+  line-height: 1.5;
+}
+/* nome da regra em negrito sem <strong> (o .flow-context-panel strong é o título do painel) */
+.kit-regra-nome { font-weight: 700; }
+
+/* catálogo de padrões: moldura do kit em volta de cada exemplo recortado do template */
+.kit-catalogo {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.kit-padrao-titulo {
+  margin: 0;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+}
+.kit-padrao-onde {
+  margin: 2px 0 10px;
+  font-size: var(--spo-fs-controle);
+}
+.kit-catalogo > p { font-size: var(--spo-fs-texto); }
+
+/* <code> fora do #content-area (painel e "Como usar"): a regra do SPO só vale dentro dele, e a cor rosa do
+   Bootstrap dava 4,5:1 no claro e 3,45:1 no escuro (bateria 3) */
+.kit-painel code,
+.kit-como-usar code {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 0 .25em;
+  border-radius: 4px;
+}

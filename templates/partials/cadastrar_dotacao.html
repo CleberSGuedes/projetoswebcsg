@@ -4,7 +4,7 @@
      data-user-nome="{{ user_nome }}"
      data-view-mode="{{ view_mode or 'formulario' }}">
   <div class="card no-print" {% if view_mode == 'consultar' %}style="display:none;"{% endif %}>
-    <div class="card-title">Cadastrar Dotação <span id="dotacao-editing-badge" style="display:none; color:#111827; font-weight:500; margin-left:6px;"></span></div>
+    <div class="card-title">Cadastrar Dotação <span id="dotacao-editing-badge" class="spo-editing-badge" style="display:none;"></span></div>
     <form id="form-dotacao" class="form">
       <input type="hidden" id="dotacao-id" />
       <div class="form-grid">
