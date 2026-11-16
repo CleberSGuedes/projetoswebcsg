@@ -8519,10 +8519,8 @@ body.theme-dark .pagination button.active {
 .login-card .login-sessao-titulo { margin: 0 0 4px; font-weight: 700; font-size: 14px; color: var(--text); }
 .login-sessao-titulo .bi { color: #b45309; margin-right: 4px; }
 .theme-dark .login-sessao-titulo .bi { color: #fbbf24; }
-.login-card .login-sessao-texto { margin: 0 0 10px; font-size: 13px; color: var(--text); }
-.login-sessao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
-/* no claro, a borda do "Cancelar" (borda dos campos) dava 2,96:1 sobre o fundo âmbar do aviso */
-body:not(.theme-dark) .login-card .login-sessao .btn-secondary { border-color: #6b7280; }
+/* sem botões desde feat/login-segunda-tentativa (2026-11-14): o texto fecha o aviso */
+.login-card .login-sessao-texto { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
 
 /* ==========================================================================
    [jean] Login: "Entrar" na cor de destaque; "×" do Alerta redondo no celular
@@ -8587,3 +8585,1312 @@ body.login-body[data-accent-preference="yellow"] { --color-50: #fff9e6; --color-
 body.login-body[data-accent-preference="orange"] { --color-50: #fff3e8; --color-100: #ffe1c8; --color-200: #ffbe6f; --color-300: #ffa348; --color-700: #a33400; --color-800: #772600; --color-900: #571c00; }
 body.login-body[data-accent-preference="red"] { --color-50: #fff0f0; --color-100: #ffd7d7; --color-200: #ff7b7b; --color-300: #f66151; --color-700: #a51d2d; --color-800: #7d1824; --color-900: #5d121b; }
 body.login-body[data-accent-preference="purple"] { --color-50: #f7f0ff; --color-100: #eadcff; --color-200: #dc8add; --color-300: #c061cb; --color-700: #4e2a68; --color-800: #3d2052; --color-900: #2e183e; }
+
+/* ==========================================================================
+   [jean] Título da página sem anel de foco (fix/titulo-sem-anel-de-foco, 2026-11-13)
+   Achado do Jean na homologação: logo depois do login, o "Bem-vindo" aparecia dentro
+   de um quadrado. É o foco que o A11 leva ao título da página (ao trocar de tela ou
+   ao fechar um aviso, como o Alerta da chave) para o leitor de tela anunciá-lo; o A12
+   desenhava nele o mesmo anel dos controles. Título e <main> não são controles (o
+   2.4.7 vale para o que se opera pelo teclado): o foco continua indo para lá, mas sem
+   anel. Botões, campos, abas e links mantêm o anel.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body :is(h1, h2, h3, [role="heading"], .card-title, main)[tabindex="-1"]:focus:not(#spo-titulo) {
+    outline: none;
+  }
+}
+
+/* ==========================================================================
+   [jean] Valores em azul e vermelho mais vivos (fix/cores-valores, 2026-11-13)
+   Achado do Jean na homologação (FIP 613): os valores positivos (azul, .pos) e
+   negativos (vermelho, .neg) dos totais e das tabelas usavam #0b3c91 e #8b0000, tão
+   escuros que se confundiam com o preto. Pedido: as cores clássicas do Excel/VBA.
+   Claro: azul puro #0000ff (8,6:1 no branco). O vermelho puro #ff0000 dá só 4,0:1
+   (abaixo do AA); fica #a00000, o mais vivo com ≥ 7:1 (8,4:1) — decisão do Jean.
+   Escuro: o azul puro daria 1,9:1; tons claros mais vivos que os pastéis de antes,
+   #94baff (7,7:1) e #ff9999 (7,4:1) sobre o cartão #242424/#262626.
+   Vale para todos os relatórios que marcam pos/neg (FIP 613, PED, EMP, NOB, EST EMP…).
+   [jean] fix/densidade-cartoes-pos-neg (2026-11-15; achado do kit de mockup): as cores viram os
+   tokens --spo-positive/--spo-negative (padrão SPO-AA+ §3.4) e valem em QUALQUER célula numérica
+   do conteúdo (td.num.pos/.neg), não só na tabela do FIP 613 — tabela nova que marca o sinal
+   já sai colorida, como manda o §6.1.
+   ========================================================================== */
+body { --spo-positive: #0000ff; --spo-negative: #a00000; }
+body.theme-dark { --spo-positive: #94baff; --spo-negative: #ff9999; }
+@media (forced-colors: none) {
+  body :is(.totais-row .pos, .fip-table td.num.pos, #content-area td.num.pos):not(#spo-valor) { color: var(--spo-positive); }
+  body :is(.totais-row .neg, .fip-table td.num.neg, #content-area td.num.neg):not(#spo-valor) { color: var(--spo-negative); }
+  body #content-area td.num:is(.pos, .neg):not(#spo-valor) { font-weight: 600; }
+}
+
+/* ==========================================================================
+   [jean] Escala tipográfica, passo 1: mínimo de 12 px e entrelinha 1,5
+   (fix/tipografia-minimo-12, 2026-11-13; padrão spo-aa+ §2.2 e §7)
+   Medição de 66 telas: texto de leitura em 9–11 px e descrições com entrelinha
+   1,25–1,35. Aqui sobem para 12 px e 1,5 só os casos medidos (seletores abaixo);
+   ficam em 11 px os rótulos curtos em maiúsculas e negrito (passo "Rótulo").
+   Exceção (decisão do Jean): nome/"Logados" do topo e rodapé são informação
+   secundária e ficam em 10 px (antes 9 e 11 px), com entrelinha 1,5.
+   Fora deste passo: textos dos gráficos (SVG do Plotly, configurados no JS) e os
+   títulos de página (passo 2).
+   ========================================================================== */
+@media (forced-colors: none) {
+  /* informação secundária: topo e rodapé */
+  body :is(.user-meta, .footer .footer-line):not(#spo-tipo) { font-size: 10px; }
+  /* mínimo de 12 px */
+  body :is(.totais-row > span, .meta-uo-col > div,
+           .teto-kpi > span, .teto-filter-grid .field > span, .teto-dashboard-fonte,
+           .planning-action-checklist-toggle, .see-upload-option > span, .home-welcome-hint,
+           .visual-pref-toggle small, .contract-version-pill, td > code,
+           .planning-status, .status-badge, #meta-fisica-tbody td.muted):not(#spo-tipo) {
+    /* [jean] feat/densidade-teste-px: era 12px fixo (mais específica que as regras da densidade, por
+       causa do id da lista); agora o tamanho de controle da densidade (Intermediário 12, como antes) */
+    font-size: var(--spo-fs-controle);
+  }
+  /* paginação: respeita "Compacto"/"Intermediário" do texto das tabelas (Personalizar) */
+  body:is([data-spo-table-text="legible"], :not([data-spo-table-text])) :is(.page-size label, .pagination > span):not(#spo-tipo) {
+    font-size: var(--spo-fs-dado);
+  }
+  /* entrelinha 1,5 em texto que pode ocupar mais de uma linha */
+  body :is(p.muted, .muted > div, .meta-uo-col > div, .teto-dashboard-fonte, .flow-node small,
+           .contract-preview-meta em, .visual-pref-toggle small, #meta-fisica-tbody td.muted,
+           .footer .footer-line, .home-welcome-hint):not(#spo-tipo) {
+    line-height: 1.5;
+  }
+}
+
+/* ==========================================================================
+   [jean] Escala tipográfica, passo 2: título da página igual em todas as telas
+   (fix/titulos-de-pagina, 2026-11-13; padrão spo-aa+ §2.2)
+   Medição das 66 telas: o título da página tinha 22, 23, 24 ou 25,6 px, peso 500
+   ou 700 e entrelinha 1,2 ou 1,5, conforme o módulo. Passa a 24 px, negrito (700,
+   decisão do Jean) e entrelinha 1,2 em todo cabeçalho de página: <h1> do conteúdo
+   e o .card-title que faz papel de título nos cabeçalhos de módulo e de relatório.
+   Telas sem cabeçalho de página (formulários de cadastro e consultas) não mudam:
+   o título delas é o do cartão do formulário.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body :is(#content-area h1, .module-header-copy > .card-title, .report-header-copy > .card-title,
+           .home-grid .card.highlight > .card-title):not(#spo-titulo-pagina) {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+}
+
+/* ==========================================================================
+   [jean] Totais do PLAN 51 sem corte (fix/totais-plan51-celular, 2026-11-13)
+   O quadro do PLAN 51 (.totais-box--wide) cresce até caber tudo numa linha
+   (min-width: max-content), para os valores em bilhões, e fica numa grade de duas
+   colunas fixas ao lado dos botões (max-content auto). Quando o cartão do relatório
+   é estreito, o conjunto passava do cartão: a 375 px, quadro de 562 px num cartão
+   de 283 px; entre ~820 e ~950 px de janela, os botões saíam do cartão.
+   Medido pela largura do próprio cartão (container query), não da janela:
+   - cartão até 900 px: os botões descem para baixo do quadro ("quebra de linha
+     antes dos botões", como diz a regra original);
+   - cartão até 640 px: o quadro usa a mesma regra adaptável dos outros relatórios
+     (#31/#56): colunas que cabem e, se rótulo e valor não couberem lado a lado, o
+     valor desce de linha.
+   Cartão mais largo: o PLAN 51 não muda.
+   ========================================================================== */
+.report-data-card:has(.totais-box--wide) { container: spo-plan51 / inline-size; }
+@container spo-plan51 (max-width: 900px) {
+  .relatorio-top-uo .relatorio-top-right:not(#spo-plan51) {
+    grid-template-columns: max-content;
+    justify-items: end;
+    row-gap: 10px;
+  }
+}
+@container spo-plan51 (max-width: 640px) {
+  .relatorio-top-uo .relatorio-top-right:not(#spo-plan51) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .relatorio-top-uo .totais-box.totais-box--wide:not(#spo-plan51) {
+    min-width: 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    column-gap: 12px;
+  }
+  .relatorio-top-uo .totais-box--wide .totais-row:not(#spo-plan51) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: 6px;
+    row-gap: 0;
+    min-width: 0;
+  }
+  .relatorio-top-uo .totais-box--wide .totais-row > span { flex: 0 1 auto; min-width: 0; }
+  .relatorio-top-uo .totais-box--wide .totais-row > strong {
+    flex: 0 0 auto;
+    margin-left: auto;
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
+/* ==========================================================================
+   [jean] Superfícies que ficaram fora do tema (fix/superficies-escuro-restantes, 2026-11-14)
+   Prints do Jean:
+   (1) Totais da Meta Física (.meta-fisica-resumo-card): cores fixas de tema claro
+       (fundo #f6fafc, borda #c6d8e2, texto #334155/#0f172a). No escuro, cartão aceso;
+       no claro, a borda dava 1,47:1 e o cartão 1,05:1 contra o fundo (quase some).
+       Passa aos tokens: fundo --surface, borda dos campos (--spo-control-border), texto
+       --muted/--text, divisões --border.
+   (2) "Escolher arquivo": o botão nativo do <input type="file"> nunca teve estilo e
+       ficava claro no escuro. Passa a botão em contorno, como os secundários (#60).
+   (3) Avisos .alert-info no escuro (ex.: "Regras de segurança" da Limpeza de
+       Histórico): texto fixo #0f4c4c (verde escuro) sobre fundo escuro, 1,46:1.
+       No escuro, texto --text, fundo do destaque a 10% e borda dos campos.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body .meta-fisica-resumo-card:not(#spo-sup) {
+    background: var(--surface);
+    border: 1px solid var(--spo-control-border, #86848c);
+  }
+  body .meta-fisica-resumo-table :is(th, td):not(#spo-sup) { border-bottom-color: var(--border); }
+  body .meta-fisica-resumo-table th:not(#spo-sup) { color: var(--muted); }
+  body .meta-fisica-resumo-table td:not(#spo-sup) { color: var(--text); }
+
+  body input[type="file"]::file-selector-button {
+    margin-right: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--spo-control-border, #86848c);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  body input[type="file"]:is(:hover, :focus-visible)::file-selector-button {
+    background: rgba(var(--accent-rgb), 0.12);
+  }
+
+  body.theme-dark .alert-info:not(#spo-sup) {
+    color: var(--text);
+    background: rgba(var(--accent-rgb), 0.10);
+    border-color: var(--spo-control-border, #86848c);
+  }
+}
+
+/* ==========================================================================
+   [jean] Teto Orçamentário, aba Tabelas: fonte de dados e escala tipográfica
+   (fix/teto-tabelas-tipografia, 2026-11-14; padrão spo-aa+ §2.1 e §2.2)
+   Medição da aba Tabelas: valores em Inter (o padrão de dados é Intel One Mono,
+   como o KPI da aba Gráficos) e textos em 10,5–11,5 px, com entrelinha 1,3 nos
+   nomes do quadro comparativo. Os valores passam a seguir a fonte de dados escolhida
+   no Personalizar (data-spo-font-data); os textos vão a 12 px e entrelinha 1,5.
+   ========================================================================== */
+body[data-spo-font-data="classic"]:not([data-spo-font-ui="classic"]) :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: var(--spo-font-classic);
+}
+body[data-spo-font-data="inter"] :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO Inter", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body[data-spo-font-data="plex-sans"] :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO IBM Plex Sans", var(--spo-font-classic);
+  font-variant-numeric: tabular-nums;
+}
+body:is([data-spo-font-data="intel-mono"], :not([data-spo-font-data])) :is(.teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace;
+}
+@media (forced-colors: none) {
+  body :is(.teto-qomp-delta, .teto-qomp-year-head .yr-total, .teto-rank-pct, .teto-rank-code,
+           .teto-rank-row.teto-rank-child :is(.teto-rank-code, .teto-rank-name, .teto-rank-val),
+           .teto-group-card .pct):not(#spo-teto-tab) {
+    font-size: 12px;
+  }
+  body :is(.teto-qomp-grupo-name, .teto-qomp-row.child .teto-qomp-grupo-name):not(#spo-teto-tab) {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+/* colunas de ano do comparativo (QOMP, Fonte/Grupo, Grupo por Teto): o mínimo era
+   150 px (128 px até 720 px) e cortava os valores em bilhões (112 cortes a 375 px já
+   com a Inter; 166 com a mono). 184 px cabem "R$ 99.999.999.999,99" em 14 px na
+   Intel One Mono; com pouco espaço o quadro rola para o lado, como antes. */
+body .teto-qomp-grid:not(#spo-teto-tab) { --qomp-w-ano: 184px; }
+
+/* ==========================================================================
+   [jean] Espaçamento entre linhas escolhido no Personalizar
+   (feat/entrelinhas-personalizar, 2026-11-14; padrão spo-aa+ §2.1 e §2.2)
+   data-spo-line-height no <body> (gravado por initFontesPersonalizar):
+   default = 1,5 (padrão SPO, já aplicado pela escala); ample = 1,75; larger = 2,0.
+   Vale só para o texto corrido do conteúdo (parágrafos, listas, avisos, ajudas,
+   descrições, metadados); títulos, tabelas, botões e campos não mudam, para não
+   desmontar o layout. Atende ao WCAG 1.4.12 (espaçamento de texto) e 1.4.8.
+   ========================================================================== */
+body[data-spo-line-height="ample"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+    .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
+  line-height: 1.75;
+}
+body[data-spo-line-height="larger"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+    .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
+  line-height: 2;
+}
+
+/* ==========================================================================
+   [jean] Personalizar em tela estreita: escolha atual visível e amostra no cartão
+   (fix/personalizar-fontes-estreito, 2026-11-14; bateria WCAG 1.4.12)
+   A 375 px com "Maior (125%)" + "Mais amplo (2,0)": o resumo da escolha atual de
+   cada grupo (.visual-pref-toggle small, nowrap + reticências) ficava cortado
+   ("Inter (padrão S…", "Legível (12 px, …") e a amostra de tabela passava do
+   cartão (220 px em 182 px). O resumo passa a quebrar linha (vale também para os
+   grupos de Preferências comuns); na amostra, cada linha empilha como os totais
+   dos relatórios: o valor desce para a linha de baixo quando não cabe ao lado do rótulo.
+   ========================================================================== */
+body .visual-pref-toggle small:not(#spo-pref) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+body .spo-fontes-amostra:not(#spo-pref) { overflow-x: auto; max-width: 100%; }
+/* cada linha da amostra empilha como os totais dos relatórios (#31/#56): rótulo e valor
+   lado a lado quando cabem; se não, o valor desce para a linha de baixo, inteiro */
+body .spo-fontes-amostra tr:not(#spo-pref) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+  border-top: 1px solid var(--border);
+}
+body .spo-fontes-amostra td:not(#spo-pref) { border-top: 0; }
+body .spo-fontes-amostra td:first-child:not(#spo-pref) { flex: 0 1 auto; min-width: 0; }
+body .spo-fontes-amostra td:last-child:not(#spo-pref) { flex: 0 0 auto; margin-left: auto; white-space: nowrap; text-align: right; }
+
+/* ==========================================================================
+   [jean] Teto Orçamentário: indicador "Teto total" sem estourar o cartão
+   (fix/teto-kpi-total, 2026-11-14; print do Jean)
+   Os 4 indicadores dividiam a largura em partes iguais; com a fonte de dados
+   padrão (Intel One Mono, #63), "R$ 11.333.931.142,00" saía do cartão. A
+   coluna do Teto total passa a ter mínimo de 15rem, que cabe
+   "R$ 999.999.999.999,00" em 16 px negrito na mono (~222 px com o espaçamento);
+   as outras três dividem o resto. Vale também nas faixas de 2 colunas.
+   ========================================================================== */
+body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: minmax(15rem, 1.6fr) repeat(3, minmax(0, 1fr)); }
+body #teto-kpi-total { white-space: nowrap; }
+/* mesmas faixas do painel (container teto-dashboard): 2 colunas até 820 px, 1 até 560 px */
+@container teto-dashboard (max-width: 820px) {
+  body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: minmax(15rem, 1fr) minmax(0, 1fr); }
+}
+@container teto-dashboard (max-width: 560px) {
+  body .teto-kpi-grid:not(#spo-kpi) { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   [jean] Leitura ampliada: largura de linha e espaço entre parágrafos
+   (feat/leitura-ampliada, 2026-11-14; padrão spo-aa+ §2.2; WCAG 1.4.8, AAA;
+   equivale ao "leitura ampliada" do C04 do laboratório)
+   Medição de 66 telas a 1440 px: 31 blocos de texto corrido em 19 telas com mais
+   de 80 caracteres por linha (até 188, na Início); parágrafos seguidos separados
+   por 14–16 px, com entrelinha de 18 px.
+   - texto corrido (p, li, dd e avisos .alert, fora de tabelas, menus e botões):
+     no máximo 72ch (decisão do Jean, equilíbrio com o espaço dos cartões largos).
+     O "ch" é a largura do "0", mais larga que a média das letras: 72ch dão uma
+     média de ~84–110 caracteres por linha (o 1.4.8, AAA, pede ≤ 80; 56ch
+     chegariam lá, com metade do cartão vazio a 1440 px);
+     o texto centralizado da Início continua centralizado;
+   - parágrafos seguidos: espaço de 1 entrelinha (1lh; decisão do Jean: separa bem
+     sem parecer vazio; o AAA pediria 1,5), que acompanha a opção "Espaçamento
+     entre linhas" do Personalizar.
+   ========================================================================== */
+/* Desde feat/opcao-leitura (2026-11-14), só vale com a opção "Leitura" do Personalizar
+   em Intermediário (72ch, 1 entrelinha) ou Estrito (ver o bloco "Opção Leitura" no fim). */
+body[data-spo-reading="medium"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+  max-width: 72ch;
+}
+body:is([data-spo-reading="medium"], [data-spo-reading="strict"]) #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
+  margin-inline: auto;
+}
+body[data-spo-reading="medium"] #content-area p + p:not(table *):not(#spo-leitura) {
+  margin-top: max(1em, 1lh);
+}
+
+/* ==========================================================================
+   [jean] "Texto das tabelas" em todas as tabelas (fix/texto-tabelas-todas, 2026-11-14)
+   A opção do Personalizar (Compacto 8 px, Intermediário 10 px, Legível 12 px)
+   só alcançava as tabelas dos relatórios (.fip-table, .plan20-table), os filtros
+   e a paginação. As demais tabelas do conteúdo (consultas de cadastro, usuários,
+   Limpeza, API, estrutura, Meta Física, tabelas de dados dos gráficos…) ficavam
+   com 12 px nas células e 13 px nos títulos, qualquer que fosse a escolha.
+   Agora Intermediário e Compacto valem para todas; Legível (padrão) mantém o
+   tamanho próprio delas, que já é ≥ 12 px. Campos e botões de formulário dentro
+   das tabelas não mudam.
+   ========================================================================== */
+body[data-spo-table-text="medium"] #content-area table:not(.fip-table, .plan20-table):not(.spo-fontes-amostra table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button), th *:not(input, select, textarea, button)) {
+  font-size: 10px;
+}
+body[data-spo-table-text="compact"] #content-area table:not(.fip-table, .plan20-table):not(.spo-fontes-amostra table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button), th *:not(input, select, textarea, button)) {
+  font-size: 8px;
+}
+
+/* ==========================================================================
+   [jean] Login com as fontes e o tamanho escolhidos no Personalizar
+   (feat/login-fontes, 2026-11-14; padrão spo-aa+ §2.1)
+   O login-theme.js grava no <body> os mesmos atributos do main.js
+   (data-spo-font-ui etc.). A fonte da interface já vale pelas regras do body;
+   aqui entram o tamanho do texto (o cartão faz o papel do .main) e a entrelinha
+   do texto corrido do cartão (subtítulo, avisos, ajudas).
+   ========================================================================== */
+body.login-body[data-spo-text-size="large"] .login-card:not(#spo-login-fontes) {
+  zoom: 1.125;
+}
+body.login-body[data-spo-text-size="larger"] .login-card:not(#spo-login-fontes) {
+  zoom: 1.25;
+}
+body.login-body[data-spo-line-height="ample"] .login-card :is(p, .alert, small, .muted):not(button *, label):not(#spo-login-fontes) {
+  line-height: 1.75;
+}
+body.login-body[data-spo-line-height="larger"] .login-card :is(p, .alert, small, .muted):not(button *, label):not(#spo-login-fontes) {
+  line-height: 2;
+}
+
+/* ==========================================================================
+   [jean] Opção "Leitura" do Personalizar (feat/opcao-leitura, 2026-11-14;
+   padrão spo-aa+ §2.1 e §2.2; WCAG 1.4.8, AAA, atendido por "um mecanismo")
+   data-spo-reading no <body> (gravado por initFontesPersonalizar e pelo
+   login-theme.js):
+   - default (padrão SPO): largura livre, como antes do #92;
+   - medium: 72ch e 1 entrelinha entre parágrafos (o #92; bloco "Leitura ampliada");
+   - strict: no máximo 80 caracteres reais por linha e 1,5 entrelinha entre
+     parágrafos. O "ch" é a largura do "0", mais larga que a média das letras;
+     a largura em ch de cada fonte foi medida (contagem exata por linha, pior
+     caso nas telas de texto corrido) para nunca passar de 80 caracteres.
+   ========================================================================== */
+/* Largura medida em 2026-11-14 (1440 px; Limpeza, Início, Contrato Visual, Teto): com 80ch, o pior
+   caso deu 117 caracteres na Inter, 130 na Atkinson, 111 na Source Sans 3 e na do sistema (Segoe UI).
+   Com os valores abaixo, o pior caso ficou em 78 (Inter e Atkinson), 74 (Source) e 72 (sistema).
+   "Do sistema" varia com o computador: valor mais conservador. Tamanho 112%/125% não muda a conta
+   (o zoom amplia letra e largura juntos). */
+body[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
+body[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
+body[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
+body[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
+body[data-spo-reading="strict"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+  max-width: var(--spo-leitura-estrita);
+}
+/* Espaço entre parágrafos: o WCAG 1.4.8 fala do espaço *depois* de cada parágrafo (≥ 1,5 × a
+   entrelinha dele). O parágrafo de cima reserva esse espaço e o de baixo não soma margem: em
+   cartões flex/grid as margens não se sobrepõem, e somar daria até 3 entrelinhas. */
+body[data-spo-reading="strict"] #content-area p:has(+ p):not(table *):not(#spo-leitura) {
+  margin-bottom: max(1.5em, 1.5lh);
+}
+body[data-spo-reading="strict"] #content-area p + p:not(table *):not(#spo-leitura) {
+  margin-top: 0;
+}
+
+/* ==========================================================================
+   [jean] Realce do foco e links sublinhados (feat/foco-e-links, 2026-11-14;
+   cartão "Visão e cores" do Personalizar; padrão spo-aa+ §2.1 e §4.4)
+   data-spo-focus e data-spo-links no <body> (initFontesPersonalizar e login-theme.js).
+   - Foco reforçado (WCAG 2.4.13, AAA): o anel padrão (3 px na cor de destaque,
+     feat/foco-visivel) vira um anel DUPLO: 4 px na cor de destaque entre duas
+     faixas de 2 px na cor do fundo (branco no claro, preto no escuro). O anel
+     contrasta com qualquer superfície, inclusive botões na própria cor de destaque.
+     A faixa interna e a externa vêm de box-shadow (o outline fica no meio).
+   - Links sublinhados (WCAG 1.4.1): links de texto do conteúdo e do login sempre
+     sublinhados; menu, abas, botões e links com aparência de botão não mudam.
+   Com "cores forçadas" do Windows, o sistema decide: nada aqui vale lá.
+   ========================================================================== */
+@media (forced-colors: none) {
+  body[data-spo-focus="strong"] { --spo-focus-halo: #ffffff; }
+  body[data-spo-focus="strong"].theme-dark { --spo-focus-halo: #000000; }
+  body[data-spo-focus="strong"] :is(a[href], button, input:not([type="hidden"]), select, textarea, summary,
+           [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible:not(#spo-foco) {
+    outline: 4px solid var(--spo-focus-ring, var(--accent));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--spo-focus-halo), 0 0 0 8px var(--spo-focus-halo);
+  }
+  /* Dentro de áreas que cortam o que passa da borda (overflow), o anel fica para dentro:
+     menu lateral, grupos do Personalizar (.visual-pref-group), tabelas com rolagem
+     (filtros das colunas e botões de ação) e avisos modais. Medido em 9 telas. */
+  body[data-spo-focus="strong"] :is(.sidebar, .visual-pref-group, .table-responsive, .teto-table-scroll,
+       .planning-structure-table-wrap, .planning-report-table-wrap, .modal-card)
+       :is(a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"]):focus-visible:not(#spo-foco) {
+    outline-offset: -6px;
+    box-shadow: inset 0 0 0 2px var(--spo-focus-halo), inset 0 0 0 8px var(--spo-focus-halo);
+  }
+}
+body[data-spo-links="underline"] :is(#content-area, .login-card) a[href]:not(.btn, [class*="btn"], [class*="button"], .menu-item, [role="button"], [role="tab"], [role="menuitem"], .personalizar-subnav a, .nav-link, .page-link):not(#spo-links) {
+  text-decoration: underline;
+  text-decoration-thickness: max(1px, 0.08em);
+  text-underline-offset: 0.18em;
+}
+
+/* ==========================================================================
+   [jean] Tamanho 150%, brilho reduzido e reduzir movimento
+   (feat/visao-150-brilho-movimento, 2026-11-14; cartões "Fontes e tamanho do
+   texto" e "Visão e cores" do Personalizar; padrão spo-aa+ §2.1)
+   - Muito grande (150%), data-spo-text-size="xlarge": amplia a área de conteúdo
+     (.main) e o cartão de login, como o 112% e o 125% (WCAG 1.4.4 e 1.4.10);
+   - Brilho reduzido, data-spo-brightness="reduced", só no tema claro: cartões
+     #eceef1 (cerca de 15% menos luz que o branco) e página #dadee4. Para manter o
+     contraste, o texto secundário escurece (#4a4850) e o texto na cor de
+     destaque passa ao tom 800;
+   - Reduzir movimento, data-spo-motion="reduce": o mesmo que a preferência do
+     sistema já faz (bloco "Movimento reduzido"), mesmo sem ela; a rolagem suave
+     do JS também para (initMovimentoReduzido).
+   ========================================================================== */
+body[data-spo-text-size="xlarge"] .main { zoom: 1.5; }
+body.login-body[data-spo-text-size="xlarge"] .login-card:not(#spo-login-fontes) { zoom: 1.5; }
+/* Celular (< 480 px): 150% deixaria só 240 px úteis, abaixo dos 320 px de referência do WCAG
+   1.4.10 (palavras longas passavam da borda e o Teto rolava para o lado a 360 px). Ali o
+   "Muito grande" vale 125%, o máximo que cabe sem rolagem lateral. */
+@media (max-width: 479.98px) {
+  body[data-spo-text-size="xlarge"] .main { zoom: 1.25; }
+  body.login-body[data-spo-text-size="xlarge"] .login-card:not(#spo-login-fontes) { zoom: 1.25; }
+}
+/* Teto (#89): com a área de conteúdo ampliada num celular, o painel fica com menos de 300 px e o
+   "Teto total" (sem quebra de linha, ~222 px) passava da borda — já acontecia com o 125% a 360 px.
+   Ali o valor pode quebrar entre o "R$" e o número, e a grade não força largura mínima. */
+@container teto-dashboard (max-width: 300px) {
+  body .teto-kpi-grid:not(#spo-kpi):not(#spo-kpi-estreito) { grid-template-columns: minmax(0, 1fr); }
+  body #teto-kpi-total:not(#spo-kpi-estreito) { white-space: normal; }
+}
+/* Telas com cabeçalho e duas colunas (Usuários, Permissões, API…): no tamanho padrão passam a
+   uma coluna com a janela até 900 px (Permissões até 1100; o formulário dela até 720). Com a área
+   de conteúdo ampliada, a largura útil é a da janela dividida pelo fator, mas o @media continua
+   olhando a janela: a 820 px e 150%, Usuários ficava com 547 px úteis em duas colunas e rolava para
+   o lado. Os limites abaixo são os mesmos multiplicados por 1,125 / 1,25 / 1,5. */
+@media (max-width: 1012px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="large"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1238px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 810px) {
+  body[data-spo-text-size="large"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 1125px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="larger"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1375px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  body[data-spo-text-size="larger"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 1350px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header) { grid-template-columns: 1fr; }
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header) > .module-header { grid-column: auto; }
+}
+@media (max-width: 1650px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header .bi-shield-lock) { grid-template-columns: 1fr; }
+}
+@media (max-width: 1080px) {
+  body[data-spo-text-size="xlarge"] .grid:has(> .module-header .bi-shield-lock) > .module-card .form-grid { grid-template-columns: 1fr; }
+}
+body[data-spo-text-size="xlarge"] .meta-uo-col {
+  min-width: min(190px, 100%);
+  overflow-wrap: anywhere;
+}
+@media (forced-colors: none) {
+  body[data-spo-brightness="reduced"]:not(.theme-dark) {
+    --surface: #eceef1;
+    --card: #eceef1;
+    --bg: #dadee4;
+    --body-bg: linear-gradient(180deg, #dfe3e8, #dadee4);
+    --footer-bg: #dadee4;
+    --muted: #4a4850;
+    --spo-accent-text: var(--color-800);
+  }
+}
+html:has(> body[data-spo-motion="reduce"]),
+body[data-spo-motion="reduce"] *, body[data-spo-motion="reduce"] *::before, body[data-spo-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+body[data-spo-motion="reduce"] :is(.app-loading-progress, .app-loading-marker, .app-loading-dot, .planning-component-loading-row .bi) {
+  animation: none !important;
+}
+body[data-spo-motion="reduce"] .app-loading-dot { opacity: 1; }
+
+/* ==========================================================================
+   [jean] Telas de Usuários no celular (fix/usuarios-celular, 2026-11-14;
+   WCAG 1.4.10)
+   Até 900 px, as telas com cabeçalho e duas colunas deviam passar a uma coluna
+   (.grid:has(> .module-header) { 1fr }), mas a regra perdia por especificidade
+   para a que define as duas colunas de Cadastrar, Editar, Perfil e API
+   (.grid:has(> .module-header .bi-person-gear) etc., com coluna mínima de
+   320 px): a 360 px, a tela rolava para o lado (580 px de conteúdo em 296).
+   ========================================================================== */
+@media (max-width: 900px) {
+  body .grid:has(> .module-header):not(#spo-usuarios-celular) { grid-template-columns: minmax(0, 1fr); }
+  body .grid:has(> .module-header):not(#spo-usuarios-celular) > .module-header { grid-column: auto; }
+}
+
+/* ==========================================================================
+   [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; ver initBuscaTelas
+   no fim do main.js). Item "Buscar tela" no menu lateral, abaixo de "Início".
+   A caixa usa as classes dos avisos do SPO (modal-overlay, modal-card,
+   modal-header-title) e o campo .field; aqui só o que é próprio da busca:
+   largura, lista de resultados e a camada acima dos avisos. Opção ativa com
+   fundo e borda à esquerda (não depende só da cor).
+   ========================================================================== */
+.spo-busca-fundo { /* o mesmo fundo dos avisos (.modal-overlay), numa camada acima deles (9999) */
+  position: fixed; inset: 0; z-index: 10001;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 10vh; background: rgba(0, 0, 0, 0.45);
+}
+.spo-busca-fundo[hidden] { display: none; }
+body.spo-busca-aberta { overflow: hidden; }
+.spo-busca-caixa { width: min(640px, calc(100% - 48px)); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; }
+.spo-busca-titulo { margin: 0; line-height: 1.3; }
+.spo-busca-campo input { font-size: 14px; }
+.spo-busca-secao:not(:empty) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.spo-busca-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.spo-busca-opcao {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; padding: 6px 10px;
+  border-left: 4px solid transparent; border-radius: 8px; cursor: pointer;
+}
+.spo-busca-opcao:hover { background: rgba(var(--accent-rgb), 0.08); }
+.spo-busca-opcao[aria-selected="true"] { background: rgba(var(--accent-rgb), 0.16); border-left-color: var(--accent); }
+.spo-busca-opcao > .bi { font-size: 16px; color: var(--spo-accent-text, var(--accent)); }
+.spo-busca-texto { display: flex; flex-direction: column; min-width: 0; }
+.spo-busca-texto strong { font-size: 14px; font-weight: 600; }
+.spo-busca-texto small { font-size: 12px; color: var(--muted); overflow-wrap: break-word; }
+.spo-busca-externo { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.spo-busca-rodape { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.spo-busca-status { margin: 0; font-size: 12px; color: var(--muted); }
+@media (max-width: 600px) {
+  .spo-busca-fundo { padding: 0; }
+  .spo-busca-caixa { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
+}
+
+/* ==========================================================================
+   [jean] Correções da bateria completa do Personalizar (fix/bateria-personalizar,
+   2026-11-14; relatório em docs_jean/auditoria_aa/BATERIA_PERSONALIZAR_2026-11-14.md)
+   66 telas × 4 perfis × 3 larguras (390, 1080, 1366). Achados reais:
+   1) Texto na cor de destaque "forte" (--accent-strong) ou no destaque puro
+      (--accent): com o Azul, 3,77:1 (números do Contrato Visual, selo e nota das
+      Permissões); com o brilho reduzido, 3,24; "Contexto ativo" (Governança) e
+      "Área UENs" (Notas SEE) com 4,1. Passam a usar --spo-accent-text, o tom de
+      texto do destaque com contraste garantido em cada destaque, claro e escuro.
+      Ícones na mesma cor (Permissões, Notas SEE) passam ao tom gráfico
+      (--spo-accent-graphic, ≥ 3:1); os da Governança seguem o tema dos diagramas.
+   2) <code> com a cor rosa do Bootstrap (#d63384): 3,45:1 no escuro (API de
+      Acessos). Passa à cor do texto.
+   3) Permissões (Perfil): duas colunas com mínimos fixos de 500 e 520 px; a
+      1366 px com o menu aberto, a área de conteúdo tem 996 px e a tela rolava
+      para o lado. Acima de 1100 px, colunas proporcionais.
+   4) Modelos de Chave: duas colunas com mínimos de 420 e 520 px, uma coluna só
+      abaixo de 1280 px. Com o texto ampliado, o limite é multiplicado pelo fator
+      (1440 / 1600 / 1920 px), como nas telas de cabeçalho (#103).
+   5) Campos de formulário (.field) não encolhiam abaixo da largura própria do
+      <input>: a 390 px com o texto ampliado, Usuários rolava 4 px para o lado (o formulário
+      tinha colunas de 210 px no mínimo).
+   ========================================================================== */
+body .contract-flow li span:not(#spo-bateria),
+body .permission-header-badge:not(#spo-bateria),
+body .permission-note:not(#spo-bateria),
+body .report-empty-state:not(#spo-bateria),
+body .teto-checklist-actions button:not(#spo-bateria),
+body .personalizar-subnav a:not(#spo-bateria),
+body .contract-rule-badge-draft:not(#spo-bateria),
+body .flow-context-label:not(#spo-bateria),
+body .see-eyebrow:not(#spo-bateria) {
+  color: var(--spo-accent-text, var(--text));
+}
+body .permission-panel-icon:not(#spo-bateria),
+body .see-file-row > i:not(#spo-bateria),
+body .pill-list li:not(#spo-bateria)::before {
+  color: var(--spo-accent-graphic, var(--accent));
+}
+body #content-area code:not(#spo-bateria) {
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.08);
+  padding: 0 .25em;
+  border-radius: 4px;
+}
+@media (min-width: 1101px) {
+  /* força abaixo das regras de texto ampliado do #103 (0,4,1), que passam a uma coluna antes;
+     acima delas e do original (0,3,0): as colunas proporcionais valem também no texto ampliado */
+  .grid:has(> .module-header .bi-shield-lock):not(.spo-bateria) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  }
+}
+@media (max-width: 1440px) { body[data-spo-text-size="large"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+@media (max-width: 1600px) { body[data-spo-text-size="larger"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+@media (max-width: 1920px) { body[data-spo-text-size="xlarge"] .planning-key-model-layout:not(#spo-bateria) { grid-template-columns: 1fr; } }
+body .field:not(#spo-bateria) { min-width: 0; }
+body .field :is(input, select, textarea):not(#spo-bateria) { min-width: 0; max-width: 100%; }
+/* o formulário de Usuários tinha colunas de 210 px no mínimo: no celular com texto ampliado não cabiam */
+body .grid:has(> .module-header :is(.bi-person-plus, .bi-person-gear, .bi-shield-lock, .bi-hdd-network)) > .module-card .form-grid:not(#spo-bateria) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}
+
+/* ==========================================================================
+   [jean] Declaração de acessibilidade (feat/declaracao-acessibilidade, 2026-11-14)
+   Cartão "Acessibilidade do SPO" no fim do Personalizar, na largura inteira;
+   link "Acessibilidade" no rodapé (inserido pelo JS) que leva até ele.
+   ========================================================================== */
+.personalizar-grid > .spo-acessibilidade { grid-column: 1 / -1; }
+/* tamanhos iguais aos dos outros cartões do Personalizar (fix/declaracao-tamanhos, 2026-11-15, pedido
+   do dev. Jean): título 14 px como o .card-title deles (era 18), abertura e itens 12 px como a descrição
+   e o resumo das opções (eram 14), títulos internos 13 px como o nome das opções (eram 14) */
+.spo-acessibilidade h2.card-title { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.spo-acessibilidade > p, .spo-acessibilidade-grade li { font-size: 12px; line-height: 1.5; }
+.spo-acessibilidade h2.card-title:focus { outline: none; }
+.spo-acessibilidade-grade {
+  display: grid; gap: 16px; margin: 12px 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+.spo-acessibilidade-grade section {
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+}
+.spo-acessibilidade-grade h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+.spo-acessibilidade-grade h3 .bi { color: var(--spo-accent-graphic, var(--accent)); }
+.spo-acessibilidade-grade ul { margin: 0; padding-left: 18px; }
+.spo-acessibilidade-grade li { margin: 4px 0; }
+.spo-acessibilidade a[href^="mailto"] { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.footer .footer-acessibilidade { color: inherit; text-decoration: underline; text-underline-offset: 0.18em; cursor: pointer; }
+
+/* [jean] Links da declaração de acessibilidade: abrem em nova aba, com ícone e aviso para leitor de tela */
+.spo-acessibilidade a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.spo-acessibilidade a abbr { text-decoration: none; }
+.spo-acessibilidade .spo-nova-aba .bi { font-size: 0.75em; margin-left: 0.2em; vertical-align: baseline; }
+
+/* ==========================================================================
+   [jean] Atalhos do teclado (feat/atalhos-teclado, 2026-11-14)
+   Ajuda no padrão da busca de telas, segundo link de pulo e a faixa de dica dos
+   componentes com setas.
+   ========================================================================== */
+.spo-atalhos-caixa { width: min(760px, calc(100% - 48px)); }
+.spo-atalhos-corpo { overflow-y: auto; min-height: 0; display: grid; gap: 14px; padding: 2px 4px 4px 2px; }
+.spo-atalhos-secao h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.spo-atalhos-secao h3 .bi { color: var(--spo-accent-graphic, var(--accent)); }
+.spo-atalhos-lista { margin: 0; display: grid; gap: 4px; }
+.spo-atalhos-lista > div { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 4px 16px; padding: 6px 8px; border-radius: 8px; background: var(--surface); }
+.spo-atalhos-lista dt { font-weight: 400; }
+.spo-atalhos-lista dd { margin: 0; }
+.spo-atalhos-nota:not([hidden]) { margin: 0; font-size: 13px; color: var(--text); }
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 1px 6px; text-align: center;
+  font: inherit; font-size: 0.86em; font-weight: 600; line-height: 1.4;
+  color: var(--text); background: var(--card, #fff);
+  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
+}
+@media (max-width: 600px) {
+  .spo-atalhos-lista > div { grid-template-columns: minmax(0, 1fr); }
+}
+.spo-pular-menu { left: 8px; }
+.spo-pular:focus + .spo-pular-menu { top: 64px; }
+.spo-dica-teclado {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9000;
+  max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 10px;
+  font-size: 13px; line-height: 1.4; text-align: center;
+  color: #ffffff; background: #1d1d1d; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.spo-dica-teclado[hidden] { display: none; }
+body.spo-busca-aberta .spo-dica-teclado { display: none; }
+#spo-teclado-card a[data-spo-atalhos] { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 600; }
+@media (max-width: 600px) { .spo-atalhos-caixa { width: 100%; } }
+
+/* [jean] fix/alt-m-foco: anel no foco levado por atalho (Alt+M, Esc no menu), mesmo depois de um clique */
+@media (forced-colors: none) {
+  body .spo-foco-atalho:focus:not(#spo-foco) { outline: 3px solid var(--spo-focus-ring, var(--accent)); outline-offset: 2px; }
+  body .sidebar .spo-foco-atalho:focus:not(#spo-foco) { outline-offset: -3px; }
+  body[data-spo-focus="strong"] .spo-foco-atalho:focus:not(#spo-foco) { outline-width: 4px; box-shadow: 0 0 0 2px var(--spo-focus-halo), 0 0 0 8px var(--spo-focus-halo); }
+  body[data-spo-focus="strong"] .sidebar .spo-foco-atalho:focus:not(#spo-foco) { outline-offset: -6px; box-shadow: inset 0 0 0 2px var(--spo-focus-halo), inset 0 0 0 8px var(--spo-focus-halo); }
+}
+
+/* ==========================================================================
+   [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
+   Janela do resumo e do documento técnico (texto lido do servidor, classe .spo-doc).
+   ========================================================================== */
+/* tamanho de janela de consulta, não de tela: no computador até 720 px e 72% da altura; no celular,
+   cartão com margens (a página continua aparecendo em volta), e não tela cheia como a busca */
+.spo-padrao-caixa { width: min(720px, calc(100% - 48px)); max-height: min(72vh, 680px); }
+@media (max-width: 600px) {
+  .spo-busca-fundo.spo-padrao-fundo { padding: 16px; align-items: center; }
+  .spo-busca-caixa.spo-padrao-caixa { width: 100%; height: auto; max-height: 72vh; border-radius: 14px; }
+  .spo-padrao-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .spo-busca-caixa.spo-padrao-caixa .spo-busca-rodape { flex-wrap: nowrap; }
+  .spo-busca-caixa.spo-padrao-caixa .spo-busca-rodape .btn { white-space: normal; text-align: center; flex: 1 1 auto; justify-content: center; }
+}
+.spo-padrao-corpo { overflow-y: auto; min-height: 0; padding: 2px 8px 8px 2px; line-height: 1.5; }
+.spo-padrao-corpo:focus-visible { outline-offset: -3px; }
+.spo-padrao-caixa .spo-busca-rodape { flex-wrap: wrap; }
+.spo-padrao-status { flex: 1 1 12em; }
+.spo-doc h3 { margin: 18px 0 8px; font-size: 16px; font-weight: 700; line-height: 1.3; }
+.spo-doc h3:first-child { margin-top: 4px; }
+.spo-doc h4 { margin: 14px 0 6px; font-size: 14px; font-weight: 700; }
+.spo-doc p, .spo-doc ul, .spo-doc ol, .spo-doc blockquote { margin: 0 0 10px; }
+.spo-doc ul, .spo-doc ol { padding-left: 22px; }
+.spo-doc li { margin: 3px 0; }
+.spo-doc li.spo-doc-marcar { list-style: none; margin-left: -18px; }
+.spo-doc blockquote { padding: 8px 12px; border-left: 4px solid var(--spo-accent-graphic, var(--accent)); background: var(--surface); border-radius: 0 8px 8px 0; }
+.spo-doc code { color: var(--text); background: rgba(var(--accent-rgb), 0.08); padding: 0 .25em; border-radius: 4px; font-size: 0.92em; overflow-wrap: anywhere; }
+.spo-doc a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.spo-doc-tabela { overflow-x: auto; margin: 0 0 12px; border: 1px solid var(--border); border-radius: 8px; }
+.spo-doc-tabela table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.spo-doc-tabela th, .spo-doc-tabela td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; min-width: 8em; }
+.spo-doc-tabela th { font-weight: 700; background: var(--surface); }
+.spo-doc-tabela tr:last-child td { border-bottom: 0; }
+.spo-doc-sumario { margin: 0 0 14px; padding: 10px 14px; border: 1px dashed var(--border); border-radius: 8px; }
+.spo-doc-sumario ol { margin: 6px 0 0; columns: 2 16em; }
+.spo-acessibilidade a[data-spo-padrao] { font-weight: 700; }
+/* tabelas do documento: texto para leitura, na fonte da interface (não na fonte de dados das tabelas do SPO) */
+body .spo-padrao-corpo .spo-doc-tabela table:not(#spo-doc) { font-family: inherit; }
+
+/* ==========================================================================
+   [jean] Amostra das fontes no estilo da prévia "Componentes do SPO"
+   (fix/amostra-fontes, 2026-11-14; pedido do dev. Jean: a amostra não tinha o
+   mesmo acabamento da prévia). Fundo de página com um cartão em miniatura:
+   sobretítulo 11 px, título de cartão 16 px, texto 14 px, metadados 12 px e uma
+   tabela de relatório com cabeçalho (fonte e tamanho seguem "Fonte dos dados" e
+   "Texto das tabelas"; a entrelinha e a leitura seguem as opções do texto corrido).
+   ========================================================================== */
+/* a borda, os cantos e a sombra vêm da prévia (.personalizar-preview + .preview-surface, que seguem o
+   estilo dos cartões, o contraste e o contrato visual); aqui só se desfaz a grade da prévia */
+body .spo-fontes-amostra.preview-surface:not(#spo-amostra) {
+  display: block; min-height: 0; padding: 12px 14px; background: var(--card);
+  border-style: solid; border-width: var(--spo-preview-border-width);
+  border-radius: var(--spo-preview-radius); box-shadow: var(--spo-preview-shadow);
+}
+/* cor da borda com especificidade baixa (0,2,0): vence a regra antiga da amostra e perde para os
+   presets do contrato visual (body[...] .preview-surface), como na prévia */
+.spo-fontes-amostra.preview-surface { border-color: var(--spo-preview-border); }
+.spo-amostra-sobretitulo { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.5; color: var(--spo-accent-text, var(--text)); }
+.spo-amostra-titulo { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 2px 0 6px; }
+body .spo-fontes-amostra p.spo-amostra-texto:not(#spo-amostra) { font-size: 14px; margin: 0 0 4px; }
+body .spo-fontes-amostra p.spo-amostra-letras:not(#spo-amostra) { font-size: 14px; margin: 0 0 10px; letter-spacing: .04em; }
+body .spo-fontes-amostra table:not(#spo-amostra) { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.spo-fontes-amostra caption { caption-side: top; }
+.spo-fontes-amostra :is(th, td) { padding: 5px 8px; text-align: left; }
+.spo-fontes-amostra thead th { font-weight: 700; background: rgba(var(--accent-rgb), 0.08); border-bottom: 2px solid var(--border); }
+.spo-fontes-amostra tbody td { border-top: 1px solid var(--border); }
+.spo-fontes-amostra tbody tr:nth-child(even) td { background: rgba(var(--accent-rgb), 0.03); }
+.spo-fontes-amostra :is(th, td):last-child { text-align: right; white-space: nowrap; }
+
+/* [jean] Prévia dos componentes com "Cores dos gráficos: seguras para daltonismo" (fix/amostra-fontes,
+   2026-11-15; pedido do dev. Jean: a prévia não mudava). Os quatro nós do mini diagrama passam às
+   quatro primeiras cores da paleta Okabe-Ito (window.spoPaletaDaltonismo), com contorno, como nos
+   gráficos. A paleta segue o FUNDO DO DIAGRAMA (data-visual-diagram-theme, que resolve o tema e a opção
+   "Diagramas"), não o tema da página: diagrama claro = paleta clara e contorno escuro; escuro = paleta
+   escura e contorno claro. */
+body[data-spo-cvd="safe"] .personalizar-preview .preview-line::before {
+  background:
+    radial-gradient(circle at 14% 50%, #0072B2 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 40% 50%, #E69F00 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 66% 50%, #009E73 0 6.5px, #1f2328 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 88% 50%, #D55E00 0 6.5px, #1f2328 7px 8.5px, transparent 9px);
+}
+body[data-spo-cvd="safe"]:is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="highDark"]) .personalizar-preview .preview-line::before {
+  background:
+    radial-gradient(circle at 14% 50%, #56B4E9 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 40% 50%, #E69F00 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 66% 50%, #009E73 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px),
+    radial-gradient(circle at 88% 50%, #D55E00 0 6.5px, #f5f5f5 7px 8.5px, transparent 9px);
+}
+
+/* [jean] Sugestão "Leitura confortável" ao escolher a Atkinson (feat/sugestao-atkinson, 2026-11-15) */
+.spo-sugestao {
+  margin: 8px 0; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); border-left: 4px solid var(--spo-accent-graphic, var(--accent));
+  background: rgba(var(--accent-rgb), 0.06);
+}
+.spo-sugestao p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
+.spo-sugestao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ==========================================================================
+   [jean] Alto contraste escuro sem azul-marinho também no QUADRO dos gráficos
+   (fix/alto-contraste-escuro-quadro, 2026-11-15; relatado pelo dev. Jean: "o azul voltou")
+   O #100 deixou transparente o fundo do gráfico Plotly no modo highDark (tema escuro +
+   Diagramas: alto contraste), mas o quadro em volta (.teto-chart) pinta --spo-diagram-bg,
+   que nesse modo ainda era o azul-marinho #111827; com o gráfico transparente, o azul
+   aparecia de novo. Agora, como decidido no #100: fundo do cartão no quadro, nós dos
+   diagramas (Mapa Conceitual e afins) no cinza neutro do escuro comum e a prévia do
+   Personalizar igual; cores das séries, texto e bordas do alto contraste não mudam
+   (texto #f8fafc: 15,1:1 sobre #242424).
+   ========================================================================== */
+body[data-visual-diagram-theme="highDark"] {
+  --spo-diagram-bg: var(--card, #242424);
+  --spo-diagram-node-bg: #262626;
+}
+body[data-visual-diagram-theme="highDark"] .personalizar-preview {
+  --spo-preview-diagram-bg: var(--card, #242424);
+}
+
+/* ==========================================================================
+   [jean] Correções da bateria 2 do Personalizar (fix/bateria-personalizar-2, 2026-11-15)
+   4 perfis × 66 telas × 3 larguras; achados entre o AA e a meta SPO-AA+ (7:1):
+   1) Brilho reduzido: o texto secundário (--muted #4a4850) dava 6,3–6,98:1 nos painéis
+      semitransparentes, que mostram o fundo da página (#dadee4): Governança, Estrutura,
+      Personalizar, cabeçalho do PTA/OpR. Agora #3e3c44 (≥ 7,58 em todos os fundos do modo);
+      com o contraste Reforçado, continua #38363d (antes o brilho reduzido o anulava).
+   2) Brilho reduzido: o vermelho de "Dispensar" (Limpar Formulário, Cancelar/Remover dos
+      filtros, #a51d2d) dava 6,42:1 no cartão #eceef1. Agora #861523 (8,42 no cartão).
+   3) Início: o texto de boas-vindas fica num cartão de degradê transparente sobre o fundo
+      da página; em --muted dava 6,14–6,66:1 (Roxo, brilho reduzido), e a dica ainda tinha
+      opacity .7. Passa ao texto principal, sem opacidade.
+   4) Contrato Visual Protegido: <em> das prévias em --muted sobre dois tingidos do destaque
+      (escuro + Amarelo + Reforçado: 6,65:1). Passa ao texto principal (7,98).
+   ========================================================================== */
+@media (forced-colors: none) {
+  body[data-spo-brightness="reduced"]:not(.theme-dark) { --muted: #3e3c44; }
+  body[data-spo-brightness="reduced"][data-visual-contrast="enhanced"]:not(.theme-dark) { --muted: #38363d; }
+  body[data-spo-brightness="reduced"]:not(.theme-dark) .btn-danger:is([id$="-clear"], [id$="-filtro-cancel"], [id$="-filtro-remove"]):not(#spo-bat2) {
+    color: #861523; border-color: #861523;
+  }
+}
+body #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-bat2) { color: var(--text); opacity: 1; }
+body .contract-preview-meta em:not(#spo-bat2) { color: var(--text); }
+
+/* [jean] Bateria 2, segunda rodada (com a opacidade composta na medição):
+   5) Contrato Visual: a pílula de versão ("v2026.07") tinha opacity .72: 4,26:1. Sem opacidade.
+   6) Notas SEE: as opções de envio indisponíveis (.see-upload-option.is-disabled) eram apagadas com
+      opacity .45 (2,2–3,4:1). Passam ao estilo de desabilitado do padrão (§3.4): fundo #eef2f4 e
+      texto #5f6670 (5,15:1) no claro; fundo branco a 5% e texto #b5b5b5 (6,53:1) no escuro.
+   7) Diagramas claros (nós do Mapa Conceitual e afins): o texto secundário do nó selecionado
+      (--spo-diagram-muted #4a4950) ficava abaixo de 7:1 com o brilho reduzido. Agora #3e3d44
+      (≥ 8,9:1 nos nós brancos e tingidos, nos 8 destaques). */
+body .contract-version-pill:not(#spo-bat2) { opacity: 1; }
+body .see-upload-option.is-disabled:not(#spo-bat2) { opacity: 1; background: #eef2f4; color: #5f6670; }
+body .see-upload-option.is-disabled:not(#spo-bat2) * { color: inherit; }
+body.theme-dark .see-upload-option.is-disabled:not(#spo-bat2) { background: rgba(255, 255, 255, 0.05); color: #b5b5b5; }
+@media (forced-colors: none) {
+  body[data-visual-diagrams][data-visual-diagram-theme="light"]:is(.theme-dark, :not(.theme-dark)) { --spo-diagram-muted: #3e3d44; }
+}
+
+/* [jean] Link do documento técnico no Contrato Visual Protegido (bateria 2, 2026-11-15):
+   mesmo estilo dos links da declaração (destaque, sublinhado), dentro do .muted. */
+body .protected-contract-card .contract-padrao-note a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
+
+/* [jean] Atkinson Hyperlegible Mono na "Fonte de tabelas e dados" (bateria 2, 2026-11-15; pedido do
+   dev. Jean): a monoespaçada da família Atkinson (Braille Institute), para combinar com a Atkinson na
+   interface. Mesmos alvos da Intel One Mono (tabelas, totais, KPIs do Teto e valores do quadro). */
+@font-face { font-family: "SPO Atkinson Hyperlegible Mono"; src: url("../fonts/atkinson-hyperlegible-mono/atkinson-hyperlegible-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+body[data-spo-font-data="atkinson-mono"] :is(table, .totais-row strong, [id^="teto-kpi-"], .teto-group-card .value, .teto-rank-val, .teto-rank-pct, .teto-rank-code, .teto-qomp-value, .teto-qomp-delta, .teto-qomp-year-head .yr, .teto-qomp-year-head .yr-total, .teto-qomp-fonte-code) {
+  font-family: "SPO Atkinson Hyperlegible Mono", Consolas, "Courier New", monospace;
+}
+
+/* [jean] Movimento reduzido, cartões que sobem ao passar o mouse (fix/movimento-reduzido, 2026-11-15):
+   com a transição desligada, o deslocamento de 1–2 px continuava, só que num salto. Com "Reduzir
+   sempre" (ou o sistema pedindo), o cartão não se desloca; borda, fundo e sombra continuam marcando. */
+body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload-option, .login-form .btn-primary, .contract-preset, .flow-node):is(:hover, :focus-visible) { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  body :is(.institutional-card .noticia-box, .see-upload-option, .login-form .btn-primary, .contract-preset, .flow-node):is(:hover, :focus-visible) { transform: none; }
+}
+
+/* ==========================================================================
+   [jean] Janelas no celular (fix/telas-estreitas-rolagem-janelas, 2026-11-15;
+   pedido do dev. Jean): a busca de telas e a ajuda dos atalhos ocupavam a tela
+   inteira até 600 px; agora são cartões com margem, como a janela do padrão
+   SPO-AA+ (a página continua aparecendo em volta). A busca fica no alto (o
+   teclado virtual sobe por baixo e não cobre o campo); a ajuda, no centro.
+   ========================================================================== */
+@media (max-width: 600px) {
+  .spo-busca-fundo:not(.spo-padrao-fundo) { padding: 16px; }
+  .spo-busca-caixa:not(.spo-padrao-caixa) { width: 100%; height: auto; max-height: 72vh; border-radius: 14px; }
+  .spo-busca-fundo.spo-atalhos-fundo { align-items: center; }
+  .spo-busca-caixa:not(.spo-padrao-caixa) .spo-busca-rodape { flex-wrap: nowrap; }
+}
+
+/* ==========================================================================
+   [jean] Janela dividida sem largura mínima (fix/janela-dividida-sem-largura-minima,
+   2026-11-15; decisão do dev. Jean)
+   O modo "split sob pressão" (syncSplitPressureMode, contrato visual de 2026-07)
+   liga com a área da página até 480 px dentro de uma janela de navegador pelo
+   menos 180 px mais larga, e fixava 560 px de largura mínima (520 com o preset
+   "Pressão operacional"), com rolagem lateral. Ligava também no modo de aparelho
+   do DevTools e no painel estreito do app, e a 393/440 px a página inteira (topo,
+   conteúdo e o quadro do PTA/OpR) passava da borda. Agora a página se reorganiza
+   como no celular, sem largura mínima (WCAG 1.4.10; padrão SPO-AA+: sem rolagem
+   lateral a 320 px). A classe continua existindo (o JS não mudou); só o valor da
+   largura mínima vai a zero, e a área de conteúdo volta a cortar o excesso.
+   ========================================================================== */
+html.spo-split-pressure,
+html.spo-split-pressure body { --spo-operational-min-width: 0px; }
+html.spo-split-pressure { overflow-x: hidden; }
+html.spo-split-pressure .main { overflow-x: clip; }
+html.spo-split-pressure .pta2027-frame { min-width: 0; width: 100%; }
+
+/* ==========================================================================
+   [jean] Cartões dinâmicos no padrão de Governança e Resultados
+   (feat/cartoes-dinamicos, 2026-11-15; pedido do dev. Jean)
+   O cartão do fluxo de Governança e Resultados (.flow-node) passa a ser o
+   sistema visual dos cartões clicáveis do SPO (o mockup PTA/OpR fica para
+   depois): fundo, borda e textos com as cores dos diagramas (--spo-diagram-*,
+   que seguem a opção "Diagramas" e o alto contraste), cantos de 12 px,
+   espaçamento de 12 px, ícone de 20 px na cor de destaque no alto, título de
+   14 px em negrito e descrição de 12 px; com o mouse ou o foco, borda na cor de
+   destaque; selecionado, borda e barra de 3 px à esquerda na cor de seleção e
+   fundo tingido. Aplicado a:
+   - Institucional (Diretrizes, Repositório, Legislação, Parceiros): os cartões
+     ganharam ícone e passam a abrir o documento com um clique em qualquer
+     parte (o link do texto cobre o cartão; continua um só ponto de Tab);
+   - Notas SEE: "Selecionar pasta" e "Selecionar arquivos";
+   - Contrato Visual Protegido: os presets (o ativo = selecionado).
+   ========================================================================== */
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 12px;
+  text-align: left;
+  color: var(--spo-diagram-text, var(--text));
+  background: var(--spo-diagram-node-bg, var(--card));
+  border: 1px solid var(--spo-diagram-border, rgba(var(--accent-rgb), 0.24));
+  border-radius: 12px;
+  box-shadow: none;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset) > i {
+  color: var(--spo-diagram-selection, var(--accent));
+  font-size: 20px;
+  line-height: 1;
+}
+body .institutional-card .noticia-box h5 { margin: 0; font-size: 14px; line-height: 1.3; }
+body :is(.see-upload-option, .contract-preset) > strong { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
+body .institutional-card .noticia-box :is(small, p),
+body :is(.see-upload-option, .contract-preset) > span {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--spo-diagram-muted, var(--muted));
+}
+body .institutional-card .noticia-box p { color: var(--spo-diagram-text, var(--text)); }
+/* [jean] fix/bateria-3 (2026-11-15): com "Diagramas" no modo oposto ao tema (claro + diagramas escuros, ou o
+   inverso), o fundo do cartão seguia os diagramas e o título, a legenda e o link seguiam o tema: 1,0–1,6:1.
+   Título e legenda passam às cores dos diagramas sempre; o link, só quando os modos divergem (no caso
+   comum ele continua na cor de destaque do tema). */
+body .institutional-card .noticia-box h5 { color: var(--spo-diagram-text, var(--text)); }
+body .institutional-card .noticia-box :is(small, .text-muted) { color: var(--spo-diagram-muted, var(--muted)) !important; }
+body:not(.theme-dark):is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="highDark"]) .institutional-card .noticia-box a,
+body.theme-dark:is([data-visual-diagram-theme="light"], [data-visual-diagram-theme="highLight"]) .institutional-card .noticia-box a {
+  color: var(--spo-diagram-text, var(--text));
+  text-decoration: underline;
+}
+/* o cartão inteiro abre o documento: o link do texto estende a área de clique sobre o cartão */
+body .institutional-card .noticia-box a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+body .institutional-card .noticia-box a:focus-visible { outline: none; }
+body .institutional-card .noticia-box:has(a:focus-visible) {
+  outline: 3px solid var(--spo-focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) {
+  border-color: var(--spo-diagram-accent, var(--accent));
+  transform: translateY(-1px);
+}
+/* .active = preset escolhido na prévia (aria-pressed): o "selecionado" completo; o ativo local
+   (.contract-preset-active-local) só ganha a borda na cor de seleção, como antes, para os dois
+   não se confundirem quando são presets diferentes */
+body .contract-preset.contract-preset-active-local:not(.active) { border-color: var(--spo-diagram-selection, var(--accent)); }
+/* [jean] fix/bateria-3: :not(#spo-preset) para vencer ".theme-dark .contract-preset.active" (0,3,0), que no
+   escuro repunha o fundo escuro tingido; com "Diagramas: claro" o texto (cor dos diagramas) ficava a 1,12:1 */
+body .contract-preset.active:not(#spo-preset) {
+  border-color: var(--spo-diagram-selection, var(--accent));
+  box-shadow: inset 0 0 0 1px var(--spo-diagram-selection, var(--accent)), inset 3px 0 0 var(--spo-diagram-selection, var(--accent));
+  background: color-mix(in srgb, var(--spo-diagram-selection, var(--accent)) 12%, var(--spo-diagram-node-bg, var(--card)));
+}
+body .contract-preset.contract-preset-draft-local { border-style: dashed; }
+/* contraste Médio/Reforçado e preset "Contraste técnico": contorno ≥ 3:1, como o .flow-node */
+body:is([data-visual-contrast="medium"], [data-visual-contrast="enhanced"], [data-visual-contract-preset="contrast"])
+  :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):not(.active):not(.contract-preset-active-local):not(:hover):not(:focus-within) {
+  border-color: var(--spo-control-border, var(--border));
+}
+/* Notas SEE: opção indisponível continua no estilo de desabilitado (bateria 2) e sem levantar */
+body .see-upload-option.is-disabled:not(#spo-bat2) { transform: none; border-color: var(--border); }
+/* movimento reduzido: sem levantar (o bloco do #121 já cobre estes cartões; repetido aqui pela especificidade) */
+body[data-spo-motion="reduce"] :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset):is(:hover, :focus-visible, :focus-within) { transform: none; }
+}
+
+/* ==========================================================================
+   [jean] Fonte Mulish como opção da interface (feat/fonte-mulish, 2026-11-15;
+   pedido do dev. Jean, para comparar com a Inter na leitura corrida)
+   Personalizar → Fontes e tamanho do texto → Fonte da interface → "Mulish".
+   Formas arredondadas e abertas; o I maiúsculo e o l minúsculo são parecidos
+   (a prévia "Fontes e tabelas" mostra "Il1 O0" para comparar). O padrão SPO
+   continua a Inter. Arquivo em static/fonts/mulish (OFL 1.1; LEIA-ME).
+   ========================================================================== */
+@font-face { font-family: "SPO Mulish"; src: url("../fonts/mulish/mulish-latin-wght-normal.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
+body[data-spo-font-ui="mulish"] { font-family: "SPO Mulish", var(--spo-font-classic); }
+/* "Leitura → Estrito": largura média das letras ÷ largura do "0" medida (Mulish 0,801; Inter 0,787) dá 54ch;
+   fica 53ch, como a Inter (lado conservador: no máximo 80 caracteres por linha) */
+body[data-spo-reading="strict"][data-spo-font-ui="mulish"] { --spo-leitura-estrita: 53ch; }
+
+/* ==========================================================================
+   [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15; etapa 2 do
+   plano de tipografia; padrão SPO-AA+ v4 §2.2.1)
+   A opção "Texto das tabelas" vira "Densidade do texto" (mesmo atributo
+   data-spo-table-text e mesmos valores compact / medium / legible, para não
+   perder a escolha já gravada). Cada densidade define as variáveis da escala;
+   nesta etapa só as tabelas passam a usá-las (dado: Compacto 10, Intermediário
+   12, Legível 13 px — antes 8 / 10 / 12; a escolha gravada é convertida para
+   a densidade de mesmo tamanho, uma vez só, no main.js e no login-theme.js). Rótulos, campos, texto, leitura e
+   títulos seguem nas próximas etapas, começando pelo Personalizar.
+   Padrão SPO: Intermediário (decisão do dev. Jean depois de testar as três no
+   FIP 613); o Legível entra na "Leitura confortável" da Atkinson. Sem atributo
+   (antes do main.js) vale o Intermediário.
+   ========================================================================== */
+body {
+  --spo-fs-dado: 12px; --spo-fs-controle: 12px; --spo-fs-texto: 13px; --spo-fs-leitura: 14px;
+  --spo-fs-titulo: 14px; --spo-fs-rotulo: 11px; --spo-fs-secao: 20px; --spo-fs-pagina: 24px;
+}
+body[data-spo-table-text="legible"] {
+  --spo-fs-dado: 13px; --spo-fs-controle: 13px; --spo-fs-texto: 14px; --spo-fs-leitura: 16px; --spo-fs-titulo: 16px;
+}
+body[data-spo-table-text="compact"] {
+  --spo-fs-dado: 10px; --spo-fs-controle: 11px; --spo-fs-texto: 12px; --spo-fs-leitura: 13px; --spo-fs-titulo: 13px;
+}
+/* tabelas dos relatórios, filtros de múltipla escolha e paginação */
+body :is(.fip-table, .plan20-table) :is(td, th):not(#spo-dens),
+body :is(.fip-table, .plan20-table) :is(td, th) :is(span, strong, small, a, button):not(#spo-dens),
+body :is(.mf-display, .mf-display i, .mf-search, .mf-option, .mf-btn):not(#spo-dens),
+body :is(.pagination button, .page-btn, .page-size select, .page-size .input, .page-size label, .pagination > span):not(#spo-dens) {
+  font-size: var(--spo-fs-dado);
+}
+/* demais tabelas do conteúdo (cadastros, usuários, Limpeza, API, estrutura, Meta Física, dados dos
+   gráficos…); campos e botões de formulário dentro delas não mudam */
+body #content-area table:not(.fip-table, .plan20-table):not(#spo-tabelas) :is(td, th, td *:not(input, select, textarea, button, .bi), th *:not(input, select, textarea, button, .bi)):not(#spo-dens) {
+  font-size: var(--spo-fs-dado);
+}
+/* amostra do Personalizar */
+body .spo-fontes-amostra table:not(#spo-dens) { font-size: var(--spo-fs-dado); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (a): Personalizar e janelas
+   (feat/densidade-personalizar, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   O Personalizar (cartões, opções, prévias, declaração) e as janelas de
+   consulta (busca de telas, ajuda dos atalhos, "O padrão SPO-AA+") passam a
+   usar as variáveis da densidade escolhida. No Intermediário (padrão):
+   rótulo 11, controle 12, texto 13, leitura 14, título 14 px; no Legível,
+   13/14/16/16; no Compacto, 11/12/13/13. Botões e campos de formulário em
+   geral ficam para a etapa dos formulários. Antes: cartões de opção em
+   12–13 px e janelas em 14–16 px (a diferença notada pelo dev. Jean).
+   ========================================================================== */
+body .personalizar-card > .eyebrow:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-sobretitulo:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .personalizar-card > .card-title:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade h2.card-title:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-titulo:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-caixa .modal-header-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body .personalizar-card > p:not(.spo-acessibilidade-rodape):not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade > p:not(.spo-acessibilidade-rodape):not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-grade li:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-grade h3:not(#spo-dens):not(#spo-dens-b),
+body :is(.visual-pref-toggle, .visual-pref-option, .preference-row) strong:not(#spo-dens):not(#spo-dens-b),
+body .spo-sugestao p:not(#spo-dens):not(#spo-dens-b),
+body .spo-amostra-texto:not(#spo-dens):not(#spo-dens-b),
+body #spo-previsualizacao p:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-campo input:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-texto strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+/* seções da ajuda dos atalhos: no tamanho de título (não menores que a descrição, que é leitura) */
+body .spo-atalhos-secao h3:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-titulo); }
+body :is(.visual-pref-toggle, .visual-pref-option, .preference-row) small:not(#spo-dens):not(#spo-dens-b),
+body .spo-fontes-status:not(#spo-dens):not(#spo-dens-b),
+body .spo-fontes-amostra caption:not(#spo-dens):not(#spo-dens-b),
+body .spo-acessibilidade-rodape:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-caixa .modal-header-subtitle:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-campo > span:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-secao:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-texto small:not(#spo-dens):not(#spo-dens-b),
+body .spo-busca-status:not(#spo-dens):not(#spo-dens-b),
+body .spo-atalhos-nota:not(#spo-dens):not(#spo-dens-b),
+body .spo-atalhos-lista kbd:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .spo-atalhos-lista :is(dt, dd):not(#spo-dens):not(#spo-dens-b),
+body .spo-padrao-corpo :is(p, li, dd, td, th, blockquote):not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
+}
+/* documento SPO-AA+: títulos das seções no tamanho da leitura, em negrito (não maiores que o título
+   da janela) */
+body .spo-doc h3:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
+body .spo-doc h4:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-leitura); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (b): relatórios e cabeçalho de página
+   (feat/densidade-relatorios, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Cabeçalho de página (todas as telas: .report-header e .module-header):
+     sobretítulo = rótulo (11), título = página (24), descrição = texto
+     (Intermediário 13, Legível 14, Compacto 12). No Intermediário os valores
+     são os de antes.
+   - Relatórios: "Última atualização" e "Totais (filtros aplicados)" = texto
+     em negrito (antes 12 px); nome da UO, linhas da atualização e rótulos dos
+     totais = controle; valores dos totais = dado (a fonte de dados continua).
+   As tabelas, filtros e paginação já seguiam a densidade (#131).
+   ========================================================================== */
+body .report-header-copy .report-eyebrow:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy .module-eyebrow:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .report-header-copy h1:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy h1:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-pagina);
+}
+body .report-header-copy > p:not(#spo-dens):not(#spo-dens-b),
+body .module-header-copy > p:not(#spo-dens):not(#spo-dens-b),
+body .relatorio-top > .muted > div:first-child > strong:not(#spo-dens):not(#spo-dens-b),
+body .totais-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body .meta-uo-titulo:not(#spo-dens):not(#spo-dens-b),
+body .meta-uo-col > div:not(#spo-dens):not(#spo-dens-b),
+body .totais-row > span:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .totais-row > strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-dado);
+}
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (c): formulários e cadastros
+   (feat/densidade-formularios, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Título de cartão = título (Intermediário 14, igual a antes).
+   - Rótulos de campo e o texto dentro dos campos (input, select, textarea),
+     inclusive dentro das tabelas e dos avisos = controle (Intermediário 12,
+     igual a antes; a busca de usuários tinha 14).
+   - Botões = texto (Intermediário 13: os dos formulários tinham 14, os dos
+     relatórios já tinham 13) e legenda de grupo de campos = texto.
+   No Legível: título 16, botões 14, rótulos e campos 13; no Compacto: 13/12/11.
+   A busca de telas e os botões das janelas de consulta seguem as regras da
+   etapa (a) quando mais específicas.
+   ========================================================================== */
+body #content-area .card > .card-title:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body #content-area .btn:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) .btn:not(#spo-dens):not(#spo-dens-b),
+body #content-area fieldset > legend:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body #content-area .field > span:not(#spo-dens):not(#spo-dens-b),
+body #content-area .field.inline span:not(#spo-dens):not(#spo-dens-b),
+body #content-area label > span:not([class]):not(#spo-dens):not(#spo-dens-b),
+body #content-area input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(#spo-dens):not(#spo-dens-b),
+body #content-area select:not(#spo-dens):not(#spo-dens-b),
+body #content-area textarea:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) select:not(#spo-dens):not(#spo-dens-b),
+body .modal-card:not(.spo-busca-caixa) textarea:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+/* botões das janelas de consulta (busca, atalhos, SPO-AA+): também no tamanho de texto */
+body .spo-busca-caixa .btn:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-texto); }
+
+/* ==========================================================================
+   [jean] Densidade do texto, etapa 3 (d): painéis, cartões dinâmicos e Início
+   (feat/densidade-paineis, 2026-11-15; padrão SPO-AA+ v4 §2.2.1)
+   - Governança e Resultados: título dos cartões do fluxo e do contexto =
+     título; descrição dos cartões = controle; sobretítulo do contexto =
+     rótulo; texto do contexto e dos cartões = leitura (a referência de
+     hierarquia do padrão: no Intermediário fica como estava).
+   - Cartões dinâmicos (Institucional, Notas SEE, presets do Contrato):
+     título = título, texto = controle.
+   - Teto Orçamentário: títulos dos quadros = título; rótulos, legendas e nomes
+     = controle; cabeçalhos do quadro comparativo = rótulo; valores, totais,
+     variações e ranking = dado; ano e valor do quadro = texto. Valores em
+     destaque um passo acima do título: indicadores do alto (+2 px) e cartões
+     por grupo (+4 px) — Intermediário 16 e 18 px, como antes.
+   - Início: texto de boas-vindas = leitura + 2 px (Intermediário 16; era
+     16,8); dica e sessões = controle; texto do Status = texto.
+   ========================================================================== */
+body .flow-context-label:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-row.teto-qomp-head > .teto-qomp-cell:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-rotulo);
+}
+body .teto-panel h2:not(#spo-dens):not(#spo-dens-b),
+body .teto-filter-heading strong:not(#spo-dens):not(#spo-dens-b),
+body .flow-node strong:not(#spo-dens):not(#spo-dens-b),
+body .flow-context-panel strong:not(#spo-dens):not(#spo-dens-b),
+body .institutional-card .noticia-box h5:not(#spo-dens):not(#spo-dens-b),
+body .see-upload-option > strong:not(#spo-dens):not(#spo-dens-b),
+body .contract-preset > strong:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-titulo);
+}
+body .flow-context-panel p:not(#spo-dens):not(#spo-dens-b),
+body .governanca-card p:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
+}
+body .spo-grafico-dados > summary:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-year-head .yr:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-value:not(#spo-dens):not(#spo-dens-b),
+body .home-status-card > p:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body .flow-node small:not(#spo-dens):not(#spo-dens-b),
+body .teto-kpi > span:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-legend span:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-card .name:not(#spo-dens):not(#spo-dens-b),
+body .teto-group-card .pct:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-sub:not(#spo-dens):not(#spo-dens-b),
+body .institutional-card .noticia-box :is(small:not(#spo-dens):not(#spo-dens-b),
+body p):not(#spo-dens):not(#spo-dens-b),
+body .see-upload-option > span:not(#spo-dens):not(#spo-dens-b),
+body .contract-preset > span:not(#spo-dens):not(#spo-dens-b),
+body .home-welcome-card .home-welcome-hint:not(#spo-dens):not(#spo-dens-b),
+body .home-session-status:not(#spo-dens):not(#spo-dens-b),
+body .home-session-status li:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-controle);
+}
+body .teto-qomp-year-head .yr-total:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-row:not(.teto-qomp-head) > .teto-qomp-cell:not(#spo-dens):not(#spo-dens-b),
+body .teto-qomp-delta:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-code:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-name:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-val:not(#spo-dens):not(#spo-dens-b),
+body .teto-rank-pct:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-dado);
+}
+body .teto-kpi > strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 2px); }
+body .teto-group-card .value:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-titulo) + 4px); }
+body .home-welcome-text:not(#spo-dens):not(#spo-dens-b), body .home-welcome-text strong:not(#spo-dens):not(#spo-dens-b) { font-size: calc(var(--spo-fs-leitura) + 2px); }
+
+/* [jean] feat/densidade-teste-px: a linha "Fonte: FIPLAN…" do cabeçalho do Teto é nota, não
+   descrição da página: tamanho de controle (Intermediário 12, como antes) */
+body .module-header-copy > p.teto-dashboard-fonte:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-controle); }
+
+/* [jean] Navegação pelo teclado nas tabelas (feat/teclado-tabelas): anel de foco por dentro da célula
+   (por fora seria cortado pela rolagem da tabela) */
+#content-area table :is(td, th)[tabindex]:focus-visible {
+  outline: 3px solid var(--spo-focus-ring, var(--accent));
+  outline-offset: -3px;
+}
+
+/* ==========================================================================
+   [jean] Componentes comuns na "Densidade do texto" (fix/densidade-cartoes-pos-neg, 2026-11-15;
+   achado do kit de mockup, padrão SPO-AA+ §2.2.1 e §7). Com a densidade trocada no kit, estes não
+   mudavam: título do cartão de seção (15 px fixo), a descrição dele (12 px fixo), o texto corrido e as
+   listas do cartão e os avisos (14 px, herdados do body). No Intermediário (padrão SPO): título 15 → 14,
+   texto do cartão 14 → 13; descrição (12) e avisos (14) ficam como estavam. Os avisos da Limpeza de
+   Histórico têm tamanho próprio e ficam de fora.
+   ========================================================================== */
+body #content-area .module-card-title h2:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-titulo); }
+body #content-area .module-card-title p:not(#spo-dens):not(#spo-dens-b) { font-size: var(--spo-fs-controle); }
+body #content-area .module-card > p:not(#spo-dens):not(#spo-dens-b),
+body #content-area .module-card > ul > li:not(#spo-dens):not(#spo-dens-b),
+body #content-area .module-card > ol > li:not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-texto);
+}
+body #content-area .alert:not(.limpeza-regras):not(.limpeza-pendente):not(#spo-dens):not(#spo-dens-b) {
+  font-size: var(--spo-fs-leitura);
+}

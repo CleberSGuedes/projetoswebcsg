@@ -20,6 +20,17 @@ com a licença original), pelo jsDelivr: `https://cdn.jsdelivr.net/npm/<pacote>@
 | ibm-plex-sans | `@fontsource-variable/ibm-plex-sans@5.3.0` | `OFL.txt` | 4429 | `d0283623ef57e722fd0eb688a8041589670c608ab780cd3612d06ba6f153d3fd` |
 | intel-one-mono | `@fontsource-variable/intel-one-mono@5.3.0` | `intel-one-mono-latin-wght-normal.woff2` | 20824 | `82d17b2912498c1b3b317e45f38be2b7d37bf7ef5df7654d2d03c969447c3bc6` |
 | intel-one-mono | `@fontsource-variable/intel-one-mono@5.3.0` | `OFL.txt` | 5770 | `3a9cbbb9eb7ae866ff2d9f0a029ee41085758d58217f492e081e15d7e09d7696` |
+| atkinson-hyperlegible-mono | `@fontsource-variable/atkinson-hyperlegible-mono@5.3.0` | `atkinson-hyperlegible-mono-latin-wght-normal.woff2` | 17752 | `2706b1ee4f452e744ea91f7e4908cbde9c5d35521bf5ffffc71a382a2de89613` |
+| atkinson-hyperlegible-mono | `@fontsource-variable/atkinson-hyperlegible-mono@5.3.0` | `OFL.txt` (o `LICENSE` do pacote) | 4609 | `05327050630a640eb824c8fcb7de8b2e605600d8863e4f531ca7c348239916c6` |
+| mulish | `@fontsource-variable/mulish@5.3.0` | `mulish-latin-wght-normal.woff2` | 29968 | `8d1d33d6beea5a722b8f336d79c61c07405949457e37b5e65454c72dc10aba1a` |
+| mulish | `@fontsource-variable/mulish@5.3.0` | `OFL.txt` (o `LICENSE` do pacote) | 4491 | `e8c2c25954b4ff44e44ad6b2d900d0b3936a593a4579e8d65b2788aac7ebf8ca` |
+
+A Atkinson Hyperlegible Mono foi baixada em 2026-11-15 (bateria 2 do Personalizar, pedido do dev. Jean), do
+mesmo jeito; é a monoespaçada da família Atkinson do Braille Institute (Google Fonts, OFL 1.1).
+
+A Mulish foi baixada em 2026-11-15 (pedido do dev. Jean, para comparar com a Inter na leitura corrida), do
+mesmo jeito; desenho de Vernon Adams e do Mulish Project (Google Fonts, OFL 1.1). Opção de "Fonte da
+interface"; o padrão continua a Inter.
 
 Uso: escolha em **Personalizar Temas SPO** (fonte da interface e fonte de tabelas e dados). O navegador só
 baixa a fonte escolhida. "Clássica (padrão SPO)" usa as fontes do sistema, sem baixar nada.

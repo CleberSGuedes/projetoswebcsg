@@ -1,11 +1,12 @@
 <section class="personalizar-spo" id="personalizar-spo-panel">
-  <div class="page-header">
-    <div>
-      <div class="eyebrow">Ambiente administrativo</div>
+  <header class="page-header module-header">
+    <div class="module-header-copy">
+      <div class="module-eyebrow">Ambiente administrativo</div>
       <h1>{{ "Personalizar Temas SPO" if mostrar_temas else "Contrato Visual Protegido" }}</h1>
-      <p class="muted">{{ "Configure preferências visuais do ambiente." if mostrar_temas else "Gerencie presets versionados do contrato visual do SPO." }}</p>
+      <p>{{ "Configure preferências visuais do ambiente." if mostrar_temas else "Gerencie presets versionados do contrato visual do SPO." }}</p>
     </div>
-  </div>
+    <i class="bi bi-{{ 'brush' if mostrar_temas else 'shield-lock' }}" aria-hidden="true"></i>
+  </header>
 
   {% if mostrar_temas %}
   <div class="personalizar-grid" id="spo-personalizacao-comum">
@@ -63,11 +64,16 @@
             <i class="bi bi-layout-sidebar"></i>
             <span>
               <strong>Densidade visual</strong>
-              <small data-visual-pref-current="density">Confortável</small>
+              <small data-visual-pref-current="density">Automática (pela largura da tela)</small>
             </span>
             <i class="bi bi-chevron-down visual-pref-chevron"></i>
           </button>
           <div class="visual-pref-options" id="visual-pref-panel-density" data-visual-pref-panel="density" role="group" aria-label="Densidade visual" hidden>
+            {# [jean] densidade automática (feat/densidade-automatica, 2026-11-14) #}
+            <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="auto">
+              <i class="bi bi-aspect-ratio"></i>
+              <span><strong>Automática (padrão SPO)</strong><small>Confortável em telas largas, compacta em tablets e notebooks pequenos, ampla no celular. Acompanha o zoom e o tamanho da janela.</small></span>
+            </button>
             <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="comfortable">
               <i class="bi bi-layout-text-sidebar-reverse"></i>
               <span><strong>Confortável</strong><small>Espaço padrão de leitura.</small></span>
@@ -165,7 +171,7 @@
     <article class="card personalizar-card visual-preferences-card" id="spo-fontes-card">
       <div class="eyebrow">Leitura</div>
       <div class="card-title">Fontes e tamanho do texto</div>
-      <p class="muted">Escolha a fonte da interface, a das tabelas e dados, o tamanho do texto e o texto das tabelas dos relatórios. Vale só neste navegador.</p>
+      <p class="muted">Escolha a fonte da interface, a das tabelas e dados, o tamanho do texto e a densidade do texto. Vale só neste navegador.</p>
       <div class="visual-pref-groups">
         <div class="visual-pref-group" data-spo-font-group="ui">
           <button class="visual-pref-toggle" type="button" data-spo-font-toggle="ui" aria-expanded="false" aria-controls="spo-font-panel-ui">
@@ -192,6 +198,10 @@
             <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="source">
               <i class="bi bi-type" aria-hidden="true"></i>
               <span><strong>Source Sans 3</strong><small>Leitura confortável em textos longos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="mulish">
+              <i class="bi bi-type" aria-hidden="true"></i>
+              <span><strong>Mulish</strong><small>Formas arredondadas e abertas, leitura corrida suave. O I maiúsculo e o l minúsculo são parecidos.</small></span>
             </button>
           </div>
         </div>
@@ -221,6 +231,10 @@
               <i class="bi bi-code" aria-hidden="true"></i>
               <span><strong>Intel One Mono (padrão SPO)</strong><small>Monoespaçada feita para baixa visão; números alinhados; tabelas mais largas.</small></span>
             </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="atkinson-mono">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+              <span><strong>Atkinson Hyperlegible Mono</strong><small>Monoespaçada da família Atkinson (Braille Institute), feita para baixa visão; combina com a Atkinson na interface.</small></span>
+            </button>
           </div>
         </div>
         <div class="visual-pref-group" data-spo-font-group="size">
@@ -245,39 +259,228 @@
               <i class="bi bi-zoom-in" aria-hidden="true"></i>
               <span><strong>Maior (125%)</strong><small>Amplia mais; o menu e o topo não mudam.</small></span>
             </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="xlarge">
+              <i class="bi bi-zoom-in" aria-hidden="true"></i>
+              <span><strong>Muito grande (150%)</strong><small>Para baixa visão: amplia a área de conteúdo em 50%; as telas se reorganizam na largura menor.</small></span>
+            </button>
           </div>
         </div>
         <div class="visual-pref-group" data-spo-font-group="table">
           <button class="visual-pref-toggle" type="button" data-spo-font-toggle="table" aria-expanded="false" aria-controls="spo-font-panel-table">
             <i class="bi bi-layout-text-window" aria-hidden="true"></i>
             <span>
-              <strong>Texto das tabelas</strong>
-              <small data-spo-font-current="table">Legível (12 px, padrão SPO)</small>
+              <strong>Densidade do texto</strong>
+              <small data-spo-font-current="table">Intermediário (padrão SPO)</small>
             </span>
             <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
           </button>
-          <div class="visual-pref-options" id="spo-font-panel-table" data-spo-font-panel="table" role="group" aria-label="Texto das tabelas" hidden>
+          <div class="visual-pref-options" id="spo-font-panel-table" data-spo-font-panel="table" role="group" aria-label="Densidade do texto" hidden>
             <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="compact">
               <i class="bi bi-list" aria-hidden="true"></i>
-              <span><strong>Compacto (8 px)</strong><small>Mais linhas na tela; letra pequena.</small></span>
+              <span><strong>Compacto</strong><small>Mais informação na tela, letra menor: tabelas com 10 px.</small></span>
             </button>
             <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="medium">
               <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
-              <span><strong>Intermediário (10 px)</strong><small>Letra um pouco maior, do tamanho dos títulos das colunas.</small></span>
+              <span><strong>Intermediário (padrão SPO)</strong><small>Tabelas com 12 px e texto um passo abaixo do Legível; bom equilíbrio entre informação e leitura.</small></span>
             </button>
             <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="legible">
               <i class="bi bi-eye" aria-hidden="true"></i>
-              <span><strong>Legível (12 px, padrão SPO)</strong><small>Letra maior nas tabelas, filtros e paginação dos relatórios; linhas mais altas. Indicado para baixa visão.</small></span>
+              <span><strong>Legível</strong><small>Tabelas com 13 px e texto maior; linhas mais altas. Indicado para baixa visão (entra na "Leitura confortável" da Atkinson).</small></span>
+            </button>
+          </div>
+        </div>
+        {# [jean] Espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="line">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="line" aria-expanded="false" aria-controls="spo-font-panel-line">
+            <i class="bi bi-text-paragraph" aria-hidden="true"></i>
+            <span>
+              <strong>Espaçamento entre linhas</strong>
+              <small data-spo-font-current="line">Padrão (1,5)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-line" data-spo-font-panel="line" role="group" aria-label="Espaçamento entre linhas" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="default">
+              <i class="bi bi-text-left" aria-hidden="true"></i>
+              <span><strong>Padrão (1,5)</strong><small>Espaçamento padrão SPO no texto corrido.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="ample">
+              <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
+              <span><strong>Amplo (1,75)</strong><small>Mais espaço entre as linhas de descrições, ajudas e avisos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="larger">
+              <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+              <span><strong>Mais amplo (2,0)</strong><small>O maior espaçamento; indicado para leitura com baixa visão ou dislexia. Títulos e tabelas não mudam.</small></span>
+            </button>
+          </div>
+        </div>
+        {# [jean] Leitura: largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8) #}
+        <div class="visual-pref-group" data-spo-font-group="reading">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="reading" aria-expanded="false" aria-controls="spo-font-panel-reading">
+            <i class="bi bi-book" aria-hidden="true"></i>
+            <span>
+              <strong>Leitura</strong>
+              <small data-spo-font-current="reading">Padrão SPO (largura livre)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-reading" data-spo-font-panel="reading" role="group" aria-label="Leitura" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="default">
+              <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+              <span><strong>Padrão SPO (largura livre)</strong><small>O texto ocupa toda a largura do cartão.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="medium">
+              <i class="bi bi-text-center" aria-hidden="true"></i>
+              <span><strong>Intermediário (72ch)</strong><small>Linhas mais curtas e um espaço de uma linha entre os parágrafos.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="strict">
+              <i class="bi bi-book" aria-hidden="true"></i>
+              <span><strong>Estrito (WCAG AAA)</strong><small>No máximo 80 caracteres por linha e espaço de 1,5 linha entre os parágrafos. Indicado para quem perde a linha ao ler.</small></span>
             </button>
           </div>
         </div>
       </div>
-      <div class="spo-fontes-amostra" aria-label="Amostra das fontes escolhidas">
-        <p>Amostra: Programação PTA 2027 — ação, produto e meta (Il1 O0 ç ã é).</p>
-        <table><caption>Tabela de relatório (segue "Texto das tabelas")</caption><tbody>
-          <tr><td>Crédito autorizado</td><td>5.914.425.031,88</td></tr>
-          <tr><td>Saldo de dotação</td><td>2.886.249.455,56</td></tr>
-        </tbody></table>
+      <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+    </article>
+
+    {# [jean] Visão e cores (feat/graficos-daltonismo, 2026-11-14): opções para quem tem daltonismo ou baixa visão #}
+    <article class="card personalizar-card visual-preferences-card" id="spo-visao-card">
+      <div class="eyebrow">Acessibilidade</div>
+      <div class="card-title">Visão e cores</div>
+      <p class="muted">Ajustes para daltonismo e baixa visão. Vale só neste navegador. O Windows também tem filtros de cor e lupa para todos os programas (Configurações → Acessibilidade).</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-spo-font-group="cvd">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="cvd" aria-expanded="false" aria-controls="spo-font-panel-cvd">
+            <i class="bi bi-palette" aria-hidden="true"></i>
+            <span>
+              <strong>Cores dos gráficos</strong>
+              <small data-spo-font-current="cvd">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-cvd" data-spo-font-panel="cvd" role="group" aria-label="Cores dos gráficos" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="default">
+              <i class="bi bi-bar-chart" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Cores do tema, com a cor de destaque na primeira série.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="safe">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+              <span><strong>Seguras para daltonismo (paleta Okabe-Ito)</strong><small>Paleta de Okabe e Ito (Universidade de Tóquio, 2008), que se distingue nos três tipos de daltonismo (protanopia, deuteranopia e tritanopia) e nas formas mais leves. Listras e pontos nas barras e fatias e marcadores nas linhas ajudam também quem não distingue cor nenhuma. As tabelas coloridas seguem as mesmas cores.</small></span>
+            </button>
+          </div>
+        </div>
+        {# [jean] Realce do foco e links sublinhados (feat/foco-e-links, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="focus">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="focus" aria-expanded="false" aria-controls="spo-font-panel-focus">
+            <i class="bi bi-bullseye" aria-hidden="true"></i>
+            <span>
+              <strong>Realce do foco</strong>
+              <small data-spo-font-current="focus">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-focus" data-spo-font-panel="focus" role="group" aria-label="Realce do foco" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="default">
+              <i class="bi bi-circle" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Anel de 3 px na cor de destaque em volta do item escolhido pelo teclado.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="strong">
+              <i class="bi bi-bullseye" aria-hidden="true"></i>
+              <span><strong>Reforçado (anel duplo)</strong><small>Anel mais grosso, com borda clara e escura, visível sobre qualquer fundo. Indicado para baixa visão e para quem navega pelo teclado.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="links">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="links" aria-expanded="false" aria-controls="spo-font-panel-links">
+            <i class="bi bi-link-45deg" aria-hidden="true"></i>
+            <span>
+              <strong>Links</strong>
+              <small data-spo-font-current="links">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-links" data-spo-font-panel="links" role="group" aria-label="Links" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="default">
+              <i class="bi bi-link" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Links na cor de destaque.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="underline">
+              <i class="bi bi-type-underline" aria-hidden="true"></i>
+              <span><strong>Sempre sublinhados</strong><small>Os links do texto ficam sublinhados, para não depender só da cor. Menu e botões não mudam.</small></span>
+            </button>
+          </div>
+        </div>
+        {# [jean] Brilho e movimento (feat/visao-150-brilho-movimento, 2026-11-14) #}
+        <div class="visual-pref-group" data-spo-font-group="brightness">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="brightness" aria-expanded="false" aria-controls="spo-font-panel-brightness">
+            <i class="bi bi-brightness-high" aria-hidden="true"></i>
+            <span>
+              <strong>Brilho do tema claro</strong>
+              <small data-spo-font-current="brightness">Padrão SPO</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-brightness" data-spo-font-panel="brightness" role="group" aria-label="Brilho do tema claro" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="default">
+              <i class="bi bi-brightness-high" aria-hidden="true"></i>
+              <span><strong>Padrão SPO</strong><small>Cartões brancos sobre fundo cinza-claro.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="reduced">
+              <i class="bi bi-brightness-low" aria-hidden="true"></i>
+              <span><strong>Reduzido</strong><small>Cartões em cinza-claro, com menos luz, para quem se incomoda com o branco e não quer o tema escuro. O texto continua com o mesmo destaque. Não muda o tema escuro.</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="visual-pref-group" data-spo-font-group="motion">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="motion" aria-expanded="false" aria-controls="spo-font-panel-motion">
+            <i class="bi bi-pause-circle" aria-hidden="true"></i>
+            <span>
+              <strong>Movimento</strong>
+              <small data-spo-font-current="motion">Automático (segue o sistema)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-motion" data-spo-font-panel="motion" role="group" aria-label="Movimento" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="auto">
+              <i class="bi bi-gear" aria-hidden="true"></i>
+              <span><strong>Automático (segue o sistema)</strong><small>Reduz as animações quando o computador pede "reduzir movimento".</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="reduce">
+              <i class="bi bi-pause-circle" aria-hidden="true"></i>
+              <span><strong>Reduzir sempre</strong><small>Sem animações, transições nem rolagem suave no SPO, mesmo que o computador não peça. Indicado para quem sente tontura ou se distrai com movimento.</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+    </article>
+
+    {# [jean] Teclado (feat/atalhos-teclado, 2026-11-14): ajuda dos atalhos e atalhos de uma tecla (WCAG 2.1.4) #}
+    <article class="card personalizar-card visual-preferences-card" id="spo-teclado-card">
+      <div class="eyebrow">Acessibilidade</div>
+      <div class="card-title">Teclado</div>
+      <p class="muted">O SPO pode ser usado só pelo teclado. <a href="#" data-spo-atalhos>Ver os atalhos do teclado</a> (ou tecle <kbd>?</kbd>). <kbd>Alt</kbd> + <kbd>M</kbd> volta ao menu, e <kbd>Ctrl</kbd> + <kbd>K</kbd> busca uma tela.</p>
+      <div class="visual-pref-groups">
+        <div class="visual-pref-group" data-spo-font-group="keys">
+          <button class="visual-pref-toggle" type="button" data-spo-font-toggle="keys" aria-expanded="false" aria-controls="spo-font-panel-keys">
+            <i class="bi bi-keyboard" aria-hidden="true"></i>
+            <span>
+              <strong>Atalhos de uma tecla</strong>
+              <small data-spo-font-current="keys">Ligados (padrão SPO)</small>
+            </span>
+            <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="visual-pref-options" id="spo-font-panel-keys" data-spo-font-panel="keys" role="group" aria-label="Atalhos de uma tecla" hidden>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="keys" data-spo-font-value="on">
+              <i class="bi bi-keyboard" aria-hidden="true"></i>
+              <span><strong>Ligados (padrão SPO)</strong><small>"/" abre a busca de telas e "?" abre a ajuda do teclado, fora dos campos de texto.</small></span>
+            </button>
+            <button type="button" class="visual-pref-option" data-spo-font-pref="keys" data-spo-font-value="off">
+              <i class="bi bi-slash-circle" aria-hidden="true"></i>
+              <span><strong>Desligados</strong><small>Para quem usa comando de voz ou digita sem querer fora dos campos. Ctrl+K (busca) e Alt+M (menu) continuam valendo.</small></span>
+            </button>
+          </div>
+        </div>
       </div>
       <p class="spo-fontes-status" role="status" aria-live="polite"></p>
     </article>
@@ -306,6 +509,70 @@
         <button class="secondary-button" type="button" id="spo-theme-reset">Restaurar padrão do laboratório</button>
       </div>
     </article>
+
+    {# [jean] Prévia das fontes e tabelas (fix/amostra-fontes, 2026-11-15; decisão do dev. Jean): a amostra
+       saiu do cartão "Fontes e tamanho do texto" e ganhou cartão próprio, ao lado da prévia dos componentes;
+       usa a mesma borda dela (as variáveis --spo-preview-* vêm da classe personalizar-preview do cartão) #}
+    <article class="card personalizar-card personalizar-preview" id="spo-previa-fontes">
+      <div class="eyebrow">Prévia</div>
+      <div class="card-title">Fontes e tabelas</div>
+      <div class="spo-fontes-amostra preview-surface" role="group" aria-label="Amostra das fontes escolhidas">
+        <div class="spo-amostra-sobretitulo">Amostra · Planejamento</div>
+        <div class="spo-amostra-titulo">Programação PTA/OpR</div>
+        <p class="spo-amostra-texto">Ação, produto e meta da programação anual. Compare as letras:</p>
+        <p class="spo-amostra-letras">Il1 O0 — ç ã é</p>
+        <table>
+          <caption>Tabela de relatório<br>(segue a "Densidade do texto")</caption>
+          <thead><tr><th scope="col">Item</th><th scope="col">Valor (R$)</th></tr></thead>
+          <tbody>
+            <tr><td>Crédito</td><td>5.914.425.031,88</td></tr>
+            <tr><td>Empenhado</td><td>3.028.175.576,32</td></tr>
+            <tr><td>Saldo</td><td>2.886.249.455,56</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    {# [jean] Declaração de acessibilidade do SPO (feat/declaracao-acessibilidade, 2026-11-14).
+       Só o que foi medido; "parcial" e "em avaliação" quando ainda não foi. Atualizar a cada avaliação. #}
+    <article class="card personalizar-card spo-acessibilidade" id="spo-acessibilidade" aria-labelledby="spo-acessibilidade-titulo">
+      <div class="eyebrow">Declaração</div>
+      <h2 class="card-title" id="spo-acessibilidade-titulo" tabindex="-1">Acessibilidade do SPO</h2>
+      <p>O SPO segue o padrão <a href="#" data-spo-padrao aria-haspopup="dialog">SPO-AA+</a>: as <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/" target="_blank" rel="noopener noreferrer" title="Diretrizes de Acessibilidade para Conteúdo Web 2.2, tradução oficial do W3C Brasil"><abbr title="Web Content Accessibility Guidelines">WCAG</abbr> 2.2<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a> no nível <strong>AA</strong> como meta mínima, com critérios do nível <strong>AAA</strong> oferecidos como opção, e as recomendações do <a href="https://emag.governoeletronico.gov.br/" target="_blank" rel="noopener noreferrer"><abbr title="Modelo de Acessibilidade em Governo Eletrônico">eMAG</abbr><span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, em atenção à <a href="https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13146.htm" target="_blank" rel="noopener noreferrer">Lei Brasileira de Inclusão (Lei 13.146/2015)<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>. Esta declaração descreve o que foi verificado; não é uma certificação.</p>
+      <div class="spo-acessibilidade-grade">
+        <section aria-labelledby="spo-a11y-atendido">
+          <h3 id="spo-a11y-atendido"><i class="bi bi-check-circle" aria-hidden="true"></i> Atendido</h3>
+          <ul>
+            <li>Contraste de textos e de componentes (WCAG <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#contrast-minimum" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.3">1.4.3<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a> e <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#non-text-contrast" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.11">1.4.11<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), nos temas claro e escuro e nas 8 cores de destaque.</li>
+            <li>Foco visível em todos os controles e navegação completa pelo teclado (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#keyboard" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.1.1">2.1.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#focus-visible" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.4.7">2.4.7<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>); veja os <a href="#" data-spo-atalhos>atalhos do teclado</a>.</li>
+            <li>Gráficos com resumo para leitor de tela e tabela com os dados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#non-text-content" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.1.1">1.1.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
+            <li>Telas que se reorganizam em celular e com zoom de 200%, sem rolagem lateral (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#resize-text" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.4">1.4.4<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#reflow" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.10">1.4.10<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
+            <li>Espaçamento de texto ajustável sem perda de conteúdo (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#text-spacing" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.12">1.4.12<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
+            <li>Alvos de toque de 44 px em telas de toque (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#target-size-minimum" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.5.8">2.5.8<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>; meta <a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#target-size-enhanced" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.5.5">2.5.5<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>).</li>
+          </ul>
+        </section>
+        <section aria-labelledby="spo-a11y-opcao">
+          <h3 id="spo-a11y-opcao"><i class="bi bi-sliders" aria-hidden="true"></i> Atendido por opção (nesta página)</h3>
+          <ul>
+            <li>Leitura com no máximo 80 caracteres por linha e espaço entre parágrafos (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#visual-presentation" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.8">1.4.8<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Leitura → Estrito".</li>
+            <li>Foco reforçado, com anel duplo (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#focus-appearance" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.4.13">2.4.13<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Realce do foco".</li>
+            <li>Sem animações (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#animation-from-interactions" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.3.3">2.3.3<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>, AAA): "Movimento → Reduzir sempre".</li>
+            <li>Atalhos de uma tecla só podem ser desligados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#character-key-shortcuts" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 2.1.4">2.1.4<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>): "Teclado → Atalhos de uma tecla".</li>
+            <li>Links sempre sublinhados (<a href="https://www.w3c.br/traducoes/wcag/wcag22-pt-BR/#use-of-color" target="_blank" rel="noopener noreferrer" title="WCAG 2.2, critério 1.4.1">1.4.1<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>): "Links".</li>
+            <li>Além da norma: cores dos gráficos para daltonismo (paleta <a href="https://jfly.uni-koeln.de/color/" target="_blank" rel="noopener noreferrer" title="Color Universal Design, de Masataka Okabe e Kei Ito">Okabe-Ito<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), texto até 150%, entrelinha até 2,0, fontes legíveis (<a href="https://www.brailleinstitute.org/freefont/" target="_blank" rel="noopener noreferrer" title="Braille Institute">Atkinson Hyperlegible<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>), brilho reduzido e densidade automática.</li>
+          </ul>
+        </section>
+        <section aria-labelledby="spo-a11y-parcial">
+          <h3 id="spo-a11y-parcial"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Parcial ou em avaliação</h3>
+          <ul>
+            <li>Uso com leitor de tela (NVDA, Narrador), nos navegadores Firefox e Safari e com as cores forçadas do Windows: em teste com os colegas na homologação.</li>
+            <li>Mockup "Programação PTA/OpR": contraste, tamanho de texto e dimensões no padrão (medidos nas 12 vistas, nos 8 destaques, claro e escuro) e as opções desta página, inclusive a densidade, menos o estilo dos cartões e cores para daltonismo nos diagramas (imagens prontas). Teclado e leitor de tela dentro dele ainda não foram avaliados.</li>
+            <li>Listas de seleção com textos longos podem aparecer cortadas no celular com o texto ampliado (limite do controle do navegador).</li>
+          </ul>
+        </section>
+      </div>
+      <p class="muted spo-acessibilidade-rodape">Os links abrem em nova aba; os critérios levam à tradução oficial das WCAG 2.2 do W3C Brasil. Como foi avaliado: bateria automática em 66 telas, 4 perfis de preferências e 3 larguras de tela (celular, monitor em retrato e notebook), em 14/11/2026, repetida em 15/11/2026 com o tema escuro, o alto contraste dos gráficos e o brilho reduzido; e teste com os colegas na homologação. Encontrou uma barreira? Escreva para <a href="mailto:nger@edu.mt.gov.br">nger@edu.mt.gov.br</a>, dizendo a tela, o que tentou fazer e o recurso que usa (leitor de tela, zoom, teclado…).</p>
+    </article>
   </div>
 
   {% endif %}
@@ -319,6 +586,7 @@
         <div class="card-title">Presets gerenciais do layout</div>
         <p class="muted">Área controlada exclusivamente pelo Painel de Permissões. Use para testar presets versionados sem alterar o banco de dados.</p>
         <p class="muted contract-local-note">Catálogo local em JavaScript/localStorage para testes. A migração para banco estruturado fica reservada para a próxima etapa de governança.</p>
+        <p class="muted contract-padrao-note">Regras de acessibilidade e de visual que todo preset respeita: <a href="#" data-spo-padrao="tecnico" aria-haspopup="dialog">documento técnico do padrão SPO-AA+</a>.</p>
       </div>
       <span class="contract-version-pill">v2026.07</span>
     </div>

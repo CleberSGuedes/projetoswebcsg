@@ -96,13 +96,14 @@
     preview: "pré-visualizou",
   });
   const COMMON_VISUAL_DEFAULTS = Object.freeze({
-    density: "comfortable",
+    density: "auto", // [jean] densidade automática (feat/densidade-automatica): era "comfortable"
     contrast: "standard",
     cards: "soft",
     diagrams: "auto",
   });
   const COMMON_VISUAL_OPTIONS = Object.freeze({
     density: {
+      auto: "automática (pela largura da tela)", // [jean] feat/densidade-automatica
       comfortable: "confortável",
       compact: "compacta",
       spacious: "ampla",
@@ -857,7 +858,9 @@
 
   function applyCommonVisualPreferences(preferences, persist = false) {
     const current = normalizeCommonVisualPreferences(preferences);
-    document.body.dataset.visualDensity = current.density;
+    // [jean] "auto" vira confortável/compacta/ampla pela largura da janela (initDensidadeAutomatica)
+    document.body.dataset.visualDensityPref = current.density;
+    document.body.dataset.visualDensity = typeof window.spoResolverDensidade === "function" ? window.spoResolverDensidade(current.density) : current.density;
     document.body.dataset.visualContrast = current.contrast;
     document.body.dataset.visualCards = current.cards;
     document.body.dataset.visualDiagrams = current.diagrams;
@@ -19910,7 +19913,7 @@
       }
       // Mesma paleta fixa de groupColors usada no grafico de pizza (aba
       // Graficos) - o grupo de despesa tem sempre a mesma cor no app inteiro.
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
 
       legendEl.innerHTML = groups
         .map(
@@ -19985,7 +19988,7 @@
       // groupColors do grupo-pai nas sub-linhas (mais clara via opacidade) -
       // reforca visualmente a hierarquia grupo -> tipificacao.
       const max = groups[0].valor;
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
       const nameOf = (label) => (label.includes(" - ") ? label.split(" - ").slice(1).join(" - ") : label);
 
       const rankRow = (label, valor, color, isChild) => {
@@ -20226,7 +20229,7 @@
         return;
       }
       const sumByYear = (rows, year) => sum(rows.filter((row) => row.exercicio === year));
-      const colorFor = (label, index) => groupColors[codeOf(label)] || oldChartPalette[index % oldChartPalette.length];
+      const colorFor = (label, index) => { const cores = getTetoChartColors(); return cores.groupColors[codeOf(label)] || cores.palette[index % cores.palette.length]; }; // [jean] mesma paleta do tema da aba Graficos (fix/teto-tabelas-cores-tema)
       const pctChange = (change) => `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2).replace(".", ",")}%`;
 
       const deltaChip = (curr, prevValue) => {
@@ -27719,17 +27722,52 @@
 (function initFontesPersonalizar() {
   const STORAGE_KEY = "spo-font-preferences";
   const OPTIONS = Object.freeze({
-    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3" },
-    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)" },
-    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)" },
-    table: { compact: "Compacto (8 px)", medium: "Intermediário (10 px)", legible: "Legível (12 px, padrão SPO)" },
+    ui: { classic: "Do sistema", inter: "Inter (padrão SPO)", atkinson: "Atkinson Hyperlegible", source: "Source Sans 3", mulish: "Mulish" },
+    data: { classic: "Do sistema", inter: "Inter (números alinhados)", "plex-sans": "IBM Plex Sans", "intel-mono": "Intel One Mono (padrão SPO)", "atkinson-mono": "Atkinson Hyperlegible Mono" },
+    size: { default: "Padrão (100%)", large: "Grande (112%)", larger: "Maior (125%)", xlarge: "Muito grande (150%)" },
+    table: { compact: "Compacto", medium: "Intermediário (padrão SPO)", legible: "Legível" },
+    // espaçamento entre linhas do texto corrido (feat/entrelinhas-personalizar, 2026-11-14)
+    line: { default: "Padrão (1,5)", ample: "Amplo (1,75)", larger: "Mais amplo (2,0)" },
+    // largura das linhas e espaço entre parágrafos (feat/opcao-leitura, 2026-11-14; WCAG 1.4.8)
+    reading: { default: "Padrão SPO (largura livre)", medium: "Intermediário (72ch)", strict: "Estrito (WCAG AAA, até 80 caracteres)" },
+    // cartão "Visão e cores" (feat/graficos-daltonismo, 2026-11-14): cores dos gráficos
+    cvd: { default: "Padrão SPO", safe: "Seguras para daltonismo (Okabe-Ito)" },
+    // feat/foco-e-links (2026-11-14): realce do foco e links sublinhados
+    focus: { default: "Padrão SPO", strong: "Reforçado (anel duplo)" },
+    links: { default: "Padrão SPO", underline: "Sempre sublinhados" },
+    // feat/visao-150-brilho-movimento (2026-11-14): brilho do tema claro e movimento
+    brightness: { default: "Padrão SPO", reduced: "Reduzido" },
+    motion: { auto: "Automático (segue o sistema)", reduce: "Reduzir sempre" },
+    // cartão "Teclado" (feat/atalhos-teclado, 2026-11-14; WCAG 2.1.4): atalhos de uma tecla só ("/" e "?")
+    keys: { on: "Ligados (padrão SPO)", off: "Desligados" },
   });
   // padrão SPO (feat/padrao-fontes, 2026-11-13): Inter na interface, Intel One Mono nos dados, tabelas a 12 px.
   // Quem já salvou uma escolha no navegador continua com ela.
-  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "legible" });
-  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText" });
+  const DEFAULTS = Object.freeze({ ui: "inter", data: "intel-mono", size: "default", table: "medium", line: "default", reading: "default", cvd: "default", focus: "default", links: "default", brightness: "default", motion: "auto", keys: "on" });
+  const ATTRS = Object.freeze({ ui: "spoFontUi", data: "spoFontData", size: "spoTextSize", table: "spoTableText", line: "spoLineHeight", reading: "spoReading", cvd: "spoCvd", focus: "spoFocus", links: "spoLinks", brightness: "spoBrightness", motion: "spoMotion", keys: "spoKeys" });
+
+  // [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15): a escolha antiga "Texto das tabelas"
+  // gravada vira a densidade de MESMO tamanho nas tabelas, uma vez só: Legível antigo (12 px) →
+  // Intermediário (12 px, o novo padrão SPO); Intermediário antigo (10 px) → Compacto (10 px); Compacto
+  // antigo (8 px) → Compacto (10 px). Marca "spo-densidade-v2" para não converter de novo.
+  const MARCA_DENSIDADE = "spo-densidade-v2";
+  const DENSIDADE_ANTIGA = { legible: "medium", medium: "compact", compact: "compact" };
+  function converterDensidade() {
+    try {
+      if (localStorage.getItem(MARCA_DENSIDADE)) return;
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved && DENSIDADE_ANTIGA[saved.table]) {
+        saved.table = DENSIDADE_ANTIGA[saved.table];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      }
+      localStorage.setItem(MARCA_DENSIDADE, "1");
+    } catch (err) {
+      /* armazenamento bloqueado: nada a converter */
+    }
+  }
 
   function read() {
+    converterDensidade();
     const prefs = { ...DEFAULTS };
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -27781,16 +27819,37 @@
     });
   }
 
+  // cartões que usam estas preferências: "Fontes e tamanho do texto", "Visão e cores" e "Teclado"
+  const CARDS = "#spo-fontes-card, #spo-visao-card, #spo-teclado-card";
   function prepareCard() {
-    const card = document.getElementById("spo-fontes-card");
-    if (!card || card.dataset.spoFontReady === "1") return;
-    card.dataset.spoFontReady = "1";
-    sync(card);
-    setOpen(card, "");
+    document.querySelectorAll(CARDS).forEach((card) => {
+      if (card.dataset.spoFontReady === "1") return;
+      card.dataset.spoFontReady = "1";
+      sync(card);
+      setOpen(card, "");
+    });
   }
 
   document.addEventListener("click", (ev) => {
-    const card = ev.target.closest && ev.target.closest("#spo-fontes-card");
+    // "Restaurar padrão do laboratório" (spo-theme-reset) volta tema, destaque e preferências
+    // visuais; as fontes ficam em chave própria e também voltam ao padrão SPO (fix/restaurar-fontes)
+    if (ev.target.closest && ev.target.closest("#spo-theme-reset")) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (err) {
+        /* armazenamento bloqueado: vale só nesta página */
+      }
+      apply({ ...DEFAULTS });
+      document.querySelectorAll(CARDS).forEach((c) => {
+        sync(c);
+        setOpen(c, "");
+        const status = c.querySelector(".spo-fontes-status");
+        if (status) status.textContent = { "spo-visao-card": "Cores de volta ao padrão SPO.", "spo-teclado-card": "Teclado de volta ao padrão SPO." }[c.id] || "Fontes e tamanhos de volta ao padrão SPO.";
+      });
+      avisarGraficos();
+      return;
+    }
+    const card = ev.target.closest && ev.target.closest(CARDS);
     if (!card) return;
     const toggle = ev.target.closest("[data-spo-font-toggle]");
     if (toggle) {
@@ -27807,17 +27866,23 @@
     const prefs = { ...read(), [key]: value };
     save(prefs);
     apply(prefs);
+    if (key === "cvd") avisarGraficos();
     sync(card);
     setOpen(card, "");
     const status = card.querySelector(".spo-fontes-status");
     if (status) status.textContent = `"${OPTIONS[key][value]}" aplicada neste navegador.`;
   });
 
+  // gráficos e tabelas coloridas por grupo redesenham com a paleta nova (o Teto escuta este evento)
+  function avisarGraficos() {
+    document.dispatchEvent(new CustomEvent("spo-common-visual-change", { detail: {} }));
+  }
+
   window.addEventListener("storage", (ev) => {
     if (ev.key !== STORAGE_KEY) return;
     apply(read());
-    const card = document.getElementById("spo-fontes-card");
-    if (card) sync(card);
+    document.querySelectorAll(CARDS).forEach((c) => sync(c));
+    avisarGraficos();
   });
 
   apply(read());
@@ -27838,12 +27903,43 @@
   if (!window.matchMedia || !Element.prototype.scrollIntoView) return;
   const consulta = window.matchMedia("(prefers-reduced-motion: reduce)");
   const original = Element.prototype.scrollIntoView;
+  // [jean] fix/movimento-reduzido (2026-11-15; pedido do dev. Jean): o salto imediato trocava a tela
+  // de uma vez ("flash"). Como no "Reduzir movimento" do iPhone/Mac, a chegada esmaece (opacidade
+  // de 0,35 a 1 em 0,22 s, sem deslocamento), só quando a página de fato se moveu.
+  const areaPrincipal = () => document.getElementById("content-area") || document.querySelector(".main") || document.body;
+  const esmaecer = (el) => {
+    if (!el || typeof el.animate !== "function") return;
+    try { el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" }); } catch (err) { /* sem Web Animations */ }
+  };
   Element.prototype.scrollIntoView = function scrollIntoViewRespeitandoMovimento(arg) {
-    if (consulta.matches && arg && typeof arg === "object" && arg.behavior === "smooth") {
-      return original.call(this, { ...arg, behavior: "auto" });
+    const reduzir = consulta.matches || (document.body && document.body.dataset.spoMotion === "reduce"); // [jean] opção do Personalizar
+    if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      // "instant": "auto" seguiria o scroll-behavior do CSS, e o <html> do SPO rola suave
+      const antes = this.getBoundingClientRect().top;
+      const resultado = original.call(this, { ...arg, behavior: "instant" });
+      if (Math.abs(this.getBoundingClientRect().top - antes) > 2) esmaecer(this);
+      return resultado;
     }
     return original.apply(this, arguments);
   };
+  // [jean] fix/movimento-reduzido (2026-11-15): scrollTo/scrollBy({ behavior: "smooth" }) também
+  // (a edição de Etapa rolava suave até o topo mesmo com "Reduzir sempre"); vale para chamadas futuras.
+  const imediata = (fn) => function rolagemRespeitandoMovimento(arg) {
+    const reduzir = consulta.matches || (document.body && document.body.dataset.spoMotion === "reduce");
+    if (reduzir && arg && typeof arg === "object" && arg.behavior === "smooth") {
+      const pagina = this === window || this === document.documentElement || this === document.body || this === document.scrollingElement;
+      const caixa = pagina ? (document.scrollingElement || document.documentElement) : this;
+      const antes = [caixa.scrollTop, caixa.scrollLeft];
+      const resultado = fn.call(this, { ...arg, behavior: "instant" });
+      if (Math.abs(caixa.scrollTop - antes[0]) > 2 || Math.abs(caixa.scrollLeft - antes[1]) > 2) esmaecer(pagina ? areaPrincipal() : this);
+      return resultado;
+    }
+    return fn.apply(this, arguments);
+  };
+  ["scrollTo", "scroll", "scrollBy"].forEach((nome) => {
+    if (typeof window[nome] === "function") window[nome] = imediata(window[nome]);
+    if (typeof Element.prototype[nome] === "function") Element.prototype[nome] = imediata(Element.prototype[nome]);
+  });
 })();
 
 /* ==========================================================================
@@ -28086,6 +28182,23 @@
   function botaoFechar(dlg) {
     return [...dlg.querySelectorAll("button")].find((b) => /fechar|cancelar|^não$|^nao$/i.test((b.textContent || b.getAttribute("aria-label") || "").trim()) || /close/i.test(b.id || ""));
   }
+  // [jean] fix/busca-sobre-aviso: a busca de telas, a ajuda dos atalhos e "O padrão SPO-AA+"
+  // (.spo-busca-fundo) abrem por cima dos avisos. Enquanto uma delas estiver aberta, o aviso de
+  // baixo não toma o foco (o "Alerta" da Início aparece depois de a página carregar e roubava o
+  // foco da busca aberta com Ctrl+K) nem as teclas (o Esc fechava o aviso escondido, e não a
+  // janela da frente). Fechada a janela, o aviso volta a prender o Tab e a fechar com Esc.
+  const janelaPorCima = () => [...document.querySelectorAll(".spo-busca-fundo")].some((j) => !j.hidden);
+  // ao fechar uma dessas janelas com um aviso ainda aberto, o foco vai para o aviso (e não para
+  // quem abriu a janela, que fica atrás dele); devolve true quando cuidou do foco
+  window.spoFocarAvisoAberto = function spoFocarAvisoAberto() {
+    if (janelaPorCima()) return false;
+    const aviso = [...document.querySelectorAll(".modal-overlay[data-spo-dialogo]")].filter(visivel).pop();
+    if (!aviso) return false;
+    const alvo = [...aviso.querySelectorAll(FOCAVEIS)].find(visivel);
+    if (!alvo) return false;
+    alvo.focus({ preventScroll: true });
+    return true;
+  };
   function prepararModais() {
     document.querySelectorAll(".modal-overlay").forEach((ov) => {
       const aberto = visivel(ov);
@@ -28097,8 +28210,9 @@
         if (t) { if (!t.id) t.id = `spo-dialogo-titulo-${Date.now()}`; ov.setAttribute("aria-labelledby", t.id); }
         ov.__spoVoltar = document.activeElement;
         const primeiro = [...ov.querySelectorAll(FOCAVEIS)].find(visivel);
-        if (primeiro) primeiro.focus({ preventScroll: true });
+        if (primeiro && !janelaPorCima()) primeiro.focus({ preventScroll: true });
         ov.__spoTeclas = (ev) => {
+          if (janelaPorCima()) return;
           if (ev.key === "Escape") { const f = botaoFechar(ov); if (f) { ev.preventDefault(); f.click(); } return; }
           if (ev.key !== "Tab") return;
           const itens = [...ov.querySelectorAll(FOCAVEIS)].filter(visivel);
@@ -28229,7 +28343,27 @@
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const distancia = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
 
-  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+  // [jean] Cores seguras para daltonismo (feat/graficos-daltonismo, 2026-11-14): paleta Okabe-Ito
+  // (Okabe & Ito, 2008), distinta nos três tipos (protanopia, deuteranopia, tritanopia). No escuro,
+  // a ordem troca o azul-escuro pelo azul-claro e o preto pelo branco. Positivo/negativo: azul ×
+  // laranja (nunca verde × vermelho). As barras e fatias ganham contorno na cor do texto (o
+  // contorno é que garante 3:1 com o fundo, WCAG 1.4.11) e padrões (initGraficosEscala).
+  const PALETA_DALTONISMO = {
+    claro: ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#56B4E9", "#CC79A7", "#F0E442", "#000000"],
+    escuro: ["#56B4E9", "#E69F00", "#009E73", "#D55E00", "#0072B2", "#CC79A7", "#F0E442", "#FFFFFF"],
+  };
+  window.spoPaletaDaltonismo = PALETA_DALTONISMO;
+  const comDaltonismo = (tema, modo) => {
+    if (document.body.dataset.spoCvd !== "safe" || modo === "system") return tema;
+    const escuro = modo === "dark" || modo === "highDark" || modo === "high";
+    const pal = escuro ? PALETA_DALTONISMO.escuro : PALETA_DALTONISMO.claro;
+    return { ...tema, palette: pal.slice(), positive: pal[0], negative: escuro ? "#E69F00" : "#D55E00", cumulative: pal[5], line: pal[5] };
+  };
+  const temaBase = (tema, modo) => {
+    // [jean] alto contraste escuro (fix/alto-contraste-escuro-fundo, 2026-11-14): fundo do cartão
+    // (transparente) no lugar do azul-marinho fixo; cores das séries, texto e moldura continuam as do
+    // alto contraste (séries ≥ 5,77:1 e texto 14,8:1 sobre o cartão #242424).
+    if (modo === "highDark") return { ...tema, panel: "rgba(0,0,0,0)", plot: "rgba(0,0,0,0)" };
     if (modo !== "light" && modo !== "dark") return tema;
     const css = getComputedStyle(document.body);
     const bruto = (css.getPropertyValue(modo === "dark" && document.body.classList.contains("theme-dark")
@@ -28253,6 +28387,9 @@
       focus: destaque,
       palette: [destaque, ...resto],
     };
+  };
+  window.spoTemaDiagramaComDestaque = function (tema, modo) {
+    return comDaltonismo(temaBase(tema, modo), modo);
   };
 })();
 
@@ -28344,4 +28481,1463 @@
     ev.preventDefault();
     focar(alvo);
   });
+})();
+
+/* ==========================================================================
+   [jean] Gráficos na escala tipográfica e legíveis em tela estreita
+   (fix/graficos-celular-escala, 2026-11-14; padrão spo-aa+ §2.2, §3.5; WCAG 1.4.12)
+   Os gráficos (Plotly) usavam Arial 11 px, legenda horizontal e margens fixas:
+   - fora da escala (mínimo 12 px) e fora da fonte escolhida no Personalizar;
+   - rótulos do 2º eixo (20%…100%) saindo do gráfico (margem direita fixa);
+   - legenda horizontal que se sobrepõe com espaçamento de texto forçado (1.4.12),
+     porque o Plotly mede o texto ao desenhar.
+   Este bloco envolve Plotly.react/newPlot e ajusta o layout de qualquer gráfico
+   antes de desenhar, sem mudar o código de cada gráfico:
+   - fonte da interface (a do <body>), mínimo 12 px no texto, eixos, legenda e notas;
+   - eixos com automargin (nenhum rótulo sai do gráfico);
+   - legenda vertical no pé do gráfico (um item por linha: nunca lado a lado);
+   - gráfico estreito (≤ 520 px): margens laterais mínimas, eixo X inclinado e
+     nomes longos da legenda quebrados entre palavras; a pizza tem automargin
+     (rótulos de fora não são cortados).
+   Ao redimensionar, o gráfico que muda de faixa (estreito/largo) é redesenhado.
+   ========================================================================== */
+(function initGraficosEscala() {
+  if (!window.Plotly || window.Plotly.__spoEscala) return;
+  const P = window.Plotly;
+  const MIN = 12;
+  const ESTREITO = 520;
+  const elDe = (gd) => (typeof gd === "string" ? document.getElementById(gd) : gd);
+  const fonteUi = () => {
+    try {
+      return getComputedStyle(document.body).fontFamily || "sans-serif";
+    } catch (err) {
+      return "sans-serif";
+    }
+  };
+  // [jean] feat/densidade-graficos (2026-11-15; padrão SPO-AA+ v4 §2.2.1): o texto dos gráficos segue a
+  // "Densidade do texto" — tamanho base = --spo-fs-dado (Compacto 10, Intermediário 12, Legível 13 px);
+  // texto que o gráfico já pede maior que 12 px sobe ou desce na mesma diferença. No Intermediário fica
+  // como antes (mínimo de 12 px).
+  const base = () => {
+    try {
+      const v = parseFloat(getComputedStyle(document.body).getPropertyValue("--spo-fs-dado"));
+      return Number.isFinite(v) && v > 0 ? v : MIN;
+    } catch (err) {
+      return MIN;
+    }
+  };
+  const tamanho = (f) => {
+    const b = base();
+    const pedido = Number((f && f.size) || 0);
+    return pedido > MIN ? pedido + (b - MIN) : b;
+  };
+
+  function ajustar(gd, layout) {
+    const el = elDe(gd);
+    const largura = el ? el.getBoundingClientRect().width : 0;
+    const estreito = largura > 0 && largura <= ESTREITO;
+    if (el) {
+      el.dataset.spoGraficoEstreito = estreito ? "1" : "0";
+      el.__spoLayoutBase = layout || {};
+    }
+    const L = { ...(layout || {}) };
+    L.font = { ...(L.font || {}), family: fonteUi(), size: tamanho(L.font) };
+    Object.keys(L).forEach((k) => {
+      if (!/^[xy]axis\d*$/.test(k) || !L[k] || typeof L[k] !== "object") return;
+      const eixo = { ...L[k], automargin: true };
+      eixo.tickfont = { ...(eixo.tickfont || {}), size: tamanho(eixo.tickfont) };
+      if (estreito && k.startsWith("xaxis") && eixo.tickangle === undefined) eixo.tickangle = -45;
+      L[k] = eixo;
+    });
+    if (L.showlegend !== false) {
+      L.legend = {
+        ...(L.legend || {}),
+        orientation: "v",
+        x: 0,
+        xanchor: "left",
+        yref: "container",
+        y: 0,
+        yanchor: "bottom",
+        font: { ...((L.legend && L.legend.font) || {}), size: tamanho(L.legend && L.legend.font) },
+      };
+    }
+    if (Array.isArray(L.annotations)) {
+      L.annotations = L.annotations.map((a) => ({ ...a, font: { ...(a.font || {}), size: tamanho(a.font) } }));
+    }
+    if (estreito) {
+      const m = L.margin || {};
+      L.margin = { ...m, l: Math.min(m.l ?? 16, 16), r: Math.min(m.r ?? 16, 16) };
+    }
+    return L;
+  }
+
+  // nomes longos de legenda quebram entre palavras no gráfico estreito (o Plotly não
+  // quebra a legenda sozinho); a pizza ganha automargin para os rótulos de fora
+  const quebrar = (texto, max) => {
+    const t = String(texto ?? "");
+    if (t.length <= max || t.includes("<br>")) return t;
+    const linhas = [];
+    let atual = "";
+    t.split(" ").forEach((p) => {
+      if (atual && (atual + " " + p).length > max) { linhas.push(atual); atual = p; } else { atual = atual ? atual + " " + p : p; }
+    });
+    if (atual) linhas.push(atual);
+    return linhas.join("<br>");
+  };
+  // [jean] Cores seguras para daltonismo (feat/graficos-daltonismo): além da paleta (tema dos
+  // diagramas), cada cor ganha um padrão próprio nas barras, fatias e blocos, contorno na cor do
+  // texto e, nas linhas, marcador e traço próprios. O padrão segue a COR (a mesma série tem o mesmo
+  // padrão em todos os gráficos), então a legenda também mostra a diferença sem depender da cor.
+  const PADROES = ["", "/", "\\", "x", "-", "|", "+", "."];
+  const SIMBOLOS = ["circle", "square", "diamond", "triangle-up", "x", "triangle-down", "star", "cross"];
+  const TRACOS = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot", "solid", "dash"];
+  const cvdLigado = () => document.body.dataset.spoCvd === "safe";
+  const corTexto = () => (getComputedStyle(document.body).getPropertyValue("--text") || "").trim() || "#24323d";
+  // posição da cor na paleta do modo atual (claro ou escuro): a mesma cor tem o mesmo padrão
+  const indiceCor = (cor, i) => {
+    const P = window.spoPaletaDaltonismo;
+    if (!P) return i % 8;
+    let modo = "";
+    try { modo = window.spoGetDiagramSemanticTokens().mode; } catch (err) { modo = ""; }
+    const pal = ["dark", "highDark", "high"].includes(modo) ? P.escuro : P.claro;
+    const k = pal.findIndex((c) => c.toLowerCase() === String(cor || "").toLowerCase());
+    return k >= 0 ? k : i % 8;
+  };
+  function comPadroes(t, i) {
+    const contorno = corTexto();
+    const padrao = (cor, j) => ({ shape: PADROES[indiceCor(cor, j)], fillmode: "overlay", fgcolor: contorno, fgopacity: 0.55, size: 8, solidity: 0.25 });
+    const m = { ...(t.marker || {}) };
+    if (t.type === "bar") {
+      m.pattern = Array.isArray(m.color)
+        ? { ...padrao(null, i), shape: m.color.map((c, j) => PADROES[indiceCor(c, j)]) }
+        : padrao(m.color, i);
+      m.line = { ...(m.line || {}), color: contorno, width: 1 };
+    } else if (t.type === "pie") {
+      const cores = m.colors || [];
+      m.pattern = { ...padrao(null, 0), shape: (t.values || t.labels || []).map((_, j) => PADROES[indiceCor(cores[j], j)]) };
+      m.line = { ...(m.line || {}), color: contorno, width: 1.5 };
+    } else if (t.type === "treemap") {
+      m.line = { ...(m.line || {}), color: contorno, width: 1.5 };
+    } else if (t.type === "scatter" || t.mode) {
+      const cor = (t.line && t.line.color) || m.color;
+      const k = indiceCor(cor, i);
+      m.symbol = SIMBOLOS[k];
+      m.size = Math.max(m.size || 0, 8);
+      m.line = { ...(m.line || {}), color: contorno, width: 1 };
+      return { ...t, mode: t.mode && t.mode.includes("markers") ? t.mode : `${t.mode || "lines"}+markers`, marker: m, line: { ...(t.line || {}), dash: TRACOS[k] } };
+    }
+    return { ...t, marker: m };
+  }
+
+  // [jean] fix/rotulos-arvore-contraste: o Plotly escolhe o texto de dentro dos blocos do gráfico de
+  // árvore entre um cinza (#444) e o branco por um critério próprio, e 5 dos 8 blocos da paleta segura
+  // para daltonismo ficavam abaixo de 4,5:1 (rosa 3,18; verde 3,42; vermelhão 3,87). Agora, para cada
+  // bloco, o texto é preto ou branco, o que tiver mais contraste com a cor do bloco (pior caso 5,19:1,
+  // no azul Okabe-Ito); vale para qualquer paleta e tema.
+  const luminancia = (cor) => {
+    const s = String(cor || "").trim();
+    let rgb = null;
+    const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const h = hex[1].length === 3 ? hex[1].split("").map((c) => c + c).join("") : hex[1];
+      rgb = [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16));
+    } else {
+      const m = s.match(/rgba?\(([^)]+)\)/i);
+      if (m) rgb = m[1].split(",").slice(0, 3).map((x) => parseFloat(x));
+    }
+    if (!rgb || rgb.some((x) => Number.isNaN(x))) return null;
+    const v = rgb.map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  };
+  const textoSobre = (cor) => {
+    const l = luminancia(cor);
+    if (l === null) return undefined;
+    return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? "#000000" : "#ffffff";
+  };
+
+  function ajustarDados(gd, data) {
+    const el = elDe(gd);
+    if (el) el.__spoDataBase = data;
+    if (!Array.isArray(data)) return data;
+    if (cvdLigado()) data = data.map((tr, i) => (tr && typeof tr === "object" ? comPadroes(tr, i) : tr));
+    const largura = el ? el.getBoundingClientRect().width : 0;
+    const estreito = largura > 0 && largura <= ESTREITO;
+    const max = Math.max(14, Math.floor((largura - 48) / 8));
+    return data.map((tr) => {
+      if (!tr || typeof tr !== "object") return tr;
+      const t = { ...tr };
+      if (t.type === "treemap" && t.marker && Array.isArray(t.marker.colors)) {
+        const cores = t.marker.colors.map(textoSobre);
+        if (cores.every(Boolean)) t.textfont = { ...(t.textfont || {}), color: cores };
+      }
+      if (t.type === "pie") {
+        t.automargin = true;
+        if (estreito && Array.isArray(t.labels)) t.labels = t.labels.map((x) => quebrar(x, max));
+      } else if (estreito && typeof t.name === "string") {
+        t.name = quebrar(t.name, max);
+      }
+      return t;
+    });
+  }
+
+  const react = P.react.bind(P);
+  const newPlot = P.newPlot.bind(P);
+  P.react = (gd, data, layout, config) => react(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
+  P.newPlot = (gd, data, layout, config) => newPlot(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
+  P.__spoEscala = true;
+
+  // trocar a densidade no Personalizar redesenha os gráficos já abertos
+  let densidade = document.body ? document.body.dataset.spoTableText : "";
+  if (document.body) {
+    new MutationObserver(() => {
+      if (document.body.dataset.spoTableText === densidade) return;
+      densidade = document.body.dataset.spoTableText;
+      document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+        if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+      });
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text"] });
+  }
+
+  let espera = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(espera);
+    espera = setTimeout(() => {
+      document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+        const largura = gd.getBoundingClientRect().width;
+        if (!largura || !gd.data) return;
+        const agora = largura <= ESTREITO ? "1" : "0";
+        if (gd.dataset.spoGraficoEstreito !== agora) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+      });
+    }, 250);
+  });
+})();
+
+/* ==========================================================================
+   [jean] Validador da paleta segura para daltonismo (feat/graficos-daltonismo, 2026-11-14)
+   window.spoValidarPaletaDaltonismo(): para as paletas clara e escura
+   (window.spoPaletaDaltonismo), simula protanopia, deuteranopia e tritanopia
+   (matrizes de Machado, Oliveira e Fernandes, 2009, severidade total, em RGB
+   linear) e mede a diferença de cor entre cada par de séries (CIEDE2000).
+   Também mede o contraste do contorno (cor do texto) com o fundo do gráfico.
+   Uso: na ferramenta do navegador, em qualquer tela; não muda nada na página.
+   ========================================================================== */
+(function initValidadorDaltonismo() {
+  const M = {
+    normal: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+    deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+    tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.3039]],
+  };
+  const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const sim = (h, m) => { const c = rgb(h).map(lin); return m.map((l) => Math.min(1, Math.max(0, l[0] * c[0] + l[1] * c[1] + l[2] * c[2]))); };
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const contraste = (a, b) => { const x = lum(rgb(a).map(lin)), y = lum(rgb(b).map(lin)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const lab = (c) => {
+    const X = (0.4124 * c[0] + 0.3576 * c[1] + 0.1805 * c[2]) / 0.95047, Y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2], Z = (0.0193 * c[0] + 0.1192 * c[1] + 0.9505 * c[2]) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const rad = (d) => (d * Math.PI) / 180;
+  const de2000 = ([L1, a1, b1], [L2, a2, b2]) => {
+    const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2), Cb = (C1 + C2) / 2;
+    const G = 0.5 * (1 - Math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)));
+    const a1p = (1 + G) * a1, a2p = (1 + G) * a2, C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+    const h1p = ((Math.atan2(b1, a1p) * 180) / Math.PI + 360) % 360, h2p = ((Math.atan2(b2, a2p) * 180) / Math.PI + 360) % 360;
+    let dh = h2p - h1p;
+    if (C1p * C2p === 0) dh = 0; else if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+    const dLp = L2 - L1, dCp = C2p - C1p, dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(rad(dh / 2));
+    const Lbp = (L1 + L2) / 2, Cbp = (C1p + C2p) / 2;
+    let hbp = h1p + h2p;
+    if (C1p * C2p !== 0) hbp = Math.abs(h1p - h2p) <= 180 ? (h1p + h2p) / 2 : (h1p + h2p < 360 ? (h1p + h2p + 360) / 2 : (h1p + h2p - 360) / 2);
+    const T = 1 - 0.17 * Math.cos(rad(hbp - 30)) + 0.24 * Math.cos(rad(2 * hbp)) + 0.32 * Math.cos(rad(3 * hbp + 6)) - 0.2 * Math.cos(rad(4 * hbp - 63));
+    const dth = 30 * Math.exp(-(((hbp - 275) / 25) ** 2)), Rc = 2 * Math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7));
+    const Sl = 1 + (0.015 * (Lbp - 50) ** 2) / Math.sqrt(20 + (Lbp - 50) ** 2), Sc = 1 + 0.045 * Cbp, Sh = 1 + 0.015 * Cbp * T, Rt = -Math.sin(rad(2 * dth)) * Rc;
+    return Math.sqrt((dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh));
+  };
+
+  window.spoValidarPaletaDaltonismo = function (opcoes = {}) {
+    const minimoDE = opcoes.minimoDE ?? 10; // diferença mínima entre séries (o padrão desenhado ajuda além disso)
+    const fundos = { claro: opcoes.fundoClaro || "#ffffff", escuro: opcoes.fundoEscuro || "#1a1a1a" };
+    const contornos = { claro: opcoes.contornoClaro || "#24323d", escuro: opcoes.contornoEscuro || "#f8fafc" };
+    const paletas = window.spoPaletaDaltonismo || {};
+    const resultado = [];
+    Object.keys(paletas).forEach((modo) => {
+      const pal = paletas[modo];
+      Object.entries(M).forEach(([tipo, m]) => {
+        const labs = pal.map((c) => lab(sim(c, m)));
+        let pior = { de: Infinity };
+        for (let i = 0; i < pal.length; i += 1) for (let j = i + 1; j < pal.length; j += 1) {
+          const de = de2000(labs[i], labs[j]);
+          if (de < pior.de) pior = { de, a: pal[i], b: pal[j] };
+        }
+        resultado.push({ modo, tipo, menorDiferenca: Number(pior.de.toFixed(1)), par: `${pior.a} × ${pior.b}`, passou: pior.de >= minimoDE });
+      });
+      const c = contraste(contornos[modo], fundos[modo]);
+      resultado.push({ modo, tipo: "contorno × fundo", menorDiferenca: Number(c.toFixed(2)), par: `${contornos[modo]} × ${fundos[modo]}`, passou: c >= 3 });
+    });
+    return { resultado, falhas: resultado.filter((r) => !r.passou) };
+  };
+})();
+
+/* ==========================================================================
+   [jean] Densidade automática (feat/densidade-automatica, 2026-11-14; decisão do
+   dev. Jean na discussão de 14/11, no lugar de trocar o preset do Contrato Visual
+   pelo tipo de aparelho)
+   A opção "Automática" (padrão) do grupo "Densidade visual" escolhe a densidade
+   pela LARGURA da janela, que acompanha zoom, redimensionamento e janela dividida:
+   - mais de 1200 px: confortável (o padrão SPO de antes);
+   - de 721 a 1200 px (tablet deitado, notebook pequeno, monitor em retrato,
+     janela dividida): compacta;
+   - até 720 px (celular, em pé ou deitado; zoom de 200% numa tela de 1280 px):
+     ampla.
+   O alvo de toque de 44 px continua vindo da regra de ponteiro grosso (#35).
+   As 34 regras de CSS de cada densidade são as mesmas de sempre: aqui só se
+   decide qual valor vai para data-visual-density. A escolha da pessoa fica em
+   data-visual-density-pref; quem escolheu uma densidade fixa continua com ela.
+   ========================================================================== */
+(function initDensidadeAutomatica() {
+  if (!window.matchMedia) return;
+  const estreita = window.matchMedia("(max-width: 720px)");
+  const media = window.matchMedia("(max-width: 1200px)");
+  window.spoResolverDensidade = function (pref) {
+    if (pref !== "auto") return pref;
+    if (estreita.matches) return "spacious";
+    if (media.matches) return "compact";
+    return "comfortable";
+  };
+  const atualizar = () => {
+    if (!document.body) return;
+    const pref = document.body.dataset.visualDensityPref || document.body.dataset.visualDensity;
+    if (pref !== "auto") return;
+    document.body.dataset.visualDensityPref = "auto";
+    document.body.dataset.visualDensity = window.spoResolverDensidade("auto");
+  };
+  [estreita, media].forEach((q) => (q.addEventListener ? q.addEventListener("change", atualizar) : q.addListener(atualizar)));
+  atualizar();
+})();
+
+/* ==========================================================================
+   [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; fase 1 do plano do
+   dev. Jean; padrão spo-aa+ §4.4)
+   Item "Buscar tela" no menu lateral, logo abaixo de "Início" (inserido aqui,
+   sem mudar o base.html), e atalhos Ctrl+K e "/". A caixa segue o padrão dos
+   avisos do SPO (modal-overlay/modal-card, título na cor de destaque, campo
+   .field e botão "Fechar" secundário).
+   - Procura nas telas do MENU, que já vem filtrado pelas permissões
+     (applyMenuPermissions esconde com display: none): ninguém acha tela que não vê.
+   - Sem acentos e sem diferença de maiúsculas; acha por nome, grupo do menu e
+     GLOSSÁRIO (siglas e termos que não estão no nome). Mostra o caminho
+     ("Atualizar › Execução › EMP"), porque há vários itens com o mesmo nome.
+   - Caixa vazia: as 5 telas mais recentes DESTE usuário (no navegador, numa
+     chave por conta; não acompanha a pessoa em outro computador).
+   - Acessibilidade: diálogo modal com caixa de busca (combobox) e lista
+     (listbox) no padrão WAI-ARIA; setas, Enter, Esc; anúncio da quantidade.
+   Fase 2 (com o Cleber): glossário administrável no banco e registro das
+   buscas sem resultado.
+   ========================================================================== */
+(function initBuscaTelas() {
+  const GLOSSARIO = [
+    { rotas: ["dashboard"], termos: ["inicio", "home", "pagina inicial", "alerta"] },
+    { rotas: ["/emp"], termos: ["empenho", "empenhos", "nota de empenho"] },
+    { rotas: ["/est-emp"], termos: ["estorno de empenho", "anulacao de empenho"] },
+    { rotas: ["/nob"], termos: ["nota de obrigacao", "notas de obrigacao", "pagamento"] },
+    { rotas: ["/ped"], termos: ["pedido", "pedidos", "pedido de empenho"] },
+    { rotas: ["/fip613"], termos: ["fip", "fip 613"] },
+    { rotas: ["plan20"], termos: ["plan 20", "pta", "planejamento anual"] },
+    { rotas: ["plan21"], termos: ["plan 21", "nger"] },
+    { rotas: ["plan51"], termos: ["plan 51"] },
+    { rotas: ["teto"], termos: ["teto", "plan 23", "plan 134", "momp", "limite orcamentario"] },
+    { rotas: ["/dotacao"], termos: ["dotacao", "credito", "credito orcamentario"] },
+    { rotas: ["est-dotacao"], termos: ["estorno de dotacao", "estorno de credito"] },
+    { rotas: ["estrutura-planejamento"], termos: ["paoe", "acao", "programa", "produto", "estrutura", "uo", "ug"] },
+    { rotas: ["chave"], termos: ["chave", "chave de planejamento", "chaves"] },
+    { rotas: ["programar-pta-loa", "programacao-pta2027"], termos: ["pta", "loa", "programacao"] },
+    { rotas: ["programacao-pta2027"], termos: ["opr", "pta/opr", "plano de trabalho anual", "orcamento para resultado", "orcamento por resultado"] },
+    { rotas: ["receita-anexo10"], termos: ["receita", "anexo 10"] },
+    { rotas: ["notas-see"], termos: ["nota fiscal", "notas fiscais", "danfe", "see"] },
+    { rotas: ["meta_fisica", "matriculas-metas"], termos: ["meta", "metas", "meta fisica"] },
+    { rotas: ["usuarios/senha"], termos: ["senha", "trocar senha", "mudar senha"] },
+    { rotas: ["usuarios/"], termos: ["usuario", "usuarios", "conta"] },
+    { rotas: ["painel"], termos: ["permissao", "permissoes", "acesso", "perfil de acesso"] },
+    { rotas: ["personalizar-spo/temas"], termos: ["tema", "cores", "cor", "fonte", "letra", "tamanho do texto", "modo escuro", "acessibilidade", "daltonismo", "foco", "densidade", "leitura", "brilho"] },
+    { rotas: ["limpeza-historico"], termos: ["historico", "limpar", "cargas antigas"] },
+    { rotas: ["seguranca-sessao"], termos: ["sessao", "sessoes", "login", "seguranca"] },
+    { rotas: ["institucional/"], termos: ["institucional", "documentos", "links"] },
+  ];
+  const MAX_RECENTES = 5;
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const chaveRecentes = () => {
+    const meta = document.getElementById("user-meta");
+    const conta = meta ? (meta.dataset.email || meta.dataset.name || "") : "";
+    return conta ? `spo-telas-recentes:${norm(conta)}` : "";
+  };
+  const lerRecentes = () => {
+    const k = chaveRecentes();
+    if (!k) return [];
+    try { const v = JSON.parse(localStorage.getItem(k) || "[]"); return Array.isArray(v) ? v : []; } catch (err) { return []; }
+  };
+  const gravarRecente = (rota) => {
+    const k = chaveRecentes();
+    if (!k || !rota || rota === "logout") return;
+    const lista = [rota, ...lerRecentes().filter((r) => r !== rota)].slice(0, MAX_RECENTES);
+    try { localStorage.setItem(k, JSON.stringify(lista)); } catch (err) { /* armazenamento bloqueado */ }
+  };
+
+  // telas que a pessoa vê no menu (as escondidas pelas permissões ficam de fora)
+  const visivelNoMenu = (el) => {
+    for (let e = el; e && !(e.classList && e.classList.contains("sidebar")); e = e.parentElement) {
+      if (e.style && e.style.display === "none") return false;
+    }
+    return true;
+  };
+  function indice() {
+    const menu = document.querySelector(".sidebar");
+    if (!menu) return [];
+    return [...menu.querySelectorAll("a.menu-item[data-route]")]
+      .filter((a) => a.dataset.route !== "logout" && visivelNoMenu(a))
+      .map((a) => {
+        const nome = ((a.querySelector("span") || a).textContent || "").trim();
+        const caminho = [];
+        for (let g = a.parentElement && a.parentElement.closest(".menu-group"); g; g = g.parentElement && g.parentElement.closest(".menu-group")) {
+          const s = g.querySelector(":scope > .menu-parent span");
+          if (s && s.textContent.trim()) caminho.unshift(s.textContent.trim());
+        }
+        const rota = a.dataset.route;
+        const termos = GLOSSARIO.filter((x) => x.rotas.some((r) => rota.includes(r))).flatMap((x) => x.termos);
+        const icone = [...((a.querySelector("i") || {}).classList || [])].find((c) => c.startsWith("bi-")) || "bi-window";
+        return { a, rota, nome, caminho, icone, externo: Boolean(a.dataset.externalUrl), nNome: norm(nome), nCaminho: norm(caminho.join(" ")), nTermos: termos.map(norm) };
+      });
+  }
+  function buscar(lista, consulta) {
+    const q = norm(consulta);
+    if (!q) return [];
+    const palavras = q.split(" ");
+    return lista
+      .map((t) => {
+        const todas = palavras.every((p) => t.nNome.includes(p) || t.nCaminho.includes(p) || t.nTermos.some((x) => x.includes(p)));
+        if (!todas) return null;
+        let pontos = 10;
+        if (t.nNome === q) pontos += 200;
+        if (t.nNome.startsWith(q)) pontos += 100;
+        if (t.nNome.includes(q)) pontos += 60;
+        if (t.nTermos.some((x) => x === q)) pontos += 80;
+        if (t.nTermos.some((x) => x.startsWith(q))) pontos += 40;
+        return { t, pontos };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.pontos - a.pontos || a.t.nNome.localeCompare(b.t.nNome))
+      .map((x) => x.t);
+  }
+
+  let dialogo = null;
+  let abridor = null;
+  let resultados = [];
+  let ativo = -1;
+
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay: o tratamento genérico dos avisos (#41) também prenderia o Tab e o Esc
+    dialogo.className = "spo-busca-fundo";
+    dialogo.hidden = true;
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-busca-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-busca-titulo" class="modal-header-title spo-busca-titulo">Buscar tela</h2>',
+      '    <div class="modal-header-subtitle">Setas para escolher, Enter para abrir, Esc para fechar.</div></div>',
+      '  </div>',
+      '  <label class="field spo-busca-campo" for="spo-busca-entrada">',
+      '    <span>Nome da tela, sigla ou assunto</span>',
+      '    <input type="text" id="spo-busca-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false"',
+      '           aria-controls="spo-busca-lista" autocomplete="off" spellcheck="false" placeholder="ex.: empenho, PAOE, senha">',
+      '  </label>',
+      '  <div class="spo-busca-secao" id="spo-busca-secao" aria-hidden="true"></div>',
+      '  <ul id="spo-busca-lista" class="spo-busca-lista" role="listbox" aria-label="Telas encontradas"></ul>',
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status" role="status" aria-live="polite"></p>',
+      '    <button type="button" class="btn btn-secondary sm spo-busca-fechar">Fechar</button>',
+      '  </div>',
+      '</div>',
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    entrada.addEventListener("input", () => desenhar(entrada.value));
+    entrada.addEventListener("keydown", teclas);
+    dialogo.querySelector(".spo-busca-fechar").addEventListener("click", () => fechar());
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key === "Tab") { // foco preso no diálogo (entrada e botão de fechar)
+        const alvos = [entrada, dialogo.querySelector(".spo-busca-fechar")];
+        const i = alvos.indexOf(document.activeElement);
+        ev.preventDefault();
+        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+      }
+    });
+    dialogo.querySelector("#spo-busca-lista").addEventListener("click", (ev) => {
+      const li = ev.target.closest("[role=option]");
+      if (li) abrir(Number(li.dataset.indice));
+    });
+    return dialogo;
+  }
+
+  function desenhar(consulta) {
+    const lista = indice();
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    const ul = dialogo.querySelector("#spo-busca-lista");
+    const secao = dialogo.querySelector("#spo-busca-secao");
+    const status = dialogo.querySelector(".spo-busca-status");
+    const vazio = !norm(consulta);
+    if (vazio) {
+      resultados = lerRecentes().map((r) => lista.find((t) => t.rota === r)).filter(Boolean);
+      secao.textContent = resultados.length ? "Telas recentes" : "";
+    } else {
+      resultados = buscar(lista, consulta);
+      secao.textContent = "";
+    }
+    ativo = resultados.length ? 0 : -1;
+    ul.innerHTML = resultados.map((t, i) => [
+      `<li role="option" id="spo-busca-op-${i}" data-indice="${i}" aria-selected="${i === ativo}" class="spo-busca-opcao">`,
+      `<i class="bi ${esc(t.icone)}" aria-hidden="true"></i>`,
+      `<span class="spo-busca-texto"><strong>${esc(t.nome)}</strong>${t.caminho.length ? `<small>${esc(t.caminho.join(" › "))}</small>` : ""}</span>`,
+      t.externo ? '<span class="spo-busca-externo">abre em outra aba</span>' : "",
+      "</li>",
+    ].join("")).join("");
+    entrada.setAttribute("aria-expanded", String(resultados.length > 0));
+    if (ativo >= 0) entrada.setAttribute("aria-activedescendant", `spo-busca-op-${ativo}`); else entrada.removeAttribute("aria-activedescendant");
+    if (vazio) status.textContent = resultados.length ? `${resultados.length} ${resultados.length === 1 ? "tela recente" : "telas recentes"}.` : "Digite o nome da tela, uma sigla ou um assunto.";
+    else status.textContent = resultados.length ? `${resultados.length} ${resultados.length === 1 ? "tela encontrada" : "telas encontradas"}.` : `Nenhuma tela encontrada para "${consulta.trim()}".`;
+  }
+
+  function marcar(i) {
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    ativo = i;
+    dialogo.querySelectorAll("[role=option]").forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
+    const li = dialogo.querySelector(`#spo-busca-op-${i}`);
+    if (li) { entrada.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({ block: "nearest" }); }
+  }
+
+  function teclas(ev) {
+    const n = resultados.length;
+    if (ev.key === "ArrowDown" && n) { ev.preventDefault(); marcar((ativo + 1) % n); }
+    else if (ev.key === "ArrowUp" && n) { ev.preventDefault(); marcar((ativo - 1 + n) % n); }
+    else if (ev.key === "Enter") { ev.preventDefault(); if (ativo >= 0) abrir(ativo); }
+  }
+
+  function abrir(i) {
+    const t = resultados[i];
+    if (!t) return;
+    fechar(false);
+    gravarRecente(t.rota);
+    t.a.click(); // mesmo caminho do clique no menu (rota interna ou link externo)
+  }
+
+  function mostrar() {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para o item do menu
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-busca-menu");
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    const entrada = dialogo.querySelector("#spo-busca-entrada");
+    entrada.value = "";
+    desenhar("");
+    entrada.focus();
+  }
+
+  function fechar(devolverFoco = true) {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (devolverFoco && !(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
+  }
+
+  // telas abertas pelo menu também entram nas recentes
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest(".sidebar a.menu-item[data-route]");
+    if (a && ev.isTrusted) gravarRecente(a.dataset.route);
+  }, true);
+
+  // atalhos: Ctrl+K (ou Cmd+K) em qualquer lugar; "/" fora de campos de texto
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || !document.getElementById("user-meta")) return;
+    const campo = ev.target.closest && ev.target.closest("input, textarea, select, [contenteditable]");
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === "k" || ev.key === "K")) { ev.preventDefault(); mostrar(); }
+    else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && document.body.dataset.spoKeys !== "off") { ev.preventDefault(); mostrar(); }
+  });
+
+  // item "Buscar tela" no menu lateral, logo abaixo de "Início"
+  function itemMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu || !document.getElementById("user-meta") || menu.querySelector(".spo-busca-menu")) return;
+    const inicio = menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "menu-item spo-busca-menu";
+    a.setAttribute("role", "button");
+    a.setAttribute("aria-haspopup", "dialog");
+    a.setAttribute("aria-keyshortcuts", "Control+K /");
+    a.title = "Buscar tela (Ctrl+K ou /)";
+    a.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i> <span>Buscar tela</span>';
+    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
+    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
+    if (inicio) inicio.after(a); else menu.prepend(a);
+  }
+  itemMenu();
+  window.spoBuscaTelas = { abrir: mostrar, buscar: (q) => buscar(indice(), q).map((t) => t.rota), recentes: lerRecentes };
+})();
+
+/* ==========================================================================
+   [jean] Link "Acessibilidade" no rodapé (feat/declaracao-acessibilidade,
+   2026-11-14). Leva ao cartão "Acessibilidade do SPO" do Personalizar Temas.
+   Inserido aqui (sem mudar o base.html). Só aparece para quem tem a tela
+   Personalizar Temas no menu (as permissões escondem o item com display: none).
+   ========================================================================== */
+(function initLinkAcessibilidade() {
+  const ROTA = "atualizar/personalizar-spo/temas";
+  const itemMenu = () => document.querySelector(`.sidebar a.menu-item[data-route="${ROTA}"]`);
+  const visivel = (el) => { for (let e = el; e && !(e.classList && e.classList.contains("sidebar")); e = e.parentElement) { if (e.style && e.style.display === "none") return false; } return true; };
+  function irParaCartao() {
+    const cartao = document.getElementById("spo-acessibilidade");
+    if (!cartao) return false;
+    cartao.scrollIntoView({ block: "start" });
+    const titulo = document.getElementById("spo-acessibilidade-titulo");
+    if (titulo) titulo.focus({ preventScroll: true });
+    return true;
+  }
+  function montar() {
+    const rodape = document.querySelector(".footer");
+    if (!rodape || rodape.querySelector(".footer-acessibilidade")) return;
+    const a = document.createElement("a");
+    a.href = "#spo-acessibilidade";
+    a.className = "footer-line footer-acessibilidade";
+    a.textContent = "Acessibilidade";
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (irParaCartao()) return;
+      const item = itemMenu();
+      if (!item) return;
+      item.click();
+      let tentativas = 0;
+      // o SPO leva o foco ao título da página ao trocar de tela (#41): espera essa troca e vai ao cartão depois
+      const esperar = setInterval(() => {
+        tentativas += 1;
+        if (document.getElementById("spo-acessibilidade")) { clearInterval(esperar); setTimeout(irParaCartao, 500); }
+        else if (tentativas > 40) clearInterval(esperar);
+      }, 150);
+    });
+    const build = rodape.querySelector(".footer-build");
+    rodape.insertBefore(a, build || null);
+    const ajustar = () => { const item = itemMenu(); a.hidden = !(item && visivel(item)); };
+    ajustar();
+    // as permissões chegam depois do carregamento (applyMenuPermissions): reavalia
+    const menu = document.querySelector(".sidebar");
+    if (menu) new MutationObserver(ajustar).observe(menu, { attributes: true, subtree: true, attributeFilter: ["style"] });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", montar); else montar();
+})();
+
+/* ==========================================================================
+   [jean] Atalhos do teclado (feat/atalhos-teclado, 2026-11-14; padrão spo-aa+ §4.4)
+   Pedido do dev. Jean: o SPO já funciona pelo teclado (#41, #59, #106), mas nada
+   dizia como. Ex.: no Mapa Conceitual as setas trocam o cartão, mas não havia como
+   saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
+   1) Ajuda "Atalhos do teclado": diálogo no padrão dos avisos, aberto pela tecla
+      "?", pelo item do menu (abaixo de "Buscar tela") e por links com
+      [data-spo-atalhos] (cartão Teclado e declaração de acessibilidade).
+   2) Alt+M leva o foco ao item da tela atual no menu (abre o menu se estiver
+      recolhido no celular); link de pulo "Ir para o menu" ao lado de "Pular
+      para o conteúdo".
+   3) WCAG 2.1.4 (A): os atalhos de UMA tecla ("/" da busca e "?") podem ser
+      desligados no Personalizar → Teclado (body[data-spo-keys="off"]). Ctrl+K e
+      Alt+M usam tecla modificadora e continuam valendo.
+   4) Dica dos componentes com setas (menu, abas, mapa e diagramas): ao chegar
+      pelo teclado, aparece uma linha curta no rodapé da tela, e o leitor de
+      tela recebe o mesmo texto (aria-describedby).
+   ========================================================================== */
+(function initAtalhosTeclado() {
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const umaTecla = () => document.body.dataset.spoKeys !== "off";
+  const emCampo = (el) => !!(el && el.closest && el.closest("input, textarea, select, [contenteditable]"));
+  const logado = () => !!document.getElementById("user-meta");
+
+  const k = (...teclas) => teclas.map((t) => `<kbd>${t}</kbd>`).join(" + ");
+  const SECOES = [
+    ["Navegar", "bi-signpost-split", [
+      [`${k("Tab")} / ${k("Shift", "Tab")}`, "Vai para o próximo / o anterior item da tela (botões, campos, links, cartões)."],
+      [`${k("Enter")} ou ${k("Espaço")}`, "Aciona o botão ou abre o item em foco."],
+      [k("Tab"), "Logo ao abrir o SPO, o primeiro Tab mostra \"Pular para o conteúdo\" e \"Ir para o menu\"."],
+      [k("Alt", "M"), "Vai ao menu lateral, no item da tela atual (abre o menu se ele estiver recolhido). No menu, Esc volta para onde você estava."],
+      [`${k("Ctrl", "K")} ou ${k("/")}`, "Abre a busca de telas: digite parte do nome, uma sigla ou um assunto."],
+      [k("?"), "Abre esta ajuda."],
+    ]],
+    ["Menu lateral", "bi-list", [
+      [`${k("↓")} ${k("↑")}`, "Próximo / item anterior do menu."],
+      [`${k("→")} ${k("←")}`, "Abre / fecha o grupo (Relatórios, Painéis…). Num item, ← volta ao grupo."],
+      [`${k("Home")} ${k("End")}`, "Primeiro / último item."],
+      [k("Enter"), "Abre a tela; o foco vai para o título dela."],
+      [k("Esc"), "Sai do menu e volta para onde você estava na tela."],
+    ]],
+    ["Abas, diagramas e mapa conceitual", "bi-diagram-3", [
+      [`${k("←")} ${k("→")} (ou ${k("↑")} ${k("↓")})`, "Trocam a aba ou o cartão selecionado."],
+      [`${k("Home")} ${k("End")}`, "Primeira / última aba ou cartão."],
+      [k("Tab"), "Sai do componente e segue para o próximo item da tela."],
+    ]],
+    ["Tabelas", "bi-table", [
+      [k("Tab"), "Entra na tabela, na última célula visitada (na primeira vez, a primeira célula de dados); o próximo Tab já sai dela. Um clique numa célula também começa a navegação por ali."],
+      [`${k("←")} ${k("→")} ${k("↑")} ${k("↓")}`, "Anda de célula em célula (também pelo cabeçalho e pela linha dos filtros, e a partir de um filtro ou botão da célula)."],
+      [`${k("Home")} ${k("End")}`, "Primeira / última célula da linha."],
+      [`${k("Ctrl", "Home")} ${k("Ctrl", "End")}`, "Primeira / última célula da tabela."],
+      [`${k("PageUp")} ${k("PageDown")}`, "Sobe / desce 10 linhas."],
+      [k("Enter"), "Entra no campo, filtro, botão ou link da célula; Esc volta para a célula."],
+      [`${k("←")} ${k("→")}`, "Na paginação: andam pelos botões de página (Home/End: primeiro/último); ↑ ou Esc voltam para a tabela."],
+    ]],
+    ["Busca, avisos e filtros", "bi-window-stack", [
+      [`${k("↓")} ${k("↑")} e ${k("Enter")}`, "Na busca de telas: escolhem e abrem a tela."],
+      [k("Esc"), "Fecha o aviso, a busca, esta ajuda ou a lista de um filtro (o filtro não aplicado é descartado)."],
+      [k("Tab"), "Com um aviso aberto, o foco fica dentro dele até ser fechado."],
+    ]],
+    ["No navegador", "bi-browser-chrome", [
+      [`${k("Ctrl", "+")} / ${k("Ctrl", "−")} / ${k("Ctrl", "0")}`, "Amplia / reduz / volta o zoom da página (o SPO se reorganiza até 400%)."],
+    ]],
+  ];
+
+  let dialogo = null;
+  let abridor = null;
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
+    dialogo.className = "spo-busca-fundo spo-atalhos-fundo";
+    dialogo.hidden = true;
+    const secoes = SECOES.map(([titulo, icone, linhas]) => [
+      '<section class="spo-atalhos-secao">',
+      `<h3><i class="bi ${icone}" aria-hidden="true"></i> ${titulo}</h3>`,
+      '<dl class="spo-atalhos-lista">',
+      linhas.map(([teclas, texto]) => `<div><dt>${teclas}</dt><dd>${texto}</dd></div>`).join(""),
+      "</dl></section>",
+    ].join("")).join("");
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-atalhos-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-atalhos-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Atalhos do teclado</h2>',
+      '    <div class="modal-header-subtitle">O SPO pode ser usado só pelo teclado. Esc fecha esta ajuda.</div></div>',
+      "  </div>",
+      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Lista de atalhos">${secoes}`,
+      '    <p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
+      "  </div>",
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status">Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>',
+      '    <button type="button" class="btn btn-secondary sm spo-atalhos-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    dialogo.querySelector(".spo-atalhos-fechar").addEventListener("click", () => fechar());
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key === "Tab") { // foco preso na ajuda (lista rolável e botão Fechar)
+        const alvos = [dialogo.querySelector(".spo-atalhos-corpo"), dialogo.querySelector(".spo-atalhos-fechar")];
+        const i = alvos.indexOf(document.activeElement);
+        ev.preventDefault();
+        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+      }
+    });
+    return dialogo;
+  }
+  function mostrar() {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-atalhos-menu");
+    const nota = dialogo.querySelector("[data-spo-atalhos-nota]");
+    nota.textContent = umaTecla() ? "" : "Os atalhos de uma tecla só (/ e ?) estão desligados neste navegador; Ctrl+K e Alt+M continuam valendo.";
+    nota.hidden = umaTecla();
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    dialogo.querySelector(".spo-atalhos-corpo").scrollTop = 0;
+    dialogo.querySelector(".spo-atalhos-fechar").focus();
+  }
+  function fechar() {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
+  }
+
+  // 2) Alt+M e "Ir para o menu"
+  // fix/alt-m-foco: o Chrome só mostra o anel (:focus-visible) quando a última ação foi uma
+  // tecla "comum"; depois de um clique, o Alt+M movia o foco sem anel nem dica. O foco levado
+  // por atalho ganha a classe spo-foco-atalho (anel igual ao do teclado) e a dica aparece.
+  // Esc no menu devolve o foco para onde a pessoa estava (e fecha o menu se ele estiver aberto por cima da tela).
+  let voltaDoMenu = null;
+  let focoPorAtalho = false;
+  function focarComAnel(el) {
+    if (!el) return;
+    focoPorAtalho = true;
+    el.classList.add("spo-foco-atalho");
+    el.addEventListener("blur", () => el.classList.remove("spo-foco-atalho"), { once: true });
+    try { el.focus({ focusVisible: true }); } catch (err) { el.focus(); }
+    focoPorAtalho = false;
+  }
+  function irParaMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu) return;
+    const sidebar = menu.closest(".sidebar");
+    const atual = document.activeElement;
+    if (atual && atual !== document.body && !(sidebar && sidebar.contains(atual))) voltaDoMenu = atual;
+    // o item da tela atual; se estiver num grupo fechado (ou no menu recolhido), o grupo visível que o contém
+    const alvo = () => {
+      const ativo = menu.querySelector(".menu-item.active[data-route]");
+      if (visivel(ativo)) return ativo;
+      for (let g = ativo && ativo.closest(".menu-group"); g; g = g.parentElement && g.parentElement.closest(".menu-group")) {
+        const pai = g.querySelector(":scope > .menu-parent");
+        if (visivel(pai)) return pai;
+      }
+      return [...menu.querySelectorAll(".menu-item")].find(visivel);
+    };
+    let item = alvo();
+    const focar = (el) => { if (el) { focarComAnel(el); el.scrollIntoView({ block: "nearest" }); } };
+    if (!item || (sidebar && !visivel(sidebar))) {
+      const toggle = document.getElementById("sidebar-toggle");
+      if (toggle && visivel(toggle)) toggle.click();
+      requestAnimationFrame(() => requestAnimationFrame(() => focar(alvo())));
+      return;
+    }
+    focar(item);
+  }
+  const pularConteudo = document.querySelector(".spo-pular");
+  if (pularConteudo && !document.querySelector(".spo-pular-menu") && document.getElementById("menu")) {
+    const a = document.createElement("a");
+    a.className = "spo-pular spo-pular-menu";
+    a.href = "#menu";
+    a.textContent = "Ir para o menu (Alt+M)";
+    a.setAttribute("aria-keyshortcuts", "Alt+M");
+    a.addEventListener("click", (ev) => { ev.preventDefault(); irParaMenu(); });
+    pularConteudo.after(a);
+  }
+
+  // Esc com o foco no menu: volta para onde estava (Alt+M de novo faz o mesmo caminho de ida)
+  function sairDoMenu() {
+    const sidebar = document.querySelector(".sidebar");
+    // menu aberto por cima da tela (pelo Alt+M, pelo Enter num grupo com o menu recolhido ou no celular): fecha
+    if (sidebar && sidebar.classList.contains("open")) {
+      const toggle = document.getElementById("sidebar-toggle");
+      if (toggle) toggle.click();
+    }
+    faixa.hidden = true;
+    let alvo = voltaDoMenu && voltaDoMenu.isConnected && visivel(voltaDoMenu) ? voltaDoMenu : null;
+    if (!alvo) {
+      const main = document.getElementById("content-area");
+      alvo = main && ([...main.querySelectorAll("h1, [role='heading'][aria-level='1']")].find(visivel) || main);
+      if (alvo && !alvo.hasAttribute("tabindex")) alvo.setAttribute("tabindex", "-1");
+    }
+    voltaDoMenu = null;
+    if (alvo) focarComAnel(alvo);
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar || !sidebar.contains(document.activeElement)) return;
+    ev.preventDefault();
+    sairDoMenu();
+  });
+
+  // atalhos
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || !logado()) return;
+    if (ev.altKey && !ev.ctrlKey && !ev.metaKey && (ev.code === "KeyM" || ev.key === "m" || ev.key === "M")) {
+      ev.preventDefault();
+      irParaMenu();
+      return;
+    }
+    if (ev.key === "?" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !emCampo(ev.target) && umaTecla()) {
+      ev.preventDefault();
+      mostrar();
+    }
+  });
+  // links que abrem a ajuda (cartão Teclado, declaração de acessibilidade)
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest("[data-spo-atalhos]");
+    if (!a) return;
+    ev.preventDefault();
+    mostrar();
+  });
+
+  // 1) item "Atalhos do teclado" no menu, logo abaixo de "Buscar tela"
+  function itemMenu() {
+    const menu = document.getElementById("menu");
+    if (!menu || !logado() || menu.querySelector(".spo-atalhos-menu")) return;
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "menu-item spo-atalhos-menu";
+    a.setAttribute("role", "button");
+    a.setAttribute("aria-haspopup", "dialog");
+    a.setAttribute("aria-keyshortcuts", "?");
+    a.title = "Atalhos do teclado (?)";
+    a.innerHTML = '<i class="bi bi-keyboard" aria-hidden="true"></i> <span>Atalhos do teclado</span>';
+    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
+    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
+    const antes = menu.querySelector(".spo-busca-menu") || menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
+    if (antes) antes.after(a); else menu.prepend(a);
+  }
+  itemMenu();
+
+  // 4) dica dos componentes com setas
+  const DICAS = [
+    ["#menu .menu-item", "spo-dica-menu", "↓ ↑ andam no menu · → abre o grupo, ← fecha · Enter abre a tela · Esc volta para onde estava"],
+    ["[data-flow-node]", "spo-dica-cartoes", "← → trocam o cartão · Home/End: primeiro/último · Tab sai"],
+    ['[role="tab"]', "spo-dica-abas", "← → trocam a aba · Home/End: primeira/última · Tab segue para o conteúdo"],
+    ["#content-area table :is(td, th)[tabindex]", "spo-dica-tabela", "Setas andam pelas células · Home/End: linha · Ctrl+Home/End: tabela · PageUp/PageDown: 10 linhas · Enter entra no campo, Esc volta"],
+  ];
+  DICAS.forEach(([, id, texto]) => {
+    if (document.getElementById(id)) return;
+    const d = document.createElement("span");
+    d.id = id;
+    d.className = "spo-sr-only";
+    d.textContent = texto;
+    document.body.appendChild(d);
+  });
+  const faixa = document.createElement("div");
+  faixa.className = "spo-dica-teclado";
+  faixa.setAttribute("aria-hidden", "true"); // o leitor de tela recebe o texto pelo aria-describedby
+  faixa.hidden = true;
+  document.body.appendChild(faixa);
+  const tipoDe = (el) => DICAS.find(([sel]) => el.matches && el.matches(sel));
+  document.addEventListener("focusin", (ev) => {
+    const el = ev.target;
+    const tipo = el && tipoDe(el);
+    if (!tipo) { faixa.hidden = true; return; }
+    const [, id, texto] = tipo;
+    const desc = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if (!desc.includes(id)) el.setAttribute("aria-describedby", [...desc, id].join(" "));
+    let pelaTecla = focoPorAtalho;
+    try { pelaTecla = pelaTecla || el.matches(":focus-visible"); } catch (err) { /* navegador sem :focus-visible */ }
+    faixa.textContent = texto;
+    faixa.hidden = !pelaTecla;
+  });
+  document.addEventListener("focusout", (ev) => {
+    if (!ev.relatedTarget || !tipoDe(ev.relatedTarget)) faixa.hidden = true;
+  });
+
+  window.spoAtalhosTeclado = { abrir: mostrar, irParaMenu };
+})();
+
+/* ==========================================================================
+   [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
+   Pedido do dev. Jean: a declaração de acessibilidade cita o padrão "SPO-AA+";
+   o usuário precisa poder ver o que ele é. Links com [data-spo-padrao] abrem
+   uma janela no visual da busca e da ajuda, com duas vistas:
+   - Resumo (aqui, para quem usa o SPO): o que o padrão garante, o que se pode
+     ajustar e como é verificado. Mudou uma meta no documento técnico? Atualize
+     este resumo no mesmo PR (padrão §5.1).
+   - Documento técnico completo: lido do servidor (/api/documentos/padrao-spo-aa-plus,
+     que converte o docs/padrao-visual-spo-aa-plus.md), com sumário; atualiza
+     sozinho a cada PR que muda o documento. Desde a bateria 2 (2026-11-15) abre
+     só pelo Contrato Visual Protegido ([data-spo-padrao="tecnico"]); a janela
+     aberta pela declaração mostra só o resumo (pedido do dev. Jean).
+   ========================================================================== */
+(function initPadraoSpoAaPlus() {
+  const visivel = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const FOCAVEIS = "a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  const lista = (itens) => `<ul>${itens.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+  const RESUMO = [
+    '<p>O <strong>SPO-AA+</strong> é o padrão de acessibilidade e de visual do SPO. Ele parte das <strong>WCAG 2.2, nível AA</strong> (a referência internacional, também adotada pelo eMAG) e vai além em pontos escolhidos — é o "+" do nome.</p>',
+    '<h3>O que o SPO garante em todas as telas</h3>',
+    lista([
+      "Texto com contraste de pelo menos <strong>7:1</strong> com o fundo (o nível AA pede 4,5:1; 7:1 é o nível AAA).",
+      "Bordas de campos, ícones que informam e o anel de foco com pelo menos <strong>3:1</strong>.",
+      "Foco sempre visível e tudo alcançável pelo teclado (<a href=\"#\" data-spo-atalhos>atalhos do teclado</a>).",
+      "Alvos de toque de no mínimo 24 px, e 44 px em telas de toque.",
+      "Sem corte nem rolagem lateral em telas de 320 px de largura e com zoom de 200%.",
+      "Nenhum texto se perde com o espaçamento de texto ampliado.",
+      "Texto de leitura com no mínimo 12 px e entrelinha 1,5.",
+      "Informação nunca só pela cor: sempre há título, ícone, negrito ou ✓ junto.",
+      "O pedido de \"reduzir movimento\" do computador é respeitado.",
+    ]),
+    '<h3>O que você pode ajustar</h3>',
+    "<p>Em <strong>Personalizar Temas SPO</strong>, vale só no seu navegador:</p>",
+    lista([
+      "tema claro, escuro ou automático, e 8 cores de destaque;",
+      "contraste (suave, médio ou reforçado), densidade e estilo dos cartões;",
+      "fontes, tamanho do texto até 150%, densidade do texto, entrelinha e largura de leitura;",
+      "cores dos gráficos para daltonismo, foco reforçado, links sublinhados, brilho reduzido e movimento;",
+      "atalhos de uma tecla do teclado.",
+    ]),
+    '<h3>Como é verificado</h3>',
+    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
+  ].join("");
+
+  let dialogo = null;
+  let abridor = null;
+  let documento = null; // cache da sessão da página
+
+  function montar() {
+    if (dialogo) return dialogo;
+    dialogo = document.createElement("div");
+    // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
+    dialogo.className = "spo-busca-fundo spo-padrao-fundo";
+    dialogo.hidden = true;
+    dialogo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-padrao-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-padrao-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      '    <div class="modal-header-text"><h2 id="spo-padrao-titulo" class="modal-header-title spo-busca-titulo" tabindex="-1">O padrão SPO-AA+</h2>',
+      '    <div class="modal-header-subtitle" id="spo-padrao-sub">Resumo para quem usa o SPO. Esc fecha.</div></div>',
+      "  </div>",
+      `  <div class="spo-padrao-corpo spo-doc" tabindex="0" role="region" aria-labelledby="spo-padrao-titulo">${RESUMO}</div>`,
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status spo-padrao-status" role="status" aria-live="polite"></p>',
+      '    <button type="button" class="btn btn-secondary sm spo-padrao-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    document.body.appendChild(dialogo);
+    dialogo.querySelector(".spo-padrao-fechar").addEventListener("click", () => fechar());
+    dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("click", (ev) => { // sumário do documento: rola dentro da janela
+      const a = ev.target.closest && ev.target.closest('a[href^="#doc-"]');
+      if (!a) return;
+      ev.preventDefault();
+      const alvo = dialogo.querySelector(a.getAttribute("href"));
+      if (alvo) { alvo.setAttribute("tabindex", "-1"); alvo.scrollIntoView({ block: "start" }); alvo.focus({ preventScroll: true }); }
+    });
+    dialogo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key !== "Tab") return;
+      const alvos = [...dialogo.querySelectorAll(FOCAVEIS)].filter(visivel);
+      if (!alvos.length) return;
+      const i = alvos.indexOf(document.activeElement);
+      ev.preventDefault();
+      const j = i < 0 ? 0 : (i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length;
+      alvos[j].focus();
+    });
+    return dialogo;
+  }
+
+  async function carregarDocumento() {
+    if (documento) return documento;
+    // [jean] feat/kit-documento-padrao: com X-Requested-With, a rota responde 401 (e não o redirecionamento
+    // para o login) quando não há sessão — a janela então pede para entrar no SPO (kit de mockup, sessão expirada)
+    const resp = await fetch("/api/documentos/padrao-spo-aa-plus", { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+    if (resp.status === 401) { const e = new Error("sem sessão"); e.semSessao = true; throw e; }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    documento = await resp.json();
+    return documento;
+  }
+
+  async function trocar(vista) {
+    const corpo = dialogo.querySelector(".spo-padrao-corpo");
+    const sub = dialogo.querySelector("#spo-padrao-sub");
+    const status = dialogo.querySelector(".spo-padrao-status");
+    const titulo = dialogo.querySelector("#spo-padrao-titulo");
+    if (vista === "resumo") {
+      corpo.innerHTML = RESUMO;
+      titulo.textContent = "O padrão SPO-AA+";
+      sub.textContent = "Resumo para quem usa o SPO. Esc fecha.";
+      status.textContent = "";
+      corpo.scrollTop = 0;
+      titulo.focus();
+      return;
+    }
+    corpo.innerHTML = "";
+    titulo.textContent = "Padrão SPO-AA+: documento técnico";
+    sub.textContent = "Regras para quem desenvolve o SPO, lidas do servidor. Esc fecha.";
+    status.textContent = "Carregando o documento técnico…";
+    titulo.focus();
+    try {
+      const doc = await carregarDocumento();
+      const sumario = doc.sumario.length
+        ? `<nav class="spo-doc-sumario" aria-label="Sumário"><strong>Sumário</strong><ol>${doc.sumario.map((s) => `<li><a href="#${s.id}">${s.titulo.replace(/^[\d.]+\s*/, "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</a></li>`).join("")}</ol></nav>`
+        : "";
+      corpo.innerHTML = sumario + doc.html;
+      status.textContent = "Documento técnico carregado.";
+      corpo.scrollTop = 0;
+      titulo.focus();
+    } catch (err) {
+      status.textContent = err && err.semSessao
+        ? "O documento técnico é para quem tem acesso ao SPO: entre no SPO neste navegador e abra de novo."
+        : "Não foi possível carregar o documento técnico agora. Tente de novo em instantes.";
+    }
+  }
+
+  function mostrar(vista = "resumo") {
+    montar();
+    if (!dialogo.hidden) return;
+    abridor = document.activeElement;
+    dialogo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    trocar(vista);
+  }
+
+  function fechar() {
+    if (!dialogo || dialogo.hidden) return;
+    dialogo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest("[data-spo-padrao]");
+    if (!a) return;
+    ev.preventDefault();
+    mostrar(a.dataset.spoPadrao === "tecnico" ? "tecnico" : "resumo");
+  });
+  // links da ajuda dos atalhos dentro do resumo: fecha esta janela antes
+  document.addEventListener("click", (ev) => {
+    if (dialogo && !dialogo.hidden && ev.target.closest && ev.target.closest(".spo-padrao-caixa [data-spo-atalhos]")) fechar();
+  }, true);
+
+  window.spoPadraoSpoAaPlus = { abrir: mostrar };
+})();
+
+/* ==========================================================================
+   [jean] Ponte de preferências para o PTA 2027 (feat/ponte-pta2027, 2026-11-14)
+   O código original do PTA 2027 manda ao mockup só o tema e a cor de destaque
+   (readThemePayload/postTheme, que não foram alterados). Este bloco manda, numa
+   mensagem própria ("spo-preferencias"), as demais escolhas do Personalizar
+   (data-spo-* e data-visual-* do <body>) e os tons de foco e destaque calculados;
+   no mockup, assets/spo-preferencias.js grava e assets/spo-preferencias.css aplica.
+   Manda quando o mockup carrega ou pede, e a cada mudança de preferência.
+   Também recebe do mockup os atalhos do teclado (Ctrl+K, "/", "?", Alt+M), que
+   com o foco dentro do iframe não chegam a esta página.
+   ========================================================================== */
+(function initPontePta2027() {
+  const ATRIBUTOS = ["spoFontUi", "spoFontData", "spoTableText", "spoLineHeight", "spoReading", "spoCvd",
+    "spoFocus", "spoLinks", "spoBrightness", "spoMotion", "spoKeys", "visualContrast", "visualDensity"];
+  const TOKENS = ["--spo-focus-ring", "--spo-focus-halo", "--spo-accent-text", "--spo-accent-graphic"];
+  const quadro = () => document.getElementById("pta2027-frame");
+
+  function pacote() {
+    const prefs = {};
+    ATRIBUTOS.forEach((k) => { if (document.body.dataset[k]) prefs[k] = document.body.dataset[k]; });
+    // "reduzir movimento" do sistema também vale no mockup
+    try { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) prefs.spoMotion = "reduce"; } catch (err) { /* sem matchMedia */ }
+    const estilo = getComputedStyle(document.body);
+    const tokens = {};
+    TOKENS.forEach((t) => { const v = estilo.getPropertyValue(t).trim(); if (v) tokens[t] = v; });
+    if (!tokens["--spo-focus-halo"]) tokens["--spo-focus-halo"] = document.body.classList.contains("theme-dark") ? "#000000" : "#ffffff";
+    return { type: "spo-preferencias", prefs, tokens };
+  }
+  function enviar() {
+    const f = quadro();
+    if (!f || !f.contentWindow) return;
+    try { f.contentWindow.postMessage(pacote(), window.location.origin); } catch (err) { /* quadro ainda carregando */ }
+  }
+
+  window.addEventListener("message", (ev) => {
+    const f = quadro();
+    if (!f || ev.origin !== window.location.origin || ev.source !== f.contentWindow) return;
+    const tipo = ev.data && ev.data.type;
+    if (tipo === "spo-preferencias-pedido") { enviar(); return; }
+    if (tipo !== "spo-atalho") return;
+    const acao = ev.data.acao;
+    if (acao.endsWith("uma-tecla") && document.body.dataset.spoKeys === "off") return;
+    if ((acao === "busca" || acao === "busca-uma-tecla") && window.spoBuscaTelas) window.spoBuscaTelas.abrir();
+    else if (acao === "ajuda-uma-tecla" && window.spoAtalhosTeclado) window.spoAtalhosTeclado.abrir();
+    else if (acao === "menu" && window.spoAtalhosTeclado) window.spoAtalhosTeclado.irParaMenu();
+  });
+
+  // mudanças de preferência (atributos do <body>, tema) e quadro novo (a tela é carregada por partial)
+  new MutationObserver(enviar).observe(document.body, { attributes: true, attributeFilter: ["class", ...ATRIBUTOS.map((k) => "data-" + k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()))] });
+  document.addEventListener("load", (ev) => { if (ev.target && ev.target.id === "pta2027-frame") enviar(); }, true);
+  document.addEventListener("spo-common-visual-change", enviar);
+  window.spoPontePta2027 = { enviar, pacote };
+})();
+
+/* ==========================================================================
+   [jean] Sugestão "Leitura confortável" ao escolher a Atkinson Hyperlegible
+   (feat/sugestao-atkinson, 2026-11-15; pedido do dev. Jean, com a opção "sugestão,
+   não automático" decidida com ele). Ao escolher a Atkinson na "Fonte da interface",
+   aparece, abaixo dela, a oferta de também aplicar texto Grande (112%), entrelinha
+   Ampla (1,75) e leitura Intermediária (72ch) e, desde a bateria 2 (2026-11-15), a
+   Atkinson Hyperlegible Mono nas tabelas e dados; a oferta lista só o que falta.
+   Nada muda sem o clique:
+   - "Aplicar as três": sobe só o que estiver abaixo do sugerido (não reduz quem já
+     usa mais), pelos próprios botões do cartão (mesmo caminho do clique, grava e
+     aplica); cada opção continua ajustável depois;
+   - "Agora não": só fecha a sugestão desta vez.
+   Aparece TODA VEZ que a Atkinson é escolhida (pedido do dev. Jean: a primeira
+   versão lembrava o "Agora não" e não oferecia mais), exceto se as três opções já
+   estiverem no sugerido ou acima (não há o que oferecer).
+   ========================================================================== */
+(function initSugestaoAtkinson() {
+  // [jean] feat/densidade-do-texto: a densidade Legível entra na "Leitura confortável" (o padrão SPO é o
+  // Intermediário; o Legível fica para quem escolhe a Atkinson, decisão do dev. Jean)
+  const ORDEM = { size: ["default", "large", "larger", "xlarge"], line: ["default", "ample", "larger"], reading: ["default", "medium", "strict"], table: ["compact", "medium", "legible"] };
+  const ALVO = { size: "large", line: "ample", reading: "medium", table: "legible" };
+  const ATR = { size: "spoTextSize", line: "spoLineHeight", reading: "spoReading", table: "spoTableText" };
+  const SEM_VALOR = { size: "default", line: "default", reading: "default", table: "medium" };
+  const abaixo = (k) => ORDEM[k].indexOf(document.body.dataset[ATR[k]] || SEM_VALOR[k]) < ORDEM[k].indexOf(ALVO[k]);
+  // a fonte dos dados não tem "acima": falta enquanto não for a Atkinson Mono
+  const faltando = () => [...(document.body.dataset.spoFontData === "atkinson-mono" ? [] : ["data"]), ...Object.keys(ALVO).filter(abaixo)];
+  const NOMES = { data: "a <strong>Atkinson Hyperlegible Mono</strong> nas tabelas e dados", size: "texto <strong>Grande (112%)</strong>", line: "entrelinha <strong>Ampla (1,75)</strong>", reading: "leitura <strong>Intermediária (72ch)</strong>", table: "densidade do texto <strong>Legível</strong>" };
+  const VALOR = { data: "atkinson-mono", ...ALVO };
+  const BOTAO = ["", "Aplicar", "Aplicar as duas", "Aplicar as três", "Aplicar as quatro", "Aplicar as cinco"];
+  const lista = (itens) => (itens.length < 2 ? itens.join("") : itens.slice(0, -1).join(", ") + " e " + itens[itens.length - 1]);
+
+  function remover() { document.getElementById("spo-sugestao-atkinson")?.remove(); }
+
+  function mostrar(card) {
+    remover();
+    const falta = faltando();
+    if (!falta.length) return;
+    const grupo = card.querySelector('[data-spo-font-group="ui"]');
+    if (!grupo) return;
+    const caixa = document.createElement("div");
+    caixa.id = "spo-sugestao-atkinson";
+    caixa.className = "spo-sugestao";
+    caixa.setAttribute("role", "status");
+    caixa.innerHTML = [
+      '<p><strong>Leitura confortável:</strong> quer aplicar também ' + lista(falta.map((k) => NOMES[k])) + '? ' + (falta.length > 1 ? 'Cada opção continua ajustável depois.' : 'A opção continua ajustável depois.') + '</p>',
+      '<div class="spo-sugestao-acoes">',
+      '<button type="button" class="btn btn-primary sm" data-sugestao="aplicar">' + BOTAO[falta.length] + '</button>',
+      '<button type="button" class="btn btn-secondary sm" data-sugestao="dispensar">Agora não</button>',
+      '</div>',
+    ].join("");
+    grupo.after(caixa);
+    caixa.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-sugestao]");
+      if (!b) return;
+      if (b.dataset.sugestao === "aplicar") {
+        const mudou = faltando();
+        mudou.forEach((k) => card.querySelector('[data-spo-font-pref="' + k + '"][data-spo-font-value="' + VALOR[k] + '"]')?.click());
+        const nomes = { data: "Atkinson Hyperlegible Mono nas tabelas e dados", size: "texto Grande (112%)", line: "entrelinha Ampla (1,75)", reading: "leitura Intermediária (72ch)", table: "densidade do texto Legível" };
+        const status = card.querySelector(".spo-fontes-status");
+        if (status) status.textContent = "Leitura confortável aplicada neste navegador: " + mudou.map((k) => nomes[k]).join(", ") + ".";
+      }
+      // o foco volta para a opção "Fonte da interface" (a caixa vai sumir)
+      card.querySelector('[data-spo-font-toggle="ui"]')?.focus();
+      remover();
+    });
+  }
+
+  // depois do clique tratado pelo initFontesPersonalizar (registrado antes)
+  document.addEventListener("click", (ev) => {
+    const op = ev.target.closest && ev.target.closest('#spo-fontes-card [data-spo-font-pref="ui"]');
+    if (!op) return;
+    if (op.dataset.spoFontValue === "atkinson") mostrar(op.closest("#spo-fontes-card"));
+    else remover();
+  });
+})();
+
+/* ==========================================================================
+   [jean] Navegação pelo teclado nas tabelas (feat/teclado-tabelas, 2026-11-15;
+   pedido do dev. Jean; padrão "grade" do WAI-ARIA, como nas planilhas da web)
+   Em toda tabela de dados da área de conteúdo:
+   - Tab entra na tabela numa célula só (a última visitada; na primeira vez, a
+     primeira célula de dados): "tabindex itinerante", leve em tabelas grandes
+     (só a célula da vez tem tabindex 0);
+   - setas andam de célula em célula (também pelo cabeçalho e pela linha dos
+     filtros); Home/End vão ao início/fim da linha; Ctrl+Home/End à primeira/
+     última célula; PageUp/PageDown sobem/descem 10 linhas;
+   - Enter entra no primeiro campo, filtro, botão ou link da célula; Esc, dentro
+     dele, volta para a célula (se o próprio controle não usou o Esc).
+   As teclas só agem com o foco na própria célula: dentro de um campo, as setas
+   seguem o comportamento de sempre. Os controles das células continuam na
+   ordem do Tab. A tabela não ganha role="grid" (o leitor de tela segue lendo-a
+   como tabela). Alt + setas não foi usado: no navegador volta/avança a página.
+   ========================================================================== */
+(function initNavegacaoTabelas() {
+  const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const area = () => document.getElementById("content-area");
+  const ehTabela = (t) => t && t.tBodies && t.tBodies.length && t.rows.length > 1 && t.getAttribute("role") !== "presentation";
+  const visivel = (el) => !!(el && el.getClientRects().length);
+
+  // controles das células que saem da ordem do Tab (alcançados pelas setas + Enter): os do cabeçalho
+  // (títulos e filtros) e os botões e links das linhas; campos de digitação das linhas continuam no Tab;
+  // nada dentro de uma lista de filtro aberta (.mf-panel) é tocado
+  const LISTAS = ".mf-panel, .planning-action-checklist-panel, .planning-action-checklist-options";
+  const ehControleDeCelula = (el) => !el.closest(LISTAS) && (!!el.closest("thead") || el.matches('button, a[href], summary, [role="button"]'));
+  function tirarDoTab(t) {
+    t.querySelectorAll(FOCAVEIS).forEach((el) => {
+      if (el.matches("td, th") || el.dataset.spoTabOrig !== undefined || !ehControleDeCelula(el)) return;
+      el.dataset.spoTabOrig = el.hasAttribute("tabindex") ? el.getAttribute("tabindex") : "";
+      el.tabIndex = -1;
+    });
+  }
+  function preparar(t) {
+    if (!ehTabela(t) || !visivel(t)) return;
+    tirarDoTab(t);
+    const corpo = t.tBodies[0];
+    const primeiraLinha = corpo && [...corpo.rows].find(visivel);
+    const primeiraDeDados = primeiraLinha && primeiraLinha.cells[0];
+    const atual = t.querySelector('td[tabindex="0"], th[tabindex="0"]');
+    if (atual) {
+      // escolha automática feita antes de os dados chegarem (só o cabeçalho): passa à 1ª célula de dados
+      if (atual.dataset.spoTabAuto && primeiraDeDados && atual !== primeiraDeDados && !corpo.contains(atual) && document.activeElement !== atual) {
+        atual.tabIndex = -1;
+        delete atual.dataset.spoTabAuto;
+        primeiraDeDados.tabIndex = 0;
+        primeiraDeDados.dataset.spoTabAuto = "1";
+      }
+      return;
+    }
+    const cabecalho = [...t.rows].find(visivel);
+    const inicio = primeiraDeDados || (cabecalho && cabecalho.cells[0]);
+    if (inicio) { inicio.tabIndex = 0; inicio.dataset.spoTabAuto = "1"; }
+  }
+  let espera = 0;
+  function prepararTodas() {
+    clearTimeout(espera);
+    espera = setTimeout(() => area()?.querySelectorAll("table").forEach(preparar), 150);
+  }
+  const alvo = area() || document.body;
+  new MutationObserver(prepararTodas).observe(alvo, { childList: true, subtree: true });
+  prepararTodas();
+
+  // a célula que recebe o foco vira a "da vez" (tabindex 0); as outras da tabela, -1
+  function tornarDaVez(cel) {
+    delete cel.dataset.spoTabAuto; // a pessoa já navegou: a escolha deixa de ser automática
+    const t = cel.closest("table");
+    t.querySelectorAll('td[tabindex="0"], th[tabindex="0"]').forEach((c) => { if (c !== cel) c.tabIndex = -1; });
+    cel.tabIndex = 0;
+  }
+  // o foco sozinho só rola o bastante para a célula aparecer em parte (voltando para a esquerda, a
+  // 1ª coluna ficava cortada e a barra não voltava ao início — achado do dev. Jean): a célula vai
+  // inteira à vista e, na 1ª coluna, a rolagem lateral volta ao começo
+  function rolagemLateral(el) {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const c = getComputedStyle(p);
+      if (/(auto|scroll)/.test(c.overflowX) && p.scrollWidth > p.clientWidth) return p;
+    }
+    return null;
+  }
+  function irPara(cel) {
+    if (!cel || !visivel(cel)) return;
+    tornarDaVez(cel);
+    cel.focus({ preventScroll: true });
+    const caixa = rolagemLateral(cel);
+    if (caixa) {
+      const rc = cel.getBoundingClientRect();
+      const rx = caixa.getBoundingClientRect();
+      if (cel.cellIndex === 0) caixa.scrollLeft = 0;
+      else if (rc.left < rx.left) caixa.scrollLeft -= rx.left - rc.left;
+      else if (rc.right > rx.right) caixa.scrollLeft += Math.min(rc.right - rx.right, rc.left - rx.left);
+    }
+    cel.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  document.addEventListener("focusin", (ev) => {
+    const cel = ev.target;
+    if (cel && cel.matches && cel.matches("#content-area table :is(td, th)[tabindex]")) tornarDaVez(cel);
+  });
+  // clicar numa célula (fora de um controle) ativa a navegação a partir dela
+  document.addEventListener("click", (ev) => {
+    const el = ev.target;
+    if (!el || !el.closest || el.closest('a[href], button, input, select, textarea, label, summary, [role="button"]') || el.closest(LISTAS)) return;
+    const cel = el.closest("td, th");
+    const t = cel && cel.closest("table");
+    if (!t || !t.closest("#content-area") || !ehTabela(t) || !visivel(cel)) return;
+    if (window.getSelection && String(window.getSelection()).length) return; // seleção de texto com o mouse
+    tornarDaVez(cel);
+    cel.focus({ preventScroll: true });
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.altKey || ev.metaKey) return;
+    const alvoEv = ev.target;
+    if (!alvoEv || !alvoEv.closest) return;
+    const cel = alvoEv.closest("td, th");
+    const t = cel && cel.closest("table");
+    if (!t || !t.closest("#content-area") || !ehTabela(t)) return;
+    // dentro de um controle da célula: Esc volta para a célula; nos botões e filtros (não nos campos de
+    // digitação, nem com a lista do filtro aberta), as setas e afins andam a partir da célula
+    if (alvoEv !== cel) {
+      if (alvoEv.closest(LISTAS)) return;
+      if (ev.key === "Escape" && !ev.ctrlKey && !ev.shiftKey) { ev.preventDefault(); irPara(cel); return; }
+      const botao = alvoEv.matches('button, a[href], summary, [role="button"]') && alvoEv.getAttribute("aria-expanded") !== "true";
+      if (!botao || !/^(Arrow(Up|Down|Left|Right)|Home|End|Page(Up|Down))$/.test(ev.key)) return;
+    }
+    // só linhas visíveis (há linhas escondidas, como a de "nenhum resultado"; o foco não entra nelas)
+    const linhas = [...t.rows].filter(visivel);
+    const r = linhas.indexOf(cel.parentElement);
+    if (r < 0) return;
+    const c = cel.cellIndex;
+    const naLinha = (ri, ci) => { const l = linhas[Math.max(0, Math.min(linhas.length - 1, ri))]; return l && l.cells[Math.max(0, Math.min(l.cells.length - 1, ci))]; };
+    let destino = null;
+    switch (ev.key) {
+      case "ArrowRight": if (!ev.ctrlKey) destino = naLinha(r, c + 1); break;
+      case "ArrowLeft": if (!ev.ctrlKey) destino = naLinha(r, c - 1); break;
+      case "ArrowDown": if (!ev.ctrlKey) destino = naLinha(r + 1, c); break;
+      case "ArrowUp": if (!ev.ctrlKey) destino = naLinha(r - 1, c); break;
+      case "Home": destino = ev.ctrlKey ? naLinha(0, 0) : naLinha(r, 0); break;
+      case "End": destino = ev.ctrlKey ? naLinha(linhas.length - 1, Infinity) : naLinha(r, Infinity); break;
+      case "PageDown": destino = naLinha(r + 10, c); break;
+      case "PageUp": destino = naLinha(r - 10, c); break;
+      case "Enter": {
+        const dentro = [...cel.querySelectorAll(FOCAVEIS)].find(visivel);
+        if (dentro) { ev.preventDefault(); dentro.focus(); }
+        return;
+      }
+      default: return;
+    }
+    if (!destino) return;
+    ev.preventDefault();
+    irPara(destino);
+  });
+})();
+
+
+// [jean] feat/teclado-tabelas: paginação das tabelas pelo teclado (achado do dev. Jean no PED: com o foco
+// num botão de página, as setas não andavam e não havia como voltar à tabela). ← → andam pelos botões
+// ativos, Home/End primeiro/último; ↑ ou Esc voltam à célula da vez da tabela. Depois de trocar de página
+// (Enter), o foco fica na paginação redesenhada (no mesmo número ou na página atual), em vez de cair no início.
+(function initTecladoPaginacao() {
+  const SEL = "#content-area .pagination button"; // a FIP 613 e outras não põem a classe page-btn nos botões
+  const botoes = (pag) => [...pag.querySelectorAll("button")].filter((b) => !b.disabled && b.getClientRects().length);
+  function tabelaDa(pag) {
+    let el = pag;
+    while (el && el.id !== "content-area") {
+      const t = el.parentElement && [...el.parentElement.querySelectorAll("table")].find((x) => x.getClientRects().length && x.tBodies.length);
+      if (t) return t;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey) return;
+    const btn = ev.target && ev.target.closest && ev.target.closest(SEL);
+    if (!btn || btn !== ev.target) return;
+    const pag = btn.closest(".pagination");
+    const lista = botoes(pag);
+    const i = lista.indexOf(btn);
+    let alvo = null;
+    if (ev.key === "ArrowLeft") alvo = lista[i - 1];
+    else if (ev.key === "ArrowRight") alvo = lista[i + 1];
+    else if (ev.key === "Home") alvo = lista[0];
+    else if (ev.key === "End") alvo = lista[lista.length - 1];
+    else if ((ev.key === "ArrowUp" || ev.key === "Escape") && !ev.shiftKey) {
+      const t = tabelaDa(pag);
+      alvo = t && (t.querySelector('td[tabindex="0"], th[tabindex="0"]') || (t.tBodies[0] && t.tBodies[0].rows[0] && t.tBodies[0].rows[0].cells[0]));
+      if (alvo && !alvo.hasAttribute("tabindex")) alvo.tabIndex = 0;
+    } else return;
+    ev.preventDefault();
+    if (alvo) { alvo.focus(); alvo.scrollIntoView({ block: "nearest", inline: "nearest" }); }
+  });
+  // a paginação é redesenhada a cada troca de página; devolve o foco a ela
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest(SEL);
+    if (!btn || document.activeElement !== btn) return;
+    const pag = btn.closest(".pagination");
+    const idPag = pag.id;
+    const rotulo = btn.textContent.trim();
+    let tentativas = 0;
+    const devolver = () => {
+      const ativo = document.activeElement;
+      if (ativo === btn && btn.isConnected) { if (++tentativas < 10) setTimeout(devolver, 200); return; } // ainda não redesenhou (carga assíncrona)
+      if (ativo && ativo !== document.body && ativo.isConnected) return; // o foco já está em outro lugar
+      const atual = (idPag && document.getElementById(idPag)) || (pag.isConnected ? pag : null);
+      if (atual) {
+        const lista = botoes(atual);
+        const destino = lista.find((b) => b.textContent.trim() === rotulo) || atual.querySelector("button.active, button[aria-current='page']") || lista[0];
+        if (destino) { destino.focus({ preventScroll: true }); return; }
+      }
+      if (++tentativas < 10) setTimeout(devolver, 200);
+    };
+    setTimeout(devolver, 0);
+  }, true);
 })();

@@ -1,0 +1,862 @@
+<!doctype html>
+<!--
+  [jean] feat/kit-mockup (2026-11-15) — Kit de mockup SPO-AA+.
+
+  Ponto de partida de toda tela nova do SPO, desde o primeiro mockup (padrão SPO-AA+, §6.1).
+  Usa o próprio style.css do SPO e lê do main.js a paleta dos destaques (ACCENT_COLORS), as opções do
+  Personalizar e a navegação pelo teclado das tabelas: nada aqui é cópia, então o kit acompanha o SPO.
+
+  Como usar: com o SPO local ligado, abra http://127.0.0.1:5000/static/kit/mockup-spo-aa-plus.html
+  (não precisa entrar no SPO). Copie este arquivo para o mockup novo e troque o conteúdo de exemplo,
+  mantendo as classes. Pelo painel "Preferências do kit", veja a tela nos dois temas, nos 8 destaques,
+  nas três densidades do texto, a 150% e com as demais opções do Personalizar.
+  Aberto direto do disco (file://), o navegador bloqueia a leitura do main.js: o kit avisa e fica no
+  padrão SPO sem os destaques nem o teclado das tabelas.
+
+  O padrão em si: botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no cabeçalho do kit (a mesma janela
+  do SPO; o documento técnico pede o SPO logado neste navegador). Para o agente ou quem lê o código, a fonte é
+  docs/padrao-visual-spo-aa-plus.md (seção 6.4 = o kit; 6.1 = o checklist de tela nova).
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kit de mockup SPO-AA+</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="kit-mockup.css">
+</head>
+<body class="kit-mockup-body" data-spo-font-ui="inter" data-spo-font-data="intel-mono" data-spo-text-size="default"
+      data-spo-table-text="medium" data-spo-line-height="default" data-spo-reading="default" data-spo-cvd="default"
+      data-spo-focus="default" data-spo-links="default" data-spo-brightness="default" data-spo-motion="auto"
+      data-spo-keys="on" data-visual-density="comfortable" data-visual-density-pref="auto"
+      data-visual-contrast="standard" data-visual-cards="soft" data-visual-diagrams="auto" data-visual-diagram-theme="light" data-accent-preference="classic" data-visual-contract-preset="default">
+  <a class="kit-pulo" href="#content-area">Ir para o conteúdo</a>
+
+
+  <div class="main">
+    <!-- o painel fica dentro do .main para alinhar com o conteúdo (o .main tem a margem da barra lateral do SPO) -->
+    <aside class="kit-painel personalizar-spo" aria-labelledby="kit-painel-titulo">
+      <!-- cabeçalho de página do SPO (§4.4), como o do Personalizar -->
+      <header class="module-header kit-cabecalho">
+        <div class="module-header-copy">
+          <div class="module-eyebrow">Kit de mockup · SPO-AA+</div>
+          <h1 id="kit-painel-titulo">Preferências do kit</h1>
+          <p>Os mesmos cartões e regras do Personalizar e os presets do Contrato Visual. Abre com as suas preferências do SPO neste navegador; o que mudar aqui vale só nesta página (nada é gravado; recarregar a página volta às suas).</p>
+          <div class="kit-painel-acoes">
+            <button class="btn btn-secondary sm" type="button" id="kit-padrao">Padrão SPO</button>
+            <button class="btn btn-secondary sm" type="button" id="kit-recolher" aria-expanded="true" aria-controls="kit-opcoes kit-previas-bloco">Recolher</button>
+            <a class="btn btn-secondary sm" href="#" data-spo-padrao><i class="bi bi-universal-access" aria-hidden="true"></i><span>O padrão SPO-AA+</span></a>
+            <a class="btn btn-secondary sm" href="#" data-spo-padrao="tecnico"><i class="bi bi-journal-code" aria-hidden="true"></i><span>Documento técnico</span></a>
+          </div>
+        </div>
+        <i class="bi bi-brush" aria-hidden="true"></i>
+      </header>
+      <div id="kit-aviso" class="alert alert-info kit-aviso" role="status" hidden></div>
+      <!-- cartões copiados de templates/partials/atualizar_personalizar_spo.html (o tests/test_kit_mockup.py
+           confere que continuam iguais); quem dá o comportamento é o kit-mockup.js, sem gravar nada -->
+      <div id="kit-opcoes" class="personalizar-grid kit-opcoes">
+        <article class="card personalizar-card">
+          <div class="eyebrow">Tema</div>
+          <div class="card-title">Modo de aparência</div>
+          <div class="preference-row-group" role="group" aria-label="Modo de aparência">
+            <button class="preference-row" type="button" data-theme-choice="light">
+              <i class="bi bi-sun"></i>
+              <span>
+                <strong>Claro</strong>
+                <small>Usar sempre o modo claro.</small>
+              </span>
+            </button>
+            <button class="preference-row" type="button" data-theme-choice="auto">
+              <i class="bi bi-circle-half"></i>
+              <span>
+                <strong>Automático</strong>
+                <small>Acompanhar o tema do sistema.</small>
+              </span>
+            </button>
+            <button class="preference-row" type="button" data-theme-choice="dark">
+              <i class="bi bi-moon"></i>
+              <span>
+                <strong>Escuro</strong>
+                <small>Usar sempre o modo escuro.</small>
+              </span>
+            </button>
+          </div>
+        </article>
+        <article class="card personalizar-card">
+          <div class="eyebrow">Cor</div>
+          <div class="card-title">Cor de destaque</div>
+          <p class="muted">É possível definir as cores de destaque do ambiente.</p>
+          <div class="accent-palette" role="group" aria-label="Cor de destaque">
+            <button class="accent-swatch" type="button" title="Clássico (padrão SPO)" aria-label="Clássico (padrão SPO)" data-accent-choice="classic" style="--swatch: #0f7c68;"><span>Clássico (padrão SPO)</span></button>
+            <button class="accent-swatch" type="button" title="Ciano" aria-label="Ciano" data-accent-choice="teal" style="--swatch: #19a7cc;"><span>Ciano</span></button>
+            <button class="accent-swatch" type="button" title="Azul" aria-label="Azul" data-accent-choice="blue" style="--swatch: #3584e4;"><span>Azul</span></button>
+            <button class="accent-swatch" type="button" title="Roxo" aria-label="Roxo" data-accent-choice="purple" style="--swatch: #9141ac;"><span>Roxo</span></button>
+            <button class="accent-swatch" type="button" title="Vermelho" aria-label="Vermelho" data-accent-choice="red" style="--swatch: #e01b24;"><span>Vermelho</span></button>
+            <button class="accent-swatch" type="button" title="Laranja" aria-label="Laranja" data-accent-choice="orange" style="--swatch: #ff7800;"><span>Laranja</span></button>
+            <button class="accent-swatch" type="button" title="Amarelo" aria-label="Amarelo" data-accent-choice="yellow" style="--swatch: #f6d32d;"><span>Amarelo</span></button>
+            <button class="accent-swatch" type="button" title="Verde" aria-label="Verde" data-accent-choice="green" style="--swatch: #33b865;"><span>Verde</span></button>
+          </div>
+        </article>
+        <article class="card personalizar-card visual-preferences-card">
+          <div class="eyebrow">Preferências comuns</div>
+          <div class="card-title">Leitura e componentes</div>
+          <p class="muted">Preferências locais para administradores, sem alterar o contrato protegido do SPO.</p>
+          <div class="visual-pref-groups">
+            <div class="visual-pref-group" data-visual-pref-group="density">
+              <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="density" aria-expanded="false" aria-controls="visual-pref-panel-density">
+                <i class="bi bi-layout-sidebar"></i>
+                <span>
+                  <strong>Densidade visual</strong>
+                  <small data-visual-pref-current="density">Automática (pela largura da tela)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron"></i>
+              </button>
+              <div class="visual-pref-options" id="visual-pref-panel-density" data-visual-pref-panel="density" role="group" aria-label="Densidade visual" hidden>
+                <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="auto">
+                  <i class="bi bi-aspect-ratio"></i>
+                  <span><strong>Automática (padrão SPO)</strong><small>Confortável em telas largas, compacta em tablets e notebooks pequenos, ampla no celular. Acompanha o zoom e o tamanho da janela.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="comfortable">
+                  <i class="bi bi-layout-text-sidebar-reverse"></i>
+                  <span><strong>Confortável</strong><small>Espaço padrão de leitura.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="compact">
+                  <i class="bi bi-arrows-collapse"></i>
+                  <span><strong>Compacta</strong><small>Menos respiro em painéis.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="density" data-visual-value="spacious">
+                  <i class="bi bi-arrows-expand"></i>
+                  <span><strong>Ampla</strong><small>Mais área de leitura.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-visual-pref-group="contrast">
+              <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="contrast" aria-expanded="false" aria-controls="visual-pref-panel-contrast">
+                <i class="bi bi-circle-half"></i>
+                <span>
+                  <strong>Contraste</strong>
+                  <small data-visual-pref-current="contrast">Suave (padrão SPO)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron"></i>
+              </button>
+              <div class="visual-pref-options" id="visual-pref-panel-contrast" data-visual-pref-panel="contrast" role="group" aria-label="Contraste visual" hidden>
+                <button type="button" class="visual-pref-option" data-visual-pref="contrast" data-visual-value="standard">
+                  <i class="bi bi-circle-half"></i>
+                  <span><strong>Suave (padrão SPO)</strong><small>Contornos leves; seleção e foco em destaque.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="contrast" data-visual-value="medium">
+                  <i class="bi bi-square"></i>
+                  <span><strong>Médio</strong><small>Opções e cartões clicáveis com contorno nítido.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="contrast" data-visual-value="enhanced">
+                  <i class="bi bi-border-width"></i>
+                  <span><strong>Reforçado</strong><small>Bordas e foco mais claros.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-visual-pref-group="cards">
+              <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="cards" aria-expanded="false" aria-controls="visual-pref-panel-cards">
+                <i class="bi bi-layers"></i>
+                <span>
+                  <strong>Estilo dos cartões</strong>
+                  <small data-visual-pref-current="cards">Suave</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron"></i>
+              </button>
+              <div class="visual-pref-options" id="visual-pref-panel-cards" data-visual-pref-panel="cards" role="group" aria-label="Estilo dos cartões" hidden>
+                <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="soft">
+                  <i class="bi bi-layers"></i>
+                  <span><strong>Suave</strong><small>Sombra leve nos blocos.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="outlined">
+                  <i class="bi bi-square"></i>
+                  <span><strong>Contornado</strong><small>Borda mais presente.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="cards" data-visual-value="flat">
+                  <i class="bi bi-app"></i>
+                  <span><strong>Plano</strong><small>Sem sombra decorativa.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-visual-pref-group="diagrams">
+              <button class="visual-pref-toggle" type="button" data-visual-pref-toggle="diagrams" aria-expanded="false" aria-controls="visual-pref-panel-diagrams">
+                <i class="bi bi-diagram-3"></i>
+                <span>
+                  <strong>Diagramas</strong>
+                  <small data-visual-pref-current="diagrams">Automático</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron"></i>
+              </button>
+              <div class="visual-pref-options" id="visual-pref-panel-diagrams" data-visual-pref-panel="diagrams" role="group" aria-label="Preferência de diagramas" hidden>
+                <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="auto">
+                  <i class="bi bi-magic"></i>
+                  <span><strong>Automático</strong><small>Acompanha claro/escuro.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="light">
+                  <i class="bi bi-brightness-high"></i>
+                  <span><strong>Claro</strong><small>Força gráficos claros.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="dark">
+                  <i class="bi bi-moon-stars"></i>
+                  <span><strong>Escuro</strong><small>Força gráficos escuros.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-visual-pref="diagrams" data-visual-value="high">
+                  <i class="bi bi-eye"></i>
+                  <span><strong>Alto contraste</strong><small>Grade e cores reforçadas.</small></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="card personalizar-card visual-preferences-card" id="spo-fontes-card">
+          <div class="eyebrow">Leitura</div>
+          <div class="card-title">Fontes e tamanho do texto</div>
+          <p class="muted">Escolha a fonte da interface, a das tabelas e dados, o tamanho do texto e a densidade do texto. Vale só neste navegador.</p>
+          <div class="visual-pref-groups">
+            <div class="visual-pref-group" data-spo-font-group="ui">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="ui" aria-expanded="false" aria-controls="spo-font-panel-ui">
+                <i class="bi bi-fonts" aria-hidden="true"></i>
+                <span>
+                  <strong>Fonte da interface</strong>
+                  <small data-spo-font-current="ui">Inter (padrão SPO)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-ui" data-spo-font-panel="ui" role="group" aria-label="Fonte da interface" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="classic">
+                  <i class="bi bi-type" aria-hidden="true"></i>
+                  <span><strong>Do sistema</strong><small>A fonte antiga do SPO: varia com o computador (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux).</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="inter">
+                  <i class="bi bi-type" aria-hidden="true"></i>
+                  <span><strong>Inter (padrão SPO)</strong><small>Muito legível em tamanhos pequenos; igual em qualquer computador ou celular.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="atkinson">
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                  <span><strong>Atkinson Hyperlegible</strong><small>Feita para baixa visão: letras bem distintas.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="source">
+                  <i class="bi bi-type" aria-hidden="true"></i>
+                  <span><strong>Source Sans 3</strong><small>Leitura confortável em textos longos.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="ui" data-spo-font-value="mulish">
+                  <i class="bi bi-type" aria-hidden="true"></i>
+                  <span><strong>Mulish</strong><small>Formas arredondadas e abertas, leitura corrida suave. O I maiúsculo e o l minúsculo são parecidos.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="data">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="data" aria-expanded="false" aria-controls="spo-font-panel-data">
+                <i class="bi bi-table" aria-hidden="true"></i>
+                <span>
+                  <strong>Fonte de tabelas e dados</strong>
+                  <small data-spo-font-current="data">Intel One Mono (padrão SPO)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-data" data-spo-font-panel="data" role="group" aria-label="Fonte de tabelas e dados" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="classic">
+                  <i class="bi bi-type" aria-hidden="true"></i>
+                  <span><strong>Do sistema</strong><small>A fonte antiga do SPO: varia com o computador (Segoe UI no Windows, a do sistema no Mac, Cantarell no Linux).</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="inter">
+                  <i class="bi bi-123" aria-hidden="true"></i>
+                  <span><strong>Inter (números alinhados)</strong><small>Algarismos de mesma largura nas colunas.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="plex-sans">
+                  <i class="bi bi-123" aria-hidden="true"></i>
+                  <span><strong>IBM Plex Sans</strong><small>Técnica, com números alinhados.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="intel-mono">
+                  <i class="bi bi-code" aria-hidden="true"></i>
+                  <span><strong>Intel One Mono (padrão SPO)</strong><small>Monoespaçada feita para baixa visão; números alinhados; tabelas mais largas.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="data" data-spo-font-value="atkinson-mono">
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                  <span><strong>Atkinson Hyperlegible Mono</strong><small>Monoespaçada da família Atkinson (Braille Institute), feita para baixa visão; combina com a Atkinson na interface.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="size">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="size" aria-expanded="false" aria-controls="spo-font-panel-size">
+                <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                <span>
+                  <strong>Tamanho do texto</strong>
+                  <small data-spo-font-current="size">Padrão (100%)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-size" data-spo-font-panel="size" role="group" aria-label="Tamanho do texto" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="default">
+                  <i class="bi bi-fonts" aria-hidden="true"></i>
+                  <span><strong>Padrão (100%)</strong><small>Tamanho atual.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="large">
+                  <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                  <span><strong>Grande (112%)</strong><small>Amplia a área de conteúdo.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="larger">
+                  <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                  <span><strong>Maior (125%)</strong><small>Amplia mais; o menu e o topo não mudam.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="size" data-spo-font-value="xlarge">
+                  <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                  <span><strong>Muito grande (150%)</strong><small>Para baixa visão: amplia a área de conteúdo em 50%; as telas se reorganizam na largura menor.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="table">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="table" aria-expanded="false" aria-controls="spo-font-panel-table">
+                <i class="bi bi-layout-text-window" aria-hidden="true"></i>
+                <span>
+                  <strong>Densidade do texto</strong>
+                  <small data-spo-font-current="table">Intermediário (padrão SPO)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-table" data-spo-font-panel="table" role="group" aria-label="Densidade do texto" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="compact">
+                  <i class="bi bi-list" aria-hidden="true"></i>
+                  <span><strong>Compacto</strong><small>Mais informação na tela, letra menor: tabelas com 10 px.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="medium">
+                  <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
+                  <span><strong>Intermediário (padrão SPO)</strong><small>Tabelas com 12 px e texto um passo abaixo do Legível; bom equilíbrio entre informação e leitura.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="table" data-spo-font-value="legible">
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                  <span><strong>Legível</strong><small>Tabelas com 13 px e texto maior; linhas mais altas. Indicado para baixa visão (entra na "Leitura confortável" da Atkinson).</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="line">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="line" aria-expanded="false" aria-controls="spo-font-panel-line">
+                <i class="bi bi-text-paragraph" aria-hidden="true"></i>
+                <span>
+                  <strong>Espaçamento entre linhas</strong>
+                  <small data-spo-font-current="line">Padrão (1,5)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-line" data-spo-font-panel="line" role="group" aria-label="Espaçamento entre linhas" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="default">
+                  <i class="bi bi-text-left" aria-hidden="true"></i>
+                  <span><strong>Padrão (1,5)</strong><small>Espaçamento padrão SPO no texto corrido.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="ample">
+                  <i class="bi bi-distribute-vertical" aria-hidden="true"></i>
+                  <span><strong>Amplo (1,75)</strong><small>Mais espaço entre as linhas de descrições, ajudas e avisos.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="line" data-spo-font-value="larger">
+                  <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+                  <span><strong>Mais amplo (2,0)</strong><small>O maior espaçamento; indicado para leitura com baixa visão ou dislexia. Títulos e tabelas não mudam.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="reading">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="reading" aria-expanded="false" aria-controls="spo-font-panel-reading">
+                <i class="bi bi-book" aria-hidden="true"></i>
+                <span>
+                  <strong>Leitura</strong>
+                  <small data-spo-font-current="reading">Padrão SPO (largura livre)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-reading" data-spo-font-panel="reading" role="group" aria-label="Leitura" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="default">
+                  <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+                  <span><strong>Padrão SPO (largura livre)</strong><small>O texto ocupa toda a largura do cartão.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="medium">
+                  <i class="bi bi-text-center" aria-hidden="true"></i>
+                  <span><strong>Intermediário (72ch)</strong><small>Linhas mais curtas e um espaço de uma linha entre os parágrafos.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="reading" data-spo-font-value="strict">
+                  <i class="bi bi-book" aria-hidden="true"></i>
+                  <span><strong>Estrito (WCAG AAA)</strong><small>No máximo 80 caracteres por linha e espaço de 1,5 linha entre os parágrafos. Indicado para quem perde a linha ao ler.</small></span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+        </article>
+        <article class="card personalizar-card visual-preferences-card" id="spo-visao-card">
+          <div class="eyebrow">Acessibilidade</div>
+          <div class="card-title">Visão e cores</div>
+          <p class="muted">Ajustes para daltonismo e baixa visão. Vale só neste navegador. O Windows também tem filtros de cor e lupa para todos os programas (Configurações → Acessibilidade).</p>
+          <div class="visual-pref-groups">
+            <div class="visual-pref-group" data-spo-font-group="cvd">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="cvd" aria-expanded="false" aria-controls="spo-font-panel-cvd">
+                <i class="bi bi-palette" aria-hidden="true"></i>
+                <span>
+                  <strong>Cores dos gráficos</strong>
+                  <small data-spo-font-current="cvd">Padrão SPO</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-cvd" data-spo-font-panel="cvd" role="group" aria-label="Cores dos gráficos" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="default">
+                  <i class="bi bi-bar-chart" aria-hidden="true"></i>
+                  <span><strong>Padrão SPO</strong><small>Cores do tema, com a cor de destaque na primeira série.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="cvd" data-spo-font-value="safe">
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                  <span><strong>Seguras para daltonismo (paleta Okabe-Ito)</strong><small>Paleta de Okabe e Ito (Universidade de Tóquio, 2008), que se distingue nos três tipos de daltonismo (protanopia, deuteranopia e tritanopia) e nas formas mais leves. Listras e pontos nas barras e fatias e marcadores nas linhas ajudam também quem não distingue cor nenhuma. As tabelas coloridas seguem as mesmas cores.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="focus">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="focus" aria-expanded="false" aria-controls="spo-font-panel-focus">
+                <i class="bi bi-bullseye" aria-hidden="true"></i>
+                <span>
+                  <strong>Realce do foco</strong>
+                  <small data-spo-font-current="focus">Padrão SPO</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-focus" data-spo-font-panel="focus" role="group" aria-label="Realce do foco" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="default">
+                  <i class="bi bi-circle" aria-hidden="true"></i>
+                  <span><strong>Padrão SPO</strong><small>Anel de 3 px na cor de destaque em volta do item escolhido pelo teclado.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="focus" data-spo-font-value="strong">
+                  <i class="bi bi-bullseye" aria-hidden="true"></i>
+                  <span><strong>Reforçado (anel duplo)</strong><small>Anel mais grosso, com borda clara e escura, visível sobre qualquer fundo. Indicado para baixa visão e para quem navega pelo teclado.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="links">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="links" aria-expanded="false" aria-controls="spo-font-panel-links">
+                <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                <span>
+                  <strong>Links</strong>
+                  <small data-spo-font-current="links">Padrão SPO</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-links" data-spo-font-panel="links" role="group" aria-label="Links" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="default">
+                  <i class="bi bi-link" aria-hidden="true"></i>
+                  <span><strong>Padrão SPO</strong><small>Links na cor de destaque.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="links" data-spo-font-value="underline">
+                  <i class="bi bi-type-underline" aria-hidden="true"></i>
+                  <span><strong>Sempre sublinhados</strong><small>Os links do texto ficam sublinhados, para não depender só da cor. Menu e botões não mudam.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="brightness">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="brightness" aria-expanded="false" aria-controls="spo-font-panel-brightness">
+                <i class="bi bi-brightness-high" aria-hidden="true"></i>
+                <span>
+                  <strong>Brilho do tema claro</strong>
+                  <small data-spo-font-current="brightness">Padrão SPO</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-brightness" data-spo-font-panel="brightness" role="group" aria-label="Brilho do tema claro" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="default">
+                  <i class="bi bi-brightness-high" aria-hidden="true"></i>
+                  <span><strong>Padrão SPO</strong><small>Cartões brancos sobre fundo cinza-claro.</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="brightness" data-spo-font-value="reduced">
+                  <i class="bi bi-brightness-low" aria-hidden="true"></i>
+                  <span><strong>Reduzido</strong><small>Cartões em cinza-claro, com menos luz, para quem se incomoda com o branco e não quer o tema escuro. O texto continua com o mesmo destaque. Não muda o tema escuro.</small></span>
+                </button>
+              </div>
+            </div>
+            <div class="visual-pref-group" data-spo-font-group="motion">
+              <button class="visual-pref-toggle" type="button" data-spo-font-toggle="motion" aria-expanded="false" aria-controls="spo-font-panel-motion">
+                <i class="bi bi-pause-circle" aria-hidden="true"></i>
+                <span>
+                  <strong>Movimento</strong>
+                  <small data-spo-font-current="motion">Automático (segue o sistema)</small>
+                </span>
+                <i class="bi bi-chevron-down visual-pref-chevron" aria-hidden="true"></i>
+              </button>
+              <div class="visual-pref-options" id="spo-font-panel-motion" data-spo-font-panel="motion" role="group" aria-label="Movimento" hidden>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="auto">
+                  <i class="bi bi-gear" aria-hidden="true"></i>
+                  <span><strong>Automático (segue o sistema)</strong><small>Reduz as animações quando o computador pede "reduzir movimento".</small></span>
+                </button>
+                <button type="button" class="visual-pref-option" data-spo-font-pref="motion" data-spo-font-value="reduce">
+                  <i class="bi bi-pause-circle" aria-hidden="true"></i>
+                  <span><strong>Reduzir sempre</strong><small>Sem animações, transições nem rolagem suave no SPO, mesmo que o computador não peça. Indicado para quem sente tontura ou se distrai com movimento.</small></span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="spo-fontes-status" role="status" aria-live="polite"></p>
+        </article>
+        <!-- presets do Contrato: cartões dinâmicos (flow-node) com o painel de contexto abaixo, como em
+             Governança e Resultados; lista, rótulos, regras e detalhes lidos do PROTECTED_CONTRACT_PRESETS -->
+        <article class="card personalizar-card kit-contrato-card">
+          <div class="eyebrow">Contrato</div>
+          <div class="card-title">Preset do Contrato Visual</div>
+          <p class="muted">Os presets do Contrato Visual Protegido (no SPO, em Administrar SPO → Personalizar → Contrato). Escolha um para ver o que ele muda.</p>
+          <div class="governanca-grid semantic-flow-grid kit-presets" data-kit-presets aria-label="Presets do Contrato Visual"></div>
+          <div class="flow-context-panel kit-preset-contexto" id="kit-preset-contexto" aria-live="polite"></div>
+        </article>
+      </div>
+      <!-- prévias e gráficos logo abaixo das preferências: mostram o efeito de cada escolha (pedido do dev. Jean) -->
+      <div id="kit-previas-bloco" class="kit-previas-bloco">
+        <!-- As duas prévias do Personalizar, com a MESMA marcação do template
+             (templates/partials/atualizar_personalizar_spo.html; o tests/test_kit_mockup.py confere) -->
+        <section aria-labelledby="kit-previas-titulo">
+          <h2 class="kit-secao" id="kit-previas-titulo">Prévias do Personalizar</h2>
+          <div class="kit-previas">
+            <article class="card personalizar-card personalizar-preview" id="spo-previsualizacao">
+              <div class="eyebrow">Prévia</div>
+              <div class="card-title">Componentes do SPO</div>
+              <div class="preview-surface">
+                <div class="preview-sidebar">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="preview-content">
+                  <div class="preview-title"></div>
+                  <div class="preview-line"></div>
+                  <div class="preview-actions">
+                    <button type="button">Ação principal</button>
+                    <button type="button">Secundária</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="card personalizar-card personalizar-preview" id="spo-previa-fontes">
+              <div class="eyebrow">Prévia</div>
+              <div class="card-title">Fontes e tabelas</div>
+              <div class="spo-fontes-amostra preview-surface" role="group" aria-label="Amostra das fontes escolhidas">
+                <div class="spo-amostra-sobretitulo">Amostra · Planejamento</div>
+                <div class="spo-amostra-titulo">Programação PTA/OpR</div>
+                <p class="spo-amostra-texto">Ação, produto e meta da programação anual. Compare as letras:</p>
+                <p class="spo-amostra-letras">Il1 O0 — ç ã é</p>
+                <table>
+                  <caption>Tabela de relatório<br>(segue a "Densidade do texto")</caption>
+                  <thead><tr><th scope="col">Item</th><th scope="col">Valor (R$)</th></tr></thead>
+                  <tbody>
+                    <tr><td>Crédito</td><td>5.914.425.031,88</td></tr>
+                    <tr><td>Empenhado</td><td>3.028.175.576,32</td></tr>
+                    <tr><td>Saldo</td><td>2.886.249.455,56</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- Gráficos (§3.5): Plotly com o tema dos diagramas, o destaque, o daltonismo, a escala e a tabela
+             de dados do SPO (lidos do main.js); o painel e o quadro são os do Teto (.teto-panel, .teto-chart) -->
+        <section aria-labelledby="kit-graficos-titulo">
+          <h2 class="kit-secao" id="kit-graficos-titulo">Gráficos</h2>
+          <div class="teto-chart-grid kit-graficos">
+            <section class="teto-panel"><h2>Teto por grupo de despesa</h2><div class="teto-chart" id="kit-grafico-pizza"></div></section>
+            <section class="teto-panel"><h2>Execução por região</h2><div class="teto-chart" id="kit-grafico-barras"></div></section>
+          </div>
+        </section>
+      </div>
+    </aside>
+    <!-- passo a passo (o mesmo do §6.4 do padrão SPO-AA+) -->
+    <details class="card kit-como-usar">
+      <summary>Como usar o kit</summary>
+      <ol>
+        <li><strong>Consultar o padrão:</strong> os botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no alto
+          abrem a mesma janela do SPO (o documento técnico pede o SPO logado neste navegador). A fonte é
+          <code>docs/padrao-visual-spo-aa-plus.md</code>: o checklist de tela nova é o §6.1, e o kit, o §6.4.</li>
+        <li><strong>Criar:</strong> copie este arquivo para a mesma pasta (<code>static/kit/</code>) com outro nome,
+          por exemplo <code>mockup-pta-opr.html</code>, e abra em <code>http://127.0.0.1:5000/static/kit/mockup-pta-opr.html</code>
+          (o SPO local ligado; não precisa entrar).</li>
+        <li><strong>Montar:</strong> troque só o conteúdo de <code>&lt;main id="content-area"&gt;</code>, copiando os blocos
+          de exemplo (cabeçalho, cartões, campos e botões, tabela, gráfico) e mudando os textos. Mantenha este painel e
+          o <code>&lt;script&gt;</code> do fim.</li>
+        <li><strong>CSS próprio</strong> (só se precisar): num <code>&lt;style&gt;</code> do mockup, apenas com tokens de cor
+          (<code>var(--text)</code>, <code>var(--spo-accent-text)</code>…) e tamanhos pelas variáveis
+          (<code>var(--spo-fs-texto)</code>…); nada de px nem cor escrita à mão.</li>
+        <li><strong>Revisar pelo painel:</strong> claro e escuro; dois ou três destaques (o Amarelo é o mais exigente no
+          claro); Compacto, Intermediário e Legível; 150%; a Atkinson com a "Leitura confortável"; os presets do
+          Contrato; cores seguras para daltonismo, se houver gráfico; Tab, setas e Esc; janela estreita.</li>
+        <li><strong>Levar ao SPO:</strong> o conteúdo do <code>&lt;main&gt;</code> vira o template
+          <code>templates/partials/&lt;tela&gt;.html</code>; o <code>&lt;style&gt;</code> vai para um bloco <code>[jean]</code> no fim
+          do <code>style.css</code>. Teclado nas tabelas, gráficos acessíveis, densidade e temas já vêm do SPO.</li>
+        <li><strong>Guardar:</strong> o mockup fica em <code>static/kit/</code> enquanto está em desenho; vai ao Git só junto
+          com o PR da tela.</li>
+      </ol>
+    </details>
+
+    <main id="content-area" tabindex="-1">
+      <div class="kit-pilha">
+
+        <!-- 1. Cabeçalho de página (§4.4): sobretítulo, h1 24 px, descrição e o ícone do item do menu -->
+        <header class="module-header">
+          <div class="module-header-copy">
+            <div class="module-eyebrow">Grupo do menu · Subgrupo</div>
+            <h1>Nome da tela nova</h1>
+            <p>Uma frase dizendo o que a pessoa faz nesta tela.</p>
+          </div>
+          <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+        </header>
+
+        <!-- 2. Cartão padrão com texto: a escala da "Densidade do texto" (§2.2.1) -->
+        <section class="card module-card" aria-labelledby="kit-texto-titulo">
+          <div class="module-card-title"><i class="bi bi-fonts" aria-hidden="true"></i><div><h2 id="kit-texto-titulo">Texto e escala</h2><p>Título de cartão, descrição e texto corrido.</p></div></div>
+          <p>Escala da "Densidade do texto": títulos de cartão em <code>--spo-fs-titulo</code>, texto corrido em
+            <code>--spo-fs-texto</code>, rótulos e campos em <code>--spo-fs-controle</code>, dados em <code>--spo-fs-dado</code>
+            e janelas de ajuda em <code>--spo-fs-leitura</code>. Troque a densidade no painel e confira se a tela nova
+            acompanha. <a href="#kit-tabela-titulo">Link na cor de destaque</a>.</p>
+          <ul>
+            <li>Nunca <code>font-size</code> em px (o teste reprova); nunca cor literal (use os tokens do §3).</li>
+            <li>Texto secundário em <span class="muted">--muted</span>, nunca com <code>opacity</code>.</li>
+          </ul>
+        </section>
+
+        <!-- 3. Catálogo de padrões: cada exemplo é recortado do template de origem (o tests/test_kit_mockup.py
+             confere que continua igual); o kit só põe a moldura com o nome e onde o padrão é usado -->
+        <section class="kit-catalogo" aria-labelledby="kit-catalogo-titulo">
+          <h2 class="kit-secao" id="kit-catalogo-titulo">Catálogo de padrões</h2>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Cartões dinâmicos com painel de contexto</h3>
+            <p class="muted kit-padrao-onde">Governança e Resultados (EAP e Políticas, Estratégia, Matrículas e Metas…). O escolhido abre o contexto abaixo; setas, Home e End trocam a escolha.</p>
+            <section class="governanca-resultados" data-governanca-flow-panel>
+              <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões de EAP e políticas públicas">
+                  <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Estrutura analítica" data-flow-detail="A EAP organiza a leitura gerencial das políticas sem substituir programa, ação ou produto oficial do PPA.">
+                    <i class="bi bi-layers governanca-icon"></i>
+                    <strong>Estrutura analítica</strong>
+                    <small>A EAP deve funcionar como mapa de leitura das políticas, sem substituir programa, ação ou produto oficial do PPA.</small>
+                  </button>
+                  <button class="flow-node" type="button" data-flow-node data-flow-context="Vínculos oficiais" data-flow-detail="Cada componente gerencial precisa apontar para o nó oficial adequado: programa, PAOE, produto, subação ou etapa.">
+                    <i class="bi bi-link-45deg governanca-icon"></i>
+                    <strong>Vínculos oficiais</strong>
+                    <small>Cada componente gerencial precisa se ligar aos nós oficiais adequados: programa, PAOE, produto, subação ou etapa.</small>
+                  </button>
+                  <button class="flow-node" type="button" data-flow-node data-flow-context="Histórico anual" data-flow-detail="Alterações de políticas, componentes e prioridades devem preservar contexto por exercício e por ciclo de planejamento.">
+                    <i class="bi bi-clock-history governanca-icon"></i>
+                    <strong>Histórico anual</strong>
+                    <small>Alterações de políticas, componentes e prioridades devem preservar contexto por exercício e por ciclo de planejamento.</small>
+                  </button>
+                </div>
+              <div class="flow-context-panel" id="governanca-eap-politicas-context" data-flow-context-panel aria-live="polite">
+                  <span class="flow-context-label">Estrutura analítica</span>
+                  <strong>Estrutura analítica</strong>
+                  <p>A EAP organiza a leitura gerencial das políticas sem substituir programa, ação ou produto oficial do PPA.</p>
+                </div>
+            </section>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Fluxo com setas e painel de contexto</h3>
+            <p class="muted kit-padrao-onde">Governança e Resultados → Mapa Conceitual.</p>
+            <section class="governanca-resultados" data-governanca-flow-panel>
+              <article class="card governanca-card">
+                  <div class="card-title">Fluxo da programação ampliada</div>
+                  <div class="governanca-flow" data-flow-node-container aria-label="Fluxo conceitual da programação ampliada">
+                    <button class="flow-node" type="button" data-flow-node data-flow-context="Base oficial preservada" data-flow-detail="Trilho oficial do planejamento. O PPA continua como referência estrutural para programas, ações, produtos, metas e ODS.">
+                      <i class="bi bi-bank"></i>
+                      <strong>Plano Plurianual (PPA)</strong>
+                      <small>Programas, ações, produtos, metas e ODS.</small>
+                    </button>
+                    <i class="bi bi-arrow-right flow-arrow"></i>
+                    <button class="flow-node" type="button" data-flow-node data-flow-default="true" data-flow-context="Contexto ativo" data-flow-detail="Camada administrativa em construção para relacionar EAP, política pública, programação anual e governança sem alterar o gabarito oficial.">
+                      <i class="bi bi-diagram-3"></i>
+                      <strong>PTA ampliado</strong>
+                      <small>EAP, política pública e programação anual.</small>
+                    </button>
+                    <i class="bi bi-arrow-right flow-arrow"></i>
+                    <button class="flow-node" type="button" data-flow-node data-flow-context="Valor público" data-flow-detail="Ponto de ligação entre subações, entregas institucionais, Entregas-MT e OKR, permitindo leitura por resultado esperado.">
+                      <i class="bi bi-box-seam"></i>
+                      <strong>Subações e entregas</strong>
+                      <small>Valor público, Entregas-MT e OKR.</small>
+                    </button>
+                    <i class="bi bi-arrow-right flow-arrow"></i>
+                    <button class="flow-node" type="button" data-flow-node data-flow-context="Relações versionáveis" data-flow-detail="Camada de vínculo entre processos, riscos, projetos e etapas, tratada por exercício ou ciclo de programação.">
+                      <i class="bi bi-kanban"></i>
+                      <strong>Etapas e processos</strong>
+                      <small>Processos, riscos e projetos vinculados.</small>
+                    </button>
+                    <i class="bi bi-arrow-right flow-arrow"></i>
+                    <button class="flow-node" type="button" data-flow-node data-flow-context="Memória orçamentária" data-flow-detail="Apoia leitura de fonte, dotação e memória de cálculo sem substituir a estrutura oficial do FIPLAN.">
+                      <i class="bi bi-calculator"></i>
+                      <strong>Orçamento</strong>
+                      <small>Memória de cálculo, fonte e dotação.</small>
+                    </button>
+                    <i class="bi bi-arrow-right flow-arrow"></i>
+                    <button class="flow-node" type="button" data-flow-node data-flow-context="Aprendizado institucional" data-flow-detail="Fecha o ciclo com acompanhamento, classificação, execução e leitura dos resultados para retroalimentar o planejamento.">
+                      <i class="bi bi-graph-up-arrow"></i>
+                      <strong>Execução e resultados</strong>
+                      <small>Classificação, acompanhamento e aprendizado.</small>
+                    </button>
+                  </div>
+                  <div class="flow-context-panel" id="governanca-flow-context" data-flow-context-panel aria-live="polite">
+                    <span class="flow-context-label">Contexto ativo</span>
+                    <strong>PTA ampliado</strong>
+                    <p>Camada administrativa em construção para relacionar EAP, política pública, programação anual e governança sem alterar o gabarito oficial.</p>
+                  </div>
+                </article>
+            </section>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Cartões de painel</h3>
+            <p class="muted kit-padrao-onde">Governança e Resultados → Mapa Conceitual (blocos de texto lado a lado).</p>
+            <div class="governanca-grid">
+                <article class="card governanca-card">
+                  <div class="card-title">Base oficial preservada</div>
+                  <p>PLAN-20 e PLAN-21 continuam como trilhos oficiais e gerenciais da programação. Esta camada registra relações complementares sem contaminar o gabarito FIPLAN.</p>
+                </article>
+                <article class="card governanca-card">
+                  <div class="card-title">Relações versionáveis</div>
+                  <p>Os vínculos entre estratégia, EAP, entregas, processos, riscos e resultados devem ser tratados por exercício ou por ciclo de programação.</p>
+                </article>
+                <article class="card governanca-card">
+                  <div class="card-title">Preparação para o próximo patch</div>
+                  <p>A próxima etapa será desenhar o modelo do PPA e as tabelas de vínculo com o PTA ampliado.</p>
+                </article>
+              </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Cartão de documento</h3>
+            <p class="muted kit-padrao-onde">Institucional (Diretrizes, Legislação, Parceiros, Repositório): o cartão inteiro leva ao documento.</p>
+            <div class="card module-card institutional-card">
+              <div class="card-title">Diretrizes e Procedimentos</div>
+              <div class="row g-3">
+                <div class="col-md-6 mb-3">
+                  <div class="noticia-box">
+                      <i class="bi bi-calendar-range" aria-hidden="true"></i>
+                      <h5><strong>Plano Plurianual - PPA</strong></h5>
+                      <small class="text-muted">Plano Plurianual - PPA 2024-2027</small>
+                      <p>Disponível em
+                        <a href="https://drive.google.com/file/d/1d6gelgl1S732s4U1g0bSrbrpR5Od2_gS/view?pli=1" target="_blank" rel="noopener noreferrer">
+                          Plano Plurianual - PPA
+                        </a>
+                      </p>
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Indicadores</h3>
+            <p class="muted kit-padrao-onde">Painéis → Teto Orçamentário (os valores são preenchidos pelo JavaScript da tela).</p>
+            <div class="teto-kpi-grid">
+                <div class="teto-kpi"><span>Teto total</span><strong id="teto-kpi-total">R$ 0,00</strong></div>
+                <div class="teto-kpi"><span>Fontes de recurso</span><strong id="teto-kpi-fontes">0</strong></div>
+                <div class="teto-kpi"><span>Grupos de despesa</span><strong id="teto-kpi-grupos">0</strong></div>
+                <div class="teto-kpi"><span>Ações/PAOE</span><strong id="teto-kpi-paoes">0</strong></div>
+              </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Opções de envio</h3>
+            <p class="muted kit-padrao-onde">Atualizar → Notas SEE (escolher pasta ou arquivos).</p>
+            <section class="see-card">
+              <div class="see-upload-options">
+                  <label class="see-upload-option"><i class="bi bi-folder2-open"></i><strong>Selecionar pasta</strong><span>Todos os PDFs da pasta</span><input id="see-folder-input" type="file" name="pdfs" accept="application/pdf,.pdf" webkitdirectory directory multiple></label>
+                  <label class="see-upload-option"><i class="bi bi-files"></i><strong>Selecionar arquivos</strong><span>Um ou vários PDFs</span><input id="see-files-input" type="file" name="pdfs" accept="application/pdf,.pdf" multiple></label>
+                </div>
+            </section>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Presets do Contrato</h3>
+            <p class="muted kit-padrao-onde">Personalizar → Contrato Visual Protegido (o marcado acompanha o preset escolhido no painel do kit).</p>
+            <div class="contract-preset-grid" role="group" aria-label="Presets do contrato visual">
+              <button class="contract-preset" type="button" data-contract-preset="default">
+                <strong>Padrão SPO</strong>
+                <span>Contrato atual de layout, temas e responsividade.</span>
+              </button>
+              <button class="contract-preset" type="button" data-contract-preset="compact">
+                <strong>Compacto gerencial</strong>
+                <span>Reduz espaços em painéis densos sem mudar a hierarquia.</span>
+              </button>
+              <button class="contract-preset" type="button" data-contract-preset="contrast">
+                <strong>Contraste técnico</strong>
+                <span>Reforça bordas e estados para revisão visual.</span>
+              </button>
+              <button class="contract-preset" type="button" data-contract-preset="mobile">
+                <strong>Pressão operacional</strong>
+                <span>Realça dimensões usadas no modo móvel e split.</span>
+              </button>
+            </div>
+          </div>
+          <p class="muted">Também são padrões do SPO, já mostrados acima: cabeçalho de página, cartão de seção
+            (<code>module-card</code>), prévias do Personalizar, gráficos, formulário e a tela de relatório com
+            totais. Os cartões do mockup PTA/OpR entram aqui quando ele for integrado ao SPO.</p>
+        </section>
+
+        <!-- 4. Formulário (§4.1, §4.2): campos, desabilitado e a hierarquia dos botões -->
+        <section class="card module-card" aria-labelledby="kit-form-titulo">
+          <div class="module-card-title"><i class="bi bi-ui-checks" aria-hidden="true"></i><div><h2 id="kit-form-titulo">Formulário</h2><p>Campos, estados e botões.</p></div></div>
+          <form class="form" onsubmit="return false;">
+            <div class="form-grid">
+              <label class="field"><span>*Exercício</span><input inputmode="numeric" maxlength="4" placeholder="Ex.: 2027" required></label>
+              <label class="field"><span>Unidade Orçamentária</span>
+                <select><option value="">Selecione...</option><option>14101 - SEDUC</option><option>14601 - FMTE</option></select>
+              </label>
+              <label class="field"><span>Campo desabilitado</span><input value="Selecione primeiro a UO" disabled></label>
+              <label class="field"><span>Observação</span><textarea rows="2"></textarea></label>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary sm" type="submit"><i class="bi bi-check2" aria-hidden="true"></i><span>Salvar</span></button>
+              <button class="btn btn-secondary sm" type="button"><span>Editar</span></button>
+              <button class="btn btn-danger sm" type="button" id="kit-form-clear"><span>Limpar Formulário</span></button>
+              <button class="btn btn-danger sm" type="button"><i class="bi bi-trash" aria-hidden="true"></i><span>Excluir</span></button>
+            </div>
+          </form>
+          <div class="alert alert-info">Aviso informativo: texto em <code>--text</code> sobre o destaque claro.</div>
+        </section>
+
+        <!-- 5. Tela de relatório (§4.4), com a marcação dos relatórios do SPO: cabeçalho de relatório, cartão
+             report-data-card e o topo recortado do relatorios_fip613.html (o tests/test_kit_mockup.py confere) —
+             a "Última atualização por UO" é escrita pelo renderUltimasAtualizacoes do main.js e os totais são
+             preenchidos pelo kit, como o JavaScript da tela faz; depois filtros, teclado e paginação -->
+        <section class="report-page" aria-labelledby="kit-relatorio-titulo">
+          <header class="report-header">
+            <div class="report-header-copy"><div class="report-eyebrow">Relatórios · Execução</div><h1 id="kit-relatorio-titulo">Relatório de exemplo</h1><p>Acompanhe a execução orçamentária, aplique filtros e exporte os resultados.</p></div>
+            <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i>
+          </header>
+          <div class="card plan20-card report-data-card">
+            <div class="card-title">Relatório de exemplo</div>
+            <div class="actions relatorio-top relatorio-top-uo">
+                <div class="muted" id="fip613-relatorio-meta">Carregando...</div>
+                <div class="relatorio-top-right">
+                  <div class="totais-box" id="fip613-totais">
+                    <div class="totais-title">Totais (filtros aplicados)</div>
+                    <div class="totais-row"><span>PAOE:</span> <strong id="tot-paoe">-</strong></div>
+                    <div class="totais-row"><span>Grupo:</span> <strong id="tot-grupo">-</strong></div>
+                    <div class="totais-row"><span>Créd. Autorizado:</span> <strong id="tot-cred-autorizado">0</strong></div>
+                    <div class="totais-row"><span>Bloqueado/Conting.:</span> <strong id="tot-bloqueado">0</strong></div>
+                    <div class="totais-row"><span>Teto Disponível:</span> <strong id="tot-teto">-</strong></div>
+                    <div class="totais-row"><span>Saldo de Dotação:</span> <strong id="tot-saldo-dotacao">-</strong></div>
+                  </div>
+                  <div class="actions report-actions">
+                    <button class="btn sm compact" id="fip613-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+                    <button class="btn sm compact" id="fip613-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+                  </div>
+                </div>
+              </div>
+            <div class="report-empty-state" hidden>Consulta sem resultados.</div>
+            <div class="table-responsive">
+              <table class="table plan20-table" id="kit-tabela">
+                <thead>
+                  <tr><th>UO</th><th>Programa</th><th>Ação/PAOE</th><th>Região</th><th>Situação</th><th>Valor</th><th>Saldo</th></tr>
+                  <tr class="filter-row" data-kit-filtros></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-foot">
+              <div class="page-size">
+                <label for="kit-page-size">Itens por página</label>
+                <select id="kit-page-size" class="input"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select>
+              </div>
+              <div id="kit-pagination" class="pagination"></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="kit-mockup.js"></script>
+</body>
+</html>
