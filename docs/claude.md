@@ -3140,3 +3140,17 @@ Segunda trava da avaliação "o padrão resiste a ampliações?": os testes do C
 - `tests/test_kit_mockup.py` (+3): as assinaturas lidas continuam no `main.js` e o kit as pede; as funções lidas não passaram a chamar outras do SPO (provado: uma chamada falsa a `syncThemeControls` dentro do `applyAccentColor` reprova); equivalência dos filtros.
 
 Testado no kit: Clássico/Azul, claro/escuro, diagramas automático/alto contraste, densidade automática/ampla, "Padrão SPO" volta tudo; "Última atualização" escrita pela função do SPO (horário no fuso de Manaus); totais do FIP; fluxos, gráficos e teclado intactos; console sem erros.
+
+## Bateria 3: SPO e kit de mockup (dev. Jean, 2026-11-15)
+
+Pedido do dev. Jean para fechar a rodada: bateria geral automatizada das opções de tema/personalização no SPO e no kit, com inventário e correções. Medição de contraste (AA 4,5:1 e AA+ 7:1), rolagem lateral, texto cortado, gráficos e erros de console, em 1366, 1080 e 390 px, uma tela por vez (roteiro local, fora do Git).
+- **Kit:** todas as opções do painel, uma a uma, nos dois temas e em três larguras, mais os grupos abertos — 318 medições, duas vezes (antes e depois das correções).
+- **SPO:** 18 telas em 5 perfis de preferências (270 medições), 7 telas com "Diagramas" no modo oposto ao tema (42) e a "fase 1" (cada opção do Personalizar clicada pela tela: 35 + 14, todas aplicam e gravam; prévias e oferta da Atkinson).
+- **Achados e correções:**
+  1. *Cartão de documento do Institucional* com "Diagramas" no modo oposto ao tema: fundo pelos diagramas e título, legenda e link pelo tema, 1,0–1,6:1. No bloco `[jean]` dos cartões dinâmicos: `h5` e `small`/`.text-muted` nas cores dos diagramas; o link passa a `--spo-diagram-text` sublinhado só quando os modos divergem.
+  2. *Preset selecionado do Contrato Visual* no tema escuro: `.theme-dark .contract-preset.active` (0,3,0) vencia a regra do cartão dinâmico e, com "Diagramas: claro", a descrição ficava a 1,12:1. A regra ganhou `:not(#spo-preset)`.
+  3. *Kit:* `<code>` fora do `#content-area` ("Como usar", painel) com a cor rosa do Bootstrap (4,5:1 no claro, 3,45:1 no escuro); regra própria no `kit-mockup.css`.
+  4. *Kit:* os presets do Contrato (marcação do Contrato) entraram no catálogo, comparados com o template, para o kit cobrir o componente do achado 2.
+- Depois das correções: kit 318/318 sem achados; Contrato e Institucional limpos nos perfis de diagramas opostos e no de alto contraste. As opções desabilitadas das Notas SEE (5,15/6,53:1) são o estilo de desabilitado do §3.4, não defeito.
+- Padrão §6.1: item novo (quem usa as cores dos diagramas usa em tudo; medir com os diagramas no modo oposto ao tema). `?v=` do CSS: `20261115.jean-bateria-3.1` (`base.html` e `login.html`).
+- Fora desta bateria: teclado/foco (testados à mão), leitor de tela, cores forçadas, Firefox/Safari e as telas fora da amostra (os relatórios pesados EMP, NOB e EST EMP ficaram de fora para não carregar o banco).
