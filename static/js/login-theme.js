@@ -33,12 +33,53 @@
 
   try {
     const visual = JSON.parse(localStorage.getItem("spo-common-visual-preferences") || "{}");
-    body.dataset.visualDensity = visual.density || "comfortable";
+    // [jean] densidade automática (feat/densidade-automatica): "auto" (padrão) pela largura da janela
+    const pref = visual.density || "auto";
+    const largura = window.innerWidth || 1280;
+    body.dataset.visualDensityPref = pref;
+    body.dataset.visualDensity = pref !== "auto" ? pref : (largura <= 720 ? "spacious" : (largura <= 1200 ? "compact" : "comfortable"));
     body.dataset.visualContrast = visual.contrast || "standard";
     body.dataset.visualCards = visual.cards || "soft";
   } catch (_) {
     body.dataset.visualDensity = "comfortable";
+    body.dataset.visualDensityPref = "comfortable";
     body.dataset.visualContrast = "standard";
     body.dataset.visualCards = "soft";
   }
+
+  // [jean] Fontes e tamanho do texto escolhidos no Personalizar (feat/login-fontes, 2026-11-14).
+  // Mesma chave e mesmos valores do initFontesPersonalizar (main.js); valor desconhecido fica no padrão SPO.
+  const fontOptions = {
+    spoFontUi: ["inter", ["classic", "inter", "atkinson", "source", "mulish"], "ui"],
+    spoFontData: ["intel-mono", ["classic", "inter", "plex-sans", "intel-mono", "atkinson-mono"], "data"],
+    spoTextSize: ["default", ["default", "large", "larger", "xlarge"], "size"],
+    spoTableText: ["medium", ["compact", "medium", "legible"], "table"],
+    spoLineHeight: ["default", ["default", "ample", "larger"], "line"],
+    spoReading: ["default", ["default", "medium", "strict"], "reading"],
+    spoCvd: ["default", ["default", "safe"], "cvd"],
+    spoFocus: ["default", ["default", "strong"], "focus"],
+    spoLinks: ["default", ["default", "underline"], "links"],
+    spoBrightness: ["default", ["default", "reduced"], "brightness"],
+    spoMotion: ["auto", ["auto", "reduce"], "motion"],
+    spoKeys: ["on", ["on", "off"], "keys"],
+  };
+  let fontPrefs = {};
+  try {
+    fontPrefs = JSON.parse(localStorage.getItem("spo-font-preferences") || "{}") || {};
+    // [jean] feat/densidade-do-texto: mesma conversão única do main.js (initFontesPersonalizar)
+    if (!localStorage.getItem("spo-densidade-v2")) {
+      const antiga = { legible: "medium", medium: "compact", compact: "compact" };
+      if (antiga[fontPrefs.table]) {
+        fontPrefs.table = antiga[fontPrefs.table];
+        localStorage.setItem("spo-font-preferences", JSON.stringify(fontPrefs));
+      }
+      localStorage.setItem("spo-densidade-v2", "1");
+    }
+  } catch (_) {
+    fontPrefs = fontPrefs || {};
+  }
+  Object.keys(fontOptions).forEach((attr) => {
+    const [fallback, allowed, key] = fontOptions[attr];
+    body.dataset[attr] = allowed.includes(fontPrefs[key]) ? fontPrefs[key] : fallback;
+  });
 })();

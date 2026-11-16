@@ -1,0 +1,312 @@
+/* ==========================================================================
+   [jean] Ponte de preferências do SPO para o PTA 2027 (feat/ponte-pta2027, 2026-11-14)
+   O SPO manda as escolhas do "Personalizar Temas SPO" (mensagem "spo-preferencias");
+   o spo-preferencias.js grava no <body> os mesmos atributos data-spo-* do SPO, e este
+   arquivo aplica o que faz sentido no mockup. Tema e cor de destaque continuam vindo
+   do código original (applySpoHostTheme). Não muda nada fora do modo embutido.
+   - Tamanho do texto: NÃO entra aqui. O zoom da área do SPO (.main) já amplia o iframe
+     inteiro (medido: escala 1,25 com "Maior"); ampliar de novo dobraria.
+   - Densidade e estilo dos cartões: o mockup tem layout próprio, em px fixos; ficam fora.
+   - Daltonismo: os diagramas do mockup são imagens SVG prontas; ficam fora (em avaliação).
+   ========================================================================== */
+@font-face { font-family: "SPO Inter"; src: url("../../fonts/inter/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible"; src: url("../../fonts/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Source Sans 3"; src: url("../../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO IBM Plex Sans"; src: url("../../fonts/ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Intel One Mono"; src: url("../../fonts/intel-one-mono/intel-one-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "SPO Atkinson Hyperlegible Mono"; src: url("../../fonts/atkinson-hyperlegible-mono/atkinson-hyperlegible-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+
+body.spo-ponte { --spo-font-classic: "Cantarell", "Segoe UI", system-ui, -apple-system, sans-serif; }
+
+/* Fonte da interface (o mockup pedia "Inter", que não carregava: caía na Segoe UI) */
+body.spo-ponte[data-spo-font-ui="inter"] { font-family: "SPO Inter", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="atkinson"] { font-family: "SPO Atkinson Hyperlegible", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="source"] { font-family: "SPO Source Sans 3", var(--spo-font-classic); }
+/* [jean] Mulish (feat/fonte-mulish, 2026-11-15) */
+@font-face { font-family: "SPO Mulish"; src: url("../../fonts/mulish/mulish-latin-wght-normal.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
+body.spo-ponte[data-spo-font-ui="mulish"] { font-family: "SPO Mulish", var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-ui="classic"] { font-family: var(--spo-font-classic); }
+
+/* Fonte e tamanho do texto das tabelas */
+body.spo-ponte[data-spo-font-data="classic"] table { font-family: var(--spo-font-classic); }
+body.spo-ponte[data-spo-font-data="inter"] table { font-family: "SPO Inter", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
+body.spo-ponte[data-spo-font-data="plex-sans"] table { font-family: "SPO IBM Plex Sans", var(--spo-font-classic); font-variant-numeric: tabular-nums; }
+body.spo-ponte[data-spo-font-data="intel-mono"] table { font-family: "SPO Intel One Mono", Consolas, "Courier New", monospace; }
+body.spo-ponte[data-spo-font-data="atkinson-mono"] table { font-family: "SPO Atkinson Hyperlegible Mono", Consolas, "Courier New", monospace; }
+/* [jean] Densidade do texto (feat/densidade-do-texto, 2026-11-15; padrão SPO-AA+ v4 §2.2.1): tabelas 13/12/10 px */
+body.spo-ponte[data-spo-table-text="legible"] table :is(th, td) { font-size: 13px; }
+body.spo-ponte[data-spo-table-text="medium"] table :is(th, td) { font-size: 12px; }
+body.spo-ponte[data-spo-table-text="compact"] table :is(th, td) { font-size: 10px; }
+
+/* Entrelinha do texto corrido (padrão SPO 1,5) */
+body.spo-ponte main :is(p, li, dd, small):not(table *, button *) { line-height: 1.5; }
+body.spo-ponte[data-spo-line-height="ample"] main :is(p, li, dd, small):not(table *, button *) { line-height: 1.75; }
+body.spo-ponte[data-spo-line-height="larger"] main :is(p, li, dd, small):not(table *, button *) { line-height: 2; }
+
+/* Leitura: largura do texto corrido e espaço entre parágrafos (WCAG 1.4.8) */
+body.spo-ponte[data-spo-reading="medium"] main :is(p, li, dd):not(table *, nav *, button *) { max-width: 72ch; }
+body.spo-ponte[data-spo-reading="medium"] main p + p:not(table *) { margin-top: max(1em, 1lh); }
+body.spo-ponte[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="mulish"] { --spo-leitura-estrita: 53ch; }
+body.spo-ponte[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
+body.spo-ponte[data-spo-reading="strict"] main :is(p, li, dd):not(table *, nav *, button *) { max-width: var(--spo-leitura-estrita); }
+body.spo-ponte[data-spo-reading="strict"] main p:has(+ p):not(table *) { margin-bottom: max(1.5em, 1.5lh); }
+body.spo-ponte[data-spo-reading="strict"] main p + p:not(table *) { margin-top: 0; }
+
+/* Foco visível no padrão do SPO (cor do anel enviada pelo SPO) e foco reforçado */
+body.spo-ponte :is(a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 3px solid var(--spo-focus-ring, var(--teal-dark));
+  outline-offset: 2px;
+}
+body.spo-ponte[data-spo-focus="strong"] :is(a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline-width: 4px;
+  box-shadow: 0 0 0 2px var(--spo-focus-halo, #fff), 0 0 0 8px var(--spo-focus-halo, #fff);
+}
+
+/* Links sempre sublinhados */
+body.spo-ponte[data-spo-links="underline"] main a[href]:not([class*="button"], [class*="btn"], [role="button"], [role="tab"]) {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Contraste médio e reforçado: bordas e texto secundário mais fortes */
+body.spo-ponte[data-visual-contrast="medium"] { --line: #b9c7cd; }
+body.spo-ponte.dark[data-visual-contrast="medium"] { --line: #4d636b; }
+body.spo-ponte[data-visual-contrast="enhanced"] { --line: #8fa1a9; --muted: #3f4d55; }
+body.spo-ponte.dark[data-visual-contrast="enhanced"] { --line: #6b828a; --muted: #cbd8dc; }
+/* no modo embutido escuro, o mockup fixa --line e --muted com !important (borda = destaque a 24%):
+   médio e reforçado seguem a mesma lógica, com mais opacidade */
+body.spo-ponte.embedded-mode.dark[data-visual-contrast="medium"] { --line: rgba(var(--spo-accent-rgb, 66, 223, 192), .42) !important; }
+body.spo-ponte.embedded-mode.dark[data-visual-contrast="enhanced"] { --line: rgba(var(--spo-accent-rgb, 66, 223, 192), .64) !important; --muted: #d3e2e1 !important; }
+
+/* Brilho reduzido (só no tema claro): menos branco, texto com o mesmo destaque */
+body.spo-ponte[data-spo-brightness="reduced"]:not(.dark) { --bg: #dadee4; --surface: #eceef1; --soft: #e3e6ea; --muted: #4a4850; }
+
+/* ==========================================================================
+   [jean] Cores do PTA 2027 no padrão SPO-AA+, tema claro (feat/mockup-pta2027-aa-plus)
+   Medido na vista inicial: 65 de 97 textos abaixo de 7:1.
+   - Destaque usado como cor de TEXTO (--teal, --teal-dark, --spo-accent-deep): com o Azul,
+     4,77:1 e 5,27:1. Passam ao tom de texto do destaque do SPO (--spo-accent-text, que a ponte
+     manda), o mesmo dos botões principais do SPO; o texto branco sobre o destaque (abas e
+     botões ativos, 4,46–4,77:1) também passa de 7:1. O mockup grava o --teal no <html>
+     (applySpoHostTheme), por isso o !important.
+   - Texto secundário (--muted #5c6f74, 5,05:1 no fundo do mockup): #3f4e52 (8,3:1; ≥ 7,4 nos
+     fundos tingidos); com brilho reduzido, #384649 (7,26 no fundo #dadee4); reforçado, #2f3b3f.
+   ========================================================================== */
+html:has(> body.spo-ponte.embedded-mode:not(.dark)),
+body.spo-ponte.embedded-mode:not(.dark) {
+  --teal: var(--spo-accent-text, #086b64) !important;
+  --teal-dark: var(--spo-accent-text, #086b64) !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) { --spo-accent-deep: var(--spo-accent-text, #086b64) !important; --muted: #3f4e52 !important; }
+body.spo-ponte.embedded-mode:not(.dark)[data-spo-brightness="reduced"] { --muted: #384649 !important; }
+body.spo-ponte.embedded-mode:not(.dark)[data-visual-contrast="enhanced"] { --muted: #2f3b3f !important; }
+/* cores literais do mockup abaixo de 7:1 (medidas nas vistas e nas 6 etapas da jornada) */
+body.spo-ponte.embedded-mode:not(.dark) .validation-grid .summary-item.neutral strong { color: #36504a; } /* 4,52 → 8,4 */
+body.spo-ponte.embedded-mode:not(.dark) .validation-grid .summary-item.warning :is(small, strong) { color: #6b4000; } /* 4,86 e 5,57 → 8,3 */
+body.spo-ponte.embedded-mode:not(.dark) .diagram-float-toggle { color: var(--text); }                    /* texto a 62%: 3,99 */
+body.spo-ponte.embedded-mode:not(.dark) :is(.vector-head .secondary-button, .concept-actions .secondary-button[id^="export-"]) { color: var(--teal-dark); } /* a 74%: 4,78 */
+/* ==========================================================================
+   [jean] Tema escuro (medido: 2,2 a 4,2:1 em todas as vistas, já no mockup original)
+   Como o SPO no escuro: texto na cor de destaque usa o tom de texto do destaque do escuro
+   (--spo-accent-text, claro); botões e marcadores com fundo no destaque passam a texto
+   #111111 (o fundo, agora claro, segue o --teal). O --spo-accent-deep continua como está,
+   porque é fundo do cartão da chave (.key-card, com texto branco); os textos que o usavam
+   como cor passam ao tom de texto do destaque.
+   ========================================================================== */
+html:has(> body.spo-ponte.embedded-mode.dark),
+body.spo-ponte.embedded-mode.dark {
+  --teal: var(--spo-accent-text, #7fd6cb) !important;
+  --teal-dark: var(--spo-accent-text, #7fd6cb) !important;
+}
+body.spo-ponte.embedded-mode.dark :is(.primary-button, .start-policy, .tree-step.active i, .tree-step.complete i,
+    .view-tab.active, .context-components-panel li, .concept-button:hover, .concept-button.active, .concept-branches b,
+    .eap-map-flow article span, .eap-map-flow .eap-map-node span, .eap-layer-node span,
+    .macro-card:hover .macro-number, .macro-card.active .macro-number) { color: #111111 !important; }
+body.spo-ponte.embedded-mode.dark .context-components-panel li::before { color: #111111 !important; }
+/* badges numerados sobre fundo tingido do destaque: com o Amarelo, o tom de texto do destaque dava
+   5,5–6,2:1 contra o próprio tingido; no escuro, ficam na cor do texto */
+body.spo-ponte.embedded-mode.dark :is(.macro-card:not(:hover):not(.active) .macro-number, .policy-expansion .policy-icon,
+    .component-options b) { color: var(--text) !important; }
+body.spo-ponte.embedded-mode.dark :is(.region-readonly-grid label.selected, .context-goal-toggle.open, .bridge-title h2, .section-heading h2, .process-lane h3,
+    .policy-expansion .expansion-head h3, .policy-expansion .policy-option strong, .eap-summary strong, .eap-summary span,
+    .eyebrow, .text-button, .context-item-button em, .context-indicator-card em, .quality-card b, .eap-table th,
+    .eap-table code, .process-pill) { color: var(--spo-accent-text, #7fd6cb) !important; }
+body.spo-ponte.embedded-mode.dark .key-card p { color: var(--text) !important; }                                   /* #bfd0cf: 6,87 */
+body.spo-ponte.embedded-mode.dark .validation-grid .summary-item.warning small { color: #ffd59b !important; }    /* #f2b766: 5,97 */
+/* bateria 8 destaques × claro/escuro: aba inativa sobre o tingido do destaque (Vermelho e Roxo no claro:
+   6,86 e 6,95) e "eixo(s) de execução" no cartão de política selecionado (escuro: 6,07–6,74) */
+body.spo-ponte.embedded-mode .view-tab:not(.active) { color: var(--text) !important; }
+body.spo-ponte.embedded-mode.dark .macro-card:is(.active, :hover) small { color: var(--text) !important; }
+/* caixas de marcar das etapas 3 e 4: o rótulo clicável tinha 19 px de altura (alvo mínimo 24 px, WCAG 2.5.8) */
+body.spo-ponte label:has(> input[type="checkbox"], > input[type="radio"]) { min-height: 24px; }
+/* <small> sem tamanho próprio (o navegador o deixa em 11,67 px): 12 px; regras do mockup vencem */
+:where(body.spo-ponte small) { font-size: max(12px, 0.86em); }
+
+/* Movimento reduzido (opção do SPO ou do sistema) */
+html:has(> body.spo-ponte[data-spo-motion="reduce"]) { scroll-behavior: auto; }
+body.spo-ponte[data-spo-motion="reduce"] *, body.spo-ponte[data-spo-motion="reduce"] *::before, body.spo-ponte[data-spo-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:has(> body.spo-ponte) { scroll-behavior: auto; }
+  body.spo-ponte :is(.macro-card, .pillar, .eap-layer-node, .policy-expansion .policy-option):is(:hover, .active, .open) { transform: none !important; }
+}
+/* cartões que sobem 1–3 px ao passar o mouse: parados (fix/movimento-reduzido, 2026-11-15) */
+body.spo-ponte[data-spo-motion="reduce"] :is(.macro-card, .pillar, .eap-layer-node, .policy-expansion .policy-option):is(:hover, .active, .open) { transform: none !important; }
+
+/* ==========================================================================
+   [jean] Botão "×" de remover linha e listas suspensas no padrão SPO
+   (feat/mockup-pta2027-aa-plus; pedido do dev. Jean depois de ver o mockup)
+   - "×" (.remove-row): tirar uma linha é "Dispensar" no SPO (padrão §4.1): contorno
+     vermelho, sem preenchimento (era fundo rosado sem borda, "×" a 4,99:1). O nome
+     para leitor de tela ("Remover linha") vem do spo-preferencias.js.
+   - Listas suspensas: a lista aberta era a do Windows (opção marcada no azul do sistema).
+     Como no SPO (feat/listas-nativas): lista na superfície do tema, opção sob o mouse com
+     16% do destaque, a escolhida em negrito, até 40rem e quebra de linha. O campo fechado
+     continua o do mockup (seta nativa). Firefox e Safari seguem com a lista nativa.
+   ========================================================================== */
+body.spo-ponte.embedded-mode .remove-row { background: transparent !important; color: #a51d2d !important; border: 1.5px solid #a51d2d !important; font-size: 18px; line-height: 1; }
+body.spo-ponte.embedded-mode .remove-row:is(:hover, :focus-visible) { background: rgba(165, 29, 45, 0.08) !important; }
+body.spo-ponte.embedded-mode.dark .remove-row { color: #ffa3a3 !important; border-color: #ffa3a3 !important; }
+body.spo-ponte.embedded-mode.dark .remove-row:is(:hover, :focus-visible) { background: rgba(255, 163, 163, 0.12) !important; }
+@supports (appearance: base-select) {
+  body.spo-ponte select:not([multiple]):not([size]),
+  body.spo-ponte select:not([multiple]):not([size])::picker(select) { appearance: base-select; }
+  body.spo-ponte select:not([multiple]):not([size])::picker(select) {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--spo-native-border, var(--line)); border-radius: 10px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18); padding: 4px;
+    max-height: min(60vh, 420px); max-width: min(40rem, calc(100vw - 16px));
+  }
+  body.spo-ponte.dark select:not([multiple]):not([size])::picker(select) { background: #202a2b; box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55); }
+  body.spo-ponte select:not([multiple]):not([size]) option {
+    padding: 6px 10px; border-radius: 6px; background: transparent; color: var(--text);
+    white-space: normal; overflow-wrap: anywhere; line-height: 1.35;
+  }
+  body.spo-ponte select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--spo-accent-rgb, 8, 59, 54), 0.16); color: var(--text); outline: none;
+  }
+  body.spo-ponte select:not([multiple]):not([size]) option:checked { font-weight: 600; }
+  body.spo-ponte select:not([multiple]):not([size]) option:disabled { opacity: 0.55; }
+  body.spo-ponte select:not([multiple]):not([size]) { white-space: nowrap; overflow: clip; overflow-clip-margin: content-box; }
+  body.spo-ponte select:not([multiple]):not([size])::picker-icon { color: var(--muted); transition: rotate .15s; }
+  body.spo-ponte select:not([multiple]):not([size]):open::picker-icon { rotate: 180deg; }
+}
+
+/* ==========================================================================
+   [jean] Dimensões do mockup na escala do SPO (feat/escala-mockup-pta, 2026-11-14;
+   proposta aprovada pelo dev. Jean: docs_jean/auditoria_aa/PROPOSTA_ESCALA_MOCKUP_PTA_2026-11-14.md)
+   Medido em 9 vistas: título principal 40,6 px, cartões com espaço de 12 a 28 px e cantos de
+   12 a 24 px, campos de 46 px. Agora, como o SPO (referência: Mapa Conceitual):
+   - cartão principal = cabeçalho de página: espaço 22/24, cantos 18, título 24 px;
+   - títulos: página 24 · seção 20 · cartão 16 px;
+   - espaço dos cartões e entre eles pela DENSIDADE do Personalizar (compacta 12/10,
+     confortável 16/14, ampla 18/18; o mesmo data-visual-density que a ponte já manda);
+   - cantos: seções e cartões 14 px, cartões pequenos 12 px;
+   - campos 40 px (espaço 10/12, cantos 10); botões espaço 10/14, cantos 12, mínimo 40 px
+     (44 px em tela de toque).
+   ========================================================================== */
+body.spo-ponte { --pta-pad: 16px; --pta-gap: 14px; }
+body.spo-ponte[data-visual-density="compact"] { --pta-pad: 12px; --pta-gap: 10px; }
+body.spo-ponte[data-visual-density="spacious"] { --pta-pad: 18px; --pta-gap: 18px; }
+
+body.spo-ponte.embedded-mode .hero { padding: 22px 24px !important; border-radius: 18px !important; gap: 20px !important; }
+body.spo-ponte.embedded-mode main h1 { font-size: 24px !important; line-height: 1.2 !important; font-weight: 700 !important; }
+body.spo-ponte.embedded-mode main h2 { font-size: 20px !important; line-height: 1.25 !important; }
+body.spo-ponte.embedded-mode main h3 { font-size: 16px !important; line-height: 1.3 !important; }
+body.spo-ponte.embedded-mode .hero p { font-size: 14px !important; }
+
+body.spo-ponte.embedded-mode :is(.macro-section, .strategy-bridge, .risk-bridge, .step-content,
+    .identity-card, .process-lane, .policy-expansion, .eap-map-card, .vector-diagram-card) {
+  padding: var(--pta-pad) !important; border-radius: 14px !important;
+}
+body.spo-ponte.embedded-mode :is(.macro-card, .pillar, .policy-option, .summary-item, .eap-map-node,
+    .key-card, .quality-card, .context-item, .nested-program-block, .component-picker) {
+  padding: 12px !important; border-radius: 12px !important;
+}
+body.spo-ponte.embedded-mode :is(.identity-grid, .value-chain, .policy-list, .form-grid) { gap: var(--pta-gap) !important; }
+body.spo-ponte.embedded-mode .eap-map-flow { padding: var(--pta-pad) !important; border-radius: 14px !important; }
+body.spo-ponte.embedded-mode :is(.risk-grid > article, .eap-map-branch > section) { padding: 12px !important; border-radius: 12px !important; }
+/* "Continuar rascunho" quebrava em 2 linhas (63 px) na coluna estreita do cartão principal */
+@media (min-width: 600px) { body.spo-ponte.embedded-mode .hero-actions .secondary-button { white-space: nowrap; } }
+
+body.spo-ponte.embedded-mode main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  padding: 10px 12px !important; border-radius: 10px !important;
+}
+body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) {
+  padding: 10px 14px !important; border-radius: 12px !important; min-height: 40px;
+}
+@media (pointer: coarse) {
+  body.spo-ponte.embedded-mode :is(.primary-button, .secondary-button) { min-height: 44px; }
+}
+
+/* [jean] bateria 2 (fix/bateria-personalizar-2): "×" de remover no brilho reduzido (#a51d2d dava 6,42:1 no #eceef1) */
+body.spo-ponte.embedded-mode[data-spo-brightness="reduced"]:not(.dark) .remove-row { color: #861523 !important; border-color: #861523 !important; }
+
+/* [jean] Indicador de avanço do tamanho do texto (bateria 2, 2026-11-15): o círculo fixo
+   (68/62 px) ficava menor que "concluído" com a escala de 12 px; agora cresce com o texto. */
+body.spo-ponte.embedded-mode .progress-ring{
+  box-sizing:border-box!important;
+  width:fit-content!important;
+  max-width:max-content;
+  height:auto!important;
+  min-width:68px;
+  aspect-ratio:1;
+  padding:0 .4em;
+  align-content:center;
+  line-height:1.1;
+}
+body.spo-ponte.embedded-mode .progress-ring span{ margin-top:0; white-space:nowrap; }
+
+/* [jean] Visão processual (fix/movimento-reduzido, pedido do dev. Jean, 2026-11-15): os cartões
+   "Processos de suporte/gerenciais/finalísticos" abrem o detalhamento, mas no tema claro não
+   mostravam a seleção (a regra geral do modo embutido, com !important, apagava o :hover/.active).
+   Em teste, eles seguem o desenho dos cartões do "Mapa EAP" (.eap-map-node): fundo claro, borda
+   fina e, ao passar o mouse ou selecionado, borda na cor de destaque com sombra leve. No escuro,
+   o pta-2027.css já trata os dois cartões juntos (só o raio muda aqui). */
+body.spo-ponte.embedded-mode .process-summary-card { border-radius: 12px !important; }
+body.spo-ponte.embedded-mode:not(.dark) .process-summary-card {
+  background: linear-gradient(180deg, #fbfefe, #f4fbfa) !important;
+  border: 1px solid #d7e8eb !important;
+  box-shadow: none !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) .process-summary-card:is(:hover, .active) {
+  border-color: var(--teal) !important;
+  box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
+}
+
+/* [jean] Contexto ativo em coluna estreita (fix/movimento-reduzido, pedido do dev. Jean,
+   2026-11-15): com a escala de 12 px, "N componente(s) disponível(is)" e "N vinculado(s) nesta
+   programação" lado a lado mediam 196 px numa coluna de 183 px; a grade do painel seguia essa
+   largura e a lista inteira passava 13 px da borda (cartões cortados, cabeçalho sobre a borda). */
+body.spo-ponte .context-components-panel { grid-template-columns: minmax(0, 1fr); }
+body.spo-ponte .context-components-head { flex-wrap: wrap; row-gap: 4px; }
+body.spo-ponte .context-components-head span { margin-left: auto; }
+body.spo-ponte .context-components-panel li { overflow-wrap: anywhere; }
+/* o painel aberto (componentes ou metas) tinha margin-top: -10px e subia 10 px sobre o cartão
+   "Política PAOE"/"Pilar" (os cartões têm 8 px de margem): agora fica colado, dividindo a borda */
+body.spo-ponte #context-cards .context-item-button.open { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+body.spo-ponte #context-cards .context-item-button.open + :is(.context-components-panel, .context-goals-panel) {
+  margin-top: -1px !important; border-top-left-radius: 0 !important; border-top-right-radius: 0 !important;
+}
+/* as metas do painel "Pilar / Metas PEE" tinham fundo tingido, barra de 3 px à esquerda e raio de
+   12 px, diferentes dos cartões dos componentes e dos indicadores (fundo claro, borda fina, raio
+   de 10 px), e a meta aberta ficava igual à fechada. Agora seguem os componentes; aberta ou com o
+   mouse em cima, borda na cor de destaque e sombra leve (como os cartões do Mapa EAP). */
+body.spo-ponte.embedded-mode #context-cards .context-goal-card {
+  border-width: 1px !important; border-radius: 10px !important; padding: 10px !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card {
+  background: var(--spo-native-surface) !important;
+  border-color: var(--spo-native-border) !important; box-shadow: none !important;
+}
+body.spo-ponte.embedded-mode #context-cards .context-goal-card:is(:hover, .open) {
+  border-color: var(--teal) !important;
+}
+body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card:is(:hover, .open) {
+  box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
+}
