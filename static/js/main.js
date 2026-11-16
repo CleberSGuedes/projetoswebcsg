@@ -28655,11 +28655,57 @@
     return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? "#000000" : "#ffffff";
   };
 
-  function ajustarDados(gd, data) {
+  // [jean] feat/graficos-separador (2026-11-16; comparação visual com o laboratório v4.3.1): linha
+  // separadora entre fatias, blocos e barras, na cor do FUNDO do próprio gráfico (vira um vão). Duas cores
+  // vizinhas da paleta podem ficar abaixo de 3:1 entre si (no claro, os grupos 1 e 4 do Teto são dois
+  // azuis); o vão separa os elementos sem depender da cor (WCAG 1.4.11). O fundo vem do layout do gráfico
+  // ou, se ele for transparente, do quadro em volta (o tema dos diagramas pode estar no modo oposto ao da
+  // página). Com as cores seguras para daltonismo continua o contorno na cor do texto (comPadroes), mais
+  // forte.
+  // 1 px no modo normal (claro e escuro) e 2 px com os diagramas em alto contraste (highLight/highDark,
+  // também no automático quando o sistema pede mais contraste) ou com o "Contraste: Reforçado" do
+  // Personalizar, em todos os tipos (pedido do dev. Jean).
+  const SEPARADOS = new Set(["pie", "treemap", "sunburst", "bar"]);
+  const larguraSeparador = () => {
+    let modo = "";
+    try { modo = window.spoGetDiagramSemanticTokens().mode; } catch (err) { modo = ""; }
+    const reforcado = document.body && document.body.dataset.visualContrast === "enhanced";
+    return modo === "highLight" || modo === "highDark" || reforcado ? 2 : 1;
+  };
+  const corVisivel = (c) => {
+    const t = String(c || "").trim();
+    return t && !/^transparent$/i.test(t) && !/^rgba\([^)]*,\s*0(\.0+)?\s*\)$/i.test(t) ? t : "";
+  };
+  const fundoGrafico = (L, el, tipo) => {
+    const L2 = L || {};
+    const doLayout = tipo === "bar" ? corVisivel(L2.plot_bgcolor) || corVisivel(L2.paper_bgcolor) : corVisivel(L2.paper_bgcolor);
+    if (doLayout) return doLayout;
+    // fundo transparente: quem pinta o fundo é o quadro em volta (.teto-chart etc.)
+    try {
+      for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+        const c = corVisivel(getComputedStyle(n).backgroundColor);
+        if (c) return c;
+      }
+      return (getComputedStyle(document.body).getPropertyValue("--card") || "").trim() || corTexto();
+    } catch (err) {
+      return corTexto();
+    }
+  };
+  function comSeparador(t, L, el) {
+    if (!SEPARADOS.has(t.type)) return t;
+    const largura = larguraSeparador();
+    const m = { ...(t.marker || {}) };
+    m.line = { ...(m.line || {}), color: fundoGrafico(L, el, t.type), width: largura };
+    return { ...t, marker: m };
+  }
+
+  function ajustarDados(gd, data, L) {
     const el = elDe(gd);
     if (el) el.__spoDataBase = data;
     if (!Array.isArray(data)) return data;
-    if (cvdLigado()) data = data.map((tr, i) => (tr && typeof tr === "object" ? comPadroes(tr, i) : tr));
+    data = cvdLigado()
+      ? data.map((tr, i) => (tr && typeof tr === "object" ? comPadroes(tr, i) : tr))
+      : data.map((tr) => (tr && typeof tr === "object" ? comSeparador(tr, L, el) : tr));
     const largura = el ? el.getBoundingClientRect().width : 0;
     const estreito = largura > 0 && largura <= ESTREITO;
     const max = Math.max(14, Math.floor((largura - 48) / 8));
@@ -28682,20 +28728,21 @@
 
   const react = P.react.bind(P);
   const newPlot = P.newPlot.bind(P);
-  P.react = (gd, data, layout, config) => react(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
-  P.newPlot = (gd, data, layout, config) => newPlot(gd, ajustarDados(gd, data), ajustar(gd, layout), config);
+  P.react = (gd, data, layout, config) => { const L = ajustar(gd, layout); return react(gd, ajustarDados(gd, data, L), L, config); };
+  P.newPlot = (gd, data, layout, config) => { const L = ajustar(gd, layout); return newPlot(gd, ajustarDados(gd, data, L), L, config); };
   P.__spoEscala = true;
 
-  // trocar a densidade no Personalizar redesenha os gráficos já abertos
-  let densidade = document.body ? document.body.dataset.spoTableText : "";
+  // trocar a densidade ou o contraste (largura do separador) no Personalizar redesenha os gráficos já abertos
+  const estadoRedesenho = () => `${document.body.dataset.spoTableText}|${document.body.dataset.visualContrast}`;
+  let densidade = document.body ? estadoRedesenho() : "";
   if (document.body) {
     new MutationObserver(() => {
-      if (document.body.dataset.spoTableText === densidade) return;
-      densidade = document.body.dataset.spoTableText;
+      if (estadoRedesenho() === densidade) return;
+      densidade = estadoRedesenho();
       document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
         if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
       });
-    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text"] });
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text", "data-visual-contrast"] });
   }
 
   let espera = 0;
