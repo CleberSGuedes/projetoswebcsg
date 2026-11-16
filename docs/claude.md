@@ -3282,6 +3282,35 @@ Vinda da comparação visual com o laboratório v4.3.1 (16/11): lá as fatias, o
 
 Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-modais-celular.1` nos três (há teste que reprova se divergirem). O `RELEASE` continua `RELEASE_2_2026_11_16.2` (ainda não publicado). Esta correção é feita em cima do lote 5 por exceção combinada (a `dev/cleber` ainda não tem o AA+) e chega à `dev/cleber` e à `dev/jean` depois, pela sincronização da `main`.
 
+### 41.101 Teto Orçamentário no celular: tabelas sem corte (dev. Cleber, 2026-11-16)
+
+**Problema** (Android, ~412 px, na homologação; Painéis/Dashboards → Teto Orçamentário → aba "Tabelas"):
+1. "Grupo 1 por Fontes" e "Grupo por Teto Total": a coluna fixa do grupo ocupava mais da metade da largura, os valores dos exercícios apareciam cortados ("R$ 4.", ".320.9") e a rolagem lateral não chegava ao fim da coluna.
+2. "Teto por grupo e tipificação da despesa" (e "Teto por fonte de recurso"): o nome do grupo sumia ("3 C", "4 Ir") e a tipificação ficava espremida contra a barra.
+3. "Quadro comparativo de Fonte/Grupo" (e o QOMP): as colunas dos exercícios não apareciam e o código da fonte saía cortado ("1540107" em vez de "15401070"), isto é, um número errado na tela.
+
+**Causa** (medida no navegador do app a 360 × 740 e 412 × 915; o cartão tem 230 e 282 px de largura útil):
+- **Quadros por exercício:** as colunas fixas (`position: sticky`) somavam 190 px (só Grupo) ou 260 px (Fonte 70 + Grupo 190), de 282 px, e ficavam por cima das colunas dos exercícios (184 px cada). Na rolagem até o fim, a última coluna ocupava de 98 a 282 px e a coluna fixa cobria de 0 a 190 px: só 92 dos 184 px apareciam. Para uma coluna fixa deixar a última coluna inteira, a conta é `coluna fixa + coluna do exercício ≤ largura do cartão`; a 360 px (230 px) isso dá menos de 58 px de coluna fixa, que não comporta nem o código da fonte.
+- **Código da fonte:** a coluna da Fonte tinha 70 px fixos (50 px de conteúdo), e o código de 8 dígitos precisa de 49 px (Intel One Mono, Compacto) a 67 px (Inter, Legível). Passando da coluna, o final ficava por baixo da coluna do Grupo (também fixa e mais alta). A fonte mais larga do AA+ agrava, mas a causa é a largura fixa.
+- **Ranking:** `.teto-rank-row` tinha 3 colunas (rótulo, barra de 70 px no mínimo, valor de 90 px no mínimo e até 147 px); o rótulo ficava com 25 a 67 px, e `.teto-rank-name` tem `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`.
+- Os outros cartões da aba (inclusive "Por grupo de despesa") não tinham corte.
+
+**Regra aplicada** (só CSS, bloco `[cleber]` no fim do `style.css`; nenhum cálculo, filtro, dado ou endpoint mudou, e o `main.js` não foi tocado). Opção "rótulo acima dos valores", aprovada pelo dev. Cleber:
+- **Quadros por exercício, só até 600 px de largura** (`@media (max-width: 600px)`): a grade passa a ter só as colunas dos exercícios, e o rótulo vai para linhas próprias acima dos valores (`grid-row` 1: código da fonte; 2: nome do grupo/tipificação; 3: valores). O rótulo ocupa a largura do quadro (`100cqw`, do `container-type: inline-size` no `.teto-qomp-scroll`) e acompanha a rolagem lateral (`position: sticky; left: 0`), inteiro e quebrando em linhas. Sem coluna fixa por cima, a rolagem chega à última coluna inteira (184 px, cabem os valores de até "R$ 99.999.999.999,99"). O cabeçalho dos exercícios (ano e total) continua alinhado com os valores, e o "Total Geral" e as faixas alternadas por fonte continuam. Os rótulos "Fonte" e "Grupo de despesa" do cabeçalho somem no celular (não têm mais coluna); a célula do código da fonte vazia (`:empty`) não ocupa linha.
+- **Se o navegador não suportar `container-type` ou `cqw`:** o `width: 100%` de reserva faz o rótulo ocupar a linha toda; ele deixa de acompanhar a rolagem lateral, mas não some nem corta.
+- **Ranking, até 600 px de largura ou com a janela baixa até 560 px de altura** (celular em pé ou deitado, onde o cartão tem ~600 px e os nomes ainda saíam cortados): o rótulo (código e nome) fica inteiro na linha de cima, quebrando em linhas, e a barra e o valor ficam na de baixo; a tipificação continua recuada.
+- Só `var(--…)`: sem cor literal, sem `font-size` em px e sem `style="…"` (`test_cor_literal`, `test_tamanho_fonte` e `test_style_inline` continuam passando). Acima desses limites nada muda.
+- Esta correção foi feita em cima da homologação (mesma exceção dos avisos modais, 41.100: a `dev/cleber` ainda não tem o AA+) e chega à `dev/cleber` e à `dev/jean` depois, pela sincronização da `main`.
+
+**Como testar:** na aba Tabelas do Teto Orçamentário, com a janela em 360 × 740, 412 × 915 e 740 × 360, nas densidades Compacto, Intermediário e Legível e com Intel One Mono e Inter (Personalizar → Fontes e tamanho do texto):
+1. nos quatro quadros por exercício, o rótulo fica inteiro acima dos valores; rolando para o lado, o rótulo acompanha e a última coluna aparece inteira (scrollWidth = 552 px com 3 exercícios); os 14 códigos de fonte têm 8 dígitos;
+2. no ranking das fontes e dos grupos, o nome aparece inteiro acima da barra e do valor;
+3. a 1366 × 768 tudo igual ao de antes (colunas fixas de 86 e 250 px, ranking de 3 colunas com reticências).
+
+Medido nas 6 combinações de densidade e fonte, a 360 × 740, 412 × 915 e 740 × 360: nenhum texto cortado, nenhum rótulo fora do cartão, última coluna inteira, valores dentro do cartão.
+
+Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-teto-celular.1` nos três (há teste que reprova se divergirem). `RELEASE_2_2026_11_16.3`.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
