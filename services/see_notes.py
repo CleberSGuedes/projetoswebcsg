@@ -61,6 +61,59 @@ def _municipio(lines: list[str], normalized: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+# Texto fiscal das Informações Complementares (ICMS/IPI/lei). Nunca pode virar DRE ou escola.
+_TEXTO_FISCAL = r"\bN\s?A\s?O\s+INCID|\bICMS\b|\bRICMS\b|\bIPI\b|\bRIPI\b|\bLEI\s+COMPLEMENTAR\b|\bART\.?\s*\d"
+
+# Layout Somos de 2026-09 (4º bimestre): destinatário é a SEDUC e a escola só aparece nas
+# Informações Complementares ("Solicitação: ... - <escola>" e "Endereço de entrega: ... - <município> - MT - BR").
+LAYOUT_SOMOS_SOLICITACAO = "somos_solicitacao"
+
+
+def _tem_texto_fiscal(value: str | None) -> bool:
+    return bool(value and re.search(_TEXTO_FISCAL, _ascii_upper(value)))
+
+
+def _somos_solicitacao(normalized: str) -> dict | None:
+    """Escola e município do layout Somos com 'Solicitação' (texto já sem acentos e em uma linha).
+
+    Formas da Solicitação vistas nas notas:
+    - "REF. SOLICITACAO NO 16432651 - EEI JULA PARE"
+    - "16435674 - SECRETARIA DE ESTADO DE EDUCACAO DE MATO - CEAADA PROFA ARLETE ..."
+    - "REF. SOLICITACAO NO 16433248 - DRE ALTA FLORESTA" (entrega na própria DRE)
+    O nome termina antes do texto fiscal ("NAO INCID. ICMS ..."). Na dúvida, devolve None.
+    """
+    if not (
+        re.search(r"\bSOLICITACAO\s*:", normalized)
+        and re.search(r"\bENDERECO\s+DE\s+ENTREGA\s*:", normalized)
+    ):
+        return None
+    nome = None
+    solicitacao = re.search(rf"\bSOLICITACAO\s*:\s*(.*?)\s*(?:{_TEXTO_FISCAL}|$)", normalized)
+    if solicitacao:
+        match = re.match(
+            r"(?:REF\.?\s*SOLICITACAO\s*N[O°.]*\s*)?\d+\s*-\s*"
+            r"(?:SECRETARIA\s+DE\s+ESTADO\s+DE\s+EDUCACAO(?:\s+DE\s+MATO(?:\s+GROSSO)?)?\s*-\s*)?"
+            r"(.*)$",
+            solicitacao.group(1),
+        )
+        nome = match.group(1).strip(" -") if match else None
+        if not nome or len(nome) > 120 or not re.search(r"[A-Z]{2}", nome) or _tem_texto_fiscal(nome):
+            nome = None
+    municipio = None
+    entrega = re.search(r"\bENDERECO\s+DE\s+ENTREGA\s*:\s*(.*?)\s*-\s*MT\s*-\s*BR\b", normalized)
+    if entrega:
+        municipio = entrega.group(1).rsplit(" - ", 1)[-1].strip(" -")
+        if not municipio or len(municipio) > 60 or re.search(r"\d", municipio) or _tem_texto_fiscal(municipio):
+            municipio = None
+    entrega_dre = bool(nome and re.match(r"DRE\s+[A-Z]", nome))
+    return {
+        # "Escola (nota)" mostra sempre o texto da Solicitação, inclusive na entrega na DRE.
+        "escola": nome,
+        "dre": nome if entrega_dre else None,
+        "municipio": municipio,
+    }
+
+
 def _metadata(text: str, filename: str) -> dict:
     normalized = _ascii_upper(text).replace("\r", "")
     filename_digits = re.sub(r"\D", "", Path(filename).stem)
@@ -96,6 +149,7 @@ def _metadata(text: str, filename: str) -> dict:
     destinatario_escola = _destinatario_escola(lines)
     dre_line = next((line for line in lines if re.fullmatch(r"DRE\s+[A-Z][A-Z ]{2,60}", line)), None)
     codigo_fora_do_layout = False
+    somos_novo = None
     if combined:
         escola, dre, codigo = (combined.group(1).strip(), combined.group(2).strip(), combined.group(3).strip())
     elif destinatario_escola and dre_line:
@@ -103,10 +157,13 @@ def _metadata(text: str, filename: str) -> dict:
         # esse modelo de nota não traz o código da escola.
         escola, dre, codigo = destinatario_escola, dre_line, None
         codigo_fora_do_layout = True
+    elif somos_novo := _somos_solicitacao(normalized):
+        # Somos novo: a nota não traz DRE nem código; ambos vêm do cadastro (nome + município).
+        escola, dre, codigo = somos_novo["escola"], somos_novo["dre"], None
     else:
         dre = _near_label(
             normalized,
-            r"D\.?R\.?E\.?",
+            r"\bD\.?R\.?E\.?",
             r"COD(?:IGO)?|CD|PEDIDO(?:\(S\))?|ESC(?:OLA)?|CNPJ|DANFE|CHAVE",
         )
         codigo = _near_label(
@@ -120,9 +177,9 @@ def _metadata(text: str, filename: str) -> dict:
             r"ESCOLA(?:\s+ESTADUAL)?|ESC\.?|E\.E\.",
             r"D\.?R\.?E\.?|COD(?:IGO)?|CNPJ|DANFE|CHAVE",
         )
-    if not dre:
+    if not dre and not somos_novo:
         dre_match = re.search(
-            r"D\.?R\.?E\.?\s*:\s*((?:D\.?R\.?E\.?\s+)?.{2,100}?)"
+            r"\bD\.?R\.?E\.?\s*:\s*((?:D\.?R\.?E\.?\s+)?.{2,100}?)"
             r"(?=\s+(?:PEDIDO(?:\(S\))?|COD(?:IGO)?|CD|ENTREGA|SEM\s+VENCIMENTO|VIAGEM|$))",
             normalized,
             re.IGNORECASE,
@@ -141,9 +198,19 @@ def _metadata(text: str, filename: str) -> dict:
         or any(marker in escola for marker in ("VALOR TOTAL DA NOTA", "FRETE POR CONTA", "DESPESAS ACESSORIAS"))
     ):
         escola = None
+    # Proteção (todos os layouts): texto fiscal nunca vira DRE nem escola; fica o alerta de campo ausente.
+    if _tem_texto_fiscal(dre):
+        dre = None
+    if _tem_texto_fiscal(escola):
+        escola = None
     has_school_block = bool(re.search(r"(?:ESCOLA|ESC\.?|E\.E\.)\s*:", normalized, re.IGNORECASE))
     entrega_direta_dre = bool(dre and not has_school_block and not codigo_fora_do_layout)
-    if codigo_fora_do_layout:
+    if somos_novo:
+        entrega_direta_dre = bool(dre)
+    municipio =somos_novo["municipio"] if somos_novo else _municipio(lines, normalized)
+    if somos_novo:
+        expected_values = (dre, numero) if entrega_direta_dre else (escola, municipio, numero)
+    elif codigo_fora_do_layout:
         expected_values = (dre, escola, numero)
     elif entrega_direta_dre:
         expected_values = (dre, numero)
@@ -156,9 +223,10 @@ def _metadata(text: str, filename: str) -> dict:
         "dre": dre,
         "codigo_escola": codigo,
         "nome_escola": escola,
-        "municipio": _municipio(lines, normalized),
+        "municipio": municipio,
         "entrega_direta_dre": entrega_direta_dre,
         "codigo_fora_do_layout": codigo_fora_do_layout,
+        "layout": LAYOUT_SOMOS_SOLICITACAO if somos_novo else None,
         "confianca": round(found / len(expected_values), 4),
     }
 
@@ -272,7 +340,14 @@ def extract_pdf(
     metadata = _metadata(full_text, path.name)
     warnings = []
     required_metadata = [("dre", "DRE"), ("numero_danfe", "número da DANFE")]
-    if metadata.get("codigo_fora_do_layout"):
+    if metadata.get("layout") == LAYOUT_SOMOS_SOLICITACAO and not metadata.get("entrega_direta_dre"):
+        # A nota não traz DRE nem código da escola: vêm do cadastro (identificar_escola).
+        required_metadata = [
+            ("nome_escola", "nome da escola (Solicitação)"),
+            ("municipio", "município (Endereço de entrega)"),
+            ("numero_danfe", "número da DANFE"),
+        ]
+    elif metadata.get("codigo_fora_do_layout"):
         required_metadata[1:1] = [("nome_escola", "nome da escola")]
         warnings.append({
             "codigo": "CAMPO_CODIGO_ESCOLA_AUSENTE",
