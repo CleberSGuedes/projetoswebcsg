@@ -782,10 +782,10 @@
           <div class="alert alert-info">Aviso informativo: texto em <code>--text</code> sobre o destaque claro.</div>
         </section>
 
-        <!-- 5. Tela de relatório (§4.4), com a marcação dos relatórios do SPO (FIP 613, PLAN20, PED…):
-             cabeçalho de relatório, cartão report-data-card e, no topo, "Última atualização por UO" (o HTML que o
-             renderUltimasAtualizacoes do main.js escreve), totais com pos/neg e os botões; depois filtros,
-             teclado nas células e paginação -->
+        <!-- 5. Tela de relatório (§4.4), com a marcação dos relatórios do SPO: cabeçalho de relatório, cartão
+             report-data-card e o topo recortado do relatorios_fip613.html (o tests/test_kit_mockup.py confere) —
+             a "Última atualização por UO" é escrita pelo renderUltimasAtualizacoes do main.js e os totais são
+             preenchidos pelo kit, como o JavaScript da tela faz; depois filtros, teclado e paginação -->
         <section class="report-page" aria-labelledby="kit-relatorio-titulo">
           <header class="report-header">
             <div class="report-header-copy"><div class="report-eyebrow">Relatórios · Execução</div><h1 id="kit-relatorio-titulo">Relatório de exemplo</h1><p>Acompanhe a execução orçamentária, aplique filtros e exporte os resultados.</p></div>
@@ -794,28 +794,23 @@
           <div class="card plan20-card report-data-card">
             <div class="card-title">Relatório de exemplo</div>
             <div class="actions relatorio-top relatorio-top-uo">
-              <div class="muted" id="kit-relatorio-meta"><div><strong>Última atualização por UO</strong></div><div class="meta-uo-grid">
-                <div class="meta-uo-col">
-                  <div class="meta-uo-titulo">14101 - SEDUC</div>
-                  <div>Enviado por: usuario.exemplo@spo-dev.test</div>
-                  <div>Upload em: 15/11/2026, 09:59:25</div>
-                  <div>Data do download: 15/11/2026, 09:14:00</div>
-                </div>
-              </div></div>
-              <div class="relatorio-top-right">
-                <div class="totais-box">
-                  <div class="totais-title">Totais (filtros aplicados)</div>
-                  <div class="totais-row"><span>UO:</span> <strong>14101 * 14601</strong></div>
-                  <div class="totais-row"><span>Valor:</span> <strong id="kit-total">0</strong></div>
-                  <div class="totais-row"><span>Bloqueado/Conting.:</span> <strong class="neg">-201.449.949,07</strong></div>
-                  <div class="totais-row"><span>Saldo:</span> <strong class="pos">2.886.249.455,56</strong></div>
-                </div>
-                <div class="actions report-actions">
-                  <button class="btn sm compact" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
-                  <button class="btn sm compact" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+                <div class="muted" id="fip613-relatorio-meta">Carregando...</div>
+                <div class="relatorio-top-right">
+                  <div class="totais-box" id="fip613-totais">
+                    <div class="totais-title">Totais (filtros aplicados)</div>
+                    <div class="totais-row"><span>PAOE:</span> <strong id="tot-paoe">-</strong></div>
+                    <div class="totais-row"><span>Grupo:</span> <strong id="tot-grupo">-</strong></div>
+                    <div class="totais-row"><span>Créd. Autorizado:</span> <strong id="tot-cred-autorizado">0</strong></div>
+                    <div class="totais-row"><span>Bloqueado/Conting.:</span> <strong id="tot-bloqueado">0</strong></div>
+                    <div class="totais-row"><span>Teto Disponível:</span> <strong id="tot-teto">-</strong></div>
+                    <div class="totais-row"><span>Saldo de Dotação:</span> <strong id="tot-saldo-dotacao">-</strong></div>
+                  </div>
+                  <div class="actions report-actions">
+                    <button class="btn sm compact" id="fip613-reset" type="button"><i class="bi bi-eraser"></i><span>Limpar Filtros</span></button>
+                    <button class="btn sm compact" id="fip613-download" type="button"><i class="bi bi-download"></i><span>Baixar Excel</span></button>
+                  </div>
                 </div>
               </div>
-            </div>
             <div class="report-empty-state" hidden>Consulta sem resultados.</div>
             <div class="table-responsive">
               <table class="table plan20-table" id="kit-tabela">
