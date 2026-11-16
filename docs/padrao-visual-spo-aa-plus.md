@@ -501,7 +501,14 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   relatórios do SPO (FIP 613, PLAN20, PED): `report-header`, cartão `report-data-card`, topo
   `relatorio-top relatorio-top-uo` com "Última atualização por UO" (o HTML do `renderUltimasAtualizacoes`),
   totais com `pos`/`neg` e os botões; filtros `.mf-*`, navegação pelo teclado e paginação.
+- **O padrão dentro do kit:** os botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no cabeçalho do kit
+  abrem a mesma janela do SPO (`initPadraoSpoAaPlus`, lido do `main.js`); o documento técnico vem da rota
+  `/api/documentos/padrao-spo-aa-plus` e pede o SPO logado neste navegador (sem sessão, a janela diz para
+  entrar). Para o agente ou quem lê o código, a fonte é este arquivo, citado no comentário do kit e no
+  "Como usar".
 - **Como usar** (o mesmo passo a passo está na caixa "Como usar o kit", no alto da página):
+  0. **Consultar o padrão:** botões do cabeçalho (resumo e documento técnico) ou este arquivo; checklist de
+     tela nova no §6.1.
   1. **Criar:** copie `mockup-spo-aa-plus.html` para a mesma pasta (`static/kit/`) com outro nome, por exemplo
      `mockup-pta-opr.html`, e abra pelo SPO local (`/static/kit/mockup-pta-opr.html`); na mesma pasta, os
      caminhos do `style.css`, do `kit-mockup.js` e do `main.js` continuam valendo.

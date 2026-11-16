@@ -11,7 +11,9 @@
 //  - os gráficos (feat/kit-previas): COMMON_DIAGRAM_THEMES e os blocos initDiagramasDestaque (destaque e
 //    daltonismo), initGraficosAcessiveis (resumo e tabela de dados) e initGraficosEscala (fonte, densidade,
 //    padrões do daltonismo, tela estreita), com o mesmo Plotly do base.html;
-//  - o initGovernancaSemanticFlows (cartões dinâmicos com painel de contexto do catálogo de padrões).
+//  - o initGovernancaSemanticFlows (cartões dinâmicos com painel de contexto do catálogo de padrões);
+//  - o initPadraoSpoAaPlus (a janela "O padrão SPO-AA+": resumo e documento técnico, o mesmo do SPO;
+//    o documento técnico vem da rota /api/documentos/padrao-spo-aa-plus e pede o SPO logado).
 // Ao abrir, o kit usa as preferências vigentes no SPO deste navegador (como qualquer tela do SPO);
 // "Padrão SPO" volta ao padrão e recarregar a página volta às vigentes. Nada é gravado.
 // O tests/test_kit_mockup.py confere que esses trechos continuam no main.js e que a extração funciona.
@@ -57,6 +59,7 @@
     return {
       fluxos: `${trecho(fonte, "function initGovernancaSemanticFlows() {", true)}
 initGovernancaSemanticFlows();`,
+      padraoDoc: `${trecho(fonte, "(function initPadraoSpoAaPlus() {", true)})();`,
       diagramas: objeto(fonte, "const COMMON_DIAGRAM_THEMES = Object.freeze({"),
       graficos: ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"].map(bloco),
       presets: objeto(fonte, "const PROTECTED_CONTRACT_PRESETS = Object.freeze({"),
@@ -512,6 +515,7 @@ initGovernancaSemanticFlows();`,
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
       new Function(spo.fluxos)();
+      new Function(spo.padraoDoc)();
       if (window.Plotly) {
         // o initGraficosEscala pergunta o modo dos diagramas por esta função do main.js
         window.spoGetDiagramSemanticTokens = () => ({ mode: body.dataset.visualDiagramTheme || "light", tokens: {} });
