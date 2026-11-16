@@ -76,3 +76,22 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px;
 }
+
+/* passo a passo do kit */
+.kit-como-usar {
+  margin: 12px var(--spo-layout-content-padding, 18px) 0;
+  padding: 12px 16px;
+}
+.kit-como-usar > summary {
+  cursor: pointer;
+  font-size: var(--spo-fs-titulo);
+  font-weight: 700;
+  color: var(--spo-accent-text, var(--text));
+}
+.kit-como-usar ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--spo-fs-texto);
+  line-height: 1.5;
+}
+.kit-como-usar li + li { margin-top: 6px; }

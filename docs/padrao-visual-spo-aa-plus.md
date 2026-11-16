@@ -488,9 +488,26 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   `initGraficosEscala` lidos do `main.js`), cartões dinâmicos (`flow-node`), formulário (campos,
   desabilitado, hierarquia dos botões), aviso `alert-info` e relatório com totais, filtros `.mf-*`,
   `pos`/`neg`, navegação pelo teclado e paginação.
-- **Como usar:** copie o arquivo para o mockup novo, troque o conteúdo de exemplo e mantenha as classes.
-  CSS novo segue o §6.1 (tokens e `var(--spo-fs-*)`). O kit também **mede o próprio SPO**: componente
-  que não muda ao trocar a densidade ou o tema no painel é dívida (§7).
+- **Como usar** (o mesmo passo a passo está na caixa "Como usar o kit", no alto da página):
+  1. **Criar:** copie `mockup-spo-aa-plus.html` para a mesma pasta (`static/kit/`) com outro nome, por exemplo
+     `mockup-pta-opr.html`, e abra pelo SPO local (`/static/kit/mockup-pta-opr.html`); na mesma pasta, os
+     caminhos do `style.css`, do `kit-mockup.js` e do `main.js` continuam valendo.
+  2. **Montar:** troque só o conteúdo de `<main id="content-area">`, copiando os blocos de exemplo e mudando
+     os textos; mantenha o painel e o `<script>` do fim.
+  3. **CSS próprio**, se precisar: num `<style>` do mockup, só com tokens de cor e `var(--spo-fs-*)` (§6.1).
+  4. **Revisar pelo painel:** claro e escuro; dois ou três destaques (o Amarelo é o mais exigente no claro);
+     Compacto, Intermediário e Legível; 150%; a Atkinson com a "Leitura confortável"; os presets do Contrato;
+     daltonismo, se houver gráfico; Tab, setas e Esc; janela estreita. O que quebra ou não muda se corrige
+     ainda no mockup.
+  5. **Levar ao SPO:** o conteúdo do `<main>` vira `templates/partials/<tela>.html`; o `<style>` vai para um
+     bloco `[jean]` no fim do `style.css`. Teclado nas tabelas, gráficos acessíveis, densidade e temas já vêm
+     do SPO.
+  6. **Guardar:** o mockup fica em `static/kit/` enquanto está em desenho e vai ao Git só junto com o PR da
+     tela.
+
+  Com o Claude: "faça um mockup da tela X a partir do kit" — ele cria o arquivo, mede nas combinações do
+  passo 4 e mostra as capturas antes de qualquer código no SPO. O kit também **mede o próprio SPO**:
+  componente que não muda ao trocar a densidade ou o tema no painel é dívida (§7).
 - Regra nova do Personalizar que liga uma opção a outra (como a oferta da Atkinson): o kit precisa
   reproduzi-la, lendo do `main.js`, para continuar mostrando o comportamento exato do SPO.
 - `tests/test_kit_mockup.py` reprova se os trechos que o kit lê do `main.js` mudarem de nome ou de forma,
