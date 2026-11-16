@@ -3111,3 +3111,11 @@ Pedido do dev. Jean: o documento técnico do padrão tem de estar no kit, para c
 - `tests/test_kit_mockup.py` (+1): o kit lê o `initPadraoSpoAaPlus`, que ainda lê a rota; botões e caminho do arquivo-fonte presentes.
 
 Testado: clique de verdade em "Documento técnico" no kit (logado): janela aberta, sumário com 9 seções, foco no título, Esc fecha; pedido sem sessão com `X-Requested-With` responde 401. `?v=` do `main.js`: `20261115.jean-kit-documento.1`.
+
+## Teste contra cor literal no style.css — Fase B (dev. Jean, 2026-11-15)
+
+Avaliação pedida pelo dev. Jean (o kit e o SPO resistem a ampliações?): o tamanho em px já estava travado (`test_tamanho_fonte.py`), a cor não — tela nova podia escrever `#1a5fb4` e nada reprovava. É a Fase B do roteiro do N5 (padrão §7).
+- `tests/test_cor_literal.py`: conta as cores literais do `style.css` (hexadecimal e `rgb/rgba/hsl/hsla` com números; `rgba(var(--accent-rgb), .16)` não conta) **fora de definição de token** (`--nome: …` fica de fora: é onde a cor deve estar), sem comentários. Hoje: **376 cores, 191 valores**. A referência fica em `tests/referencia_cor_literal.json` (gerada pelo próprio teste). Reprova valor novo e contagem que sobe; quando desce, o segundo teste avisa (skip) para baixar a referência com `python tests/test_cor_literal.py` — que se recusa se a contagem subiu (exceção nova do §6.3 só com `--forcar`).
+- Conferido que reprova: cor nova (`#1a5fb4`) e mais um uso de cor existente (`#ffffff`; o comando de atualizar também recusou); e que aceita: token novo definido com cor e usado por `var()`.
+- Cores por nome (`white`, `black`…) não são contadas.
+- Padrão: regra de ouro (§3), checklist (§6.1) e roteiro do N5 (§7) atualizados.
