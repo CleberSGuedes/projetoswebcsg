@@ -240,12 +240,12 @@ nunca corrija um destaque dentro de um componente.
 | Perigo (contorno) | `#a51d2d` / `#ffa3a3` | texto e borda 7,46 | 8,15 | Limpar Formulário, Cancelar/Remover das consultas |
 | Aviso | âmbar `#b45309` / `#fbbf24` | faixa 4,63; ícone 4,28 | 8,28; 6,96 | faixas e ícones de aviso (o texto do aviso fica em `--text`) |
 | Desabilitado | fundo `#eef2f4`, texto `#5f6670`, borda `#c9ced6` | texto 5,15 | fundo `rgba(255,255,255,.05)`, texto `#b5b5b5` (6,53), borda `#4a4a4a` | todo `:disabled` em `.form-grid` e as opções indisponíveis das Notas SEE (`.see-upload-option.is-disabled`, antes `opacity .45`) |
-| Valores positivos/negativos (classes `pos`/`neg`) | azul `#0000ff` / vermelho `#a00000` | 8,37 / 8,20 | `#94baff` / `#ff9999` (7,71 / 7,38) | totais de todos os relatórios e células do FIP 613 (#70). O vermelho puro `#ff0000` daria 4,0:1, abaixo do AA |
+| Valores positivos/negativos (classes `pos`/`neg`) | tokens **`--spo-positive`** / **`--spo-negative`**: azul `#0000ff` / vermelho `#a00000` | 8,37 / 8,20 | `#94baff` / `#ff9999` (7,71 / 7,38) | totais de todos os relatórios e **qualquer célula numérica do conteúdo** (`td.num.pos`/`.neg`, em negrito 600; antes só o FIP 613 — achado do kit de mockup, 15/11) (#70). O vermelho puro `#ff0000` daria 4,0:1, abaixo do AA |
 | Informação (`.alert-info`) | texto `#0f4c4c` sobre fundo do destaque claro | 8,86 | texto `--text`, fundo do destaque a 10%, borda dos controles (11,65) | avisos informativos, ex.: "Regras de segurança" da Limpeza (#79) |
 
 > **A fazer (N5):** estes estados ainda são literais repetidos em blocos diferentes. Na divisão do CSS,
-> viram tokens (`--spo-danger`, `--spo-danger-outline`, `--spo-warning`, `--spo-disabled-*`,
-> `--spo-positive`, `--spo-negative`), definidos uma vez por tema.
+> viram tokens (`--spo-danger`, `--spo-danger-outline`, `--spo-warning`, `--spo-disabled-*`),
+> definidos uma vez por tema. `--spo-positive` e `--spo-negative` já existem (15/11).
 
 ### 3.5 Diagramas e gráficos
 
@@ -457,7 +457,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 | Amostras de destaque no Personalizar (`.accent-swatch`) | mostram a cor real de cada destaque |
 | Paletas de diagrama (§3.5), `ACCENT_COLORS` e a paleta Okabe-Ito (`PALETA_DALTONISMO`) | são definições de token |
 | Paleta do login (bloco `[jean] Login com a paleta inteira`) | cópia do `ACCENT_COLORS` para a tela que não carrega o `main.js` (§3.3) |
-| Valores `pos`/`neg` e `.alert-info` escuro (§3.4) | literais até virarem tokens no N5 |
+| Definição de `--spo-positive`/`--spo-negative` (§3.4) e `.alert-info` escuro | são definições de token (o `.alert-info` escuro, literal até o N5) |
 | Logotipo e imagens | não são interface |
 
 ### 6.4 Kit de mockup SPO-AA+
@@ -570,8 +570,8 @@ resolvido por `initGraficosEscala`).
 | Programação PTA/OpR com cabeçalho próprio | depende do futuro do mockup (dataPTA) |
 | Ícone do cabeçalho repete o do `MENU_META`; paleta do login repete o `ACCENT_COLORS` | na divisão, gerar de uma fonte só |
 | Cores forçadas do Windows, `prefers-contrast: more`, leitor de tela, Firefox/Safari | não medidos |
-| **Achado do kit de mockup (15/11):** componentes comuns fora da "Densidade do texto" — título do cartão `.module-card-title h2` (15 px fixo), descrição dele (12), texto corrido e listas de cartão (14, herdado do `body`) e avisos `.alert` (14) | a decidir: passar a `--spo-fs-titulo`/`-controle`/`-texto`/`-leitura` (no Intermediário, o título vai de 15 a 14 e o texto de cartão de 14 a 13 em todas as telas que os usam) |
-| **Achado do kit de mockup (15/11):** `pos`/`neg` só pintam nos totais (`.totais-row`) e na tabela do FIP 613 (`.fip-table td.num`); numa tabela nova, o negativo fica sem cor | a decidir: regra geral para `td.num.pos/.neg` do conteúdo |
+| **Achado do kit de mockup (15/11):** componentes comuns fora da "Densidade do texto" — título do cartão `.module-card-title h2` (15 px fixo), descrição dele (12), texto corrido e listas de cartão (14, herdado do `body`) e avisos `.alert` (14) | **resolvido** (`fix/densidade-cartoes-pos-neg`): título = `--spo-fs-titulo`, descrição = `-controle`, texto e listas = `-texto`, avisos = `-leitura` (os da Limpeza de Histórico têm tamanho próprio). No Intermediário, título 15 → 14 e texto do cartão 14 → 13 nas 11 telas com cartão de seção |
+| **Achado do kit de mockup (15/11):** `pos`/`neg` só pintam nos totais (`.totais-row`) e na tabela do FIP 613 (`.fip-table td.num`); numa tabela nova, o negativo fica sem cor | **resolvido**: tokens `--spo-positive`/`--spo-negative` e regra para qualquer `td.num.pos/.neg` do conteúdo (§3.4) |
 
 ## 8. Histórico
 
