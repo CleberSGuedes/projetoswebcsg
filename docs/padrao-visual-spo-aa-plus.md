@@ -463,7 +463,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 | Onde | Por quê |
 |---|---|
 | Faixa de ambiente (`.environment-banner`, `.environment-inline`) | identidade de cada ambiente (dev/homologação) |
-| Amostras de destaque no Personalizar (`.accent-swatch`) | mostram a cor real de cada destaque |
+| Amostras de destaque no Personalizar (`.accent-swatch`) | mostram a cor real de cada destaque. Amostra de 44 px, com halo claro e o ponto na cor real (desenho do laboratório). A **escolhida** não depende só da cor: anel suave na própria cor (decorativo) e um **✓ em `--text` num selo neutro** no canto, que carrega o estado (≥ 14:1 nos 8 destaques e nos dois temas; desde 16/11, C10) |
 | Paletas de diagrama (§3.5), `ACCENT_COLORS` e a paleta Okabe-Ito (`PALETA_DALTONISMO`) | são definições de token |
 | Paleta do login (bloco `[jean] Login com a paleta inteira`) | cópia do `ACCENT_COLORS` para a tela que não carrega o `main.js` (§3.3) |
 | Definição de `--spo-positive`/`--spo-negative` (§3.4) e `.alert-info` escuro | são definições de token (o `.alert-info` escuro, literal até o N5) |

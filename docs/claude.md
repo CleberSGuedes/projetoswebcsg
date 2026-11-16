@@ -3154,3 +3154,16 @@ Pedido do dev. Jean para fechar a rodada: bateria geral automatizada das opçõe
 - Depois das correções: kit 318/318 sem achados; Contrato e Institucional limpos nos perfis de diagramas opostos e no de alto contraste. As opções desabilitadas das Notas SEE (5,15/6,53:1) são o estilo de desabilitado do §3.4, não defeito.
 - Padrão §6.1: item novo (quem usa as cores dos diagramas usa em tudo; medir com os diagramas no modo oposto ao tema). `?v=` do CSS: `20261115.jean-bateria-3.1` (`base.html` e `login.html`).
 - Fora desta bateria: teclado/foco (testados à mão), leitor de tela, cores forçadas, Firefox/Safari e as telas fora da amostra (os relatórios pesados EMP, NOB e EST EMP ficaram de fora para não carregar o banco).
+
+## ✓ na cor de destaque ativa (dev. Jean, 2026-11-16)
+
+Gate C10 do AA+ v3.1 do laboratório, com o desenho confirmado na comparação visual de 16/11 (o laboratório reabilitado por cópia tinha o ✓). No Personalizar, a amostra da cor escolhida tinha um anel na **própria cor da amostra**: nas cores claras ele ficava abaixo de 3:1 com o cartão (5 de 16 combinações; Amarelo no claro 1,47:1), e a escolha dependia só da cor (WCAG 1.4.1 e 1.4.11).
+- Bloco `[jean]` no fim do `style.css`, no **desenho do laboratório** (preferido pelo dev. Jean depois de comparar):
+  - amostra de **44 px** (alvo do AA+; antes 34 px, e 44 px só no toque), com o halo claro na cor da amostra e o ponto na cor real (regras de base inalteradas);
+  - escolhida: **anel suave na própria cor** (55%, com vão na cor do cartão), agora decorativo, e o `::after` vira um **selo neutro com ✓** (fundo `--card`, borda `--border`, ✓ em `--text`, `--spo-fs-rotulo`) no canto inferior direito. Quem carrega o estado é o ✓.
+  - Dois desenhos anteriores foram descartados na conferência do dev. Jean: anel e selo na cor do texto (pesado) e anel em `--spo-selected-border` (destoava do laboratório).
+  - `:not(#spo-check)` vence `.accent-swatch.active` e a regra de alvos do AA+. Com cores forçadas do Windows, contorno e selo em `Highlight`.
+- Medido nos 8 destaques × 2 temas (marcando a amostra só na página, com as transições desligadas): **✓ a 16,86:1 (claro) e 14,26:1 (escuro)** em todos; anel de 1,25 a 4,19:1 e borda do selo de 1,36 a 1,43:1, suaves de propósito (decorativos). Antes, o anel era a única marca, de 1,47 a 6,05:1. O kit de mockup mostra o mesmo (usa o `style.css`).
+- `?v=` do CSS: `20261116.jean-cor-ativa-check.3` (`base.html`, `login.html` e o kit de mockup).
+- **Kit de mockup com o `?v=` do SPO:** o kit carregava `../css/style.css` sem versão, e o navegador continuou mostrando as amostras antigas do cache. O link do kit passou a levar o mesmo `?v=` do `base.html`, e `test_kit_carrega_o_style_css_da_mesma_versao_do_spo` (`tests/test_kit_mockup.py`) reprova quando os dois divergem: **ao mudar o `?v=` do CSS, mudar também em `static/kit/mockup-spo-aa-plus.html`**.
+- Junto, no ambiente local do dev. Jean (sem código): a etiqueta de ambiente voltou ao topo com `APP_ENV_LABEL`/`APP_ENV_CLASS` no `.env` local — o mecanismo do `app.py` já existia.
