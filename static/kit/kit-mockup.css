@@ -117,3 +117,4 @@
   margin: 2px 0 10px;
   font-size: var(--spo-fs-controle);
 }
+.kit-catalogo > p { font-size: var(--spo-fs-texto); }
