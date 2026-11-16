@@ -9933,3 +9933,64 @@ body .accent-swatch.active:not(#spo-check)::after {
   body .accent-swatch.active:not(#spo-check) { outline: 3px solid Highlight; outline-offset: 2px; }
   body .accent-swatch.active:not(#spo-check)::after { forced-color-adjust: none; background: Canvas; color: Highlight; border-color: Highlight; }
 }
+
+/* ===== [cleber] Avisos modais no celular: cartão com margem ===== */
+/* Pedido do dev. Cleber (fix/modais-celular, 2026-11-16). No celular (Moto Edge 50 Fusion, Firefox), os
+   avisos ocupavam a tela inteira e o "×" do Alerta ficava fora da área visível: o .emp-record-card não
+   tem altura máxima nem rolagem (só o .modal-card tinha, e em 85vh, que não acompanha a barra de endereço).
+   Regra comum a todo aviso .modal-overlay (Alerta e pendências da Início, avisos de upload, conclusão das
+   Notas SEE, Metas Físicas, Limpeza de Histórico), menos o "Carregando": o overlay tem a altura visível
+   (100dvh, com 100vh para navegador antigo) e margem de 16 px, somada às áreas seguras; o cartão cabe
+   nessa altura e rola por dentro; o cabeçalho e o rodapé ("Fechar") ficam fixos; no Alerta, o "×" fica
+   fixo no topo. A busca, a ajuda e "O padrão SPO-AA+" (.spo-busca-fundo) já são cartões (#124).
+   O deslocamento do sticky conta a partir da área de conteúdo (sem o padding do cartão), por isso
+   os valores negativos (-20, -18 e -6 px): o cabeçalho, o rodapé e o "×" ficam rentes à borda do cartão.
+   Só vale em tela de celular (em pé ou deitado); no computador nada muda. */
+@media (max-width: 600px), (max-height: 560px) {
+  .modal-overlay:not(.app-loading-overlay) {
+    box-sizing: border-box;
+    height: 100vh;
+    height: 100dvh;
+    bottom: auto;
+    padding: 16px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+  .modal-overlay:not(.app-loading-overlay) .modal-card,
+  .modal-overlay:not(.app-loading-overlay) .emp-record-card {
+    box-sizing: border-box;
+    width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .modal-overlay:not(.app-loading-overlay) .emp-record-card { max-width: 900px; }
+  /* cabeçalho fixo no topo do cartão (o fundo cobre o que rola por baixo) */
+  .modal-overlay:not(.app-loading-overlay) .modal-card > .modal-header {
+    position: sticky;
+    top: -20px;
+    z-index: 2;
+    margin: -20px -22px 0;
+    padding: 20px 22px 10px;
+    background: var(--surface);
+  }
+  /* rodapé ("Fechar", "OK", "Baixar Excel") sempre visível, sem rolar até o fim */
+  .modal-overlay:not(.app-loading-overlay) .modal-card > :is(.modal-footer, .see-done-footer) {
+    position: sticky;
+    bottom: -18px;
+    z-index: 2;
+    margin: 12px -22px -18px;
+    padding: 10px 22px 18px;
+    background: var(--surface);
+    border-top: 1px dashed var(--border);
+  }
+  /* Alerta: o "×" acompanha o topo do cartão enquanto ele rola (não ocupa linha: margens negativas) */
+  .modal-overlay:not(.app-loading-overlay) .emp-record-card > .emp-record-close-icon {
+    position: sticky;
+    top: -6px;
+    z-index: 3;
+    display: block;
+    margin: -6px -4px -22px auto;
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+}

@@ -3255,6 +3255,33 @@ Vinda da comparação visual com o laboratório v4.3.1 (16/11): lá as fatias, o
 - Conferido no kit de mockup, nos temas claro e escuro e com os diagramas claro, escuro e em alto contraste (inclusive no modo oposto ao tema): a linha tem exatamente a cor do quadro nas 8 combinações (2 temas × 4 modos dos diagramas), com 2 px só em alto contraste; e nos 3 níveis de contraste × 2 temas, com 2 px só no Reforçado. No SPO real, os 5 gráficos do Teto Orçamentário (pizza, árvore, dois de barras e o cascata). Padrão §3.5: item novo.
 - `?v=` do `main.js`: `20261116.jean-graficos-separador.4` (`base.html`). CSS sem mudança.
 
+### 41.100 Avisos modais no celular: cartão com margem (dev. Cleber, 2026-11-16)
+
+**Problema:** no celular (Moto Edge 50 Fusion, Firefox no Android), na homologação, os avisos modais ocupavam a tela inteira e o "×" de fechar ficava fora da área visível: não dava para fechar o "Alerta" da chave de planejamento na Início. A busca de telas e a ajuda dos atalhos já tinham sido resolvidas no #124 (cartões com margem), mas os outros avisos ficaram de fora.
+
+**Causa** (medida no navegador do app a 360 × 740 e 390 × 844):
+- Todo aviso usa o mesmo mecanismo: `.modal-overlay` (`position: fixed; inset: 0`, centralizado) com um cartão dentro, e `prepararModais` (`main.js`) cuida de foco, Tab e Esc.
+- O **Alerta da Início não usa `.modal-card`**, e sim `.emp-record-card`, que só tinha largura: sem altura máxima e sem rolagem. O "×" é `position: absolute` no topo do cartão. A 360 × 740 o cartão tinha 779 px: começava em −19 px e o "×" ficava em −8 a 20 px, cortado; o overlay não rola, então não havia como alcançá-lo (só o Esc fechava). O #66 só tinha deixado o "×" redondo e com área de toque de 44 px.
+- O `.modal-card` comum tinha `max-height: 85vh` e rolava o cartão inteiro: cabeçalho e rodapé rolavam junto, e o "Fechar" ficava no fim da rolagem (a 390 × 844, nas pendências da Início, a 1.133 px dentro de um cartão de 717 px). Os avisos desse tipo não têm "×". Além disso `vh` não acompanha a barra de endereço do navegador do celular (hipótese: o navegador do app não tem barra dinâmica, então isso fica a confirmar no aparelho).
+- O CSS não tinha `dvh`, `svh` nem `env(safe-area-inset-*)`.
+
+**Regra aplicada** (só CSS, bloco `[cleber]` no fim do `style.css`, dentro de `@media (max-width: 600px), (max-height: 560px)`: celular em pé ou deitado; no computador nada muda):
+- todo `.modal-overlay`, menos o "Carregando" (`.app-loading-overlay`), passa a ter a altura visível (`height: 100vh` e, em seguida, `100dvh`) e margem de 16 px somada às áreas seguras (`max(16px, env(safe-area-inset-*))`, com `padding: 16px` de reserva);
+- `.modal-card` e `.emp-record-card` ficam com `width: 100%`, `max-height: 100%` do overlay (a altura visível de verdade) e `overflow-y: auto`: o cartão cabe na tela e rola por dentro;
+- o cabeçalho (`.modal-header`) e o rodapé (`.modal-footer`, `.see-done-footer`) ficam fixos (`position: sticky`, com fundo `var(--surface)`): nos avisos sem "×" o "Fechar" fica sempre visível, sem rolar até o fim;
+- no Alerta, o "×" (`.emp-record-close-icon`) fica fixo no topo do cartão enquanto ele rola, sem ocupar linha (margens negativas); a área de toque de 44 px e o foco visível do #66 continuam;
+- o `top`/`bottom` do `sticky` conta a partir da área de conteúdo, sem o padding do cartão; por isso os valores negativos (−20, −18 e −6 px), que deixam cabeçalho, rodapé e "×" rentes à borda;
+- só `var(--…)`: sem cor literal, sem `font-size` em px e sem `style="…"` (`test_cor_literal`, `test_tamanho_fonte` e `test_style_inline` continuam passando); nenhum texto, conteúdo ou comportamento dos avisos mudou, e o `main.js` não foi tocado;
+- fora do bloco, a busca, a ajuda e "O padrão SPO-AA+" (`.spo-busca-fundo`) seguem as regras do #124.
+
+**Como testar:** na Início, com a janela em 360 × 740, 390 × 844 e 740 × 360 (celular deitado), recarregar:
+1. o Alerta fica num cartão com 16 px de margem, rola por dentro, e o "×" fica a ~11 px do topo do cartão, visível também com a rolagem no fim; um toque a 5 px do círculo ainda fecha (área de 44 px);
+2. fechado o Alerta, as pendências aparecem num cartão com margem, com o cabeçalho no topo e o "Fechar" (44 px de altura) visível sem rolar, em qualquer posição da rolagem; Esc fecha e o foco volta para a página;
+3. avisos de conclusão (Notas SEE), Limpeza de Histórico e Metas Físicas seguem a mesma regra (conferidos com o mesmo HTML montado pelo `main.js`, sem processar nada);
+4. a 1366 × 768 tudo igual ao de antes: Alerta com 900 × 483 px e "×" absoluto, `.modal-card` com `max-height: 85vh`, cabeçalho e rodapé estáticos.
+
+Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-modais-celular.1` nos três (há teste que reprova se divergirem). O `RELEASE` continua `RELEASE_2_2026_11_16.2` (ainda não publicado). Esta correção é feita em cima do lote 5 por exceção combinada (a `dev/cleber` ainda não tem o AA+) e chega à `dev/cleber` e à `dev/jean` depois, pela sincronização da `main`.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
