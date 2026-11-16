@@ -264,6 +264,12 @@ initGovernancaSemanticFlows();`,
     marcar("[data-contract-preset]", "data-contract-preset", estado.preset);
     opcoes.querySelectorAll("[data-contract-preset]").forEach((b) => b.classList.toggle("is-selected", b.dataset.contractPreset === estado.preset));
     contextoDoPreset();
+    // os presets do catálogo (marcação do Contrato) mostram o mesmo preset como selecionado
+    document.querySelectorAll(".kit-catalogo [data-contract-preset]").forEach((b) => {
+      const ativo = b.dataset.contractPreset === estado.preset;
+      b.classList.toggle("active", ativo);
+      b.setAttribute("aria-pressed", String(ativo));
+    });
     opcoes.querySelectorAll("[data-visual-pref]").forEach((b) => {
       const ativo = estado[b.dataset.visualPref] === b.dataset.visualValue;
       b.classList.toggle("active", ativo);

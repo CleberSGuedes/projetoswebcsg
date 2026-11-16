@@ -442,6 +442,10 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Texto dentro de forma de tamanho fixo (círculo, pílula, selo): a forma cresce com o texto (`fit-content`, `aspect-ratio`), nunca o contrário; meça com a fonte mais larga (indicador de avanço do PTA/OpR, bateria 2).
 - [ ] Texto sobre painel **semitransparente** (tingido do destaque, degradê): meça contra o fundo da página que aparece por trás, também com o brilho reduzido.
 - [ ] Teclado: tudo alcançável com Tab; componente com setas tem dica (`DICAS`) e sai com Tab; atalho novo está na ajuda (§4.4).
+- [ ] Cartão ou painel que usa as cores dos diagramas (`--spo-diagram-*`) usa-as em **tudo** dentro dele
+      (título, legenda, link), nunca as do tema: com "Diagramas" no modo oposto ao tema, texto do tema sobre
+      fundo dos diagramas fica ilegível (bateria 3: 1,0–1,6:1 no cartão de documento e no preset do Contrato).
+      Meça também com "Diagramas: escuro" no tema claro e "claro" no escuro.
 - [ ] Medido como no §5, nos dois temas, e anotado no PR.
 
 ### 6.2 CSS e cache
