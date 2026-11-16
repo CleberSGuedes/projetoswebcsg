@@ -3233,6 +3233,28 @@ Pedido do dev. Jean para fechar a rodada: bateria geral automatizada das opçõe
 - Padrão §6.1: item novo (quem usa as cores dos diagramas usa em tudo; medir com os diagramas no modo oposto ao tema). `?v=` do CSS: `20261115.jean-bateria-3.1` (`base.html` e `login.html`).
 - Fora desta bateria: teclado/foco (testados à mão), leitor de tela, cores forçadas, Firefox/Safari e as telas fora da amostra (os relatórios pesados EMP, NOB e EST EMP ficaram de fora para não carregar o banco).
 
+### 41.98 ✓ na cor de destaque ativa (dev. Jean, 2026-11-16)
+
+Gate C10 do AA+ v3.1 do laboratório, com o desenho confirmado na comparação visual de 16/11 (o laboratório reabilitado por cópia tinha o ✓). No Personalizar, a amostra da cor escolhida tinha um anel na **própria cor da amostra**: nas cores claras ele ficava abaixo de 3:1 com o cartão (5 de 16 combinações; Amarelo no claro 1,47:1), e a escolha dependia só da cor (WCAG 1.4.1 e 1.4.11).
+- Bloco `[jean]` no fim do `style.css`, no **desenho do laboratório** (preferido pelo dev. Jean depois de comparar):
+  - amostra de **44 px** (alvo do AA+; antes 34 px, e 44 px só no toque), com o halo claro na cor da amostra e o ponto na cor real (regras de base inalteradas);
+  - escolhida: **anel suave na própria cor** (55%, com vão na cor do cartão), agora decorativo, e o `::after` vira um **selo neutro com ✓** (fundo `--card`, borda `--border`, ✓ em `--text`, `--spo-fs-rotulo`) no canto inferior direito. Quem carrega o estado é o ✓.
+  - Dois desenhos anteriores foram descartados na conferência do dev. Jean: anel e selo na cor do texto (pesado) e anel em `--spo-selected-border` (destoava do laboratório).
+  - `:not(#spo-check)` vence `.accent-swatch.active` e a regra de alvos do AA+. Com cores forçadas do Windows, contorno e selo em `Highlight`.
+- Medido nos 8 destaques × 2 temas (marcando a amostra só na página, com as transições desligadas): **✓ a 16,86:1 (claro) e 14,26:1 (escuro)** em todos; anel de 1,25 a 4,19:1 e borda do selo de 1,36 a 1,43:1, suaves de propósito (decorativos). Antes, o anel era a única marca, de 1,47 a 6,05:1. O kit de mockup mostra o mesmo (usa o `style.css`).
+- `?v=` do CSS: `20261116.jean-cor-ativa-check.3` (`base.html`, `login.html` e o kit de mockup).
+- **Kit de mockup com o `?v=` do SPO:** o kit carregava `../css/style.css` sem versão, e o navegador continuou mostrando as amostras antigas do cache. O link do kit passou a levar o mesmo `?v=` do `base.html`, e `test_kit_carrega_o_style_css_da_mesma_versao_do_spo` (`tests/test_kit_mockup.py`) reprova quando os dois divergem: **ao mudar o `?v=` do CSS, mudar também em `static/kit/mockup-spo-aa-plus.html`**.
+- Junto, no ambiente local do dev. Jean (sem código): a etiqueta de ambiente voltou ao topo com `APP_ENV_LABEL`/`APP_ENV_CLASS` no `.env` local — o mecanismo do `app.py` já existia.
+
+### 41.99 Linha separadora nos gráficos (dev. Jean, 2026-11-16)
+
+Vinda da comparação visual com o laboratório v4.3.1 (16/11): lá as fatias, os blocos e as barras tinham um vão entre si, nos dois temas. No Teto, os grupos 1 e 4 da paleta clara são dois azuis; sem o vão, a pizza e as barras viravam um bloco só (duas cores vizinhas abaixo de 3:1 entre si, WCAG 1.4.11).
+- `initGraficosEscala` (`main.js`), função `comSeparador`: pizza, árvore (treemap), sunburst e barras ganham `marker.line` de **1 px** no modo normal (claro e escuro) e de **2 px com os diagramas em alto contraste** (`highLight`/`highDark`, também no automático quando o sistema pede mais contraste) **ou com o "Contraste: Reforçado"** (`data-visual-contrast="enhanced"`), na **cor do fundo do próprio gráfico**. Trocar o contraste redesenha os gráficos abertos (o observador que já redesenhava na troca de densidade passou a olhar também o `data-visual-contrast`). Uma primeira versão com 2 px nas fatias e blocos ficou mais pesada que a do laboratório (conferência do dev. Jean). O fundo vem do layout (`plot_bgcolor` nas barras, `paper_bgcolor` nos outros) e, quando ele é transparente (caso do Teto), do primeiro ancestral com fundo pintado (o quadro `.teto-chart`). Assim acompanha o tema dos diagramas, que pode estar no modo oposto ao da página. O `react`/`newPlot` envolvidos passaram a montar o layout antes dos dados, para o separador ler o fundo.
+- Linhas, pontos e cascata (PAOE) ficam sem: as barras do cascata já não se tocam.
+- Com as **cores seguras para daltonismo** continua o contorno na cor do texto (`comPadroes`), mais forte.
+- Conferido no kit de mockup, nos temas claro e escuro e com os diagramas claro, escuro e em alto contraste (inclusive no modo oposto ao tema): a linha tem exatamente a cor do quadro nas 8 combinações (2 temas × 4 modos dos diagramas), com 2 px só em alto contraste; e nos 3 níveis de contraste × 2 temas, com 2 px só no Reforçado. No SPO real, os 5 gráficos do Teto Orçamentário (pizza, árvore, dois de barras e o cascata). Padrão §3.5: item novo.
+- `?v=` do `main.js`: `20261116.jean-graficos-separador.4` (`base.html`). CSS sem mudança.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
