@@ -10066,3 +10066,57 @@ body .accent-swatch.active:not(#spo-check)::after {
   .teto-rank-row .teto-rank-track { grid-column: 1; }
   .teto-rank-row .teto-rank-val { grid-column: 2; white-space: nowrap; }
 }
+
+/* ===== [cleber] Avisos modais com fonte maior: botão de fechar sempre visível ===== */
+/* Pedido do dev. Cleber (fix/modal-pendencias-fonte-maior, 2026-11-16). Relato do Jean (Chrome no Android):
+   com "Fonte maior" no Personalizar SPO, o modal de pendências mostrava o cabeçalho e o botão "Fechar" sumia.
+   Causa (medida a 360 x 800): a fonte maior é um zoom no .main (112,5%, 125% e 150%; 125% no "Muito grande"
+   abaixo de 480 px; ver "Tamanho do texto" e "Tamanho 150%" acima) e os avisos ficam dentro do .main. O zoom
+   multiplica as medidas em unidades da tela: o height: 100dvh do bloco de celular virava 1000 px numa tela de
+   800 px, o cartão passava da janela e o rodapé ("Fechar") ficava fora dela. No computador acontece o mesmo
+   com o max-height: 85vh do .modal-card (a 1366 x 768 com 125%, o cartão ia de -24 a 792 px). A densidade
+   não interfere: só o tamanho da fonte.
+   Correção: --spo-zoom guarda o mesmo fator do zoom do .main e as medidas em vw/vh/dvh dentro do .main são
+   divididas por ele, de modo que, depois do zoom, valem a janela visível (o conteúdo continua ampliado). Com
+   a fonte normal o fator é 1 e nada muda. O bloco "Avisos modais no celular" acima não foi alterado.
+   ATENÇÃO: os fatores abaixo ESPELHAM as regras de zoom do .main (body[data-spo-text-size] .main, na seção
+   "Tamanho do texto", e o "Muito grande" com o @media (max-width: 479.98px)). Ao mudar um fator lá, mude
+   aqui; tests/test_modal_zoom.py reprova se divergirem. */
+body[data-spo-text-size="large"] { --spo-zoom: 1.125; }
+body[data-spo-text-size="larger"] { --spo-zoom: 1.25; }
+body[data-spo-text-size="xlarge"] { --spo-zoom: 1.5; }
+@media (max-width: 479.98px) {
+  body[data-spo-text-size="xlarge"] { --spo-zoom: 1.25; }
+}
+/* celular (em pé ou deitado): o overlay tem a altura visível da janela, já descontado o zoom */
+@media (max-width: 600px), (max-height: 560px) {
+  .main .modal-overlay:not(.app-loading-overlay) {
+    height: calc(100vh / var(--spo-zoom, 1));
+    height: calc(100dvh / var(--spo-zoom, 1));
+  }
+}
+/* computador: o cartão não passa de 85% da janela visível; o Alerta não passa da largura (92vw) */
+.main .modal-card { max-height: calc(85vh / var(--spo-zoom, 1)); }
+.main .emp-record-modal .emp-record-card { width: min(900px, calc(92vw / var(--spo-zoom, 1))); }
+/* Alerta (.emp-record-card) no computador com a fonte ampliada: sem altura máxima, a 700 x 620 ou 1366 x 600 o
+   cartão passava da janela e o "×" ficava fora dela. Agora cabe na janela visível (menos 16 px de margem em
+   cada lado), rola por dentro e o "×" acompanha o topo, como no celular (bloco "Avisos modais no celular").
+   Só com a fonte ampliada e só fora das condições do celular: com a fonte normal nada muda. */
+@media (min-width: 601px) and (min-height: 561px) {
+  body:is([data-spo-text-size="large"], [data-spo-text-size="larger"], [data-spo-text-size="xlarge"])
+    .main .emp-record-modal .emp-record-card {
+    box-sizing: border-box;
+    max-height: calc((100vh - 32px) / var(--spo-zoom, 1));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  body:is([data-spo-text-size="large"], [data-spo-text-size="larger"], [data-spo-text-size="xlarge"])
+    .main .emp-record-modal .emp-record-card > .emp-record-close-icon {
+    position: sticky;
+    top: -6px;
+    z-index: 3;
+    display: block;
+    margin: -6px -4px -22px auto;
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+}

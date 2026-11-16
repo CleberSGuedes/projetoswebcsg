@@ -9,6 +9,13 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-16 — dev/cleber, ainda não publicado (RELEASE_2_2026_11_16.6)
+
+### Corrigido
+- Avisos modais com fonte maior (dev. Cleber, `fix/modal-pendencias-fonte-maior`): o botão "Fechar" do modal de pendências sumia no celular com "Fonte maior" no Personalizar SPO, porque o zoom da fonte multiplicava a altura do aviso. O botão de fechar fica visível em qualquer tamanho de fonte, no celular e no computador; fonte normal sem mudança — seção "Avisos modais com fonte maior" do [claude.md](claude.md) e `tests/test_modal_zoom.py`.
+
+---
+
 ## 2026-11-16 — Publicação em produção (RELEASE_2_2026_11_16.4)
 
 Promoção da homologação para a `main` (PR #156): AA+ lotes 1 a 5 (PRs #65, #68, #153 e #154), avisos modais e Teto Orçamentário no celular (#154 e #155). Sincronização da `main` com a `dev/cleber` (#157) e com a `dev/jean` (#158).

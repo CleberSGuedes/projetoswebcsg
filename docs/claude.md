@@ -3356,6 +3356,26 @@ Medido nas 6 combinações de densidade e fonte, a 360 × 740, 412 × 915 e 740 
 
 Sem script de banco e sem mudança de back-end. `templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-teto-celular.1` nos três (há teste que reprova se divergirem). `RELEASE_2_2026_11_16.3`.
 
+### Avisos modais com fonte maior: botão de fechar sempre visível (dev. Cleber, 2026-11-16)
+
+**Problema** (Chrome no Android, na homologação): com "Fonte maior" no Personalizar SPO, o modal de pendências (PTA Gerencial - Metas Físicas e Etapas Aguardando Aprovação) mostrava o cabeçalho com o logo e o título, mas o botão "Fechar" sumia.
+
+**Causa** (medida no navegador do app a 360 × 800 e 1366 × 768):
+- A fonte maior é um `zoom` no `.main` (`body[data-spo-text-size] .main`: 112,5%, 125% e 150%; 125% no "Muito grande" abaixo de 480 px). Os avisos modais ficam dentro do `.main`.
+- O `zoom` multiplica as medidas em unidades da janela (`vw`, `vh`, `dvh`). A 360 × 800 com 125%, o `height: 100dvh` do bloco "Avisos modais no celular" (41.100) virava 1.000 px numa tela de 800 px: o cartão passava da janela e o rodapé, com o "Fechar", ficava fora dela (903 a 958 px).
+- No computador acontecia o mesmo com o `max-height: 85vh` do `.modal-card` (a 1366 × 768 com 125%, o cartão ia de -24 a 792 px) e com o `width: min(900px, 92vw)` do Alerta.
+- A densidade visual não interfere: comfortable e spacious deram medidas idênticas. Só o tamanho da fonte importa.
+
+**Regra aplicada** (só CSS, bloco `[cleber] Avisos modais com fonte maior` no fim do `style.css`; o bloco 41.100 não foi alterado):
+- `--spo-zoom` guarda o mesmo fator do zoom do `.main` (1, 1,125, 1,25 e 1,5; 1,25 no "Muito grande" abaixo de 480 px). **Os fatores espelham as regras de zoom do `.main`:** ao mudar um fator lá, mude também o `--spo-zoom`. `tests/test_modal_zoom.py` reprova se divergirem.
+- Dentro do `.main`, as medidas em `vw`/`vh`/`dvh` dos avisos são divididas por `var(--spo-zoom, 1)`: a altura do `.modal-overlay` no celular (`100dvh`), o `max-height` do `.modal-card` (`85vh`) e a largura do Alerta (`92vw`). Depois do zoom valem a janela visível, e o conteúdo continua ampliado. Com a fonte normal o fator é 1 e nada muda.
+- Alerta no computador com a fonte ampliada (janela maior que 600 × 560): ganhou `max-height` (janela menos 16 px de margem em cada lado) e rolagem, e o "×" acompanha o topo, como no celular. A 700 × 620 e 1366 × 600 o cartão passava da janela e o "×" saía dela.
+- Só `var(--…)` e `calc()`: sem cor literal, sem `font-size` em px e sem `style="…"`. O `main.js` não foi tocado.
+
+**Verificação** (modal de pendências e Alerta; fonte normal, Grande, Maior e Muito grande; densidade confortável e ampla; 360 × 800, 412 × 915, 800 × 360, 700 × 620, 1366 × 600 e 1366 × 768): cartão dentro da janela, botão de fechar visível, sem cobertura por outro elemento e com clique que fecha, conteúdo rola até o fim, sem rolagem lateral da página e sem tabela cortada sem rolagem. Com a fonte normal as medidas ficaram iguais às de antes.
+
+`templates/base.html`, `templates/login.html` e `static/kit/mockup-spo-aa-plus.html`: só o `?v=` do CSS, agora `20261116.cleber-modal-fonte-maior.1` nos três. `RELEASE_2_2026_11_16.6`.
+
 ## 42. Notas SEE: DANFE novo da Somos (4º bimestre/2026) (2026-11-13)
 
 **Sintoma (produção):** catálogo "4° Bimestre", 647 notas, todas com alerta. Produtos e quantidades certos (8.818 itens, soma 339.835), mas a escola não era identificada: 639 notas sem DRE/código/escola e 8 com lixo no campo DRE (`DRE_FORA_DO_CADASTRO`).
