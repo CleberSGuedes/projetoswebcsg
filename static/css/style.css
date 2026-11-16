@@ -8349,7 +8349,7 @@ body.theme-dark .pagination button.active {
   select:not([multiple]):not([size])::picker(select) {
     background: var(--surface);
     color: var(--text);
-    border: 1px solid var(--spo-control-border, var(--border));
+    border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
     padding: 4px;
@@ -8508,7 +8508,7 @@ body.theme-dark .pagination button.active {
 .login-sessao {
   margin: 4px 0 12px;
   padding: 12px 14px;
-  border: 1px solid var(--spo-control-border, var(--border));
+  border: 1px solid var(--border);
   border-left: 4px solid #b45309;
   border-radius: 10px;
   background: rgba(180, 83, 9, 0.06);
@@ -9893,4 +9893,43 @@ body #content-area .module-card > ol > li:not(#spo-dens):not(#spo-dens-b) {
 }
 body #content-area .alert:not(.limpeza-regras):not(.limpeza-pendente):not(#spo-dens):not(#spo-dens-b) {
   font-size: var(--spo-fs-leitura);
+}
+
+/* ==========================================================================
+   [jean] Amostras de cor no desenho do laboratório, com ✓ na escolhida (fix/cor-ativa-check,
+   2026-11-16; C10 do AA+ v3.1 do laboratório, comparação visual de 16/11)
+   O anel da amostra escolhida era a única marca da escolha, na própria cor: nas cores claras ficava
+   abaixo de 3:1 com o cartão (5 de 16 combinações; Amarelo no claro 1,47:1), e a escolha dependia só
+   da cor (WCAG 1.4.1 e 1.4.11). Agora segue o laboratório (preferido pelo dev. Jean):
+   - amostra de 44 px (alvo do AA+) com o halo claro na cor da amostra e o ponto na cor real;
+   - escolhida: anel suave na própria cor (decorativo) + ✓ num selo neutro. Quem carrega o estado é o
+     ✓: --text sobre --card (≥ 14:1); a borda do selo é neutra (--border), como no laboratório.
+   :not(#spo-check) vence ".accent-swatch.active" e a regra de alvos do AA+ (0,2,1).
+   ========================================================================== */
+body .accent-swatch:not(#spo-check) {
+  width: 44px;
+  height: 44px;
+}
+body .accent-swatch.active:not(#spo-check) {
+  border-color: color-mix(in srgb, var(--swatch) 74%, var(--border));
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 5px color-mix(in srgb, var(--swatch) 55%, transparent);
+}
+body .accent-swatch.active:not(#spo-check)::after {
+  content: "✓";
+  inset: auto -3px -3px auto;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  color: var(--text);
+  font-size: var(--spo-fs-rotulo);
+  font-weight: 800;
+  line-height: 1;
+}
+@media (forced-colors: active) {
+  body .accent-swatch.active:not(#spo-check) { outline: 3px solid Highlight; outline-offset: 2px; }
+  body .accent-swatch.active:not(#spo-check)::after { forced-color-adjust: none; background: Canvas; color: Highlight; border-color: Highlight; }
 }
