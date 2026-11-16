@@ -198,7 +198,10 @@ tela: `docs_jean/auditoria_aa/TIPOGRAFIA_MEDICAO_2026-11-13.md` (ambiente do dev
 ## 3. Tokens (a fonte única de cor)
 
 **Regra de ouro:** em componente, **só variável** (`var(--…)`). Cor literal (`#…`, `rgb(…)`) só
-na **definição** de um token (§3.1–3.4) ou numa exceção registrada (§6.3).
+na **definição** de um token (§3.1–3.4) ou numa exceção registrada (§6.3). **Verificado pela suíte**
+(`tests/test_cor_literal.py`, desde 15/11): guarda a contagem atual de cores literais fora de definição de
+token (376 em 191 valores, regras antigas) em `tests/referencia_cor_literal.json` e reprova valor novo ou
+contagem que sobe; definição de token (`--nome: #…`) não conta.
 
 ### 3.1 Superfícies, texto e bordas
 
@@ -417,7 +420,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
       dele, e é vista no kit nos dois temas, em mais de um destaque, nas três densidades do texto e a 150%
       antes de virar código. Nada fica para "ajustar ao padrão depois".
 - [ ] Nenhuma cor literal em componente; use os tokens (§3). Precisa de cor nova? Crie um token
-      (definido por tema) e registre aqui.
+      (definido por tema) e registre aqui. O `tests/test_cor_literal.py` reprova cor escrita à mão.
 - [ ] Botões na hierarquia do §4.1; campos, listas e navegação como no §4.
 - [ ] Nada de `style="color:…"`/`background` no HTML (#52).
 - [ ] Nada de `window.alert`/`confirm`/`prompt` (bloqueados em alguns navegadores; #61).
@@ -552,7 +555,10 @@ diferentes**, em 3.709 declarações (695 já usam `var(--)`); 143 regras `.them
 | Já sobrepostos pelo AA+ | filtros `.mf-*`, paginação, `.btn`, totais, tabelas | apagar o literal antigo quando a área for dividida (hoje o bloco `[jean]` vence) |
 
 Ordem sugerida: na divisão do CSS (depois do AA+ na `main`), cada área vira um arquivo; no mesmo
-PR da área, os literais viram tokens. Um teste da suíte deve impedir **literais novos** (Fase B).
+PR da área, os literais viram tokens. **Fase B — feita (15/11):** `tests/test_cor_literal.py` impede
+literais novos; a contagem de hoje (376 cores, 191 valores, fora de definição de token) só desce. Quando uma
+área passar aos tokens, rode `python tests/test_cor_literal.py` para baixar a referência (o comando se recusa
+se a contagem tiver subido; exceção nova do §6.3 só com `--forcar`).
 
 **Tipografia** — a tabela abaixo é a medição de 2026-11-13. **Resolvidos:** os casos de 10–11 px e as
 entrelinhas apertadas (#75; topo e rodapé ficam em 10 px por decisão do dev. Jean), os títulos de
