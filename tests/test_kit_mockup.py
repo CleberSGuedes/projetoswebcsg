@@ -202,6 +202,8 @@ CATALOGO = [
     ("notas_see.html", '<div class="see-upload-options">', "div"),
     # feat/kit-sem-copias: topo do relatório (Última atualização, totais e botões) recortado do FIP 613
     ("relatorios_fip613.html", '<div class="actions relatorio-top relatorio-top-uo">', "div"),
+    # fix/bateria-3: presets do Contrato (a bateria achou um defeito neles que o kit não via)
+    ("atualizar_personalizar_spo.html", '<div class="contract-preset-grid"', "div"),
 ]
 
 

@@ -9570,6 +9570,17 @@ body :is(.see-upload-option, .contract-preset) > span {
   color: var(--spo-diagram-muted, var(--muted));
 }
 body .institutional-card .noticia-box p { color: var(--spo-diagram-text, var(--text)); }
+/* [jean] fix/bateria-3 (2026-11-15): com "Diagramas" no modo oposto ao tema (claro + diagramas escuros, ou o
+   inverso), o fundo do cartão seguia os diagramas e o título, a legenda e o link seguiam o tema: 1,0–1,6:1.
+   Título e legenda passam às cores dos diagramas sempre; o link, só quando os modos divergem (no caso
+   comum ele continua na cor de destaque do tema). */
+body .institutional-card .noticia-box h5 { color: var(--spo-diagram-text, var(--text)); }
+body .institutional-card .noticia-box :is(small, .text-muted) { color: var(--spo-diagram-muted, var(--muted)) !important; }
+body:not(.theme-dark):is([data-visual-diagram-theme="dark"], [data-visual-diagram-theme="highDark"]) .institutional-card .noticia-box a,
+body.theme-dark:is([data-visual-diagram-theme="light"], [data-visual-diagram-theme="highLight"]) .institutional-card .noticia-box a {
+  color: var(--spo-diagram-text, var(--text));
+  text-decoration: underline;
+}
 /* o cartão inteiro abre o documento: o link do texto estende a área de clique sobre o cartão */
 body .institutional-card .noticia-box a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
 body .institutional-card .noticia-box a:focus-visible { outline: none; }
@@ -9585,7 +9596,9 @@ body :is(.institutional-card .noticia-box, .see-upload-option, .contract-preset)
    (.contract-preset-active-local) só ganha a borda na cor de seleção, como antes, para os dois
    não se confundirem quando são presets diferentes */
 body .contract-preset.contract-preset-active-local:not(.active) { border-color: var(--spo-diagram-selection, var(--accent)); }
-body .contract-preset.active {
+/* [jean] fix/bateria-3: :not(#spo-preset) para vencer ".theme-dark .contract-preset.active" (0,3,0), que no
+   escuro repunha o fundo escuro tingido; com "Diagramas: claro" o texto (cor dos diagramas) ficava a 1,12:1 */
+body .contract-preset.active:not(#spo-preset) {
   border-color: var(--spo-diagram-selection, var(--accent));
   box-shadow: inset 0 0 0 1px var(--spo-diagram-selection, var(--accent)), inset 3px 0 0 var(--spo-diagram-selection, var(--accent));
   background: color-mix(in srgb, var(--spo-diagram-selection, var(--accent)) 12%, var(--spo-diagram-node-bg, var(--card)));

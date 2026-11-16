@@ -118,3 +118,13 @@
   font-size: var(--spo-fs-controle);
 }
 .kit-catalogo > p { font-size: var(--spo-fs-texto); }
+
+/* <code> fora do #content-area (painel e "Como usar"): a regra do SPO só vale dentro dele, e a cor rosa do
+   Bootstrap dava 4,5:1 no claro e 3,45:1 no escuro (bateria 3) */
+.kit-painel code,
+.kit-como-usar code {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 0 .25em;
+  border-radius: 4px;
+}
