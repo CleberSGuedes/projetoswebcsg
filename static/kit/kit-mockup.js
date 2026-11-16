@@ -395,7 +395,7 @@ initGovernancaSemanticFlows();`,
     const vista = dados.slice((pagina - 1) * porPagina, pagina * porPagina);
     corpo.innerHTML = vista.length
       ? vista.map((l) => `<tr>${COLUNAS.map((c) => (NUMERICAS.has(c)
-        ? `<td class="num ${l[c] < 0 ? "neg" : ""}">${moeda(l[c])}</td>`
+        ? `<td class="num${c === "saldo" ? (l[c] < 0 ? " neg" : (l[c] > 0 ? " pos" : "")) : ""}">${moeda(l[c])}</td>`
         : `<td>${esc(l[c])}</td>`)).join("")}</tr>`).join("")
       : `<tr><td colspan="${COLUNAS.length}" class="muted">Nenhum resultado com estes filtros.</td></tr>`;
     document.getElementById("kit-total").textContent = moeda(dados.reduce((s, l) => s + l.valor, 0));
