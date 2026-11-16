@@ -320,3 +320,17 @@ def test_filtros_de_lista_do_kit_equivalentes_aos_do_spo():
     faltam_kit = [p for p in pecas if p not in kit_js and p.replace('"', "") not in kit_js]
     assert not faltam_main, f"o filtro de lista do SPO mudou ({faltam_main}): atualize o filtro do kit de mockup"
     assert not faltam_kit, f"o filtro de lista do kit não segue mais o do SPO: {faltam_kit}"
+
+
+def test_kit_carrega_o_style_css_da_mesma_versao_do_spo():
+    """O kit usa o style.css do SPO: o link precisa do mesmo ?v= do base.html, senão o navegador continua
+    mostrando a versão antiga do cache no kit (aconteceu com as amostras de cor, fix/cor-ativa-check)."""
+    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    v_base = re.search(r"css/style\.css'\) \}\}\?v=([\w.-]+)", base)
+    v_kit = re.search(r'href="\.\./css/style\.css\?v=([\w.-]+)"', kit)
+    assert v_base, "o link do style.css no base.html mudou de forma"
+    assert v_kit, "o kit de mockup carrega o style.css sem ?v= (o navegador mostraria a versão antiga)"
+    assert v_kit.group(1) == v_base.group(1), (
+        f"?v= do style.css no kit ({v_kit.group(1)}) diferente do base.html ({v_base.group(1)}): "
+        "copie o do base.html para static/kit/mockup-spo-aa-plus.html")
