@@ -267,6 +267,14 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 - **layout comum a todo gráfico** (`initGraficosEscala`): fonte da interface ≥ 12 px, eixos com
   `automargin`, legenda vertical no pé, pizza com `automargin`; em gráfico estreito (≤ 520 px),
   margens mínimas, eixo X inclinado e nomes longos da legenda quebrados entre palavras;
+- **separador entre os elementos** (desde 16/11, comparação com o laboratório): fatias, blocos e
+  barras com linha de **1 px** (claro e escuro) e **2 px com os diagramas em alto contraste** (claro e
+  escuro, também no automático quando o sistema pede mais contraste) **ou com o "Contraste: Reforçado"**,
+  na **cor do fundo do próprio gráfico**
+  (o fundo do layout ou, se for transparente, o do quadro em volta), o que vira um vão nos dois temas e
+  com os diagramas no modo oposto ao tema. Duas cores vizinhas podem ficar abaixo de 3:1 entre si (no
+  claro, dois azuis); o vão as separa sem depender da cor. Linhas e cascata ficam sem. Com as cores
+  seguras para daltonismo vale o contorno na cor do texto (abaixo);
 - **a cor de um grupo é a mesma em gráficos e tabelas**: tabelas e cartões que colorem por categoria
   usam a mesma paleta do tema dos gráficos (`getTetoChartColors()` no Teto, #81), nunca uma paleta fixa;
 - **cores seguras para daltonismo** (opção do Personalizar, `data-spo-cvd="safe"`): paleta **Okabe-Ito**
