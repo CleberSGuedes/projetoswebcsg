@@ -1,7 +1,9 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-13) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-16) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
+
+> **Estado em 16/11/2026:** a produção (`main`) está com o AA+ (lotes 1 a 5), os avisos modais e o Teto Orçamentário no celular e as Notas SEE com o DANFE novo da Somos, em produção desde 16/11/2026 (`RELEASE_2_2026_11_16.4`). O que entrou e o que não entrou: [CHANGELOG.md](CHANGELOG.md); lições operacionais das promoções: seção 40.13.
 
 > **Estado em 10/11/2026: layout novo, menu gerado do catálogo e funcionalidades da `homologacao`/`dev/cleber` integrados na `main`** (seção 32). Novas UOs (26101, 26201 e 26202): código pronto e **bloqueado** na produção (`UOS_EXECUCAO_LIBERADAS` e `UOS_PLAN20_LIBERADAS` em `services/uo.py` = só a SEDUC; a liberação temporária da 26101 que existia na homologação **não** veio). Estado, roteiro de testes e como liberar: [plano_implementacao_novas_uos.md](plano_implementacao_novas_uos.md) e seção 31.
 > **Não libere nenhuma UO nova sem a confirmação oficial e a autorização explícita do usuário** (seção 22). No início de cada sessão, pergunte se a confirmação oficial já saiu.
@@ -683,6 +685,8 @@ Só 3 arquivos em conflito, mais um problema que o merge automático criaria cal
 ### 21.6 `dev/jean` (branch `sync/main-para-dev-jean`, a partir do resultado já resolvido da homologação)
 Só o `templates/base.html` em conflito: `?v=` do CSS/JS (fica `20261002.sync-main.1`) e o rodapé — mantida a linha própria da branch (`PATCH_DEV_SPO_2026_07_01.1`) junto com o release `RELEASE_2_2026_09_29.3`. O selo de ambiente da `dev/jean` (`lab-badge`, "Integração DEV Jean", alimentado por `inject_spo_environment` no `app.py`) ficou idêntico. Verificação: nenhuma linha da branch perdida além do CSS da QOMP antiga, release e `?v=` antigos; `pytest` 44/44; `node --check`; render do menu e das telas do Teto/Estrutura/Plan20.
 
+**Atualização (2026-11-16):** a linha própria `PATCH_DEV_SPO_2026_07_01.1` do rodapé **não existe mais** no `templates/base.html` da `dev/jean`, e o selo `lab-badge` também não. O selo de ambiente da `dev/jean` vem das variáveis `APP_ENV_LABEL` e `APP_ENV_CLASS` do `.env` do ambiente dela (`app.py` → `ENVIRONMENT_LABEL`), como nos outros ambientes. O nome antigo `SPO_ENV_LABEL` não é mais lido.
+
 ### 21.7 Banco de cada ambiente: `scripts/atualizar_schema_sync_main.py`
 O código sincronizado exige três mudanças de schema que a `main` fez só no banco dela:
 1. `momp.uo` (`VARCHAR(5)`) + índice `ix_momp_exercicio_uo` + histórico marcado como `14101` (seção 20) — sem isso o Teto-SEDUC e o dashboard dão erro.
@@ -946,10 +950,7 @@ Os 6 commits da `main` posteriores à sincronização de 02/10 (`839afeb`, `9e29
   - `homologacao`: `services/features.py` (a branch tem o menu reorganizado em grupos — mantida a árvore dela e acrescentado "Limpeza de Histórico" no grupo "Atualizar Execução Orçamentária", depois de NOB, mais o ícone `trash3` em `MENU_META`); `static/css/style.css` (ficaram os dois blocos); `templates/base.html` (rodapé em linhas da branch com o release `RELEASE_2_2026_10_15.2` e `?v=20261016.sync-main.2`); `docs/claude.md` (os dois lados só acrescentavam).
   - `dev/cleber`: só `docs/claude.md`. `features.py` e CSS entraram sozinhos, sem duplicar o item de menu (conferido, ao contrário do "Programar PTA/LOA" de 02/10).
   - `dev/jean`: `docs/claude.md` (o lado da `homologacao` já trazia a seção 21.6, então ficou só ele) e o rodapé do `base.html` (release novo + a linha própria `PATCH_DEV_SPO_2026_07_01.1`; o selo "Ambiente de integracao DEV Jean" não mudou).
-- **Armadilha de edição:** `services/features.py` e `docs/claude.md` usam final de linha **CRLF**, mas as ferramentas de leitura não mostram o `
-`. Um `replace` em Python com `
-` simples não casa e falha **sem erro** — foi o que aconteceu na primeira tentativa. Conferir com `repr()` antes de editar e usar `
-`.
+- **Armadilha de edição (final de linha):** o repositório guarda **LF**; na pasta de trabalho os arquivos podem aparecer com **CRLF** por causa do `core.autocrlf` (confira com `git ls-files --eol <arquivo>`: `i/lf w/crlf` quer dizer índice em LF e pasta de trabalho em CRLF). Quem edita por script precisa **ler o final de linha do arquivo antes** e usar o mesmo nele: um `replace` com `\n` simples não casa num arquivo em CRLF e falha **sem erro**, e gravar LF onde havia CRLF mistura os dois. Nunca misturar LF e CRLF no mesmo arquivo. Foi o que aconteceu na primeira tentativa de 16/10/2026 com `services/features.py` e `docs/claude.md`.
 - **Cuidado com o banco nos testes:** a pasta de trabalho precisa de uma cópia do `.env`, então testes e `create_app()` rodados ali apontam para o banco de **produção**. Foram rodados só `tests/test_limpeza_historico.py` (14 testes, tabelas temporárias) e `node --check`; depois de subir o app uma vez, conferido que nenhuma tabela nova foi criada. A `.venv` local não tem o `pdfplumber` das branches, então a suíte completa não rodou lá.
 - **Limpeza:** as pastas de trabalho e as branches `sync/...` (locais e no GitHub) foram removidas. Conferido: as três branches não têm nenhum commit da `main` faltando.
 - **Pendente em cada ambiente** (homologação, `dev/cleber`, `dev/jean`):
@@ -1393,7 +1394,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Para a homologação e a `main`:** quem promove (hoje, o Cleber) cria uma branch temporária a partir do destino e faz o **cherry-pick só do commit do tema**. Exemplos: `pr/<tema>-para-homologacao` e `pr/<tema>-para-main`.
   - Não se faz merge da `dev/<nome>` inteira: cada `dev` tem arquivos próprios, que não podem chegar à homologação nem à `main`.
   - Na `dev/cleber`: `.cpanel.yml`, `scripts/deploy_cpanel.sh` e `CLAUDE.md`.
-  - Na `dev/jean`: o selo "Integração DEV Jean" e o rodapé `PATCH_DEV...`.
+  - Na `dev/jean`: o selo de ambiente (vem do `.env` do ambiente dela, `APP_ENV_LABEL` e `APP_ENV_CLASS`, não do código; o nome antigo `SPO_ENV_LABEL` não é mais lido e a linha `PATCH_DEV...` do rodapé não existe mais), os `.cmd` e o `.ps1` dela e `docs/politica-seguranca-branches.md`.
 - **Sincronização `main` → `dev/cleber` e `dev/jean`:**
   - Feita por quem promoveu, depois de cada subida para a `main`, com branch `sync/main-para-dev-<nome>` e PR.
   - O tema do desenvolvedor volta para a `dev/<nome>` dele como outro commit, com o mesmo conteúdo, e normalmente não dá conflito.
@@ -1432,6 +1433,50 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 ### 40.6 Publicação
 - **Produção (`main`): só durante o dia, até ~18:00, nunca à noite.** A automação roda de madrugada e precisa validar antes.
 - **Depois do deploy:** Restart no cPanel e conferência rápida (login, a tela do tema e, se mexeu em jobs, `python scripts/limpar_jobs_orfaos.py`).
+
+### 40.7 Promoção para a homologação e para a `main`: pasta separada
+- **Uma pasta separada por promoção** (`git worktree`), nunca na pasta principal: `git worktree add -b pr/<tema>-para-homologacao C:\workspace\projetoswebcsg_<tema> origin/homologacao` (ou `pr/homologacao-para-main` a partir da `origin/main`). A pasta principal fica só para leituras e o `fetch`.
+- Logo depois de criar: `git branch --unset-upstream`, para que um `git push` sem argumento nunca vá para a `homologacao` nem para a `main`.
+- **Cherry-pick só dos commits dos temas**, na ordem em que entraram, nunca merge da branch inteira (§40.1). O conflito esperado é só o `docs/claude.md` (fica o lado do destino) e a linha `RELEASE` do `templates/base.html`; conflito em código: parar e analisar.
+- **Conferência antes de testar:** `git diff --stat origin/<destino>...HEAD`; os arquivos levados idênticos aos da origem, menos o `RELEASE`; `services/uo.py`, `.cpanel.yml` e `scripts/deploy_cpanel.sh` iguais aos do destino (UOs novas seguem bloqueadas, §22); `requirements.txt`, `node_runners/package*.json` e `db/` sem mudança, ou os scripts de banco listados no PR.
+- **Testes na pasta separada:** copiar só o `.env`, `npm install --omit=dev` em `node_runners` (descartar a reescrita do `package-lock.json`), `pytest` duas vezes e `node --check`; teste visual rápido e teste manual de quem promove antes do push.
+
+### 40.8 Como mergear cada tipo de PR
+- **Tema para a `dev/<nome>`** (`feat/` ou `fix/`): **"Squash and merge"**, um commit por tema (§40.1).
+- **Lote para a `homologacao` e `homologacao` → `main`:** **"Create a merge commit"**, para os commits dos temas ficarem separados no histórico.
+- **Sincronização `main` → `dev/cleber` e `dev/jean`:** **"Create a merge commit"**, **nunca squash**: o squash apaga o histórico e faz a próxima sincronização repetir os mesmos conflitos.
+- Em todos: link do PR com o destino fixo (`/compare/<destino>...<origem>`) e conferir o campo *base* antes de mergear (§21.8).
+
+### 40.9 RELEASE conta por dia, para todas as branches
+- O `RELEASE_2_AAAA_MM_DD.N` do rodapé (`templates/base.html`) conta **por dia e para todas as branches juntas**: o próximo `N` do dia, qualquer que seja a branch ou o ambiente. Dia diferente: troca a data e volta para `.1`; mesmo dia: soma 1 ao maior `N` já usado em qualquer branch.
+- Em 16/11/2026: `.1` (lote 4), `.2` (lote 5), `.3` (Teto no celular) na homologação, `.4` na produção e `.5` nesta atualização do `docs/claude.md`.
+- Conferir antes: `git log --all -S'RELEASE_2_AAAA_MM_DD.N' --oneline`. O `?v=` do CSS e do JS segue a regra do §40.2 e não é a mesma coisa.
+
+### 40.10 Exceção combinada: correção urgente em cima da homologação
+- Quando a correção é urgente e a `dev/cleber` ainda **não tem o código** em que ela mexe (por exemplo, o AA+ do Jean, que chegou à `dev/cleber` só pela sincronização da `main`), a correção é feita numa branch `pr/<tema>-para-homologacao` **em cima da homologação**, e não numa `feat/` a partir da `dev/cleber`.
+- Ela segue o fluxo de promoção do §40.7 e volta para a `dev/cleber` e a `dev/jean` **pela sincronização da `main`**, como qualquer outro tema.
+- Exemplos de 16/11/2026: avisos modais no celular (§41.100, no PR #154) e Teto Orçamentário no celular (§41.101, PR #155).
+- O PR precisa dizer que é essa exceção, e a seção do tema deve dizê-lo também.
+
+### 40.11 Seções novas do dev. Jean: subseções da 41
+- O dev. Jean descreve cada tema numa seção **sem número** (§40.2). Quem promove as **numera como subseções da 41** (`### 41.N`), em ordem, **depois da última 41.N e antes da `## 42.`**, rebaixando os subtítulos `###` internos para `####` e sem número. Só o nível e o número do título mudam; o texto dele não é reescrito.
+- Exemplos: 41.33 a 41.97 (lote 4) e 41.98 a 41.99 (lote 5). As seções do próprio promotor (41.100 e 41.101) seguem a mesma ordem.
+- No `docs/claude.md` das `dev/*`, depois da sincronização, fica a versão numerada da `main`.
+
+### 40.12 Testes do padrão AA+ (valem para os dois desenvolvedores)
+- **`test_tamanho_fonte`:** `font-size` no `static/css/style.css` só por `var(--spo-fs-*)`; valor em px novo ou contagem que sobe reprova.
+- **`test_cor_literal`:** sem cor literal nova (`#hex`, `rgb`, `hsl`) fora da definição de um token; referência em `tests/referencia_cor_literal.json`.
+- **`test_style_inline`:** sem cor ou tamanho de texto em `style="…"` nos templates nem escritos à mão no `main.js`.
+- **`test_kit_mockup`:** o kit (`static/kit/`) continua lendo do `main.js` e segue o próprio padrão; o `?v=` do CSS no kit precisa ser igual ao do `base.html`.
+- Quando uma regra antiga passar a usar o token ou a variável, a contagem desce e o teste avisa para baixar a referência.
+
+### 40.13 Lições operacionais das promoções
+- Uma **pasta nova (`git worktree`) nasce sem `node_modules` e sem `.env`**: copiar só o `.env` e rodar `npm install --omit=dev` em `node_runners` (sem commitar o `package-lock.json`). **Apagar a cópia do `.env`** das pastas temporárias ao remover a pasta.
+- **Servidor com `--debug`** (Flask) cria um **processo filho** que segura a porta (5010): ao encerrar, encerrar a árvore inteira (janela, pai, filho do `--debug` e o launcher do `.venv`) e confirmar a porta livre.
+- **Shell ou servidor dentro da pasta impede apagá-la**: o `git worktree remove` desregistra mas pode falhar ao apagar ("Permission denied" ou "Invalid argument") e deixar a pasta vazia ou pela metade. Sair da pasta, parar o que a usa e repetir; sem `--force` e sem apagar à mão antes de conferir.
+- **Caminho longo** (`node_modules` fundo): `cmd /c rmdir /s /q "\\?\<pasta>"`.
+- No Git Bash, argumentos como `origem:.arquivo` sofrem conversão de caminho (`MSYS_NO_PATHCONV=1`); e o Python do Windows não enxerga `/tmp` do Git Bash.
+- Testes locais usam sempre o banco do ambiente (`proj5954_spo_csg_amb_cleber`), nunca o de produção: conferir o nome em `.env` antes de rodar.
 
 ## 41. AA+ (acessibilidade) — dev. Jean (2026-11-13)
 
