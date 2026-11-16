@@ -29521,7 +29521,10 @@
 
   async function carregarDocumento() {
     if (documento) return documento;
-    const resp = await fetch("/api/documentos/padrao-spo-aa-plus", { credentials: "same-origin" });
+    // [jean] feat/kit-documento-padrao: com X-Requested-With, a rota responde 401 (e não o redirecionamento
+    // para o login) quando não há sessão — a janela então pede para entrar no SPO (kit de mockup, sessão expirada)
+    const resp = await fetch("/api/documentos/padrao-spo-aa-plus", { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+    if (resp.status === 401) { const e = new Error("sem sessão"); e.semSessao = true; throw e; }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     documento = await resp.json();
     return documento;
@@ -29556,7 +29559,9 @@
       corpo.scrollTop = 0;
       titulo.focus();
     } catch (err) {
-      status.textContent = "Não foi possível carregar o documento técnico agora. Tente de novo em instantes.";
+      status.textContent = err && err.semSessao
+        ? "O documento técnico é para quem tem acesso ao SPO: entre no SPO neste navegador e abra de novo."
+        : "Não foi possível carregar o documento técnico agora. Tente de novo em instantes.";
     }
   }
 

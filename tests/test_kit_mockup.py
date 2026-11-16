@@ -233,3 +233,19 @@ def test_fluxos_de_governanca_lidos_do_main_js():
     bloco = _trecho(main, marcador, True)
     globais = set(re.findall(r"\b(init[A-Z]\w+|spo[A-Z]\w+)\(", bloco)) - {"initGovernancaSemanticFlows"}
     assert not globais, f"o initGovernancaSemanticFlows passou a chamar {sorted(globais)}: o kit precisa delas"
+
+
+# ---- feat/kit-documento-padrao: o documento do padrão SPO-AA+ dentro do kit
+
+
+def test_kit_abre_o_documento_do_padrao():
+    main = _main()
+    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    marcador = "(function initPadraoSpoAaPlus() {"
+    assert marcador in main and marcador in kit_js, "o kit lê a janela do padrão (initPadraoSpoAaPlus) do main.js"
+    bloco = _trecho(main, marcador, True)
+    assert "/api/documentos/padrao-spo-aa-plus" in bloco, "a janela do padrão deixou de ler o documento técnico da rota"
+    assert 'data-spo-padrao="tecnico"' in kit and "data-spo-padrao>" in kit, "o kit perdeu os botões do padrão"
+    assert "docs/padrao-visual-spo-aa-plus.md" in kit, "o kit deve apontar o arquivo-fonte do padrão"
+    assert (RAIZ / "docs" / "padrao-visual-spo-aa-plus.md").exists()
