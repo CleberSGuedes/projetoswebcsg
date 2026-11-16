@@ -21,33 +21,16 @@
 
 .kit-painel {
   margin: 16px var(--spo-layout-content-padding, 18px) 0;
-  padding: 16px;
-}
-.kit-painel-topo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.kit-painel h2 {
-  margin: 4px 0;
-  font-size: var(--spo-fs-titulo);
-  font-weight: 700;
-}
-.kit-painel-ajuda {
-  margin: 0;
-  font-size: var(--spo-fs-controle);
+  padding: 0;
 }
 .kit-painel-acoes {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-.kit-opcoes {
   margin-top: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
 }
+/* a grade dos cartões é a do Personalizar (.personalizar-grid); aqui só o espaço acima dela */
+.kit-opcoes { margin-top: 12px; }
 .kit-aviso { margin: 12px 0 0; }
 
 .kit-pilha {
@@ -66,8 +49,6 @@
 .kit-pilha .module-card > .alert,
 .kit-pilha .module-card .actions + .alert { margin-top: 12px; }
 
-/* oferta "Leitura confortável" no painel: ocupa a linha inteira da grade, logo abaixo da fonte da interface */
-.kit-opcoes > .spo-sugestao { grid-column: 1 / -1; }
 
 /* prévias do Personalizar e gráficos lado a lado quando cabem (colunas sem mínimo fixo: §6.1) */
 .kit-previas,
@@ -95,3 +76,28 @@
   line-height: 1.5;
 }
 .kit-como-usar li + li { margin-top: 6px; }
+
+/* prévias e gráficos logo abaixo dos cartões de preferências */
+.kit-previas-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* presets do Contrato: o cartão ocupa a linha inteira da grade; cartões dinâmicos lado a lado quando cabem
+   e o painel de contexto logo abaixo (como em Governança e Resultados) */
+.kit-contrato-card { grid-column: 1 / -1; }
+.kit-presets {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  margin-top: 12px;
+}
+.kit-preset-contexto { margin-top: 12px; }
+.kit-preset-contexto ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--spo-fs-controle);
+  line-height: 1.5;
+}
+/* nome da regra em negrito sem <strong> (o .flow-context-panel strong é o título do painel) */
+.kit-regra-nome { font-weight: 700; }

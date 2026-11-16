@@ -36,8 +36,28 @@ MARCADORES = [
     # presets do Contrato Visual Protegido (feat/kit-contrato)
     "const PROTECTED_CONTRACT_PRESETS = Object.freeze({",
 ]
-# opções do Personalizar que não fazem sentido no kit (não há atalhos de uma tecla nele)
-FORA_DO_KIT = {"keys"}
+
+
+# ---- feat/kit-previas: prévias do Personalizar e gráficos
+
+GRAFICOS = ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"]
+TEMPLATE_PERSONALIZAR = RAIZ / "templates" / "partials" / "atualizar_personalizar_spo.html"
+
+
+def _sem_espacos(texto: str) -> str:
+    return re.sub(r"\s+", " ", texto).replace("> <", "><").strip()
+
+
+def _bloco_div(html: str, abertura: str) -> str:
+    """Do `<div ...>` de abertura até o </div> que o fecha (contando divs)."""
+    i = html.index(abertura)
+    nivel = 0
+    for m in re.finditer(r"<div\b|</div>", html[i:]):
+        nivel += 1 if m.group(0) == "<div" else -1
+        if nivel == 0:
+            return html[i: i + m.end()]
+    raise AssertionError(f"div sem fecho: {abertura}")
+
 
 
 def _main() -> str:
@@ -84,43 +104,53 @@ def test_trechos_do_teclado_sao_funcoes_completas():
         assert main[fim:fim + 4] == ")();", f"{marcador}: o kit espera a função fechada por '}})();'"
 
 
-def test_kit_mostra_todas_as_opcoes_do_personalizar():
-    main = _main()
-    fontes = main[main.index("(function initFontesPersonalizar()"):]
-    opcoes = _trecho(fontes, "const OPTIONS = Object.freeze({", False)
-    chaves = set(re.findall(r"^\s{4}(\w+): \{", opcoes, flags=re.M))
-    assert chaves, "não achei as opções do initFontesPersonalizar"
-    kit_js = (KIT / "kit-mockup.js").read_text(encoding="utf-8")
-    grupos = set(re.findall(r'\["(\w+)", "[^"]+"\]', kit_js[kit_js.index("const GRUPOS_FONTES"):kit_js.index("const GRUPOS_VISUAL")]))
-    faltam = sorted(chaves - grupos - FORA_DO_KIT)
-    assert not faltam, f"o Personalizar tem opções que o kit de mockup não mostra (GRUPOS_FONTES): {faltam}"
+def _artigos(html: str) -> list:
+    """Os <article class="card personalizar-card..."> de primeiro nível, inteiros."""
+    out = []
+    pos = 0
+    while True:
+        i = html.find('<article class="card personalizar-card', pos)
+        if i < 0:
+            return out
+        nivel = 0
+        for m in re.finditer(r"<article\b|</article>", html[i:]):
+            nivel += 1 if m.group(0) == "<article" else -1
+            if nivel == 0:
+                out.append(html[i: i + m.end()])
+                pos = i + m.end()
+                break
+
+
+def _sem_jinja(t: str) -> str:
+    return re.sub(r"\{#.*?#\}", "", t, flags=re.S)
+
+
+# cartões do Personalizar que não entram no painel do kit (o kit não tem atalhos; prévias e declaração
+# ficam no conteúdo do kit ou não se aplicam)
+FORA_DO_PAINEL = ('id="spo-teclado-card"', "personalizar-preview", "spo-acessibilidade", "protected-contract-card")
+
+
+def test_painel_do_kit_tem_os_cartoes_do_personalizar():
+    tpl = _sem_jinja(TEMPLATE_PERSONALIZAR.read_text(encoding="utf-8"))
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    originais = [a for a in _artigos(tpl) if not any(f in a for f in FORA_DO_PAINEL)]
+    copias = [a for a in _artigos(kit) if "personalizar-preview" not in a and "kit-contrato-card" not in a]
+    assert originais, "não achei os cartões do Personalizar no template"
+    assert [_sem_espacos(a) for a in copias] == [_sem_espacos(a) for a in originais], (
+        "os cartões do painel do kit de mockup não são mais iguais aos do Personalizar "
+        "(templates/partials/atualizar_personalizar_spo.html): copie a marcação nova para o kit")
+    # presets do Contrato: cartões dinâmicos gerados pelo kit a partir do PROTECTED_CONTRACT_PRESETS (com
+    # label, summary, scope, state, rules e details, que o painel de contexto mostra)
+    assert "data-kit-presets" in kit and 'id="kit-preset-contexto"' in kit
+    presets = _trecho(_main(), "const PROTECTED_CONTRACT_PRESETS = Object.freeze({", False)
+    for campo in ("label:", "summary:", "scope:", "state:", "rules:", "details:"):
+        assert campo in presets, f"PROTECTED_CONTRACT_PRESETS sem {campo} (o painel de contexto do kit usa)"
 
 
 def test_css_do_kit_segue_o_padrao():
     css = re.sub(r"/\*.*?\*/", "", (KIT / "kit-mockup.css").read_text(encoding="utf-8"), flags=re.S)
     assert not re.search(r"font-size\s*:\s*[0-9.]+px", css), "kit-mockup.css: tamanho em px; use var(--spo-fs-*)"
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css), "kit-mockup.css: cor literal; use os tokens (§3)"
-
-
-# ---- feat/kit-previas: prévias do Personalizar e gráficos
-
-GRAFICOS = ["initDiagramasDestaque", "initGraficosAcessiveis", "initGraficosEscala"]
-TEMPLATE_PERSONALIZAR = RAIZ / "templates" / "partials" / "atualizar_personalizar_spo.html"
-
-
-def _sem_espacos(texto: str) -> str:
-    return re.sub(r"\s+", " ", texto).replace("> <", "><").strip()
-
-
-def _bloco_div(html: str, abertura: str) -> str:
-    """Do `<div ...>` de abertura até o </div> que o fecha (contando divs)."""
-    i = html.index(abertura)
-    nivel = 0
-    for m in re.finditer(r"<div\b|</div>", html[i:]):
-        nivel += 1 if m.group(0) == "<div" else -1
-        if nivel == 0:
-            return html[i: i + m.end()]
-    raise AssertionError(f"div sem fecho: {abertura}")
 
 
 def test_previas_do_kit_iguais_as_do_personalizar():
