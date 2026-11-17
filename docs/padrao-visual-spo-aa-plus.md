@@ -460,7 +460,7 @@ Contato para barreiras: nger@edu.mt.gov.br.
 **Publicação para o usuário:** "SPO-AA+", na declaração, abre a janela "O padrão SPO-AA+"
 (`initPadraoSpoAaPlus`, fim do `main.js`) só com o **resumo** escrito para quem usa o SPO (metas do §1,
 opções do §2.1 e como se verifica). O **documento técnico completo** abre pelo Contrato Visual Protegido
-(link `data-spo-padrao="tecnico"`, desde a bateria 2), lido deste arquivo pelo servidor
+(link `data-spo-padrao="tecnico"` no cartão "Kit de mockup SPO-AA+", desde 17/11; antes, numa nota do contrato, desde a bateria 2), lido deste arquivo pelo servidor
 (`/api/documentos/padrao-spo-aa-plus`, conversor em `services/documentos.py`). Este documento atualiza
 sozinho; o **resumo, não**: mudou uma meta do §1 ou uma opção do §2.1, atualize o `RESUMO` no mesmo PR.
 Elemento de markdown novo neste arquivo (link, bloco de código…): confira se o conversor o cobre
