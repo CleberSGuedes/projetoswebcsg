@@ -10221,6 +10221,8 @@ label > input[type="radio"] {
   gap: 6px;
   flex: none;
 }
+/* desenho discreto (variante B, aprovada pelo dev. Jean em 17/11): só o ícone, na cor do texto secundário,
+   sem círculo; a área de toque continua com o tamanho do botão (32 px; 44 px em tela de toque) */
 .spo-cabecalho-btn {
   width: 32px;
   height: 32px;
@@ -10229,9 +10231,10 @@ label > input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--spo-control-border, var(--border));
-  background: var(--card);
-  color: var(--spo-accent-graphic, var(--accent));
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
   font-size: var(--spo-fs-titulo);
   line-height: 1;
 }
@@ -10280,3 +10283,65 @@ label > input[type="radio"] {
 .spo-ajuda-conteudo a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
 .spo-ajuda-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .spo-ajuda-acoes [hidden] { display: none; }
+
+/* ==========================================================================
+   [jean] Menu no celular: só o "›" e a gaveta inteira (feat/menu-celular, 2026-11-17; ponto 2 do plano de
+   readequação para celular e navegadores, decisão do dev. Jean)
+   No celular a coluna de ícones (64 px) comia ~1/4 da largura, não cabia na altura (rolava por dentro) e se
+   desalinhava do cabeçalho com a barra de endereço; aberta, a gaveta era translúcida (--sidebar-bg a 88–92%) e,
+   com o celular deitado, começava abaixo do cabeçalho (3 itens visíveis em 360 px de altura). Agora, no modo
+   compacto (body.spo-menu-compacto, ligado pelo initMenuCompacto do main.js: até 600 px de largura, até 560 px
+   de altura, ou quando a coluna não cabe na altura, ex.: fonte do sistema ampliada):
+   - a coluna some e fica só o "›", no canto do cabeçalho (fixo no alto, como o cabeçalho; sem altura medida);
+     o conteúdo ganha a largura inteira;
+   - um toque abre o menu inteiro por cima da tela: altura da tela (dvh, acompanha a barra de endereço), fundo
+     opaco do cartão e a página escurecida atrás (sombra com --spo-veu); fecha com toque fora, Esc ou ao
+     escolher uma tela (o que já existia), e o "‹" fica no mesmo lugar do "›".
+   Desktop e tablet com a coluna cabendo: sem mudança.
+   ========================================================================== */
+:root { --spo-veu: rgba(0, 0, 0, 0.45); }
+body.spo-menu-compacto .main {
+  margin-left: 0;
+  width: 100%;
+}
+body.spo-menu-compacto .sidebar:not(.open) {
+  top: 0;
+  bottom: auto;
+  height: auto;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+  /* o "›" no centro do logotipo do SPO (--spo-seta-topo, medido pelo initMenuCompacto; 27 px no tamanho padrão) */
+  padding: var(--spo-seta-topo, 27px) 0 0 10px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+body.spo-menu-compacto .sidebar:not(.open) > :not(.sidebar-header) { display: none; }
+body.spo-menu-compacto .sidebar.open {
+  top: 0;
+  bottom: 0;
+  padding-top: var(--spo-seta-topo, 27px); /* o "‹" no mesmo lugar do "›": não pula ao abrir */
+  height: 100vh;
+  height: 100dvh;
+  background: var(--card);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 0 0 100vmax var(--spo-veu);
+}
+/* sem a coluna, o cabeçalho reserva à esquerda só o "›" (10 + 44 + 8 px) em vez da largura da coluna */
+body.spo-menu-compacto .topbar { padding-left: 62px; }
+/* o "›" no estilo dos outros botões redondos do SPO (contorno e ícone na cor de destaque, sem sombra) */
+body.spo-menu-compacto #sidebar-toggle {
+  border: 1px solid var(--spo-control-border, var(--border));
+  background: var(--card);
+  box-shadow: none;
+  color: var(--spo-accent-graphic, var(--accent));
+}
+body.spo-menu-compacto #sidebar-toggle i { color: inherit; font-size: var(--spo-fs-titulo); }
+/* menu aberto por cima da tela (até 1200 px, também em tablet): fundo opaco (o --sidebar-bg é translúcido) */
+@media (max-width: 1200px) {
+  body .sidebar.open { background: var(--card); }
+}
+/* os ícones discretos sem contorno: vence a regra geral dos contornos na cor de destaque (#44, body :is(…)) */
+body .topbar .spo-cabecalho-btn:not(#spo-check) { border-color: transparent; }
