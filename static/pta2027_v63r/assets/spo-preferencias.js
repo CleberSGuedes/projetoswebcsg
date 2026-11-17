@@ -55,6 +55,11 @@
       b.setAttribute("aria-label", "Remover linha");
       b.title = "Remover linha";
     });
+    // [jean] o "×" que fecha a Visão processual, a Visão estratégica e a lista de eixos (fix/detalhe-abaixo-cartao)
+    document.querySelectorAll(".close-expansion:not([aria-label])").forEach((b) => {
+      b.setAttribute("aria-label", "Fechar");
+      b.title = "Fechar";
+    });
   }
   nomearBotoes();
   new MutationObserver(nomearBotoes).observe(document.body, { childList: true, subtree: true });
@@ -166,21 +171,38 @@
   // modos de movimento (no "Automático", a rolagem suave original percorreria ~1000 px). O
   // pta-2027.js não muda: expandMacro e renderMacros são globais e são envolvidas aqui; antes de
   // redesenhar os grupos, a caixa volta ao lugar original (o redesenho apagaria a caixa).
+  // [jean] Detalhe logo abaixo da LINHA do cartão (fix/detalhe-abaixo-cartao, 2026-11-17; ponto 3 do plano de
+  // readequação para celular e navegadores): abaixo do grupo ainda ficava longe no celular (até ~480 px abaixo
+  // do 1º cartão do grupo C, com os outros cartões no meio). Agora o detalhe entra na própria grade, depois do
+  // último cartão da mesma linha, ocupando a linha inteira (.spo-na-grade, grid-column: 1 / -1).
+  function ultimoDaLinha(cartao) {
+    const topo = Math.round(cartao.getBoundingClientRect().top);
+    let ultimo = cartao;
+    for (let el = cartao.nextElementSibling; el && el.classList.contains(cartao.classList[0]); el = el.nextElementSibling) {
+      if (Math.abs(Math.round(el.getBoundingClientRect().top) - topo) > 2) break;
+      ultimo = el;
+    }
+    return ultimo;
+  }
+
   (function eixosJuntoDaMacro() {
     const caixa = document.getElementById("policy-expansion");
     if (!caixa || typeof window.expandMacro !== "function" || typeof window.renderMacros !== "function") return;
     const marcador = document.createComment(" lugar original de #policy-expansion ");
     caixa.parentNode.insertBefore(marcador, caixa);
-    const devolver = () => { if (caixa.previousSibling !== marcador) marcador.after(caixa); };
+    const devolver = () => { caixa.classList.remove("spo-na-grade"); if (caixa.previousSibling !== marcador) marcador.after(caixa); };
     const empilhados = (cadeia) => getComputedStyle(cadeia).gridTemplateColumns.trim().split(/\s+/).length === 1;
 
     const abrirOriginal = comRolagemContida(caixa, window.expandMacro);
-    window.expandMacro = function expandirJuntoDoGrupo(index) {
+    window.expandMacro = function expandirJuntoDoCartao(index) {
       const cartao = document.querySelector(`.macro-card[data-macro="${index}"]`);
       const grupo = cartao && cartao.closest(".process-lane");
       const cadeia = grupo && grupo.parentElement;
-      if (grupo && cadeia && empilhados(cadeia)) grupo.after(caixa);
-      else devolver();
+      devolver(); // antes de medir as linhas: a caixa no meio da grade empurraria os cartões
+      if (grupo && cadeia && empilhados(cadeia)) {
+        ultimoDaLinha(cartao).after(caixa);
+        caixa.classList.add("spo-na-grade");
+      }
       return abrirOriginal.apply(this, arguments);
     };
 
@@ -190,6 +212,24 @@
       return redesenharOriginal.apply(this, arguments);
     };
   })();
+
+  // [jean] Visão processual (fix/detalhe-abaixo-cartao): o detalhe do processo abria depois da grade dos três
+  // cartões; no celular (1 coluna), até ~270 px abaixo do cartão tocado. Agora entra logo depois da linha dele.
+  if (typeof window.selectProcessDetail === "function") {
+    const detalheOriginal = window.selectProcessDetail;
+    window.selectProcessDetail = function detalheJuntoDoCartao(key) {
+      const cartao = document.querySelector(`.process-summary-card[data-process="${key}"]`);
+      const painel = document.getElementById("process-detail-panel");
+      const grade = cartao && cartao.parentElement;
+      if (cartao && painel && grade) {
+        if (painel.parentElement === grade) grade.after(painel); // lugar original: logo depois da grade
+        painel.classList.remove("spo-na-grade");
+        ultimoDaLinha(cartao).after(painel);
+        painel.classList.add("spo-na-grade");
+      }
+      return detalheOriginal.apply(this, arguments);
+    };
+  }
 
   // [jean] Cartões que abrem um detalhamento (pilares, macropolíticas, processos da Visão
   // processual): o selecionado só se via pela cor; agora o leitor de tela também ouve
