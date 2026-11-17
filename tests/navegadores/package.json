@@ -1,0 +1,14 @@
+{
+  "name": "spo-bateria-aa-plus",
+  "private": true,
+  "description": "Bateria SPO-AA+: o SPO e o kit de mockup em Chromium, Firefox e WebKit (níveis básico, intermediário e completo)",
+  "type": "module",
+  "scripts": {
+    "basico": "node bateria.mjs basico",
+    "intermediario": "node bateria.mjs intermediario",
+    "completo": "node bateria.mjs completo"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

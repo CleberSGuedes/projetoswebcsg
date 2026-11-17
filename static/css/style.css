@@ -8825,12 +8825,14 @@ body .teto-qomp-grid:not(#spo-teto-tab) { --qomp-w-ano: 184px; }
    Vale só para o texto corrido do conteúdo (parágrafos, listas, avisos, ajudas,
    descrições, metadados); títulos, tabelas, botões e campos não mudam, para não
    desmontar o layout. Atende ao WCAG 1.4.12 (espaçamento de texto) e 1.4.8.
+   [jean] fix/bateria-4 (2026-11-17): estas regras e as da "Leitura" valem também em .spo-area-leitura (as prévias
+   do Personalizar no painel do kit de mockup, fora do #content-area); a especificidade é a mesma (a do id).
    ========================================================================== */
-body[data-spo-line-height="ample"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+body[data-spo-line-height="ample"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, blockquote, .alert, .muted, small,
     .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
   line-height: 1.75;
 }
-body[data-spo-line-height="larger"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+body[data-spo-line-height="larger"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, blockquote, .alert, .muted, small,
     .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
   line-height: 2;
 }
@@ -8904,13 +8906,13 @@ body #teto-kpi-total { white-space: nowrap; }
    ========================================================================== */
 /* Desde feat/opcao-leitura (2026-11-14), só vale com a opção "Leitura" do Personalizar
    em Intermediário (72ch, 1 entrelinha) ou Estrito (ver o bloco "Opção Leitura" no fim). */
-body[data-spo-reading="medium"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+body[data-spo-reading="medium"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
   max-width: 72ch;
 }
-body:is([data-spo-reading="medium"], [data-spo-reading="strict"]) #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
+body:is([data-spo-reading="medium"], [data-spo-reading="strict"]) :is(#content-area, .spo-area-leitura) .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
   margin-inline: auto;
 }
-body[data-spo-reading="medium"] #content-area p + p:not(table *):not(#spo-leitura) {
+body[data-spo-reading="medium"] :is(#content-area, .spo-area-leitura) p + p:not(table *):not(#spo-leitura) {
   margin-top: max(1em, 1lh);
 }
 
@@ -8974,16 +8976,16 @@ body[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
-body[data-spo-reading="strict"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
   max-width: var(--spo-leitura-estrita);
 }
 /* Espaço entre parágrafos: o WCAG 1.4.8 fala do espaço *depois* de cada parágrafo (≥ 1,5 × a
    entrelinha dele). O parágrafo de cima reserva esse espaço e o de baixo não soma margem: em
    cartões flex/grid as margens não se sobrepõem, e somar daria até 3 entrelinhas. */
-body[data-spo-reading="strict"] #content-area p:has(+ p):not(table *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) p:has(+ p):not(table *):not(#spo-leitura) {
   margin-bottom: max(1.5em, 1.5lh);
 }
-body[data-spo-reading="strict"] #content-area p + p:not(table *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) p + p:not(table *):not(#spo-leitura) {
   margin-top: 0;
 }
 
@@ -9467,10 +9469,6 @@ body.theme-dark .see-upload-option.is-disabled:not(#spo-bat2) { background: rgba
 @media (forced-colors: none) {
   body[data-visual-diagrams][data-visual-diagram-theme="light"]:is(.theme-dark, :not(.theme-dark)) { --spo-diagram-muted: #3e3d44; }
 }
-
-/* [jean] Link do documento técnico no Contrato Visual Protegido (bateria 2, 2026-11-15):
-   mesmo estilo dos links da declaração (destaque, sublinhado), dentro do .muted. */
-body .protected-contract-card .contract-padrao-note a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
 
 /* [jean] Atkinson Hyperlegible Mono na "Fonte de tabelas e dados" (bateria 2, 2026-11-15; pedido do
    dev. Jean): a monoespaçada da família Atkinson (Braille Institute), para combinar com a Atkinson na
@@ -10120,3 +10118,489 @@ body[data-spo-text-size="xlarge"] { --spo-zoom: 1.5; }
     background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
 }
+
+/* ==========================================================================
+   [jean] Destaque preso depois do toque no menu lateral (fix/hover-toque, 2026-11-17; ponto 2b do plano de
+   readequação para celular e navegadores)
+   No celular o navegador mantém o :hover no último item tocado até o próximo toque em outro lugar. No menu
+   lateral isso deixava DOIS itens destacados: o da tela atual (.active / .active-ancestor) e o tocado antes
+   (prints do Jean, Chrome e Firefox no Android; reproduzido no Playwright com toque: "Administrar SPO" ativo +
+   "Institucional" preso). Só em telas sem mouse (hover: none), o :hover dos itens do menu volta ao estado
+   normal (o mesmo do .menu-item e do .menu-parent sem destaque); a tela atual e o grupo aberto continuam
+   destacados. No desktop nada muda. As outras regras de :hover do SPO não foram tocadas: nelas o item tocado
+   vira o selecionado (Personalizar, amostras de cor) ou o destaque preso não se confunde com seleção.
+   :not(#spo-check) vence as regras do menu com tema escuro e com a coluna recolhida.
+   ========================================================================== */
+@media (hover: none) {
+  body .sidebar .menu-item:not(.menu-parent):not(.active):not(#spo-check):hover,
+  body .sidebar .menu-group:not(.active-ancestor):not(.open) > .menu-parent:not(#spo-check):hover {
+    color: var(--muted);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ==========================================================================
+   [jean] Lista nativa aberta com a linguagem do filtro SPO (fix/lista-nativa-visual, 2026-11-17; ponto 1 do
+   plano de readequação para celular e navegadores, PR 2)
+   No desktop com Chrome/Edge (base-select, bloco "Listas nativas" acima), a lista aberta de um <select> tinha
+   outra cara que o filtro SPO dos relatórios (print do Jean: Cadastrar Dotação × PED). Medido no Chromium:
+   borda cinza (o filtro usa a borda dos controles, que segue o destaque), sombra 18% no claro (o filtro, 8%) e
+   destaque ao passar o mouse de 16% (o do filtro, 4% de preto ou 6% de branco, quase invisível). Agora a
+   lista aberta usa a borda do filtro, os dois usam a mesma sombra (o token --shadow de cada tema) e o mesmo destaque ao passar o mouse: 12% da cor
+   de destaque, como os itens do menu. Ficam diferentes de propósito: a fonte (o filtro mostra dados, na fonte
+   de dados; a lista do formulário, nomes, na fonte da interface) e a marca (✓ na escolha única, caixa de
+   seleção na múltipla). Firefox e Safari seguem com a lista do sistema (regra do padrão §4).
+   ========================================================================== */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size])::picker(select),
+  .theme-dark select:not([multiple]):not([size])::picker(select) {
+    border-color: var(--spo-control-border, var(--border));
+    box-shadow: var(--shadow);
+  }
+  select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--accent-rgb), 0.12);
+  }
+}
+.mf-panel,
+.theme-dark .mf-panel {
+  box-shadow: var(--shadow);
+}
+.mf-panel .mf-option:hover,
+.theme-dark .mf-panel .mf-option:hover {
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+/* ==========================================================================
+   [jean] Alvos de toque com no mínimo 24 px (fix/alvos-toque-24, 2026-11-17; WCAG 2.5.8, achado da linha de
+   base do plano de readequação para celular e navegadores)
+   A bateria (Chromium, Firefox e WebKit; desktop e celulares) achou dois alvos abaixo de 24 px fora de texto
+   corrido: as opções "Não/Sim" dos formulários (o rótulo, que também marca a opção, tinha 18 px de altura;
+   o círculo, 13 px) e o link "Acessibilidade" do rodapé (15 px de altura). Agora: o rótulo de uma opção tem ao
+   menos 24 px de altura (44 px em tela de toque, como os outros controles do AA+), com o círculo de 18 px; o
+   link do rodapé ganha área de toque invisível (inset negativo, a técnica do botão "›" do menu, A5/#35), sem
+   mudar o desenho do rodapé. Vale para os seis formulários com opções (Dotação, Estorno, Etapa, Meta
+   Física, Subação e Notas SEE).
+   ========================================================================== */
+label:has(> input[type="radio"]) {
+  min-height: 24px;
+}
+label > input[type="radio"] {
+  width: 18px;
+  height: 18px;
+}
+@media (pointer: coarse) {
+  label:has(> input[type="radio"]) {
+    min-height: 44px;
+  }
+}
+/* [jean] fix/bateria-4 (2026-11-17): o mesmo para as caixas de marcar com rótulo ao lado (label.field.inline: "Ativo"
+   em Usuários → Cadastrar, Editar e Perfil; "Servidor cadastrado" e os escopos em Acessos da API), que a bateria 4
+   achou com 18 px de altura no desktop */
+label.field.inline:has(> input[type="checkbox"]) {
+  min-height: 24px;
+}
+label.field.inline > input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+@media (pointer: coarse) {
+  label.field.inline:has(> input[type="checkbox"]) {
+    min-height: 44px;
+  }
+}
+.footer .footer-acessibilidade {
+  position: relative;
+}
+.footer .footer-acessibilidade::after {
+  content: "";
+  position: absolute;
+  inset: -5px -4px;
+}
+
+/* ==========================================================================
+   [jean] Ajuda e busca no cabeçalho (feat/ajuda-cabecalho, 2026-11-17; ponto 5 do plano de readequação
+   para celular e navegadores)
+   A lupa ("Buscar tela") e o "?" ("Ajuda") saíram do menu lateral e foram para o cabeçalho, numa coluna
+   própria: no desktop, ao lado da linha do usuário; no celular (até 820 px), em pé, à direita do título e da
+   linha do usuário (ocupando as duas linhas), sem aumentar o cabeçalho. Em tela de toque os
+   botões têm 44 px (regra geral do AA+ para .icon-btn). A janela "Ajuda" (antes "Atalhos do teclado")
+   ganhou seções que se abrem (<details>).
+   ========================================================================== */
+.spo-cabecalho-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+/* desenho discreto (variante B, aprovada pelo dev. Jean em 17/11): só o ícone, na cor do texto secundário,
+   sem círculo; a área de toque continua com o tamanho do botão (32 px; 44 px em tela de toque) */
+.spo-cabecalho-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: var(--spo-fs-titulo);
+  line-height: 1;
+}
+@media (hover: hover) {
+  .spo-cabecalho-btn:hover { background: rgba(var(--accent-rgb), 0.12); }
+}
+/* celular: grade de duas colunas; os botões, em pé, ocupam a altura do título + a linha do usuário
+   (74 + 15 px ≈ os 94 px dos dois botões de 44 px), sem aumentar o cabeçalho */
+@media (max-width: 820px) {
+  .topbar:has(.spo-cabecalho-acoes) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 8px;
+  }
+  .topbar .user-info { display: contents; }
+  .topbar .brand-wrap { grid-column: 1; grid-row: 1; min-width: 0; }
+  .topbar .user-meta { grid-column: 1; grid-row: 2; min-width: 0; }
+  .topbar .spo-cabecalho-acoes { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; }
+}
+
+.spo-ajuda-secao {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+.spo-ajuda-secao > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: var(--spo-fs-titulo);
+  color: var(--text);
+}
+.spo-ajuda-secao > summary .bi { color: var(--spo-accent-graphic, var(--accent)); }
+.spo-ajuda-conteudo {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+  font-size: var(--spo-fs-texto);
+}
+.spo-ajuda-conteudo p { margin: 0; }
+.spo-ajuda-conteudo a { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; }
+.spo-ajuda-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.spo-ajuda-acoes [hidden] { display: none; }
+
+/* ==========================================================================
+   [jean] Menu no celular: só o "›" e a gaveta inteira (feat/menu-celular, 2026-11-17; ponto 2 do plano de
+   readequação para celular e navegadores, decisão do dev. Jean)
+   No celular a coluna de ícones (64 px) comia ~1/4 da largura, não cabia na altura (rolava por dentro) e se
+   desalinhava do cabeçalho com a barra de endereço; aberta, a gaveta era translúcida (--sidebar-bg a 88–92%) e,
+   com o celular deitado, começava abaixo do cabeçalho (3 itens visíveis em 360 px de altura). Agora, no modo
+   compacto (body.spo-menu-compacto, ligado pelo initMenuCompacto do main.js: até 600 px de largura, até 560 px
+   de altura, ou quando a coluna não cabe na altura, ex.: fonte do sistema ampliada):
+   - a coluna some e fica só o "›", no canto do cabeçalho (fixo no alto, como o cabeçalho; sem altura medida);
+     o conteúdo ganha a largura inteira;
+   - um toque abre o menu inteiro por cima da tela: altura da tela (dvh, acompanha a barra de endereço), fundo
+     opaco do cartão e a página escurecida atrás (sombra com --spo-veu); fecha com toque fora, Esc ou ao
+     escolher uma tela (o que já existia), e o "‹" fica no mesmo lugar do "›".
+   Desktop e tablet com a coluna cabendo: sem mudança.
+   ========================================================================== */
+:root { --spo-veu: rgba(0, 0, 0, 0.45); }
+body.spo-menu-compacto .main {
+  margin-left: 0;
+  width: 100%;
+}
+body.spo-menu-compacto .sidebar:not(.open) {
+  top: 0;
+  bottom: auto;
+  height: auto;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+  /* o "›" no centro do logotipo do SPO (--spo-seta-topo, medido pelo initMenuCompacto; 27 px no tamanho padrão) */
+  padding: var(--spo-seta-topo, 27px) 0 0 10px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+body.spo-menu-compacto .sidebar:not(.open) > :not(.sidebar-header) { display: none; }
+body.spo-menu-compacto .sidebar.open {
+  top: 0;
+  bottom: 0;
+  padding-top: var(--spo-seta-topo, 27px); /* o "‹" no mesmo lugar do "›": não pula ao abrir */
+  height: 100vh;
+  height: 100dvh;
+  background: var(--card);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 0 0 100vmax var(--spo-veu);
+}
+/* sem a coluna, o cabeçalho reserva à esquerda só o "›" (10 + 44 + 8 px) em vez da largura da coluna */
+body.spo-menu-compacto .topbar { padding-left: 62px; }
+/* [jean] fix/menu-cabecalho-pta (2026-11-17): na Programação PTA/OpR o cabeçalho do SPO dá lugar ao da tela
+   (special-context-focus), que não reservava o lugar do "›": o botão ficava em cima do rótulo e do título */
+body.spo-menu-compacto.special-context-focus .pta2027-integration-header { padding-left: 66px; } /* o cabeçalho começa 4 px antes da borda (margem -18 px) */
+/* o "›" no estilo dos outros botões redondos do SPO (contorno e ícone na cor de destaque, sem sombra) */
+body.spo-menu-compacto #sidebar-toggle {
+  border: 1px solid var(--spo-control-border, var(--border));
+  background: var(--card);
+  box-shadow: none;
+  color: var(--spo-accent-graphic, var(--accent));
+}
+body.spo-menu-compacto #sidebar-toggle i { color: inherit; font-size: var(--spo-fs-titulo); }
+/* menu aberto por cima da tela (até 1200 px, também em tablet): fundo opaco (o --sidebar-bg é translúcido) */
+@media (max-width: 1200px) {
+  body .sidebar.open { background: var(--card); }
+}
+/* os ícones discretos sem contorno: vence a regra geral dos contornos na cor de destaque (#44, body :is(…)) */
+body .topbar .spo-cabecalho-btn:not(#spo-check) { border-color: transparent; }
+
+/* ==========================================================================
+   [jean] Filtro SPO no celular como cartão (feat/filtro-celular, 2026-11-17; ponto 1 do plano de readequação
+   para celular e navegadores, PR 1)
+   No celular o painel do filtro (.mf-panel, os filtros dos relatórios) abria preso à coluna, dentro da tabela
+   que rola para o lado: saía cortado ("Apl") ou abaixo da borda da tela, sem o "Aplicar" à vista (medido em
+   PED, FIP 613 e PLAN 51; deitado, nas três). Agora, até 600 px de largura ou 560 px de altura, o painel aberto
+   vira um cartão com 16 px de margem NO ALTO da tela (como a busca e a Ajuda: o teclado virtual, ao tocar em
+   "Buscar...", cobriria um cartão preso embaixo), com a lista rolando por dentro e "Cancelar"/"Aplicar" sempre
+   à vista; os nomes longos quebram linha. Atrás, um véu (.spo-filtro-veu, criado pelo initFiltroCelular do
+   main.js) que recebe o toque e só fecha o filtro, sem acionar o que está embaixo. Desktop sem mudança.
+   ========================================================================== */
+@media (max-width: 600px), (max-height: 560px) {
+  .mf-panel.open {
+    position: fixed;
+    z-index: 10000;
+    top: max(16px, env(safe-area-inset-top));
+    right: 16px;
+    bottom: auto;
+    left: 16px;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    resize: none;
+  }
+  .mf-panel.open .mf-options { min-height: 0; }
+  .mf-panel.open .mf-option span { white-space: normal; overflow-wrap: anywhere; }
+}
+.spo-filtro-veu {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--spo-veu);
+}
+
+/* ==========================================================================
+   [jean] Cartão "Chave do planejamento" na Início (feat/alerta-cartao, 2026-11-17; PROPOSTA ao dev. Cleber,
+   ponto 4 do plano de readequação para celular e navegadores). O Alerta deixa de ser janela que abre sozinha
+   (até 87% da tela no celular) e vira cartão: as placas dos dias no estilo SPO (algarismo na cor do texto, fundo
+   e contorno do tema; o vermelho brigava com os destaques laranja e amarelo no escuro), e o tom de "placa de
+   aviso" fica com os dois sinais (alerta no título, "homens trabalhando" no pé), em cores de placa fixas.
+   A grade da Início (minmax(320px, 1fr)) transbordava com menos de ~350 px de conteúdo: agora min(320px, 100%).
+   ========================================================================== */
+.home-grid { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.spo-aviso-titulo { display: flex; align-items: center; gap: 8px; }
+.spo-aviso-titulo > .bi { color: var(--spo-accent-text, var(--accent)); }
+/* sinal de alerta do Alerta antigo (o mesmo desenho do Cleber): cores de placa, fixas nos dois temas e em qualquer
+   destaque; decorativo (o título diz o assunto). Borda vermelha 4,83:1 contra o cartão claro, 3,45:1 contra o escuro. */
+body { --spo-sinal-fundo: #ffffff; --spo-sinal-borda: #e01b24; --spo-sinal-marca: #111111; }
+.spo-sinal-alerta { flex: none; width: 2.25em; height: 2.25em; }
+.spo-sinal-alerta .spo-sinal-fundo { fill: var(--spo-sinal-fundo); stroke: var(--spo-sinal-borda); }
+.spo-sinal-alerta .spo-sinal-marca { fill: var(--spo-sinal-marca); }
+.spo-indice-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 6px 0 10px; }
+.spo-indice-digitos { display: inline-flex; gap: 4px; }
+.spo-indice-digitos > span {
+  display: inline-grid; place-items: center; min-width: 1.6em; padding: 4px 2px;
+  font-size: var(--spo-fs-pagina); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--spo-control-border, var(--border)); border-radius: 8px;
+}
+.spo-indice-rotulo { flex: 1 1 12em; font-size: var(--spo-fs-leitura); }
+.spo-indice-recorde { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; font-size: var(--spo-fs-texto); }
+.spo-indice-recorde > .bi { color: var(--spo-accent-text, var(--accent)); }
+.spo-indice-selo {
+  padding: 1px 8px; font-size: var(--spo-fs-rotulo); font-weight: 600; color: var(--spo-accent-text, var(--accent));
+  border: 1px solid currentColor; border-radius: 999px;
+}
+.spo-indice-nota { margin: 0 0 10px; font-size: var(--spo-fs-rotulo); }
+/* frase do pé do Alerta, com a placa "homens trabalhando" redesenhada em SVG (o JPG tinha cantos brancos, que
+   apareciam no tema escuro); cores de placa fixas, decorativa */
+body { --spo-obra-fundo: #f5cc0a; --spo-obra-marca: #111111; }
+.spo-indice-colabore {
+  display: flex; align-items: center; gap: 10px; margin: 0; padding-top: 10px;
+  font-size: var(--spo-fs-texto); font-weight: 600; border-top: 1px dashed var(--border);
+}
+.spo-sinal-obra { flex: none; width: 2.25em; height: 2.25em; }
+.spo-sinal-obra .spo-obra-fundo { fill: var(--spo-obra-fundo); stroke: var(--spo-obra-fundo); }
+.spo-sinal-obra .spo-obra-borda, .spo-sinal-obra .spo-obra-figura { stroke: var(--spo-obra-marca); }
+.spo-sinal-obra .spo-obra-marca { fill: var(--spo-obra-marca); }
+
+/* ==========================================================================
+   [jean] Cartão "Pendências" na Início e o detalhe em cartão flutuante (feat/pendencias-cartao, 2026-11-17;
+   PROPOSTA ao dev. Cleber, ponto 4 do plano de readequação). Contagem por tipo no cartão; o detalhe (aberto
+   pelo bloco [jean] initPendenciasDetalhe do main.js) usa a caixa da busca/"O padrão SPO-AA+", com um grupo
+   recolhível por tipo; no celular as linhas das tabelas viram "rótulo: valor" (sem rolar para o lado).
+   ========================================================================== */
+.spo-contador {
+  display: inline-grid; place-items: center; min-width: 1.7em; padding: 0 6px; margin-left: auto;
+  font-size: var(--spo-fs-rotulo); font-weight: 700; color: var(--spo-accent-text, var(--accent));
+  border: 1px solid currentColor; border-radius: 999px;
+}
+.spo-pendencias-card { display: flex; flex-direction: column; }
+.spo-pendencias-lista { list-style: none; margin: 4px 0 12px; padding: 0; }
+.spo-pendencias-lista li {
+  display: flex; justify-content: space-between; gap: 12px; padding: 7px 0;
+  font-size: var(--spo-fs-texto); border-bottom: 1px solid var(--border);
+}
+.spo-pendencias-lista li:last-child { border-bottom: 0; }
+.spo-pendencias-lista strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spo-pendencias-lista .spo-pendencias-aviso { color: var(--spo-negative); font-weight: 600; }
+.spo-pendencias-ver { margin-top: auto; }
+.spo-pendencias-caixa { width: min(760px, calc(100% - 48px)); }
+.spo-pendencias-corpo { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.spo-pendencias-grupo { border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.spo-pendencias-grupo > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
+  font-size: var(--spo-fs-texto); font-weight: 600;
+}
+.spo-pendencias-grupo[open] > summary { border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
+.spo-pendencias-grupo > :not(summary) { margin-bottom: 10px; }
+.spo-pendencias-uo { margin: 8px 0 4px; font-size: var(--spo-fs-texto); font-weight: 700; }
+@media (max-width: 600px) {
+  .spo-busca-caixa.spo-pendencias-caixa { width: calc(100% - 32px); height: auto; max-height: calc(100dvh - 32px); margin-top: 16px; border-radius: 14px; }
+  .spo-pendencias-tabela thead { display: none; }
+  .spo-pendencias-tabela, .spo-pendencias-tabela tbody, .spo-pendencias-tabela tr, .spo-pendencias-tabela td { display: block; }
+  .spo-pendencias-tabela tr { padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .spo-pendencias-tabela tr:last-child { border-bottom: 0; }
+  .spo-pendencias-tabela td { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
+  .spo-pendencias-tabela td::before { content: attr(data-rotulo); font-weight: 600; color: var(--muted); text-align: left; }
+}
+
+/* ==========================================================================
+   [jean] Busca nas listas longas dos formulários (feat/busca-listas-longas, 2026-11-17; Etapa 5 do plano de
+   readequação). Campo "Filtrar a lista" logo abaixo do <select> de 40 opções ou mais (bloco initBuscaListasLongas
+   do main.js) e o texto inteiro da escolha quando ele não cabe na lista fechada. O campo herda o desenho dos
+   campos do formulário (.field input); a lupa e a contagem ficam em --muted.
+   ========================================================================== */
+.spo-lista-busca { display: flex; align-items: center; gap: 8px; }
+.spo-lista-busca[hidden], .spo-lista-escolha[hidden] { display: none; }
+.spo-lista-busca > .bi { flex: none; color: var(--muted); }
+.field .spo-lista-busca .spo-lista-busca-campo { flex: 1 1 auto; min-width: 0; width: auto; }
+.spo-lista-busca-status { flex: none; font-size: var(--spo-fs-rotulo); color: var(--muted); white-space: nowrap; }
+.spo-lista-busca-status:empty { display: none; }
+.spo-lista-escolha {
+  font-size: var(--spo-fs-rotulo); line-height: 1.5; color: var(--muted); overflow-wrap: anywhere;
+  border-left: 3px solid var(--spo-control-border, var(--border)); padding-left: 8px;
+}
+
+/* ==========================================================================
+   [jean] Cabeçalho da Programação PTA/OpR igual ao do SPO (fix/menu-cabecalho-pta, 2026-11-17; achados e
+   desenho do dev. Jean no Chrome: Samsung A55 360 × 800, iPhone 16, Surface 10 960 × 1440)
+   Ao programar um eixo, o cabeçalho do SPO dá lugar ao da tela (special-context-focus; contrato visual do
+   dev. Cleber). Ele não tinha a lupa nem o "?", e o "›" do menu ficava em cima do título (celular) ou abaixo
+   do cabeçalho, com um canto vazio acima da coluna do menu (tablet). Agora:
+   - a lupa e o "?" do SPO entram no cabeçalho da tela (moverAcoes, no main.js; os mesmos botões), lado a lado,
+     à direita: no celular, na linha de baixo, ao lado do usuário e do "Voltar" (o título fica com a largura
+     inteira); do tablet para cima, depois da linha do usuário;
+   - o "›" fica no centro da coluna dos dois botões: no celular, fixo no alto (--spo-seta-topo); com a coluna
+     do menu à vista, ela começa no alto da tela, sem o canto vazio (--spo-seta-foco, o espaço acima do "›").
+   ========================================================================== */
+body.special-context-focus .pta2027-integration-header:has(> .spo-cabecalho-acoes) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 16px;
+}
+body.special-context-focus .pta2027-integration-header > .spo-cabecalho-acoes { grid-column: 3; grid-row: 1; }
+body.special-context-focus .pta2027-integration-header .spo-cabecalho-btn:not(#spo-check) { border-color: transparent; }
+@media (max-width: 760px) {
+  body.special-context-focus .pta2027-integration-header:has(> .spo-cabecalho-acoes) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+    row-gap: 2px;
+    padding-bottom: 11px; /* a área de toque do "Voltar" (10 px abaixo dele) cabe inteira: o cabeçalho corta o que passa */
+  }
+  /* barra baixa (pedido do dev. Jean): o título com a largura inteira (não cabe ao lado dos botões a 360 px) e,
+     na linha de baixo, os dois botões lado a lado, ao lado do usuário e do "Voltar" */
+  body.special-context-focus .pta2027-integration-header:has(> .spo-cabecalho-acoes) > div:first-child { grid-column: 1 / -1; grid-row: 1; }
+  body.special-context-focus .pta2027-integration-header:has(> .spo-cabecalho-acoes) .pta2027-context-side { grid-column: 1; grid-row: 2; }
+  body.special-context-focus .pta2027-integration-header > .spo-cabecalho-acoes { grid-column: 2; grid-row: 2; }
+}
+/* "Voltar à cadeia estratégica": 24 px visíveis (WCAG 2.5.8), com a área de toque de 44 px por fora, invisível
+   (::after), como os links do rodapé; antes o botão tinha 44 px de altura para uma linha de 14 px */
+body.special-context-focus .pta2027-integration-header .pta2027-context-side .pta2027-sticky-back:not([hidden]) {
+  position: relative;
+  min-height: 24px;
+}
+body.special-context-focus .pta2027-integration-header .pta2027-context-side .pta2027-sticky-back:not([hidden])::after {
+  content: "";
+  position: absolute;
+  inset: -10px -6px;
+}
+/* com a coluna do menu à vista (fora do modo compacto): a coluna vai até o alto da tela, e o "›" desce até o
+   centro dos botões do cabeçalho */
+body.special-context-focus:not(.spo-menu-compacto) .sidebar,
+body.pta2027-immersive.special-context-focus:not(.spo-menu-compacto) .sidebar {
+  inset: 0 auto 0 0;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  padding-top: var(--spo-seta-foco, 10px);
+}
+
+/* ==========================================================================
+   [jean] Filtro SPO no desktop (fix/filtro-desktop, 2026-11-17; achado do dev. Jean no kit, medido também no
+   FIP 613). O painel do filtro dos relatórios tinha 260 px fixos, opções sem quebra de linha e em negrito (herdado
+   do cabeçalho da coluna, onde o filtro fica): no FIP 613, 28 de 30 nomes de uma coluna ficavam cortados (o mais
+   longo pede 825 px). Nas últimas colunas, o painel passava até 110 px da borda da tabela e o "Aplicar" sumia.
+   Agora, em todas as larguras: opções em peso normal, quebrando linha (como no cartão do celular, #172). Fora do
+   modo celular: o painel cresce com os nomes até 420 px (e nunca passa da largura da tela), e abre alinhado pela
+   direita da coluna quando, aberto para a direita, sairia da área visível da tabela (.mf-panel-direita, posta pelo
+   initFiltroPosicao do main.js). A alça de redimensionar continua.
+   ========================================================================== */
+.mf-panel .mf-option,
+.mf-panel .mf-option span,
+.mf-panel .mf-search { font-weight: 400; }
+.mf-panel .mf-option span { white-space: normal; overflow-wrap: anywhere; }
+@media (min-width: 601px) and (min-height: 561px) {
+  .mf-panel {
+    width: max-content;
+    min-width: 260px;
+    max-width: min(420px, calc(100vw - 32px));
+  }
+  .mf-panel.mf-panel-direita { left: auto; right: 0; }
+}
+
+/* ==========================================================================
+   [jean] Kit de mockup no Contrato Visual Protegido (feat/kit-no-contrato, 2026-11-17; pedido do dev. Jean: o kit só
+   abria pelo endereço, e o dev. Cleber nem o tinha visto). Cartão logo abaixo do título do contrato, com o que o kit
+   tem, como testar e como usar, e o botão principal que o abre numa aba nova.
+   ========================================================================== */
+.spo-kit-contrato {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--spo-control-border, var(--border));
+  border-radius: 12px;
+  background: var(--card);
+}
+.spo-kit-contrato .module-card-title { margin-bottom: 8px; }
+.spo-kit-contrato .module-card-title h3 { margin: 0; font-size: var(--spo-fs-titulo); font-weight: 700; }
+.spo-kit-contrato .module-card-title p { margin: 2px 0 0; }
+.spo-kit-contrato-lista { margin: 0 0 8px; padding-left: 1.2em; font-size: var(--spo-fs-texto); line-height: 1.5; color: var(--text); }
+/* o link do documento técnico (cor de destaque para texto, sublinhado, negrito), como os da declaração; desde
+   fix/contrato-nota-repetida, é o único link para o documento técnico no Contrato (a nota de cima saiu) */
+body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
+.spo-kit-contrato-lista li + li { margin-top: 4px; }
+.spo-kit-contrato-nota { margin: 0 0 10px; font-size: var(--spo-fs-texto); }
+.spo-kit-contrato-acoes { margin: 0; }
+.spo-kit-contrato-acoes .btn { display: inline-flex; align-items: center; gap: 6px; }
+
