@@ -29593,6 +29593,40 @@
 })();
 
 /* ==========================================================================
+   [jean] Filtro SPO no celular (feat/filtro-celular, 2026-11-17; ponto 1 do plano de readequação para celular
+   e navegadores). Com um filtro dos relatórios aberto no celular (até 600 px de largura ou 560 px de altura),
+   põe atrás dele um véu (.spo-filtro-veu) que recebe o toque e só fecha o filtro: o fechamento por "toque fora"
+   dos relatórios (closest(".mf-wrapper")) deixava o toque seguir para o que estava embaixo (outro filtro, o
+   "Baixar Excel"…). Vale para os filtros de todas as telas, sem mexer nas 11 cópias do buildFilter: observa a
+   abertura e o fechamento depois de cada clique e de cada tecla.
+   ========================================================================== */
+(function initFiltroCelular() {
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  let veu = null;
+  function fecharTodos() {
+    document.querySelectorAll(".mf-panel.open").forEach((p) => p.classList.remove("open"));
+    sincronizar();
+  }
+  function sincronizar() {
+    const aberto = celular.matches && document.querySelector(".mf-panel.open");
+    if (aberto && !veu) {
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fecharTodos(); });
+      document.body.appendChild(veu);
+    } else if (!aberto && veu) {
+      veu.remove();
+      veu = null;
+    }
+  }
+  const depois = () => requestAnimationFrame(sincronizar);
+  document.addEventListener("click", depois, true);
+  document.addEventListener("keydown", depois, true);
+  if (celular.addEventListener) celular.addEventListener("change", sincronizar);
+})();
+
+/* ==========================================================================
    [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
    Pedido do dev. Jean: a declaração de acessibilidade cita o padrão "SPO-AA+";
    o usuário precisa poder ver o que ele é. Links com [data-spo-padrao] abrem
