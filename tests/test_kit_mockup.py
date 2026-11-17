@@ -26,6 +26,8 @@ MARCADORES = [
     "const ATTRS = Object.freeze({",
     "(function initNavegacaoTabelas() {",
     "(function initTecladoPaginacao() {",
+    # busca nas listas longas (feat/busca-listas-longas)
+    "(function initBuscaListasLongas() {",
     # regra da oferta "Leitura confortável" (Atkinson)
     "(function initSugestaoAtkinson() {",
     "const ORDEM = {",
@@ -98,7 +100,7 @@ def test_marcadores_estao_no_main_js_e_no_kit():
 
 def test_trechos_do_teclado_sao_funcoes_completas():
     main = _main()
-    for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {"):
+    for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {", "(function initBuscaListasLongas() {"):
         bloco = _trecho(main, marcador, True)
         fim = main.index(bloco) + len(bloco)
         assert main[fim:fim + 4] == ")();", f"{marcador}: o kit espera a função fechada por '}})();'"
