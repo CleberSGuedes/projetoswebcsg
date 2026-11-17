@@ -13,6 +13,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ### Corrigido
 - Menu lateral no celular (`fix/hover-toque`): o item tocado antes ficava destacado junto com o da tela atual (dois itens destacados), porque o navegador mantém o `:hover` no último toque. Em telas sem mouse (`@media (hover: none)`), o `:hover` dos itens do menu volta ao estado normal; a tela atual e o grupo aberto continuam destacados; no desktop nada muda. Medido no Playwright com toque (Chromium e WebKit): de 2 itens destacados para 1; com mouse (Chromium, Firefox e WebKit) o destaque continua. Regra nova no `padrao-visual-spo-aa-plus.md` §6.1. `?v=` do CSS `20261117.jean-hover-toque.1` (`base.html`, `login.html` e kit).
+- Mockup "Programação PTA/OpR", Visão processual (`fix/hifenizacao-processos`): no celular os quadrinhos dos processos ficavam em duas colunas de 65 a 91 px e até 9 de 12 nomes saíam da caixa. Agora são duas colunas só quando cada uma tem ao menos ~9,5rem (desktop e iPad iguais), senão uma; hifenização em português e quebra forçada só como último recurso. Medido no Playwright (S26, Edge 50 Pro, iPhone 16, Firefox com fonte ampliada, desktop e iPad): de até 9 nomes saindo da caixa para 0. Só `static/pta2027_v63r/assets/spo-preferencias.css` (`?v=20261117.jean-hifenizacao-processos.1` no `index.html` do mockup).
 - **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
 
 ---
