@@ -4,6 +4,7 @@
 //  - ACCENT_COLORS (os 8 destaques), DEFAULT_ACCENT, COMMON_VISUAL_OPTIONS/DEFAULTS;
 //  - OPTIONS e DEFAULTS do initFontesPersonalizar (as opções do Personalizar);
 //  - initNavegacaoTabelas e initTecladoPaginacao (navegação pelo teclado nas tabelas);
+//  - initBuscaListasLongas (campo "Filtrar a lista" nas listas de 40 opções ou mais);
 //  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
 //  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
 //    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
@@ -103,6 +104,8 @@ initGovernancaSemanticFlows();`,
       atributos: objeto(fontes, "const ATTRS = Object.freeze({"),
       teclado: [trecho(fonte, "(function initNavegacaoTabelas() {", true) + ")();",
                 trecho(fonte, "(function initTecladoPaginacao() {", true) + ")();"],
+      // busca nas listas longas dos formulários (feat/busca-listas-longas): o mesmo bloco do SPO
+      buscaListas: trecho(fonte, "(function initBuscaListasLongas() {", true) + ")();",
     };
   }
 
@@ -552,6 +555,7 @@ initGovernancaSemanticFlows();`,
       montarPainel();
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
+      new Function(spo.buscaListas)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
       if (window.Plotly) {
