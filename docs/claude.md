@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-16) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-17) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 > **Estado em 16/11/2026:** a produção (`main`) está com o AA+ (lotes 1 a 5), os avisos modais e o Teto Orçamentário no celular e as Notas SEE com o DANFE novo da Somos, em produção desde 16/11/2026 (`RELEASE_2_2026_11_16.4`). O que entrou e o que não entrou: [CHANGELOG.md](CHANGELOG.md); lições operacionais das promoções: seção 40.13.
@@ -1400,7 +1400,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Sincronização `main` → `dev/cleber` e `dev/jean`:**
   - Feita por quem promoveu, depois de cada subida para a `main`, com branch `sync/main-para-dev-<nome>` e PR.
   - O tema do desenvolvedor volta para a `dev/<nome>` dele como outro commit, com o mesmo conteúdo, e normalmente não dá conflito.
-  - Se der conflito, mantém-se a versão mais nova do desenvolvedor.
+  - Se der conflito, mantém-se a versão mais nova do desenvolvedor, exceto a linha do `RELEASE`, que fica a da `main` (§40.8).
   - Correção urgente pode ir para todas as branches ao mesmo tempo, cada uma com a sua branch temporária, como no §39 (PRs #27, #28 e #29).
 
 ### 40.2 Arquivos de uso comum (tocar com cuidado)
@@ -1408,7 +1408,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **`templates/base.html`:** o `?v=` muda em quase todo PR e sempre dá conflito na sincronização. Usar sufixo com o nome do desenvolvedor, por exemplo `?v=AAAAMMDD.jean-<tema>.1`. Na sincronização fica o mais novo.
 - **`services/features.py` (menu e permissões) e `rotas/__init__.py` (registro de blueprint):** só acrescentar; não alterar entradas existentes.
 - **`rotas/home_routes.py`** (mais de 20 mil linhas): tocar o mínimo. Código novo em blueprint próprio (`rotas/<tema>_routes.py`) e em `services/<tema>.py`.
-- **`docs/claude.md`:** descrever o tema numa seção nova, **sem número**. Dois PRs ao mesmo tempo pegariam o mesmo número; quem promove para a homologação numera.
+- **`docs/claude.md` e `docs/CHANGELOG.md`:** todo tema registra entrada no [CHANGELOG](CHANGELOG.md) (§40.14). Ao `claude.md` só vai regra, contrato ou conhecimento que continua valendo, numa seção nova, **sem número**: dois PRs ao mesmo tempo pegariam o mesmo número, e quem promove numera (§40.11).
 
 ### 40.3 Não tocar sem combinar antes
 - **`.cpanel.yml`, `scripts/deploy_cpanel.sh` e `CLAUDE.md` da raiz:** próprios de cada branch e de cada deploy.
@@ -1439,7 +1439,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 ### 40.7 Promoção para a homologação e para a `main`: pasta separada
 - **Uma pasta separada por promoção** (`git worktree`), nunca na pasta principal: `git worktree add -b pr/<tema>-para-homologacao C:\workspace\projetoswebcsg_<tema> origin/homologacao` (ou `pr/homologacao-para-main` a partir da `origin/main`). A pasta principal fica só para leituras e o `fetch`.
 - Logo depois de criar: `git branch --unset-upstream`, para que um `git push` sem argumento nunca vá para a `homologacao` nem para a `main`.
-- **Cherry-pick só dos commits dos temas**, na ordem em que entraram, nunca merge da branch inteira (§40.1). O conflito esperado é só o `docs/claude.md` (fica o lado do destino) e a linha `RELEASE` do `templates/base.html`; conflito em código: parar e analisar.
+- **Cherry-pick só dos commits dos temas**, na ordem em que entraram, nunca merge da branch inteira (§40.1). O conflito esperado é só a linha `RELEASE` do `templates/base.html` (fica o `RELEASE` de destino, §40.8); conflito no `docs/claude.md` ou em código: parar e analisar.
 - **Conferência antes de testar:** `git diff --stat origin/<destino>...HEAD`; os arquivos levados idênticos aos da origem, menos o `RELEASE`; `services/uo.py`, `.cpanel.yml` e `scripts/deploy_cpanel.sh` iguais aos do destino (UOs novas seguem bloqueadas, §22); `requirements.txt`, `node_runners/package*.json` e `db/` sem mudança, ou os scripts de banco listados no PR.
 - **Testes na pasta separada:** copiar só o `.env`, `npm install --omit=dev` em `node_runners` (descartar a reescrita do `package-lock.json`), `pytest` duas vezes e `node --check`; teste visual rápido e teste manual de quem promove antes do push.
 
@@ -1447,10 +1447,11 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Tema para a `dev/<nome>`** (`feat/` ou `fix/`): **"Squash and merge"**, um commit por tema (§40.1).
 - **Lote para a `homologacao` e `homologacao` → `main`:** **"Create a merge commit"**, para os commits dos temas ficarem separados no histórico.
 - **Sincronização `main` → `dev/cleber` e `dev/jean`:** **"Create a merge commit"**, **nunca squash**: o squash apaga o histórico e faz a próxima sincronização repetir os mesmos conflitos.
+- **Conflito só na linha do `RELEASE` do `templates/base.html`:** fica o da `main` (sincronização) ou o `RELEASE` de destino (promoção). É o único conflito que pode ser resolvido sem parar; qualquer outro: parar, listar os arquivos e explicar.
 - Em todos: link do PR com o destino fixo (`/compare/<destino>...<origem>`) e conferir o campo *base* antes de mergear (§21.8).
 
 ### 40.9 RELEASE conta por dia, para todas as branches
-- O `RELEASE_2_AAAA_MM_DD.N` do rodapé (`templates/base.html`) conta **por dia e para todas as branches juntas**: o próximo `N` do dia, qualquer que seja a branch ou o ambiente. Dia diferente: troca a data e volta para `.1`; mesmo dia: soma 1 ao maior `N` já usado em qualquer branch.
+- O `RELEASE_2_AAAA_MM_DD.N` do rodapé (`templates/base.html`) conta **por dia e para todas as branches juntas** (o `N` soma `dev/cleber`, `homologacao` e `main`): o próximo `N` do dia, qualquer que seja a branch ou o ambiente. Dia diferente: troca a data e volta para `.1`; mesmo dia: soma 1 ao maior `N` já usado em qualquer branch.
 - Em 16/11/2026: `.1` (lote 4), `.2` (lote 5), `.3` (Teto no celular) na homologação, `.4` na produção e `.5` nesta atualização do `docs/claude.md`.
 - Conferir antes: `git log --all -S'RELEASE_2_AAAA_MM_DD.N' --oneline`. O `?v=` do CSS e do JS segue a regra do §40.2 e não é a mesma coisa.
 
@@ -1478,13 +1479,17 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **Shell ou servidor dentro da pasta impede apagá-la**: o `git worktree remove` desregistra mas pode falhar ao apagar ("Permission denied" ou "Invalid argument") e deixar a pasta vazia ou pela metade. Sair da pasta, parar o que a usa e repetir; sem `--force` e sem apagar à mão antes de conferir.
 - **Caminho longo** (`node_modules` fundo): `cmd /c rmdir /s /q "\\?\<pasta>"`.
 - No Git Bash, argumentos como `origem:.arquivo` sofrem conversão de caminho (`MSYS_NO_PATHCONV=1`); e o Python do Windows não enxerga `/tmp` do Git Bash.
-- Testes locais usam sempre o banco do ambiente (`proj5954_spo_csg_amb_cleber`), nunca o de produção: conferir o nome em `.env` antes de rodar.
+- Testes locais usam sempre o banco do próprio ambiente (`proj5954_spo_csg_amb_cleber` ou `proj5954_spo_csg_amb_jean`), nunca o da produção: conferir o nome em `.env` antes de rodar.
 
 ### 40.14 Todo tema registra uma entrada no CHANGELOG; o `claude.md` guarda só o que continua valendo
 - **Todo tema** (`feat/` ou `fix/`, de qualquer desenvolvedor) registra, **no mesmo PR**, uma entrada no [docs/CHANGELOG.md](CHANGELOG.md): data do dia (a mais nova em cima), branch ou tema, **o que mudou** (uma linha por mudança, com o número do PR quando houver), **scripts de banco** (ou "nenhum") e **mudança no contrato da API com a automação** (ou "nenhuma"). Cada lote do dia usa o `RELEASE_2_AAAA_MM_DD.N` do §40.9.
 - **Ao `claude.md` só vai o que for regra, contrato ou conhecimento duradouro**: como a funcionalidade funciona hoje, o que não pode quebrar, como testar, decisões que ainda valem. **Histórico** (problema encontrado, medição antes e depois, verificação, `?v=`, lista de arquivos, o que cada PR fez) fica **só** no CHANGELOG.
 - A seção nova do `claude.md` continua **sem número** (§40.2 e §40.11). A seção 41 deixou de ser "uma subseção por tema" em 16/11/2026: o histórico das 101 subseções foi para o CHANGELOG ("antiga 41.N") e a seção 41 ficou com a parte em vigor. Tema que nasceu como seção do `claude.md` e virou só histórico segue o mesmo caminho: o texto é movido **sem reescrever** para o CHANGELOG, com o número antigo no título.
 - Quem promove (§40.11) numera só a parte que ficou como regra; o histórico não ganha número novo.
+- **Cabeçalho da entrada no CHANGELOG:**
+  - `dev/cleber`: "AAAA-MM-DD — dev/cleber, RELEASE_...", com o `RELEASE` do commit.
+  - `dev/jean`: "AAAA-MM-DD — dev/jean, ainda não publicado", sem `RELEASE` (o Jean não mexe no `RELEASE`).
+  - Quem promove completa o cabeçalho: na homologação, "AAAA-MM-DD — homologação, RELEASE_... (lote N)"; na `main`, só "AAAA-MM-DD — produção, RELEASE_..." (sem lote e sem o `RELEASE` da homologação).
 
 ## 41. AA+ (acessibilidade) — dev. Jean (2026-11-13)
 
