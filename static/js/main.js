@@ -29657,6 +29657,19 @@
   }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const conteudo = document.getElementById("content-area");
   if (conteudo) new MutationObserver(() => { if (acoesSpo && !acoesSpo.isConnected) moverAcoes(); }).observe(conteudo, { childList: true });
+  // [jean] feat/bateria-spo-aa-plus (2026-11-17; achado da Bateria SPO-AA+): com o menu aberto POR CIMA da tela (celular, ou gaveta até
+  // 1200 px), o Esc o fecha esteja o foco onde estiver. O Esc do menu (initAtalhosTeclado) só agia com o foco dentro
+  // dele, e no Safari (iPad/iPhone com teclado) tocar no "›" não leva o foco ao botão: o Esc não fazia nada.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if (!sidebar.classList.contains("open") || !(document.body.classList.contains("spo-menu-compacto") || sobrepoe.matches)) return;
+    if ([...document.querySelectorAll(".spo-busca-fundo, .modal-overlay")].some((j) => !j.hidden && j.getClientRects().length && getComputedStyle(j).display !== "none")) return;
+    const seta = document.getElementById("sidebar-toggle");
+    if (!seta) return;
+    ev.preventDefault();
+    seta.click();
+    seta.focus();
+  });
 })();
 
 /* ==========================================================================
@@ -29724,6 +29737,14 @@
   const depois = () => requestAnimationFrame(posicionar);
   document.addEventListener("click", depois, true);
   document.addEventListener("keydown", depois, true);
+  // [jean] fix/bateria-4 (2026-11-17): clicar fora fecha o filtro em qualquer relatório. Cada relatório registra o seu
+  // "clicar fora fecha" uma vez só, sob a marca global multiFilterClickBound: o primeiro relatório aberto fica com o
+  // tratador, que só conhece os filtros dele; nos outros (ex.: FIP 613 e PLAN 51 depois do PED) o clique fora não
+  // fechava. Fechar assim equivale a "Cancelar": ao reabrir, o filtro recomeça do que está aplicado.
+  document.addEventListener("click", (ev) => {
+    if (ev.target.closest && ev.target.closest(".mf-wrapper")) return;
+    document.querySelectorAll(".mf-panel.open").forEach((p) => p.classList.remove("open", "mf-panel-direita"));
+  });
 })();
 
 /* ==========================================================================

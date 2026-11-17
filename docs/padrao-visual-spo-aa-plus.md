@@ -4,6 +4,9 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
+> Versão 5.1, 2026-11-17: a **Bateria SPO-AA+** no repositório (`tests/navegadores/`), em três níveis, como passo
+> de todo PR e de todo lote (§5 item 16, §6.1).
+>
 > Versão 5, 2026-11-17: modo móvel e navegadores (#166–#176): nada abre sozinho, o que abre fica junto de
 > quem abriu, e a bateria entre navegadores (Chromium, Firefox, WebKit) em celulares e tablets (§1, §4.4, §5, §6).
 > Versão 4, 2026-11-15: escala tipográfica com **"Densidade do texto"** (Compacto, Intermediário,
@@ -328,6 +331,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 | Desabilitado | §3.4: apagado, borda **cinza neutra** (não a do destaque), cursor "não permitido" |
 | Selo "editando" | classe `.spo-editing-badge` (cor `--text`), nunca `style="color:…"` no HTML (#52) |
 | Arquivo (`<input type="file">`) | botão nativo em contorno, como o Secundário: borda `--spo-control-border`, texto `--text`, 12 px (#79) |
+| Opção e caixa de marcar com rótulo | o rótulo marca o controle e tem **≥ 24 px** de altura (44 px no toque); círculo/caixa de 18 px: `label:has(> input[type=radio])` (#169) e `label.field.inline:has(> input[type=checkbox])` (desde 17/11, `fix/bateria-4`) |
 
 ### 4.3 Listas
 
@@ -339,7 +343,7 @@ tela, teclado) e, no celular, abre o seletor do sistema, que o usuário conhece.
 |---|---|---|
 | Escolha única, lista curta (Sim/Não, exercício, UO, mês…) | `<select>` nativo | seletor do sistema |
 | Escolha única, lista longa (**40 opções ou mais**: Chave do Planejamento, Subação/Entrega, Etapa, Subelemento…) | `<select>` nativo + campo **"Filtrar a lista"** logo abaixo (`initBuscaListasLongas`, desde 17/11): o filtro tira da lista as opções que não têm todas as palavras digitadas (sem acento); a lista continua a do navegador, então valor, cascatas (`change`) e envio não mudam; sem script, sobra o nativo | o seletor do sistema já filtrado; o texto escolhido que não cabe aparece inteiro abaixo |
-| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*`: opções em **peso normal** (o filtro fica no cabeçalho da coluna e herdava o negrito) e **quebrando linha**, nunca cortadas; o painel cresce com os nomes de 260 até 420 px (nunca além da tela) e, quando aberto para a direita sairia da área visível da tabela (últimas colunas), **abre alinhado pela direita da coluna** (`.mf-panel-direita`, `initFiltroPosicao`), com "Cancelar"/"Aplicar" sempre à vista (desde 17/11, `fix/filtro-desktop`) | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
+| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*`: opções em **peso normal** (o filtro fica no cabeçalho da coluna e herdava o negrito) e **quebrando linha**, nunca cortadas; o painel cresce com os nomes de 260 até 420 px (nunca além da tela) e, quando aberto para a direita sairia da área visível da tabela (últimas colunas), **abre alinhado pela direita da coluna** (`.mf-panel-direita`, `initFiltroPosicao`), com "Cancelar"/"Aplicar" sempre à vista (desde 17/11, `fix/filtro-desktop`). **Clicar fora fecha** o filtro em qualquer relatório (equivale a "Cancelar"; tratador geral no `initFiltroPosicao`, `fix/bateria-4`: o de cada relatório só valia no primeiro aberto) | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
 
 A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tudo bem: nenhum CSS chega nela.
 
@@ -369,7 +373,7 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 
 | Componente | Regra |
 |---|---|
-| Menu lateral | grupos com `aria-expanded`; Enter/Espaço abrem; ↓↑ Home End → ← (#41, #58). **No celular** (até 600 px de largura ou 560 px de altura) **e sempre que a coluna de ícones não cabe na altura** (`body.spo-menu-compacto`, desde 17/11): a coluna some e fica só o "›" no canto do cabeçalho, alinhado ao centro do logotipo do SPO (`--spo-seta-topo`, medido; 27 px de reserva), com o conteúdo na largura inteira; um toque abre o menu inteiro por cima da tela (altura da tela em `dvh`, fundo opaco `--card`, página escurecida com `--spo-veu`), que fecha com toque fora, Esc ou ao escolher uma tela. Não esconder sozinho por tempo nem abrir em duas etapas (WCAG 3.2, 2.2.1). Desktop e tablet com a coluna cabendo: coluna de ícones como antes |
+| Menu lateral | grupos com `aria-expanded`; Enter/Espaço abrem; ↓↑ Home End → ← (#41, #58). **No celular** (até 600 px de largura ou 560 px de altura) **e sempre que a coluna de ícones não cabe na altura** (`body.spo-menu-compacto`, desde 17/11): a coluna some e fica só o "›" no canto do cabeçalho, alinhado ao centro do logotipo do SPO (`--spo-seta-topo`, medido; 27 px de reserva), com o conteúdo na largura inteira; um toque abre o menu inteiro por cima da tela (altura da tela em `dvh`, fundo opaco `--card`, página escurecida com `--spo-veu`), que fecha com toque fora, Esc (esteja o foco onde estiver; no Safari o toque não leva o foco ao "›") ou ao escolher uma tela. Não esconder sozinho por tempo nem abrir em duas etapas (WCAG 3.2, 2.2.1). Desktop e tablet com a coluna cabendo: coluna de ícones como antes |
 | Abas | `role="tab"` + `aria-selected` + `aria-controls` → `tabpanel`; setas trocam de aba, **uma** rotina de teclado por lista (#41, #49) |
 | **Tabelas (teclado)** | padrão "grade" do WAI-ARIA, sem `role="grid"` (o leitor de tela segue lendo como tabela): Tab entra numa célula só (a última visitada; na primeira vez, a primeira de dados — tabindex itinerante), setas andam de célula em célula, Home/End na linha, Ctrl+Home/End na tabela, PageUp/PageDown 10 linhas, Enter entra no controle da célula e Esc volta; só linhas visíveis; a tabela é uma parada só do Tab (filtros, botões e links das células saem do Tab e são alcançados por setas + Enter; campos de digitação dos dados ficam); clique numa célula começa a navegação por ali; na paginação, ← → andam pelos botões e ↑/Esc voltam à tabela (o foco fica na paginação depois de trocar de página); de um filtro ou botão da célula, as setas andam pelas células (dentro de um campo ou com a lista aberta, são do campo/da lista). Alt + setas não: no navegador volta/avança a página. `initNavegacaoTabelas` (`main.js`); seção "Tabelas" na ajuda dos atalhos e dica na faixa |
 | Paginação | página ativa com borda `--accent`, negrito e `aria-current="page"` (#42, #49) |
@@ -437,7 +441,8 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
     Para ver como uma pessoa com daltonismo enxerga, aplique à área de conteúdo um filtro SVG
     `feColorMatrix` com a matriz de Machado. Tire a captura com e sem a opção.
 15. **Bateria entre navegadores (desde 2026-11-17):** Playwright com os três motores (Chromium, Firefox e
-    WebKit), numa pasta local fora do repositório (`H:\SPO_testes_navegadores`, com `LEIA-ME.md`). Quem
+    WebKit). Nasceu numa pasta local fora do repositório (`H:\SPO_testes_navegadores`), que continua como
+    **laboratório** de medidas avulsas; a bateria **oficial** é a do item 16, no repositório. Quem
     testa entra uma vez numa janela visível (`entrar.mjs`; o script não lê nem guarda senha) e a sessão
     salva serve aos três motores; **uma tela por vez**, como no item 1. Perfis: desktop 1366 nos três;
     celulares e tablets dos modelos que a equipe usa (Galaxy S24/S26, Motorola Edge 50 Pro, iPhone 16 e
@@ -448,6 +453,16 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
     erros no console. Medida própria para cada tema (ex.: cartão do filtro cabe e "Aplicar" responde ao
     toque, por `elementFromPoint`). Toque com `touchscreen.tap` quando o defeito é de toque (`:hover`
     preso). O celular real fica para depois da publicação: o kit tem a seção "Seu aparelho" (§6.4).
+16. **Bateria SPO-AA+ no repositório (desde 2026-11-17, `tests/navegadores/`, com `README.md`):** junta as medidas
+    deste §5 (as baterias 1 a 4) numa ferramenta só, em **três níveis** — `npm run basico` (~3 min, **a cada PR**),
+    `npm run intermediario` (~7 min, **a cada lote**) e `npm run completo` (~30 min, antes de enviar um lote ou numa
+    mudança grande). Verificações: **travas** (pytest), **telas** (rolagem lateral, fora da tela, texto cortado, alvos
+    < 24 px, aviso que abre sozinho, erro de script), **contraste** (AA reprova; abaixo de 7:1, aviso),
+    **equivalência** SPO × kit (cada valor do Personalizar, presets, "Automático") e **recursos** (menu no celular,
+    lupa e "?", filtro, busca nas listas, barra de título da tela, rolagem, kit, teclas de um toque). Relatório em
+    `tests/navegadores/resultados/` (fora do git); sai com código 1 se houver falha. Usa um **usuário de teste**
+    do banco de desenvolvimento (credenciais em `.env.bateria`, fora do git), nunca o login de uma pessoa; só lê e
+    toca, nada é gravado. Tela, opção, recurso ou aparelho novo: acrescentar na bateria (README, "Manter").
 
 ## 5.1 Declaração de acessibilidade
 
@@ -472,6 +487,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 
 ### 6.1 Ao criar ou mudar uma tela
 
+- [ ] **Bateria SPO-AA+** (§5, item 16; `tests/navegadores/`): `npm run basico` antes de **todo PR**; `npm run
+      intermediario` a cada **lote**; `npm run completo` antes de **enviar** um lote ou numa mudança grande. Tela,
+      opção do Personalizar ou recurso novo entra na bateria no mesmo PR (README, "Manter").
 - [ ] **Desde o primeiro mockup:** a tela nova começa do **Kit de mockup SPO-AA+** (§6.4), com as classes
       dele, e é vista no kit nos dois temas, em mais de um destaque, nas três densidades do texto e a 150%
       antes de virar código. Nada fica para "ajustar ao padrão depois".
@@ -541,6 +559,8 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
 - **Onde abrir:** no SPO, **Contrato Visual Protegido** → cartão **"Kit de mockup SPO-AA+"** (o que tem, como testar, como
   usar; botão que abre o kit numa aba nova; desde 17/11, `feat/kit-no-contrato`); ou pelo endereço
   `/static/kit/mockup-spo-aa-plus.html`.
+- **Prévias no painel:** ficam fora do `#content-area`; o bloco tem a classe `spo-area-leitura`, onde as regras de
+  entrelinha e de leitura do SPO também valem (`fix/bateria-4`). O kit marca o `data-forced-colors` como o SPO.
 - Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
   (`initNavegacaoTabelas`, `initTecladoPaginacao`), a busca nas listas longas (`initBuscaListasLongas`) e a regra da oferta "Leitura confortável" da Atkinson
@@ -681,6 +701,7 @@ resolvido por `initGraficosEscala`).
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
 | 2026-11-17 | **Versão 5:** modo móvel e navegadores (#166–#176): metas de interrupções, ordem e navegadores (§1); avisos da Início e detalhe junto do cartão (§4.4); bateria entre navegadores (§5, item 15); regras "nada abre sozinho" e "linha do cartão" (§6.1); kit no celular e "Seu aparelho" (§6.4); **barra de título da tela (secundária)** como padrão das telas em tela cheia (§4.4, §6.1, §6.4, §7; `fix/menu-cabecalho-pta`). Detalhe por PR no `docs/CHANGELOG.md`. |
+| 2026-11-17 | **Versão 5.1:** **Bateria SPO-AA+** no repositório (`tests/navegadores/`, §5 item 16; #187): as baterias 1 a 4 numa ferramenta só, em três níveis (básico a cada PR, intermediário a cada lote, completo antes de enviar um lote), passo do checklist (§6.1). Achados das baterias 4 e 5 corrigidos: entrelinha e leitura nas prévias do kit, `data-forced-colors` no kit, filtro que fecha ao clicar fora em qualquer relatório, caixas de marcar com 24 px (§4.2, §4.3; #186) e Esc que fecha o menu por cima da tela com o foco em qualquer lugar (§4.4; #187). |
 | 2026-11-15 | **Versão 4:** §2.2 "Densidade do texto" (Compacto/Intermediário/Legível para a interface inteira; padrão Legível; Compacto com tabelas de 10 px; passo Leitura de 16 px) e as variáveis `--spo-fs-*`; §2.1 Mulish na largura do "Estrito". Só documentação: a aplicação vem nas etapas 2–4. |
 | 2026-11-15 | §4.4: **cartão dinâmico** (o `.flow-node` de Governança) como sistema visual dos cartões clicáveis: Institucional, envio das Notas SEE e presets do Contrato Visual. |
 | 2026-11-15 | **Versão 3:** opções novas (leitura, daltonismo, foco, links, brilho, movimento, 150%, densidade automática, atalhos de uma tecla; §2.1); fundo do alto contraste escuro no gráfico e no quadro (§3.5); busca de telas, atalhos do teclado, Programação PTA/OpR, prévias e sugestão da Atkinson (§4.4); declaração e padrão publicados para o usuário (§5.1); bateria 2 e lições de opacidade e contêineres (§5); brilho reduzido com `--muted` `#3e3c44` e "Dispensar" `#861523`. Até o #119 e a bateria 2. |

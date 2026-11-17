@@ -9,6 +9,18 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-17 — homologação, RELEASE_2_2026_11_17.3 (lote 7.1)
+
+### Corrigido
+- Bateria 4 entre navegadores (`fix/bateria-4`; pedido do dev. Jean, com o usuário temporário da bateria só no banco de desenvolvimento): todas as opções do Personalizar e os presets do Contrato no SPO e no kit, os recursos do lote 6 e a varredura de ~55 telas em Chromium, Firefox e WebKit (desktop, celulares e tablets). Achados corrigidos: (1) no kit, "Espaçamento entre linhas" e "Leitura" não valiam nas prévias do Personalizar (fora do `#content-area`): as regras passam a valer também em `.spo-area-leitura`, com a mesma especificidade; (2) o kit não marcava `data-forced-colors` no `<body>`; (3) no desktop, clicar fora não fechava o filtro no FIP 613, no PLAN 51 e nos demais relatórios abertos depois do primeiro (o "clicar fora" de cada relatório é registrado uma vez só, sob a marca global `multiFilterClickBound`): tratador geral no `initFiltroPosicao`; (4) as caixas de marcar com rótulo ao lado (Usuários: Cadastrar, Editar, Perfil, Acessos da API) tinham 18 px de altura no desktop: agora ≥ 24 px (44 no toque), como as opções Não/Sim (#169). Padrão §4.2, §4.3, §6.4. `?v=` do CSS e do JS: `20261117.jean-bateria-4.1`.
+
+### Alterado
+- Bateria SPO-AA+ no repositório (`feat/bateria-spo-aa-plus`; pedido do dev. Jean): `tests/navegadores/` junta as baterias 1 a 4 do AA+ (contraste, tipografia, Personalizar, modo móvel, equivalência SPO × kit) numa ferramenta Playwright em três níveis — básico (~3 min, a cada PR), intermediário (~7 min, a cada lote) e completo (~30 min, antes de enviar um lote) —, com relatório em Markdown e JSON e saída com código 1 se houver falha. Verificações: travas (pytest), telas, contraste (AA reprova, AA+ avisa), equivalência e recursos-chave. Usa um usuário de teste do banco de desenvolvimento (credenciais em `.env.bateria` ou variáveis de ambiente, fora do git); só lê e toca. Dependência só da pasta: `playwright` 1.64.1 (`package.json` e `package-lock.json` próprios; `node_modules/`, `sessoes/` e `resultados/` ignorados). Padrão §5 (item 16) e kit ("Como usar"). **Achado da própria bateria, corrigido:** com o menu aberto por cima da tela (celular ou gaveta até 1200 px), o Esc só fechava com o foco dentro dele, e no Safari tocar no "›" não leva o foco ao botão (iPad/iPhone com teclado: o Esc não fazia nada); agora fecha esteja o foco onde estiver, se nenhuma janela estiver aberta por cima (`initMenuCompacto`). `?v=` do `main.js`: `20261117.jean-bateria-aa-plus.1`.
+- Bateria SPO-AA+ como passo oficial (`docs/bateria-no-padrao`): padrão SPO-AA+ na versão 5.1 — checklist de tela nova (§6.1) com o nível de bateria de cada momento (básico a cada PR, intermediário a cada lote, completo antes de enviar um lote); §5 item 15 aponta a bateria oficial (item 16) e deixa a pasta local como laboratório; §8 com a versão 5.1. Declaração de acessibilidade (Personalizar), "Como foi avaliado": desde 17/11 cada mudança passa pela Bateria SPO-AA+ (660 verificações no nível completo). Só texto.
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
+
+---
+
 ## 2026-11-17 — homologação, RELEASE_2_2026_11_17.2 (lote 7)
 
 ### Corrigido
