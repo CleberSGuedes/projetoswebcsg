@@ -10382,3 +10382,48 @@ body .topbar .spo-cabecalho-btn:not(#spo-check) { border-color: transparent; }
   z-index: 9999;
   background: var(--spo-veu);
 }
+
+/* ==========================================================================
+   [jean] Cartão "Chave do planejamento" na Início (feat/alerta-cartao, 2026-11-17; PROPOSTA ao dev. Cleber,
+   ponto 4 do plano de readequação para celular e navegadores). O Alerta deixa de ser janela que abre sozinha
+   (até 87% da tela no celular) e vira cartão: as placas dos dias no estilo SPO (algarismo na cor do texto, fundo
+   e contorno do tema; o vermelho brigava com os destaques laranja e amarelo no escuro), e o tom de "placa de
+   aviso" fica com os dois sinais (alerta no título, "homens trabalhando" no pé), em cores de placa fixas.
+   A grade da Início (minmax(320px, 1fr)) transbordava com menos de ~350 px de conteúdo: agora min(320px, 100%).
+   ========================================================================== */
+.home-grid { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.spo-aviso-titulo { display: flex; align-items: center; gap: 8px; }
+.spo-aviso-titulo > .bi { color: var(--spo-accent-text, var(--accent)); }
+/* sinal de alerta do Alerta antigo (o mesmo desenho do Cleber): cores de placa, fixas nos dois temas e em qualquer
+   destaque; decorativo (o título diz o assunto). Borda vermelha 4,83:1 contra o cartão claro, 3,45:1 contra o escuro. */
+body { --spo-sinal-fundo: #ffffff; --spo-sinal-borda: #e01b24; --spo-sinal-marca: #111111; }
+.spo-sinal-alerta { flex: none; width: 2.25em; height: 2.25em; }
+.spo-sinal-alerta .spo-sinal-fundo { fill: var(--spo-sinal-fundo); stroke: var(--spo-sinal-borda); }
+.spo-sinal-alerta .spo-sinal-marca { fill: var(--spo-sinal-marca); }
+.spo-indice-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 6px 0 10px; }
+.spo-indice-digitos { display: inline-flex; gap: 4px; }
+.spo-indice-digitos > span {
+  display: inline-grid; place-items: center; min-width: 1.6em; padding: 4px 2px;
+  font-size: var(--spo-fs-pagina); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--spo-control-border, var(--border)); border-radius: 8px;
+}
+.spo-indice-rotulo { flex: 1 1 12em; font-size: var(--spo-fs-leitura); }
+.spo-indice-recorde { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; font-size: var(--spo-fs-texto); }
+.spo-indice-recorde > .bi { color: var(--spo-accent-text, var(--accent)); }
+.spo-indice-selo {
+  padding: 1px 8px; font-size: var(--spo-fs-rotulo); font-weight: 600; color: var(--spo-accent-text, var(--accent));
+  border: 1px solid currentColor; border-radius: 999px;
+}
+.spo-indice-nota { margin: 0 0 10px; font-size: var(--spo-fs-rotulo); }
+/* frase do pé do Alerta, com a placa "homens trabalhando" redesenhada em SVG (o JPG tinha cantos brancos, que
+   apareciam no tema escuro); cores de placa fixas, decorativa */
+body { --spo-obra-fundo: #f5cc0a; --spo-obra-marca: #111111; }
+.spo-indice-colabore {
+  display: flex; align-items: center; gap: 10px; margin: 0; padding-top: 10px;
+  font-size: var(--spo-fs-texto); font-weight: 600; border-top: 1px dashed var(--border);
+}
+.spo-sinal-obra { flex: none; width: 2.25em; height: 2.25em; }
+.spo-sinal-obra .spo-obra-fundo { fill: var(--spo-obra-fundo); stroke: var(--spo-obra-fundo); }
+.spo-sinal-obra .spo-obra-borda, .spo-sinal-obra .spo-obra-figura { stroke: var(--spo-obra-marca); }
+.spo-sinal-obra .spo-obra-marca { fill: var(--spo-obra-marca); }
