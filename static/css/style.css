@@ -9468,10 +9468,6 @@ body.theme-dark .see-upload-option.is-disabled:not(#spo-bat2) { background: rgba
   body[data-visual-diagrams][data-visual-diagram-theme="light"]:is(.theme-dark, :not(.theme-dark)) { --spo-diagram-muted: #3e3d44; }
 }
 
-/* [jean] Link do documento técnico no Contrato Visual Protegido (bateria 2, 2026-11-15):
-   mesmo estilo dos links da declaração (destaque, sublinhado), dentro do .muted. */
-body .protected-contract-card .contract-padrao-note a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
-
 /* [jean] Atkinson Hyperlegible Mono na "Fonte de tabelas e dados" (bateria 2, 2026-11-15; pedido do
    dev. Jean): a monoespaçada da família Atkinson (Braille Institute), para combinar com a Atkinson na
    interface. Mesmos alvos da Intel One Mono (tabelas, totais, KPIs do Teto e valores do quadro). */
@@ -10583,7 +10579,8 @@ body.pta2027-immersive.special-context-focus:not(.spo-menu-compacto) .sidebar {
 .spo-kit-contrato .module-card-title h3 { margin: 0; font-size: var(--spo-fs-titulo); font-weight: 700; }
 .spo-kit-contrato .module-card-title p { margin: 2px 0 0; }
 .spo-kit-contrato-lista { margin: 0 0 8px; padding-left: 1.2em; font-size: var(--spo-fs-texto); line-height: 1.5; color: var(--text); }
-/* o link do documento técnico como o da nota do contrato (cor de destaque para texto, sublinhado, negrito) */
+/* o link do documento técnico (cor de destaque para texto, sublinhado, negrito), como os da declaração; desde
+   fix/contrato-nota-repetida, é o único link para o documento técnico no Contrato (a nota de cima saiu) */
 body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
 .spo-kit-contrato-lista li + li { margin-top: 4px; }
 .spo-kit-contrato-nota { margin: 0 0 10px; font-size: var(--spo-fs-texto); }
