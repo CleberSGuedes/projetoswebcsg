@@ -204,6 +204,8 @@ CATALOGO = [
     ("relatorios_fip613.html", '<div class="actions relatorio-top relatorio-top-uo">', "div"),
     # fix/bateria-3: presets do Contrato (a bateria achou um defeito neles que o kit não via)
     ("atualizar_personalizar_spo.html", '<div class="contract-preset-grid"', "div"),
+    # feat/kit-movel: opções "Não/Sim" com alvo de 24 px (#169), recortadas do Cadastrar Dotação
+    ("cadastrar_dotacao.html", '<div class="input-group" style="display:flex; gap:12px; align-items:center;">', "div"),
 ]
 
 
