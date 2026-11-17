@@ -22576,6 +22576,25 @@
       }
     }
 
+    // [jean] feat/alerta-cartao (2026-11-17, PROPOSTA): o Alerta virou o cartão "Chave do planejamento" da Início
+    // (#spo-indice-card, partials/dashboard.html), que não abre sozinho; aqui só se escrevem as datas da última
+    // atualização, no mesmo formato do Alerta. Sem o #emp-record-modal, nada abre ao entrar além das pendências.
+    const indiceAtualizado = document.querySelector("#spo-indice-card .spo-indice-atualizado");
+    if (indiceAtualizado) {
+      const formatar = (valor) => {
+        const data = parseManausLocal(valor);
+        if (!data) return "-";
+        const m = Object.fromEntries(new Intl.DateTimeFormat("pt-BR", {
+          timeZone: AMAZON_TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+        }).formatToParts(data).map((p) => [p.type, p.value]));
+        return `${m.day}/${m.month}/${m.year} às ${m.hour}h${m.minute}m`;
+      };
+      const { penult, ult } = indiceAtualizado.dataset;
+      indiceAtualizado.textContent = penult || ult
+        ? `Atualizado de ${penult ? formatar(penult) : "-"} a ${ult ? formatar(ult) : "-"}.`
+        : "Nenhuma atualização registrada.";
+    }
+
     const modal = document.getElementById("dotacao-aguardando-modal");
     const hasItems = modal ? modal.dataset.hasItems === "1" : false;
     const closeBtn = modal ? document.getElementById("dotacao-aguardando-close") : null;
