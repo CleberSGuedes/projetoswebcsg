@@ -370,7 +370,7 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 
 | Componente | Regra |
 |---|---|
-| Menu lateral | grupos com `aria-expanded`; Enter/Espaço abrem; ↓↑ Home End → ← (#41, #58). **No celular** (até 600 px de largura ou 560 px de altura) **e sempre que a coluna de ícones não cabe na altura** (`body.spo-menu-compacto`, desde 17/11): a coluna some e fica só o "›" no canto do cabeçalho, alinhado ao centro do logotipo do SPO (`--spo-seta-topo`, medido; 27 px de reserva), com o conteúdo na largura inteira; um toque abre o menu inteiro por cima da tela (altura da tela em `dvh`, fundo opaco `--card`, página escurecida com `--spo-veu`), que fecha com toque fora, Esc ou ao escolher uma tela. Não esconder sozinho por tempo nem abrir em duas etapas (WCAG 3.2, 2.2.1). Desktop e tablet com a coluna cabendo: coluna de ícones como antes |
+| Menu lateral | grupos com `aria-expanded`; Enter/Espaço abrem; ↓↑ Home End → ← (#41, #58). **No celular** (até 600 px de largura ou 560 px de altura) **e sempre que a coluna de ícones não cabe na altura** (`body.spo-menu-compacto`, desde 17/11): a coluna some e fica só o "›" no canto do cabeçalho, alinhado ao centro do logotipo do SPO (`--spo-seta-topo`, medido; 27 px de reserva), com o conteúdo na largura inteira; um toque abre o menu inteiro por cima da tela (altura da tela em `dvh`, fundo opaco `--card`, página escurecida com `--spo-veu`), que fecha com toque fora, Esc (esteja o foco onde estiver; no Safari o toque não leva o foco ao "›") ou ao escolher uma tela. Não esconder sozinho por tempo nem abrir em duas etapas (WCAG 3.2, 2.2.1). Desktop e tablet com a coluna cabendo: coluna de ícones como antes |
 | Abas | `role="tab"` + `aria-selected` + `aria-controls` → `tabpanel`; setas trocam de aba, **uma** rotina de teclado por lista (#41, #49) |
 | **Tabelas (teclado)** | padrão "grade" do WAI-ARIA, sem `role="grid"` (o leitor de tela segue lendo como tabela): Tab entra numa célula só (a última visitada; na primeira vez, a primeira de dados — tabindex itinerante), setas andam de célula em célula, Home/End na linha, Ctrl+Home/End na tabela, PageUp/PageDown 10 linhas, Enter entra no controle da célula e Esc volta; só linhas visíveis; a tabela é uma parada só do Tab (filtros, botões e links das células saem do Tab e são alcançados por setas + Enter; campos de digitação dos dados ficam); clique numa célula começa a navegação por ali; na paginação, ← → andam pelos botões e ↑/Esc voltam à tabela (o foco fica na paginação depois de trocar de página); de um filtro ou botão da célula, as setas andam pelas células (dentro de um campo ou com a lista aberta, são do campo/da lista). Alt + setas não: no navegador volta/avança a página. `initNavegacaoTabelas` (`main.js`); seção "Tabelas" na ajuda dos atalhos e dica na faixa |
 | Paginação | página ativa com borda `--accent`, negrito e `aria-current="page"` (#42, #49) |
@@ -449,6 +449,16 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
     erros no console. Medida própria para cada tema (ex.: cartão do filtro cabe e "Aplicar" responde ao
     toque, por `elementFromPoint`). Toque com `touchscreen.tap` quando o defeito é de toque (`:hover`
     preso). O celular real fica para depois da publicação: o kit tem a seção "Seu aparelho" (§6.4).
+16. **Bateria SPO-AA+ no repositório (desde 2026-11-17, `tests/navegadores/`, com `README.md`):** junta as medidas
+    deste §5 (as baterias 1 a 4) numa ferramenta só, em **três níveis** — `npm run basico` (~3 min, **a cada PR**),
+    `npm run intermediario` (~7 min, **a cada lote**) e `npm run completo` (~30 min, antes de enviar um lote ou numa
+    mudança grande). Verificações: **travas** (pytest), **telas** (rolagem lateral, fora da tela, texto cortado, alvos
+    < 24 px, aviso que abre sozinho, erro de script), **contraste** (AA reprova; abaixo de 7:1, aviso),
+    **equivalência** SPO × kit (cada valor do Personalizar, presets, "Automático") e **recursos** (menu no celular,
+    lupa e "?", filtro, busca nas listas, barra de título da tela, rolagem, kit, teclas de um toque). Relatório em
+    `tests/navegadores/resultados/` (fora do git); sai com código 1 se houver falha. Usa um **usuário de teste**
+    do banco de desenvolvimento (credenciais em `.env.bateria`, fora do git), nunca o login de uma pessoa; só lê e
+    toca, nada é gravado. Tela, opção, recurso ou aparelho novo: acrescentar na bateria (README, "Manter").
 
 ## 5.1 Declaração de acessibilidade
 
