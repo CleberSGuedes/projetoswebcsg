@@ -73,7 +73,7 @@ function credenciais() {
   return { email: v.BATERIA_EMAIL, senha: v.BATERIA_SENHA };
 }
 export async function garantirSessao() {
-  const nav = await chromium.launch();
+  const nav = await chromium.launch({ timeout: 60000 });
   try {
     if (existsSync(ARQ_SESSAO)) {
       const ctx = await nav.newContext({ storageState: ARQ_SESSAO });
@@ -110,6 +110,9 @@ export async function abrirPerfil(nomePerfil, extra = {}) {
   const opcoes = { ...p.ctx, storageState: await garantirSessao(), ...extra };
   if (p.tipo === firefox) delete opcoes.isMobile;
   const ctx = await nav.newContext(opcoes);
+  // limites do Playwright: ações e esperas 30 s, navegação 60 s (o page.evaluate não tem limite: ver lib/tempo.mjs)
+  ctx.setDefaultTimeout(30000);
+  ctx.setDefaultNavigationTimeout(60000);
   const pag = await ctx.newPage();
   const erros = [];
   pag.on("pageerror", (e) => erros.push(String(e.message).slice(0, 160)));

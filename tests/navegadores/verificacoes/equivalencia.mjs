@@ -3,7 +3,8 @@
 // todo valor fora do padrão muda algo no SPO. Também os presets do Contrato e o tema "Automático" com o sistema escuro.
 import { abrirPerfil, abrirTela, KIT } from "../lib/ambiente.mjs";
 import { fotografarPreferencias } from "../lib/medidas.mjs";
-import { registrar } from "../lib/registro.mjs";
+import { registrar, etapa } from "../lib/registro.mjs";
+import { comTempo, LIMITE_PASSO_S, TempoEsgotado } from "../lib/tempo.mjs";
 
 export const GRUPOS = [
   ["tema", "[data-theme-choice]", "data-theme-choice", ["light", "dark", "auto"], "light"],
@@ -72,9 +73,12 @@ export async function equivalencia(perfis, nomesGrupos, comPresets) {
         await spo.waitForTimeout(450);
         const base = await spo.evaluate(fotografarPreferencias, PROPS);
         for (const valor of valores) {
-          const b1 = await clicar(spo, null, sel, attr, valor), b2 = await clicar(kit, "#kit-opcoes", sel, attr, valor);
-          await spo.waitForTimeout(450); await kit.waitForTimeout(450);
-          const a = await spo.evaluate(fotografarPreferencias, PROPS), b = await kit.evaluate(fotografarPreferencias, PROPS);
+          etapa(`equivalencia ${perfil}`, `${grupo} = ${valor}`);
+          const { b1, b2, a, b } = await comTempo((async () => {
+            const b1 = await clicar(spo, null, sel, attr, valor), b2 = await clicar(kit, "#kit-opcoes", sel, attr, valor);
+            await spo.waitForTimeout(450); await kit.waitForTimeout(450);
+            return { b1, b2, a: await spo.evaluate(fotografarPreferencias, PROPS), b: await kit.evaluate(fotografarPreferencias, PROPS) };
+          })(), LIMITE_PASSO_S, `equivalência ${grupo} = ${valor} (${perfil})`);
           const dif = comparar(a, b);
           const semEfeito = valor !== padrao && !SEM_ESTILO.has(grupo) && !(grupo === "tema" && valor === "auto")
             && JSON.stringify([a.body, a.vars, a.cartoes, a.escuro]) === JSON.stringify([base.body, base.vars, base.cartoes, base.escuro]);
@@ -89,31 +93,42 @@ export async function equivalencia(perfis, nomesGrupos, comPresets) {
       if (comPresets) {
         await abrirTela(spo, "atualizar/personalizar-spo/contrato-visual-protegido");
         for (const preset of ["default", "compact", "contrast", "mobile", "default"]) {
-          await spo.evaluate((p) => document.querySelector(`.contract-preset-grid [data-contract-preset="${p}"]`)?.click(), preset);
-          await kit.evaluate((p) => document.querySelector(`#kit-opcoes [data-contract-preset="${p}"]`)?.click(), preset);
-          await spo.waitForTimeout(450); await kit.waitForTimeout(450);
+          etapa(`equivalencia ${perfil}`, `preset = ${preset}`);
           const f = (props) => { const b = document.querySelector('.contract-preset[data-contract-preset="compact"]'); const c = b && getComputedStyle(b); return { preset: document.documentElement.dataset.visualContractPreset, body: document.body.dataset.visualContractPreset, card: c ? props.map((p) => c.getPropertyValue(p)).join("|") : "" }; };
-          const a = await spo.evaluate(f, PROPS), b = await kit.evaluate(f, PROPS);
+          const { a, b } = await comTempo((async () => {
+            await spo.evaluate((p) => document.querySelector(`.contract-preset-grid [data-contract-preset="${p}"]`)?.click(), preset);
+            await kit.evaluate((p) => document.querySelector(`#kit-opcoes [data-contract-preset="${p}"]`)?.click(), preset);
+            await spo.waitForTimeout(450); await kit.waitForTimeout(450);
+            return { a: await spo.evaluate(f, PROPS), b: await kit.evaluate(f, PROPS) };
+          })(), LIMITE_PASSO_S, `equivalência preset = ${preset} (${perfil})`);
           const igual = JSON.stringify(a) === JSON.stringify(b);
           registrar({ verificacao: "equivalencia", perfil, alvo: `preset = ${preset}`, situacao: igual ? "ok" : "falha", resumo: igual ? "" : `SPO ${JSON.stringify(a).slice(0, 80)} × kit ${JSON.stringify(b).slice(0, 80)}` });
         }
       }
       await kit.close();
+    } catch (e) {
+      // um passo estourou o tempo ou deu erro: o resto deste perfil não é medido, e a bateria segue
+      registrar({ verificacao: "equivalencia", perfil, alvo: "interrompida", situacao: "falha", resumo: `${String(e.message).slice(0, 160)} (o restante deste perfil não foi medido)` });
     } finally {
-      await nav.close();
+      await comTempo(nav.close(), 30, "fechar o navegador").catch(() => {});
     }
     if (comPresets) {
       // tema "Automático" com o sistema no escuro: os dois ficam escuros
       const { nav: n2, ctx: c2, pag: s2 } = await abrirPerfil(perfil, { colorScheme: "dark" });
+      etapa(`equivalencia ${perfil}`, "tema Automático, sistema escuro");
       try {
-        await abrirTela(s2, "atualizar/personalizar-spo/temas");
-        const k2 = await c2.newPage();
-        await k2.goto(KIT, { waitUntil: "load" });
-        await k2.waitForTimeout(2500);
-        const a = await s2.evaluate(() => document.body.classList.contains("theme-dark")), b = await k2.evaluate(() => document.body.classList.contains("theme-dark"));
+        const { a, b } = await comTempo((async () => {
+          await abrirTela(s2, "atualizar/personalizar-spo/temas");
+          const k2 = await c2.newPage();
+          await k2.goto(KIT, { waitUntil: "load" });
+          await k2.waitForTimeout(2500);
+          return { a: await s2.evaluate(() => document.body.classList.contains("theme-dark")), b: await k2.evaluate(() => document.body.classList.contains("theme-dark")) };
+        })(), LIMITE_PASSO_S, `equivalência tema Automático com o sistema escuro (${perfil})`);
         registrar({ verificacao: "equivalencia", perfil, alvo: "tema Automático, sistema escuro", situacao: a && b ? "ok" : "falha", resumo: a && b ? "" : `SPO escuro=${a}, kit escuro=${b}` });
+      } catch (e) {
+        registrar({ verificacao: "equivalencia", perfil, alvo: "tema Automático, sistema escuro", situacao: "falha", resumo: String(e.message).slice(0, 160) });
       } finally {
-        await n2.close();
+        await comTempo(n2.close(), 30, "fechar o navegador").catch(() => {});
       }
     }
   }

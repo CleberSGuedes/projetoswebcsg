@@ -3,17 +3,23 @@
 // teclas de um toque e o kit. Só abre, toca, digita e escolhe; nada é gravado.
 import { abrirPerfil, abrirTela, KIT, PERFIS } from "../lib/ambiente.mjs";
 import { medirTela } from "../lib/medidas.mjs";
-import { registrar, capturar } from "../lib/registro.mjs";
+import { registrar, capturar, etapa } from "../lib/registro.mjs";
+import { comTempo, LIMITE_PASSO_S, TempoEsgotado } from "../lib/tempo.mjs";
 
 const celular = (perfil) => PERFIS[perfil].ctx.viewport.width <= 600 || PERFIS[perfil].ctx.viewport.height <= 560;
 const quadro = (pag) => pag.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
 
+// cada checagem tem o tempo-limite do passo; se estourar, a falha é registrada e o resto deste perfil é pulado
+// (o navegador pode ter travado): checar lança TempoEsgotado para o laço do perfil parar
 async function checar(perfil, alvo, pag, fn) {
+  etapa(`recursos ${perfil}`, alvo);
   try {
-    const falhas = await fn();
+    const falhas = await comTempo(fn(), LIMITE_PASSO_S, `${alvo} (${perfil})`);
     registrar({ verificacao: "recursos", perfil, alvo, situacao: falhas.length ? "falha" : "ok", resumo: falhas.join("; "), captura: falhas.length ? await capturar(pag, `recursos-${perfil}-${alvo}`) : null });
   } catch (e) {
-    registrar({ verificacao: "recursos", perfil, alvo, situacao: "falha", resumo: String(e.message).slice(0, 160), captura: await capturar(pag, `recursos-${perfil}-${alvo}-erro`) });
+    const travou = e instanceof TempoEsgotado;
+    registrar({ verificacao: "recursos", perfil, alvo, situacao: "falha", resumo: String(e.message).slice(0, 160), captura: travou ? null : await capturar(pag, `recursos-${perfil}-${alvo}-erro`) });
+    if (travou) throw e;
   }
 }
 
@@ -157,8 +163,11 @@ export async function recursos(perfis) {
         if (r.aviso) f.push(`aviso: ${r.aviso.slice(0, 80)}`);
         return f;
       });
+    } catch (e) {
+      if (!(e instanceof TempoEsgotado)) throw e;
+      registrar({ verificacao: "recursos", perfil, alvo: "interrompida", situacao: "falha", resumo: "o restante deste perfil não foi medido (um passo estourou o tempo)" });
     } finally {
-      await nav.close();
+      await comTempo(nav.close(), 30, "fechar o navegador").catch(() => {});
     }
   }
 }
@@ -178,9 +187,12 @@ export async function teclas(perfil) {
       await pag.keyboard.press("Escape");
       return abriu;
     };
-    const off = await tentar("off"), on = await tentar("on");
+    etapa(`recursos ${perfil}`, "teclas de um toque");
+    const { off, on } = await comTempo((async () => ({ off: await tentar("off"), on: await tentar("on") }))(), LIMITE_PASSO_S, `teclas de um toque (${perfil})`);
     registrar({ verificacao: "recursos", perfil, alvo: "teclas de um toque", situacao: !off && on ? "ok" : "falha", resumo: !off && on ? "" : `"/" desligado abriu=${off}, ligado abriu=${on}` });
+  } catch (e) {
+    registrar({ verificacao: "recursos", perfil, alvo: "teclas de um toque", situacao: "falha", resumo: String(e.message).slice(0, 160) });
   } finally {
-    await nav.close();
+    await comTempo(nav.close(), 30, "fechar o navegador").catch(() => {});
   }
 }
