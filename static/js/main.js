@@ -30158,3 +30158,68 @@
     setTimeout(devolver, 0);
   }, true);
 })();
+
+/* ==========================================================================
+   [jean] Pendências da Início em cartão flutuante (feat/pendencias-cartao, 2026-11-17; PROPOSTA ao dev. Cleber,
+   ponto 4 do plano de readequação para celular e navegadores). A janela das pendências (#dotacao-aguardando-modal)
+   abria sozinha ao entrar; agora a Início mostra o cartão "Pendências" e o detalhe abre só com "Ver detalhes",
+   no mesmo cartão flutuante da busca e de "O padrão SPO-AA+" (.spo-busca-fundo, fora do .main: a "Fonte maior"
+   não o amplia duas vezes). O conteúdo vem do <template id="spo-pendencias-detalhe"> da Início (montado de novo a
+   cada abertura, porque a Início é recarregada ao voltar a ela). Esc e toque fora fecham; o Tab fica dentro; o
+   foco volta ao botão.
+   ========================================================================== */
+(function initPendenciasDetalhe() {
+  let fundo = null;
+  let quemAbriu = null;
+  const focaveis = () => [...fundo.querySelectorAll("button, summary, a[href], [tabindex='0']")].filter((el) => el.offsetParent !== null);
+  function fechar() {
+    if (!fundo) return;
+    fundo.remove();
+    fundo = null;
+    document.body.classList.remove("spo-busca-aberta");
+    if (quemAbriu && document.contains(quemAbriu)) quemAbriu.focus();
+    quemAbriu = null;
+  }
+  function abrir(botao) {
+    const modelo = document.getElementById("spo-pendencias-detalhe");
+    if (!modelo) return;
+    fechar();
+    quemAbriu = botao;
+    const total = document.querySelector("#spo-pendencias-card .spo-contador");
+    const n = total ? total.firstChild.textContent.trim() : "";
+    fundo = document.createElement("div");
+    fundo.className = "spo-busca-fundo";
+    fundo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-pendencias-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-pendencias-dlg-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      `    <div class="modal-header-text"><h2 id="spo-pendencias-dlg-titulo" class="modal-header-title spo-busca-titulo" tabindex="-1">Pendências${n ? ` (${n})` : ""}</h2>`,
+      '    <div class="modal-header-subtitle">Itens que aguardam aprovação. Esc fecha.</div></div>',
+      "  </div>",
+      '  <div class="spo-pendencias-corpo" tabindex="0" role="region" aria-labelledby="spo-pendencias-dlg-titulo"></div>',
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status">Para aprovar, abra a tela do item (Cadastrar Dotação, PTA Gerencial…).</p>',
+      '    <button type="button" class="btn btn-secondary sm spo-pendencias-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    fundo.querySelector(".spo-pendencias-corpo").appendChild(modelo.content.cloneNode(true));
+    fundo.querySelector(".spo-pendencias-fechar").addEventListener("click", fechar);
+    fundo.addEventListener("mousedown", (ev) => { if (ev.target === fundo) fechar(); });
+    fundo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key !== "Tab") return;
+      const f = focaveis();
+      if (!f.length) return;
+      const titulo = fundo.querySelector("#spo-pendencias-dlg-titulo");
+      if (ev.shiftKey && (document.activeElement === f[0] || document.activeElement === titulo)) { ev.preventDefault(); f[f.length - 1].focus(); }
+      else if (!ev.shiftKey && document.activeElement === f[f.length - 1]) { ev.preventDefault(); f[0].focus(); }
+    });
+    document.body.appendChild(fundo);
+    document.body.classList.add("spo-busca-aberta");
+    fundo.querySelector("#spo-pendencias-dlg-titulo").focus();
+  }
+  document.addEventListener("click", (ev) => {
+    const botao = ev.target.closest && ev.target.closest(".spo-pendencias-ver");
+    if (botao) abrir(botao);
+  });
+})();

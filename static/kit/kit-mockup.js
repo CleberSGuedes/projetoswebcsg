@@ -570,3 +570,46 @@ initGovernancaSemanticFlows();`,
         + "padrão SPO, sem os destaques, as opções nem o teclado das tabelas.");
     });
 })();
+
+/* Cartão "Pendências" (feat/pendencias-cartao): "Ver detalhes" abre o cartão flutuante (o mesmo .spo-busca-fundo
+   da busca e de "O padrão SPO-AA+"): Esc e toque fora fecham, o Tab fica dentro, o foco volta ao botão. No SPO, o mesmo
+   comportamento está no bloco [jean] initPendenciasDetalhe do main.js. */
+(function kitPendencias() {
+  const botao = document.getElementById("kit-pendencias-ver");
+  const previa = document.querySelector(".kit-pendencias-previa");
+  if (!botao || !previa) return;
+  const fundo = document.createElement("div");
+  fundo.className = "spo-busca-fundo";
+  fundo.hidden = true;
+  const caixa = previa.cloneNode(true);
+  caixa.classList.remove("kit-pendencias-previa");
+  caixa.setAttribute("role", "dialog");
+  caixa.setAttribute("aria-modal", "true");
+  caixa.removeAttribute("aria-label");
+  const titulo = caixa.querySelector(".spo-busca-titulo");
+  titulo.id = "kit-pendencias-dlg-titulo";
+  titulo.tabIndex = -1;
+  caixa.setAttribute("aria-labelledby", titulo.id);
+  fundo.appendChild(caixa);
+  document.body.appendChild(fundo);
+  const focaveis = () => [...caixa.querySelectorAll("button, summary, [tabindex='0']")].filter((el) => el.offsetParent);
+  function fechar() {
+    fundo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    botao.focus();
+  }
+  botao.addEventListener("click", () => {
+    fundo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    titulo.focus();
+  });
+  caixa.querySelector(".spo-busca-rodape button").addEventListener("click", fechar);
+  fundo.addEventListener("mousedown", (ev) => { if (ev.target === fundo) fechar(); });
+  fundo.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); fechar(); return; }
+    if (ev.key !== "Tab") return;
+    const f = focaveis(), primeiro = f[0], ultimo = f[f.length - 1];
+    if (ev.shiftKey && (document.activeElement === primeiro || document.activeElement === titulo)) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+  });
+})();
