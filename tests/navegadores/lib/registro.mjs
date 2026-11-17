@@ -8,9 +8,13 @@ export const PASTA_RESULTADO = resolve(PASTA, "resultados", carimbo);
 mkdirSync(resolve(PASTA_RESULTADO, "capturas"), { recursive: true });
 
 export const resultados = [];
+// progresso, para o vigia de travamento (bateria.mjs): quando foi o último resultado e o que estava rodando
+export const progresso = { ultimo: Date.now(), etapa: "início", alvo: "" };
+export function etapa(nome, alvo = "") { progresso.etapa = nome; progresso.alvo = alvo; progresso.ultimo = Date.now(); }
 // situacao: "ok" | "falha" | "aviso" (aviso = abaixo da meta AA+ mas dentro do mínimo, ou algo a olhar sem reprovar)
 export function registrar(r) {
   resultados.push({ ...r, quando: new Date().toISOString() });
+  progresso.ultimo = Date.now();
   const marca = { ok: "ok   ", falha: "FALHA", aviso: "aviso" }[r.situacao] || r.situacao;
   console.log(`${marca} ${r.verificacao.padEnd(14)} ${(r.perfil || "").padEnd(24)} ${(r.alvo || "").padEnd(40)} ${r.resumo || ""}`);
 }
