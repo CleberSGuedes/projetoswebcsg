@@ -310,3 +310,21 @@ body.spo-ponte.embedded-mode #context-cards .context-goal-card:is(:hover, .open)
 body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card:is(:hover, .open) {
   box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
 }
+
+/* [jean] Quadrinhos da Visão processual sem texto saindo da caixa (fix/hifenizacao-processos, 2026-11-17;
+   ponto 3 do plano de readequação para celular e navegadores)
+   Os quadrinhos dos processos (suporte, gerenciais, finalísticos) ficavam em duas colunas fixas mesmo no
+   celular: 65 a 91 px de largura, e até 9 de 12 nomes saíam da caixa ("Desenvolvimento organizacional",
+   114 px em 65; medido no Playwright no S26, Edge 50 Pro, iPhone 16 e Firefox com fonte ampliada). Agora:
+   duas colunas só quando cada uma tem ao menos ~9,5rem (no desktop e no iPad continua igual); senão, uma
+   coluna. E hifenização em português (o index.html é lang="pt-BR"), com quebra forçada só como último
+   recurso (texto muito ampliado). */
+.process-lines.compact {
+  grid-template-columns: repeat(auto-fit, minmax(max(9.5rem, calc(50% - 5px)), 1fr));
+}
+.process-lines.compact span {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
