@@ -4,6 +4,9 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
+> Versão 5.1, 2026-11-17: a **Bateria SPO-AA+** no repositório (`tests/navegadores/`), em três níveis, como passo
+> de todo PR e de todo lote (§5 item 16, §6.1).
+>
 > Versão 5, 2026-11-17: modo móvel e navegadores (#166–#176): nada abre sozinho, o que abre fica junto de
 > quem abriu, e a bateria entre navegadores (Chromium, Firefox, WebKit) em celulares e tablets (§1, §4.4, §5, §6).
 > Versão 4, 2026-11-15: escala tipográfica com **"Densidade do texto"** (Compacto, Intermediário,
@@ -438,7 +441,8 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
     Para ver como uma pessoa com daltonismo enxerga, aplique à área de conteúdo um filtro SVG
     `feColorMatrix` com a matriz de Machado. Tire a captura com e sem a opção.
 15. **Bateria entre navegadores (desde 2026-11-17):** Playwright com os três motores (Chromium, Firefox e
-    WebKit), numa pasta local fora do repositório (`H:\SPO_testes_navegadores`, com `LEIA-ME.md`). Quem
+    WebKit). Nasceu numa pasta local fora do repositório (`H:\SPO_testes_navegadores`), que continua como
+    **laboratório** de medidas avulsas; a bateria **oficial** é a do item 16, no repositório. Quem
     testa entra uma vez numa janela visível (`entrar.mjs`; o script não lê nem guarda senha) e a sessão
     salva serve aos três motores; **uma tela por vez**, como no item 1. Perfis: desktop 1366 nos três;
     celulares e tablets dos modelos que a equipe usa (Galaxy S24/S26, Motorola Edge 50 Pro, iPhone 16 e
@@ -483,6 +487,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 
 ### 6.1 Ao criar ou mudar uma tela
 
+- [ ] **Bateria SPO-AA+** (§5, item 16; `tests/navegadores/`): `npm run basico` antes de **todo PR**; `npm run
+      intermediario` a cada **lote**; `npm run completo` antes de **enviar** um lote ou numa mudança grande. Tela,
+      opção do Personalizar ou recurso novo entra na bateria no mesmo PR (README, "Manter").
 - [ ] **Desde o primeiro mockup:** a tela nova começa do **Kit de mockup SPO-AA+** (§6.4), com as classes
       dele, e é vista no kit nos dois temas, em mais de um destaque, nas três densidades do texto e a 150%
       antes de virar código. Nada fica para "ajustar ao padrão depois".
@@ -694,6 +701,7 @@ resolvido por `initGraficosEscala`).
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
 | 2026-11-17 | **Versão 5:** modo móvel e navegadores (#166–#176): metas de interrupções, ordem e navegadores (§1); avisos da Início e detalhe junto do cartão (§4.4); bateria entre navegadores (§5, item 15); regras "nada abre sozinho" e "linha do cartão" (§6.1); kit no celular e "Seu aparelho" (§6.4); **barra de título da tela (secundária)** como padrão das telas em tela cheia (§4.4, §6.1, §6.4, §7; `fix/menu-cabecalho-pta`). Detalhe por PR no `docs/CHANGELOG.md`. |
+| 2026-11-17 | **Versão 5.1:** **Bateria SPO-AA+** no repositório (`tests/navegadores/`, §5 item 16; #187): as baterias 1 a 4 numa ferramenta só, em três níveis (básico a cada PR, intermediário a cada lote, completo antes de enviar um lote), passo do checklist (§6.1). Achados das baterias 4 e 5 corrigidos: entrelinha e leitura nas prévias do kit, `data-forced-colors` no kit, filtro que fecha ao clicar fora em qualquer relatório, caixas de marcar com 24 px (§4.2, §4.3; #186) e Esc que fecha o menu por cima da tela com o foco em qualquer lugar (§4.4; #187). |
 | 2026-11-15 | **Versão 4:** §2.2 "Densidade do texto" (Compacto/Intermediário/Legível para a interface inteira; padrão Legível; Compacto com tabelas de 10 px; passo Leitura de 16 px) e as variáveis `--spo-fs-*`; §2.1 Mulish na largura do "Estrito". Só documentação: a aplicação vem nas etapas 2–4. |
 | 2026-11-15 | §4.4: **cartão dinâmico** (o `.flow-node` de Governança) como sistema visual dos cartões clicáveis: Institucional, envio das Notas SEE e presets do Contrato Visual. |
 | 2026-11-15 | **Versão 3:** opções novas (leitura, daltonismo, foco, links, brilho, movimento, 150%, densidade automática, atalhos de uma tecla; §2.1); fundo do alto contraste escuro no gráfico e no quadro (§3.5); busca de telas, atalhos do teclado, Programação PTA/OpR, prévias e sugestão da Atkinson (§4.4); declaração e padrão publicados para o usuário (§5.1); bateria 2 e lições de opacidade e contêineres (§5); brilho reduzido com `--muted` `#3e3c44` e "Dispensar" `#861523`. Até o #119 e a bateria 2. |
