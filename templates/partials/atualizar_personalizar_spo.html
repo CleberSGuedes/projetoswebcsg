@@ -593,6 +593,25 @@
       </div>
       <span class="contract-version-pill">v2026.07</span>
     </div>
+    {# [jean] feat/kit-no-contrato (2026-11-17): o kit de mockup SPO-AA+ à vista na interface (antes só pelo endereço) #}
+    <section class="spo-kit-contrato" aria-labelledby="spo-kit-contrato-titulo">
+      <div class="module-card-title">
+        <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+        <div>
+          <h3 id="spo-kit-contrato-titulo">Kit de mockup SPO-AA+</h3>
+          <p>Ponto de partida de toda tela nova: os componentes do SPO com a marcação e o código reais, numa página à parte.</p>
+        </div>
+      </div>
+      <ul class="spo-kit-contrato-lista">
+        <li><strong>O que tem:</strong> catálogo de padrões (cabeçalhos, barra de título da tela, cartões, listas e filtros, busca nas listas longas, avisos, formulário, relatório com tabela e gráficos), prévias do Personalizar e "Seu aparelho", que mostra as medidas do celular.</li>
+        <li><strong>Como testar:</strong> o painel "Preferências do kit" troca tema, cor de destaque, fontes, densidade, presets deste contrato e opções de visão, e o efeito aparece na hora em todos os exemplos. Começa com as preferências deste navegador.</li>
+        <li><strong>Como usar numa tela nova:</strong> "Como usar o kit", no alto da página, traz o passo a passo (copiar o kit, montar a tela com os exemplos, revisar pelo painel e levar ao SPO). Regras: <a href="#" data-spo-padrao="tecnico" aria-haspopup="dialog">documento técnico do padrão SPO-AA+</a>, §6.1 e §6.4.</li>
+      </ul>
+      <p class="muted spo-kit-contrato-nota">Abre numa aba nova e não grava nada; os exemplos usam os mesmos arquivos do SPO, então mostram sempre a versão atual.</p>
+      <div class="actions spo-kit-contrato-acoes">
+        <a class="btn btn-primary" href="{{ url_for('static', filename='kit/mockup-spo-aa-plus.html') }}" target="_blank" rel="noopener"><i class="bi bi-grid-1x2" aria-hidden="true"></i> Abrir o kit de mockup<span class="spo-nova-aba"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="spo-sr-only"> (abre em nova aba)</span></span></a>
+      </div>
+    </section>
     <ol class="contract-flow" aria-label="Etapas locais do contrato protegido">
       <li><span>1</span><strong>Escolher preset</strong></li>
       <li><span>2</span><strong>Pré-visualizar</strong></li>
