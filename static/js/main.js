@@ -29657,6 +29657,19 @@
   }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const conteudo = document.getElementById("content-area");
   if (conteudo) new MutationObserver(() => { if (acoesSpo && !acoesSpo.isConnected) moverAcoes(); }).observe(conteudo, { childList: true });
+  // [jean] feat/bateria-spo-aa-plus (2026-11-17; achado da Bateria SPO-AA+): com o menu aberto POR CIMA da tela (celular, ou gaveta até
+  // 1200 px), o Esc o fecha esteja o foco onde estiver. O Esc do menu (initAtalhosTeclado) só agia com o foco dentro
+  // dele, e no Safari (iPad/iPhone com teclado) tocar no "›" não leva o foco ao botão: o Esc não fazia nada.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if (!sidebar.classList.contains("open") || !(document.body.classList.contains("spo-menu-compacto") || sobrepoe.matches)) return;
+    if ([...document.querySelectorAll(".spo-busca-fundo, .modal-overlay")].some((j) => !j.hidden && j.getClientRects().length && getComputedStyle(j).display !== "none")) return;
+    const seta = document.getElementById("sidebar-toggle");
+    if (!seta) return;
+    ev.preventDefault();
+    seta.click();
+    seta.focus();
+  });
 })();
 
 /* ==========================================================================
