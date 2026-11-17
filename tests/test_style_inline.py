@@ -32,12 +32,11 @@ PROPRIEDADES = {
 }
 
 # style="…" com cor ou texto que já existiam em 2026-11-15 (a migrar; os do login e das telas de senha
-# são do dev. Cleber): links "Esqueci a senha"/"Voltar ao login" (12px), título "UO …" do aviso da Início
-# (0.95rem) e o bloco monoespaçado de Acessos à API (12px)
+# são do dev. Cleber): links "Esqueci a senha"/"Voltar ao login" (12px) e o bloco monoespaçado de Acessos à API
+# (12px). O título "UO …" do aviso da Início (0.95rem) saiu com o feat/pendencias-cartao (2026-11-17).
 REFERENCIA = {
     "forgot_password.html": 1,
     "login.html": 1,
-    "partials/dashboard.html": 1,
     "partials/usuarios_api_acessos.html": 2,
     "reset_password.html": 1,
 }

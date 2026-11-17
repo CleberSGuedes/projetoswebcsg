@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
-  <link rel="stylesheet" href="../css/style.css?v=20261116.cleber-modal-fonte-maior.1">
+  <link rel="stylesheet" href="../css/style.css?v=20261117.jean-contrato-nota.1">
   <link rel="stylesheet" href="kit-mockup.css">
 </head>
 <body class="kit-mockup-body" data-spo-font-ui="inter" data-spo-font-data="intel-mono" data-spo-text-size="default"
@@ -590,6 +590,18 @@
     <main id="content-area" tabindex="-1">
       <div class="kit-pilha">
 
+        <!-- 0. Seu aparelho (feat/kit-movel, 2026-11-17; plano de readequação para celular e navegadores, 0.3): o que
+             o navegador informa deste aparelho, para confirmar as medidas por busca e as faixas do SPO. Abra o kit no
+             celular e mande o print, ou toque em "Copiar". Nada é enviado: tudo fica nesta página. -->
+        <section class="card module-card kit-aparelho" aria-labelledby="kit-aparelho-titulo">
+          <div class="module-card-title"><i class="bi bi-phone" aria-hidden="true"></i><div><h2 id="kit-aparelho-titulo">Seu aparelho</h2><p>O que o navegador informa deste aparelho. Muda ao girar a tela ou redimensionar a janela.</p></div></div>
+          <dl class="kit-aparelho-dados" id="kit-aparelho-dados"></dl>
+          <div class="actions kit-aparelho-acoes">
+            <button class="btn btn-secondary sm" type="button" id="kit-aparelho-copiar"><i class="bi bi-clipboard" aria-hidden="true"></i><span>Copiar</span></button>
+            <span class="muted kit-aparelho-status" id="kit-aparelho-status" role="status" aria-live="polite"></span>
+          </div>
+        </section>
+
         <!-- 1. Cabeçalho de página (§4.4): sobretítulo, h1 24 px, descrição e o ícone do item do menu -->
         <header class="module-header">
           <div class="module-header-copy">
@@ -777,9 +789,225 @@
               </button>
             </div>
           </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Cabeçalho com busca e Ajuda</h3>
+            <p class="muted kit-padrao-onde">Todas as telas (#170, #171). A lupa abre a busca de telas (Ctrl+K) e o "?" a Ajuda; os dois só o ícone, sem
+              círculo (variante discreta). Até 820 px, a grade de duas colunas, com os botões em pé. No celular, o menu vira só
+              o "›" ao lado do logotipo (aqui não aparece: o kit não tem a barra lateral).</p>
+            <header class="topbar kit-topbar">
+              <div class="brand-wrap">
+                <img class="brand-logo" src="../img/logo.jpg" alt="Logo">
+                <div>
+                  <div class="subtitle">Sistema de Planejamento e Orçamento</div>
+                  <div class="muted">SPO-NGER-SEDUCMT</div>
+                </div>
+              </div>
+              <div class="user-info">
+                <div class="user-meta">Usuária de exemplo - 17/11/2026, 10:00 | Logados: 3</div>
+                <div class="spo-cabecalho-acoes">
+                  <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-busca" aria-label="Buscar tela (exemplo)"><i class="bi bi-search" aria-hidden="true"></i></button>
+                  <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-ajuda" aria-label="Ajuda (exemplo)"><i class="bi bi-question-lg" aria-hidden="true"></i></button>
+                </div>
+              </div>
+            </header>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Barra de título da tela (secundária)</h3>
+            <p class="muted kit-padrao-onde">Telas de trabalho em tela cheia, que pedem foco (hoje: Programação PTA/OpR, ao programar um eixo;
+              #170, #171 e <code>fix/menu-cabecalho-pta</code>). Ela substitui o cabeçalho do SPO enquanto a tela está em foco (<code>body.special-context-focus</code>):
+              rótulo, título, usuário/data/logados e o "Voltar" da tela, com a lupa e o "?" do SPO à direita (os mesmos botões,
+              que voltam ao sair) e o "›" do menu no centro deles. No celular, o título com a largura inteira e, na linha de baixo,
+              usuário, "Voltar" e os botões; do tablet para cima, uma linha, e a coluna do menu começa no alto da tela. A moldura
+              abaixo roda o CSS e o <code>initMenuCompacto</code> do SPO, na largura do kit.</p>
+            <iframe class="kit-barra-tela" id="kit-barra-tela" title="Exemplo da barra de título da tela"></iframe>
+            <template id="kit-barra-tela-modelo">
+            <div class="page-header pta2027-integration-header">
+              <div>
+                <div class="eyebrow">Governança e Resultados</div>
+                <h1 id="pta2027-integration-title">Programação <abbr title="Plano de Trabalho Anual">PTA</abbr>/<abbr title="Orçamento para Resultado">OpR</abbr></h1>
+                <p class="muted">A jornada parte da estratégia, passa pela EAP e chega a subações, etapas, orçamento e validações gerenciais.</p>
+              </div>
+              <div class="pta2027-context-side">
+                <div class="pta2027-context-meta" id="pta2027-context-meta" aria-live="polite"></div>
+                <button class="pta2027-sticky-back" id="pta2027-sticky-back" type="button" hidden>
+                  &larr; Voltar &agrave; cadeia estrat&eacute;gica
+                </button>
+              </div>
+            </div>
+            </template>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Lista nativa e filtro SPO</h3>
+            <p class="muted kit-padrao-onde">Formulários (lista nativa: uma escolha) e relatórios (filtro SPO: várias). Mesma borda, sombra e destaque
+              (#168). No celular (até 600 px de largura ou 560 de altura), o filtro aberto vira um cartão no alto da tela, com
+              um véu atrás que só fecha o filtro (#172). Toque em "(Todos)" para abrir.</p>
+            <div class="form-grid kit-listas">
+              <label class="field"><span>Unidade orçamentária (lista nativa)</span>
+                <select class="input">
+                  <option>14101 - Secretaria de Estado de Educação</option>
+                  <option>14601 - Fundo Estadual de Educação</option>
+                  <option>14602 - Fundo de Manutenção e Desenvolvimento da Educação Básica e de Valorização dos Profissionais da Educação</option>
+                </select>
+              </label>
+              <div class="field"><span>Região (filtro SPO)</span>
+                <div class="mf-wrapper kit-filtro">
+                  <button type="button" class="mf-display" aria-haspopup="true" aria-expanded="false"><span>(Todos)</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                  <div class="mf-panel">
+                    <input type="text" class="mf-search" placeholder="Buscar..." aria-label="Buscar região">
+                    <div class="mf-options">
+                      <label class="mf-option"><input type="checkbox" checked><span>(Todos)</span></label>
+                      <label class="mf-option mf-select-visible"><input type="checkbox"><span>Selecionar exibidos</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Baixada Cuiabana</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Médio-Norte Mato-grossense e Vale do Arinos</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Sul</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Araguaia</span></label>
+                    </div>
+                    <div class="mf-actions"><button type="button" class="mf-btn ghost">Cancelar</button><button type="button" class="mf-btn primary">Aplicar</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Lista longa com busca</h3>
+            <p class="muted kit-padrao-onde">Formulários: lista de uma escolha com 40 opções ou mais (Chave do Planejamento, Subação/Entrega,
+              Etapa, Subelemento no Cadastrar Dotação; Subação na Etapa). O campo "Filtrar a lista" logo abaixo reduz a lista às
+              opções com todas as palavras digitadas (sem acento); a lista continua a do navegador (valor, cascatas e envio iguais).
+              Enter escolhe quando sobra uma; ↓ abre a lista filtrada; Esc limpa. Texto escolhido que não cabe aparece inteiro
+              abaixo. Comportamento do bloco <code>initBuscaListasLongas</code>, lido do <code>main.js</code>. Digite "gestao sul".</p>
+            <label class="field kit-lista-longa"><span>*Chave do Planejamento (exemplo, 48 opções)</span>
+              <select id="kit-chave">
+                <option value="">Selecione...</option>
+                  <option value="1">* R600 * 126.1 * SAEX * GESTÃO_INOVAÇÃO * Baixada Cuiabana *</option>
+                  <option value="2">* R600 * 126.2 * SAEX * GESTÃO_INOVAÇÃO * Médio-Norte *</option>
+                  <option value="3">* R600 * 126.3 * SAEX * GESTÃO_INOVAÇÃO * Sul *</option>
+                  <option value="4">* R600 * 126.4 * SAEX * GESTÃO_INOVAÇÃO * Araguaia *</option>
+                  <option value="5">* R600 * 126.5 * SAEX * GESTÃO_INOVAÇÃO * Vale do Guaporé *</option>
+                  <option value="6">* R600 * 126.6 * SAEX * GESTÃO_INOVAÇÃO * Norte *</option>
+                  <option value="7">* R600 * 126.7 * SAEX * GESTÃO_INOVAÇÃO * Noroeste *</option>
+                  <option value="8">* R600 * 126.8 * SAEX * GESTÃO_INOVAÇÃO * Sudeste *</option>
+                  <option value="9">* R700 * 126.1 * SAEX * ALFABETIZAÇÃO * Médio-Norte *</option>
+                  <option value="10">* R700 * 126.2 * SAEX * ALFABETIZAÇÃO * Sul *</option>
+                  <option value="11">* R700 * 126.3 * SAEX * ALFABETIZAÇÃO * Araguaia *</option>
+                  <option value="12">* R700 * 126.4 * SAEX * ALFABETIZAÇÃO * Vale do Guaporé *</option>
+                  <option value="13">* R700 * 126.5 * SAEX * ALFABETIZAÇÃO * Norte *</option>
+                  <option value="14">* R700 * 126.6 * SAEX * ALFABETIZAÇÃO * Noroeste *</option>
+                  <option value="15">* R700 * 126.7 * SAEX * ALFABETIZAÇÃO * Sudeste *</option>
+                  <option value="16">* R700 * 126.8 * SAEX * ALFABETIZAÇÃO * Leste *</option>
+                  <option value="17">* R800 * 126.1 * SAEX * ENSINO_MÉDIO * Sul *</option>
+                  <option value="18">* R800 * 126.2 * SAEX * ENSINO_MÉDIO * Araguaia *</option>
+                  <option value="19">* R800 * 126.3 * SAEX * ENSINO_MÉDIO * Vale do Guaporé *</option>
+                  <option value="20">* R800 * 126.4 * SAEX * ENSINO_MÉDIO * Norte *</option>
+                  <option value="21">* R800 * 126.5 * SAEX * ENSINO_MÉDIO * Noroeste *</option>
+                  <option value="22">* R800 * 126.6 * SAEX * ENSINO_MÉDIO * Sudeste *</option>
+                  <option value="23">* R800 * 126.7 * SAEX * ENSINO_MÉDIO * Leste *</option>
+                  <option value="24">* R800 * 126.8 * SAEX * ENSINO_MÉDIO * Oeste *</option>
+                  <option value="25">* R900 * 126.1 * SAEX * EDUCAÇÃO_INTEGRAL * Araguaia *</option>
+                  <option value="26">* R900 * 126.2 * SAEX * EDUCAÇÃO_INTEGRAL * Vale do Guaporé *</option>
+                  <option value="27">* R900 * 126.3 * SAEX * EDUCAÇÃO_INTEGRAL * Norte *</option>
+                  <option value="28">* R900 * 126.4 * SAEX * EDUCAÇÃO_INTEGRAL * Noroeste *</option>
+                  <option value="29">* R900 * 126.5 * SAEX * EDUCAÇÃO_INTEGRAL * Sudeste *</option>
+                  <option value="30">* R900 * 126.6 * SAEX * EDUCAÇÃO_INTEGRAL * Leste *</option>
+                  <option value="31">* R900 * 126.7 * SAEX * EDUCAÇÃO_INTEGRAL * Oeste *</option>
+                  <option value="32">* R900 * 126.8 * SAEX * EDUCAÇÃO_INTEGRAL * Baixada Cuiabana *</option>
+                  <option value="33">* R1000 * 126.1 * SAEX * INFRAESTRUTURA * Vale do Guaporé *</option>
+                  <option value="34">* R1000 * 126.2 * SAEX * INFRAESTRUTURA * Norte *</option>
+                  <option value="35">* R1000 * 126.3 * SAEX * INFRAESTRUTURA * Noroeste *</option>
+                  <option value="36">* R1000 * 126.4 * SAEX * INFRAESTRUTURA * Sudeste *</option>
+                  <option value="37">* R1000 * 126.5 * SAEX * INFRAESTRUTURA * Leste *</option>
+                  <option value="38">* R1000 * 126.6 * SAEX * INFRAESTRUTURA * Oeste *</option>
+                  <option value="39">* R1000 * 126.7 * SAEX * INFRAESTRUTURA * Baixada Cuiabana *</option>
+                  <option value="40">* R1000 * 126.8 * SAEX * INFRAESTRUTURA * Médio-Norte *</option>
+                  <option value="41">* R1100 * 126.1 * SAEX * TRANSPORTE_ESCOLAR * Norte *</option>
+                  <option value="42">* R1100 * 126.2 * SAEX * TRANSPORTE_ESCOLAR * Noroeste *</option>
+                  <option value="43">* R1100 * 126.3 * SAEX * TRANSPORTE_ESCOLAR * Sudeste *</option>
+                  <option value="44">* R1100 * 126.4 * SAEX * TRANSPORTE_ESCOLAR * Leste *</option>
+                  <option value="45">* R1100 * 126.5 * SAEX * TRANSPORTE_ESCOLAR * Oeste *</option>
+                  <option value="46">* R1100 * 126.6 * SAEX * TRANSPORTE_ESCOLAR * Baixada Cuiabana *</option>
+                  <option value="47">* R1100 * 126.7 * SAEX * TRANSPORTE_ESCOLAR * Médio-Norte *</option>
+                  <option value="48">* R1100 * 126.8 * SAEX * TRANSPORTE_ESCOLAR * Sul *</option>
+              </select>
+            </label>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Opções "Não/Sim"</h3>
+            <p class="muted kit-padrao-onde">Cadastrar Dotação e outros cinco formulários (#169). Rótulo com ao menos 24 px de altura (44 px em tela de
+              toque) e círculo de 18 px (WCAG 2.5.8).</p>
+            <label class="field"><span>*Dotação Emprestada</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="nao" checked />
+              <span>Não</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="sim" />
+              <span>Sim</span>
+            </label>
+          </div>
+            </label>
+          </div>
           <p class="muted">Também são padrões do SPO, já mostrados acima: cabeçalho de página, cartão de seção
             (<code>module-card</code>), prévias do Personalizar, gráficos, formulário e a tela de relatório com
             totais. Os cartões do mockup PTA/OpR entram aqui quando ele for integrado ao SPO.</p>
+        </section>
+
+        <!-- 3a. PROPOSTA ao dev. Cleber (ponto 4 do plano de readequação para celular e navegadores): os avisos da
+             Início como cartões, e não janelas que abrem sozinhas e cobrem a tela. Cartões iguais aos de
+             partials/dashboard.html (feat/alerta-cartao, feat/pendencias-cartao), com números de exemplo. -->
+        <section class="kit-catalogo" aria-labelledby="kit-avisos-titulo">
+          <h2 class="kit-secao" id="kit-avisos-titulo">Proposta: avisos da Início como cartões</h2>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Chave do planejamento (antes, a janela "Alerta") e Pendências (antes, a janela que abria ao entrar)</h3>
+            <p class="muted kit-padrao-onde">Início, abaixo do "Bem-vindo". Não abre sozinho. Placas dos dias no estilo SPO; os sinais de
+              alerta e de "homens trabalhando" em cores de placa fixas. Pendências: contagem por tipo; o detalhe abre só com "Ver detalhes".</p>
+            <div class="grid home-grid">
+              <section class="card spo-indice-card" aria-labelledby="kit-indice-titulo">
+                <div class="card-title spo-aviso-titulo" id="kit-indice-titulo"><svg class="spo-sinal-alerta" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><polygon class="spo-sinal-fundo" points="60,8 114,108 6,108" stroke-width="10" stroke-linejoin="round"/><rect class="spo-sinal-marca" x="55" y="38" width="10" height="36" rx="4"/><circle class="spo-sinal-marca" cx="60" cy="88" r="6"/></svg> Chave do planejamento</div>
+                <p class="spo-indice-linha">
+                  <span class="spo-indice-digitos" aria-hidden="true"><span>0</span><span>6</span><span>8</span></span>
+                  <span class="spo-indice-rotulo"><strong>68 dias</strong> sem erros na chave do planejamento</span>
+                </p>
+                <p class="spo-indice-recorde"><i class="bi bi-trophy" aria-hidden="true"></i> Recorde: <strong>68 dias</strong> <span class="spo-indice-selo">recorde atual</span></p>
+                <p class="muted spo-indice-nota"><span class="spo-indice-atualizado">Atualizado de 10/11/2026 às 08h12m a 14/11/2026 às 09h30m.</span></p>
+                <p class="spo-indice-colabore"><svg class="spo-sinal-obra" viewBox="0 0 120 108" aria-hidden="true" focusable="false"><polygon class="spo-obra-fundo" points="60,4 116,103 4,103" stroke-width="7" stroke-linejoin="round"/><polygon class="spo-obra-borda" points="60,11 109,98 11,98" fill="none" stroke-width="3.5" stroke-linejoin="round"/><g class="spo-obra-figura" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><polyline points="51,52 46,70"/><polyline points="46,70 43,79 39,91"/><polyline points="47,71 57,79 54,91"/><polyline points="51,52 41,54 42,63"/><polyline points="52,53 60,63 66,74"/></g><line class="spo-obra-figura" x1="34" y1="59" x2="75" y2="81" stroke-width="2.2" stroke-linecap="round"/><circle class="spo-obra-marca" cx="59" cy="47" r="4.6"/><path class="spo-obra-marca" d="M65 93.5 Q65.5 86 73 84 L79 80 Q85 72 91 77 L104 93.5 Z"/></svg><span>Colabore para melhorar este índice.</span></p>
+              </section>
+              <section class="card spo-pendencias-card" aria-labelledby="kit-pendencias-titulo">
+                <div class="card-title spo-aviso-titulo" id="kit-pendencias-titulo"><i class="bi bi-inbox" aria-hidden="true"></i> Pendências <span class="spo-contador" aria-label="6 itens">6</span></div>
+                <ul class="spo-pendencias-lista">
+                  <li><span>Dotações aguardando aprovação</span><strong>2</strong></li>
+                  <li><span>Subações aguardando aprovação</span><strong>1</strong></li>
+                  <li><span>Metas físicas aguardando aprovação</span><strong>2</strong></li>
+                  <li><span>Etapas aguardando aprovação</span><strong>1</strong></li>
+                </ul>
+                <button class="btn btn-secondary sm spo-pendencias-ver" type="button" id="kit-pendencias-ver" aria-haspopup="dialog"><i class="bi bi-list-ul" aria-hidden="true"></i> Ver detalhes</button>
+              </section>
+            </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">"Ver detalhes": cartão flutuante, como "O padrão SPO-AA+"</h3>
+            <p class="muted kit-padrao-onde">Largura limitada, título fixo no alto e "Fechar" fixo embaixo, rolagem por dentro (no celular, cartão com 16 px de margem);
+              Esc e toque fora fecham; o foco volta ao botão. Fora do <code>.main</code> (a "Fonte maior" não o amplia duas vezes).
+              Abaixo, a caixa sem o fundo escurecido; o botão "Ver detalhes" acima abre de verdade.</p>
+            <div class="modal-card spo-busca-caixa spo-pendencias-caixa kit-pendencias-previa" role="group" aria-label="Prévia do detalhe das pendências">
+              <div class="modal-header spo-busca-topo">
+                <div class="modal-header-text"><div class="modal-header-title spo-busca-titulo">Pendências (6)</div>
+                <div class="modal-header-subtitle">Itens que aguardam a sua aprovação ou a de outro perfil. Esc fecha.</div></div>
+              </div>
+              <div class="spo-pendencias-corpo" tabindex="0">
+                <details class="spo-pendencias-grupo" open><summary>Dotações aguardando aprovação <span class="spo-contador">2</span></summary>
+                  <div class="table-responsive"><table class="table spo-pendencias-tabela"><thead><tr><th>Controle de Dotação</th><th>Valor da Dotação</th><th>Status</th><th>Aprovar por</th></tr></thead>
+                  <tbody><tr><td data-rotulo="Controle de Dotação">2027.14101.0001</td><td data-rotulo="Valor da Dotação">150.000,00</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Aprovar por">NGER</td></tr><tr><td data-rotulo="Controle de Dotação">2027.14101.0002</td><td data-rotulo="Valor da Dotação">82.500,00</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Aprovar por">NGER</td></tr></tbody></table></div>
+                </details>
+                <details class="spo-pendencias-grupo"><summary>Subações aguardando aprovação <span class="spo-contador">1</span></summary>
+                  <div class="table-responsive"><table class="table spo-pendencias-tabela"><thead><tr><th>Controle de Subação</th><th>Status</th><th>Tipo de Solicitação</th><th>Aprovar por</th></tr></thead>
+                  <tbody><tr><td data-rotulo="Controle de Subação">SUB-2027-0031</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Tipo de Solicitação">alterar</td><td data-rotulo="Aprovar por">NGER</td></tr></tbody></table></div>
+                </details>
+                <details class="spo-pendencias-grupo"><summary>Metas físicas aguardando aprovação <span class="spo-contador">2</span></summary><p class="muted">(tabela igual à de hoje)</p></details>
+                <details class="spo-pendencias-grupo"><summary>Etapas aguardando aprovação <span class="spo-contador">1</span></summary><p class="muted">(tabela igual à de hoje)</p></details>
+              </div>
+              <div class="spo-busca-rodape"><p class="spo-busca-status">Para aprovar, abra a tela do item (Cadastrar Dotação, PTA Gerencial…).</p><button class="btn btn-secondary sm" type="button">Fechar</button></div>
+            </div>
+          </div>
         </section>
 
         <!-- 4. Formulário (§4.1, §4.2): campos, desabilitado e a hierarquia dos botões -->

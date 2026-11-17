@@ -55,6 +55,11 @@
       b.setAttribute("aria-label", "Remover linha");
       b.title = "Remover linha";
     });
+    // [jean] o "×" que fecha a Visão processual, a Visão estratégica e a lista de eixos (fix/detalhe-abaixo-cartao)
+    document.querySelectorAll(".close-expansion:not([aria-label])").forEach((b) => {
+      b.setAttribute("aria-label", "Fechar");
+      b.title = "Fechar";
+    });
   }
   nomearBotoes();
   new MutationObserver(nomearBotoes).observe(document.body, { childList: true, subtree: true });
@@ -118,12 +123,26 @@
   // tela (block: "nearest"/"center") movia a página até 275 px em tela baixa (paisagem) e
   // esmaecia o painel a cada clique (a "cintilância" do grupo C, cuja lista é maior que a tela).
   // O mockup rola a página do SPO (o iframe não tem rolagem própria).
+  // [jean] fix/rolagem-automatica: rola a página do SPO até `descer` px abaixo de onde está. Logo depois de abrir um
+  // painel, a página ainda não cresceu (o SPO aumenta o iframe um instante depois): perto do fim, a rolagem começava
+  // sem espaço e parava em 0. Espera a página crescer (até ~0,5 s) e então rola até o ponto, ou até onde der.
+  function rolarPaginaDoSpo(descer, suave) {
+    const pai = window.parent !== window ? window.parent : window;
+    const alvo = pai.scrollY + descer;
+    let quadros = 0;
+    const rolar = () => {
+      const maximo = pai.document.documentElement.scrollHeight - pai.innerHeight;
+      if (maximo >= alvo - 1 || quadros++ > 30) { pai.scrollTo({ top: Math.min(alvo, maximo), behavior: suave ? "smooth" : "instant" }); return; }
+      pai.requestAnimationFrame(rolar);
+    };
+    rolar();
+  }
   function rolarSoOComeco(painel, suave) {
     const pai = window.parent !== window ? window.parent : window;
     const topoFrame = pai !== window && window.frameElement ? window.frameElement.getBoundingClientRect().top : 0;
     const falta = topoFrame + painel.getBoundingClientRect().top + 170 - pai.innerHeight;
     if (falta <= 0) return;
-    pai.scrollBy({ top: falta, behavior: suave ? "smooth" : "instant" });
+    rolarPaginaDoSpo(falta, suave);
   }
   // [jean] Tela de celular, tablet deitado ou janela dividida (fix/telas-estreitas-rolagem-janelas e
   // fix/rolagem-sem-retrato, pedidos do dev. Jean): a janela do SPO com até 1200 px de largura (as
@@ -144,14 +163,33 @@
   // O mockup chama painel.scrollIntoView(...) dentro da função que abre; durante a chamada, o
   // scrollIntoView daquele painel é trocado (o pta-2027.js não muda):
   // - "Reduzir sempre" (ou o sistema pedindo): rolarSoOComeco, de uma vez;
-  // - "Automático" em tela estreita: a rolagem suave original do mockup (guia o olho até o que abriu);
+  // - "Automático" em tela estreita: rolagem suave até o cartão tocado ficar no alto, com o painel embaixo
+  //   (rolarAteOCartao; a original do mockup chegava a subir a página);
   // - "Automático" em tela larga: nenhuma rolagem, a não ser que o começo do painel fique fora da
   //   tela; então rolarSoOComeco, suave (para o clique não parecer sem efeito).
+  // [jean] fix/rolagem-automatica (2026-11-17; achado do dev. Jean): no "Automático" em tela estreita, a rolagem
+  // original do mockup (painel.scrollIntoView({ block: "center" })) com um painel mais alto que a tela, dentro do
+  // iframe, levava a página PARA CIMA (762 px no iPhone com a lista de eixos de 1839 px; 148 px a 1100 × 650) e o
+  // cartão tocado saía da tela. Agora a rolagem suave só desce, e só até o cartão tocado ficar logo abaixo do
+  // cabeçalho do SPO, com o painel aberto embaixo dele (o painel entra logo depois da linha do cartão, #173); sem
+  // a linha do cartão (metas do pilar), até o começo do painel ficar a 1/3 da altura da tela. Já à vista: não rola.
+  function rolarAteOCartao(painel) {
+    const pai = window.parent !== window ? window.parent : window;
+    const topoFrame = pai !== window && window.frameElement ? window.frameElement.getBoundingClientRect().top : 0;
+    let cabecalho = 0;
+    try { cabecalho = parseFloat(pai.getComputedStyle(pai.document.documentElement).getPropertyValue("--spo-topbar-height")) || 0; } catch (err) { /* outra origem */ }
+    const cartao = painel.classList.contains("spo-na-grade") && painel.previousElementSibling;
+    const descer = cartao
+      ? topoFrame + cartao.getBoundingClientRect().top - cabecalho - 12
+      : topoFrame + painel.getBoundingClientRect().top - Math.round(pai.innerHeight / 3);
+    if (descer <= 4) return;
+    rolarPaginaDoSpo(descer, true);
+  }
   function comRolagemContida(painel, fn) {
     return function abrirComRolagemContida() {
       const reduzir = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || document.body.dataset.spoMotion === "reduce";
-      if (!reduzir && telaEstreita()) return fn.apply(this, arguments);
-      painel.scrollIntoView = () => rolarSoOComeco(painel, !reduzir);
+      const estreita = !reduzir && telaEstreita();
+      painel.scrollIntoView = estreita ? () => rolarAteOCartao(painel) : () => rolarSoOComeco(painel, !reduzir);
       try { return fn.apply(this, arguments); } finally { delete painel.scrollIntoView; }
     };
   }
@@ -166,21 +204,38 @@
   // modos de movimento (no "Automático", a rolagem suave original percorreria ~1000 px). O
   // pta-2027.js não muda: expandMacro e renderMacros são globais e são envolvidas aqui; antes de
   // redesenhar os grupos, a caixa volta ao lugar original (o redesenho apagaria a caixa).
+  // [jean] Detalhe logo abaixo da LINHA do cartão (fix/detalhe-abaixo-cartao, 2026-11-17; ponto 3 do plano de
+  // readequação para celular e navegadores): abaixo do grupo ainda ficava longe no celular (até ~480 px abaixo
+  // do 1º cartão do grupo C, com os outros cartões no meio). Agora o detalhe entra na própria grade, depois do
+  // último cartão da mesma linha, ocupando a linha inteira (.spo-na-grade, grid-column: 1 / -1).
+  function ultimoDaLinha(cartao) {
+    const topo = Math.round(cartao.getBoundingClientRect().top);
+    let ultimo = cartao;
+    for (let el = cartao.nextElementSibling; el && el.classList.contains(cartao.classList[0]); el = el.nextElementSibling) {
+      if (Math.abs(Math.round(el.getBoundingClientRect().top) - topo) > 2) break;
+      ultimo = el;
+    }
+    return ultimo;
+  }
+
   (function eixosJuntoDaMacro() {
     const caixa = document.getElementById("policy-expansion");
     if (!caixa || typeof window.expandMacro !== "function" || typeof window.renderMacros !== "function") return;
     const marcador = document.createComment(" lugar original de #policy-expansion ");
     caixa.parentNode.insertBefore(marcador, caixa);
-    const devolver = () => { if (caixa.previousSibling !== marcador) marcador.after(caixa); };
+    const devolver = () => { caixa.classList.remove("spo-na-grade"); if (caixa.previousSibling !== marcador) marcador.after(caixa); };
     const empilhados = (cadeia) => getComputedStyle(cadeia).gridTemplateColumns.trim().split(/\s+/).length === 1;
 
     const abrirOriginal = comRolagemContida(caixa, window.expandMacro);
-    window.expandMacro = function expandirJuntoDoGrupo(index) {
+    window.expandMacro = function expandirJuntoDoCartao(index) {
       const cartao = document.querySelector(`.macro-card[data-macro="${index}"]`);
       const grupo = cartao && cartao.closest(".process-lane");
       const cadeia = grupo && grupo.parentElement;
-      if (grupo && cadeia && empilhados(cadeia)) grupo.after(caixa);
-      else devolver();
+      devolver(); // antes de medir as linhas: a caixa no meio da grade empurraria os cartões
+      if (grupo && cadeia && empilhados(cadeia)) {
+        ultimoDaLinha(cartao).after(caixa);
+        caixa.classList.add("spo-na-grade");
+      }
       return abrirOriginal.apply(this, arguments);
     };
 
@@ -190,6 +245,24 @@
       return redesenharOriginal.apply(this, arguments);
     };
   })();
+
+  // [jean] Visão processual (fix/detalhe-abaixo-cartao): o detalhe do processo abria depois da grade dos três
+  // cartões; no celular (1 coluna), até ~270 px abaixo do cartão tocado. Agora entra logo depois da linha dele.
+  if (typeof window.selectProcessDetail === "function") {
+    const detalheOriginal = window.selectProcessDetail;
+    window.selectProcessDetail = function detalheJuntoDoCartao(key) {
+      const cartao = document.querySelector(`.process-summary-card[data-process="${key}"]`);
+      const painel = document.getElementById("process-detail-panel");
+      const grade = cartao && cartao.parentElement;
+      if (cartao && painel && grade) {
+        if (painel.parentElement === grade) grade.after(painel); // lugar original: logo depois da grade
+        painel.classList.remove("spo-na-grade");
+        ultimoDaLinha(cartao).after(painel);
+        painel.classList.add("spo-na-grade");
+      }
+      return detalheOriginal.apply(this, arguments);
+    };
+  }
 
   // [jean] Cartões que abrem um detalhamento (pilares, macropolíticas, processos da Visão
   // processual): o selecionado só se via pela cor; agora o leitor de tela também ouve

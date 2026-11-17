@@ -22576,6 +22576,25 @@
       }
     }
 
+    // [jean] feat/alerta-cartao (2026-11-17, PROPOSTA): o Alerta virou o cartão "Chave do planejamento" da Início
+    // (#spo-indice-card, partials/dashboard.html), que não abre sozinho; aqui só se escrevem as datas da última
+    // atualização, no mesmo formato do Alerta. Sem o #emp-record-modal, nada abre ao entrar além das pendências.
+    const indiceAtualizado = document.querySelector("#spo-indice-card .spo-indice-atualizado");
+    if (indiceAtualizado) {
+      const formatar = (valor) => {
+        const data = parseManausLocal(valor);
+        if (!data) return "-";
+        const m = Object.fromEntries(new Intl.DateTimeFormat("pt-BR", {
+          timeZone: AMAZON_TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+        }).formatToParts(data).map((p) => [p.type, p.value]));
+        return `${m.day}/${m.month}/${m.year} às ${m.hour}h${m.minute}m`;
+      };
+      const { penult, ult } = indiceAtualizado.dataset;
+      indiceAtualizado.textContent = penult || ult
+        ? `Atualizado de ${penult ? formatar(penult) : "-"} a ${ult ? formatar(ult) : "-"}.`
+        : "Nenhuma atualização registrada.";
+    }
+
     const modal = document.getElementById("dotacao-aguardando-modal");
     const hasItems = modal ? modal.dataset.hasItems === "1" : false;
     const closeBtn = modal ? document.getElementById("dotacao-aguardando-close") : null;
@@ -28867,8 +28886,8 @@
 /* ==========================================================================
    [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; fase 1 do plano do
    dev. Jean; padrão spo-aa+ §4.4)
-   Item "Buscar tela" no menu lateral, logo abaixo de "Início" (inserido aqui,
-   sem mudar o base.html), e atalhos Ctrl+K e "/". A caixa segue o padrão dos
+   Botão "Buscar tela" (lupa) no cabeçalho (feat/ajuda-cabecalho, 2026-11-17;
+   antes era um item do menu lateral, logo abaixo de "Início") e atalhos Ctrl+K e "/". A caixa segue o padrão dos
    avisos do SPO (modal-overlay/modal-card, título na cor de destaque, campo
    .field e botão "Fechar" secundário).
    - Procura nas telas do MENU, que já vem filtrado pelas permissões
@@ -29086,8 +29105,8 @@
     montar();
     if (!dialogo.hidden) return;
     abridor = document.activeElement;
-    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para o item do menu
-    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-busca-menu");
+    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para a lupa do cabeçalho
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-cabecalho-busca");
     dialogo.hidden = false;
     document.body.classList.add("spo-busca-aberta");
     const entrada = dialogo.querySelector("#spo-busca-entrada");
@@ -29117,24 +29136,7 @@
     else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && document.body.dataset.spoKeys !== "off") { ev.preventDefault(); mostrar(); }
   });
 
-  // item "Buscar tela" no menu lateral, logo abaixo de "Início"
-  function itemMenu() {
-    const menu = document.getElementById("menu");
-    if (!menu || !document.getElementById("user-meta") || menu.querySelector(".spo-busca-menu")) return;
-    const inicio = menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
-    const a = document.createElement("a");
-    a.href = "#";
-    a.className = "menu-item spo-busca-menu";
-    a.setAttribute("role", "button");
-    a.setAttribute("aria-haspopup", "dialog");
-    a.setAttribute("aria-keyshortcuts", "Control+K /");
-    a.title = "Buscar tela (Ctrl+K ou /)";
-    a.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i> <span>Buscar tela</span>';
-    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
-    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
-    if (inicio) inicio.after(a); else menu.prepend(a);
-  }
-  itemMenu();
+  // o botão "Buscar tela" fica no cabeçalho (bloco "Ajuda e busca no cabeçalho", abaixo)
   window.spoBuscaTelas = { abrir: mostrar, buscar: (q) => buscar(indice(), q).map((t) => t.rota), recentes: lerRecentes };
 })();
 
@@ -29193,9 +29195,13 @@
    Pedido do dev. Jean: o SPO já funciona pelo teclado (#41, #59, #106), mas nada
    dizia como. Ex.: no Mapa Conceitual as setas trocam o cartão, mas não havia como
    saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
-   1) Ajuda "Atalhos do teclado": diálogo no padrão dos avisos, aberto pela tecla
-      "?", pelo item do menu (abaixo de "Buscar tela") e por links com
-      [data-spo-atalhos] (cartão Teclado e declaração de acessibilidade).
+   1) Janela "Ajuda" (feat/ajuda-cabecalho, 2026-11-17; antes "Atalhos do teclado"):
+      diálogo no padrão dos avisos, aberto pelo botão "?" do cabeçalho, pela tecla
+      "?" e por links com [data-spo-atalhos] (cartão Teclado e declaração de
+      acessibilidade). Seções que se abrem: Buscar telas, Acessibilidade e
+      preferências, Atalhos do teclado (aberta com mouse; fechada no toque, onde
+      não há teclado; sempre aberta quando chamada pela tecla "?" ou pelos links)
+      e Sobre e contato. O item do menu saiu (o menu do celular não cabia).
    2) Alt+M leva o foco ao item da tela atual no menu (abre o menu se estiver
       recolhido no celular); link de pulo "Ir para o menu" ao lado de "Pular
       para o conteúdo".
@@ -29255,30 +29261,65 @@
 
   let dialogo = null;
   let abridor = null;
+  const CONTATO = "nger@edu.mt.gov.br";
+  const ROTA_PERSONALIZAR = "atualizar/personalizar-spo/temas";
+  const itemPersonalizar = () => document.querySelector(`.sidebar a.menu-item[data-route="${ROTA_PERSONALIZAR}"]`);
+  const semMouse = () => !!(window.matchMedia && window.matchMedia("(hover: none)").matches);
+  // seções da Ajuda (as de atalhos ficam dentro de "Atalhos do teclado")
+  function secaoAjuda(id, icone, titulo, corpo) {
+    return [
+      `<details class="spo-ajuda-secao" data-spo-ajuda-secao="${id}">`,
+      `<summary><i class="bi ${icone}" aria-hidden="true"></i> <span>${titulo}</span></summary>`,
+      `<div class="spo-ajuda-conteudo">${corpo}</div>`,
+      "</details>",
+    ].join("");
+  }
   function montar() {
     if (dialogo) return dialogo;
     dialogo = document.createElement("div");
     // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
     dialogo.className = "spo-busca-fundo spo-atalhos-fundo";
     dialogo.hidden = true;
-    const secoes = SECOES.map(([titulo, icone, linhas]) => [
+    const atalhos = SECOES.map(([titulo, icone, linhas]) => [
       '<section class="spo-atalhos-secao">',
       `<h3><i class="bi ${icone}" aria-hidden="true"></i> ${titulo}</h3>`,
       '<dl class="spo-atalhos-lista">',
       linhas.map(([teclas, texto]) => `<div><dt>${teclas}</dt><dd>${texto}</dd></div>`).join(""),
       "</dl></section>",
     ].join("")).join("");
+    const secoes = [
+      secaoAjuda("busca", "bi-search", "Buscar telas", [
+        "<p>Ache qualquer tela pelo nome, por uma sigla (PED, FIP, PAOE) ou por um assunto (senha, tema, daltonismo). Só aparecem as telas que você pode abrir.</p>",
+        '<p class="spo-ajuda-acoes"><button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="busca"><i class="bi bi-search" aria-hidden="true"></i> Abrir a busca</button></p>',
+      ].join("")),
+      secaoAjuda("acessibilidade", "bi-universal-access", "Acessibilidade e preferências", [
+        "<p>Tema claro ou escuro, cor de destaque, fontes, tamanho e densidade do texto, cores para daltonismo, foco, brilho e movimento se ajustam no Personalizar Temas SPO e valem neste navegador.</p>",
+        '<p class="spo-ajuda-acoes">',
+        '<button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="personalizar"><i class="bi bi-sliders" aria-hidden="true"></i> Abrir o Personalizar</button>',
+        '<button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="declaracao"><i class="bi bi-universal-access" aria-hidden="true"></i> Declaração de acessibilidade</button>',
+        '<button type="button" class="btn btn-secondary sm" data-spo-padrao><i class="bi bi-patch-check" aria-hidden="true"></i> O padrão SPO-AA+</button>',
+        "</p>",
+      ].join("")),
+      secaoAjuda("atalhos", "bi-keyboard", "Atalhos do teclado", [
+        "<p>O SPO pode ser usado só pelo teclado. No celular e no tablet sem teclado, estes atalhos não se aplicam.</p>",
+        atalhos,
+        '<p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
+        "<p>Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>",
+      ].join("")),
+      secaoAjuda("sobre", "bi-info-circle", "Sobre e contato", [
+        "<p data-spo-ajuda-sobre></p>",
+        `<p>Encontrou uma barreira ou tem uma dúvida? Escreva para <a href="mailto:${CONTATO}">${CONTATO}</a>, dizendo a tela, o que tentou fazer e o recurso que usa (leitor de tela, zoom, teclado…).</p>`,
+      ].join("")),
+    ].join("");
     dialogo.innerHTML = [
       '<div class="modal-card spo-busca-caixa spo-atalhos-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-atalhos-titulo">',
       '  <div class="modal-header spo-busca-topo">',
-      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Atalhos do teclado</h2>',
-      '    <div class="modal-header-subtitle">O SPO pode ser usado só pelo teclado. Esc fecha esta ajuda.</div></div>',
+      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Ajuda</h2>',
+      '    <div class="modal-header-subtitle">Busca, acessibilidade, atalhos do teclado e contato. Esc fecha esta ajuda.</div></div>',
       "  </div>",
-      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Lista de atalhos">${secoes}`,
-      '    <p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
-      "  </div>",
+      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Conteúdo da ajuda">${secoes}</div>`,
       '  <div class="spo-busca-rodape">',
-      '    <p class="spo-busca-status">Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>',
+      '    <p class="spo-busca-status">Esta ajuda abre pelo "?" no alto da tela (ou pela tecla ?).</p>',
       '    <button type="button" class="btn btn-secondary sm spo-atalhos-fechar">Fechar</button>',
       "  </div>",
       "</div>",
@@ -29286,35 +29327,63 @@
     document.body.appendChild(dialogo);
     dialogo.querySelector(".spo-atalhos-fechar").addEventListener("click", () => fechar());
     dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("click", (ev) => {
+      const b = ev.target.closest && ev.target.closest("[data-spo-ajuda-acao]");
+      if (!b) return;
+      const acao = b.dataset.spoAjudaAcao;
+      fechar(false);
+      if (acao === "busca" && window.spoBuscaTelas) window.spoBuscaTelas.abrir();
+      else if (acao === "personalizar") { const item = itemPersonalizar(); if (item) item.click(); }
+      else if (acao === "declaracao") { const link = document.querySelector(".footer .footer-acessibilidade"); if (link) link.click(); }
+    });
     dialogo.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
-      if (ev.key === "Tab") { // foco preso na ajuda (lista rolável e botão Fechar)
-        const alvos = [dialogo.querySelector(".spo-atalhos-corpo"), dialogo.querySelector(".spo-atalhos-fechar")];
+      if (ev.key === "Tab") { // foco preso na ajuda: todos os controles visíveis dela, em ordem
+        const alvos = [...dialogo.querySelectorAll("summary, a[href], button:not([disabled]), [tabindex='0']")].filter(visivel);
+        if (!alvos.length) return;
         const i = alvos.indexOf(document.activeElement);
         ev.preventDefault();
-        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+        const prox = i < 0 ? 0 : (i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length;
+        alvos[prox].focus();
       }
     });
     return dialogo;
   }
-  function mostrar() {
+  // secao: "atalhos" quando aberta pela tecla "?" ou pelos links de atalhos
+  function mostrar(secao) {
     montar();
     if (!dialogo.hidden) return;
     abridor = document.activeElement;
-    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-atalhos-menu");
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-cabecalho-ajuda");
     const nota = dialogo.querySelector("[data-spo-atalhos-nota]");
     nota.textContent = umaTecla() ? "" : "Os atalhos de uma tecla só (/ e ?) estão desligados neste navegador; Ctrl+K e Alt+M continuam valendo.";
     nota.hidden = umaTecla();
+    const sobre = dialogo.querySelector("[data-spo-ajuda-sobre]");
+    const versao = ((document.querySelector(".footer .footer-build") || {}).textContent || "").trim();
+    const ambiente = ((document.querySelector(".environment-inline-badge span") || {}).textContent || "").trim();
+    sobre.textContent = ["SPO — Sistema de Planejamento e Orçamento (NGER/SEDUC-MT).", versao ? `Versão: ${versao}.` : "", ambiente ? `Ambiente: ${ambiente}.` : ""].filter(Boolean).join(" ");
+    const personalizar = itemPersonalizar();
+    dialogo.querySelector('[data-spo-ajuda-acao="personalizar"]').hidden = !personalizar || personalizar.closest('[style*="display: none"]') !== null;
+    dialogo.querySelector('[data-spo-ajuda-acao="declaracao"]').hidden = !document.querySelector(".footer .footer-acessibilidade:not([hidden])");
+    // seções: todas abertas, menos os atalhos no toque (lá não há teclado), a não ser que tenham sido pedidos
+    dialogo.querySelectorAll(".spo-ajuda-secao").forEach((d) => {
+      d.open = d.dataset.spoAjudaSecao !== "atalhos" || secao === "atalhos" || !semMouse();
+    });
     dialogo.hidden = false;
     document.body.classList.add("spo-busca-aberta");
-    dialogo.querySelector(".spo-atalhos-corpo").scrollTop = 0;
+    const corpo = dialogo.querySelector(".spo-atalhos-corpo");
+    corpo.scrollTop = 0;
+    if (secao === "atalhos") {
+      const d = dialogo.querySelector('[data-spo-ajuda-secao="atalhos"]');
+      if (d) corpo.scrollTop = d.getBoundingClientRect().top - corpo.getBoundingClientRect().top;
+    }
     dialogo.querySelector(".spo-atalhos-fechar").focus();
   }
-  function fechar() {
+  function fechar(devolverFoco = true) {
     if (!dialogo || dialogo.hidden) return;
     dialogo.hidden = true;
     document.body.classList.remove("spo-busca-aberta");
-    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
+    if (devolverFoco && !(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
   }
 
   // 2) Alt+M e "Ir para o menu"
@@ -29405,7 +29474,7 @@
     }
     if (ev.key === "?" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !emCampo(ev.target) && umaTecla()) {
       ev.preventDefault();
-      mostrar();
+      mostrar("atalhos");
     }
   });
   // links que abrem a ajuda (cartão Teclado, declaração de acessibilidade)
@@ -29413,27 +29482,10 @@
     const a = ev.target.closest && ev.target.closest("[data-spo-atalhos]");
     if (!a) return;
     ev.preventDefault();
-    mostrar();
+    mostrar("atalhos");
   });
 
-  // 1) item "Atalhos do teclado" no menu, logo abaixo de "Buscar tela"
-  function itemMenu() {
-    const menu = document.getElementById("menu");
-    if (!menu || !logado() || menu.querySelector(".spo-atalhos-menu")) return;
-    const a = document.createElement("a");
-    a.href = "#";
-    a.className = "menu-item spo-atalhos-menu";
-    a.setAttribute("role", "button");
-    a.setAttribute("aria-haspopup", "dialog");
-    a.setAttribute("aria-keyshortcuts", "?");
-    a.title = "Atalhos do teclado (?)";
-    a.innerHTML = '<i class="bi bi-keyboard" aria-hidden="true"></i> <span>Atalhos do teclado</span>';
-    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
-    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
-    const antes = menu.querySelector(".spo-busca-menu") || menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
-    if (antes) antes.after(a); else menu.prepend(a);
-  }
-  itemMenu();
+  // 1) a Ajuda abre pelo botão "?" do cabeçalho (bloco "Ajuda e busca no cabeçalho", abaixo)
 
   // 4) dica dos componentes com setas
   const DICAS = [
@@ -29473,6 +29525,205 @@
   });
 
   window.spoAtalhosTeclado = { abrir: mostrar, irParaMenu };
+  window.spoAjuda = { abrir: mostrar };
+})();
+
+/* ==========================================================================
+   [jean] Ajuda e busca no cabeçalho (feat/ajuda-cabecalho, 2026-11-17; ponto 5 do plano de
+   readequação para celular e navegadores, decisão do dev. Jean)
+   Dois botões no cabeçalho, numa coluna própria ao lado da linha do usuário: a lupa ("Buscar
+   tela", Ctrl+K ou /) e o "?" ("Ajuda", tecla ?). Os dois itens saíram do menu lateral: o menu
+   do celular não cabia na altura da tela, e no celular não há teclado para os atalhos. Inseridos
+   aqui (sem mudar o base.html); só aparecem com a pessoa logada.
+   ========================================================================== */
+(function initCabecalhoAcoes() {
+  const info = document.querySelector(".topbar .user-info");
+  if (!info || !document.getElementById("user-meta") || info.querySelector(".spo-cabecalho-acoes")) return;
+  const caixa = document.createElement("div");
+  caixa.className = "spo-cabecalho-acoes";
+  const botao = (classe, icone, nome, teclas, abrir) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `icon-btn spo-cabecalho-btn ${classe}`;
+    b.setAttribute("aria-label", nome);
+    b.setAttribute("aria-haspopup", "dialog");
+    b.setAttribute("aria-keyshortcuts", teclas.aria);
+    b.title = `${nome} (${teclas.titulo})`;
+    b.innerHTML = `<i class="bi ${icone}" aria-hidden="true"></i>`;
+    b.addEventListener("click", () => abrir());
+    return b;
+  };
+  caixa.append(
+    botao("spo-cabecalho-busca", "bi-search", "Buscar tela", { aria: "Control+K /", titulo: "Ctrl+K ou /" }, () => window.spoBuscaTelas && window.spoBuscaTelas.abrir()),
+    botao("spo-cabecalho-ajuda", "bi-question-lg", "Ajuda", { aria: "?", titulo: "?" }, () => window.spoAjuda && window.spoAjuda.abrir()),
+  );
+  info.appendChild(caixa);
+})();
+
+/* ==========================================================================
+   [jean] Menu compacto no celular (feat/menu-celular, 2026-11-17; ponto 2 do plano de readequação para
+   celular e navegadores, decisão do dev. Jean). Liga body.spo-menu-compacto (CSS no fim do style.css):
+   - até 600 px de largura ou até 560 px de altura (celular em pé ou deitado; as mesmas condições dos avisos);
+   - ou, no modo de menu por cima da tela (até 1200 px), quando a coluna de ícones não cabe na altura (ex.:
+     fonte do sistema ampliada num tablet).
+   Para saber se a coluna cabe, tira a classe, mede e decide na mesma passada (sem pintar a tela no meio).
+   Reavalia ao mudar o tamanho da janela, a barra de endereço (visualViewport), as fontes e as permissões.
+   No modo compacto, o "›" fica na altura do centro do logotipo do SPO (pedido do dev. Jean): mede o centro
+   do logotipo dentro do cabeçalho e passa em --spo-seta-topo (o CSS tem 27 px de reserva, o valor do
+   tamanho padrão; a medida só ajusta o alinhamento, nada depende dela para funcionar).
+   ========================================================================== */
+(function initMenuCompacto() {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar || !document.getElementById("menu")) return;
+  const pequeno = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  const sobrepoe = window.matchMedia("(max-width: 1200px)");
+  const raiz = document.documentElement;
+  function alinharSeta() {
+    const seta = document.getElementById("sidebar-toggle");
+    if (!seta) return;
+    // [jean] fix/menu-cabecalho-pta (2026-11-17; desenho do dev. Jean): na Programação PTA/OpR o cabeçalho do
+    // SPO some e entra o da tela (body.special-context-focus), com a lupa e o "?" do SPO (moverAcoes). O "›"
+    // fica no centro da coluna dos dois botões: no celular, pelo --spo-seta-topo (o "›" é fixo no alto); com a
+    // coluna do menu à vista (tablet, desktop), a coluna começa no alto da tela e o --spo-seta-foco é o espaço
+    // acima do "›" dentro dela. Medido com o cabeçalho no alto da tela (ele é fixo ao rolar: sticky, top 0).
+    const proprio = document.body.classList.contains("special-context-focus") && document.querySelector(".pta2027-integration-header");
+    const acoes = proprio && proprio.querySelector(".spo-cabecalho-acoes");
+    if (acoes && acoes.getClientRects().length) {
+      const caixa = acoes.getBoundingClientRect();
+      // relativo ao alto da barra; se ela passa da borda de cima (margem negativa), relativo à borda da tela
+      const centro = caixa.top + caixa.height / 2 - Math.max(0, proprio.getBoundingClientRect().top);
+      const alvo = Math.round(centro - seta.offsetHeight / 2);
+      if (!Number.isFinite(alvo)) return;
+      if (document.body.classList.contains("spo-menu-compacto")) {
+        raiz.style.setProperty("--spo-seta-topo", `${Math.max(0, alvo)}px`);
+      } else {
+        const atual = parseFloat(getComputedStyle(sidebar).paddingTop) || 0;
+        const novo = Math.max(0, Math.round(atual + alvo - seta.getBoundingClientRect().top + sidebar.getBoundingClientRect().top));
+        if (Math.abs(novo - atual) > 1) raiz.style.setProperty("--spo-seta-foco", `${novo}px`);
+      }
+      return;
+    }
+    const logo = document.querySelector(".topbar .brand-logo");
+    const topo = document.querySelector(".topbar");
+    if (!logo || !topo || !document.body.classList.contains("spo-menu-compacto")) return;
+    if (!logo.getClientRects().length) return; // escondido: fica a última medida (ou os 27 px do CSS)
+    const centro = logo.getBoundingClientRect().top + logo.offsetHeight / 2 - topo.getBoundingClientRect().top;
+    const valor = Math.max(0, Math.round(centro - seta.offsetHeight / 2));
+    if (Number.isFinite(valor)) raiz.style.setProperty("--spo-seta-topo", `${valor}px`);
+  }
+  // [jean] fix/menu-cabecalho-pta: a lupa e o "?" vão para o cabeçalho da tela enquanto ele substitui o do SPO
+  // (os mesmos botões, não cópias), e voltam ao sair; se a tela for trocada com eles dentro, voltam também.
+  const acoesSpo = document.querySelector(".topbar .spo-cabecalho-acoes");
+  const lugarSpo = acoesSpo && acoesSpo.parentElement;
+  function moverAcoes() {
+    if (!acoesSpo || !lugarSpo) return;
+    const proprio = document.body.classList.contains("special-context-focus") && document.querySelector(".pta2027-integration-header");
+    const destino = proprio || lugarSpo;
+    if (acoesSpo.parentElement !== destino) destino.appendChild(acoesSpo);
+    if (proprio && "ResizeObserver" in window && !proprio.dataset.spoSetaObservada) {
+      proprio.dataset.spoSetaObservada = "1";
+      new ResizeObserver(() => depois()).observe(proprio);
+    }
+  }
+  function avaliar() {
+    let compacto = pequeno.matches;
+    if (!compacto && sobrepoe.matches) {
+      if (sidebar.classList.contains("open")) return; // aberto: decide de novo quando fechar
+      document.body.classList.remove("spo-menu-compacto");
+      compacto = sidebar.scrollHeight > sidebar.clientHeight + 1;
+    }
+    document.body.classList.toggle("spo-menu-compacto", compacto);
+    moverAcoes();
+    alinharSeta();
+  }
+  avaliar();
+  let espera = 0;
+  const depois = () => { cancelAnimationFrame(espera); espera = requestAnimationFrame(avaliar); };
+  window.addEventListener("resize", depois, { passive: true });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", depois, { passive: true });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(depois);
+  window.addEventListener("load", depois);
+  // as permissões escondem itens do menu depois do carregamento; e a coluna muda ao fechar o menu
+  new MutationObserver(depois).observe(sidebar, { attributes: true, subtree: true, attributeFilter: ["style", "class"] });
+  // o título do cabeçalho muda de altura (fonte, densidade, quebra de linha): realinha o "›"
+  const topo = document.querySelector(".topbar");
+  if (topo && "ResizeObserver" in window) new ResizeObserver(depois).observe(topo);
+  // [jean] fix/menu-cabecalho-pta: entrar e sair do cabeçalho da tela (special-context-focus) leva os botões e
+  // realinha o "›"; a tela trocada (outra rota) devolve os botões ao cabeçalho do SPO
+  let comCabecalhoProprio = document.body.classList.contains("special-context-focus");
+  new MutationObserver(() => {
+    const agora = document.body.classList.contains("special-context-focus");
+    if (agora !== comCabecalhoProprio) { comCabecalhoProprio = agora; moverAcoes(); depois(); }
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  const conteudo = document.getElementById("content-area");
+  if (conteudo) new MutationObserver(() => { if (acoesSpo && !acoesSpo.isConnected) moverAcoes(); }).observe(conteudo, { childList: true });
+})();
+
+/* ==========================================================================
+   [jean] Filtro SPO no celular (feat/filtro-celular, 2026-11-17; ponto 1 do plano de readequação para celular
+   e navegadores). Com um filtro dos relatórios aberto no celular (até 600 px de largura ou 560 px de altura),
+   põe atrás dele um véu (.spo-filtro-veu) que recebe o toque e só fecha o filtro: o fechamento por "toque fora"
+   dos relatórios (closest(".mf-wrapper")) deixava o toque seguir para o que estava embaixo (outro filtro, o
+   "Baixar Excel"…). Vale para os filtros de todas as telas, sem mexer nas 11 cópias do buildFilter: observa a
+   abertura e o fechamento depois de cada clique e de cada tecla.
+   ========================================================================== */
+(function initFiltroCelular() {
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  let veu = null;
+  function fecharTodos() {
+    document.querySelectorAll(".mf-panel.open").forEach((p) => p.classList.remove("open"));
+    sincronizar();
+  }
+  function sincronizar() {
+    const aberto = celular.matches && document.querySelector(".mf-panel.open");
+    if (aberto && !veu) {
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fecharTodos(); });
+      document.body.appendChild(veu);
+    } else if (!aberto && veu) {
+      veu.remove();
+      veu = null;
+    }
+  }
+  const depois = () => requestAnimationFrame(sincronizar);
+  document.addEventListener("click", depois, true);
+  document.addEventListener("keydown", depois, true);
+  if (celular.addEventListener) celular.addEventListener("change", sincronizar);
+})();
+
+/* ==========================================================================
+   [jean] Filtro SPO no desktop: abrir para o lado que cabe (fix/filtro-desktop, 2026-11-17). O painel do filtro
+   dos relatórios abre preso à esquerda da coluna; nas últimas colunas ele passava da borda da área da tabela (que
+   rola para o lado) e o "Aplicar" ficava escondido. Ao abrir, mede: se a borda direita do painel passa da área
+   visível (a caixa que rola, ou a janela), ele abre alinhado pela direita da coluna (.mf-panel-direita; CSS no
+   fim do style.css). Vale para os filtros de todas as telas, sem mexer nas cópias do buildFilter (observa os
+   cliques e as teclas, como o initFiltroCelular). No modo celular o painel é um cartão no alto e isto não age.
+   ========================================================================== */
+(function initFiltroPosicao() {
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  function areaVisivel(painel) {
+    let direita = document.documentElement.clientWidth;
+    for (let e = painel.parentElement; e && e !== document.body; e = e.parentElement) {
+      if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(e).overflowX)) { direita = Math.min(direita, e.getBoundingClientRect().right); break; }
+    }
+    return direita;
+  }
+  function posicionar() {
+    document.querySelectorAll(".mf-panel").forEach((painel) => {
+      if (!painel.classList.contains("open") || celular.matches) { painel.classList.remove("mf-panel-direita"); return; }
+      if (painel.dataset.spoPosto === "1") return; // já posto nesta abertura: não pula enquanto se usa
+      painel.classList.remove("mf-panel-direita");
+      const r = painel.getBoundingClientRect();
+      if (r.right > areaVisivel(painel) - 8) painel.classList.add("mf-panel-direita");
+      painel.dataset.spoPosto = "1";
+    });
+    document.querySelectorAll('.mf-panel:not(.open)[data-spo-posto="1"]').forEach((p) => { delete p.dataset.spoPosto; });
+  }
+  const depois = () => requestAnimationFrame(posicionar);
+  document.addEventListener("click", depois, true);
+  document.addEventListener("keydown", depois, true);
 })();
 
 /* ==========================================================================
@@ -29506,6 +29757,7 @@
       "Texto de leitura com no mínimo 12 px e entrelinha 1,5.",
       "Informação nunca só pela cor: sempre há título, ícone, negrito ou ✓ junto.",
       "O pedido de \"reduzir movimento\" do computador é respeitado.",
+      "Nada abre sozinho por cima da tela: avisos ficam na Início como cartões, e os detalhes abrem só a pedido.",
     ]),
     '<h3>O que você pode ajustar</h3>',
     "<p>Em <strong>Personalizar Temas SPO</strong>, vale só no seu navegador:</p>",
@@ -29517,7 +29769,7 @@
       "atalhos de uma tecla do teclado.",
     ]),
     '<h3>Como é verificado</h3>',
-    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
+    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, nos navegadores Chrome/Edge, Firefox e Safari, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
   ].join("");
 
   let dialogo = null;
@@ -29987,4 +30239,222 @@
     };
     setTimeout(devolver, 0);
   }, true);
+})();
+
+/* ==========================================================================
+   [jean] Pendências da Início em cartão flutuante (feat/pendencias-cartao, 2026-11-17; PROPOSTA ao dev. Cleber,
+   ponto 4 do plano de readequação para celular e navegadores). A janela das pendências (#dotacao-aguardando-modal)
+   abria sozinha ao entrar; agora a Início mostra o cartão "Pendências" e o detalhe abre só com "Ver detalhes",
+   no mesmo cartão flutuante da busca e de "O padrão SPO-AA+" (.spo-busca-fundo, fora do .main: a "Fonte maior"
+   não o amplia duas vezes). O conteúdo vem do <template id="spo-pendencias-detalhe"> da Início (montado de novo a
+   cada abertura, porque a Início é recarregada ao voltar a ela). Esc e toque fora fecham; o Tab fica dentro; o
+   foco volta ao botão.
+   ========================================================================== */
+(function initPendenciasDetalhe() {
+  let fundo = null;
+  let quemAbriu = null;
+  const focaveis = () => [...fundo.querySelectorAll("button, summary, a[href], [tabindex='0']")].filter((el) => el.offsetParent !== null);
+  function fechar() {
+    if (!fundo) return;
+    fundo.remove();
+    fundo = null;
+    document.body.classList.remove("spo-busca-aberta");
+    if (quemAbriu && document.contains(quemAbriu)) quemAbriu.focus();
+    quemAbriu = null;
+  }
+  function abrir(botao) {
+    const modelo = document.getElementById("spo-pendencias-detalhe");
+    if (!modelo) return;
+    fechar();
+    quemAbriu = botao;
+    const total = document.querySelector("#spo-pendencias-card .spo-contador");
+    const n = total ? total.firstChild.textContent.trim() : "";
+    fundo = document.createElement("div");
+    fundo.className = "spo-busca-fundo";
+    fundo.innerHTML = [
+      '<div class="modal-card spo-busca-caixa spo-pendencias-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-pendencias-dlg-titulo">',
+      '  <div class="modal-header spo-busca-topo">',
+      `    <div class="modal-header-text"><h2 id="spo-pendencias-dlg-titulo" class="modal-header-title spo-busca-titulo" tabindex="-1">Pendências${n ? ` (${n})` : ""}</h2>`,
+      '    <div class="modal-header-subtitle">Itens que aguardam aprovação. Esc fecha.</div></div>',
+      "  </div>",
+      '  <div class="spo-pendencias-corpo" tabindex="0" role="region" aria-labelledby="spo-pendencias-dlg-titulo"></div>',
+      '  <div class="spo-busca-rodape">',
+      '    <p class="spo-busca-status">Para aprovar, abra a tela do item (Cadastrar Dotação, PTA Gerencial…).</p>',
+      '    <button type="button" class="btn btn-secondary sm spo-pendencias-fechar">Fechar</button>',
+      "  </div>",
+      "</div>",
+    ].join("\n");
+    fundo.querySelector(".spo-pendencias-corpo").appendChild(modelo.content.cloneNode(true));
+    fundo.querySelector(".spo-pendencias-fechar").addEventListener("click", fechar);
+    fundo.addEventListener("mousedown", (ev) => { if (ev.target === fundo) fechar(); });
+    fundo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
+      if (ev.key !== "Tab") return;
+      const f = focaveis();
+      if (!f.length) return;
+      const titulo = fundo.querySelector("#spo-pendencias-dlg-titulo");
+      if (ev.shiftKey && (document.activeElement === f[0] || document.activeElement === titulo)) { ev.preventDefault(); f[f.length - 1].focus(); }
+      else if (!ev.shiftKey && document.activeElement === f[f.length - 1]) { ev.preventDefault(); f[0].focus(); }
+    });
+    document.body.appendChild(fundo);
+    document.body.classList.add("spo-busca-aberta");
+    fundo.querySelector("#spo-pendencias-dlg-titulo").focus();
+  }
+  document.addEventListener("click", (ev) => {
+    const botao = ev.target.closest && ev.target.closest(".spo-pendencias-ver");
+    if (botao) abrir(botao);
+  });
+})();
+
+/* ==========================================================================
+   [jean] Busca nas listas longas dos formulários (feat/busca-listas-longas, 2026-11-17; Etapa 5 do plano de
+   readequação para celular e navegadores; regra das listas do padrão §4.3: nativo sempre que dá conta, caixa de
+   busca SPO sobre o <select> nas listas longas). Chave do Planejamento (296 opções), Subação/Entrega (470, textos
+   de até 239 caracteres), Etapa (438)… eram percorridas na mão, e no celular o seletor nativo mostra a lista
+   inteira sem busca.
+   - Toda lista de um só valor de #content-area com 40 opções ou mais ganha, logo abaixo, o campo "Filtrar a lista"
+     (fora do filtro SPO dos relatórios e das janelas). O <select> continua sendo o campo do formulário: valor,
+     eventos (change das cascatas) e envio são os dele; o filtro só tira da lista, por enquanto, as opções que não
+     contêm todas as palavras digitadas (sem acento, sem maiúsculas). Ficam a opção vazia e a já escolhida.
+   - As opções saem do DOM (o Safari do iPhone ignora option[hidden]) e voltam ao escolher (change, na captura,
+     antes dos tratadores da tela), ao sair da lista, ao limpar o campo e ao limpar o formulário. Se a tela
+     encher a lista de novo (cascata), o filtro passa a valer sobre as opções novas.
+   - Enter no campo: com um resultado só, escolhe-o; com vários, abre a lista (showPicker) ou leva o foco a ela.
+     ↓ também leva à lista; Esc limpa o campo. Contagem "12 de 296" anunciada (role="status").
+   - Texto escolhido que não cabe na lista fechada (celular, fonte ampliada): aparece inteiro logo abaixo, em
+     texto discreto (aria-hidden: o leitor de tela já lê o valor da lista).
+   ========================================================================== */
+(function initBuscaListasLongas() {
+  const MINIMO = 40;
+  const area = document.getElementById("content-area");
+  if (!area) return;
+  const estados = new Map();
+  const normalizar = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const valida = (s) => s.tagName === "SELECT" && !s.multiple && s.size <= 1 && !s.closest(".mf-wrapper, .spo-busca-fundo, [data-spo-sem-busca]");
+  const comValor = (ops) => ops.filter((o) => o.value !== "").length;
+  let regua = null;
+  function largura(texto, select) {
+    if (!regua) regua = document.createElement("canvas").getContext("2d");
+    const cs = getComputedStyle(select);
+    regua.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    return regua.measureText(texto).width;
+  }
+  function rotuloDe(select) {
+    const r = select.closest("label")?.querySelector(":scope > span") || (select.id && document.querySelector(`label[for="${select.id}"]`));
+    return (r ? r.textContent : select.getAttribute("aria-label") || "").replace(/^\*/, "").replace(/\s+/g, " ").trim();
+  }
+  function semObservar(st, fn) {
+    fn();
+    st.observador.takeRecords();
+  }
+  function restaurar(st) {
+    if (!st.filtrado) return;
+    const valor = st.select.value;
+    semObservar(st, () => { st.select.replaceChildren(...st.todas); st.select.value = valor; });
+    st.filtrado = false;
+  }
+  function escolhaInteira(st) {
+    const o = st.select.selectedOptions[0];
+    const texto = o && o.value !== "" ? o.textContent.trim() : "";
+    const cabe = !texto || largura(texto, st.select) <= st.select.clientWidth - 40;
+    st.escolha.textContent = texto;
+    st.escolha.hidden = cabe || !st.select.offsetParent;
+  }
+  function mostrar(st) {
+    const total = comValor(st.todas);
+    st.caixa.hidden = total < MINIMO && !st.campo.value;
+    st.campo.disabled = st.select.disabled;
+    st.campo.placeholder = `Filtrar a lista (${total} opções)`;
+    escolhaInteira(st);
+  }
+  function aplicar(st) {
+    const termos = normalizar(st.campo.value).split(/\s+/).filter(Boolean);
+    const valor = st.select.value;
+    if (!termos.length) {
+      restaurar(st);
+      st.status.textContent = "";
+    } else {
+      const casa = (o) => termos.every((t) => normalizar(o.textContent).includes(t));
+      const ficam = st.todas.filter((o) => o.value === "" || o.value === valor || casa(o));
+      semObservar(st, () => { st.select.replaceChildren(...ficam); st.select.value = valor; });
+      st.filtrado = true;
+      const achadas = ficam.filter((o) => o.value !== "" && casa(o)).length;
+      st.status.textContent = achadas ? `${achadas} de ${comValor(st.todas)}` : "nenhuma opção encontrada";
+    }
+    mostrar(st);
+  }
+  function restaurarELimpar(st) {
+    st.campo.value = "";
+    st.status.textContent = "";
+    restaurar(st);
+    mostrar(st);
+  }
+  function preparar(select) {
+    if (estados.has(select) || !valida(select)) return;
+    const caixa = document.createElement("div");
+    caixa.className = "spo-lista-busca";
+    caixa.hidden = true;
+    caixa.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i><input type="search" class="spo-lista-busca-campo" autocomplete="off" enterkeyhint="search"><span class="spo-lista-busca-status" role="status" aria-live="polite"></span>';
+    const escolha = document.createElement("div");
+    escolha.className = "spo-lista-escolha";
+    escolha.hidden = true;
+    escolha.setAttribute("aria-hidden", "true");
+    select.after(caixa, escolha);
+    const campo = caixa.querySelector("input");
+    campo.setAttribute("aria-label", `Filtrar a lista ${rotuloDe(select)}`.trim());
+    const st = { select, caixa, campo, escolha, status: caixa.querySelector(".spo-lista-busca-status"), todas: [...select.options], filtrado: false };
+    st.observador = new MutationObserver(() => {
+      st.todas = [...select.options];
+      st.filtrado = false;
+      if (st.campo.value) aplicar(st); else mostrar(st);
+    });
+    st.observador.observe(select, { childList: true });
+    new MutationObserver(() => mostrar(st)).observe(select, { attributes: true, attributeFilter: ["disabled"] });
+    campo.addEventListener("input", () => aplicar(st));
+    campo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && campo.value) { ev.preventDefault(); ev.stopPropagation(); restaurarELimpar(st); return; }
+      if (ev.key !== "Enter" && ev.key !== "ArrowDown") return;
+      ev.preventDefault();
+      const achadas = [...select.options].filter((o) => o.value !== "");
+      if (ev.key === "Enter" && campo.value && achadas.length === 1) {
+        select.value = achadas[0].value;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      select.focus();
+      if (achadas.length && typeof select.showPicker === "function") { try { select.showPicker(); } catch (err) { /* sem gesto do usuário */ } }
+    });
+    estados.set(select, st);
+    mostrar(st);
+  }
+  function varrer() {
+    for (const [select, st] of estados) if (!select.isConnected) { st.observador.disconnect(); estados.delete(select); }
+    area.querySelectorAll("select").forEach(preparar);
+  }
+  // escolheu na lista filtrada: devolve as opções antes dos tratadores da tela (cascatas leem select.options)
+  document.addEventListener("change", (ev) => {
+    const st = estados.get(ev.target);
+    if (!st) return;
+    if (st.filtrado) { st.campo.value = ""; st.status.textContent = ""; restaurar(st); }
+    setTimeout(() => mostrar(st), 0);
+  }, true);
+  // saiu da lista e do campo sem escolher: a lista volta inteira
+  document.addEventListener("focusout", (ev) => {
+    const lista = ev.target.closest && ev.target.closest("select");
+    const st = estados.get(lista) || [...estados.values()].find((s) => s.campo === ev.target);
+    if (!st || !st.filtrado) return;
+    // no Chrome/Edge a lista aberta (showPicker, appearance: base-select) leva o foco para dentro dela: espera fechar
+    const aberta = () => { try { return st.select.matches(":open"); } catch (err) { return false; } };
+    const dentro = () => st.select.contains(document.activeElement) || document.activeElement === st.campo;
+    setTimeout(() => { if (!aberta() && !dentro()) restaurarELimpar(st); }, 0);
+  }, true);
+  document.addEventListener("reset", (ev) => {
+    setTimeout(() => { for (const st of estados.values()) if (ev.target.contains(st.select)) restaurarELimpar(st); }, 0);
+  }, true);
+  let espera = 0;
+  new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(varrer, 120); }).observe(area, { childList: true, subtree: true });
+  let esperaTela = 0;
+  window.addEventListener("resize", () => { clearTimeout(esperaTela); esperaTela = setTimeout(() => estados.forEach(escolhaInteira), 150); });
+  varrer();
 })();
