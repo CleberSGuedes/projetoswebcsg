@@ -29694,6 +29694,39 @@
 })();
 
 /* ==========================================================================
+   [jean] Filtro SPO no desktop: abrir para o lado que cabe (fix/filtro-desktop, 2026-11-17). O painel do filtro
+   dos relatórios abre preso à esquerda da coluna; nas últimas colunas ele passava da borda da área da tabela (que
+   rola para o lado) e o "Aplicar" ficava escondido. Ao abrir, mede: se a borda direita do painel passa da área
+   visível (a caixa que rola, ou a janela), ele abre alinhado pela direita da coluna (.mf-panel-direita; CSS no
+   fim do style.css). Vale para os filtros de todas as telas, sem mexer nas cópias do buildFilter (observa os
+   cliques e as teclas, como o initFiltroCelular). No modo celular o painel é um cartão no alto e isto não age.
+   ========================================================================== */
+(function initFiltroPosicao() {
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  function areaVisivel(painel) {
+    let direita = document.documentElement.clientWidth;
+    for (let e = painel.parentElement; e && e !== document.body; e = e.parentElement) {
+      if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(e).overflowX)) { direita = Math.min(direita, e.getBoundingClientRect().right); break; }
+    }
+    return direita;
+  }
+  function posicionar() {
+    document.querySelectorAll(".mf-panel").forEach((painel) => {
+      if (!painel.classList.contains("open") || celular.matches) { painel.classList.remove("mf-panel-direita"); return; }
+      if (painel.dataset.spoPosto === "1") return; // já posto nesta abertura: não pula enquanto se usa
+      painel.classList.remove("mf-panel-direita");
+      const r = painel.getBoundingClientRect();
+      if (r.right > areaVisivel(painel) - 8) painel.classList.add("mf-panel-direita");
+      painel.dataset.spoPosto = "1";
+    });
+    document.querySelectorAll('.mf-panel:not(.open)[data-spo-posto="1"]').forEach((p) => { delete p.dataset.spoPosto; });
+  }
+  const depois = () => requestAnimationFrame(posicionar);
+  document.addEventListener("click", depois, true);
+  document.addEventListener("keydown", depois, true);
+})();
+
+/* ==========================================================================
    [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
    Pedido do dev. Jean: a declaração de acessibilidade cita o padrão "SPO-AA+";
    o usuário precisa poder ver o que ele é. Links com [data-spo-padrao] abrem

@@ -30,6 +30,8 @@ MARCADORES = [
     "(function initBuscaListasLongas() {",
     # barra de título da tela (fix/menu-cabecalho-pta): o menu compacto roda na moldura do exemplo
     "(function initMenuCompacto() {",
+    # filtro no desktop (fix/filtro-desktop): o kit roda o mesmo bloco
+    "(function initFiltroPosicao() {",
     # regra da oferta "Leitura confortável" (Atkinson)
     "(function initSugestaoAtkinson() {",
     "const ORDEM = {",
@@ -103,7 +105,7 @@ def test_marcadores_estao_no_main_js_e_no_kit():
 def test_trechos_do_teclado_sao_funcoes_completas():
     main = _main()
     for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {", "(function initBuscaListasLongas() {",
-                     "(function initMenuCompacto() {"):
+                     "(function initMenuCompacto() {", "(function initFiltroPosicao() {"):
         bloco = _trecho(main, marcador, True)
         fim = main.index(bloco) + len(bloco)
         assert main[fim:fim + 4] == ")();", f"{marcador}: o kit espera a função fechada por '}})();'"
