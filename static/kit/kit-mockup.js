@@ -108,6 +108,8 @@ initGovernancaSemanticFlows();`,
       buscaListas: trecho(fonte, "(function initBuscaListasLongas() {", true) + ")();",
       // barra de título da tela (fix/menu-cabecalho-pta): o menu compacto, que leva a lupa e o "?" e alinha o "›"
       menuCompacto: trecho(fonte, "(function initMenuCompacto() {", true) + ")();",
+      // filtro no desktop (fix/filtro-desktop): abre alinhado pela direita quando sairia da área da tabela
+      filtroPosicao: trecho(fonte, "(function initFiltroPosicao() {", true) + ")();",
     };
   }
 
@@ -642,6 +644,7 @@ initGovernancaSemanticFlows();`,
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
       new Function(spo.buscaListas)();
+      new Function(spo.filtroPosicao)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
       barraTela.montar(spo.menuCompacto);
