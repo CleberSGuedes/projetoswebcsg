@@ -10345,3 +10345,40 @@ body.spo-menu-compacto #sidebar-toggle i { color: inherit; font-size: var(--spo-
 }
 /* os ícones discretos sem contorno: vence a regra geral dos contornos na cor de destaque (#44, body :is(…)) */
 body .topbar .spo-cabecalho-btn:not(#spo-check) { border-color: transparent; }
+
+/* ==========================================================================
+   [jean] Filtro SPO no celular como cartão (feat/filtro-celular, 2026-11-17; ponto 1 do plano de readequação
+   para celular e navegadores, PR 1)
+   No celular o painel do filtro (.mf-panel, os filtros dos relatórios) abria preso à coluna, dentro da tabela
+   que rola para o lado: saía cortado ("Apl") ou abaixo da borda da tela, sem o "Aplicar" à vista (medido em
+   PED, FIP 613 e PLAN 51; deitado, nas três). Agora, até 600 px de largura ou 560 px de altura, o painel aberto
+   vira um cartão com 16 px de margem NO ALTO da tela (como a busca e a Ajuda: o teclado virtual, ao tocar em
+   "Buscar...", cobriria um cartão preso embaixo), com a lista rolando por dentro e "Cancelar"/"Aplicar" sempre
+   à vista; os nomes longos quebram linha. Atrás, um véu (.spo-filtro-veu, criado pelo initFiltroCelular do
+   main.js) que recebe o toque e só fecha o filtro, sem acionar o que está embaixo. Desktop sem mudança.
+   ========================================================================== */
+@media (max-width: 600px), (max-height: 560px) {
+  .mf-panel.open {
+    position: fixed;
+    z-index: 10000;
+    top: max(16px, env(safe-area-inset-top));
+    right: 16px;
+    bottom: auto;
+    left: 16px;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    resize: none;
+  }
+  .mf-panel.open .mf-options { min-height: 0; }
+  .mf-panel.open .mf-option span { white-space: normal; overflow-wrap: anywhere; }
+}
+.spo-filtro-veu {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--spo-veu);
+}
