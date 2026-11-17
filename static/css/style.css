@@ -8825,12 +8825,14 @@ body .teto-qomp-grid:not(#spo-teto-tab) { --qomp-w-ano: 184px; }
    Vale só para o texto corrido do conteúdo (parágrafos, listas, avisos, ajudas,
    descrições, metadados); títulos, tabelas, botões e campos não mudam, para não
    desmontar o layout. Atende ao WCAG 1.4.12 (espaçamento de texto) e 1.4.8.
+   [jean] fix/bateria-4 (2026-11-17): estas regras e as da "Leitura" valem também em .spo-area-leitura (as prévias
+   do Personalizar no painel do kit de mockup, fora do #content-area); a especificidade é a mesma (a do id).
    ========================================================================== */
-body[data-spo-line-height="ample"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+body[data-spo-line-height="ample"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, blockquote, .alert, .muted, small,
     .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
   line-height: 1.75;
 }
-body[data-spo-line-height="larger"] #content-area :is(p, li, dd, blockquote, .alert, .muted, small,
+body[data-spo-line-height="larger"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, blockquote, .alert, .muted, small,
     .meta-uo-col > div, .flow-node small, .home-welcome-hint):not(table *, button *, button, label, h1, h2, h3):not(#spo-entrelinha) {
   line-height: 2;
 }
@@ -8904,13 +8906,13 @@ body #teto-kpi-total { white-space: nowrap; }
    ========================================================================== */
 /* Desde feat/opcao-leitura (2026-11-14), só vale com a opção "Leitura" do Personalizar
    em Intermediário (72ch, 1 entrelinha) ou Estrito (ver o bloco "Opção Leitura" no fim). */
-body[data-spo-reading="medium"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+body[data-spo-reading="medium"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
   max-width: 72ch;
 }
-body:is([data-spo-reading="medium"], [data-spo-reading="strict"]) #content-area .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
+body:is([data-spo-reading="medium"], [data-spo-reading="strict"]) :is(#content-area, .spo-area-leitura) .home-welcome-card :is(.home-welcome-text, .home-welcome-hint):not(#spo-leitura) {
   margin-inline: auto;
 }
-body[data-spo-reading="medium"] #content-area p + p:not(table *):not(#spo-leitura) {
+body[data-spo-reading="medium"] :is(#content-area, .spo-area-leitura) p + p:not(table *):not(#spo-leitura) {
   margin-top: max(1em, 1lh);
 }
 
@@ -8974,16 +8976,16 @@ body[data-spo-reading="strict"] { --spo-leitura-estrita: 53ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="atkinson"] { --spo-leitura-estrita: 48ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="source"] { --spo-leitura-estrita: 56ch; }
 body[data-spo-reading="strict"][data-spo-font-ui="classic"] { --spo-leitura-estrita: 52ch; }
-body[data-spo-reading="strict"] #content-area :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) :is(p, li, dd, .alert):not(table *, nav *, button *, .menu *):not(#spo-leitura) {
   max-width: var(--spo-leitura-estrita);
 }
 /* Espaço entre parágrafos: o WCAG 1.4.8 fala do espaço *depois* de cada parágrafo (≥ 1,5 × a
    entrelinha dele). O parágrafo de cima reserva esse espaço e o de baixo não soma margem: em
    cartões flex/grid as margens não se sobrepõem, e somar daria até 3 entrelinhas. */
-body[data-spo-reading="strict"] #content-area p:has(+ p):not(table *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) p:has(+ p):not(table *):not(#spo-leitura) {
   margin-bottom: max(1.5em, 1.5lh);
 }
-body[data-spo-reading="strict"] #content-area p + p:not(table *):not(#spo-leitura) {
+body[data-spo-reading="strict"] :is(#content-area, .spo-area-leitura) p + p:not(table *):not(#spo-leitura) {
   margin-top: 0;
 }
 
@@ -10190,6 +10192,21 @@ label > input[type="radio"] {
 }
 @media (pointer: coarse) {
   label:has(> input[type="radio"]) {
+    min-height: 44px;
+  }
+}
+/* [jean] fix/bateria-4 (2026-11-17): o mesmo para as caixas de marcar com rótulo ao lado (label.field.inline: "Ativo"
+   em Usuários → Cadastrar, Editar e Perfil; "Servidor cadastrado" e os escopos em Acessos da API), que a bateria 4
+   achou com 18 px de altura no desktop */
+label.field.inline:has(> input[type="checkbox"]) {
+  min-height: 24px;
+}
+label.field.inline > input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+@media (pointer: coarse) {
+  label.field.inline:has(> input[type="checkbox"]) {
     min-height: 44px;
   }
 }

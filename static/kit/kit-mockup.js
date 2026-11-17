@@ -155,10 +155,15 @@ initGovernancaSemanticFlows();`,
   // os dados que o kit já leu; a densidade automática vem do initDensidadeAutomatica (window.spoResolverDensidade)
   let aplicarDestaque = null;
   let modoDiagramas = null;
+  let coresForcadas = () => false;
   function montarFuncoesDoSpo() {
     aplicarDestaque = new Function("ACCENT_COLORS", "DEFAULT_ACCENT", `${spo.fonteDestaque};\nreturn applyAccentColor;`)(spo.destaques, spo.destaquePadrao);
-    modoDiagramas = new Function("COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES",
-      `${spo.fonteModoDiagramas};\nreturn getResolvedCommonDiagramMode;`)(spo.visualPadrao, spo.visual, spo.diagramas);
+    // [jean] fix/bateria-4: também a função das cores forçadas do Windows, para o data-forced-colors do <body>
+    // (como o applyCommonVisualPreferences do main.js)
+    const sistema = new Function("COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES",
+      `${spo.fonteModoDiagramas};\nreturn { modo: getResolvedCommonDiagramMode, forcado: getSystemForcedColorsActive };`)(spo.visualPadrao, spo.visual, spo.diagramas);
+    modoDiagramas = sistema.modo;
+    coresForcadas = sistema.forcado;
     new Function(spo.densidadeAuto)();
   }
 
@@ -176,6 +181,7 @@ initGovernancaSemanticFlows();`,
     // modo dos diagramas pela função do SPO (com cores forçadas do Windows ela devolve "system"; o kit então
     // desenha com a paleta clara, porque o tema "system" é montado por outra função do main.js)
     body.dataset.visualDiagrams = estado.diagrams;
+    body.dataset.forcedColors = coresForcadas() ? "active" : "none";
     body.dataset.visualDiagramTheme = modoDiagramas({ ...spo.visualPadrao, density: estado.density, contrast: estado.contrast, cards: estado.cards, diagrams: estado.diagrams });
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
     sincronizar();
