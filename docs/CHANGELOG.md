@@ -9,7 +9,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
-## 2026-11-17 — dev/jean, ainda não publicado
+## 2026-11-17 — homologação, RELEASE_2_2026_11_17.2 (lote 7)
 
 ### Corrigido
 - Menu lateral no celular (`fix/hover-toque`): o item tocado antes ficava destacado junto com o da tela atual (dois itens destacados), porque o navegador mantém o `:hover` no último toque. Em telas sem mouse (`@media (hover: none)`), o `:hover` dos itens do menu volta ao estado normal; a tela atual e o grupo aberto continuam destacados; no desktop nada muda. Medido no Playwright com toque (Chromium e WebKit): de 2 itens destacados para 1; com mouse (Chromium, Firefox e WebKit) o destaque continua. Regra nova no `padrao-visual-spo-aa-plus.md` §6.1. `?v=` do CSS `20261117.jean-hover-toque.1` (`base.html`, `login.html` e kit).
