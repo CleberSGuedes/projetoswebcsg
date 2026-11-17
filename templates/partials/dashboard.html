@@ -4,6 +4,46 @@
     <p class="home-welcome-text">O <strong>SPO – Sistema de Planejamento e Orçamento</strong> é a plataforma do NGER/SEDUC-MT que integra o planejamento (PPA e PTA) à execução orçamentária do FIPLAN, com relatórios e painéis por unidade orçamentária e apoio à governança por resultados.</p>
     <p class="home-welcome-hint">Use o menu ao lado para navegar. Itens carregam sem sair da Home.</p>
   </div>
+  {# [jean] feat/alerta-cartao (2026-11-17, PROPOSTA ao dev. Cleber; plano de readequação para celular e navegadores,
+     ponto 4): o "Alerta" da chave do planejamento vira um cartão da Início, em vez da janela que abria sozinha ao
+     entrar e cobria até 87% da tela no celular. Mesmos dados (emp_record); as datas são escritas pelo initDashboard. #}
+  {% set spo_dias = (emp_record.dias_sem_erro or 0) | int %}
+  {% set spo_recorde = (emp_record.recorde or 0) | int %}
+  <section class="card spo-indice-card" id="spo-indice-card" aria-labelledby="spo-indice-titulo">
+    <div class="card-title spo-aviso-titulo" id="spo-indice-titulo"><svg class="spo-sinal-alerta" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><polygon class="spo-sinal-fundo" points="60,8 114,108 6,108" stroke-width="10" stroke-linejoin="round"/><rect class="spo-sinal-marca" x="55" y="38" width="10" height="36" rx="4"/><circle class="spo-sinal-marca" cx="60" cy="88" r="6"/></svg> Chave do planejamento</div>
+    <p class="spo-indice-linha">
+      <span class="spo-indice-digitos" aria-hidden="true">{% for ch in "%03d" | format(spo_dias) %}<span>{{ ch }}</span>{% endfor %}</span>
+      <span class="spo-indice-rotulo"><strong>{{ spo_dias }} {{ "dia" if spo_dias == 1 else "dias" }}</strong> sem erros na chave do planejamento</span>
+    </p>
+    <p class="spo-indice-recorde"><i class="bi bi-trophy" aria-hidden="true"></i> Recorde: <strong>{{ spo_recorde }} {{ "dia" if spo_recorde == 1 else "dias" }}</strong>{% if spo_dias > 0 and spo_dias >= spo_recorde %} <span class="spo-indice-selo">recorde atual</span>{% endif %}</p>
+    <p class="muted spo-indice-nota"><span class="spo-indice-atualizado" data-penult="{{ emp_record.penult_upload_at or '' }}" data-ult="{{ emp_record.ult_upload_at or '' }}"></span></p>
+    <p class="spo-indice-colabore"><svg class="spo-sinal-obra" viewBox="0 0 120 108" aria-hidden="true" focusable="false"><polygon class="spo-obra-fundo" points="60,4 116,103 4,103" stroke-width="7" stroke-linejoin="round"/><polygon class="spo-obra-borda" points="60,11 109,98 11,98" fill="none" stroke-width="3.5" stroke-linejoin="round"/><g class="spo-obra-figura" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><polyline points="51,52 46,70"/><polyline points="46,70 43,79 39,91"/><polyline points="47,71 57,79 54,91"/><polyline points="51,52 41,54 42,63"/><polyline points="52,53 60,63 66,74"/></g><line class="spo-obra-figura" x1="34" y1="59" x2="75" y2="81" stroke-width="2.2" stroke-linecap="round"/><circle class="spo-obra-marca" cx="59" cy="47" r="4.6"/><path class="spo-obra-marca" d="M65 93.5 Q65.5 86 73 84 L79 80 Q85 72 91 77 L104 93.5 Z"/></svg><span>Colabore para melhorar este índice.</span></p>
+  </section>
+  {# [jean] feat/pendencias-cartao (2026-11-17, PROPOSTA ao dev. Cleber; ponto 4 do plano de readequação): as
+     pendências viram um cartão da Início com a contagem por tipo, em vez da janela que abria sozinha ao entrar.
+     "Ver detalhes" abre o detalhe num cartão flutuante (o mesmo da busca e de "O padrão SPO-AA+"), montado pelo
+     main.js a partir do <template id="spo-pendencias-detalhe"> abaixo. Mesmos dados e as mesmas tabelas. #}
+  {% set spo_n_dot = (dotacoes_aguardando or []) | length %}
+  {% set spo_n_sub = (subacoes_aguardando or []) | length %}
+  {% set spo_n_met = (metas_aguardando or []) | length %}
+  {% set spo_n_eta = (etapas_aguardando or []) | length %}
+  {% set spo_n_est = (estornos_aguardando or []) | length %}
+  {% set spo_n_uo = (avisos_uo or []) | length %}
+  {% set spo_n_total = spo_n_dot + spo_n_sub + spo_n_met + spo_n_eta + spo_n_est %}
+  {% if spo_n_total or spo_n_uo %}
+  <section class="card spo-pendencias-card" id="spo-pendencias-card" aria-labelledby="spo-pendencias-titulo">
+    <div class="card-title spo-aviso-titulo" id="spo-pendencias-titulo"><i class="bi bi-inbox" aria-hidden="true"></i> Pendências{% if spo_n_total %} <span class="spo-contador">{{ spo_n_total }}<span class="spo-sr-only"> {{ "item" if spo_n_total == 1 else "itens" }}</span></span>{% endif %}</div>
+    <ul class="spo-pendencias-lista">
+      {% if spo_n_uo %}<li class="spo-pendencias-aviso"><span>Avisos de carga (chave ou dotação não identificada)</span><strong>{{ spo_n_uo }} UO</strong></li>{% endif %}
+      {% if spo_n_dot %}<li><span>Dotações aguardando aprovação</span><strong>{{ spo_n_dot }}</strong></li>{% endif %}
+      {% if spo_n_est %}<li><span>Estornos aguardando aprovação</span><strong>{{ spo_n_est }}</strong></li>{% endif %}
+      {% if spo_n_sub %}<li><span>Subações aguardando aprovação</span><strong>{{ spo_n_sub }}</strong></li>{% endif %}
+      {% if spo_n_met %}<li><span>Metas físicas aguardando aprovação</span><strong>{{ spo_n_met }}</strong></li>{% endif %}
+      {% if spo_n_eta %}<li><span>Etapas aguardando aprovação</span><strong>{{ spo_n_eta }}</strong></li>{% endif %}
+    </ul>
+    <button class="btn btn-secondary sm spo-pendencias-ver" type="button" aria-haspopup="dialog"><i class="bi bi-list-ul" aria-hidden="true"></i> Ver detalhes</button>
+  </section>
+  {% endif %}
   {% if can_view_sessions %}
   <div class="card home-status-card">
     <div class="card-title">Status</div>
@@ -24,223 +64,63 @@
   {% endif %}
 </div>
 
-<div
-  id="emp-record-modal"
-  class="modal-overlay emp-record-modal"
-  data-show-login="1"
-  data-dias="{{ emp_record.dias_sem_erro }}"
-  data-recorde="{{ emp_record.recorde }}"
-  data-ult="{{ emp_record.ult_upload_at or '' }}"
-  data-penult="{{ emp_record.penult_upload_at or '' }}"
-  style="display:none;"
->
-  <div class="emp-record-card">
-    <button class="emp-record-close-icon" type="button" id="emp-record-close" aria-label="Fechar">×</button>
-    <div class="emp-record-header">
-      <div class="emp-record-sign">
-        <svg viewBox="0 0 120 120" role="img" aria-label="Alerta">
-          <polygon points="60,8 114,108 6,108" fill="#ffffff" stroke="#d9150c" stroke-width="10" />
-          <rect x="55" y="38" width="10" height="36" rx="4" fill="#111111" />
-          <circle cx="60" cy="88" r="6" fill="#111111" />
-        </svg>
+{% macro spo_grupo(titulo, n, aberto=False) %}
+<details class="spo-pendencias-grupo"{% if aberto %} open{% endif %}><summary>{{ titulo }} <span class="spo-contador">{{ n }}</span></summary>
+{{ caller() }}
+</details>
+{% endmacro %}
+<template id="spo-pendencias-detalhe">
+  {% if avisos_uo %}
+    {% call spo_grupo("Avisos de carga", spo_n_uo ~ " UO", True) %}
+      <div class="alert-stack spo-pendencias-avisos">
+        {% for aviso in avisos_uo %}
+          <div class="spo-pendencias-uo">UO {{ aviso.rotulo }}</div>
+          {% if aviso.ped_dotacao %}<div class="alert alert-error alert-error-strong">PED: Controle de Dotação não encontrado: {{ aviso.ped_dotacao | join(', ') }}</div>{% endif %}
+          {% if aviso.ped_linhas %}<div class="alert alert-error alert-error-strong">PED: Chave do Planejamento não identificada (nº da linha): {{ aviso.ped_linhas | join(', ') }}</div>{% endif %}
+          {% if aviso.emp_linhas %}<div class="alert alert-error alert-error-strong">EMP: Chave do Planejamento não identificada (nº da linha): {{ aviso.emp_linhas | join(', ') }}</div>{% endif %}
+          {% if aviso.emp_dotacao %}<div class="alert alert-error alert-error-strong">EMP: Controle de Dotação não encontrado: {{ aviso.emp_dotacao | join(', ') }}</div>{% endif %}
+        {% endfor %}
       </div>
-      <div class="emp-record-title">ALERTA</div>
-      <div class="emp-record-logo">
-        <img src="/static/img/logo.jpg" alt="Logo" />
-      </div>
-    </div>
-    <div class="emp-record-body">
-      <div class="emp-record-message">ESTAMOS SEM ERROS NA CHAVE DO PLANEJAMENTO HÁ</div>
-      <div class="emp-record-count">
-        <div class="emp-record-sign small">
-          <img src="/static/img/carro.jpg" alt="Alerta de pista" />
-        </div>
-        <div class="emp-record-digits" data-value="{{ emp_record.dias_sem_erro }}" data-min-len="3"></div>
-        <div class="emp-record-label">DIAS</div>
-      </div>
-      <div class="emp-record-row">
-        <div class="emp-record-record-text">NOSSO RECORDE É DE</div>
-        <div class="emp-record-digits small" data-value="{{ emp_record.recorde }}" data-min-len="3"></div>
-        <div class="emp-record-label small">DIAS</div>
-      </div>
-      <div class="emp-record-audit" data-penult="{{ emp_record.penult_upload_at or '' }}" data-ult="{{ emp_record.ult_upload_at or '' }}">
-        Atualizado de - a -
-      </div>
-      <div class="emp-record-footer">
-        <div class="emp-record-footer-text">COLABORE PARA MELHORAR ESTE ÍNDICE</div>
-        <div class="emp-record-work">
-          <img src="/static/img/homens_trabalhando.jpg" alt="Trabalhos na via" />
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="dotacao-aguardando-modal" class="modal-overlay" data-has-items="{{ 1 if (dotacoes_aguardando or estornos_aguardando or subacoes_aguardando or metas_aguardando or etapas_aguardando or avisos_uo) else 0 }}" style="display:none;">
-  <div class="modal-card">
-    <div class="modal-header">
-      <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
-      <div class="modal-header-text">
-        <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
-        <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
-      </div>
-    </div>
-    <div class="modal-body">
-      {% if avisos_uo %}
-        <div class="modal-title">Avisos</div>
-        <div class="alert-stack" style="margin-top:8px;">
-          {% for aviso in avisos_uo %}
-            <div class="modal-title" style="font-size:0.95rem;margin-top:8px;">UO {{ aviso.rotulo }}</div>
-            {% if aviso.ped_dotacao %}
-              <div class="alert alert-error alert-error-strong">PED: Controle de Dotação não encontrado: {{ aviso.ped_dotacao | join(', ') }}</div>
-            {% endif %}
-            {% if aviso.ped_linhas %}
-              <div class="alert alert-error alert-error-strong">PED: Chave do Planejamento não identificada (nº da linha): {{ aviso.ped_linhas | join(', ') }}</div>
-            {% endif %}
-            {% if aviso.emp_linhas %}
-              <div class="alert alert-error alert-error-strong">EMP: Chave do Planejamento não identificada (nº da linha): {{ aviso.emp_linhas | join(', ') }}</div>
-            {% endif %}
-            {% if aviso.emp_dotacao %}
-              <div class="alert alert-error alert-error-strong">EMP: Controle de Dotação não encontrado: {{ aviso.emp_dotacao | join(', ') }}</div>
-            {% endif %}
-          {% endfor %}
-        </div>
-      {% endif %}
-
-      {% if dotacoes_aguardando %}
-      <div class="modal-title">Dotações Aguardando Aprovação</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Controle de Dotação</th>
-                <th>Valor da Dotação</th>
-                <th>Status</th>
-                <th>Aprovar por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for d in dotacoes_aguardando %}
-                <tr>
-                  <td>{{ d.chave_dotacao }}</td>
-                  <td>{{ d.valor_atual }}</td>
-                  <td>{{ d.status_aprovacao }}</td>
-                  <td>{{ d.adj_concedente }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-
-      {% if subacoes_aguardando %}
-        <div class="modal-title" style="margin-top:16px;">PTA Gerencial - Subações Aguardando Aprovação</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Controle de Subação</th>
-                <th>Status</th>
-                <th>Tipo de Solicitação</th>
-                <th>Aprovar por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for s in subacoes_aguardando %}
-                <tr>
-                  <td>{{ s.controle_subacao }}</td>
-                  <td>{{ s.status_aprovacao }}</td>
-                  <td>{{ "alterar" if s.tipo_solicitacao == "editar" else s.tipo_solicitacao }}</td>
-                  <td>{{ s.perfil }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-
-      {% if metas_aguardando %}
-        <div class="modal-title" style="margin-top:16px;">PTA Gerencial - Metas Físicas Aguardando Aprovação</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Controle de Meta</th>
-                <th>Status</th>
-                <th>Produto da Ação</th>
-                <th>Aprovar por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for m in metas_aguardando %}
-                <tr>
-                  <td>{{ m.controle_meta }}</td>
-                  <td>{{ m.status_aprovacao }}</td>
-                  <td>{{ m.produto_acao }}</td>
-                  <td>{{ m.perfil }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-
-      {% if etapas_aguardando %}
-        <div class="modal-title" style="margin-top:16px;">PTA Gerencial - Etapas Aguardando Aprovação</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Controle de Etapa</th>
-                <th>Status</th>
-                <th>Tipo de Solicitação</th>
-                <th>Etapa</th>
-                <th>Aprovar por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for e in etapas_aguardando %}
-                <tr>
-                  <td>{{ e.controle_etapa }}</td>
-                  <td>{{ e.status_aprovacao }}</td>
-                  <td>{{ e.tipo_solicitacao }}</td>
-                  <td>{{ e.etapa }}</td>
-                  <td>{{ e.perfil }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-
-      {% if estornos_aguardando %}
-        <div class="modal-title" style="margin-top:16px;">Estornos Aguardando Aprovação</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Controle de Dotação</th>
-                <th>Valor do Estorno</th>
-                <th>Status</th>
-                <th>Aprovar por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for e in estornos_aguardando %}
-                <tr>
-                  <td>{{ e.chave_dotacao }}</td>
-                  <td>{{ e.valor_estorno }}</td>
-                  <td>{{ e.status_aprovacao }}</td>
-                  <td>{{ e.adj_solicitante }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary sm" type="button" id="dotacao-aguardando-close">Fechar</button>
-    </div>
-  </div>
-</div>
+    {% endcall %}
+  {% endif %}
+  {% if dotacoes_aguardando %}
+    {% call spo_grupo("Dotações aguardando aprovação", spo_n_dot, not avisos_uo) %}
+      <div class="table-responsive"><table class="table spo-pendencias-tabela">
+        <thead><tr><th>Controle de Dotação</th><th>Valor da Dotação</th><th>Status</th><th>Aprovar por</th></tr></thead>
+        <tbody>{% for d in dotacoes_aguardando %}<tr><td data-rotulo="Controle de Dotação">{{ d.chave_dotacao }}</td><td data-rotulo="Valor da Dotação">{{ d.valor_atual }}</td><td data-rotulo="Status">{{ d.status_aprovacao }}</td><td data-rotulo="Aprovar por">{{ d.adj_concedente }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    {% endcall %}
+  {% endif %}
+  {% if estornos_aguardando %}
+    {% call spo_grupo("Estornos aguardando aprovação", spo_n_est) %}
+      <div class="table-responsive"><table class="table spo-pendencias-tabela">
+        <thead><tr><th>Controle de Dotação</th><th>Valor do Estorno</th><th>Status</th><th>Aprovar por</th></tr></thead>
+        <tbody>{% for e in estornos_aguardando %}<tr><td data-rotulo="Controle de Dotação">{{ e.chave_dotacao }}</td><td data-rotulo="Valor do Estorno">{{ e.valor_estorno }}</td><td data-rotulo="Status">{{ e.status_aprovacao }}</td><td data-rotulo="Aprovar por">{{ e.adj_solicitante }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    {% endcall %}
+  {% endif %}
+  {% if subacoes_aguardando %}
+    {% call spo_grupo("Subações aguardando aprovação (PTA Gerencial)", spo_n_sub) %}
+      <div class="table-responsive"><table class="table spo-pendencias-tabela">
+        <thead><tr><th>Controle de Subação</th><th>Status</th><th>Tipo de Solicitação</th><th>Aprovar por</th></tr></thead>
+        <tbody>{% for s in subacoes_aguardando %}<tr><td data-rotulo="Controle de Subação">{{ s.controle_subacao }}</td><td data-rotulo="Status">{{ s.status_aprovacao }}</td><td data-rotulo="Tipo de Solicitação">{{ "alterar" if s.tipo_solicitacao == "editar" else s.tipo_solicitacao }}</td><td data-rotulo="Aprovar por">{{ s.perfil }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    {% endcall %}
+  {% endif %}
+  {% if metas_aguardando %}
+    {% call spo_grupo("Metas físicas aguardando aprovação (PTA Gerencial)", spo_n_met) %}
+      <div class="table-responsive"><table class="table spo-pendencias-tabela">
+        <thead><tr><th>Controle de Meta</th><th>Status</th><th>Produto da Ação</th><th>Aprovar por</th></tr></thead>
+        <tbody>{% for m in metas_aguardando %}<tr><td data-rotulo="Controle de Meta">{{ m.controle_meta }}</td><td data-rotulo="Status">{{ m.status_aprovacao }}</td><td data-rotulo="Produto da Ação">{{ m.produto_acao }}</td><td data-rotulo="Aprovar por">{{ m.perfil }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    {% endcall %}
+  {% endif %}
+  {% if etapas_aguardando %}
+    {% call spo_grupo("Etapas aguardando aprovação (PTA Gerencial)", spo_n_eta) %}
+      <div class="table-responsive"><table class="table spo-pendencias-tabela">
+        <thead><tr><th>Controle de Etapa</th><th>Status</th><th>Tipo de Solicitação</th><th>Etapa</th><th>Aprovar por</th></tr></thead>
+        <tbody>{% for e in etapas_aguardando %}<tr><td data-rotulo="Controle de Etapa">{{ e.controle_etapa }}</td><td data-rotulo="Status">{{ e.status_aprovacao }}</td><td data-rotulo="Tipo de Solicitação">{{ e.tipo_solicitacao }}</td><td data-rotulo="Etapa">{{ e.etapa }}</td><td data-rotulo="Aprovar por">{{ e.perfil }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    {% endcall %}
+  {% endif %}
+</template>

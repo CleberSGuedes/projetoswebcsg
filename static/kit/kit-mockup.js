@@ -4,6 +4,7 @@
 //  - ACCENT_COLORS (os 8 destaques), DEFAULT_ACCENT, COMMON_VISUAL_OPTIONS/DEFAULTS;
 //  - OPTIONS e DEFAULTS do initFontesPersonalizar (as opções do Personalizar);
 //  - initNavegacaoTabelas e initTecladoPaginacao (navegação pelo teclado nas tabelas);
+//  - initBuscaListasLongas (campo "Filtrar a lista" nas listas de 40 opções ou mais);
 //  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
 //  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
 //    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
@@ -103,6 +104,12 @@ initGovernancaSemanticFlows();`,
       atributos: objeto(fontes, "const ATTRS = Object.freeze({"),
       teclado: [trecho(fonte, "(function initNavegacaoTabelas() {", true) + ")();",
                 trecho(fonte, "(function initTecladoPaginacao() {", true) + ")();"],
+      // busca nas listas longas dos formulários (feat/busca-listas-longas): o mesmo bloco do SPO
+      buscaListas: trecho(fonte, "(function initBuscaListasLongas() {", true) + ")();",
+      // barra de título da tela (fix/menu-cabecalho-pta): o menu compacto, que leva a lupa e o "?" e alinha o "›"
+      menuCompacto: trecho(fonte, "(function initMenuCompacto() {", true) + ")();",
+      // filtro no desktop (fix/filtro-desktop): abre alinhado pela direita quando sairia da área da tabela
+      filtroPosicao: trecho(fonte, "(function initFiltroPosicao() {", true) + ")();",
     };
   }
 
@@ -148,10 +155,15 @@ initGovernancaSemanticFlows();`,
   // os dados que o kit já leu; a densidade automática vem do initDensidadeAutomatica (window.spoResolverDensidade)
   let aplicarDestaque = null;
   let modoDiagramas = null;
+  let coresForcadas = () => false;
   function montarFuncoesDoSpo() {
     aplicarDestaque = new Function("ACCENT_COLORS", "DEFAULT_ACCENT", `${spo.fonteDestaque};\nreturn applyAccentColor;`)(spo.destaques, spo.destaquePadrao);
-    modoDiagramas = new Function("COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES",
-      `${spo.fonteModoDiagramas};\nreturn getResolvedCommonDiagramMode;`)(spo.visualPadrao, spo.visual, spo.diagramas);
+    // [jean] fix/bateria-4: também a função das cores forçadas do Windows, para o data-forced-colors do <body>
+    // (como o applyCommonVisualPreferences do main.js)
+    const sistema = new Function("COMMON_VISUAL_DEFAULTS", "COMMON_VISUAL_OPTIONS", "COMMON_DIAGRAM_THEMES",
+      `${spo.fonteModoDiagramas};\nreturn { modo: getResolvedCommonDiagramMode, forcado: getSystemForcedColorsActive };`)(spo.visualPadrao, spo.visual, spo.diagramas);
+    modoDiagramas = sistema.modo;
+    coresForcadas = sistema.forcado;
     new Function(spo.densidadeAuto)();
   }
 
@@ -169,11 +181,96 @@ initGovernancaSemanticFlows();`,
     // modo dos diagramas pela função do SPO (com cores forçadas do Windows ela devolve "system"; o kit então
     // desenha com a paleta clara, porque o tema "system" é montado por outra função do main.js)
     body.dataset.visualDiagrams = estado.diagrams;
+    body.dataset.forcedColors = coresForcadas() ? "active" : "none";
     body.dataset.visualDiagramTheme = modoDiagramas({ ...spo.visualPadrao, density: estado.density, contrast: estado.contrast, cards: estado.cards, diagrams: estado.diagrams });
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
     sincronizar();
     desenharGraficos();
+    barraTela.sincronizar();
   }
+
+  // ---------------------------------------------------------------- barra de título da tela
+  // Exemplo vivo numa moldura (iframe) com o style.css do SPO: o corpo da moldura tem special-context-focus (o
+  // estado do SPO com a barra da tela no lugar do cabeçalho) e roda o initMenuCompacto do main.js, que leva a lupa
+  // e o "?" para a barra e alinha o "›". As preferências do kit (tema, destaque, fontes…) passam para a moldura.
+  const barraTela = (function montarBarraTela() {
+    const moldura = document.getElementById("kit-barra-tela");
+    const modelo = document.getElementById("kit-barra-tela-modelo");
+    let pronta = false;
+    const css = new URL(document.querySelector('link[href*="css/style.css"]').getAttribute("href"), location.href).href;
+    const icones = (document.querySelector('link[href*="bootstrap-icons"]') || {}).href || "";
+    function copiarPreferencias() {
+      const doc = moldura.contentDocument;
+      if (!pronta || !doc || !doc.body) return;
+      const compacto = doc.body.classList.contains("spo-menu-compacto");
+      [[document.documentElement, doc.documentElement], [body, doc.body]].forEach(([de, para]) => {
+        [...para.attributes].forEach((a) => { if (a.name.startsWith("data-")) para.removeAttribute(a.name); });
+        [...de.attributes].forEach((a) => { if (a.name.startsWith("data-")) para.setAttribute(a.name, a.value); });
+        const estilo = de.getAttribute("style");
+        if (estilo) para.setAttribute("style", estilo); else para.removeAttribute("style");
+      });
+      doc.documentElement.style.setProperty("--spo-contextbar-height", "0px");
+      doc.body.className = `${body.className.replace("kit-mockup-body", "")} special-context-focus pta2027-immersive pta2027-context-focus`.trim();
+      doc.body.classList.toggle("spo-menu-compacto", compacto);
+      medir();
+    }
+    // no celular (até 600 px), a moldura vai de uma borda à outra da tela, como a barra no SPO
+    function encaixar() {
+      const celular = window.innerWidth <= 600;
+      moldura.classList.toggle("kit-tela-inteira", celular);
+      moldura.style.width = "";
+      moldura.style.marginLeft = "";
+      if (!celular) return;
+      const esquerda = moldura.parentElement.getBoundingClientRect().left;
+      moldura.style.width = `${document.documentElement.clientWidth}px`;
+      moldura.style.marginLeft = `${-esquerda}px`;
+    }
+    window.addEventListener("resize", () => requestAnimationFrame(encaixar));
+    function medir() {
+      const doc = moldura.contentDocument;
+      if (!doc || !doc.body) return;
+      const cabecalho = doc.querySelector(".pta2027-integration-header");
+      const altura = Math.ceil((cabecalho ? cabecalho.getBoundingClientRect().bottom : 0) + 72);
+      if (Math.abs(moldura.offsetHeight - altura) > 1) moldura.style.height = `${altura}px`;
+    }
+    function montar(codigoMenu) {
+      if (!moldura || !modelo) return;
+      encaixar();
+      moldura.srcdoc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="${icones}"><link rel="stylesheet" href="${css}">
+</head><body class="special-context-focus pta2027-immersive pta2027-context-focus">
+<div class="layout">
+  <header class="topbar"><div class="user-info"><div class="spo-cabecalho-acoes">
+    <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-busca" aria-label="Buscar tela (exemplo)"><i class="bi bi-search" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-ajuda" aria-label="Ajuda (exemplo)"><i class="bi bi-question-lg" aria-hidden="true"></i></button>
+  </div></div></header>
+  <aside class="sidebar collapsed" id="sidebar"><div class="sidebar-header">
+    <button class="icon-btn toggle-btn" id="sidebar-toggle" aria-label="Alternar menu (exemplo)"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+  </div><nav class="menu" id="menu"></nav></aside>
+  <div class="main"><main id="content-area"><section class="governanca-resultados pta2027-integration">${modelo.innerHTML}</section>
+    <p class="muted">Conteúdo da tela…</p></main></div>
+</div></body></html>`;
+      moldura.addEventListener("load", () => {
+        const doc = moldura.contentDocument;
+        const meta = doc.getElementById("pta2027-context-meta");
+        if (meta) meta.innerHTML = '<span class="pta2027-context-user-name">Usuária de exemplo</span><span class="pta2027-context-user-detail">17/11/2026, 10:00 | Logados: 3</span>';
+        const voltar = doc.getElementById("pta2027-sticky-back");
+        if (voltar) voltar.hidden = false;
+        pronta = true;
+        copiarPreferencias();
+        // a moldura é baixa de propósito: no SPO, janela com até 560 px de altura é celular deitado (menu compacto);
+        // aqui só a largura decide, para o exemplo mostrar o tablet e o desktop
+        const janela = moldura.contentWindow;
+        const consultar = janela.matchMedia.bind(janela);
+        janela.matchMedia = (q) => consultar(String(q).replace(/,\s*\(max-height:\s*560px\)/, ""));
+        janela.Function(codigoMenu)();
+        if ("ResizeObserver" in window) new janela.ResizeObserver(() => janela.requestAnimationFrame(medir)).observe(doc.body);
+        setTimeout(medir, 300);
+      }, { once: true });
+    }
+    return { montar, sincronizar: copiarPreferencias };
+  })();
 
   // ---------------------------------------------------------------- gráficos
   // Tema como o getCommonDiagramTheme do main.js: paleta do modo dos diagramas (data-visual-diagram-theme),
@@ -552,8 +649,11 @@ initGovernancaSemanticFlows();`,
       montarPainel();
       aplicar();
       spo.teclado.forEach((codigo) => new Function(codigo)());
+      new Function(spo.buscaListas)();
+      new Function(spo.filtroPosicao)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
+      barraTela.montar(spo.menuCompacto);
       if (window.Plotly) {
         // o initGraficosEscala pergunta o modo dos diagramas por esta função do main.js
         window.spoGetDiagramSemanticTokens = () => ({ mode: body.dataset.visualDiagramTheme || "light", tokens: {} });
@@ -569,4 +669,162 @@ initGovernancaSemanticFlows();`,
         + "(http://127.0.0.1:5000/static/kit/mockup-spo-aa-plus.html): aberto do disco, a tela fica no "
         + "padrão SPO, sem os destaques, as opções nem o teclado das tabelas.");
     });
+})();
+
+/* Cartão "Pendências" (feat/pendencias-cartao): "Ver detalhes" abre o cartão flutuante (o mesmo .spo-busca-fundo
+   da busca e de "O padrão SPO-AA+"): Esc e toque fora fecham, o Tab fica dentro, o foco volta ao botão. No SPO, o mesmo
+   comportamento está no bloco [jean] initPendenciasDetalhe do main.js. */
+(function kitPendencias() {
+  const botao = document.getElementById("kit-pendencias-ver");
+  const previa = document.querySelector(".kit-pendencias-previa");
+  if (!botao || !previa) return;
+  const fundo = document.createElement("div");
+  fundo.className = "spo-busca-fundo";
+  fundo.hidden = true;
+  const caixa = previa.cloneNode(true);
+  caixa.classList.remove("kit-pendencias-previa");
+  caixa.setAttribute("role", "dialog");
+  caixa.setAttribute("aria-modal", "true");
+  caixa.removeAttribute("aria-label");
+  const titulo = caixa.querySelector(".spo-busca-titulo");
+  titulo.id = "kit-pendencias-dlg-titulo";
+  titulo.tabIndex = -1;
+  caixa.setAttribute("aria-labelledby", titulo.id);
+  fundo.appendChild(caixa);
+  document.body.appendChild(fundo);
+  const focaveis = () => [...caixa.querySelectorAll("button, summary, [tabindex='0']")].filter((el) => el.offsetParent);
+  function fechar() {
+    fundo.hidden = true;
+    document.body.classList.remove("spo-busca-aberta");
+    botao.focus();
+  }
+  botao.addEventListener("click", () => {
+    fundo.hidden = false;
+    document.body.classList.add("spo-busca-aberta");
+    titulo.focus();
+  });
+  caixa.querySelector(".spo-busca-rodape button").addEventListener("click", fechar);
+  fundo.addEventListener("mousedown", (ev) => { if (ev.target === fundo) fechar(); });
+  fundo.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); fechar(); return; }
+    if (ev.key !== "Tab") return;
+    const f = focaveis(), primeiro = f[0], ultimo = f[f.length - 1];
+    if (ev.shiftKey && (document.activeElement === primeiro || document.activeElement === titulo)) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+  });
+})();
+
+/* feat/kit-movel (2026-11-17): "Seu aparelho" (o que o navegador informa, para confirmar as medidas por busca do
+   plano de readequação; nada é enviado) e o filtro SPO de exemplo abrindo de verdade, com o véu do celular (o mesmo
+   do bloco [jean] initFiltroCelular do main.js, que o kit não carrega). */
+(function kitAparelho() {
+  const dl = document.getElementById("kit-aparelho-dados");
+  if (!dl) return;
+  const casa = (q) => window.matchMedia(q).matches;
+  // tamanho DESENHADO (altura da linha com entrelinha 1), e não o calculado: o mínimo de fonte do Firefox e o
+  // aumento de texto do Android mudam o desenho sem mudar o getComputedStyle
+  const sondar = (tamanho) => {
+    const s = document.createElement("span");
+    s.textContent = "Xg";
+    s.style.position = "absolute";
+    s.style.visibility = "hidden";
+    s.style.whiteSpace = "nowrap";
+    s.style.fontFamily = "Arial, sans-serif";
+    s.style.lineHeight = "1";
+    s.style.fontSize = tamanho;
+    document.body.appendChild(s);
+    const px = s.getBoundingClientRect().height;
+    s.remove();
+    return Math.round(px);
+  };
+  function motor() {
+    const ua = navigator.userAgent;
+    const marcas = navigator.userAgentData && navigator.userAgentData.brands
+      ? navigator.userAgentData.brands.map((b) => b.brand).filter((b) => !/not.?a.?brand/i.test(b)) : [];
+    const nomes = (marcas.length > 1 ? marcas.filter((b) => b !== "Chromium") : marcas).join(", ");
+    if (/Firefox\//.test(ua)) return `Firefox (Gecko)${/Android/.test(ua) ? ", Android" : ""}`;
+    if (/(iPhone|iPad|iPod)/.test(ua) || (/Safari\//.test(ua) && !/Chrom(e|ium)\//.test(ua))) return `Safari ou navegador do iOS (WebKit)`;
+    return `${nomes || "Chrome, Edge ou outro"} (Chromium)${/Android/.test(ua) ? ", Android" : ""}`;
+  }
+  function dados() {
+    const vv = window.visualViewport;
+    const dpr = window.devicePixelRatio || 1;
+    const faixas = [];
+    if (casa("(max-width: 600px), (max-height: 560px)")) faixas.push("menu só com o \"›\" e filtro como cartão");
+    if (casa("(max-width: 820px)")) faixas.push("cabeçalho em duas colunas");
+    if (casa("(max-width: 1200px)") && !casa("(max-width: 600px), (max-height: 560px)")) faixas.push("coluna de ícones do menu");
+    if (!faixas.length) faixas.push("desktop (menu lateral completo)");
+    return [
+      ["Janela (área útil)", `${innerWidth} × ${innerHeight} px`],
+      ["Área visível agora", vv ? `${Math.round(vv.width)} × ${Math.round(vv.height)} px${vv.scale !== 1 ? `, zoom de pinça ${vv.scale.toFixed(2)}×` : ""}` : "não informado"],
+      ["Tela inteira", `${screen.width} × ${screen.height} px (${casa("(orientation: portrait)") ? "em pé" : "deitada"})`],
+      ["Densidade", `${dpr}× (≈ ${Math.round(screen.width * dpr)} × ${Math.round(screen.height * dpr)} pixels físicos)`],
+      ["Texto padrão do navegador", `${sondar("medium")} px (16 = sem aumento)`],
+      ["Texto mínimo", `${sondar("8px")} px (8 = sem mínimo)`],
+      ["Toque", `${casa("(pointer: coarse)") ? "dedo" : "mouse ou caneta"}${casa("(hover: hover)") ? ", passa o cursor" : ", sem cursor"}; ${navigator.maxTouchPoints || 0} ponto(s) de toque`],
+      ["Navegador", motor()],
+      ["Preferências do sistema", [
+        casa("(prefers-color-scheme: dark)") ? "tema escuro" : "tema claro",
+        casa("(prefers-reduced-motion: reduce)") ? "reduzir movimento" : null,
+        casa("(prefers-contrast: more)") ? "mais contraste" : null,
+        casa("(forced-colors: active)") ? "cores forçadas" : null,
+      ].filter(Boolean).join(", ")],
+      ["Faixa do SPO nesta janela", faixas.join("; ")],
+    ];
+  }
+  function desenhar() {
+    dl.replaceChildren(...dados().flatMap(([rotulo, valor]) => {
+      const dt = document.createElement("dt"); dt.textContent = rotulo;
+      const dd = document.createElement("dd"); dd.textContent = valor;
+      return [dt, dd];
+    }));
+  }
+  desenhar();
+  let espera = 0;
+  const depois = () => { clearTimeout(espera); espera = setTimeout(desenhar, 150); };
+  window.addEventListener("resize", depois);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", depois);
+  const status = document.getElementById("kit-aparelho-status");
+  document.getElementById("kit-aparelho-copiar").addEventListener("click", async () => {
+    const texto = ["Seu aparelho (kit SPO-AA+)", ...dados().map(([r, v]) => `${r}: ${v}`), `Agente: ${navigator.userAgent}`].join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+      status.textContent = "Copiado. Cole na mensagem.";
+    } catch (err) {
+      const area = document.createElement("textarea");
+      area.value = texto; document.body.appendChild(area); area.select();
+      const ok = document.execCommand && document.execCommand("copy");
+      area.remove();
+      status.textContent = ok ? "Copiado. Cole na mensagem." : "Não foi possível copiar: mande um print.";
+    }
+  });
+})();
+
+(function kitFiltro() {
+  const wrap = document.querySelector(".kit-filtro");
+  if (!wrap) return;
+  const botao = wrap.querySelector(".mf-display"), painel = wrap.querySelector(".mf-panel");
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  let veu = null;
+  function fechar() {
+    painel.classList.remove("open");
+    botao.setAttribute("aria-expanded", "false");
+    if (veu) { veu.remove(); veu = null; }
+  }
+  function abrir() {
+    painel.classList.add("open");
+    botao.setAttribute("aria-expanded", "true");
+    if (celular.matches && !veu) {
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fechar(); });
+      document.body.appendChild(veu);
+    }
+    painel.querySelector(".mf-search").focus();
+  }
+  botao.addEventListener("click", () => (painel.classList.contains("open") ? fechar() : abrir()));
+  painel.querySelectorAll(".mf-btn").forEach((b) => b.addEventListener("click", () => { fechar(); botao.focus(); }));
+  document.addEventListener("click", (ev) => { if (painel.classList.contains("open") && !wrap.contains(ev.target) && ev.target !== veu) fechar(); });
+  painel.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fechar(); botao.focus(); } });
 })();

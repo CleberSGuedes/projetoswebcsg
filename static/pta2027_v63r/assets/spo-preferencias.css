@@ -310,3 +310,44 @@ body.spo-ponte.embedded-mode #context-cards .context-goal-card:is(:hover, .open)
 body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card:is(:hover, .open) {
   box-shadow: 0 8px 18px rgba(8, 59, 54, .07) !important;
 }
+
+/* [jean] Quadrinhos da Visão processual sem texto saindo da caixa (fix/hifenizacao-processos, 2026-11-17;
+   ponto 3 do plano de readequação para celular e navegadores)
+   Os quadrinhos dos processos (suporte, gerenciais, finalísticos) ficavam em duas colunas fixas mesmo no
+   celular: 65 a 91 px de largura, e até 9 de 12 nomes saíam da caixa ("Desenvolvimento organizacional",
+   114 px em 65; medido no Playwright no S26, Edge 50 Pro, iPhone 16 e Firefox com fonte ampliada). Agora:
+   duas colunas só quando cada uma tem ao menos ~9,5rem (no desktop e no iPad continua igual); senão, uma
+   coluna. E hifenização em português (o index.html é lang="pt-BR"), com quebra forçada só como último
+   recurso (texto muito ampliado). */
+.process-lines.compact {
+  grid-template-columns: repeat(auto-fit, minmax(max(9.5rem, calc(50% - 5px)), 1fr));
+}
+.process-lines.compact span {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* [jean] Detalhe logo abaixo da linha do cartão (fix/detalhe-abaixo-cartao, 2026-11-17; ponto 3 do plano de
+   readequação para celular e navegadores). O spo-preferencias.js põe a lista de eixos (grupos empilhados) e o
+   detalhe da Visão processual dentro da grade, depois do último cartão da linha; aqui eles ocupam a linha
+   inteira. O "×" que fecha a Visão fica na mesma linha do "Exportar diagrama PNG", com 44 px, em vez de
+   quebrar sozinho para a linha de baixo, esticado. */
+body.spo-ponte :is(.macro-grid-inner, .process-summary-grid) > .spo-na-grade {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+body.spo-ponte.embedded-mode .concept-actions {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+body.spo-ponte.embedded-mode .concept-actions .secondary-button {
+  flex: 1 1 auto;
+}
+body.spo-ponte.embedded-mode .concept-actions .close-expansion {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
