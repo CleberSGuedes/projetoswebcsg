@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
-  <link rel="stylesheet" href="../css/style.css?v=20261117.jean-alerta-cartao.1">
+  <link rel="stylesheet" href="../css/style.css?v=20261117.jean-pendencias-cartao.1">
   <link rel="stylesheet" href="kit-mockup.css">
 </head>
 <body class="kit-mockup-body" data-spo-font-ui="inter" data-spo-font-data="intel-mono" data-spo-text-size="default"
@@ -783,14 +783,14 @@
         </section>
 
         <!-- 3a. PROPOSTA ao dev. Cleber (ponto 4 do plano de readequação para celular e navegadores): os avisos da
-             Início como cartões, e não janelas que abrem sozinhas e cobrem a tela. Cartão igual ao de
-             partials/dashboard.html (feat/alerta-cartao), com números de exemplo. -->
+             Início como cartões, e não janelas que abrem sozinhas e cobrem a tela. Cartões iguais aos de
+             partials/dashboard.html (feat/alerta-cartao, feat/pendencias-cartao), com números de exemplo. -->
         <section class="kit-catalogo" aria-labelledby="kit-avisos-titulo">
           <h2 class="kit-secao" id="kit-avisos-titulo">Proposta: avisos da Início como cartões</h2>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Chave do planejamento (antes, a janela "Alerta")</h3>
+            <h3 class="kit-padrao-titulo">Chave do planejamento (antes, a janela "Alerta") e Pendências (antes, a janela que abria ao entrar)</h3>
             <p class="muted kit-padrao-onde">Início, abaixo do "Bem-vindo". Não abre sozinho. Placas dos dias no estilo SPO; os sinais de
-              alerta e de "homens trabalhando" em cores de placa fixas.</p>
+              alerta e de "homens trabalhando" em cores de placa fixas. Pendências: contagem por tipo; o detalhe abre só com "Ver detalhes".</p>
             <div class="grid home-grid">
               <section class="card spo-indice-card" aria-labelledby="kit-indice-titulo">
                 <div class="card-title spo-aviso-titulo" id="kit-indice-titulo"><svg class="spo-sinal-alerta" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><polygon class="spo-sinal-fundo" points="60,8 114,108 6,108" stroke-width="10" stroke-linejoin="round"/><rect class="spo-sinal-marca" x="55" y="38" width="10" height="36" rx="4"/><circle class="spo-sinal-marca" cx="60" cy="88" r="6"/></svg> Chave do planejamento</div>
@@ -802,6 +802,41 @@
                 <p class="muted spo-indice-nota"><span class="spo-indice-atualizado">Atualizado de 10/11/2026 às 08h12m a 14/11/2026 às 09h30m.</span></p>
                 <p class="spo-indice-colabore"><svg class="spo-sinal-obra" viewBox="0 0 120 108" aria-hidden="true" focusable="false"><polygon class="spo-obra-fundo" points="60,4 116,103 4,103" stroke-width="7" stroke-linejoin="round"/><polygon class="spo-obra-borda" points="60,11 109,98 11,98" fill="none" stroke-width="3.5" stroke-linejoin="round"/><g class="spo-obra-figura" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><polyline points="51,52 46,70"/><polyline points="46,70 43,79 39,91"/><polyline points="47,71 57,79 54,91"/><polyline points="51,52 41,54 42,63"/><polyline points="52,53 60,63 66,74"/></g><line class="spo-obra-figura" x1="34" y1="59" x2="75" y2="81" stroke-width="2.2" stroke-linecap="round"/><circle class="spo-obra-marca" cx="59" cy="47" r="4.6"/><path class="spo-obra-marca" d="M65 93.5 Q65.5 86 73 84 L79 80 Q85 72 91 77 L104 93.5 Z"/></svg><span>Colabore para melhorar este índice.</span></p>
               </section>
+              <section class="card spo-pendencias-card" aria-labelledby="kit-pendencias-titulo">
+                <div class="card-title spo-aviso-titulo" id="kit-pendencias-titulo"><i class="bi bi-inbox" aria-hidden="true"></i> Pendências <span class="spo-contador" aria-label="6 itens">6</span></div>
+                <ul class="spo-pendencias-lista">
+                  <li><span>Dotações aguardando aprovação</span><strong>2</strong></li>
+                  <li><span>Subações aguardando aprovação</span><strong>1</strong></li>
+                  <li><span>Metas físicas aguardando aprovação</span><strong>2</strong></li>
+                  <li><span>Etapas aguardando aprovação</span><strong>1</strong></li>
+                </ul>
+                <button class="btn btn-secondary sm spo-pendencias-ver" type="button" id="kit-pendencias-ver" aria-haspopup="dialog"><i class="bi bi-list-ul" aria-hidden="true"></i> Ver detalhes</button>
+              </section>
+            </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">"Ver detalhes": cartão flutuante, como "O padrão SPO-AA+"</h3>
+            <p class="muted kit-padrao-onde">Largura limitada, título fixo no alto e "Fechar" fixo embaixo, rolagem por dentro (no celular, cartão com 16 px de margem);
+              Esc e toque fora fecham; o foco volta ao botão. Fora do <code>.main</code> (a "Fonte maior" não o amplia duas vezes).
+              Abaixo, a caixa sem o fundo escurecido; o botão "Ver detalhes" acima abre de verdade.</p>
+            <div class="modal-card spo-busca-caixa spo-pendencias-caixa kit-pendencias-previa" role="group" aria-label="Prévia do detalhe das pendências">
+              <div class="modal-header spo-busca-topo">
+                <div class="modal-header-text"><div class="modal-header-title spo-busca-titulo">Pendências (6)</div>
+                <div class="modal-header-subtitle">Itens que aguardam a sua aprovação ou a de outro perfil. Esc fecha.</div></div>
+              </div>
+              <div class="spo-pendencias-corpo" tabindex="0">
+                <details class="spo-pendencias-grupo" open><summary>Dotações aguardando aprovação <span class="spo-contador">2</span></summary>
+                  <div class="table-responsive"><table class="table spo-pendencias-tabela"><thead><tr><th>Controle de Dotação</th><th>Valor da Dotação</th><th>Status</th><th>Aprovar por</th></tr></thead>
+                  <tbody><tr><td data-rotulo="Controle de Dotação">2027.14101.0001</td><td data-rotulo="Valor da Dotação">150.000,00</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Aprovar por">NGER</td></tr><tr><td data-rotulo="Controle de Dotação">2027.14101.0002</td><td data-rotulo="Valor da Dotação">82.500,00</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Aprovar por">NGER</td></tr></tbody></table></div>
+                </details>
+                <details class="spo-pendencias-grupo"><summary>Subações aguardando aprovação <span class="spo-contador">1</span></summary>
+                  <div class="table-responsive"><table class="table spo-pendencias-tabela"><thead><tr><th>Controle de Subação</th><th>Status</th><th>Tipo de Solicitação</th><th>Aprovar por</th></tr></thead>
+                  <tbody><tr><td data-rotulo="Controle de Subação">SUB-2027-0031</td><td data-rotulo="Status">aguardando</td><td data-rotulo="Tipo de Solicitação">alterar</td><td data-rotulo="Aprovar por">NGER</td></tr></tbody></table></div>
+                </details>
+                <details class="spo-pendencias-grupo"><summary>Metas físicas aguardando aprovação <span class="spo-contador">2</span></summary><p class="muted">(tabela igual à de hoje)</p></details>
+                <details class="spo-pendencias-grupo"><summary>Etapas aguardando aprovação <span class="spo-contador">1</span></summary><p class="muted">(tabela igual à de hoje)</p></details>
+              </div>
+              <div class="spo-busca-rodape"><p class="spo-busca-status">Para aprovar, abra a tela do item (Cadastrar Dotação, PTA Gerencial…).</p><button class="btn btn-secondary sm" type="button">Fechar</button></div>
             </div>
           </div>
         </section>
