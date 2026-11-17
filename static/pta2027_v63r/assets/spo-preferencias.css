@@ -328,3 +328,26 @@ body.spo-ponte.embedded-mode:not(.dark) #context-cards .context-goal-card:is(:ho
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* [jean] Detalhe logo abaixo da linha do cartão (fix/detalhe-abaixo-cartao, 2026-11-17; ponto 3 do plano de
+   readequação para celular e navegadores). O spo-preferencias.js põe a lista de eixos (grupos empilhados) e o
+   detalhe da Visão processual dentro da grade, depois do último cartão da linha; aqui eles ocupam a linha
+   inteira. O "×" que fecha a Visão fica na mesma linha do "Exportar diagrama PNG", com 44 px, em vez de
+   quebrar sozinho para a linha de baixo, esticado. */
+body.spo-ponte :is(.macro-grid-inner, .process-summary-grid) > .spo-na-grade {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+body.spo-ponte.embedded-mode .concept-actions {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+body.spo-ponte.embedded-mode .concept-actions .secondary-button {
+  flex: 1 1 auto;
+}
+body.spo-ponte.embedded-mode .concept-actions .close-expansion {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
