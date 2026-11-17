@@ -29542,6 +29542,57 @@
 })();
 
 /* ==========================================================================
+   [jean] Menu compacto no celular (feat/menu-celular, 2026-11-17; ponto 2 do plano de readequação para
+   celular e navegadores, decisão do dev. Jean). Liga body.spo-menu-compacto (CSS no fim do style.css):
+   - até 600 px de largura ou até 560 px de altura (celular em pé ou deitado; as mesmas condições dos avisos);
+   - ou, no modo de menu por cima da tela (até 1200 px), quando a coluna de ícones não cabe na altura (ex.:
+     fonte do sistema ampliada num tablet).
+   Para saber se a coluna cabe, tira a classe, mede e decide na mesma passada (sem pintar a tela no meio).
+   Reavalia ao mudar o tamanho da janela, a barra de endereço (visualViewport), as fontes e as permissões.
+   No modo compacto, o "›" fica na altura do centro do logotipo do SPO (pedido do dev. Jean): mede o centro
+   do logotipo dentro do cabeçalho e passa em --spo-seta-topo (o CSS tem 27 px de reserva, o valor do
+   tamanho padrão; a medida só ajusta o alinhamento, nada depende dela para funcionar).
+   ========================================================================== */
+(function initMenuCompacto() {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar || !document.getElementById("menu")) return;
+  const pequeno = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  const sobrepoe = window.matchMedia("(max-width: 1200px)");
+  const raiz = document.documentElement;
+  function alinharSeta() {
+    const logo = document.querySelector(".topbar .brand-logo");
+    const topo = document.querySelector(".topbar");
+    const seta = document.getElementById("sidebar-toggle");
+    if (!logo || !topo || !seta || !document.body.classList.contains("spo-menu-compacto")) return;
+    const centro = logo.getBoundingClientRect().top + logo.offsetHeight / 2 - topo.getBoundingClientRect().top;
+    const valor = Math.max(0, Math.round(centro - seta.offsetHeight / 2));
+    if (Number.isFinite(valor)) raiz.style.setProperty("--spo-seta-topo", `${valor}px`);
+  }
+  function avaliar() {
+    let compacto = pequeno.matches;
+    if (!compacto && sobrepoe.matches) {
+      if (sidebar.classList.contains("open")) return; // aberto: decide de novo quando fechar
+      document.body.classList.remove("spo-menu-compacto");
+      compacto = sidebar.scrollHeight > sidebar.clientHeight + 1;
+    }
+    document.body.classList.toggle("spo-menu-compacto", compacto);
+    alinharSeta();
+  }
+  avaliar();
+  let espera = 0;
+  const depois = () => { cancelAnimationFrame(espera); espera = requestAnimationFrame(avaliar); };
+  window.addEventListener("resize", depois, { passive: true });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", depois, { passive: true });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(depois);
+  window.addEventListener("load", depois);
+  // as permissões escondem itens do menu depois do carregamento; e a coluna muda ao fechar o menu
+  new MutationObserver(depois).observe(sidebar, { attributes: true, subtree: true, attributeFilter: ["style", "class"] });
+  // o título do cabeçalho muda de altura (fonte, densidade, quebra de linha): realinha o "›"
+  const topo = document.querySelector(".topbar");
+  if (topo && "ResizeObserver" in window) new ResizeObserver(depois).observe(topo);
+})();
+
+/* ==========================================================================
    [jean] O padrão SPO-AA+ (feat/padrao-spo-aa-plus, 2026-11-14)
    Pedido do dev. Jean: a declaração de acessibilidade cita o padrão "SPO-AA+";
    o usuário precisa poder ver o que ele é. Links com [data-spo-padrao] abrem
