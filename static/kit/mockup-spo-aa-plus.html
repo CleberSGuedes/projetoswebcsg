@@ -590,6 +590,18 @@
     <main id="content-area" tabindex="-1">
       <div class="kit-pilha">
 
+        <!-- 0. Seu aparelho (feat/kit-movel, 2026-11-17; plano de readequação para celular e navegadores, 0.3): o que
+             o navegador informa deste aparelho, para confirmar as medidas por busca e as faixas do SPO. Abra o kit no
+             celular e mande o print, ou toque em "Copiar". Nada é enviado: tudo fica nesta página. -->
+        <section class="card module-card kit-aparelho" aria-labelledby="kit-aparelho-titulo">
+          <div class="module-card-title"><i class="bi bi-phone" aria-hidden="true"></i><div><h2 id="kit-aparelho-titulo">Seu aparelho</h2><p>O que o navegador informa deste aparelho. Muda ao girar a tela ou redimensionar a janela.</p></div></div>
+          <dl class="kit-aparelho-dados" id="kit-aparelho-dados"></dl>
+          <div class="actions kit-aparelho-acoes">
+            <button class="btn btn-secondary sm" type="button" id="kit-aparelho-copiar"><i class="bi bi-clipboard" aria-hidden="true"></i><span>Copiar</span></button>
+            <span class="muted kit-aparelho-status" id="kit-aparelho-status" role="status" aria-live="polite"></span>
+          </div>
+        </section>
+
         <!-- 1. Cabeçalho de página (§4.4): sobretítulo, h1 24 px, descrição e o ícone do item do menu -->
         <header class="module-header">
           <div class="module-header-copy">
@@ -776,6 +788,77 @@
                 <span>Realça dimensões usadas no modo móvel e split.</span>
               </button>
             </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Cabeçalho com busca e Ajuda</h3>
+            <p class="muted kit-padrao-onde">Todas as telas (#170, #171). A lupa abre a busca de telas (Ctrl+K) e o "?" a Ajuda; os dois só o ícone, sem
+              círculo (variante discreta). Até 820 px, a grade de duas colunas, com os botões em pé. No celular, o menu vira só
+              o "›" ao lado do logotipo (aqui não aparece: o kit não tem a barra lateral).</p>
+            <header class="topbar kit-topbar">
+              <div class="brand-wrap">
+                <img class="brand-logo" src="../img/logo.jpg" alt="Logo">
+                <div>
+                  <div class="subtitle">Sistema de Planejamento e Orçamento</div>
+                  <div class="muted">SPO-NGER-SEDUCMT</div>
+                </div>
+              </div>
+              <div class="user-info">
+                <div class="user-meta">Usuária de exemplo - 17/11/2026, 10:00 | Logados: 3</div>
+                <div class="spo-cabecalho-acoes">
+                  <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-busca" aria-label="Buscar tela (exemplo)"><i class="bi bi-search" aria-hidden="true"></i></button>
+                  <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-ajuda" aria-label="Ajuda (exemplo)"><i class="bi bi-question-lg" aria-hidden="true"></i></button>
+                </div>
+              </div>
+            </header>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Lista nativa e filtro SPO</h3>
+            <p class="muted kit-padrao-onde">Formulários (lista nativa: uma escolha) e relatórios (filtro SPO: várias). Mesma borda, sombra e destaque
+              (#168). No celular (até 600 px de largura ou 560 de altura), o filtro aberto vira um cartão no alto da tela, com
+              um véu atrás que só fecha o filtro (#172). Toque em "(Todos)" para abrir.</p>
+            <div class="form-grid kit-listas">
+              <label class="field"><span>Unidade orçamentária (lista nativa)</span>
+                <select class="input">
+                  <option>14101 - Secretaria de Estado de Educação</option>
+                  <option>14601 - Fundo Estadual de Educação</option>
+                  <option>14602 - Fundo de Manutenção e Desenvolvimento da Educação Básica e de Valorização dos Profissionais da Educação</option>
+                </select>
+              </label>
+              <div class="field"><span>Região (filtro SPO)</span>
+                <div class="mf-wrapper kit-filtro">
+                  <button type="button" class="mf-display" aria-haspopup="true" aria-expanded="false"><span>(Todos)</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                  <div class="mf-panel">
+                    <input type="text" class="mf-search" placeholder="Buscar..." aria-label="Buscar região">
+                    <div class="mf-options">
+                      <label class="mf-option"><input type="checkbox" checked><span>(Todos)</span></label>
+                      <label class="mf-option mf-select-visible"><input type="checkbox"><span>Selecionar exibidos</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Baixada Cuiabana</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Médio-Norte Mato-grossense e Vale do Arinos</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Sul</span></label>
+                      <label class="mf-option"><input type="checkbox" checked><span>Araguaia</span></label>
+                    </div>
+                    <div class="mf-actions"><button type="button" class="mf-btn ghost">Cancelar</button><button type="button" class="mf-btn primary">Aplicar</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo">Opções "Não/Sim"</h3>
+            <p class="muted kit-padrao-onde">Cadastrar Dotação e outros cinco formulários (#169). Rótulo com ao menos 24 px de altura (44 px em tela de
+              toque) e círculo de 18 px (WCAG 2.5.8).</p>
+            <label class="field"><span>*Dotação Emprestada</span>
+          <div class="input-group" style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="nao" checked />
+              <span>Não</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin:0;">
+              <input type="radio" name="dotacao-emprestada" value="sim" />
+              <span>Sim</span>
+            </label>
+          </div>
+            </label>
           </div>
           <p class="muted">Também são padrões do SPO, já mostrados acima: cabeçalho de página, cartão de seção
             (<code>module-card</code>), prévias do Personalizar, gráficos, formulário e a tela de relatório com

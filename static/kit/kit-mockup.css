@@ -5,6 +5,9 @@
 .kit-mockup-body {
   background: var(--bg);
 }
+/* o kit não tem o menu lateral: o .main não guarda a margem da coluna de ícones (64 px até 1200 px de largura,
+   que deslocava o conteúdo e cortava os cartões no celular; feat/kit-movel) */
+.kit-mockup-body .main { margin-left: 0; }
 
 .kit-pulo {
   position: absolute;
@@ -131,3 +134,19 @@
 
 /* prévia do detalhe das pendências (feat/pendencias-cartao): a caixa sem o fundo escurecido */
 .kit-pendencias-previa { width: 100%; max-height: 420px; margin: 0; }
+
+/* feat/kit-movel (2026-11-17): "Seu aparelho" e os exemplos do catálogo de 16-17/11 */
+.kit-aparelho-dados {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 4px 0 12px;
+  font-size: var(--spo-fs-texto);
+}
+.kit-aparelho-dados dt { font-weight: 600; color: var(--muted); }
+.kit-aparelho-dados dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) {
+  .kit-aparelho-dados { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .kit-aparelho-dados dd { margin-bottom: 8px; }
+}
+.kit-aparelho-acoes { align-items: center; }
+/* o cabeçalho de exemplo fica no fluxo do kit (no SPO ele é fixo no alto e reserva a coluna do menu) */
+.kit-padrao .topbar.kit-topbar { position: relative; top: auto; z-index: auto; padding-left: 14px; border-radius: 12px; }
+.kit-listas { align-items: start; }
