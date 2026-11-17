@@ -29676,6 +29676,7 @@
       "Texto de leitura com no mínimo 12 px e entrelinha 1,5.",
       "Informação nunca só pela cor: sempre há título, ícone, negrito ou ✓ junto.",
       "O pedido de \"reduzir movimento\" do computador é respeitado.",
+      "Nada abre sozinho por cima da tela: avisos ficam na Início como cartões, e os detalhes abrem só a pedido.",
     ]),
     '<h3>O que você pode ajustar</h3>',
     "<p>Em <strong>Personalizar Temas SPO</strong>, vale só no seu navegador:</p>",
@@ -29687,7 +29688,7 @@
       "atalhos de uma tecla do teclado.",
     ]),
     '<h3>Como é verificado</h3>',
-    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
+    "<p>Cada mudança é <strong>medida antes de entrar</strong>: contraste nos temas claro e escuro e nas 8 cores de destaque, telas do celular ao monitor largo, nos navegadores Chrome/Edge, Firefox e Safari, uso só pelo teclado e as opções do Personalizar, com baterias automáticas. Depois, a equipe testa na homologação. O que ainda não foi verificado aparece como \"parcial ou em avaliação\" na declaração de acessibilidade.</p>",
   ].join("");
 
   let dialogo = null;

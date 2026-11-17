@@ -4,6 +4,8 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
+> Versão 5, 2026-11-17: modo móvel e navegadores (#166–#176): nada abre sozinho, o que abre fica junto de
+> quem abriu, e a bateria entre navegadores (Chromium, Firefox, WebKit) em celulares e tablets (§1, §4.4, §5, §6).
 > Versão 4, 2026-11-15: escala tipográfica com **"Densidade do texto"** (Compacto, Intermediário,
 > Legível) para a interface inteira e passo **Leitura** (§2.2); a aplicação vem em PRs seguintes.
 > Versão 3, 2026-11-15 (a versão 2, de 14/11, cobria até o #86; a 1, de 13/11, até o #61). Valores
@@ -19,12 +21,15 @@ layout, responsividade e preferências.
 | Texto grande (≥ 24 px, ou ≥ 18,7 px em negrito) | ≥ 4,5:1 | WCAG 1.4.6 |
 | Elementos que não são texto: borda de campo, contorno de botão sem preenchimento, ícone que informa, faixa de aviso, anel de foco | **≥ 3:1** contra o fundo vizinho (WCAG 1.4.11) | #37, #44 |
 | Foco visível | anel de 3 px em todo elemento focável pelo teclado | #34 |
-| Alvo de toque | ≥ 24 px sempre; ≥ 44 px em tela de toque (`pointer: coarse`) | #35 |
+| Alvo de toque | ≥ 24 px sempre (WCAG 2.5.8); ≥ 44 px em tela de toque (`pointer: coarse`; meta 2.5.5) | #35, #169 |
 | Movimento | respeitar `prefers-reduced-motion` (sem transições nem rolagem suave) | #38 |
 | Zoom e telas estreitas | sem corte nem rolagem lateral da página a 320 px e a 200% | #43 |
 | Espaçamento de texto | nada se perde com entrelinha 1,5, parágrafos 2×, letras 0,12 em e palavras 0,16 em forçados em todo o texto (WCAG 1.4.12) | bateria de 14/11 (§5) |
 | Tamanho e entrelinha | escala do §2.2: mínimo de 12 px para leitura, entrelinha 1,5 no texto corrido | #73, #75, #76 |
 | Informação | nunca só pela cor: título, ícone, negrito, ✓ ou `aria-*` junto | #49, #54 |
+| Interrupções | **nada abre sozinho por cima da tela**: aviso é cartão na própria tela; janela só a pedido, e fecha com Esc, toque fora e "Fechar" (WCAG 2.2.4, AAA) | #174, #175 (propostas) |
+| Ordem | o que abre aparece **logo depois de quem abriu**, na tela e na ordem do HTML; ao fechar, o foco volta a quem abriu (WCAG 1.3.2, 2.4.3) | #170, #173, #175 |
+| Navegadores e aparelhos | o mesmo resultado no **Chromium** (Chrome, Edge, Samsung), no **Firefox** e no **WebKit** (Safari, todo navegador do iPhone), em desktop, tablet e celular, em pé e deitado, e com a fonte do sistema ampliada | bateria de 17/11 (§5) |
 
 **Exceções da WCAG que valem aqui:** campos e botões **desabilitados** não precisam de contraste
 mínimo, mas, no SPO, o texto deles fica ≥ 4,5:1 (§4.2). Logotipos e decoração, também.
@@ -352,7 +357,8 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 | Abas | `role="tab"` + `aria-selected` + `aria-controls` → `tabpanel`; setas trocam de aba, **uma** rotina de teclado por lista (#41, #49) |
 | **Tabelas (teclado)** | padrão "grade" do WAI-ARIA, sem `role="grid"` (o leitor de tela segue lendo como tabela): Tab entra numa célula só (a última visitada; na primeira vez, a primeira de dados — tabindex itinerante), setas andam de célula em célula, Home/End na linha, Ctrl+Home/End na tabela, PageUp/PageDown 10 linhas, Enter entra no controle da célula e Esc volta; só linhas visíveis; a tabela é uma parada só do Tab (filtros, botões e links das células saem do Tab e são alcançados por setas + Enter; campos de digitação dos dados ficam); clique numa célula começa a navegação por ali; na paginação, ← → andam pelos botões e ↑/Esc voltam à tabela (o foco fica na paginação depois de trocar de página); de um filtro ou botão da célula, as setas andam pelas células (dentro de um campo ou com a lista aberta, são do campo/da lista). Alt + setas não: no navegador volta/avança a página. `initNavegacaoTabelas` (`main.js`); seção "Tabelas" na ajuda dos atalhos e dica na faixa |
 | Paginação | página ativa com borda `--accent`, negrito e `aria-current="page"` (#42, #49) |
-| Avisos modais | `role="dialog"`, foco dentro, Tab preso, Esc fecha, foco volta (#41) |
+| Avisos modais | `role="dialog"`, foco dentro, Tab preso, Esc fecha, foco volta (#41). **Só a pedido** (§1, Interrupções): o que a pessoa precisa saber ao entrar vira cartão na tela |
+| **Avisos da Início** (propostas #174, #175) | cartões na grade da Início, abaixo do "Bem-vindo", nada abre ao entrar. **Chave do planejamento** (antes a janela "Alerta"): sinal de alerta no título e placa "homens trabalhando" no pé, em SVG com cores de placa fixas (`--spo-sinal-*`, `--spo-obra-*`; decorativos), dias em placas no estilo SPO (algarismo `--text`, fundo `--surface`, contorno `--spo-control-border`), recorde com selo, datas da última atualização. **Pendências:** contagem por tipo (avisos de carga por UO em `--spo-negative`); só aparece quando há pendência; "Ver detalhes" abre o detalhe no cartão flutuante da busca (`.spo-busca-fundo`, fora do `.main`), com um `<details>` por tipo e as tabelas; no celular, cada linha vira "rótulo: valor" (`td::before` com `data-rotulo`). O conteúdo vem de um `<template id="spo-pendencias-detalhe">` |
 | **Cabeçalho de página** | cartão `header.module-header` (ou `report-header`): sobretítulo `.module-eyebrow` (11 px, maiúsculas), `<h1>` 24 px negrito, descrição em `<p>`, e à direita o **ícone do item do menu** (`MENU_META`, `services/features.py`) num quadrado na cor de destaque (#84). Tela nova usa essa marcação |
 | Busca de telas | botão **lupa ("Buscar tela") no cabeçalho** (desde 17/11; antes, item do menu lateral) e atalhos **Ctrl+K** e **/**. A busca é um diálogo modal no visual dos avisos (`modal-card`, título na cor de destaque, campo `.field`, botão "Fechar"), com caixa de busca `combobox` + lista `listbox` (WAI-ARIA). Fica centralizada no desktop e, no celular (até 600 px), é um cartão com 16 px de margem no alto da tela (o teclado virtual não cobre o campo), acima dos avisos modais. As outras janelas de consulta ("Ajuda", "O padrão SPO-AA+") seguem o mesmo cartão com margem, centralizado; nenhuma ocupa a tela inteira. Cada resultado mostra o **caminho no menu**. A opção ativa tem fundo e borda à esquerda, para não depender só da cor. Quem ganha a lista são as telas do menu já filtrado pelas permissões, mais o **glossário** de siglas (`GLOSSARIO` em `initBuscaTelas`). **Tela nova no menu:** se o nome não diz o assunto, acrescente os termos no glossário |
 | Ajuda e atalhos do teclado | janela **"Ajuda"** aberta pelo botão **"?" do cabeçalho** (ao lado da lupa), pela tecla **?** e por links com `data-spo-atalhos`; mesmo visual da busca. Seções que se abrem (`<details>`): Buscar telas, Acessibilidade e preferências, Atalhos do teclado (fechada em tela de toque, a não ser quando chamada pela tecla ou pelos links) e Sobre e contato (versão, ambiente, e-mail do NGER). A lupa e o "?" são **discretos**: só o ícone, na cor `--muted`, sem círculo (área de toque igual ao botão: 32 px; 44 px no toque). Os dois ficam numa coluna própria: no desktop, ao lado da linha do usuário; no celular, em pé, ocupando a altura do título e da linha do usuário, para não aumentar o cabeçalho. **Assunto novo de ajuda:** entra como seção em `initAtalhosTeclado` (`secaoAjuda`). **Alt+M** leva ao item da tela atual no menu (ou ao grupo visível que o contém) e há o link de pulo "Ir para o menu"; no menu, **Esc** volta para onde a pessoa estava e fecha o menu aberto por cima da tela. Foco levado por atalho usa `focarComAnel` (classe `spo-foco-atalho`): depois de um clique, o Chrome não mostra o `:focus-visible` para foco movido por combinação com Alt/Ctrl. Componente com setas mostra uma **dica** no rodapé ao receber foco pelo teclado (`DICAS` em `initAtalhosTeclado`, com `aria-describedby`). **Atalho novo:** entra na lista `SECOES` da ajuda; se for de uma tecla só, respeita `data-spo-keys="off"` (WCAG 2.1.4). **Componente novo com setas:** entra em `DICAS` |
@@ -362,7 +368,7 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 | Totais dos relatórios | 2 colunas sempre que os pares cabem numa linha; senão 1; se rótulo e valor não cabem lado a lado, o **valor desce inteiro** (#31, #56). PLAN 51: o mesmo comportamento quando o **cartão** tem até 640 px (container query `spo-plan51`; até 900 px os botões descem) (#77) |
 | Quadros comparativos do Teto | colunas de ano com mínimo de 184 px (cabe "R$ 99.999.999.999,99" em 14 px mono); com pouco espaço, o quadro rola para o lado (#82) |
 | Personalizar | o resumo da escolha atual de cada grupo quebra linha, nunca reticências (#86). **Prévias** em dois cartões de uma coluna: "Componentes do SPO" e "Fontes e tabelas" (`#spo-previa-fontes`, com a mesma borda da prévia: classes `personalizar-preview`/`preview-surface`; #117). Escolher a **Atkinson Hyperlegible** oferece, toda vez, aplicar também 112%, entrelinha 1,75 e leitura 72ch ("Leitura confortável"; sobe só o que estiver abaixo; #118). Desde a bateria 2 a oferta inclui a Atkinson Hyperlegible Mono nas tabelas e dados e lista só o que falta (botão "Aplicar", "Aplicar as duas"… até "as quatro"). Opção que muda o visual deve aparecer numa das prévias |
-| Programação PTA/OpR (mockup no iframe) | recebe do SPO, na mensagem `spo-preferencias` (`initPontePta2027`), os atributos `data-spo-*`/`data-visual-*` e os tons de foco e destaque; `static/pta2027_v63r/assets/spo-preferencias.js`/`.css` aplicam fontes, tabelas, entrelinha, leitura, foco, links, contraste, brilho e movimento. O **tamanho do texto não** entra: o zoom da área do SPO já amplia o iframe. A **densidade** vale no espaço dos cartões (seção "Dimensões" do `spo-preferencias.css`); estilo dos cartões e daltonismo nos diagramas (SVG prontos) ficam fora. **Dimensões:** cartão principal = cabeçalho de página (título 24 px), títulos 24/20/16 px, cartões com cantos 14 (pequenos 12) e espaço pela densidade, campos 40 px, botões ≥ 40 px. Os atalhos do SPO digitados dentro do mockup voltam ao SPO (`spo-atalho`). **Opção nova no Personalizar:** acrescentar em `ATRIBUTOS` nos dois lados e a regra no `.css` do mockup. **SPO-AA+ no mockup:** cores (tokens `--teal`/`--muted` e literais) na seção "Cores do PTA 2027" do `spo-preferencias.css`; escala tipográfica **gerada** em `spo-escala.css` por `scripts/gerar_escala_pta2027.py` (o teste `tests/test_escala_pta2027.py` avisa se o `pta-2027.css` mudar sem gerar de novo) |
+| Programação PTA/OpR (mockup no iframe) | recebe do SPO, na mensagem `spo-preferencias` (`initPontePta2027`), os atributos `data-spo-*`/`data-visual-*` e os tons de foco e destaque; `static/pta2027_v63r/assets/spo-preferencias.js`/`.css` aplicam fontes, tabelas, entrelinha, leitura, foco, links, contraste, brilho e movimento. O **tamanho do texto não** entra: o zoom da área do SPO já amplia o iframe. A **densidade** vale no espaço dos cartões (seção "Dimensões" do `spo-preferencias.css`); estilo dos cartões e daltonismo nos diagramas (SVG prontos) ficam fora. **Dimensões:** cartão principal = cabeçalho de página (título 24 px), títulos 24/20/16 px, cartões com cantos 14 (pequenos 12) e espaço pela densidade, campos 40 px, botões ≥ 40 px. Os atalhos do SPO digitados dentro do mockup voltam ao SPO (`spo-atalho`). **Detalhe junto do cartão** (#173): a lista de eixos (Mapa da cadeia, com os grupos empilhados) e o detalhe da Visão processual entram na grade logo depois da **linha** do cartão tocado (`.spo-na-grade`, `grid-column: 1 / -1`); o "×" das vistas tem o nome "Fechar" e fica na linha do "Exportar", com 44 px. **Opção nova no Personalizar:** acrescentar em `ATRIBUTOS` nos dois lados e a regra no `.css` do mockup. **SPO-AA+ no mockup:** cores (tokens `--teal`/`--muted` e literais) na seção "Cores do PTA 2027" do `spo-preferencias.css`; escala tipográfica **gerada** em `spo-escala.css` por `scripts/gerar_escala_pta2027.py` (o teste `tests/test_escala_pta2027.py` avisa se o `pta-2027.css` mudar sem gerar de novo) |
 | Login | sem diálogos nativos (`window.confirm`/`alert`). Com sessão já aberta: aviso `role="status"` sem botões; a **segunda tentativa com o mesmo e-mail** encerra a outra sessão (#61, #80). O login usa a paleta inteira do destaque (§3.3) |
 
 ## 5. Como medir (bateria)
@@ -376,7 +382,8 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 5. Cubra **2 temas × 8 destaques** quando a cor depende do destaque; os níveis Suave e Reforçado
    quando o componente usa `--muted` ou `--spo-control-border`.
 6. Para `<select>`: meça com o **valor mais longo** escolhido e a lista **aberta**.
-7. Larguras de referência: 1920, 1600 e 1366 (menu aberto e fechado), 1024, 768, 390, 320.
+7. Larguras de referência: 1920, 1600 e 1366 (menu aberto e fechado), 1024, 768, 390, 320. Para celular e
+   tablet, os **perfis de aparelho** do item 15 (360 × 780, ~407 × 904, 393, 440, 834, ~924; deitados também).
 8. Teclado real (Tab, setas, Esc, Enter) para foco e navegação; leitor de tela quando houver
    `aria-*` novo. **Foco com clique ou Tab reais**: o `.focus()` por script não vale quando a página
    não tem o foco do navegador.
@@ -412,6 +419,18 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 
     Para ver como uma pessoa com daltonismo enxerga, aplique à área de conteúdo um filtro SVG
     `feColorMatrix` com a matriz de Machado. Tire a captura com e sem a opção.
+15. **Bateria entre navegadores (desde 2026-11-17):** Playwright com os três motores (Chromium, Firefox e
+    WebKit), numa pasta local fora do repositório (`H:\SPO_testes_navegadores`, com `LEIA-ME.md`). Quem
+    testa entra uma vez numa janela visível (`entrar.mjs`; o script não lê nem guarda senha) e a sessão
+    salva serve aos três motores; **uma tela por vez**, como no item 1. Perfis: desktop 1366 nos três;
+    celulares e tablets dos modelos que a equipe usa (Galaxy S24/S26, Motorola Edge 50 Pro, iPhone 16 e
+    Pro Max, iPad, Fold aberto), em pé e deitados; **fonte ampliada** no Firefox por
+    `font.minimum-size.x-western` = 18 (as outras preferências de escala não têm efeito no desktop).
+    Mede rolagem lateral, texto cortado (fora `.spo-sr-only` e elementos de até 2 px), alvos < 24 px
+    (o rótulo do `<label>` e a área invisível do `::after` contam), coluna do menu que rola, cabeçalho e
+    erros no console. Medida própria para cada tema (ex.: cartão do filtro cabe e "Aplicar" responde ao
+    toque, por `elementFromPoint`). Toque com `touchscreen.tap` quando o defeito é de toque (`:hover`
+    preso). O celular real fica para depois da publicação: o kit tem a seção "Seu aparelho" (§6.4).
 
 ## 5.1 Declaração de acessibilidade
 
@@ -457,7 +476,12 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - [ ] Rótulo e valor que podem não caber lado a lado: o valor desce inteiro (nunca reticências em dado).
 - [ ] Tamanho de texto novo usa as variáveis da "Densidade do texto" (`var(--spo-fs-texto)`, `-dado`, `-controle`, `-leitura`, `-titulo`…; §2.2.1), nunca `font-size` em px: o `tests/test_tamanho_fonte.py` reprova.
 - [ ] Movimento novo (animação, rolagem suave, cartão que sobe ao passar o mouse) respeita "Reduzir sempre" e o sistema: no CSS, sob `body[data-spo-motion="reduce"]` e `prefers-reduced-motion`; no JS, `scrollIntoView`/`scrollTo`/`scrollBy` já viram um salto com esmaecimento da área de chegada (0,22 s, só opacidade), sozinhos (também no mockup). Troca de conteúdo sem deslocamento: esmaecer, nunca deslizar.
-- [ ] Painel que abre ao clicar num cartão (metas, eixos, detalhamento): abre logo abaixo do cartão ou do grupo dele; com "Reduzir sempre", a página só rola se o começo do painel não estiver à vista, e só até ele (sem esmaecer); o cartão aberto mostra o estado (borda na cor de destaque) e tem `aria-expanded`. Com "Automático", a rolagem suave até o painel vale só em tela estreita e baixa (até 1200 × 1000 px; celular até 720 px de largura sempre; ou preset "Pressão operacional"); em tela larga ou alta (monitor em retrato, tablet em pé), a página só rola se o começo do painel ficar fora da tela.
+- [ ] **Nada abre sozinho** ao entrar numa tela (WCAG 2.2.4): o aviso é um cartão na própria tela; o detalhe abre a
+      pedido, no cartão flutuante da busca (`.spo-busca-fundo`, fora do `.main`: título fixo, "Fechar" fixo, rolagem
+      por dentro, Esc e toque fora fecham, foco volta a quem abriu). No celular, cartão com 16 px de margem, nunca
+      tela inteira; tabela larga dentro dele vira "rótulo: valor".
+- [ ] Painel que abre ao clicar num cartão (metas, eixos, detalhamento): abre logo abaixo da **linha** do cartão
+      (dentro da grade, ocupando a linha inteira; #173) ou do grupo dele; com "Reduzir sempre", a página só rola se o começo do painel não estiver à vista, e só até ele (sem esmaecer); o cartão aberto mostra o estado (borda na cor de destaque) e tem `aria-expanded`. Com "Automático", a rolagem suave até o painel vale só em tela estreita e baixa (até 1200 × 1000 px; celular até 720 px de largura sempre; ou preset "Pressão operacional"); em tela larga ou alta (monitor em retrato, tablet em pé), a página só rola se o começo do painel ficar fora da tela.
 - [ ] Texto **nunca** apagado com `opacity` < 1: use a cor (`--muted`, ou o desabilitado do §3.4). A opacidade derruba o contraste e escapa de medições que não a compõem (bateria 2: pílula de versão a 4,26:1, opções indisponíveis das Notas SEE a 2,2:1, dica da Início).
 - [ ] Texto dentro de forma de tamanho fixo (círculo, pílula, selo): a forma cresce com o texto (`fit-content`, `aspect-ratio`), nunca o contrário; meça com a fonte mais larga (indicador de avanço do PTA/OpR, bateria 2).
 - [ ] Texto sobre painel **semitransparente** (tingido do destaque, degradê): meça contra o fundo da página que aparece por trás, também com o brilho reduzido.
@@ -506,6 +530,10 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   reproduz (o filtro de lista dos relatórios, que no SPO é copiado em cada relatório, e o comportamento dos
   cartões do Personalizar, sem gravar) tem teste de equivalência ou segue as funções `sync*` do SPO.
   Aberto do disco (`file://`), o navegador bloqueia a leitura do `main.js`; o kit avisa e fica no padrão.
+- **No celular** o kit ocupa a tela inteira (sem a margem da coluna do menu, que ele não tem; #176). A seção
+  **"Seu aparelho"**, a primeira do conteúdo, mostra o que o navegador informa (janela útil, área visível, tela,
+  densidade, texto padrão e mínimo **como desenhados**, toque, navegador, preferências do sistema e a faixa do
+  SPO que vale na janela) e tem "Copiar" (nada é enviado): é como os colegas mandam as medidas do celular real.
 - Painel **"Preferências do kit"** com **os próprios cartões do Personalizar** (Tema, Cor de destaque,
   Preferências comuns, Fontes e tamanho do texto, Visão e cores — mesma marcação do template, descrições
   de cada opção incluídas) e um cartão "Preset do Contrato Visual" com os presets em **cartões dinâmicos**
@@ -531,7 +559,10 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   o **catálogo de padrões** (cada exemplo recortado do template de origem: cartões dinâmicos com painel de
   contexto e fluxo com setas de Governança e Resultados — com o comportamento do `initGovernancaSemanticFlows`
   lido do `main.js` —, cartões de painel, cartão de documento do Institucional, indicadores do Teto e
-  opções de envio das Notas SEE; os cartões do mockup PTA/OpR entram quando ele for integrado), formulário (campos,
+  opções de envio das Notas SEE; cabeçalho com busca e Ajuda; lista nativa e filtro SPO — o filtro abre de
+  verdade, como cartão com véu no celular —; opções "Não/Sim" de 24 px, recortadas do Cadastrar Dotação; e a
+  proposta dos avisos da Início, com o detalhe das pendências; os cartões do mockup PTA/OpR entram quando ele
+  for integrado), formulário (campos,
   desabilitado, hierarquia dos botões), aviso `alert-info` e uma **tela de relatório** com a marcação dos
   relatórios do SPO (FIP 613, PLAN20, PED): `report-header`, cartão `report-data-card`, topo
   `relatorio-top relatorio-top-uo` com "Última atualização por UO" (o HTML do `renderUltimasAtualizacoes`),
@@ -624,6 +655,7 @@ resolvido por `initGraficosEscala`).
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
+| 2026-11-17 | **Versão 5:** modo móvel e navegadores (#166–#176): metas de interrupções, ordem e navegadores (§1); avisos da Início e detalhe junto do cartão (§4.4); bateria entre navegadores (§5, item 15); regras "nada abre sozinho" e "linha do cartão" (§6.1); kit no celular e "Seu aparelho" (§6.4). Detalhe por PR no `docs/CHANGELOG.md`. |
 | 2026-11-15 | **Versão 4:** §2.2 "Densidade do texto" (Compacto/Intermediário/Legível para a interface inteira; padrão Legível; Compacto com tabelas de 10 px; passo Leitura de 16 px) e as variáveis `--spo-fs-*`; §2.1 Mulish na largura do "Estrito". Só documentação: a aplicação vem nas etapas 2–4. |
 | 2026-11-15 | §4.4: **cartão dinâmico** (o `.flow-node` de Governança) como sistema visual dos cartões clicáveis: Institucional, envio das Notas SEE e presets do Contrato Visual. |
 | 2026-11-15 | **Versão 3:** opções novas (leitura, daltonismo, foco, links, brilho, movimento, 150%, densidade automática, atalhos de uma tecla; §2.1); fundo do alto contraste escuro no gráfico e no quadro (§3.5); busca de telas, atalhos do teclado, Programação PTA/OpR, prévias e sugestão da Atkinson (§4.4); declaração e padrão publicados para o usuário (§5.1); bateria 2 e lições de opacidade e contêineres (§5); brilho reduzido com `--muted` `#3e3c44` e "Dispensar" `#861523`. Até o #119 e a bateria 2. |
