@@ -9,7 +9,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
-## 2026-11-17 — dev/jean, ainda não publicado
+## 2026-11-17 — produção, RELEASE_2_2026_11_17.4
 
 ### Corrigido
 - Menu lateral no celular (`fix/hover-toque`): o item tocado antes ficava destacado junto com o da tela atual (dois itens destacados), porque o navegador mantém o `:hover` no último toque. Em telas sem mouse (`@media (hover: none)`), o `:hover` dos itens do menu volta ao estado normal; a tela atual e o grupo aberto continuam destacados; no desktop nada muda. Medido no Playwright com toque (Chromium e WebKit): de 2 itens destacados para 1; com mouse (Chromium, Firefox e WebKit) o destaque continua. Regra nova no `padrao-visual-spo-aa-plus.md` §6.1. `?v=` do CSS `20261117.jean-hover-toque.1` (`base.html`, `login.html` e kit).
@@ -35,6 +35,16 @@ Este arquivo lista o que foi publicado, por data. Formato:
 - Contrato Visual Protegido sem a nota repetida (`fix/contrato-nota-repetida`; achado do dev. Jean): a linha "Regras de acessibilidade e de visual que todo preset respeita: documento técnico do padrão SPO-AA+" saiu, porque o cartão do kit (#182) já leva ao mesmo documento; saiu junto a regra de CSS dela (`.contract-padrao-note`). O documento técnico continua abrindo pelo Contrato, pelo link do cartão. Padrão §5.1. `?v=` do CSS: `20261117.jean-contrato-nota.1`.
 - Bateria SPO-AA+ no repositório (`feat/bateria-spo-aa-plus`; pedido do dev. Jean): `tests/navegadores/` junta as baterias 1 a 4 do AA+ (contraste, tipografia, Personalizar, modo móvel, equivalência SPO × kit) numa ferramenta Playwright em três níveis — básico (~3 min, a cada PR), intermediário (~7 min, a cada lote) e completo (~30 min, antes de enviar um lote) —, com relatório em Markdown e JSON e saída com código 1 se houver falha. Verificações: travas (pytest), telas, contraste (AA reprova, AA+ avisa), equivalência e recursos-chave. Usa um usuário de teste do banco de desenvolvimento (credenciais em `.env.bateria` ou variáveis de ambiente, fora do git); só lê e toca. Dependência só da pasta: `playwright` 1.64.1 (`package.json` e `package-lock.json` próprios; `node_modules/`, `sessoes/` e `resultados/` ignorados). Padrão §5 (item 16) e kit ("Como usar"). **Achado da própria bateria, corrigido:** com o menu aberto por cima da tela (celular ou gaveta até 1200 px), o Esc só fechava com o foco dentro dele, e no Safari tocar no "›" não leva o foco ao botão (iPad/iPhone com teclado: o Esc não fazia nada); agora fecha esteja o foco onde estiver, se nenhuma janela estiver aberta por cima (`initMenuCompacto`). `?v=` do `main.js`: `20261117.jean-bateria-aa-plus.1`.
 - Bateria SPO-AA+ como passo oficial (`docs/bateria-no-padrao`): padrão SPO-AA+ na versão 5.1 — checklist de tela nova (§6.1) com o nível de bateria de cada momento (básico a cada PR, intermediário a cada lote, completo antes de enviar um lote); §5 item 15 aponta a bateria oficial (item 16) e deixa a pasta local como laboratório; §8 com a versão 5.1. Declaração de acessibilidade (Personalizar), "Como foi avaliado": desde 17/11 cada mudança passa pela Bateria SPO-AA+ (660 verificações no nível completo). Só texto.
+
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
+
+---
+
+## 2026-11-17 — dev/cleber, RELEASE_2_2026_11_17.1
+
+### Alterado
+- Ajustes nas regras da seção 40 do `claude.md` (`fix/docs-regras-40-ajustes`), por sugestão do dev. Jean: a 40.2 aponta para a 40.14 (todo tema registra entrada no CHANGELOG; ao `claude.md` só vai o que continua valendo); a 40.13 vale para os bancos dos dois ambientes; a 40.14 descreve os formatos do cabeçalho da entrada; a 40.9 diz que o N soma `dev/cleber`, `homologacao` e `main`; a 40.8 define o único conflito liberado (linha do `RELEASE`), e a 40.1 e a 40.7 foram ajustadas para não contradizê-la.
+- Cabeçalho do `claude.md` com a data de 17/11/2026. Só documentação e o `RELEASE` do rodapé; nenhum código.
 - **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
 
 ---
