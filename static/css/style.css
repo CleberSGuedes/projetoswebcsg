@@ -10142,3 +10142,34 @@ body[data-spo-text-size="xlarge"] { --spo-zoom: 1.5; }
     box-shadow: none;
   }
 }
+
+/* ==========================================================================
+   [jean] Lista nativa aberta com a linguagem do filtro SPO (fix/lista-nativa-visual, 2026-11-17; ponto 1 do
+   plano de readequação para celular e navegadores, PR 2)
+   No desktop com Chrome/Edge (base-select, bloco "Listas nativas" acima), a lista aberta de um <select> tinha
+   outra cara que o filtro SPO dos relatórios (print do Jean: Cadastrar Dotação × PED). Medido no Chromium:
+   borda cinza (o filtro usa a borda dos controles, que segue o destaque), sombra 18% no claro (o filtro, 8%) e
+   destaque ao passar o mouse de 16% (o do filtro, 4% de preto ou 6% de branco, quase invisível). Agora a
+   lista aberta usa a borda do filtro, os dois usam a mesma sombra (o token --shadow de cada tema) e o mesmo destaque ao passar o mouse: 12% da cor
+   de destaque, como os itens do menu. Ficam diferentes de propósito: a fonte (o filtro mostra dados, na fonte
+   de dados; a lista do formulário, nomes, na fonte da interface) e a marca (✓ na escolha única, caixa de
+   seleção na múltipla). Firefox e Safari seguem com a lista do sistema (regra do padrão §4).
+   ========================================================================== */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size])::picker(select),
+  .theme-dark select:not([multiple]):not([size])::picker(select) {
+    border-color: var(--spo-control-border, var(--border));
+    box-shadow: var(--shadow);
+  }
+  select:not([multiple]):not([size]) option:is(:hover, :focus-visible) {
+    background: rgba(var(--accent-rgb), 0.12);
+  }
+}
+.mf-panel,
+.theme-dark .mf-panel {
+  box-shadow: var(--shadow);
+}
+.mf-panel .mf-option:hover,
+.theme-dark .mf-panel .mf-option:hover {
+  background: rgba(var(--accent-rgb), 0.12);
+}
