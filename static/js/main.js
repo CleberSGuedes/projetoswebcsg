@@ -30224,3 +30224,156 @@
     if (botao) abrir(botao);
   });
 })();
+
+/* ==========================================================================
+   [jean] Busca nas listas longas dos formulários (feat/busca-listas-longas, 2026-11-17; Etapa 5 do plano de
+   readequação para celular e navegadores; regra das listas do padrão §4.3: nativo sempre que dá conta, caixa de
+   busca SPO sobre o <select> nas listas longas). Chave do Planejamento (296 opções), Subação/Entrega (470, textos
+   de até 239 caracteres), Etapa (438)… eram percorridas na mão, e no celular o seletor nativo mostra a lista
+   inteira sem busca.
+   - Toda lista de um só valor de #content-area com 40 opções ou mais ganha, logo abaixo, o campo "Filtrar a lista"
+     (fora do filtro SPO dos relatórios e das janelas). O <select> continua sendo o campo do formulário: valor,
+     eventos (change das cascatas) e envio são os dele; o filtro só tira da lista, por enquanto, as opções que não
+     contêm todas as palavras digitadas (sem acento, sem maiúsculas). Ficam a opção vazia e a já escolhida.
+   - As opções saem do DOM (o Safari do iPhone ignora option[hidden]) e voltam ao escolher (change, na captura,
+     antes dos tratadores da tela), ao sair da lista, ao limpar o campo e ao limpar o formulário. Se a tela
+     encher a lista de novo (cascata), o filtro passa a valer sobre as opções novas.
+   - Enter no campo: com um resultado só, escolhe-o; com vários, abre a lista (showPicker) ou leva o foco a ela.
+     ↓ também leva à lista; Esc limpa o campo. Contagem "12 de 296" anunciada (role="status").
+   - Texto escolhido que não cabe na lista fechada (celular, fonte ampliada): aparece inteiro logo abaixo, em
+     texto discreto (aria-hidden: o leitor de tela já lê o valor da lista).
+   ========================================================================== */
+(function initBuscaListasLongas() {
+  const MINIMO = 40;
+  const area = document.getElementById("content-area");
+  if (!area) return;
+  const estados = new Map();
+  const normalizar = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const valida = (s) => s.tagName === "SELECT" && !s.multiple && s.size <= 1 && !s.closest(".mf-wrapper, .spo-busca-fundo, [data-spo-sem-busca]");
+  const comValor = (ops) => ops.filter((o) => o.value !== "").length;
+  let regua = null;
+  function largura(texto, select) {
+    if (!regua) regua = document.createElement("canvas").getContext("2d");
+    const cs = getComputedStyle(select);
+    regua.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    return regua.measureText(texto).width;
+  }
+  function rotuloDe(select) {
+    const r = select.closest("label")?.querySelector(":scope > span") || (select.id && document.querySelector(`label[for="${select.id}"]`));
+    return (r ? r.textContent : select.getAttribute("aria-label") || "").replace(/^\*/, "").replace(/\s+/g, " ").trim();
+  }
+  function semObservar(st, fn) {
+    fn();
+    st.observador.takeRecords();
+  }
+  function restaurar(st) {
+    if (!st.filtrado) return;
+    const valor = st.select.value;
+    semObservar(st, () => { st.select.replaceChildren(...st.todas); st.select.value = valor; });
+    st.filtrado = false;
+  }
+  function escolhaInteira(st) {
+    const o = st.select.selectedOptions[0];
+    const texto = o && o.value !== "" ? o.textContent.trim() : "";
+    const cabe = !texto || largura(texto, st.select) <= st.select.clientWidth - 40;
+    st.escolha.textContent = texto;
+    st.escolha.hidden = cabe || !st.select.offsetParent;
+  }
+  function mostrar(st) {
+    const total = comValor(st.todas);
+    st.caixa.hidden = total < MINIMO && !st.campo.value;
+    st.campo.disabled = st.select.disabled;
+    st.campo.placeholder = `Filtrar a lista (${total} opções)`;
+    escolhaInteira(st);
+  }
+  function aplicar(st) {
+    const termos = normalizar(st.campo.value).split(/\s+/).filter(Boolean);
+    const valor = st.select.value;
+    if (!termos.length) {
+      restaurar(st);
+      st.status.textContent = "";
+    } else {
+      const casa = (o) => termos.every((t) => normalizar(o.textContent).includes(t));
+      const ficam = st.todas.filter((o) => o.value === "" || o.value === valor || casa(o));
+      semObservar(st, () => { st.select.replaceChildren(...ficam); st.select.value = valor; });
+      st.filtrado = true;
+      const achadas = ficam.filter((o) => o.value !== "" && casa(o)).length;
+      st.status.textContent = achadas ? `${achadas} de ${comValor(st.todas)}` : "nenhuma opção encontrada";
+    }
+    mostrar(st);
+  }
+  function restaurarELimpar(st) {
+    st.campo.value = "";
+    st.status.textContent = "";
+    restaurar(st);
+    mostrar(st);
+  }
+  function preparar(select) {
+    if (estados.has(select) || !valida(select)) return;
+    const caixa = document.createElement("div");
+    caixa.className = "spo-lista-busca";
+    caixa.hidden = true;
+    caixa.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i><input type="search" class="spo-lista-busca-campo" autocomplete="off" enterkeyhint="search"><span class="spo-lista-busca-status" role="status" aria-live="polite"></span>';
+    const escolha = document.createElement("div");
+    escolha.className = "spo-lista-escolha";
+    escolha.hidden = true;
+    escolha.setAttribute("aria-hidden", "true");
+    select.after(caixa, escolha);
+    const campo = caixa.querySelector("input");
+    campo.setAttribute("aria-label", `Filtrar a lista ${rotuloDe(select)}`.trim());
+    const st = { select, caixa, campo, escolha, status: caixa.querySelector(".spo-lista-busca-status"), todas: [...select.options], filtrado: false };
+    st.observador = new MutationObserver(() => {
+      st.todas = [...select.options];
+      st.filtrado = false;
+      if (st.campo.value) aplicar(st); else mostrar(st);
+    });
+    st.observador.observe(select, { childList: true });
+    new MutationObserver(() => mostrar(st)).observe(select, { attributes: true, attributeFilter: ["disabled"] });
+    campo.addEventListener("input", () => aplicar(st));
+    campo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && campo.value) { ev.preventDefault(); ev.stopPropagation(); restaurarELimpar(st); return; }
+      if (ev.key !== "Enter" && ev.key !== "ArrowDown") return;
+      ev.preventDefault();
+      const achadas = [...select.options].filter((o) => o.value !== "");
+      if (ev.key === "Enter" && campo.value && achadas.length === 1) {
+        select.value = achadas[0].value;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      select.focus();
+      if (achadas.length && typeof select.showPicker === "function") { try { select.showPicker(); } catch (err) { /* sem gesto do usuário */ } }
+    });
+    estados.set(select, st);
+    mostrar(st);
+  }
+  function varrer() {
+    for (const [select, st] of estados) if (!select.isConnected) { st.observador.disconnect(); estados.delete(select); }
+    area.querySelectorAll("select").forEach(preparar);
+  }
+  // escolheu na lista filtrada: devolve as opções antes dos tratadores da tela (cascatas leem select.options)
+  document.addEventListener("change", (ev) => {
+    const st = estados.get(ev.target);
+    if (!st) return;
+    if (st.filtrado) { st.campo.value = ""; st.status.textContent = ""; restaurar(st); }
+    setTimeout(() => mostrar(st), 0);
+  }, true);
+  // saiu da lista e do campo sem escolher: a lista volta inteira
+  document.addEventListener("focusout", (ev) => {
+    const lista = ev.target.closest && ev.target.closest("select");
+    const st = estados.get(lista) || [...estados.values()].find((s) => s.campo === ev.target);
+    if (!st || !st.filtrado) return;
+    // no Chrome/Edge a lista aberta (showPicker, appearance: base-select) leva o foco para dentro dela: espera fechar
+    const aberta = () => { try { return st.select.matches(":open"); } catch (err) { return false; } };
+    const dentro = () => st.select.contains(document.activeElement) || document.activeElement === st.campo;
+    setTimeout(() => { if (!aberta() && !dentro()) restaurarELimpar(st); }, 0);
+  }, true);
+  document.addEventListener("reset", (ev) => {
+    setTimeout(() => { for (const st of estados.values()) if (ev.target.contains(st.select)) restaurarELimpar(st); }, 0);
+  }, true);
+  let espera = 0;
+  new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(varrer, 120); }).observe(area, { childList: true, subtree: true });
+  let esperaTela = 0;
+  window.addEventListener("resize", () => { clearTimeout(esperaTela); esperaTela = setTimeout(() => estados.forEach(escolhaInteira), 150); });
+  varrer();
+})();

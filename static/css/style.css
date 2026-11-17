@@ -10468,3 +10468,20 @@ body { --spo-obra-fundo: #f5cc0a; --spo-obra-marca: #111111; }
   .spo-pendencias-tabela td { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
   .spo-pendencias-tabela td::before { content: attr(data-rotulo); font-weight: 600; color: var(--muted); text-align: left; }
 }
+
+/* ==========================================================================
+   [jean] Busca nas listas longas dos formulários (feat/busca-listas-longas, 2026-11-17; Etapa 5 do plano de
+   readequação). Campo "Filtrar a lista" logo abaixo do <select> de 40 opções ou mais (bloco initBuscaListasLongas
+   do main.js) e o texto inteiro da escolha quando ele não cabe na lista fechada. O campo herda o desenho dos
+   campos do formulário (.field input); a lupa e a contagem ficam em --muted.
+   ========================================================================== */
+.spo-lista-busca { display: flex; align-items: center; gap: 8px; }
+.spo-lista-busca[hidden], .spo-lista-escolha[hidden] { display: none; }
+.spo-lista-busca > .bi { flex: none; color: var(--muted); }
+.field .spo-lista-busca .spo-lista-busca-campo { flex: 1 1 auto; min-width: 0; width: auto; }
+.spo-lista-busca-status { flex: none; font-size: var(--spo-fs-rotulo); color: var(--muted); white-space: nowrap; }
+.spo-lista-busca-status:empty { display: none; }
+.spo-lista-escolha {
+  font-size: var(--spo-fs-rotulo); line-height: 1.5; color: var(--muted); overflow-wrap: anywhere;
+  border-left: 3px solid var(--spo-control-border, var(--border)); padding-left: 8px;
+}
