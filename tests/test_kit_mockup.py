@@ -28,6 +28,8 @@ MARCADORES = [
     "(function initTecladoPaginacao() {",
     # busca nas listas longas (feat/busca-listas-longas)
     "(function initBuscaListasLongas() {",
+    # barra de título da tela (fix/menu-cabecalho-pta): o menu compacto roda na moldura do exemplo
+    "(function initMenuCompacto() {",
     # regra da oferta "Leitura confortável" (Atkinson)
     "(function initSugestaoAtkinson() {",
     "const ORDEM = {",
@@ -100,7 +102,8 @@ def test_marcadores_estao_no_main_js_e_no_kit():
 
 def test_trechos_do_teclado_sao_funcoes_completas():
     main = _main()
-    for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {", "(function initBuscaListasLongas() {"):
+    for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {", "(function initBuscaListasLongas() {",
+                     "(function initMenuCompacto() {"):
         bloco = _trecho(main, marcador, True)
         fim = main.index(bloco) + len(bloco)
         assert main[fim:fim + 4] == ")();", f"{marcador}: o kit espera a função fechada por '}})();'"
@@ -208,6 +211,8 @@ CATALOGO = [
     ("atualizar_personalizar_spo.html", '<div class="contract-preset-grid"', "div"),
     # feat/kit-movel: opções "Não/Sim" com alvo de 24 px (#169), recortadas do Cadastrar Dotação
     ("cadastrar_dotacao.html", '<div class="input-group" style="display:flex; gap:12px; align-items:center;">', "div"),
+    # fix/menu-cabecalho-pta: barra de título da tela (secundária), recortada da Programação PTA/OpR
+    ("atualizar_governanca_resultados_programacao_pta2027.html", '<div class="page-header pta2027-integration-header">', "div"),
 ]
 
 
