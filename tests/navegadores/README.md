@@ -65,6 +65,18 @@ node bateria.mjs intermediario --so=contraste,recursos
 Relatório em `resultados/<data-hora>/relatorio.md`, com `resultados.json` e as capturas das falhas (`resultados/`
 é ignorada pelo git). O comando termina com código 1 se houver falha.
 
+## Tempos-limite (a bateria nunca fica parada em silêncio)
+
+- **Cada passo** (uma tela, um valor do Personalizar, uma checagem de recurso) tem limite de **180 s**
+  (`BATERIA_LIMITE_PASSO_S`). Estourou: a falha é registrada com o que estava rodando ("passou de 180 s sem terminar:
+  tela relatorios_fip613 (D-firefox-1366)"), o navegador é fechado e a bateria segue (nas telas e no contraste, com
+  um navegador novo; na equivalência e nos recursos, a partir do perfil seguinte).
+- **Vigia:** se nenhum resultado novo aparecer por **6 min** (`BATERIA_LIMITE_SEM_PROGRESSO_MIN`), a bateria registra
+  onde parou, grava o relatório e sai com código 1.
+- Também: ações e esperas do Playwright com 30 s, navegação com 60 s, e o pytest das travas com 5 min.
+- Para conferir o vigia: `BATERIA_TESTE_TRAVA=1` acrescenta um passo que nunca termina (com
+  `BATERIA_LIMITE_SEM_PROGRESSO_MIN=0.25`, a bateria para em ~30 s, com o relatório).
+
 ## Manter
 
 - **Tela nova no menu** entra sozinha no nível completo se estiver em `TELAS_TODAS` (`lib/ambiente.mjs`); tela
