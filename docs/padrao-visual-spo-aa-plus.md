@@ -334,7 +334,7 @@ tela, teclado) e, no celular, abre o seletor do sistema, que o usuário conhece.
 |---|---|---|
 | Escolha única, lista curta (Sim/Não, exercício, UO, mês…) | `<select>` nativo | seletor do sistema |
 | Escolha única, lista longa (Programa, Ação/PAOE, Chave, Natureza…) | caixa de busca SPO **sobre** o `<select>` nativo (o formulário envia o mesmo valor; sem script, sobra o nativo) | a mesma caixa |
-| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*` | cartão na parte de baixo da tela, "Aplicar" sempre visível |
+| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*` | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
 
 A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tudo bem: nenhum CSS chega nela.
 
