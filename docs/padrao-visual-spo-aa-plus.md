@@ -338,10 +338,26 @@ tela, teclado) e, no celular, abre o seletor do sistema, que o usuário conhece.
 | Situação | Componente | No celular |
 |---|---|---|
 | Escolha única, lista curta (Sim/Não, exercício, UO, mês…) | `<select>` nativo | seletor do sistema |
-| Escolha única, lista longa (Programa, Ação/PAOE, Chave, Natureza…) | caixa de busca SPO **sobre** o `<select>` nativo (o formulário envia o mesmo valor; sem script, sobra o nativo) | a mesma caixa |
+| Escolha única, lista longa (**40 opções ou mais**: Chave do Planejamento, Subação/Entrega, Etapa, Subelemento…) | `<select>` nativo + campo **"Filtrar a lista"** logo abaixo (`initBuscaListasLongas`, desde 17/11): o filtro tira da lista as opções que não têm todas as palavras digitadas (sem acento); a lista continua a do navegador, então valor, cascatas (`change`) e envio não mudam; sem script, sobra o nativo | o seletor do sistema já filtrado; o texto escolhido que não cabe aparece inteiro abaixo |
 | Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*` | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
 
 A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tudo bem: nenhum CSS chega nela.
+
+**Filtro das listas longas (como funciona, para quem mexe em formulário):**
+- vale para todo `<select>` de uma escolha em `#content-area` com 40 opções ou mais, sem marcar nada no template
+  (fora: filtro `.mf-*`, janelas, e quem tiver `data-spo-sem-busca`); o campo some quando a cascata deixa a
+  lista com menos de 40;
+- as opções que não casam **saem do DOM** (o Safari do iPhone ignora `option[hidden]`) e **voltam** ao escolher
+  (`change` em captura, antes dos tratadores da tela, que podem ler `select.options`), ao sair sem escolher, ao
+  limpar o campo (Esc) e no `reset` do formulário; enquanto a lista nativa está aberta (`:open`, no Chrome o foco
+  vai para dentro dela), nada volta;
+- a tela que **enche a lista de novo** (cascata) é percebida (`MutationObserver`), e o filtro passa a valer sobre
+  as opções novas. Código de tela que escolhe um valor por script (`select.value = …`) com o filtro ativo pode não
+  achar a opção: limpe o filtro antes (o `reset` já limpa);
+- teclado: Enter escolhe quando sobra uma; ↓ abre a lista filtrada (`showPicker`); Esc limpa; contagem "12 de 296"
+  em `role="status"`; o campo se chama "Filtrar a lista <rótulo>";
+- texto escolhido que não cabe na lista fechada (medido com a fonte do campo) aparece inteiro logo abaixo, em
+  `--muted` com filete `--spo-control-border`, `aria-hidden` (o leitor de tela já lê o valor).
 
 | Lista | Regra |
 |---|---|
@@ -521,7 +537,7 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mockup-spo-aa-plus.html`.
 - Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
-  (`initNavegacaoTabelas`, `initTecladoPaginacao`) e a regra da oferta "Leitura confortável" da Atkinson
+  (`initNavegacaoTabelas`, `initTecladoPaginacao`), a busca nas listas longas (`initBuscaListasLongas`) e a regra da oferta "Leitura confortável" da Atkinson
   (`initSugestaoAtkinson`) e os **presets do Contrato Visual Protegido** (`PROTECTED_CONTRACT_PRESETS`:
   Padrão SPO, Compacto gerencial, Contraste técnico, Pressão operacional), e roda as **funções do SPO** para
   aplicar o destaque (`applyAccentColor`, sem gravar), a densidade automática (`initDensidadeAutomatica`),
@@ -560,7 +576,8 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   contexto e fluxo com setas de Governança e Resultados — com o comportamento do `initGovernancaSemanticFlows`
   lido do `main.js` —, cartões de painel, cartão de documento do Institucional, indicadores do Teto e
   opções de envio das Notas SEE; cabeçalho com busca e Ajuda; lista nativa e filtro SPO — o filtro abre de
-  verdade, como cartão com véu no celular —; opções "Não/Sim" de 24 px, recortadas do Cadastrar Dotação; e a
+  verdade, como cartão com véu no celular —; lista longa com busca (roda o `initBuscaListasLongas` do `main.js`);
+  opções "Não/Sim" de 24 px, recortadas do Cadastrar Dotação; e a
   proposta dos avisos da Início, com o detalhe das pendências; os cartões do mockup PTA/OpR entram quando ele
   for integrado), formulário (campos,
   desabilitado, hierarquia dos botões), aviso `alert-info` e uma **tela de relatório** com a marcação dos
