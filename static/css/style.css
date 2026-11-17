@@ -10120,3 +10120,25 @@ body[data-spo-text-size="xlarge"] { --spo-zoom: 1.5; }
     background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
 }
+
+/* ==========================================================================
+   [jean] Destaque preso depois do toque no menu lateral (fix/hover-toque, 2026-11-17; ponto 2b do plano de
+   readequação para celular e navegadores)
+   No celular o navegador mantém o :hover no último item tocado até o próximo toque em outro lugar. No menu
+   lateral isso deixava DOIS itens destacados: o da tela atual (.active / .active-ancestor) e o tocado antes
+   (prints do Jean, Chrome e Firefox no Android; reproduzido no Playwright com toque: "Administrar SPO" ativo +
+   "Institucional" preso). Só em telas sem mouse (hover: none), o :hover dos itens do menu volta ao estado
+   normal (o mesmo do .menu-item e do .menu-parent sem destaque); a tela atual e o grupo aberto continuam
+   destacados. No desktop nada muda. As outras regras de :hover do SPO não foram tocadas: nelas o item tocado
+   vira o selecionado (Personalizar, amostras de cor) ou o destaque preso não se confunde com seleção.
+   :not(#spo-check) vence as regras do menu com tema escuro e com a coluna recolhida.
+   ========================================================================== */
+@media (hover: none) {
+  body .sidebar .menu-item:not(.menu-parent):not(.active):not(#spo-check):hover,
+  body .sidebar .menu-group:not(.active-ancestor):not(.open) > .menu-parent:not(#spo-check):hover {
+    color: var(--muted);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
