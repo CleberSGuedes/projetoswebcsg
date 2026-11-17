@@ -36,6 +36,15 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-17 — dev/cleber, RELEASE_2_2026_11_17.1
+
+### Alterado
+- Ajustes nas regras da seção 40 do `claude.md` (`fix/docs-regras-40-ajustes`), por sugestão do dev. Jean: a 40.2 aponta para a 40.14 (todo tema registra entrada no CHANGELOG; ao `claude.md` só vai o que continua valendo); a 40.13 vale para os bancos dos dois ambientes; a 40.14 descreve os formatos do cabeçalho da entrada; a 40.9 diz que o N soma `dev/cleber`, `homologacao` e `main`; a 40.8 define o único conflito liberado (linha do `RELEASE`), e a 40.1 e a 40.7 foram ajustadas para não contradizê-la.
+- Cabeçalho do `claude.md` com a data de 17/11/2026. Só documentação e o `RELEASE` do rodapé; nenhum código.
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
+
+---
+
 ## 2026-11-16 — dev/cleber, ainda não publicado (RELEASE_2_2026_11_16.7)
 
 ### Alterado
