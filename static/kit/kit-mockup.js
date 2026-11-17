@@ -613,3 +613,118 @@ initGovernancaSemanticFlows();`,
     else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
   });
 })();
+
+/* feat/kit-movel (2026-11-17): "Seu aparelho" (o que o navegador informa, para confirmar as medidas por busca do
+   plano de readequação; nada é enviado) e o filtro SPO de exemplo abrindo de verdade, com o véu do celular (o mesmo
+   do bloco [jean] initFiltroCelular do main.js, que o kit não carrega). */
+(function kitAparelho() {
+  const dl = document.getElementById("kit-aparelho-dados");
+  if (!dl) return;
+  const casa = (q) => window.matchMedia(q).matches;
+  // tamanho DESENHADO (altura da linha com entrelinha 1), e não o calculado: o mínimo de fonte do Firefox e o
+  // aumento de texto do Android mudam o desenho sem mudar o getComputedStyle
+  const sondar = (tamanho) => {
+    const s = document.createElement("span");
+    s.textContent = "Xg";
+    s.style.position = "absolute";
+    s.style.visibility = "hidden";
+    s.style.whiteSpace = "nowrap";
+    s.style.fontFamily = "Arial, sans-serif";
+    s.style.lineHeight = "1";
+    s.style.fontSize = tamanho;
+    document.body.appendChild(s);
+    const px = s.getBoundingClientRect().height;
+    s.remove();
+    return Math.round(px);
+  };
+  function motor() {
+    const ua = navigator.userAgent;
+    const marcas = navigator.userAgentData && navigator.userAgentData.brands
+      ? navigator.userAgentData.brands.map((b) => b.brand).filter((b) => !/not.?a.?brand/i.test(b)) : [];
+    const nomes = (marcas.length > 1 ? marcas.filter((b) => b !== "Chromium") : marcas).join(", ");
+    if (/Firefox\//.test(ua)) return `Firefox (Gecko)${/Android/.test(ua) ? ", Android" : ""}`;
+    if (/(iPhone|iPad|iPod)/.test(ua) || (/Safari\//.test(ua) && !/Chrom(e|ium)\//.test(ua))) return `Safari ou navegador do iOS (WebKit)`;
+    return `${nomes || "Chrome, Edge ou outro"} (Chromium)${/Android/.test(ua) ? ", Android" : ""}`;
+  }
+  function dados() {
+    const vv = window.visualViewport;
+    const dpr = window.devicePixelRatio || 1;
+    const faixas = [];
+    if (casa("(max-width: 600px), (max-height: 560px)")) faixas.push("menu só com o \"›\" e filtro como cartão");
+    if (casa("(max-width: 820px)")) faixas.push("cabeçalho em duas colunas");
+    if (casa("(max-width: 1200px)") && !casa("(max-width: 600px), (max-height: 560px)")) faixas.push("coluna de ícones do menu");
+    if (!faixas.length) faixas.push("desktop (menu lateral completo)");
+    return [
+      ["Janela (área útil)", `${innerWidth} × ${innerHeight} px`],
+      ["Área visível agora", vv ? `${Math.round(vv.width)} × ${Math.round(vv.height)} px${vv.scale !== 1 ? `, zoom de pinça ${vv.scale.toFixed(2)}×` : ""}` : "não informado"],
+      ["Tela inteira", `${screen.width} × ${screen.height} px (${casa("(orientation: portrait)") ? "em pé" : "deitada"})`],
+      ["Densidade", `${dpr}× (≈ ${Math.round(screen.width * dpr)} × ${Math.round(screen.height * dpr)} pixels físicos)`],
+      ["Texto padrão do navegador", `${sondar("medium")} px (16 = sem aumento)`],
+      ["Texto mínimo", `${sondar("8px")} px (8 = sem mínimo)`],
+      ["Toque", `${casa("(pointer: coarse)") ? "dedo" : "mouse ou caneta"}${casa("(hover: hover)") ? ", passa o cursor" : ", sem cursor"}; ${navigator.maxTouchPoints || 0} ponto(s) de toque`],
+      ["Navegador", motor()],
+      ["Preferências do sistema", [
+        casa("(prefers-color-scheme: dark)") ? "tema escuro" : "tema claro",
+        casa("(prefers-reduced-motion: reduce)") ? "reduzir movimento" : null,
+        casa("(prefers-contrast: more)") ? "mais contraste" : null,
+        casa("(forced-colors: active)") ? "cores forçadas" : null,
+      ].filter(Boolean).join(", ")],
+      ["Faixa do SPO nesta janela", faixas.join("; ")],
+    ];
+  }
+  function desenhar() {
+    dl.replaceChildren(...dados().flatMap(([rotulo, valor]) => {
+      const dt = document.createElement("dt"); dt.textContent = rotulo;
+      const dd = document.createElement("dd"); dd.textContent = valor;
+      return [dt, dd];
+    }));
+  }
+  desenhar();
+  let espera = 0;
+  const depois = () => { clearTimeout(espera); espera = setTimeout(desenhar, 150); };
+  window.addEventListener("resize", depois);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", depois);
+  const status = document.getElementById("kit-aparelho-status");
+  document.getElementById("kit-aparelho-copiar").addEventListener("click", async () => {
+    const texto = ["Seu aparelho (kit SPO-AA+)", ...dados().map(([r, v]) => `${r}: ${v}`), `Agente: ${navigator.userAgent}`].join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+      status.textContent = "Copiado. Cole na mensagem.";
+    } catch (err) {
+      const area = document.createElement("textarea");
+      area.value = texto; document.body.appendChild(area); area.select();
+      const ok = document.execCommand && document.execCommand("copy");
+      area.remove();
+      status.textContent = ok ? "Copiado. Cole na mensagem." : "Não foi possível copiar: mande um print.";
+    }
+  });
+})();
+
+(function kitFiltro() {
+  const wrap = document.querySelector(".kit-filtro");
+  if (!wrap) return;
+  const botao = wrap.querySelector(".mf-display"), painel = wrap.querySelector(".mf-panel");
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  let veu = null;
+  function fechar() {
+    painel.classList.remove("open");
+    botao.setAttribute("aria-expanded", "false");
+    if (veu) { veu.remove(); veu = null; }
+  }
+  function abrir() {
+    painel.classList.add("open");
+    botao.setAttribute("aria-expanded", "true");
+    if (celular.matches && !veu) {
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fechar(); });
+      document.body.appendChild(veu);
+    }
+    painel.querySelector(".mf-search").focus();
+  }
+  botao.addEventListener("click", () => (painel.classList.contains("open") ? fechar() : abrir()));
+  painel.querySelectorAll(".mf-btn").forEach((b) => b.addEventListener("click", () => { fechar(); botao.focus(); }));
+  document.addEventListener("click", (ev) => { if (painel.classList.contains("open") && !wrap.contains(ev.target) && ev.target !== veu) fechar(); });
+  painel.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fechar(); botao.focus(); } });
+})();
