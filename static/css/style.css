@@ -10427,3 +10427,44 @@ body { --spo-obra-fundo: #f5cc0a; --spo-obra-marca: #111111; }
 .spo-sinal-obra .spo-obra-fundo { fill: var(--spo-obra-fundo); stroke: var(--spo-obra-fundo); }
 .spo-sinal-obra .spo-obra-borda, .spo-sinal-obra .spo-obra-figura { stroke: var(--spo-obra-marca); }
 .spo-sinal-obra .spo-obra-marca { fill: var(--spo-obra-marca); }
+
+/* ==========================================================================
+   [jean] Cartão "Pendências" na Início e o detalhe em cartão flutuante (feat/pendencias-cartao, 2026-11-17;
+   PROPOSTA ao dev. Cleber, ponto 4 do plano de readequação). Contagem por tipo no cartão; o detalhe (aberto
+   pelo bloco [jean] initPendenciasDetalhe do main.js) usa a caixa da busca/"O padrão SPO-AA+", com um grupo
+   recolhível por tipo; no celular as linhas das tabelas viram "rótulo: valor" (sem rolar para o lado).
+   ========================================================================== */
+.spo-contador {
+  display: inline-grid; place-items: center; min-width: 1.7em; padding: 0 6px; margin-left: auto;
+  font-size: var(--spo-fs-rotulo); font-weight: 700; color: var(--spo-accent-text, var(--accent));
+  border: 1px solid currentColor; border-radius: 999px;
+}
+.spo-pendencias-card { display: flex; flex-direction: column; }
+.spo-pendencias-lista { list-style: none; margin: 4px 0 12px; padding: 0; }
+.spo-pendencias-lista li {
+  display: flex; justify-content: space-between; gap: 12px; padding: 7px 0;
+  font-size: var(--spo-fs-texto); border-bottom: 1px solid var(--border);
+}
+.spo-pendencias-lista li:last-child { border-bottom: 0; }
+.spo-pendencias-lista strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spo-pendencias-lista .spo-pendencias-aviso { color: var(--spo-negative); font-weight: 600; }
+.spo-pendencias-ver { margin-top: auto; }
+.spo-pendencias-caixa { width: min(760px, calc(100% - 48px)); }
+.spo-pendencias-corpo { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.spo-pendencias-grupo { border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.spo-pendencias-grupo > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
+  font-size: var(--spo-fs-texto); font-weight: 600;
+}
+.spo-pendencias-grupo[open] > summary { border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
+.spo-pendencias-grupo > :not(summary) { margin-bottom: 10px; }
+.spo-pendencias-uo { margin: 8px 0 4px; font-size: var(--spo-fs-texto); font-weight: 700; }
+@media (max-width: 600px) {
+  .spo-busca-caixa.spo-pendencias-caixa { width: calc(100% - 32px); height: auto; max-height: calc(100dvh - 32px); margin-top: 16px; border-radius: 14px; }
+  .spo-pendencias-tabela thead { display: none; }
+  .spo-pendencias-tabela, .spo-pendencias-tabela tbody, .spo-pendencias-tabela tr, .spo-pendencias-tabela td { display: block; }
+  .spo-pendencias-tabela tr { padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .spo-pendencias-tabela tr:last-child { border-bottom: 0; }
+  .spo-pendencias-tabela td { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
+  .spo-pendencias-tabela td::before { content: attr(data-rotulo); font-weight: 600; color: var(--muted); text-align: left; }
+}
