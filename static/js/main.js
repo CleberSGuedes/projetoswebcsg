@@ -28867,8 +28867,8 @@
 /* ==========================================================================
    [jean] Busca de telas (feat/busca-funcoes, 2026-11-14; fase 1 do plano do
    dev. Jean; padrão spo-aa+ §4.4)
-   Item "Buscar tela" no menu lateral, logo abaixo de "Início" (inserido aqui,
-   sem mudar o base.html), e atalhos Ctrl+K e "/". A caixa segue o padrão dos
+   Botão "Buscar tela" (lupa) no cabeçalho (feat/ajuda-cabecalho, 2026-11-17;
+   antes era um item do menu lateral, logo abaixo de "Início") e atalhos Ctrl+K e "/". A caixa segue o padrão dos
    avisos do SPO (modal-overlay/modal-card, título na cor de destaque, campo
    .field e botão "Fechar" secundário).
    - Procura nas telas do MENU, que já vem filtrado pelas permissões
@@ -29086,8 +29086,8 @@
     montar();
     if (!dialogo.hidden) return;
     abridor = document.activeElement;
-    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para o item do menu
-    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-busca-menu");
+    // aberta pelo atalho sem nenhum controle em foco: ao fechar, o foco vai para a lupa do cabeçalho
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-cabecalho-busca");
     dialogo.hidden = false;
     document.body.classList.add("spo-busca-aberta");
     const entrada = dialogo.querySelector("#spo-busca-entrada");
@@ -29117,24 +29117,7 @@
     else if (ev.key === "/" && !campo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && document.body.dataset.spoKeys !== "off") { ev.preventDefault(); mostrar(); }
   });
 
-  // item "Buscar tela" no menu lateral, logo abaixo de "Início"
-  function itemMenu() {
-    const menu = document.getElementById("menu");
-    if (!menu || !document.getElementById("user-meta") || menu.querySelector(".spo-busca-menu")) return;
-    const inicio = menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
-    const a = document.createElement("a");
-    a.href = "#";
-    a.className = "menu-item spo-busca-menu";
-    a.setAttribute("role", "button");
-    a.setAttribute("aria-haspopup", "dialog");
-    a.setAttribute("aria-keyshortcuts", "Control+K /");
-    a.title = "Buscar tela (Ctrl+K ou /)";
-    a.innerHTML = '<i class="bi bi-search" aria-hidden="true"></i> <span>Buscar tela</span>';
-    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
-    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
-    if (inicio) inicio.after(a); else menu.prepend(a);
-  }
-  itemMenu();
+  // o botão "Buscar tela" fica no cabeçalho (bloco "Ajuda e busca no cabeçalho", abaixo)
   window.spoBuscaTelas = { abrir: mostrar, buscar: (q) => buscar(indice(), q).map((t) => t.rota), recentes: lerRecentes };
 })();
 
@@ -29193,9 +29176,13 @@
    Pedido do dev. Jean: o SPO já funciona pelo teclado (#41, #59, #106), mas nada
    dizia como. Ex.: no Mapa Conceitual as setas trocam o cartão, mas não havia como
    saber que o Tab sai dele, nem um jeito curto de voltar ao menu.
-   1) Ajuda "Atalhos do teclado": diálogo no padrão dos avisos, aberto pela tecla
-      "?", pelo item do menu (abaixo de "Buscar tela") e por links com
-      [data-spo-atalhos] (cartão Teclado e declaração de acessibilidade).
+   1) Janela "Ajuda" (feat/ajuda-cabecalho, 2026-11-17; antes "Atalhos do teclado"):
+      diálogo no padrão dos avisos, aberto pelo botão "?" do cabeçalho, pela tecla
+      "?" e por links com [data-spo-atalhos] (cartão Teclado e declaração de
+      acessibilidade). Seções que se abrem: Buscar telas, Acessibilidade e
+      preferências, Atalhos do teclado (aberta com mouse; fechada no toque, onde
+      não há teclado; sempre aberta quando chamada pela tecla "?" ou pelos links)
+      e Sobre e contato. O item do menu saiu (o menu do celular não cabia).
    2) Alt+M leva o foco ao item da tela atual no menu (abre o menu se estiver
       recolhido no celular); link de pulo "Ir para o menu" ao lado de "Pular
       para o conteúdo".
@@ -29255,30 +29242,65 @@
 
   let dialogo = null;
   let abridor = null;
+  const CONTATO = "nger@edu.mt.gov.br";
+  const ROTA_PERSONALIZAR = "atualizar/personalizar-spo/temas";
+  const itemPersonalizar = () => document.querySelector(`.sidebar a.menu-item[data-route="${ROTA_PERSONALIZAR}"]`);
+  const semMouse = () => !!(window.matchMedia && window.matchMedia("(hover: none)").matches);
+  // seções da Ajuda (as de atalhos ficam dentro de "Atalhos do teclado")
+  function secaoAjuda(id, icone, titulo, corpo) {
+    return [
+      `<details class="spo-ajuda-secao" data-spo-ajuda-secao="${id}">`,
+      `<summary><i class="bi ${icone}" aria-hidden="true"></i> <span>${titulo}</span></summary>`,
+      `<div class="spo-ajuda-conteudo">${corpo}</div>`,
+      "</details>",
+    ].join("");
+  }
   function montar() {
     if (dialogo) return dialogo;
     dialogo = document.createElement("div");
     // sem a classe modal-overlay (o tratamento genérico dos avisos, #41, também prenderia o Tab e o Esc)
     dialogo.className = "spo-busca-fundo spo-atalhos-fundo";
     dialogo.hidden = true;
-    const secoes = SECOES.map(([titulo, icone, linhas]) => [
+    const atalhos = SECOES.map(([titulo, icone, linhas]) => [
       '<section class="spo-atalhos-secao">',
       `<h3><i class="bi ${icone}" aria-hidden="true"></i> ${titulo}</h3>`,
       '<dl class="spo-atalhos-lista">',
       linhas.map(([teclas, texto]) => `<div><dt>${teclas}</dt><dd>${texto}</dd></div>`).join(""),
       "</dl></section>",
     ].join("")).join("");
+    const secoes = [
+      secaoAjuda("busca", "bi-search", "Buscar telas", [
+        "<p>Ache qualquer tela pelo nome, por uma sigla (PED, FIP, PAOE) ou por um assunto (senha, tema, daltonismo). Só aparecem as telas que você pode abrir.</p>",
+        '<p class="spo-ajuda-acoes"><button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="busca"><i class="bi bi-search" aria-hidden="true"></i> Abrir a busca</button></p>',
+      ].join("")),
+      secaoAjuda("acessibilidade", "bi-universal-access", "Acessibilidade e preferências", [
+        "<p>Tema claro ou escuro, cor de destaque, fontes, tamanho e densidade do texto, cores para daltonismo, foco, brilho e movimento se ajustam no Personalizar Temas SPO e valem neste navegador.</p>",
+        '<p class="spo-ajuda-acoes">',
+        '<button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="personalizar"><i class="bi bi-sliders" aria-hidden="true"></i> Abrir o Personalizar</button>',
+        '<button type="button" class="btn btn-secondary sm" data-spo-ajuda-acao="declaracao"><i class="bi bi-universal-access" aria-hidden="true"></i> Declaração de acessibilidade</button>',
+        '<button type="button" class="btn btn-secondary sm" data-spo-padrao><i class="bi bi-patch-check" aria-hidden="true"></i> O padrão SPO-AA+</button>',
+        "</p>",
+      ].join("")),
+      secaoAjuda("atalhos", "bi-keyboard", "Atalhos do teclado", [
+        "<p>O SPO pode ser usado só pelo teclado. No celular e no tablet sem teclado, estes atalhos não se aplicam.</p>",
+        atalhos,
+        '<p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
+        "<p>Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>",
+      ].join("")),
+      secaoAjuda("sobre", "bi-info-circle", "Sobre e contato", [
+        "<p data-spo-ajuda-sobre></p>",
+        `<p>Encontrou uma barreira ou tem uma dúvida? Escreva para <a href="mailto:${CONTATO}">${CONTATO}</a>, dizendo a tela, o que tentou fazer e o recurso que usa (leitor de tela, zoom, teclado…).</p>`,
+      ].join("")),
+    ].join("");
     dialogo.innerHTML = [
       '<div class="modal-card spo-busca-caixa spo-atalhos-caixa" role="dialog" aria-modal="true" aria-labelledby="spo-atalhos-titulo">',
       '  <div class="modal-header spo-busca-topo">',
-      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Atalhos do teclado</h2>',
-      '    <div class="modal-header-subtitle">O SPO pode ser usado só pelo teclado. Esc fecha esta ajuda.</div></div>',
+      '    <div class="modal-header-text"><h2 id="spo-atalhos-titulo" class="modal-header-title spo-busca-titulo">Ajuda</h2>',
+      '    <div class="modal-header-subtitle">Busca, acessibilidade, atalhos do teclado e contato. Esc fecha esta ajuda.</div></div>',
       "  </div>",
-      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Lista de atalhos">${secoes}`,
-      '    <p class="spo-atalhos-nota" data-spo-atalhos-nota></p>',
-      "  </div>",
+      `  <div class="spo-atalhos-corpo" tabindex="0" role="region" aria-label="Conteúdo da ajuda">${secoes}</div>`,
       '  <div class="spo-busca-rodape">',
-      '    <p class="spo-busca-status">Personalizar Temas SPO → Teclado: desligar os atalhos de uma tecla só.</p>',
+      '    <p class="spo-busca-status">Esta ajuda abre pelo "?" no alto da tela (ou pela tecla ?).</p>',
       '    <button type="button" class="btn btn-secondary sm spo-atalhos-fechar">Fechar</button>',
       "  </div>",
       "</div>",
@@ -29286,35 +29308,63 @@
     document.body.appendChild(dialogo);
     dialogo.querySelector(".spo-atalhos-fechar").addEventListener("click", () => fechar());
     dialogo.addEventListener("mousedown", (ev) => { if (ev.target === dialogo) fechar(); });
+    dialogo.addEventListener("click", (ev) => {
+      const b = ev.target.closest && ev.target.closest("[data-spo-ajuda-acao]");
+      if (!b) return;
+      const acao = b.dataset.spoAjudaAcao;
+      fechar(false);
+      if (acao === "busca" && window.spoBuscaTelas) window.spoBuscaTelas.abrir();
+      else if (acao === "personalizar") { const item = itemPersonalizar(); if (item) item.click(); }
+      else if (acao === "declaracao") { const link = document.querySelector(".footer .footer-acessibilidade"); if (link) link.click(); }
+    });
     dialogo.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fechar(); return; }
-      if (ev.key === "Tab") { // foco preso na ajuda (lista rolável e botão Fechar)
-        const alvos = [dialogo.querySelector(".spo-atalhos-corpo"), dialogo.querySelector(".spo-atalhos-fechar")];
+      if (ev.key === "Tab") { // foco preso na ajuda: todos os controles visíveis dela, em ordem
+        const alvos = [...dialogo.querySelectorAll("summary, a[href], button:not([disabled]), [tabindex='0']")].filter(visivel);
+        if (!alvos.length) return;
         const i = alvos.indexOf(document.activeElement);
         ev.preventDefault();
-        alvos[(i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length].focus();
+        const prox = i < 0 ? 0 : (i + (ev.shiftKey ? alvos.length - 1 : 1)) % alvos.length;
+        alvos[prox].focus();
       }
     });
     return dialogo;
   }
-  function mostrar() {
+  // secao: "atalhos" quando aberta pela tecla "?" ou pelos links de atalhos
+  function mostrar(secao) {
     montar();
     if (!dialogo.hidden) return;
     abridor = document.activeElement;
-    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-atalhos-menu");
+    if (!abridor || abridor === document.body) abridor = document.querySelector(".spo-cabecalho-ajuda");
     const nota = dialogo.querySelector("[data-spo-atalhos-nota]");
     nota.textContent = umaTecla() ? "" : "Os atalhos de uma tecla só (/ e ?) estão desligados neste navegador; Ctrl+K e Alt+M continuam valendo.";
     nota.hidden = umaTecla();
+    const sobre = dialogo.querySelector("[data-spo-ajuda-sobre]");
+    const versao = ((document.querySelector(".footer .footer-build") || {}).textContent || "").trim();
+    const ambiente = ((document.querySelector(".environment-inline-badge span") || {}).textContent || "").trim();
+    sobre.textContent = ["SPO — Sistema de Planejamento e Orçamento (NGER/SEDUC-MT).", versao ? `Versão: ${versao}.` : "", ambiente ? `Ambiente: ${ambiente}.` : ""].filter(Boolean).join(" ");
+    const personalizar = itemPersonalizar();
+    dialogo.querySelector('[data-spo-ajuda-acao="personalizar"]').hidden = !personalizar || personalizar.closest('[style*="display: none"]') !== null;
+    dialogo.querySelector('[data-spo-ajuda-acao="declaracao"]').hidden = !document.querySelector(".footer .footer-acessibilidade:not([hidden])");
+    // seções: todas abertas, menos os atalhos no toque (lá não há teclado), a não ser que tenham sido pedidos
+    dialogo.querySelectorAll(".spo-ajuda-secao").forEach((d) => {
+      d.open = d.dataset.spoAjudaSecao !== "atalhos" || secao === "atalhos" || !semMouse();
+    });
     dialogo.hidden = false;
     document.body.classList.add("spo-busca-aberta");
-    dialogo.querySelector(".spo-atalhos-corpo").scrollTop = 0;
+    const corpo = dialogo.querySelector(".spo-atalhos-corpo");
+    corpo.scrollTop = 0;
+    if (secao === "atalhos") {
+      const d = dialogo.querySelector('[data-spo-ajuda-secao="atalhos"]');
+      if (d) corpo.scrollTop = d.getBoundingClientRect().top - corpo.getBoundingClientRect().top;
+    }
     dialogo.querySelector(".spo-atalhos-fechar").focus();
   }
-  function fechar() {
+  function fechar(devolverFoco = true) {
     if (!dialogo || dialogo.hidden) return;
     dialogo.hidden = true;
     document.body.classList.remove("spo-busca-aberta");
-    if (!(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
+    if (devolverFoco && !(window.spoFocarAvisoAberto && window.spoFocarAvisoAberto()) && abridor && abridor.isConnected) abridor.focus();
   }
 
   // 2) Alt+M e "Ir para o menu"
@@ -29405,7 +29455,7 @@
     }
     if (ev.key === "?" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !emCampo(ev.target) && umaTecla()) {
       ev.preventDefault();
-      mostrar();
+      mostrar("atalhos");
     }
   });
   // links que abrem a ajuda (cartão Teclado, declaração de acessibilidade)
@@ -29413,27 +29463,10 @@
     const a = ev.target.closest && ev.target.closest("[data-spo-atalhos]");
     if (!a) return;
     ev.preventDefault();
-    mostrar();
+    mostrar("atalhos");
   });
 
-  // 1) item "Atalhos do teclado" no menu, logo abaixo de "Buscar tela"
-  function itemMenu() {
-    const menu = document.getElementById("menu");
-    if (!menu || !logado() || menu.querySelector(".spo-atalhos-menu")) return;
-    const a = document.createElement("a");
-    a.href = "#";
-    a.className = "menu-item spo-atalhos-menu";
-    a.setAttribute("role", "button");
-    a.setAttribute("aria-haspopup", "dialog");
-    a.setAttribute("aria-keyshortcuts", "?");
-    a.title = "Atalhos do teclado (?)";
-    a.innerHTML = '<i class="bi bi-keyboard" aria-hidden="true"></i> <span>Atalhos do teclado</span>';
-    a.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); mostrar(); });
-    a.addEventListener("keydown", (ev) => { if (ev.key === " ") { ev.preventDefault(); mostrar(); } });
-    const antes = menu.querySelector(".spo-busca-menu") || menu.querySelector(':scope > a.menu-item[data-route="dashboard"]');
-    if (antes) antes.after(a); else menu.prepend(a);
-  }
-  itemMenu();
+  // 1) a Ajuda abre pelo botão "?" do cabeçalho (bloco "Ajuda e busca no cabeçalho", abaixo)
 
   // 4) dica dos componentes com setas
   const DICAS = [
@@ -29473,6 +29506,39 @@
   });
 
   window.spoAtalhosTeclado = { abrir: mostrar, irParaMenu };
+  window.spoAjuda = { abrir: mostrar };
+})();
+
+/* ==========================================================================
+   [jean] Ajuda e busca no cabeçalho (feat/ajuda-cabecalho, 2026-11-17; ponto 5 do plano de
+   readequação para celular e navegadores, decisão do dev. Jean)
+   Dois botões no cabeçalho, numa coluna própria ao lado da linha do usuário: a lupa ("Buscar
+   tela", Ctrl+K ou /) e o "?" ("Ajuda", tecla ?). Os dois itens saíram do menu lateral: o menu
+   do celular não cabia na altura da tela, e no celular não há teclado para os atalhos. Inseridos
+   aqui (sem mudar o base.html); só aparecem com a pessoa logada.
+   ========================================================================== */
+(function initCabecalhoAcoes() {
+  const info = document.querySelector(".topbar .user-info");
+  if (!info || !document.getElementById("user-meta") || info.querySelector(".spo-cabecalho-acoes")) return;
+  const caixa = document.createElement("div");
+  caixa.className = "spo-cabecalho-acoes";
+  const botao = (classe, icone, nome, teclas, abrir) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `icon-btn spo-cabecalho-btn ${classe}`;
+    b.setAttribute("aria-label", nome);
+    b.setAttribute("aria-haspopup", "dialog");
+    b.setAttribute("aria-keyshortcuts", teclas.aria);
+    b.title = `${nome} (${teclas.titulo})`;
+    b.innerHTML = `<i class="bi ${icone}" aria-hidden="true"></i>`;
+    b.addEventListener("click", () => abrir());
+    return b;
+  };
+  caixa.append(
+    botao("spo-cabecalho-busca", "bi-search", "Buscar tela", { aria: "Control+K /", titulo: "Ctrl+K ou /" }, () => window.spoBuscaTelas && window.spoBuscaTelas.abrir()),
+    botao("spo-cabecalho-ajuda", "bi-question-lg", "Ajuda", { aria: "?", titulo: "?" }, () => window.spoAjuda && window.spoAjuda.abrir()),
+  );
+  info.appendChild(caixa);
 })();
 
 /* ==========================================================================
