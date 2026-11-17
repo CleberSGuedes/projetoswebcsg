@@ -326,11 +326,23 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 
 ### 4.3 Listas
 
+**Qual componente usar (regra de 16/11, aprovada pelo dev. Jean):** o **nativo** sempre que ele dá conta da
+tarefa; o **componente SPO** só onde o nativo não consegue fazer o trabalho. O nativo já vem acessível (leitor de
+tela, teclado) e, no celular, abre o seletor do sistema, que o usuário conhece.
+
+| Situação | Componente | No celular |
+|---|---|---|
+| Escolha única, lista curta (Sim/Não, exercício, UO, mês…) | `<select>` nativo | seletor do sistema |
+| Escolha única, lista longa (Programa, Ação/PAOE, Chave, Natureza…) | caixa de busca SPO **sobre** o `<select>` nativo (o formulário envia o mesmo valor; sem script, sobra o nativo) | a mesma caixa |
+| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*` | cartão na parte de baixo da tela, "Aplicar" sempre visível |
+
+A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tudo bem: nenhum CSS chega nela.
+
 | Lista | Regra |
 |---|---|
-| Filtros `.mf-*` (relatórios) | painel `--card`, borda `--spo-control-border`; **Esc** = Cancelar e foco volta ao botão (#51) |
+| Filtros `.mf-*` (relatórios) | painel `--card`, borda `--spo-control-border`, sombra `--shadow`; opção sob o mouse: **12% do destaque**; **Esc** = Cancelar e foco volta ao botão (#51) |
 | Listas de marcar `.planning-action-checklist-*` | opção sob o mouse: 16% do destaque; Esc fecha (#51) |
-| `<select>` nativo | `appearance: base-select` (Chrome/Edge): lista no tema, opção sob o mouse 16% do destaque, ✓ + negrito na escolhida, até 40rem e quebra de linha; campo fechado numa linha com seta desenhada no fundo (#54, #55). Firefox/Safari: lista nativa |
+| `<select>` nativo | `appearance: base-select` (Chrome/Edge): lista aberta com a **mesma borda (`--spo-control-border`), sombra (`--shadow`) e destaque sob o mouse (12%) do filtro SPO** (desde 17/11), ✓ + negrito na escolhida, até 40rem e quebra de linha; campo fechado numa linha com seta desenhada no fundo (#54, #55). Fonte da interface (o filtro, que mostra dados, usa a de dados). Firefox/Safari: lista nativa |
 
 ### 4.4 Navegação e estrutura
 
