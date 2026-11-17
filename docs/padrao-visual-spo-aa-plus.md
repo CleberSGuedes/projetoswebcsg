@@ -538,6 +538,9 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 
 `static/kit/mockup-spo-aa-plus.html` (com `kit-mockup.css` e `kit-mockup.js`): página de partida de toda
 tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mockup-spo-aa-plus.html`.
+- **Onde abrir:** no SPO, **Contrato Visual Protegido** → cartão **"Kit de mockup SPO-AA+"** (o que tem, como testar, como
+  usar; botão que abre o kit numa aba nova; desde 17/11, `feat/kit-no-contrato`); ou pelo endereço
+  `/static/kit/mockup-spo-aa-plus.html`.
 - Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
   (`initNavegacaoTabelas`, `initTecladoPaginacao`), a busca nas listas longas (`initBuscaListasLongas`) e a regra da oferta "Leitura confortável" da Atkinson

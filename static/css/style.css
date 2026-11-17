@@ -10567,3 +10567,26 @@ body.pta2027-immersive.special-context-focus:not(.spo-menu-compacto) .sidebar {
   .mf-panel.mf-panel-direita { left: auto; right: 0; }
 }
 
+/* ==========================================================================
+   [jean] Kit de mockup no Contrato Visual Protegido (feat/kit-no-contrato, 2026-11-17; pedido do dev. Jean: o kit só
+   abria pelo endereço, e o dev. Cleber nem o tinha visto). Cartão logo abaixo do título do contrato, com o que o kit
+   tem, como testar e como usar, e o botão principal que o abre numa aba nova.
+   ========================================================================== */
+.spo-kit-contrato {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--spo-control-border, var(--border));
+  border-radius: 12px;
+  background: var(--card);
+}
+.spo-kit-contrato .module-card-title { margin-bottom: 8px; }
+.spo-kit-contrato .module-card-title h3 { margin: 0; font-size: var(--spo-fs-titulo); font-weight: 700; }
+.spo-kit-contrato .module-card-title p { margin: 2px 0 0; }
+.spo-kit-contrato-lista { margin: 0 0 8px; padding-left: 1.2em; font-size: var(--spo-fs-texto); line-height: 1.5; color: var(--text); }
+/* o link do documento técnico como o da nota do contrato (cor de destaque para texto, sublinhado, negrito) */
+body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#spo-bat2) { color: var(--spo-accent-text, var(--text)); text-decoration: underline; text-underline-offset: 0.18em; font-weight: 700; }
+.spo-kit-contrato-lista li + li { margin-top: 4px; }
+.spo-kit-contrato-nota { margin: 0 0 10px; font-size: var(--spo-fs-texto); }
+.spo-kit-contrato-acoes { margin: 0; }
+.spo-kit-contrato-acoes .btn { display: inline-flex; align-items: center; gap: 6px; }
+
