@@ -328,6 +328,7 @@ Paletas por modo de diagrama (`data-visual-diagrams`: auto, claro, escuro, alto 
 | Desabilitado | §3.4: apagado, borda **cinza neutra** (não a do destaque), cursor "não permitido" |
 | Selo "editando" | classe `.spo-editing-badge` (cor `--text`), nunca `style="color:…"` no HTML (#52) |
 | Arquivo (`<input type="file">`) | botão nativo em contorno, como o Secundário: borda `--spo-control-border`, texto `--text`, 12 px (#79) |
+| Opção e caixa de marcar com rótulo | o rótulo marca o controle e tem **≥ 24 px** de altura (44 px no toque); círculo/caixa de 18 px: `label:has(> input[type=radio])` (#169) e `label.field.inline:has(> input[type=checkbox])` (desde 17/11, `fix/bateria-4`) |
 
 ### 4.3 Listas
 
@@ -339,7 +340,7 @@ tela, teclado) e, no celular, abre o seletor do sistema, que o usuário conhece.
 |---|---|---|
 | Escolha única, lista curta (Sim/Não, exercício, UO, mês…) | `<select>` nativo | seletor do sistema |
 | Escolha única, lista longa (**40 opções ou mais**: Chave do Planejamento, Subação/Entrega, Etapa, Subelemento…) | `<select>` nativo + campo **"Filtrar a lista"** logo abaixo (`initBuscaListasLongas`, desde 17/11): o filtro tira da lista as opções que não têm todas as palavras digitadas (sem acento); a lista continua a do navegador, então valor, cascatas (`change`) e envio não mudam; sem script, sobra o nativo | o seletor do sistema já filtrado; o texto escolhido que não cabe aparece inteiro abaixo |
-| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*`: opções em **peso normal** (o filtro fica no cabeçalho da coluna e herdava o negrito) e **quebrando linha**, nunca cortadas; o painel cresce com os nomes de 260 até 420 px (nunca além da tela) e, quando aberto para a direita sairia da área visível da tabela (últimas colunas), **abre alinhado pela direita da coluna** (`.mf-panel-direita`, `initFiltroPosicao`), com "Cancelar"/"Aplicar" sempre à vista (desde 17/11, `fix/filtro-desktop`) | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
+| Múltipla escolha (filtros dos relatórios) | filtro SPO `.mf-*`: opções em **peso normal** (o filtro fica no cabeçalho da coluna e herdava o negrito) e **quebrando linha**, nunca cortadas; o painel cresce com os nomes de 260 até 420 px (nunca além da tela) e, quando aberto para a direita sairia da área visível da tabela (últimas colunas), **abre alinhado pela direita da coluna** (`.mf-panel-direita`, `initFiltroPosicao`), com "Cancelar"/"Aplicar" sempre à vista (desde 17/11, `fix/filtro-desktop`). **Clicar fora fecha** o filtro em qualquer relatório (equivale a "Cancelar"; tratador geral no `initFiltroPosicao`, `fix/bateria-4`: o de cada relatório só valia no primeiro aberto) | cartão no **alto** da tela, com 16 px de margem, lista rolando por dentro e "Cancelar"/"Aplicar" sempre visíveis; véu atrás que só fecha o filtro (desde 17/11). No alto, como a busca: o teclado virtual cobriria um cartão preso embaixo |
 
 A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tudo bem: nenhum CSS chega nela.
 
@@ -541,6 +542,8 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
 - **Onde abrir:** no SPO, **Contrato Visual Protegido** → cartão **"Kit de mockup SPO-AA+"** (o que tem, como testar, como
   usar; botão que abre o kit numa aba nova; desde 17/11, `feat/kit-no-contrato`); ou pelo endereço
   `/static/kit/mockup-spo-aa-plus.html`.
+- **Prévias no painel:** ficam fora do `#content-area`; o bloco tem a classe `spo-area-leitura`, onde as regras de
+  entrelinha e de leitura do SPO também valem (`fix/bateria-4`). O kit marca o `data-forced-colors` como o SPO.
 - Usa o **próprio `style.css`** do SPO e lê do `main.js` a paleta dos destaques (`ACCENT_COLORS`), as
   opções do Personalizar (`OPTIONS`, `COMMON_VISUAL_OPTIONS`) e a navegação pelo teclado das tabelas
   (`initNavegacaoTabelas`, `initTecladoPaginacao`), a busca nas listas longas (`initBuscaListasLongas`) e a regra da oferta "Leitura confortável" da Atkinson

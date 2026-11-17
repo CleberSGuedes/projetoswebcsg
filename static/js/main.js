@@ -29724,6 +29724,14 @@
   const depois = () => requestAnimationFrame(posicionar);
   document.addEventListener("click", depois, true);
   document.addEventListener("keydown", depois, true);
+  // [jean] fix/bateria-4 (2026-11-17): clicar fora fecha o filtro em qualquer relatório. Cada relatório registra o seu
+  // "clicar fora fecha" uma vez só, sob a marca global multiFilterClickBound: o primeiro relatório aberto fica com o
+  // tratador, que só conhece os filtros dele; nos outros (ex.: FIP 613 e PLAN 51 depois do PED) o clique fora não
+  // fechava. Fechar assim equivale a "Cancelar": ao reabrir, o filtro recomeça do que está aplicado.
+  document.addEventListener("click", (ev) => {
+    if (ev.target.closest && ev.target.closest(".mf-wrapper")) return;
+    document.querySelectorAll(".mf-panel.open").forEach((p) => p.classList.remove("open", "mf-panel-direita"));
+  });
 })();
 
 /* ==========================================================================
