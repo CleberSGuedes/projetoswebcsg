@@ -106,6 +106,8 @@ initGovernancaSemanticFlows();`,
                 trecho(fonte, "(function initTecladoPaginacao() {", true) + ")();"],
       // busca nas listas longas dos formulários (feat/busca-listas-longas): o mesmo bloco do SPO
       buscaListas: trecho(fonte, "(function initBuscaListasLongas() {", true) + ")();",
+      // barra de título da tela (fix/menu-cabecalho-pta): o menu compacto, que leva a lupa e o "?" e alinha o "›"
+      menuCompacto: trecho(fonte, "(function initMenuCompacto() {", true) + ")();",
     };
   }
 
@@ -176,7 +178,91 @@ initGovernancaSemanticFlows();`,
     Object.keys(spo.atributos).forEach((k) => { if (estado[k] !== undefined) body.dataset[spo.atributos[k]] = estado[k]; });
     sincronizar();
     desenharGraficos();
+    barraTela.sincronizar();
   }
+
+  // ---------------------------------------------------------------- barra de título da tela
+  // Exemplo vivo numa moldura (iframe) com o style.css do SPO: o corpo da moldura tem special-context-focus (o
+  // estado do SPO com a barra da tela no lugar do cabeçalho) e roda o initMenuCompacto do main.js, que leva a lupa
+  // e o "?" para a barra e alinha o "›". As preferências do kit (tema, destaque, fontes…) passam para a moldura.
+  const barraTela = (function montarBarraTela() {
+    const moldura = document.getElementById("kit-barra-tela");
+    const modelo = document.getElementById("kit-barra-tela-modelo");
+    let pronta = false;
+    const css = new URL(document.querySelector('link[href*="css/style.css"]').getAttribute("href"), location.href).href;
+    const icones = (document.querySelector('link[href*="bootstrap-icons"]') || {}).href || "";
+    function copiarPreferencias() {
+      const doc = moldura.contentDocument;
+      if (!pronta || !doc || !doc.body) return;
+      const compacto = doc.body.classList.contains("spo-menu-compacto");
+      [[document.documentElement, doc.documentElement], [body, doc.body]].forEach(([de, para]) => {
+        [...para.attributes].forEach((a) => { if (a.name.startsWith("data-")) para.removeAttribute(a.name); });
+        [...de.attributes].forEach((a) => { if (a.name.startsWith("data-")) para.setAttribute(a.name, a.value); });
+        const estilo = de.getAttribute("style");
+        if (estilo) para.setAttribute("style", estilo); else para.removeAttribute("style");
+      });
+      doc.documentElement.style.setProperty("--spo-contextbar-height", "0px");
+      doc.body.className = `${body.className.replace("kit-mockup-body", "")} special-context-focus pta2027-immersive pta2027-context-focus`.trim();
+      doc.body.classList.toggle("spo-menu-compacto", compacto);
+      medir();
+    }
+    // no celular (até 600 px), a moldura vai de uma borda à outra da tela, como a barra no SPO
+    function encaixar() {
+      const celular = window.innerWidth <= 600;
+      moldura.classList.toggle("kit-tela-inteira", celular);
+      moldura.style.width = "";
+      moldura.style.marginLeft = "";
+      if (!celular) return;
+      const esquerda = moldura.parentElement.getBoundingClientRect().left;
+      moldura.style.width = `${document.documentElement.clientWidth}px`;
+      moldura.style.marginLeft = `${-esquerda}px`;
+    }
+    window.addEventListener("resize", () => requestAnimationFrame(encaixar));
+    function medir() {
+      const doc = moldura.contentDocument;
+      if (!doc || !doc.body) return;
+      const cabecalho = doc.querySelector(".pta2027-integration-header");
+      const altura = Math.ceil((cabecalho ? cabecalho.getBoundingClientRect().bottom : 0) + 72);
+      if (Math.abs(moldura.offsetHeight - altura) > 1) moldura.style.height = `${altura}px`;
+    }
+    function montar(codigoMenu) {
+      if (!moldura || !modelo) return;
+      encaixar();
+      moldura.srcdoc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="${icones}"><link rel="stylesheet" href="${css}">
+</head><body class="special-context-focus pta2027-immersive pta2027-context-focus">
+<div class="layout">
+  <header class="topbar"><div class="user-info"><div class="spo-cabecalho-acoes">
+    <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-busca" aria-label="Buscar tela (exemplo)"><i class="bi bi-search" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn spo-cabecalho-btn spo-cabecalho-ajuda" aria-label="Ajuda (exemplo)"><i class="bi bi-question-lg" aria-hidden="true"></i></button>
+  </div></div></header>
+  <aside class="sidebar collapsed" id="sidebar"><div class="sidebar-header">
+    <button class="icon-btn toggle-btn" id="sidebar-toggle" aria-label="Alternar menu (exemplo)"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+  </div><nav class="menu" id="menu"></nav></aside>
+  <div class="main"><main id="content-area"><section class="governanca-resultados pta2027-integration">${modelo.innerHTML}</section>
+    <p class="muted">Conteúdo da tela…</p></main></div>
+</div></body></html>`;
+      moldura.addEventListener("load", () => {
+        const doc = moldura.contentDocument;
+        const meta = doc.getElementById("pta2027-context-meta");
+        if (meta) meta.innerHTML = '<span class="pta2027-context-user-name">Usuária de exemplo</span><span class="pta2027-context-user-detail">17/11/2026, 10:00 | Logados: 3</span>';
+        const voltar = doc.getElementById("pta2027-sticky-back");
+        if (voltar) voltar.hidden = false;
+        pronta = true;
+        copiarPreferencias();
+        // a moldura é baixa de propósito: no SPO, janela com até 560 px de altura é celular deitado (menu compacto);
+        // aqui só a largura decide, para o exemplo mostrar o tablet e o desktop
+        const janela = moldura.contentWindow;
+        const consultar = janela.matchMedia.bind(janela);
+        janela.matchMedia = (q) => consultar(String(q).replace(/,\s*\(max-height:\s*560px\)/, ""));
+        janela.Function(codigoMenu)();
+        if ("ResizeObserver" in window) new janela.ResizeObserver(() => janela.requestAnimationFrame(medir)).observe(doc.body);
+        setTimeout(medir, 300);
+      }, { once: true });
+    }
+    return { montar, sincronizar: copiarPreferencias };
+  })();
 
   // ---------------------------------------------------------------- gráficos
   // Tema como o getCommonDiagramTheme do main.js: paleta do modo dos diagramas (data-visual-diagram-theme),
@@ -558,6 +644,7 @@ initGovernancaSemanticFlows();`,
       new Function(spo.buscaListas)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
+      barraTela.montar(spo.menuCompacto);
       if (window.Plotly) {
         // o initGraficosEscala pergunta o modo dos diagramas por esta função do main.js
         window.spoGetDiagramSemanticTokens = () => ({ mode: body.dataset.visualDiagramTheme || "light", tokens: {} });

@@ -29579,13 +29579,51 @@
   const sobrepoe = window.matchMedia("(max-width: 1200px)");
   const raiz = document.documentElement;
   function alinharSeta() {
+    const seta = document.getElementById("sidebar-toggle");
+    if (!seta) return;
+    // [jean] fix/menu-cabecalho-pta (2026-11-17; desenho do dev. Jean): na Programação PTA/OpR o cabeçalho do
+    // SPO some e entra o da tela (body.special-context-focus), com a lupa e o "?" do SPO (moverAcoes). O "›"
+    // fica no centro da coluna dos dois botões: no celular, pelo --spo-seta-topo (o "›" é fixo no alto); com a
+    // coluna do menu à vista (tablet, desktop), a coluna começa no alto da tela e o --spo-seta-foco é o espaço
+    // acima do "›" dentro dela. Medido com o cabeçalho no alto da tela (ele é fixo ao rolar: sticky, top 0).
+    const proprio = document.body.classList.contains("special-context-focus") && document.querySelector(".pta2027-integration-header");
+    const acoes = proprio && proprio.querySelector(".spo-cabecalho-acoes");
+    if (acoes && acoes.getClientRects().length) {
+      const caixa = acoes.getBoundingClientRect();
+      // relativo ao alto da barra; se ela passa da borda de cima (margem negativa), relativo à borda da tela
+      const centro = caixa.top + caixa.height / 2 - Math.max(0, proprio.getBoundingClientRect().top);
+      const alvo = Math.round(centro - seta.offsetHeight / 2);
+      if (!Number.isFinite(alvo)) return;
+      if (document.body.classList.contains("spo-menu-compacto")) {
+        raiz.style.setProperty("--spo-seta-topo", `${Math.max(0, alvo)}px`);
+      } else {
+        const atual = parseFloat(getComputedStyle(sidebar).paddingTop) || 0;
+        const novo = Math.max(0, Math.round(atual + alvo - seta.getBoundingClientRect().top + sidebar.getBoundingClientRect().top));
+        if (Math.abs(novo - atual) > 1) raiz.style.setProperty("--spo-seta-foco", `${novo}px`);
+      }
+      return;
+    }
     const logo = document.querySelector(".topbar .brand-logo");
     const topo = document.querySelector(".topbar");
-    const seta = document.getElementById("sidebar-toggle");
-    if (!logo || !topo || !seta || !document.body.classList.contains("spo-menu-compacto")) return;
+    if (!logo || !topo || !document.body.classList.contains("spo-menu-compacto")) return;
+    if (!logo.getClientRects().length) return; // escondido: fica a última medida (ou os 27 px do CSS)
     const centro = logo.getBoundingClientRect().top + logo.offsetHeight / 2 - topo.getBoundingClientRect().top;
     const valor = Math.max(0, Math.round(centro - seta.offsetHeight / 2));
     if (Number.isFinite(valor)) raiz.style.setProperty("--spo-seta-topo", `${valor}px`);
+  }
+  // [jean] fix/menu-cabecalho-pta: a lupa e o "?" vão para o cabeçalho da tela enquanto ele substitui o do SPO
+  // (os mesmos botões, não cópias), e voltam ao sair; se a tela for trocada com eles dentro, voltam também.
+  const acoesSpo = document.querySelector(".topbar .spo-cabecalho-acoes");
+  const lugarSpo = acoesSpo && acoesSpo.parentElement;
+  function moverAcoes() {
+    if (!acoesSpo || !lugarSpo) return;
+    const proprio = document.body.classList.contains("special-context-focus") && document.querySelector(".pta2027-integration-header");
+    const destino = proprio || lugarSpo;
+    if (acoesSpo.parentElement !== destino) destino.appendChild(acoesSpo);
+    if (proprio && "ResizeObserver" in window && !proprio.dataset.spoSetaObservada) {
+      proprio.dataset.spoSetaObservada = "1";
+      new ResizeObserver(() => depois()).observe(proprio);
+    }
   }
   function avaliar() {
     let compacto = pequeno.matches;
@@ -29595,6 +29633,7 @@
       compacto = sidebar.scrollHeight > sidebar.clientHeight + 1;
     }
     document.body.classList.toggle("spo-menu-compacto", compacto);
+    moverAcoes();
     alinharSeta();
   }
   avaliar();
@@ -29609,6 +29648,15 @@
   // o título do cabeçalho muda de altura (fonte, densidade, quebra de linha): realinha o "›"
   const topo = document.querySelector(".topbar");
   if (topo && "ResizeObserver" in window) new ResizeObserver(depois).observe(topo);
+  // [jean] fix/menu-cabecalho-pta: entrar e sair do cabeçalho da tela (special-context-focus) leva os botões e
+  // realinha o "›"; a tela trocada (outra rota) devolve os botões ao cabeçalho do SPO
+  let comCabecalhoProprio = document.body.classList.contains("special-context-focus");
+  new MutationObserver(() => {
+    const agora = document.body.classList.contains("special-context-focus");
+    if (agora !== comCabecalhoProprio) { comCabecalhoProprio = agora; moverAcoes(); depois(); }
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  const conteudo = document.getElementById("content-area");
+  if (conteudo) new MutationObserver(() => { if (acoesSpo && !acoesSpo.isConnected) moverAcoes(); }).observe(conteudo, { childList: true });
 })();
 
 /* ==========================================================================

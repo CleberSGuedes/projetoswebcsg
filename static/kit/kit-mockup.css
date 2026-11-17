@@ -7,7 +7,7 @@
 }
 /* o kit não tem o menu lateral: o .main não guarda a margem da coluna de ícones (64 px até 1200 px de largura,
    que deslocava o conteúdo e cortava os cartões no celular; feat/kit-movel) */
-.kit-mockup-body .main { margin-left: 0; }
+.kit-mockup-body .main { margin-left: 0; width: 100%; } /* sem a coluna do menu: a largura inteira (o SPO tira 64 px dela) */
 
 .kit-pulo {
   position: absolute;
@@ -150,3 +150,7 @@
 /* o cabeçalho de exemplo fica no fluxo do kit (no SPO ele é fixo no alto e reserva a coluna do menu) */
 .kit-padrao .topbar.kit-topbar { position: relative; top: auto; z-index: auto; padding-left: 14px; border-radius: 12px; }
 .kit-listas { align-items: start; }
+/* barra de título da tela (fix/menu-cabecalho-pta): a moldura com o exemplo vivo; a altura vem do conteúdo (kit-mockup.js) */
+.kit-barra-tela { display: block; width: 100%; border: thin solid var(--border); border-radius: 0.75rem; background: var(--bg); }
+/* no celular, a moldura ocupa a largura da tela (como a barra no SPO): largura e margem postas pelo kit-mockup.js */
+.kit-barra-tela.kit-tela-inteira { max-width: none; border-inline: 0; border-radius: 0; }
