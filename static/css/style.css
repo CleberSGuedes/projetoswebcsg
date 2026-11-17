@@ -10173,3 +10173,35 @@ body[data-spo-text-size="xlarge"] { --spo-zoom: 1.5; }
 .theme-dark .mf-panel .mf-option:hover {
   background: rgba(var(--accent-rgb), 0.12);
 }
+
+/* ==========================================================================
+   [jean] Alvos de toque com no mínimo 24 px (fix/alvos-toque-24, 2026-11-17; WCAG 2.5.8, achado da linha de
+   base do plano de readequação para celular e navegadores)
+   A bateria (Chromium, Firefox e WebKit; desktop e celulares) achou dois alvos abaixo de 24 px fora de texto
+   corrido: as opções "Não/Sim" dos formulários (o rótulo, que também marca a opção, tinha 18 px de altura;
+   o círculo, 13 px) e o link "Acessibilidade" do rodapé (15 px de altura). Agora: o rótulo de uma opção tem ao
+   menos 24 px de altura (44 px em tela de toque, como os outros controles do AA+), com o círculo de 18 px; o
+   link do rodapé ganha área de toque invisível (inset negativo, a técnica do botão "›" do menu, A5/#35), sem
+   mudar o desenho do rodapé. Vale para os seis formulários com opções (Dotação, Estorno, Etapa, Meta
+   Física, Subação e Notas SEE).
+   ========================================================================== */
+label:has(> input[type="radio"]) {
+  min-height: 24px;
+}
+label > input[type="radio"] {
+  width: 18px;
+  height: 18px;
+}
+@media (pointer: coarse) {
+  label:has(> input[type="radio"]) {
+    min-height: 44px;
+  }
+}
+.footer .footer-acessibilidade {
+  position: relative;
+}
+.footer .footer-acessibilidade::after {
+  content: "";
+  position: absolute;
+  inset: -5px -4px;
+}
