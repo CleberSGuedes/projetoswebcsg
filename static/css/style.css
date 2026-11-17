@@ -10544,3 +10544,26 @@ body.pta2027-immersive.special-context-focus:not(.spo-menu-compacto) .sidebar {
   padding-top: var(--spo-seta-foco, 10px);
 }
 
+/* ==========================================================================
+   [jean] Filtro SPO no desktop (fix/filtro-desktop, 2026-11-17; achado do dev. Jean no kit, medido também no
+   FIP 613). O painel do filtro dos relatórios tinha 260 px fixos, opções sem quebra de linha e em negrito (herdado
+   do cabeçalho da coluna, onde o filtro fica): no FIP 613, 28 de 30 nomes de uma coluna ficavam cortados (o mais
+   longo pede 825 px). Nas últimas colunas, o painel passava até 110 px da borda da tabela e o "Aplicar" sumia.
+   Agora, em todas as larguras: opções em peso normal, quebrando linha (como no cartão do celular, #172). Fora do
+   modo celular: o painel cresce com os nomes até 420 px (e nunca passa da largura da tela), e abre alinhado pela
+   direita da coluna quando, aberto para a direita, sairia da área visível da tabela (.mf-panel-direita, posta pelo
+   initFiltroPosicao do main.js). A alça de redimensionar continua.
+   ========================================================================== */
+.mf-panel .mf-option,
+.mf-panel .mf-option span,
+.mf-panel .mf-search { font-weight: 400; }
+.mf-panel .mf-option span { white-space: normal; overflow-wrap: anywhere; }
+@media (min-width: 601px) and (min-height: 561px) {
+  .mf-panel {
+    width: max-content;
+    min-width: 260px;
+    max-width: min(420px, calc(100vw - 32px));
+  }
+  .mf-panel.mf-panel-direita { left: auto; right: 0; }
+}
+
