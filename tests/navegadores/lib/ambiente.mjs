@@ -78,7 +78,7 @@ export async function garantirSessao() {
     if (existsSync(ARQ_SESSAO)) {
       const ctx = await nav.newContext({ storageState: ARQ_SESSAO });
       const pag = await ctx.newPage();
-      await pag.goto(BASE, { waitUntil: "domcontentloaded" });
+      await pag.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
       const ok = !new URL(pag.url()).pathname.startsWith("/login") && await pag.locator("#sidebar").count();
       await ctx.close();
       if (ok) return ARQ_SESSAO;
@@ -120,11 +120,12 @@ export async function abrirPerfil(nomePerfil, extra = {}) {
   return { nav, ctx, pag, erros, motor: p.tipo.name() };
 }
 
-// abre uma tela pelo menu (clique no [data-route]) e espera o carregamento e os dados (até 60 s)
-export async function abrirTela(pag, rota) {
+// abre uma tela pelo menu (clique no [data-route]) e espera o carregamento e os dados (até 60 s). pausas: false tira as
+// esperas fixas (1,5 s e 2 s), para quem espera a tela ficar pronta de outro jeito (comparar.mjs)
+export async function abrirTela(pag, rota, { pausas = true } = {}) {
   if (!pag.url().startsWith(BASE) || !rota) {
     await pag.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await pag.waitForTimeout(1500);
+    if (pausas) await pag.waitForTimeout(1500);
   }
   if (new URL(pag.url()).pathname.startsWith("/login")) throw new Error("sessão expirada");
   if (rota) {
@@ -132,7 +133,7 @@ export async function abrirTela(pag, rota) {
     if (!achou) throw new Error("tela não encontrada no menu (permissão do usuário de teste?)");
   }
   await pag.waitForFunction(() => ![...document.querySelectorAll(".app-loading-overlay")].some((e) => getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0), null, { timeout: 60000 }).catch(() => {});
-  await pag.waitForTimeout(2000);
+  if (pausas) await pag.waitForTimeout(2000);
 }
 
 // preferências do Personalizar gravadas no navegador antes de carregar (mesmas chaves do main.js)
