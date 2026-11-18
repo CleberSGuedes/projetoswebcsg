@@ -9,7 +9,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
-## 2026-11-18 — dev/cleber, RELEASE_2_2026_11_18.2
+## 2026-11-18 — homologação, RELEASE_2_2026_11_18.3 (Notas SEE: correção do envio de PDFs)
 
 ### Corrigido
 - Notas SEE: correção do envio de PDFs (`fix/notas-see-envio`), etapa 2, envio robusto. Em produção, um lote do envio ficou pendurado sem resposta e a tela não mostrou nada; o erro do envio ainda cancelava o processamento sozinho (processamentos 93/94). Agora cada lote tem tempo limite (60 s + 15 s por MB) e, em tempo esgotado, falha de rede, erro 5xx ou 429, é reenviado até 3 vezes no total (esperas de 5 s e 15 s). A tela mostra o andamento ("Enviando lote 11 de 13 (PDFs 501 a 550)… 45 s · tentativa 2 de 3") e a contagem regressiva da nova tentativa.
