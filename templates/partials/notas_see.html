@@ -70,13 +70,18 @@
           <label class="see-upload-option"><i class="bi bi-files"></i><strong>Selecionar arquivos</strong><span>Um ou vários PDFs</span><input id="see-files-input" type="file" name="pdfs" accept="application/pdf,.pdf" multiple></label>
         </div>
         <div class="see-selection-summary" id="see-selection-summary">Nenhum PDF selecionado.</div>
+        <div class="see-selection-summary" id="see-selection-ignored" hidden></div>
         <div class="see-append-choice" id="see-append-choice" hidden>
           <strong>Deseja acrescentar novas notas ao catálogo já processado?</strong>
           <label><input type="radio" name="see_append_mode" value="acrescentar" checked> Sim, manter as anteriores</label>
           <label><input type="radio" name="see_append_mode" value="novo"> Não, iniciar uma nova lista</label>
         </div>
-        <div class="actions"><button class="btn btn-primary" id="see-process-submit" type="submit" disabled><i class="bi bi-play-fill"></i>Iniciar processamento</button></div>
-        <div id="see-process-msg" class="muted"></div>
+        <div class="actions"><button class="btn btn-primary" id="see-process-submit" type="submit" disabled><i class="bi bi-play-fill"></i>Iniciar processamento</button><button class="btn btn-danger" id="see-upload-cancel" type="button" hidden><i class="bi bi-x-circle"></i>Cancelar envio</button></div>
+        <div id="see-process-msg" class="muted" role="status" aria-live="polite"></div>
+        <div class="alert alert-error" id="see-upload-error" role="alert" hidden>
+          <p id="see-upload-error-msg"></p>
+          <div class="actions"><button class="btn btn-primary sm" id="see-upload-retry" type="button"><i class="bi bi-arrow-clockwise"></i>Tentar novamente</button></div>
+        </div>
       </form>
     </section>
   </div>

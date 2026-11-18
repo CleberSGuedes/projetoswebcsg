@@ -9,6 +9,18 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-18 — dev/cleber, RELEASE_2_2026_11_18.1
+
+### Corrigido
+- Notas SEE: correção do envio de PDFs (etapa 2: envio robusto) (`fix/notas-see-envio`). Em produção, um lote do envio ficou pendurado sem resposta e a tela não mostrou nada; o erro do envio ainda cancelava o processamento sozinho (processamentos 93/94). Agora cada lote tem tempo limite (60 s + 15 s por MB) e, em tempo esgotado, falha de rede, erro 5xx ou 429, é reenviado até 3 vezes no total (esperas de 5 s e 15 s). A tela mostra o andamento ("Enviando lote 11 de 13 (PDFs 501 a 550)… 45 s · tentativa 2 de 3") e a contagem regressiva da nova tentativa.
+- Notas SEE, reenvio sem duplicar: no servidor, arquivo com o mesmo SHA-256 **e** o mesmo caminho relativo no mesmo processamento conta como "já recebido" e volta no campo novo `already` da resposta do envio (não grava de novo nem soma ignorados); o duplicado verdadeiro (mesmo conteúdo em outro caminho) continua ignorado como antes.
+- Notas SEE, erro no envio sem descarte automático: depois das 3 tentativas, a mensagem fica na tela (não some no primeiro clique) com "Tentar novamente", que continua do lote que falhou, e "Cancelar envio", que cancela o processamento **do envio** (não o do painel). Enquanto há envio em andamento, o navegador avisa ao recarregar ou fechar a aba (`beforeunload`; o texto do aviso é do navegador e não pode ser trocado).
+- Notas SEE, arquivos que não são PDF: o navegador não envia mais (o `.rar` de 8,94 MB do 3º bimestre subia e era descartado no servidor); a tela lista os ignorados ("1 arquivo ignorado por não ser PDF: METROPOLITANA.rar") e manda só os nomes no campo opcional `ignorados_navegador` da criação do processamento (lista de textos, até 500 nomes de até 255 caracteres; entrada inválida é descartada sem quebrar a criação). O servidor registra a mesma ocorrência `ARQUIVO_IGNORADO` de antes: aba "Ocorrências" do Excel, resumo, contagem de ignorados e mensagem do `iniciar` iguais; no "acrescentar", aparecem só os ignorados do envio novo.
+- Validação na `dev/cleber` com as 641 notas + 1 `.rar` do 3º bimestre: resposta perdida no lote 5 (o servidor gravou, a tela não recebeu) reenviada com `already` e sem duplicar; erro 502 três vezes no lote 11 e "Tentar novamente" continuando do lote 11; envio normal sem o `.rar`. Os três terminaram como o processamento de referência (641 notas, 630 sem alertas, 11 com alertas, 0 erros, 1 ignorado; 23 linhas em "Ocorrências"). Aviso ao recarregar e "Cancelar envio" testados pelo dev. Cleber no Firefox e no Chrome. Testes novos em `tests/test_notas_see.py` (reenvio idempotente, duplicado em outro caminho, envio depois do cancelamento, contagem do `iniciar`, ignorados do navegador, limite e campo opcional, acrescentar). `?v=` do `main.js` `20261118.cleber-notas-see-envio.1`; CSS sem mudança.
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma (rotas das Notas SEE, campo `already` acrescentado na resposta do envio e campo opcional `ignorados_navegador` na criação).
+
+---
+
 ## 2026-11-17 — produção, RELEASE_2_2026_11_17.4
 
 ### Corrigido

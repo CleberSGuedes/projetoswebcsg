@@ -4515,6 +4515,8 @@
     let pollTimer = null;
     let lastProcessing = null;
     let watchingJobId = null;
+    // Envio em andamento (ou parado por erro, esperando "Tentar novamente" / "Cancelar envio").
+    let envio = null;
     const historyCatalog = document.getElementById("see-history-catalog");
     const historyExercicio = document.getElementById("see-history-exercicio");
     const catalogLabel = (item) => `${item.exercicio} · ${escapeHtml(item.nome)}`;
@@ -4522,6 +4524,15 @@
     const historyMsg = document.getElementById("see-history-msg");
     const SEE_BATCH_MAX_FILES = 50;
     const SEE_BATCH_MAX_BYTES = 20 * 1024 * 1024;
+    // Cada lote tem tempo limite (60 s + 15 s por MB) e até 3 tentativas, com espera de 5 s e depois 15 s.
+    const SEE_LOTE_TENTATIVAS = 3;
+    const SEE_LOTE_ESPERAS_MS = [5000, 15000];
+    const seeTempoLimiteLote = (bytes) => 60000 + Math.ceil((15000 * bytes) / (1024 * 1024));
+    const uploadCancel = document.getElementById("see-upload-cancel");
+    const uploadError = document.getElementById("see-upload-error");
+    const uploadErrorMsg = document.getElementById("see-upload-error-msg");
+    const uploadRetry = document.getElementById("see-upload-retry");
+    const selectionIgnored = document.getElementById("see-selection-ignored");
 
     const escapeHtml = (value) => String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -4545,11 +4556,57 @@
     root.addEventListener("change", clearVisibleErrors);
     root.addEventListener("click", clearVisibleErrors);
     const requestJson = async (url, options = {}) => {
-      const { headers = {}, ...rest } = options;
-      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
-      return data;
+      const { headers = {}, timeoutMs = 0, signal = null, ...rest } = options;
+      if (!timeoutMs && !signal) {
+        const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+        return data;
+      }
+      // Com tempo limite e/ou cancelamento (envio dos PDFs): o erro diz o tipo da falha
+      // (tempo, rede, http ou cancelado) e o status HTTP, para decidir se tenta de novo.
+      const controller = new AbortController();
+      let motivo = "";
+      const abortar = (qual) => {
+        if (motivo) return;
+        motivo = qual;
+        controller.abort();
+      };
+      const onSignal = () => abortar("cancelado");
+      if (signal) {
+        if (signal.aborted) onSignal();
+        else signal.addEventListener("abort", onSignal, { once: true });
+      }
+      const timer = timeoutMs ? setTimeout(() => abortar("tempo"), timeoutMs) : null;
+      const falha = (tipo, message, status = 0) => Object.assign(new Error(message), { tipo, status });
+      const falhaAbortada = () => (motivo === "tempo"
+        ? falha("tempo", `O servidor não respondeu em ${Math.round(timeoutMs / 1000)} s.`)
+        : falha("cancelado", "Envio cancelado."));
+      try {
+        let response;
+        try {
+          response = await fetch(url, { ...rest, signal: controller.signal, headers: { "X-Requested-With": "fetch", ...headers } });
+        } catch (error) {
+          if (motivo) throw falhaAbortada();
+          throw falha("rede", "Sem conexão com o servidor.");
+        }
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          if (motivo) throw falhaAbortada();
+        }
+        if (!response.ok) {
+          const message = response.status >= 500 || !data.error
+            ? `O servidor respondeu com erro ${response.status}.`
+            : data.error;
+          throw falha("http", message, response.status);
+        }
+        return data;
+      } finally {
+        if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onSignal);
+      }
     };
     const renderProducts = () => {
       const catalog = selectedCatalog();
@@ -4591,16 +4648,27 @@
       renderProducts();
     };
     const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    // Só PDFs são enviados; os demais ficam de fora já no navegador (o servidor mantém a própria checagem).
+    const ehPdf = (file) => /\.pdf$/i.test(file.name || "");
+    const selectedPdfs = () => selectedFiles().filter(ehPdf);
+    const selectedNaoPdf = () => selectedFiles().filter((file) => !ehPdf(file));
     function updateSelection() {
-      const files = selectedFiles();
+      const files = selectedPdfs();
+      const outros = selectedNaoPdf();
       const size = files.reduce((total, file) => total + file.size, 0);
       document.getElementById("see-selection-summary").textContent = files.length
         ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
         : "Nenhum PDF selecionado.";
+      const nomesOutros = outros.slice(0, 5).map((file) => file.name).join(", ");
+      const maisOutros = outros.length > 5 ? ` e mais ${outros.length - 5}` : "";
+      selectionIgnored.textContent = outros.length
+        ? `${outros.length === 1 ? "1 arquivo ignorado" : `${outros.length} arquivos ignorados`} por não ser PDF: ${nomesOutros}${maisOutros}`
+        : "";
+      selectionIgnored.hidden = !outros.length;
       const catalog = selectedCatalog();
       const processingActive = lastProcessing
         && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
-      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive || Boolean(envio);
       const canAppend = lastProcessing
         && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
         && String(lastProcessing.catalog_id) === String(catalog?.id);
@@ -4860,13 +4928,165 @@
         setMessage(processMsg, error.message, true);
       }
     };
+    // ---- Envio dos PDFs em lotes ----
+    // Um lote só avança depois de um 200. Falha passageira (tempo esgotado, rede, 5xx, 429) tenta o mesmo
+    // lote de novo; esgotadas as tentativas, o envio fica parado (o processamento continua "enviando") e
+    // "Tentar novamente" continua do lote que falhou. Nada é descartado sem o usuário pedir.
+    const avisoSaida = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const mostrarErroEnvio = (mensagem, podeTentar) => {
+      setMessage(processMsg, "");
+      uploadErrorMsg.textContent = mensagem;
+      uploadRetry.hidden = !podeTentar;
+      uploadError.hidden = false;
+    };
+    const limparErroEnvio = () => {
+      uploadError.hidden = true;
+      uploadErrorMsg.textContent = "";
+    };
+    // Encerra o envio atual: interrompe o fetch e a espera em curso e libera a tela para um novo envio.
+    const encerrarEnvio = () => {
+      const atual = envio;
+      envio = null;
+      if (atual) {
+        clearTimeout(atual.esperaTimer);
+        clearInterval(atual.cronometro);
+        atual.controller?.abort();
+        atual.acordar?.();
+      }
+      window.removeEventListener("beforeunload", avisoSaida);
+      uploadCancel.hidden = true;
+      updateSelection();
+    };
+    const esperar = (atual, ms) => new Promise((resolve) => {
+      atual.acordar = resolve;
+      atual.esperaTimer = setTimeout(resolve, ms);
+    });
+    const enviarLote = async (atual, lote) => {
+      for (let tentativa = 1; ; tentativa += 1) {
+        const inicio = Date.now();
+        const sufixo = tentativa > 1 ? ` · tentativa ${tentativa} de ${SEE_LOTE_TENTATIVAS}` : "";
+        const mostrar = () => setMessage(processMsg, `Enviando lote ${lote.numero} de ${atual.lotes.length} (PDFs ${lote.de} a ${lote.ate})… ${Math.floor((Date.now() - inicio) / 1000)} s${sufixo}`);
+        mostrar();
+        atual.cronometro = setInterval(mostrar, 1000);
+        atual.controller = new AbortController();
+        const batchData = new FormData();
+        lote.arquivos.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
+        try {
+          return await requestJson(`/api/notas-see/processamentos/${atual.jobId}/arquivos`, {
+            method: "POST",
+            body: batchData,
+            timeoutMs: seeTempoLimiteLote(lote.bytes),
+            signal: atual.controller.signal,
+          });
+        } catch (error) {
+          if (error.tipo === "cancelado" || envio !== atual) throw error;
+          error.repetivel = error.tipo === "tempo" || error.tipo === "rede"
+            || (error.tipo === "http" && (error.status >= 500 || error.status === 429));
+          if (!error.repetivel || tentativa >= SEE_LOTE_TENTATIVAS) throw error;
+          clearInterval(atual.cronometro);
+          const fimEspera = Date.now() + SEE_LOTE_ESPERAS_MS[tentativa - 1];
+          const avisar = () => setMessage(processMsg, `O lote ${lote.numero} de ${atual.lotes.length} não foi enviado: ${error.message} Nova tentativa em ${Math.max(0, Math.ceil((fimEspera - Date.now()) / 1000))} s…`);
+          avisar();
+          atual.cronometro = setInterval(avisar, 1000);
+          await esperar(atual, fimEspera - Date.now());
+          if (envio !== atual) throw Object.assign(new Error("Envio cancelado."), { tipo: "cancelado" });
+        } finally {
+          clearInterval(atual.cronometro);
+        }
+      }
+    };
+    const acompanharProcessamento = (data, atual) => {
+      jobId = data.job_id;
+      watchingJobId = data.job_id;
+      setMessage(processMsg, data.message);
+      progressCard.hidden = false;
+      renderStatus({
+        id: data.job_id,
+        status: "na_fila",
+        message: data.message || "Processamento colocado na fila.",
+        progress: 0,
+        processed: 0,
+        total: data.total || atual.total,
+        success: 0,
+        warnings: 0,
+        errors: 0,
+        duration: 0,
+        files: [
+          ...atual.accepted.map((name) => ({ name, status: "enviado", progress: 0 })),
+          ...atual.ignored.map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+        ],
+        catalog_id: Number(atual.catalogId),
+        catalog_name: atual.catalogName,
+        executed_by: lastProcessing?.executed_by,
+        created_at: new Date().toISOString(),
+        initial_count: data.initial || 0,
+        added_count: data.added || atual.total,
+        ignored_count: data.ignored_count || 0,
+      });
+      progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      poll();
+    };
+    const continuarEnvio = async () => {
+      const atual = envio;
+      if (!atual) return;
+      limparErroEnvio();
+      uploadCancel.hidden = false;
+      window.addEventListener("beforeunload", avisoSaida);
+      updateSelection();
+      try {
+        while (atual.indice < atual.lotes.length) {
+          const lote = atual.lotes[atual.indice];
+          const result = await enviarLote(atual, lote);
+          if (envio !== atual) return;
+          atual.accepted.push(...(result.accepted || []), ...(result.already || []));
+          atual.ignored.push(...(result.ignored || []));
+          atual.enviados += lote.arquivos.length;
+          atual.indice += 1;
+        }
+        setMessage(processMsg, "Iniciando processamento...");
+        atual.controller = new AbortController();
+        let data;
+        try {
+          data = await requestJson(`/api/notas-see/processamentos/${atual.jobId}/iniciar`, { method: "POST", timeoutMs: 60000, signal: atual.controller.signal });
+        } catch (error) {
+          if (error.status !== 409 || envio !== atual) throw error;
+          // 409 numa nova tentativa: o "iniciar" anterior chegou ao servidor; segue o processamento se ele andou.
+          const status = await requestJson(`/api/notas-see/processamentos/${atual.jobId}`, { timeoutMs: 30000 });
+          if (["enviando", "descartado"].includes(status.status)) throw error;
+          data = { job_id: atual.jobId, message: status.message, total: status.total, initial: status.initial_count, added: status.added_count, ignored_count: status.ignored_count };
+        }
+        if (envio !== atual) return;
+        encerrarEnvio();
+        acompanharProcessamento(data, atual);
+      } catch (error) {
+        if (envio !== atual || error.tipo === "cancelado") return;
+        const noIniciar = atual.indice >= atual.lotes.length;
+        if (error.status === 404 || error.status === 409 || (noIniciar && [400, 503].includes(error.status))) {
+          // O processamento não recebe mais arquivos (descartado ou recusado pelo servidor): não há o que retomar.
+          encerrarEnvio();
+          mostrarErroEnvio(`${error.message} Selecione os PDFs e inicie um novo envio.`, false);
+          return;
+        }
+        const lote = atual.lotes[atual.indice];
+        const onde = noIniciar
+          ? "Os PDFs foram recebidos, mas o processamento não foi iniciado"
+          : `O lote ${lote.numero} de ${atual.lotes.length} (PDFs ${lote.de} a ${lote.ate}) não foi enviado${error.repetivel ? ` depois de ${SEE_LOTE_TENTATIVAS} tentativas` : ""}`;
+        mostrarErroEnvio(`${onde}: ${error.message} ${atual.enviados} de ${atual.total} PDF(s) já foram recebidos. Use "Tentar novamente" para continuar deste ponto ou "Cancelar envio" para descartar o envio.`, true);
+      }
+    };
     processForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!processForm.reportValidity() || submit.disabled) return;
-      submit.disabled = true; setMessage(processMsg, "Preparando envio...");
-      let uploadJobId = null;
+      if (!processForm.reportValidity() || submit.disabled || envio) return;
+      submit.disabled = true;
+      limparErroEnvio();
+      setMessage(processMsg, "Preparando envio...");
+      const files = selectedPdfs();
+      const naoPdf = selectedNaoPdf();
+      let created;
       try {
-        const files = selectedFiles();
         const createData = new FormData();
         createData.append("catalogo_id", catalogSelect.value);
         const appendMode = appendChoice.hidden
@@ -4874,76 +5094,60 @@
           : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
         createData.append("append_mode", appendMode);
         if (appendMode === "acrescentar" && lastProcessing?.id) createData.append("base_job_id", lastProcessing.id);
-        const created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData });
-        uploadJobId = created.job_id;
-
-        // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
-        const batches = [];
-        let current = [];
-        let currentSize = 0;
-        files.forEach((file) => {
-          if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) {
-            batches.push(current);
-            current = [];
-            currentSize = 0;
-          }
-          current.push(file);
-          currentSize += file.size;
-        });
-        if (current.length) batches.push(current);
-        const accepted = [];
-        const ignored = [];
-        let sent = 0;
-        for (const batch of batches) {
-          setMessage(processMsg, `Enviando PDFs: ${sent} de ${files.length} (${Math.round((sent / files.length) * 100)}%)...`);
-          const batchData = new FormData();
-          batch.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
-          const result = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/arquivos`, { method: "POST", body: batchData });
-          accepted.push(...(result.accepted || []));
-          ignored.push(...(result.ignored || []));
-          sent += batch.length;
-        }
-        setMessage(processMsg, "Iniciando processamento...");
-        const data = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/iniciar`, { method: "POST" });
-        uploadJobId = null;
-        data.accepted = accepted;
-        data.ignored = ignored;
-        jobId = data.job_id;
-        watchingJobId = data.job_id;
-        setMessage(processMsg, data.message);
-        progressCard.hidden = false;
-        renderStatus({
-          id: data.job_id,
-          status: "na_fila",
-          message: data.message || "Processamento colocado na fila.",
-          progress: 0,
-          processed: 0,
-          total: data.total || selectedFiles().length,
-          success: 0,
-          warnings: 0,
-          errors: 0,
-          duration: 0,
-          files: [
-            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
-            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
-          ],
-          catalog_id: Number(catalogSelect.value),
-          catalog_name: selectedCatalog()?.nome,
-          executed_by: lastProcessing?.executed_by,
-          created_at: new Date().toISOString(),
-          initial_count: data.initial || 0,
-          added_count: data.added || selectedFiles().length,
-          ignored_count: data.ignored_count || 0,
-        });
-        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        poll();
+        // Os não-PDF não são enviados; só os nomes, para ficarem registrados como ignorados (Excel e resumo).
+        if (naoPdf.length) createData.append("ignorados_navegador", JSON.stringify(naoPdf.map((file) => file.webkitRelativePath || file.name)));
+        created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData, timeoutMs: 60000 });
       } catch (error) {
-        // Envio interrompido: descarta o processamento parcial para não deixá-lo pendente.
-        if (uploadJobId) {
-          requestJson(`/api/notas-see/processamentos/${uploadJobId}/cancelar`, { method: "POST" }).catch(() => {});
-        }
-        setMessage(processMsg, error.message, true);
-        submit.disabled = false;
+        mostrarErroEnvio(`Não foi possível começar o envio: ${error.message}`, false);
+        updateSelection();
+        return;
+      }
+
+      // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
+      const lotes = [];
+      let current = [];
+      let currentSize = 0;
+      let posicao = 0;
+      const fecharLote = () => {
+        lotes.push({ numero: lotes.length + 1, de: posicao + 1, ate: posicao + current.length, bytes: currentSize, arquivos: current });
+        posicao += current.length;
+        current = [];
+        currentSize = 0;
+      };
+      files.forEach((file) => {
+        if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) fecharLote();
+        current.push(file);
+        currentSize += file.size;
+      });
+      if (current.length) fecharLote();
+      envio = {
+        jobId: created.job_id,
+        lotes,
+        indice: 0,
+        total: files.length,
+        enviados: 0,
+        accepted: [],
+        ignored: naoPdf.map((file) => ({ name: file.name, reason: "Extensão diferente de PDF." })),
+        catalogId: catalogSelect.value,
+        catalogName: selectedCatalog()?.nome,
+      };
+      await continuarEnvio();
+    });
+    uploadRetry.addEventListener("click", () => {
+      if (envio) continuarEnvio();
+    });
+    // Cancela o processamento do ENVIO (não o do painel) e descarta o que já foi recebido.
+    uploadCancel.addEventListener("click", async () => {
+      const atual = envio;
+      if (!atual) return;
+      encerrarEnvio();
+      limparErroEnvio();
+      setMessage(processMsg, "Cancelando o envio...");
+      try {
+        await requestJson(`/api/notas-see/processamentos/${atual.jobId}/cancelar`, { method: "POST", timeoutMs: 30000 });
+        setMessage(processMsg, "Envio cancelado. Nenhum PDF foi processado; quando quiser, inicie um novo envio.");
+      } catch (error) {
+        mostrarErroEnvio(`Não foi possível confirmar o cancelamento do envio: ${error.message}`, false);
       }
     });
     document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });

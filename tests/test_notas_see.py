@@ -11,6 +11,7 @@ from __future__ import annotations
 import glob
 import inspect
 import io
+import json
 import os
 import re
 import shutil
@@ -272,6 +273,145 @@ def test_envio_em_lotes_ignora_duplicados_e_nao_pdf(ctx):
     razoes = " | ".join(i["reason"] for i in body["ignored"])
     assert "duplicado" in razoes and "Extensão" in razoes and "não é um PDF" in razoes
     assert (ctx.nr.SEE_UPLOAD_DIR / str(job_id)).exists()
+
+
+def _ocorrencias_ignorado(ctx, job_id):
+    from models import SeeOcorrencia
+
+    ctx.db.session.rollback()
+    return SeeOcorrencia.query.filter_by(processamento_id=job_id, codigo="ARQUIVO_IGNORADO").all()
+
+
+def _lote_com_copia():
+    return {"pdfs": [
+        (io.BytesIO(_pdf(1)), "pasta/a.pdf"),
+        (io.BytesIO(_pdf(2)), "pasta/b.pdf"),
+        (io.BytesIO(_pdf(1)), "pasta/copia_de_a.pdf"),
+        (io.BytesIO(b"texto"), "pasta/nota.txt"),
+    ]}
+
+
+def test_reenvio_do_mesmo_lote_e_idempotente(ctx):
+    """Nova tentativa do lote (ou reenvio automático do navegador): nada é gravado nem ignorado de novo."""
+    from models import SeeProcessamento, SeeProcessamentoArquivo
+
+    cid = _catalogo(ctx)
+    job_id = _novo_job(ctx, cid)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data=_lote_com_copia(), processamento_id=job_id)
+    assert code == 200 and body["added"] == 2 and body["already"] == [] and len(body["ignored"]) == 2
+    code, body = ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data=_lote_com_copia(), processamento_id=job_id)
+    assert code == 200, body
+    assert body["added"] == 0 and body["accepted"] == []
+    assert sorted(body["already"]) == ["a.pdf", "b.pdf"]
+    assert len(body["ignored"]) == 2, "a resposta continua dizendo o que foi ignorado no lote"
+    assert len(_ocorrencias_ignorado(ctx, job_id)) == 2, "o ignorado não é gravado de novo"
+    assert SeeProcessamentoArquivo.query.filter_by(processamento_id=job_id).count() == 2
+    assert ctx.db.session.get(SeeProcessamento, job_id).arquivos_enviados == 2
+    assert len(list((ctx.nr.SEE_UPLOAD_DIR / str(job_id)).iterdir())) == 2
+
+
+def test_duplicado_verdadeiro_com_outro_caminho_continua_ignorado(ctx):
+    cid = _catalogo(ctx)
+    job_id = _novo_job(ctx, cid)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(7)), "pasta/a.pdf")]}, processamento_id=job_id)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(7)), "outra/a.pdf")]}, processamento_id=job_id)
+    assert code == 200 and body["added"] == 0 and body["already"] == []
+    assert body["ignored"] == [{"name": "a.pdf", "reason": "Arquivo duplicado na seleção atual."}]
+    assert len(_ocorrencias_ignorado(ctx, job_id)) == 1
+
+
+def test_envio_depois_do_cancelamento_responde_409(ctx):
+    cid = _catalogo(ctx)
+    job_id = _novo_job(ctx, cid)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(8)), "a.pdf")]}, processamento_id=job_id)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_cancelar, method="POST", processamento_id=job_id)
+    assert code == 200 and body["message"] == "Envio cancelado."
+    code, body = ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(9)), "b.pdf")]}, processamento_id=job_id)
+    assert code == 409 and "não está mais recebendo" in body["error"]
+
+
+def test_iniciar_conta_certo_depois_de_nova_tentativa(ctx, monkeypatch):
+    monkeypatch.setattr(ctx.nr, "_start_see_worker", lambda job: None)
+    monkeypatch.setattr(ctx.nr, "pdfplumber_disponivel", lambda: True)
+    cid = _catalogo(ctx)
+    job_id = _novo_job(ctx, cid)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data=_lote_com_copia(), processamento_id=job_id)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data=_lote_com_copia(), processamento_id=job_id)  # nova tentativa
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(3)), "pasta/c.pdf")]}, processamento_id=job_id)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_iniciar, method="POST", processamento_id=job_id)
+    assert code == 202, body
+    assert body["added"] == 3 and body["total"] == 3 and body["ignored_count"] == 2
+    assert body["message"] == "3 PDF(s) recebido(s), 2 ignorado(s)."
+
+
+def test_nao_pdf_filtrado_no_navegador_fica_registrado_como_hoje(ctx, monkeypatch):
+    """Só os nomes chegam; ocorrência, contagem e mensagem do iniciar iguais às do arquivo enviado."""
+    from models import SeeOcorrencia
+
+    monkeypatch.setattr(ctx.nr, "_start_see_worker", lambda job: None)
+    monkeypatch.setattr(ctx.nr, "pdfplumber_disponivel", lambda: True)
+    cid = _catalogo(ctx)
+    nomes = ["Notas Fiscais/METROPOLITANA.rar", 123, None, "x" * 300 + ".zip", "ruim\x01.rar", "", "  ", {"a": 1}, "Notas Fiscais\\SINOP\\desktop.ini"]
+    code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "novo", "ignorados_navegador": json.dumps(nomes)})
+    assert code == 201, body
+    ctx.jobs.append(body["job_id"])
+    job_id = body["job_id"]
+    assert body["ignorados_navegador"] == 2
+    ocorrencias = _ocorrencias_ignorado(ctx, job_id)
+    assert sorted(o.mensagem for o in ocorrencias) == ["METROPOLITANA.rar: Extensão diferente de PDF.", "desktop.ini: Extensão diferente de PDF."]
+    assert all(o.severidade == "informacao" and o.fase == "upload" for o in ocorrencias)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(11)), "Notas Fiscais/SINOP/a.pdf")]}, processamento_id=job_id)
+    code, status = ctx.chamar(ctx.nr.api_notas_see_status, processamento_id=job_id)
+    assert status["ignored_count"] == 2
+    assert {"name": "METROPOLITANA.rar", "status": "ignorado", "progress": 0, "error": "Extensão diferente de PDF.", "warnings": 0} in status["files"]
+    code, body = ctx.chamar(ctx.nr.api_notas_see_iniciar, method="POST", processamento_id=job_id)
+    assert code == 202 and body["message"] == "1 PDF(s) recebido(s), 2 ignorado(s)." and body["ignored_count"] == 2
+    assert SeeOcorrencia.query.filter_by(processamento_id=job_id).count() == 2
+
+
+def test_ignorados_do_navegador_tem_limite_e_campo_e_opcional(ctx):
+    cid = _catalogo(ctx)
+    muitos = [f"arquivo_{i}.rar" for i in range(ctx.nr.SEE_IGNORADOS_NAVEGADOR_MAX + 100)]
+    code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "novo", "ignorados_navegador": json.dumps(muitos)})
+    assert code == 201 and body["ignorados_navegador"] == ctx.nr.SEE_IGNORADOS_NAVEGADOR_MAX
+    ctx.jobs.append(body["job_id"])
+    assert len(_ocorrencias_ignorado(ctx, body["job_id"])) == ctx.nr.SEE_IGNORADOS_NAVEGADOR_MAX
+    for bruto in ("isto não é json", json.dumps({"nome": "a.rar"}), json.dumps("a.rar")):
+        code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "novo", "ignorados_navegador": bruto})
+        assert code == 201 and body["ignorados_navegador"] == 0, bruto
+        ctx.jobs.append(body["job_id"])
+        assert _ocorrencias_ignorado(ctx, body["job_id"]) == []
+    # Sem o campo: comportamento antigo.
+    code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "novo"})
+    assert code == 201 and body["initial"] == 0 and body["ignorados_navegador"] == 0
+    ctx.jobs.append(body["job_id"])
+    assert _ocorrencias_ignorado(ctx, body["job_id"]) == []
+
+
+def test_acrescentar_mostra_so_os_ignorados_do_envio_novo(ctx, monkeypatch):
+    from models import SeeProcessamento
+
+    monkeypatch.setattr(ctx.nr, "_start_see_worker", lambda job: None)
+    monkeypatch.setattr(ctx.nr, "pdfplumber_disponivel", lambda: True)
+    cid = _catalogo(ctx)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "novo", "ignorados_navegador": json.dumps(["antigo.rar"])})
+    base_id = body["job_id"]
+    ctx.jobs.append(base_id)
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(21)), "a.pdf")]}, processamento_id=base_id)
+    ctx.chamar(ctx.nr.api_notas_see_iniciar, method="POST", processamento_id=base_id)
+    ctx.db.session.rollback()
+    ctx.db.session.get(SeeProcessamento, base_id).status = "finalizado"  # como se o worker tivesse concluído
+    ctx.db.session.execute(text("UPDATE see_processamento_arquivos SET status = 'finalizado' WHERE processamento_id = :i"), {"i": base_id})
+    ctx.db.session.commit()
+
+    code, body = ctx.chamar(ctx.nr.api_notas_see_processar, method="POST", data={"catalogo_id": str(cid), "append_mode": "acrescentar", "base_job_id": str(base_id), "ignorados_navegador": json.dumps(["novo1.rar", "novo2.zip"])})
+    assert code == 201 and body["initial"] == 1 and body["ignorados_navegador"] == 2, body
+    job_id = body["job_id"]
+    ctx.jobs.append(job_id)
+    assert sorted(o.contexto for o in _ocorrencias_ignorado(ctx, job_id)) == ["novo1.rar", "novo2.zip"]
+    ctx.chamar(ctx.nr.api_notas_see_enviar_arquivos, method="POST", data={"pdfs": [(io.BytesIO(_pdf(22)), "b.pdf")]}, processamento_id=job_id)
+    code, body = ctx.chamar(ctx.nr.api_notas_see_iniciar, method="POST", processamento_id=job_id)
+    assert code == 202 and body["ignored_count"] == 2 and body["message"] == "Atualização iniciada: 1 anterior(es) + 1 novo(s), 2 ignorado(s)."
 
 
 def test_iniciar_sem_arquivos_descarta_e_apaga(ctx):
