@@ -31167,6 +31167,14 @@
     let desloca = 0;
     if (r.right > innerWidth - margem) desloca = innerWidth - margem - r.right;
     if (r.left + desloca < margem) desloca = margem - r.left;
+    // fix/sigla-balao-zoom (lote 8.1): com a "Fonte maior" o conteúdo tem zoom (1,125 a 1,5) e o deslocamento, medido
+    // em pixels da tela, era ampliado por ele (a 360 px com "Maior", o balão começava em -29 px). Aplica, mede quanto
+    // o balão andou de fato e corrige pela proporção: vale com ou sem zoom, em qualquer navegador.
+    if (desloca) {
+      w.style.setProperty("--spo-sigla-desloca", `${desloca}px`);
+      const andou = balao.getBoundingClientRect().left - r.left;
+      if (Math.abs(andou) > 0.5) desloca *= desloca / andou;
+    }
     w.style.setProperty("--spo-sigla-desloca", `${Math.round(desloca)}px`);
   };
   const montar = (abbr) => {

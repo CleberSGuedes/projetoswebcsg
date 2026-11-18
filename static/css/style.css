@@ -10683,6 +10683,9 @@ body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#sp
   text-align: left;
 }
 .spo-sigla-balao[hidden] { display: none; }
+/* fix/sigla-balao-zoom (lote 8.1): com a "Fonte maior" o .main tem zoom e o 100vw dentro dele vira 125% da tela (a 360 px
+   com "Maior", o balão tinha 402 px). Mesmo ajuste dos avisos modais (--spo-zoom, bloco "[cleber] Avisos modais com fonte maior") */
+.main .spo-sigla-balao { max-width: min(22rem, calc((100vw - 16px) / var(--spo-zoom, 1))); }
 /* a sigla parece texto: fora da altura mínima de 44 px dos botões em tela de toque (que esticava a linha do título;
    achado pela comparação antes × depois). Dentro de frase é exceção do alvo de 24 px; no título ela já passa de 24 px */
 /* (os :not() só sobem a especificidade acima da regra dos 44 px, body :is(…, input:not()…), que é 0,4,2) */
