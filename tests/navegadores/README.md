@@ -24,7 +24,7 @@ Ficam fora da varredura: os relatórios pesados (EMP, NOB e EST EMP: consultas d
 
 - **travas** — `tests/test_cor_literal.py`, `test_tamanho_fonte.py`, `test_style_inline.py` e `test_kit_mockup.py`.
 - **telas** — rolagem lateral; elemento fora da tela; texto cortado; alvo de toque com menos de 24 px (WCAG 2.5.8;
-  links dentro de frases são exceção do critério); aviso que abre sozinho; erro de script.
+  links e siglas dentro de frases são exceção do critério); aviso que abre sozinho; erro de script.
 - **contraste** — todo texto visível contra o fundo real (compõe transparências, opacidade e degradês): **falha**
   abaixo do AA (4,5:1; 3:1 texto grande), **aviso** abaixo da meta AA+ (7:1; 4,5:1 grande).
 - **equivalencia** — cada valor de cada opção do Personalizar, clicado no SPO e no kit: os mesmos atributos e
@@ -104,7 +104,7 @@ atingem tudo (dividir o CSS ou o JS).
   - o vizinho que só **se deslocou** (mesma largura e altura) dentro de um pai que contém um texto que mudou (a hora
     que encolhe numa linha alinhada à direita empurra o nome que vem antes);
   - uma diferença que **não se repete** quando a tela é aberta de novo (a comparação olha duas vezes antes de
-    reprovar).
+    reprovar; casa as diferenças pelo caminho do elemento, não pelo id, que pode ser sorteado de novo).
 - **Espera a tela ficar pronta**, sem tempos fixos: carregamento encerrado, nenhuma requisição ao servidor pendente
   (as tabelas chegam por `fetch` depois do carregamento), fontes carregadas e nenhum elemento novo por 0,7 s; depois, o
   fim das animações.
