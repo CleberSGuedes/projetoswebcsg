@@ -9,6 +9,14 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-18 — dev/jean (lote 8.1), ainda não publicado
+
+### Corrigido
+- Erro de script da linha do usuário no Safari (`fix/linha-usuario-resizeobserver`; achado do dev. Cleber na bateria intermediária da homologação, 158/159: WebKit, iPhone 16, Início, 4 de 6 cargas): o `initLinhaUsuario` (#197) observava o `<body>` com um `ResizeObserver`. Ao passar de uma para duas linhas (ou o contrário), a altura do cabeçalho muda, o observador do `syncTopbarHeight` grava a altura nova e isso muda a altura do `<body>` no meio da entrega; o `<body>`, mais raso, ficava com aviso não entregue e o Safari registrava "ResizeObserver loop completed with undelivered notifications". A tela ficava certa. Agora o observador acompanha só a largura do `.topbar` (o pai, `.user-info`, é `display: contents` no celular e mede 0); fontes e Personalizar continuam pelos mesmos avisos de antes. Reproduzido no WebKit (iPhone 16) varrendo a largura de 320 a 820 px de 6 em 6: antes, o erro na troca de linha em 3 de 3 rodadas; depois, 0 de 3, com a linha trocando no mesmo ponto (de 482 para 488 px com o nome do usuário de teste). `?v=` do JS `20261118.jean-linha-usuario-ro.1` (`base.html`).
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
+
+---
+
 ## 2026-11-17 — dev/jean, ainda não publicado
 
 ### Adicionado
