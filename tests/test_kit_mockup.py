@@ -32,6 +32,8 @@ MARCADORES = [
     "(function initMenuCompacto() {",
     # filtro no desktop (fix/filtro-desktop): o kit roda o mesmo bloco
     "(function initFiltroPosicao() {",
+    # siglas com balão (feat/siglas-explicadas): o kit roda o mesmo bloco
+    "(function initSiglas() {",
     # regra da oferta "Leitura confortável" (Atkinson)
     "(function initSugestaoAtkinson() {",
     "const ORDEM = {",
@@ -105,7 +107,7 @@ def test_marcadores_estao_no_main_js_e_no_kit():
 def test_trechos_do_teclado_sao_funcoes_completas():
     main = _main()
     for marcador in ("(function initNavegacaoTabelas() {", "(function initTecladoPaginacao() {", "(function initBuscaListasLongas() {",
-                     "(function initMenuCompacto() {", "(function initFiltroPosicao() {"):
+                     "(function initMenuCompacto() {", "(function initFiltroPosicao() {", "(function initSiglas() {"):
         bloco = _trecho(main, marcador, True)
         fim = main.index(bloco) + len(bloco)
         assert main[fim:fim + 4] == ")();", f"{marcador}: o kit espera a função fechada por '}})();'"
@@ -385,3 +387,16 @@ def test_catalogo_do_kit_cita_so_o_que_existe():
     nao_sao_padrao = {"kit-catalogo-titulo", "kit-p-chave-pendencias"}
     problemas += [f"{t}: título do kit fora do catálogo" for t in titulos if t not in ids and t not in nao_sao_padrao]
     assert not problemas, "catálogo do kit (static/kit/catalogo.json) desatualizado:\n  " + "\n  ".join(problemas)
+
+
+def test_siglas_do_mockup_pta_iguais_as_do_spo():
+    """[jean] feat/siglas-explicadas (2026-11-18): o mockup PTA/OpR (static/pta2027_v63r, dentro de um iframe) não roda
+    o main.js; ele tem uma cópia exata do initSiglas no spo-preferencias.js. A cópia tem de continuar igual à do SPO."""
+    main = _main()
+    mockup = (RAIZ / "static" / "pta2027_v63r" / "assets" / "spo-preferencias.js").read_text(encoding="utf-8-sig")
+    marcador = "(function initSiglas() {"
+    assert marcador in mockup, "o mockup PTA/OpR perdeu o initSiglas (copie o bloco do main.js)"
+    norm = lambda t: t.replace("\r\n", "\n")
+    assert norm(_trecho(main, marcador, True)) == norm(_trecho(mockup, marcador, True)), (
+        "o initSiglas do mockup PTA/OpR (static/pta2027_v63r/assets/spo-preferencias.js) ficou diferente do main.js: "
+        "copie o bloco do main.js de novo")

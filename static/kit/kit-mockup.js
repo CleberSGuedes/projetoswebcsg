@@ -5,6 +5,7 @@
 //  - OPTIONS e DEFAULTS do initFontesPersonalizar (as opções do Personalizar);
 //  - initNavegacaoTabelas e initTecladoPaginacao (navegação pelo teclado nas tabelas);
 //  - initBuscaListasLongas (campo "Filtrar a lista" nas listas de 40 opções ou mais);
+//  - initSiglas (siglas com balão em qualquer aparelho: <abbr title> vira botão);
 //  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
 //  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
 //    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
@@ -110,6 +111,8 @@ initGovernancaSemanticFlows();`,
       menuCompacto: trecho(fonte, "(function initMenuCompacto() {", true) + ")();",
       // filtro no desktop (fix/filtro-desktop): abre alinhado pela direita quando sairia da área da tabela
       filtroPosicao: trecho(fonte, "(function initFiltroPosicao() {", true) + ")();",
+      // siglas com balão (feat/siglas-explicadas): o mesmo bloco do SPO
+      siglas: trecho(fonte, "(function initSiglas() {", true) + ")();",
     };
   }
 
@@ -651,6 +654,7 @@ initGovernancaSemanticFlows();`,
       spo.teclado.forEach((codigo) => new Function(codigo)());
       new Function(spo.buscaListas)();
       new Function(spo.filtroPosicao)();
+      new Function(spo.siglas)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
       barraTela.montar(spo.menuCompacto);

@@ -254,8 +254,11 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
   // instante diferente, por exemplo, não se repete; uma mudança de estilo, sim)
   if (difs.some((d) => !d.dado && !d.pixel)) {
     const outra = diferencas(antes, expandirRetrato((await deNovo()).retrato));
-    const repete = new Set(outra.map((d) => `${d.el}|${d.prop}`));
-    difs = difs.filter((d) => repete.has(`${d.el}|${d.prop}`));
+    // pelo caminho do elemento, não pelo nome: o nome leva o id, e um id sorteado de novo na reabertura (spo-sigla-3 no
+    // lugar de spo-sigla-1) fazia a diferença "não se repetir" e sumir da lista
+    const chave = (d) => `${(d.el.match(/\((body[^)]*)\)/) || [, d.el])[1]}|${d.prop}`;
+    const repete = new Set(outra.map(chave));
+    difs = difs.filter((d) => repete.has(chave(d)));
   }
   const estilo = difs.filter((d) => !d.dado && !d.pixel), leves = difs.filter((d) => d.dado || d.pixel);
   for (const d of difs) todas.push({ perfil, alvo, ...d });
