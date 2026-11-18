@@ -31112,11 +31112,21 @@
   let quadro = 0;
   const depois = () => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); };
   ajustar();
-  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe
-  if (window.ResizeObserver) {
-    const ro = new ResizeObserver(depois);
-    ro.observe(meta.parentElement || meta);
-    ro.observe(document.body);
+  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe.
+  // fix/linha-usuario-resizeobserver (lote 8.1): observa só a LARGURA do cabeçalho. Antes observava o <body>, e o
+  // Safari registrava "ResizeObserver loop completed with undelivered notifications": ao passar de 1 para 2 linhas
+  // (ou o contrário), a altura do cabeçalho muda, o observador do syncTopbarHeight grava a nova altura e isso muda a
+  // altura do <body> no meio da entrega; o <body>, mais raso, ficava com aviso não entregue. O pai (.user-info) é
+  // display: contents no celular (tamanho 0), por isso o alvo é o .topbar.
+  const cabecalho = meta.closest(".topbar");
+  if (window.ResizeObserver && cabecalho) {
+    let largura = -1;
+    new ResizeObserver((entradas) => {
+      const w = Math.round(entradas[entradas.length - 1].contentRect.width);
+      if (w === largura) return; // só a altura mudou (pelo próprio ajuste): nada a refazer
+      largura = w;
+      depois();
+    }).observe(cabecalho);
   }
   window.addEventListener("resize", depois, { passive: true });
   if (document.fonts) { document.fonts.ready.then(depois); document.fonts.addEventListener("loadingdone", depois); }
