@@ -11,6 +11,9 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ## 2026-11-17 — dev/jean, ainda não publicado
 
+### Adicionado
+- Teste do mapa de rotas (`feat/teste-mapa-rotas`; Fase 0 do backend da modularização do `rotas/home_routes.py`, sugestão do dev. Cleber de 13/11): `tests/test_mapa_rotas.py` compara URL, métodos e endpoint das 258 rotas da aplicação com `tests/referencia_mapa_rotas.json` (uma rota por linha) e reprova se alguma some, aparece ou muda; rota nova ou mudança de propósito se registra rodando `python tests/test_mapa_rotas.py`. Conferido movendo uma rota de verdade (experimento desfeito): para outro arquivo, registrada no mesmo `home_bp`, passa sem diferença; para um blueprint novo, acusa `home.api_clients_list → usuarios.api_clients_list`.
+
 ### Corrigido
 - Bateria SPO-AA+ com tempos-limite (`fix/bateria-tempo-limite`; pedido do dev. Cleber depois de rodar o completo na homologação, onde travou uma vez em silêncio no Firefox, no passo do tema "Automático"): cada passo (tela, valor do Personalizar, checagem de recurso) tem limite de 180 s (`BATERIA_LIMITE_PASSO_S`) e, se estourar, falha com o que estava rodando, fecha o navegador e segue; um vigia para a bateria, grava o relatório e sai com código 1 se nenhum resultado aparecer por 6 min (`BATERIA_LIMITE_SEM_PROGRESSO_MIN`); limites também no Playwright (30 s nas ações, 60 s na navegação) e no pytest das travas (5 min). Conferido de propósito: com limite de 1 s, as 20 telas do básico falham com mensagem e a bateria chega ao fim (código 1); com um passo que nunca termina (`BATERIA_TESTE_TRAVA=1`), o vigia para em ~30 s, com o relatório. O primeiro teste do vigia achou que ele não podia estar solto do processo (`unref`): o Node saía com o código 13, sem relatório. Intermediário normal: 159/159. Só `tests/navegadores/` (e o README).
 - **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
