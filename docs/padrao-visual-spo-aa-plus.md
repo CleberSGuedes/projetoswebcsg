@@ -372,6 +372,11 @@ A lista aberta do `<select>` no Firefox e no Safari é a do sistema, e está tud
 |---|---|
 | Filtros `.mf-*` (relatórios) | painel `--card`, borda `--spo-control-border`, sombra `--shadow`; opção sob o mouse: **12% do destaque**; **Esc** = Cancelar e foco volta ao botão (#51) |
 | Listas de marcar `.planning-action-checklist-*` | opção sob o mouse: 16% do destaque; Esc fecha (#51) |
+
+**Em decisão (18/11, `feat/lista-spo-unica`):** uma **lista única de várias escolhas** no lugar do filtro `.mf-*` e da
+lista de marcar — aplica a cada clique (medido: até 74 ms nas tabelas e 66–102 ms no Teto), busca com rótulo, "Selecionar
+exibidos"/"Limpar", etiquetas dos filtros ativos, botão com o nome do campo, cartão no alto no celular. Desenho no kit
+("Proposta: lista única de várias escolhas", classes `.spo-multi-*`); a troca nas telas vai com a modularização do `main.js`.
 | `<select>` nativo | `appearance: base-select` (Chrome/Edge): lista aberta com a **mesma borda (`--spo-control-border`), sombra (`--shadow`) e destaque sob o mouse (12%) do filtro SPO** (desde 17/11), ✓ + negrito na escolhida, até 40rem e quebra de linha; campo fechado numa linha com seta desenhada no fundo (#54, #55). Fonte da interface (o filtro, que mostra dados, usa a de dados). Firefox/Safari: lista nativa |
 
 ### 4.4 Navegação e estrutura
