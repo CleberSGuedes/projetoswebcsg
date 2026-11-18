@@ -886,3 +886,89 @@ initGovernancaSemanticFlows();`,
       if (p) p.textContent = "Não foi possível ler o catálogo (static/kit/catalogo.json). Abra o kit pelo SPO local (http://127.0.0.1:5000/static/kit/…), não pelo disco.";
     });
 })();
+
+// [jean] feat/lista-spo-unica (2026-11-18): os dois exemplos de lista de várias escolhas do kit.
+// 1) A lista de marcar de hoje (Teto): a mesma marcação; aqui só abrir/fechar, "Selecionar todos", "Limpar" e o texto
+//    do botão (no SPO, o initTetoOrcamentarioDashboard faz isso e a cascata das opções).
+(function kitListaMarcar() {
+  const w = document.querySelector("[data-kit-lista-marcar]");
+  if (!w) return;
+  const botao = w.querySelector(".planning-action-checklist-toggle"), painel = w.querySelector(".planning-action-checklist-panel");
+  const caixas = () => [...w.querySelectorAll(".planning-action-checklist-options input[type=checkbox]")];
+  const texto = () => { const n = caixas().filter((c) => c.checked).length; botao.textContent = !n ? "Todas" : n === 1 ? "1 selecionado" : `${n} selecionados`; };
+  const fechar = () => { painel.hidden = true; botao.setAttribute("aria-expanded", "false"); };
+  botao.addEventListener("click", (ev) => { ev.preventDefault(); const abrir = painel.hidden; painel.hidden = !abrir; botao.setAttribute("aria-expanded", String(abrir)); });
+  w.querySelector("[data-select-all]").addEventListener("click", (ev) => { ev.preventDefault(); caixas().forEach((c) => (c.checked = true)); texto(); });
+  w.querySelector("[data-select-none]").addEventListener("click", (ev) => { ev.preventDefault(); caixas().forEach((c) => (c.checked = false)); texto(); });
+  w.addEventListener("change", texto);
+  w.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !painel.hidden) { fechar(); botao.focus(); } });
+  document.addEventListener("click", (ev) => { if (!painel.hidden && !w.closest("label").contains(ev.target)) fechar(); });
+})();
+
+// 2) A proposta de lista única: aplica a cada clique; busca com rótulo; "Selecionar exibidos" e "Limpar"; etiquetas dos
+//    filtros ativos (removíveis); o botão diz o campo e o estado ("Região: Todas"); Esc e clicar fora fecham; no celular,
+//    cartão no alto da tela com o véu do filtro SPO.
+(function kitListaUnica() {
+  const w = document.querySelector("[data-kit-lista-unica]");
+  if (!w) return;
+  const botao = w.querySelector(".spo-multi-botao"), painel = w.querySelector(".spo-multi-painel");
+  const busca = w.querySelector(".spo-multi-busca input"), estado = w.querySelector("#kit-lu-estado");
+  const contagem = w.querySelector(".spo-multi-contagem"), etiquetas = w.querySelector(".spo-multi-etiquetas");
+  const rotulo = w.querySelector("#kit-lu-rotulo").textContent.trim();
+  const opcoes = () => [...w.querySelectorAll(".spo-multi-opcao")];
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  let veu = null;
+  function atualizar() {
+    const marcadas = opcoes().filter((o) => o.querySelector("input").checked).map((o) => o.textContent.trim());
+    estado.textContent = !marcadas.length ? "Todas" : marcadas.length === 1 ? marcadas[0] : `${marcadas.length} selecionadas`;
+    etiquetas.replaceChildren(...marcadas.map((nome) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "spo-multi-etiqueta";
+      b.setAttribute("aria-label", `Remover ${rotulo}: ${nome}`);
+      b.append(`${rotulo}: ${nome} `);
+      const x = document.createElement("i"); x.className = "bi bi-x"; x.setAttribute("aria-hidden", "true"); b.append(x);
+      b.addEventListener("click", () => {
+        const o = opcoes().find((op) => op.textContent.trim() === nome);
+        if (o) o.querySelector("input").checked = false;
+        atualizar();
+        botao.focus();
+      });
+      return b;
+    }));
+  }
+  function filtrar() {
+    const termos = norm(busca.value).split(/\s+/).filter(Boolean);
+    let n = 0;
+    opcoes().forEach((o) => { const ok = termos.every((t) => norm(o.textContent).includes(t)); o.hidden = !ok; if (ok) n += 1; });
+    contagem.textContent = `${n} de ${opcoes().length}`;
+  }
+  function fechar() {
+    painel.hidden = true;
+    botao.setAttribute("aria-expanded", "false");
+    w.classList.remove("spo-multi-cartao");
+    if (veu) { veu.remove(); veu = null; }
+  }
+  function abrir() {
+    painel.hidden = false;
+    botao.setAttribute("aria-expanded", "true");
+    if (celular.matches) {
+      w.classList.add("spo-multi-cartao");
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fechar(); });
+      document.body.appendChild(veu);
+    }
+    busca.value = ""; filtrar(); busca.focus();
+  }
+  botao.addEventListener("click", () => (painel.hidden ? abrir() : fechar()));
+  busca.addEventListener("input", filtrar);
+  w.addEventListener("change", atualizar); // aplica a cada clique
+  w.querySelector("[data-lu-exibidos]").addEventListener("click", () => { opcoes().filter((o) => !o.hidden).forEach((o) => (o.querySelector("input").checked = true)); atualizar(); });
+  w.querySelector("[data-lu-limpar]").addEventListener("click", () => { opcoes().forEach((o) => (o.querySelector("input").checked = false)); atualizar(); });
+  w.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !painel.hidden) { ev.stopPropagation(); fechar(); botao.focus(); } });
+  document.addEventListener("click", (ev) => { if (!painel.hidden && !w.contains(ev.target) && ev.target !== veu) fechar(); });
+  atualizar();
+})();

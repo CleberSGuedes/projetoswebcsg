@@ -885,6 +885,65 @@
             </div>
           </div>
           <div class="kit-padrao">
+            <h3 class="kit-padrao-titulo" id="kit-p-lista-marcar">Lista de marcar</h3>
+            <p class="muted kit-padrao-onde">Painéis → Teto Orçamentário (os 13 filtros) e Estrutura do Planejamento (Ações/PAOE). Aplica a
+              cada clique; "Selecionar todos" e "Limpar"; o botão mostra "N selecionados"; no Teto, as opções se ajustam aos outros filtros
+              (cascata) e os filtros ativos aparecem como etiquetas abaixo. Sem busca; no celular abre no meio da página.</p>
+            <label class="field kit-lista-marcar"><span>Região (lista de marcar)</span>
+              <div class="planning-action-checklist teto-multi-filter" data-kit-lista-marcar>
+                <button class="planning-action-checklist-toggle" type="button" aria-haspopup="true" aria-expanded="false">Todas</button>
+                <div class="planning-action-checklist-panel" hidden>
+                  <div class="teto-checklist-actions">
+                    <button type="button" data-select-all>Selecionar todos</button>
+                    <button type="button" data-select-none>Limpar</button>
+                  </div>
+                  <div class="planning-action-checklist-options">
+                    <label class="planning-action-checklist-option"><input type="checkbox" value="Baixada Cuiabana"><span>Baixada Cuiabana</span></label>
+                    <label class="planning-action-checklist-option"><input type="checkbox" value="Médio-Norte Mato-grossense e Vale do Arinos"><span>Médio-Norte Mato-grossense e Vale do Arinos</span></label>
+                    <label class="planning-action-checklist-option"><input type="checkbox" value="Sul"><span>Sul</span></label>
+                    <label class="planning-action-checklist-option"><input type="checkbox" value="Araguaia"><span>Araguaia</span></label>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="kit-padrao kit-proposta">
+            <h3 class="kit-padrao-titulo" id="kit-p-lista-unica">Proposta: lista única de várias escolhas</h3>
+            <p class="muted kit-padrao-onde"><strong>Em decisão</strong> (achado do dev. Jean, 18/11; feat/lista-spo-unica). Um componente só no lugar do
+              filtro SPO e da lista de marcar: o visual leve da lista de marcar, a busca e o "Selecionar exibidos" do filtro SPO, as etiquetas
+              dos filtros ativos e o cartão no alto da tela no celular. <strong>Aplica a cada clique</strong>: medido em 18/11, aplicar um filtro
+              custa no máximo 74 ms nas tabelas (FIP 613, PED, PLAN 20, PLAN 51, PLAN 21, Dotação, Est. Dotação) e de 66 a 102 ms no Teto,
+              abaixo dos ~100 ms em que a resposta parece imediata; o "Aplicar" fica só para uma lista que um dia passe disso. Corrige duas
+              falhas do filtro SPO: o botão agora diz a que campo pertence ("Região: Todas") e a busca tem rótulo de verdade.</p>
+            <div class="field spo-multi" data-kit-lista-unica>
+              <span id="kit-lu-rotulo">Região</span>
+              <div class="spo-multi-campo">
+              <button type="button" class="spo-multi-botao" aria-haspopup="true" aria-expanded="false" aria-controls="kit-lu-painel"
+                      aria-labelledby="kit-lu-rotulo kit-lu-estado"><span id="kit-lu-estado">Todas</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+              <div class="spo-multi-painel" id="kit-lu-painel" hidden>
+                <label class="spo-multi-busca"><span class="spo-sr-only">Buscar em Região</span>
+                  <input type="search" placeholder="Buscar em Região" autocomplete="off"></label>
+                <div class="spo-multi-acoes">
+                  <button type="button" data-lu-exibidos>Selecionar exibidos</button>
+                  <button type="button" data-lu-limpar>Limpar</button>
+                </div>
+                <div class="spo-multi-opcoes" role="group" aria-labelledby="kit-lu-rotulo">
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Baixada Cuiabana"><span>Baixada Cuiabana</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Médio-Norte Mato-grossense e Vale do Arinos"><span>Médio-Norte Mato-grossense e Vale do Arinos</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Sul"><span>Sul</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Araguaia"><span>Araguaia</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Norte"><span>Norte</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Oeste"><span>Oeste</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Leste"><span>Leste</span></label>
+                  <label class="spo-multi-opcao"><input type="checkbox" value="Sudeste"><span>Sudeste</span></label>
+                </div>
+                <p class="spo-multi-contagem" role="status">8 de 8</p>
+              </div>
+              </div>
+              <div class="spo-multi-etiquetas" aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="kit-padrao">
             <h3 class="kit-padrao-titulo" id="kit-p-lista-longa">Lista longa com busca</h3>
             <p class="muted kit-padrao-onde">Formulários: lista de uma escolha com 40 opções ou mais (Chave do Planejamento, Subação/Entrega,
               Etapa, Subelemento no Cadastrar Dotação; Subação na Etapa). O campo "Filtrar a lista" logo abaixo reduz a lista às
