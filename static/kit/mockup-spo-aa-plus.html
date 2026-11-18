@@ -16,6 +16,9 @@
   O padrão em si: botões "O padrão SPO-AA+" (resumo) e "Documento técnico" no cabeçalho do kit (a mesma janela
   do SPO; o documento técnico pede o SPO logado neste navegador). Para o agente ou quem lê o código, a fonte é
   docs/padrao-visual-spo-aa-plus.md (seção 6.4 = o kit; 6.1 = o checklist de tela nova).
+
+  Índice e fichas (feat/kit-indice): o kit-mockup.js monta o índice do alto e a ficha de cada padrão a partir do
+  static/kit/catalogo.json, a fonte única que também se lê direto. Padrão novo aqui = item novo no catálogo.
 -->
 <html lang="pt-BR">
 <head>
@@ -591,6 +594,15 @@
       </ol>
     </details>
 
+    <!-- índice do kit (itens e subitens), montado pelo kit-mockup.js a partir do static/kit/catalogo.json, que também
+         dá a ficha de cada padrão (feat/kit-indice) -->
+    <nav class="card kit-sumario" id="kit-sumario" aria-labelledby="kit-sumario-titulo">
+      <h2 id="kit-sumario-titulo">Índice do kit</h2>
+      <p class="muted">Cada padrão tem uma <strong>ficha</strong> logo abaixo do título: quando usar, onde no SPO, classes,
+        funções do <code>main.js</code>, seção do padrão e PRs. A mesma informação, para ler direto: <code>static/kit/catalogo.json</code>.</p>
+      <p class="muted kit-sumario-carregando">Lendo o catálogo…</p>
+    </nav>
+
     <main id="content-area" tabindex="-1">
       <div class="kit-pilha">
 
@@ -634,7 +646,7 @@
         <section class="kit-catalogo" aria-labelledby="kit-catalogo-titulo">
           <h2 class="kit-secao" id="kit-catalogo-titulo">Catálogo de padrões</h2>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Cartões dinâmicos com painel de contexto</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-cartoes-dinamicos">Cartões dinâmicos com painel de contexto</h3>
             <p class="muted kit-padrao-onde">Governança e Resultados (EAP e Políticas, Estratégia, Matrículas e Metas…). O escolhido abre o contexto abaixo; setas, Home e End trocam a escolha.</p>
             <section class="governanca-resultados" data-governanca-flow-panel>
               <div class="governanca-grid semantic-flow-grid" data-flow-node-container aria-label="Dimensões de EAP e políticas públicas">
@@ -662,7 +674,7 @@
             </section>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Fluxo com setas e painel de contexto</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-fluxo-setas">Fluxo com setas e painel de contexto</h3>
             <p class="muted kit-padrao-onde">Governança e Resultados → Mapa Conceitual.</p>
             <section class="governanca-resultados" data-governanca-flow-panel>
               <article class="card governanca-card">
@@ -713,7 +725,7 @@
             </section>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Cartões de painel</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-cartoes-painel">Cartões de painel</h3>
             <p class="muted kit-padrao-onde">Governança e Resultados → Mapa Conceitual (blocos de texto lado a lado).</p>
             <div class="governanca-grid">
                 <article class="card governanca-card">
@@ -731,7 +743,7 @@
               </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Cartão de documento</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-cartao-documento">Cartão de documento</h3>
             <p class="muted kit-padrao-onde">Institucional (Diretrizes, Legislação, Parceiros, Repositório): o cartão inteiro leva ao documento.</p>
             <div class="card module-card institutional-card">
               <div class="card-title">Diretrizes e Procedimentos</div>
@@ -752,7 +764,7 @@
             </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Indicadores</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-indicadores">Indicadores</h3>
             <p class="muted kit-padrao-onde">Painéis → Teto Orçamentário (os valores são preenchidos pelo JavaScript da tela).</p>
             <div class="teto-kpi-grid">
                 <div class="teto-kpi"><span>Teto total</span><strong id="teto-kpi-total">R$ 0,00</strong></div>
@@ -762,7 +774,7 @@
               </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Opções de envio</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-opcoes-envio">Opções de envio</h3>
             <p class="muted kit-padrao-onde">Atualizar → Notas SEE (escolher pasta ou arquivos).</p>
             <section class="see-card">
               <div class="see-upload-options">
@@ -772,7 +784,7 @@
             </section>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Presets do Contrato</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-presets-contrato">Presets do Contrato</h3>
             <p class="muted kit-padrao-onde">Personalizar → Contrato Visual Protegido (o marcado acompanha o preset escolhido no painel do kit).</p>
             <div class="contract-preset-grid" role="group" aria-label="Presets do contrato visual">
               <button class="contract-preset" type="button" data-contract-preset="default">
@@ -794,7 +806,7 @@
             </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Cabeçalho com busca e Ajuda</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-cabecalho-busca">Cabeçalho com busca e Ajuda</h3>
             <p class="muted kit-padrao-onde">Todas as telas (#170, #171). A lupa abre a busca de telas (Ctrl+K) e o "?" a Ajuda; os dois só o ícone, sem
               círculo (variante discreta). Até 820 px, a grade de duas colunas, com os botões em pé. No celular, o menu vira só
               o "›" ao lado do logotipo (aqui não aparece: o kit não tem a barra lateral).</p>
@@ -816,7 +828,7 @@
             </header>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Barra de título da tela (secundária)</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-barra-tela">Barra de título da tela (secundária)</h3>
             <p class="muted kit-padrao-onde">Telas de trabalho em tela cheia, que pedem foco (hoje: Programação PTA/OpR, ao programar um eixo;
               #170, #171 e <code>fix/menu-cabecalho-pta</code>). Ela substitui o cabeçalho do SPO enquanto a tela está em foco (<code>body.special-context-focus</code>):
               rótulo, título, usuário/data/logados e o "Voltar" da tela, com a lupa e o "?" do SPO à direita (os mesmos botões,
@@ -841,7 +853,7 @@
             </template>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Lista nativa e filtro SPO</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-lista-nativa-filtro">Lista nativa e filtro SPO</h3>
             <p class="muted kit-padrao-onde">Formulários (lista nativa: uma escolha) e relatórios (filtro SPO: várias). Mesma borda, sombra e destaque
               (#168). No celular (até 600 px de largura ou 560 de altura), o filtro aberto vira um cartão no alto da tela, com
               um véu atrás que só fecha o filtro (#172). Toque em "(Todos)" para abrir.</p>
@@ -873,7 +885,7 @@
             </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Lista longa com busca</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-lista-longa">Lista longa com busca</h3>
             <p class="muted kit-padrao-onde">Formulários: lista de uma escolha com 40 opções ou mais (Chave do Planejamento, Subação/Entrega,
               Etapa, Subelemento no Cadastrar Dotação; Subação na Etapa). O campo "Filtrar a lista" logo abaixo reduz a lista às
               opções com todas as palavras digitadas (sem acento); a lista continua a do navegador (valor, cascatas e envio iguais).
@@ -934,7 +946,7 @@
             </label>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Opções "Não/Sim"</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-nao-sim">Opções "Não/Sim"</h3>
             <p class="muted kit-padrao-onde">Cadastrar Dotação e outros cinco formulários (#169). Rótulo com ao menos 24 px de altura (44 px em tela de
               toque) e círculo de 18 px (WCAG 2.5.8).</p>
             <label class="field"><span>*Dotação Emprestada</span>
@@ -955,13 +967,14 @@
             totais. Os cartões do mockup PTA/OpR entram aqui quando ele for integrado ao SPO.</p>
         </section>
 
-        <!-- 3a. PROPOSTA ao dev. Cleber (ponto 4 do plano de readequação para celular e navegadores): os avisos da
-             Início como cartões, e não janelas que abrem sozinhas e cobrem a tela. Cartões iguais aos de
-             partials/dashboard.html (feat/alerta-cartao, feat/pendencias-cartao), com números de exemplo. -->
+        <!-- 3a. Avisos da Início como cartões (#174, #175; proposta aceita pelo dev. Cleber no lote 7, padrão desde
+             então): os avisos são cartões na própria tela, e não janelas que abrem sozinhas e cobrem a tela.
+             Cartões iguais aos de partials/dashboard.html (feat/alerta-cartao, feat/pendencias-cartao), com números
+             de exemplo. -->
         <section class="kit-catalogo" aria-labelledby="kit-avisos-titulo">
-          <h2 class="kit-secao" id="kit-avisos-titulo">Proposta: avisos da Início como cartões</h2>
+          <h2 class="kit-secao" id="kit-avisos-titulo">Avisos da Início como cartões</h2>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">Chave do planejamento (antes, a janela "Alerta") e Pendências (antes, a janela que abria ao entrar)</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-chave-pendencias">Chave do planejamento (antes, a janela "Alerta") e Pendências (antes, a janela que abria ao entrar)</h3>
             <p class="muted kit-padrao-onde">Início, abaixo do "Bem-vindo". Não abre sozinho. Placas dos dias no estilo SPO; os sinais de
               alerta e de "homens trabalhando" em cores de placa fixas. Pendências: contagem por tipo; o detalhe abre só com "Ver detalhes".</p>
             <div class="grid home-grid">
@@ -988,7 +1001,7 @@
             </div>
           </div>
           <div class="kit-padrao">
-            <h3 class="kit-padrao-titulo">"Ver detalhes": cartão flutuante, como "O padrão SPO-AA+"</h3>
+            <h3 class="kit-padrao-titulo" id="kit-p-ver-detalhes">"Ver detalhes": cartão flutuante, como "O padrão SPO-AA+"</h3>
             <p class="muted kit-padrao-onde">Largura limitada, título fixo no alto e "Fechar" fixo embaixo, rolagem por dentro (no celular, cartão com 16 px de margem);
               Esc e toque fora fecham; o foco volta ao botão. Fora do <code>.main</code> (a "Fonte maior" não o amplia duas vezes).
               Abaixo, a caixa sem o fundo escurecido; o botão "Ver detalhes" acima abre de verdade.</p>

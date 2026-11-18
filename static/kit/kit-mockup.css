@@ -154,3 +154,43 @@
 .kit-barra-tela { display: block; width: 100%; border: thin solid var(--border); border-radius: 0.75rem; background: var(--bg); }
 /* no celular, a moldura ocupa a largura da tela (como a barra no SPO): largura e margem postas pelo kit-mockup.js */
 .kit-barra-tela.kit-tela-inteira { max-width: none; border-inline: 0; border-radius: 0; }
+
+/* [jean] feat/kit-indice (2026-11-18): índice do kit e fichas dos padrões (kit-mockup.js, catalogo.json) */
+.kit-sumario {
+  margin: 12px var(--spo-layout-content-padding, 18px) 0;
+  padding: 12px 16px;
+}
+.kit-sumario h2 { margin: 0 0 4px; font-size: var(--spo-fs-titulo); }
+.kit-sumario p { margin: 0 0 8px; font-size: var(--spo-fs-texto); }
+.kit-sumario-grupos {
+  margin: 0;
+  padding-left: 1.2em;
+  columns: 2 18rem;
+  column-gap: 2rem;
+  font-size: var(--spo-fs-texto);
+}
+.kit-sumario-grupos > li { break-inside: avoid; margin-bottom: 8px; }
+.kit-sumario-grupo { font-weight: 700; color: var(--text); }
+.kit-sumario-grupos ol { margin: 2px 0 0; padding-left: 1.2em; list-style: lower-alpha; }
+.kit-sumario-grupos a { color: var(--spo-accent-text); }
+.kit-ficha {
+  margin: 4px 0 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: var(--spo-fs-texto);
+}
+.kit-ficha > summary { cursor: pointer; font-weight: 600; color: var(--spo-accent-text); }
+.kit-ficha dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 2px;
+}
+.kit-ficha dt { font-weight: 600; color: var(--text); }
+.kit-ficha dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .kit-ficha dl { grid-template-columns: 1fr; }
+  .kit-ficha dd { margin-bottom: 4px; }
+}
