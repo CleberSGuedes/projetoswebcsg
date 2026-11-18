@@ -10604,3 +10604,19 @@ body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#sp
 .spo-kit-contrato-acoes { margin: 0; }
 .spo-kit-contrato-acoes .btn { display: inline-flex; align-items: center; gap: 6px; }
 
+
+/* [cleber] Notas SEE: painel do envio (fix/notas-see-envio, etapa 3)
+   - Até 980 px a grade das Notas SEE tem uma coluna (1fr = minmax(auto, 1fr)): com a fonte "Maior"
+     (.main com zoom 1,25), a tabela de produtos do "Catálogo de produtos" esticava a coluna além da
+     tela e os cartões passavam da borda direita. Com min-width: 0 nos cartões, a coluna fica na largura
+     da tela e a tabela rola dentro do .see-table-wrap (que já tem overflow-x: auto). No desktop a grade
+     já usa minmax(0, …): nada muda.
+   - Linha de aviso do painel ("Sem conexão com o servidor, tentando de novo…", sessão encerrada e o
+     retorno do "Cancelar").
+   - Linha de botões do painel (.see-panel-actions, só no notas_see.html): em "Enviando PDFs" e "Envio
+     parado" os números e a lista ficam ocultos e o "Cancelar" encostava na barra. 12 px acima, o mesmo
+     espaço do card "Selecionar DANFEs" entre o resumo e os botões (gap do formulário). Nos estados com a
+     lista, esta margem colapsa com os 14 px da .see-file-list (cartão em bloco): o espaço continua 14 px. */
+.see-grid > * { min-width: 0; }
+.see-progress-aviso { margin: -6px 0 12px; }
+.see-panel-actions { margin-top: 12px; }
