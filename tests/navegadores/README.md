@@ -65,6 +65,52 @@ node bateria.mjs intermediario --so=contraste,recursos
 Relatório em `resultados/<data-hora>/relatorio.md`, com `resultados.json` e as capturas das falhas (`resultados/`
 é ignorada pelo git). O comando termina com código 1 se houver falha.
 
+## Comparação antes × depois (mudança que não pode mudar a aparência)
+
+Para provar que uma mudança **não mudou nada na tela** (dividir o `style.css` ou o `main.js`, mover código, trocar a
+ordem de carregamento): grava-se um retrato de cada tela **antes** e compara-se **depois**, elemento por elemento.
+
+```
+npm run comparar:gravar -- --nome=antes                 # ANTES de mexer (11 telas × 3 vistas, ~5 min)
+npm run comparar -- --nome=antes                        # DEPOIS (lista cada diferença)
+npm run comparar:gravar -- --nome=antes --telas=todas --vistas=ampla   # mais telas e vistas
+```
+
+- **Retrato:** o estilo calculado de cada elemento da tela (cerca de 110 propriedades: cores, fundo, fonte, bordas,
+  espaçamentos, grid/flex, sombras...), a caixa (posição e tamanho), os `::before`/`::after`, os tokens (variáveis
+  CSS) e uma captura. O elemento é achado pelo caminho de tags desde o `<body>`; `<script>` e `<link>` não contam, então
+  acrescentar um arquivo de CSS ou JS não muda o caminho de nada.
+- **Telas:** `basicas` (5), `principais` (11, padrão) ou `todas`, sempre com o **kit de mockup** no fim (ele usa o
+  mesmo `style.css` e lê trechos do `main.js`, então uma divisão também pode quebrá-lo); `kit` = só o kit. **Vistas** (aparelho + preferências do
+  Personalizar): `padrao` (desktop claro, desktop escuro/Amarelo reforçado, Galaxy S26) ou `ampla` (+ Firefox,
+  Safari, leitura com fonte 150% e iPhone escuro).
+- **Resultado** por tela: **ok** (igual), **aviso** (estilo igual; só mudou um dado ao vivo ou uma medida de até 1 px)
+  ou **falha** (diferença de estilo). A lista inteira vai para `resultados/<data-hora>/diferencas/diferencas.md`
+  (tela, elemento, propriedade, antes → depois), com as capturas de antes e depois das telas com falha. A referência
+  fica em `resultados/referencias/<nome>/` (fora do git).
+- **O que não reprova** (e por quê), sempre listado:
+  - **dado ao vivo:** o texto de um elemento mudou (relógio, sessões ativas, dado do banco) ou uma linha de lista ou
+    tabela entrou ou saiu; a caixa dele, das que o contêm e as faixas dos grids que o contêm mudam junto;
+  - **até 1 px** num comprimento em px ou numa caixa: arredondamento de medida feita pelo script (cor, opacidade e
+    peso de fonte não têm tolerância);
+  - identificadores sorteados a cada carga (os `url(#clip…)` dos gráficos);
+  - uma diferença que **não se repete** quando a tela é aberta de novo (a comparação olha duas vezes antes de
+    reprovar).
+- **Espera** a tela parar antes do retrato: sem carregamento, sem elementos novos por 2 s (tabelas que chegam depois),
+  fim das animações.
+- **Limites:** não entra no conteúdo de `<iframe>` (a Programação PTA/OpR) nem nos estados de passar o mouse e de foco.
+  O banco precisa ser o mesmo entre gravar e comparar (com o banco mudando, os dados viram avisos, não falhas).
+
+**Provado** (17/11/2026; 33 casos = 11 telas × 3 vistas, e o kit em 3 vistas; mudanças temporárias, desfeitas depois). Duas provas, uma
+para cada lado: a ferramenta não pode dar alarme falso numa mudança segura, e tem de pegar uma mudança de verdade.
+
+| Prova | Mudança feita | O que se esperava | Resultado |
+|---|---|---|---|
+| A — mudança segura | `style.css` cortado em 3 arquivos, carregados na mesma ordem | "nada mudou" | ✅ nada mudou nos 33 casos |
+| B — mudança de propósito | as 3 partes na ordem 3, 1, 2, e a borda do cabeçalho de alfa 0,10 para 0,11 (invisível a olho nu) | "mudou", com a lista | ✅ mudou nos 33 casos: a borda em todas as telas; a ordem trocada em tokens, sombras, cores e larguras |
+| Kit — mudança de propósito | +2 px no espaçamento de um cartão só do kit (`.kit-como-usar`) | "mudou" só no kit, onde a regra vale | ✅ mudou no kit no desktop (claro e escuro); no celular, igual: lá uma regra do SPO (densidade espaçosa, 18 px) vence a do kit, então a mudança não aparece; as telas do SPO, iguais |
+| Kit — CSS em 3 partes | o kit carregando as 3 partes, na mesma ordem | "nada mudou" | ❌ **mudou: achado real.** O `kit-mockup.js` procura o CSS do SPO pelo nome (`link[href*="css/style.css"]`); sem esse arquivo, o script do kit para e a cor de destaque e várias seções somem. Na divisão do CSS, o kit precisa achar o CSS de outro jeito |
+
 ## Tempos-limite (a bateria nunca fica parada em silêncio)
 
 - **Cada passo** (uma tela, um valor do Personalizar, uma checagem de recurso) tem limite de **180 s**
