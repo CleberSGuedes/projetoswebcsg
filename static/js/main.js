@@ -2559,6 +2559,15 @@
     measure.remove();
     sidebar.style.setProperty("--sidebar-expanded-width", `${Math.max(160, measuredWidth)}px`);
   }
+  // [jean] fix/largura-menu-fontes (2026-11-17): a largura acima era medida uma vez, logo depois das permissões; se a
+  // fonte da interface ainda não tinha chegado, a coluna do menu ficava 16 a 19 px mais estreita ou mais larga, ao acaso
+  // (achado pela comparação antes × depois da Bateria SPO-AA+). Mede de novo quando as fontes terminam de carregar,
+  // inclusive depois de trocar a fonte no Personalizar.
+  if (sidebar && menu && document.fonts) {
+    const remedirMenu = () => requestAnimationFrame(updateSidebarExpandedWidth);
+    document.fonts.ready.then(remedirMenu);
+    document.fonts.addEventListener("loadingdone", remedirMenu);
+  }
 
   function syncTopbarHeight() {
     const contextHeader = document.querySelector(".pta2027-integration-header");
