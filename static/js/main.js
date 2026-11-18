@@ -31042,3 +31042,47 @@
   window.addEventListener("resize", () => { clearTimeout(esperaTela); esperaTela = setTimeout(() => estados.forEach(escolhaInteira), 150); });
   varrer();
 })();
+
+/* ==========================================================================
+   [jean] fix/linha-usuario-cabecalho (2026-11-17; achado 2 do dev. Jean)
+   A linha do usuário no cabeçalho ("Nome - data, hora | Logados: N") quebrava em
+   qualquer ponto nas telas estreitas (overflow-wrap: anywhere do #43): "Nome -" numa
+   linha e a data na outra, ou a hora separada da data. Agora a linha se divide em
+   duas partes que nunca se partem ao meio: cabendo tudo, fica numa linha; não cabendo,
+   o nome vai numa linha e "data, hora | Logados" na de baixo, sem o traço. O texto
+   (textContent) continua o mesmo: o cabeçalho da Programação PTA/OpR o lê daqui.
+   ========================================================================== */
+(function initLinhaUsuario() {
+  const meta = document.getElementById("user-meta");
+  if (!meta) return;
+  const nome = meta.dataset.name || "";
+  const texto = meta.textContent;
+  if (!nome || !texto.startsWith(nome + " - ")) return; // formato inesperado: fica como está
+  const parte = (classe, conteudo) => {
+    const s = document.createElement("span");
+    s.className = classe;
+    s.textContent = conteudo;
+    return s;
+  };
+  const pNome = parte("spo-usuario-nome", nome);
+  const pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
+  meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+  // numa linha só, se couber: tira as duas linhas, vê se a sessão desceu, e decide (tudo no mesmo quadro, sem piscar)
+  const ajustar = () => {
+    meta.classList.remove("spo-usuario-duas-linhas");
+    const desceu = pSessao.getBoundingClientRect().top > pNome.getBoundingClientRect().top + 1;
+    meta.classList.toggle("spo-usuario-duas-linhas", desceu);
+  };
+  let quadro = 0;
+  const depois = () => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); };
+  ajustar();
+  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(depois);
+    ro.observe(meta.parentElement || meta);
+    ro.observe(document.body);
+  }
+  window.addEventListener("resize", depois, { passive: true });
+  if (document.fonts) { document.fonts.ready.then(depois); document.fonts.addEventListener("loadingdone", depois); }
+  new MutationObserver(depois).observe(document.body, { attributes: true, attributeFilter: ["data-spo-font-size", "data-spo-font-ui", "style", "class"] });
+})();
