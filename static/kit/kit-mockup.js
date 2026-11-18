@@ -828,3 +828,57 @@ initGovernancaSemanticFlows();`,
   document.addEventListener("click", (ev) => { if (painel.classList.contains("open") && !wrap.contains(ev.target) && ev.target !== veu) fechar(); });
   painel.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fechar(); botao.focus(); } });
 })();
+
+// [jean] feat/kit-indice (2026-11-18; achado 4 do dev. Jean): índice do kit (itens e subitens) e uma ficha igual para
+// cada padrão — quando usar, onde no SPO, classes, funções do main.js, seção do padrão e PRs —, montados a partir do
+// static/kit/catalogo.json, a fonte única (quem implementa, pessoa ou agente, pode ler o catálogo direto). O
+// tests/test_kit_mockup.py confere que tudo o que o catálogo cita existe.
+(function kitCatalogo() {
+  const nav = document.getElementById("kit-sumario");
+  if (!nav) return;
+  const el = (tag, classe, texto) => { const e = document.createElement(tag); if (classe) e.className = classe; if (texto !== undefined) e.textContent = texto; return e; };
+  const codigos = (lista, sufixo) => { const dd = el("dd"); lista.forEach((c, i) => { if (i) dd.append(", "); dd.append(el("code", "", c + (sufixo || ""))); }); return dd; };
+  function ficha(item) {
+    const det = el("details", "kit-ficha");
+    det.append(el("summary", "", "Ficha do padrão"));
+    const dl = el("dl");
+    const par = (rotulo, dd) => { dl.append(el("dt", "", rotulo)); dl.append(typeof dd === "string" ? el("dd", "", dd) : dd); };
+    par("Quando usar", item.quando);
+    par("Onde no SPO", item.onde);
+    if (item.classes && item.classes.length) par("Classes (style.css)", codigos(item.classes.map((c) => "." + c)));
+    if (item.js && item.js.length) par("Funções (main.js)", codigos(item.js, "()"));
+    par("Padrão", `docs/padrao-visual-spo-aa-plus.md, seção ${item.padrao}`);
+    if (item.prs && item.prs.length) par("PRs", item.prs.join(", "));
+    det.append(dl);
+    return det;
+  }
+  fetch("catalogo.json", { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((cat) => {
+      const lista = el("ol", "kit-sumario-grupos");
+      cat.grupos.forEach((grupo) => {
+        const li = el("li");
+        li.append(el("span", "kit-sumario-grupo", grupo.nome));
+        const sub = el("ol");
+        grupo.itens.forEach((item) => {
+          const alvo = document.getElementById(item.id);
+          if (!alvo) return;
+          const a = el("a", "", item.nome);
+          a.href = "#" + item.id;
+          const linha = el("li");
+          linha.append(a);
+          sub.append(linha);
+          // a ficha logo depois do título (ou do bloco de título do cartão/cabeçalho)
+          (alvo.closest(".module-card-title, header.module-header") || alvo).insertAdjacentElement("afterend", ficha(item));
+        });
+        li.append(sub);
+        lista.append(li);
+      });
+      nav.querySelector(".kit-sumario-carregando")?.remove();
+      nav.append(lista);
+    })
+    .catch(() => {
+      const p = nav.querySelector(".kit-sumario-carregando");
+      if (p) p.textContent = "Não foi possível ler o catálogo (static/kit/catalogo.json). Abra o kit pelo SPO local (http://127.0.0.1:5000/static/kit/…), não pelo disco.";
+    });
+})();

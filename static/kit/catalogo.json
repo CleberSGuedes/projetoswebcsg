@@ -1,0 +1,51 @@
+{
+  "sobre": "Catálogo dos padrões do kit de mockup SPO-AA+ (feat/kit-indice, 2026-11-18). Fonte única do índice e das fichas do kit (kit-mockup.js) e leitura direta para quem implementa (pessoa ou agente). Cada padrão diz onde está no kit (id), quando usar, onde é usado no SPO, as classes do style.css, as funções do main.js e a seção do docs/padrao-visual-spo-aa-plus.md. O tests/test_kit_mockup.py confere que tudo o que está aqui existe. Padrão novo no kit = item novo aqui.",
+  "grupos": [
+    {
+      "nome": "Ponto de partida",
+      "itens": [
+        { "id": "kit-painel-titulo", "nome": "Preferências do kit", "quando": "Ver o mockup nos dois temas, nos 8 destaques, nas três densidades, a 150% e com as demais opções do Personalizar.", "onde": "Só no kit (os cartões são os do Personalizar).", "classes": ["personalizar-card", "personalizar-grid"], "js": ["initFontesPersonalizar"], "padrao": "6.4" },
+        { "id": "kit-previas-titulo", "nome": "Prévias do Personalizar", "quando": "Conferir o efeito de cada escolha do Personalizar em componentes e em dados.", "onde": "Administrar SPO → Personalizar.", "classes": ["personalizar-card"], "js": [], "padrao": "4.4" },
+        { "id": "kit-graficos-titulo", "nome": "Gráficos", "quando": "Todo gráfico: cores dos diagramas, resumo para leitor de tela, tabela de dados e escala do texto.", "onde": "Painéis → Teto Orçamentário; Personalizar (prévias).", "classes": ["teto-panel", "teto-chart"], "js": ["initGraficosAcessiveis", "initGraficosEscala", "initDiagramasDestaque"], "padrao": "3.5" },
+        { "id": "kit-aparelho-titulo", "nome": "Seu aparelho", "quando": "Conferir largura, altura, densidade de pixels e faixa do SPO do aparelho em uso.", "onde": "Só no kit.", "classes": ["kit-aparelho-dados"], "js": [], "padrao": "5" },
+        { "id": "kit-texto-titulo", "nome": "Texto e escala", "quando": "Título de cartão, descrição e texto corrido pela \"Densidade do texto\" (variáveis --spo-fs-*).", "onde": "Todas as telas.", "classes": ["module-card"], "js": [], "padrao": "2.2.1" }
+      ]
+    },
+    {
+      "nome": "Estrutura da tela",
+      "itens": [
+        { "id": "kit-p-cabecalho-busca", "nome": "Cabeçalho com busca e Ajuda", "quando": "Cabeçalho do SPO: lupa (busca de telas, Ctrl+K) e \"?\" (Ajuda), só o ícone.", "onde": "Todas as telas.", "classes": ["topbar", "brand-wrap"], "js": ["initBuscaTelas", "initCabecalhoAcoes", "initAtalhosTeclado"], "padrao": "4.4", "prs": ["#170", "#171"] },
+        { "id": "kit-p-barra-tela", "nome": "Barra de título da tela (secundária)", "quando": "Telas de trabalho em tela cheia, que pedem foco; o cabeçalho do SPO dá lugar ao da tela.", "onde": "Programação PTA/OpR, ao programar um eixo.", "classes": ["pta2027-integration-header"], "js": [], "padrao": "4.4", "prs": ["#179"] },
+        { "id": "kit-p-ver-detalhes", "nome": "\"Ver detalhes\": cartão flutuante", "quando": "Detalhe pedido pela pessoa (nunca aberto sozinho): largura limitada, título fixo, \"Fechar\" embaixo, rolagem por dentro.", "onde": "Início (Pendências); \"O padrão SPO-AA+\".", "classes": ["spo-pendencias-caixa", "modal-card"], "js": ["initPendenciasDetalhe"], "padrao": "4.4", "prs": ["#175"] }
+      ]
+    },
+    {
+      "nome": "Cartões",
+      "itens": [
+        { "id": "kit-p-cartoes-dinamicos", "nome": "Cartões dinâmicos com painel de contexto", "quando": "Escolher um entre vários blocos e ver o contexto dele abaixo; setas, Home e End trocam a escolha.", "onde": "Governança e Resultados (EAP e Políticas, Estratégia, Matrículas e Metas…).", "classes": ["flow-node", "semantic-flow-grid"], "js": ["initGovernancaSemanticFlows"], "padrao": "4.4" },
+        { "id": "kit-p-fluxo-setas", "nome": "Fluxo com setas e painel de contexto", "quando": "Etapas em sequência, com o contexto da escolhida abaixo.", "onde": "Governança e Resultados → Mapa Conceitual.", "classes": ["governanca-card"], "js": ["initGovernancaSemanticFlows"], "padrao": "4.4" },
+        { "id": "kit-p-cartoes-painel", "nome": "Cartões de painel", "quando": "Blocos de texto lado a lado.", "onde": "Governança e Resultados → Mapa Conceitual.", "classes": ["governanca-grid", "governanca-card"], "js": [], "padrao": "4.4" },
+        { "id": "kit-p-cartao-documento", "nome": "Cartão de documento", "quando": "Cartão inteiro que leva a um documento.", "onde": "Institucional (Diretrizes, Legislação, Parceiros, Repositório).", "classes": ["institutional-card"], "js": [], "padrao": "4.4" },
+        { "id": "kit-p-indicadores", "nome": "Indicadores", "quando": "Valores-chave no alto de um painel.", "onde": "Painéis → Teto Orçamentário.", "classes": ["teto-kpi-grid", "teto-kpi"], "js": [], "padrao": "4.4" },
+        { "id": "kit-avisos-titulo", "nome": "Avisos da Início como cartões", "quando": "Aviso que a pessoa precisa ver: cartão na própria tela, nada abre sozinho por cima.", "onde": "Início (Chave do planejamento e Pendências).", "classes": ["spo-aviso-titulo", "spo-pendencias-card"], "js": ["initPendenciasDetalhe"], "padrao": "4.4", "prs": ["#174", "#175"] }
+      ]
+    },
+    {
+      "nome": "Formulários e listas",
+      "itens": [
+        { "id": "kit-form-titulo", "nome": "Formulário", "quando": "Campos, estado desabilitado e a hierarquia dos botões (principal, secundário em contorno).", "onde": "Cadastros e demais formulários.", "classes": ["form-grid", "field", "input"], "js": [], "padrao": "4.2" },
+        { "id": "kit-p-lista-nativa-filtro", "nome": "Lista nativa e filtro SPO", "quando": "Uma escolha: lista nativa. Várias escolhas nos relatórios: filtro SPO (busca, \"(Todos)\", \"Selecionar exibidos\", \"Aplicar\").", "onde": "Formulários (nativa); relatórios (filtro SPO).", "classes": ["mf-panel", "mf-option", "mf-search"], "js": ["initEscFiltros", "initFiltroCelular", "initFiltroPosicao"], "padrao": "4.3", "prs": ["#168", "#172"] },
+        { "id": "kit-p-lista-longa", "nome": "Lista longa com busca", "quando": "Lista de uma escolha com 40 opções ou mais: o campo \"Filtrar a lista\" aparece sozinho abaixo dela.", "onde": "Chave do Planejamento, Subação/Entrega, Etapa, Subelemento (Cadastrar Dotação).", "classes": [], "js": ["initBuscaListasLongas"], "padrao": "4.3", "prs": ["#178"] },
+        { "id": "kit-p-nao-sim", "nome": "Opções \"Não/Sim\"", "quando": "Escolha entre duas opções, com alvo de ao menos 24 px (44 px em tela de toque).", "onde": "Cadastrar Dotação e outros cinco formulários.", "classes": [], "js": [], "padrao": "4.2", "prs": ["#169"] },
+        { "id": "kit-p-opcoes-envio", "nome": "Opções de envio", "quando": "Escolher como enviar arquivos (pasta ou arquivos).", "onde": "Atualizar → Notas SEE.", "classes": ["see-upload-options", "see-upload-option"], "js": [], "padrao": "4.2" },
+        { "id": "kit-p-presets-contrato", "nome": "Presets do Contrato", "quando": "Escolha entre conjuntos prontos de preferências.", "onde": "Personalizar → Contrato Visual Protegido.", "classes": ["contract-preset-grid", "contract-preset"], "js": [], "padrao": "4.4" }
+      ]
+    },
+    {
+      "nome": "Relatórios",
+      "itens": [
+        { "id": "kit-relatorio-titulo", "nome": "Tela de relatório", "quando": "Relatório com última atualização por UO, totais, filtros, teclado nas tabelas e paginação.", "onde": "Relatórios (FIP 613, PED, PLAN 20…).", "classes": ["report-header", "report-data-card"], "js": ["renderUltimasAtualizacoes", "initNavegacaoTabelas", "initTecladoPaginacao"], "padrao": "4.4" }
+      ]
+    }
+  ]
+}
