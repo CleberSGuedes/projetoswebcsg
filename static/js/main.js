@@ -2559,6 +2559,15 @@
     measure.remove();
     sidebar.style.setProperty("--sidebar-expanded-width", `${Math.max(160, measuredWidth)}px`);
   }
+  // [jean] fix/largura-menu-fontes (2026-11-17): a largura acima era medida uma vez, logo depois das permissões; se a
+  // fonte da interface ainda não tinha chegado, a coluna do menu ficava 16 a 19 px mais estreita ou mais larga, ao acaso
+  // (achado pela comparação antes × depois da Bateria SPO-AA+). Mede de novo quando as fontes terminam de carregar,
+  // inclusive depois de trocar a fonte no Personalizar.
+  if (sidebar && menu && document.fonts) {
+    const remedirMenu = () => requestAnimationFrame(updateSidebarExpandedWidth);
+    document.fonts.ready.then(remedirMenu);
+    document.fonts.addEventListener("loadingdone", remedirMenu);
+  }
 
   function syncTopbarHeight() {
     const contextHeader = document.querySelector(".pta2027-integration-header");
@@ -29080,9 +29089,16 @@
   const MIN = 12;
   const ESTREITO = 520;
   const elDe = (gd) => (typeof gd === "string" ? document.getElementById(gd) : gd);
+  // [jean] fix/graficos-fontes (2026-11-18): o Plotly guarda a medida de cada texto por um código que inclui o nome da
+  // fonte; o texto medido com a fonte de reserva (a da interface ainda não carregou) continuaria com essa medida depois.
+  // Enquanto a fonte não carrega, o nome leva um último item que não existe ("spo-fonte-carregando": o navegador o
+  // ignora e desenha igual); quando ela chega, o redesenho usa o nome limpo e o Plotly mede de novo.
   const fonteUi = () => {
     try {
-      return getComputedStyle(document.body).fontFamily || "sans-serif";
+      const familia = getComputedStyle(document.body).fontFamily || "sans-serif";
+      // regular e negrito (títulos e rótulos em negrito vêm de outro arquivo da fonte, que pode chegar depois)
+      const pronta = !document.fonts || (document.fonts.check(`12px ${familia}`) && document.fonts.check(`bold 12px ${familia}`));
+      return pronta ? familia : `${familia}, spo-fonte-carregando`;
     } catch (err) {
       return "sans-serif";
     }
@@ -29115,6 +29131,7 @@
     }
     const L = { ...(layout || {}) };
     L.font = { ...(L.font || {}), family: fonteUi(), size: tamanho(L.font) };
+    if (el) el.__spoFonteDesenho = L.font.family;
     Object.keys(L).forEach((k) => {
       if (!/^[xy]axis\d*$/.test(k) || !L[k] || typeof L[k] !== "object") return;
       const eixo = { ...L[k], automargin: true };
@@ -29305,17 +29322,45 @@
   P.newPlot = (gd, data, layout, config) => { const L = ajustar(gd, layout); return newPlot(gd, ajustarDados(gd, data, L), L, config); };
   P.__spoEscala = true;
 
-  // trocar a densidade ou o contraste (largura do separador) no Personalizar redesenha os gráficos já abertos
-  const estadoRedesenho = () => `${document.body.dataset.spoTableText}|${document.body.dataset.visualContrast}`;
+  const redesenharTodos = () => {
+    document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+      if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+    });
+  };
+  // trocar a densidade, o contraste (largura do separador) ou a fonte da interface no Personalizar redesenha os
+  // gráficos já abertos
+  const estadoRedesenho = () =>
+    `${document.body.dataset.spoTableText}|${document.body.dataset.visualContrast}|${document.body.dataset.spoFontUi}`;
   let densidade = document.body ? estadoRedesenho() : "";
   if (document.body) {
     new MutationObserver(() => {
       if (estadoRedesenho() === densidade) return;
       densidade = estadoRedesenho();
+      redesenharTodos();
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text", "data-visual-contrast", "data-spo-font-ui"] });
+  }
+  // [jean] fix/graficos-fontes (2026-11-18): o Plotly mede o texto ao desenhar. Gráfico desenhado antes de a fonte
+  // da interface chegar ficava medido com a fonte de reserva (legenda, margens e eixos variavam de uma carga para
+  // outra; achado pela comparação antes × depois no kit, no celular). Redesenha quando as fontes terminam de carregar,
+  // inclusive a fonte nova escolhida no Personalizar (o mesmo cuidado do menu, #196). Só os gráficos desenhados com a
+  // fonte ainda carregando: redesenhar à toa mexe 1 px na margem da pizza (o Plotly.react não refaz o automargin igual).
+  if (document.fonts) {
+    let esperaFonte = 0;
+    const redesenharSemFonte = () => {
+      const agora = fonteUi();
+      if (agora.endsWith("spo-fonte-carregando")) return;
       document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
-        if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+        if (gd.data && gd.__spoFonteDesenho && gd.__spoFonteDesenho !== agora) {
+          P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+        }
       });
-    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text", "data-visual-contrast"] });
+    };
+    const depoisDasFontes = () => {
+      clearTimeout(esperaFonte);
+      esperaFonte = setTimeout(() => requestAnimationFrame(redesenharSemFonte), 50);
+    };
+    document.fonts.ready.then(depoisDasFontes);
+    document.fonts.addEventListener("loadingdone", depoisDasFontes);
   }
 
   let espera = 0;
@@ -31032,4 +31077,150 @@
   let esperaTela = 0;
   window.addEventListener("resize", () => { clearTimeout(esperaTela); esperaTela = setTimeout(() => estados.forEach(escolhaInteira), 150); });
   varrer();
+})();
+
+/* ==========================================================================
+   [jean] fix/linha-usuario-cabecalho (2026-11-17; achado 2 do dev. Jean)
+   A linha do usuário no cabeçalho ("Nome - data, hora | Logados: N") quebrava em
+   qualquer ponto nas telas estreitas (overflow-wrap: anywhere do #43): "Nome -" numa
+   linha e a data na outra, ou a hora separada da data. Agora a linha se divide em
+   duas partes que nunca se partem ao meio: cabendo tudo, fica numa linha; não cabendo,
+   o nome vai numa linha e "data, hora | Logados" na de baixo, sem o traço. O texto
+   (textContent) continua o mesmo: o cabeçalho da Programação PTA/OpR o lê daqui.
+   ========================================================================== */
+(function initLinhaUsuario() {
+  const meta = document.getElementById("user-meta");
+  if (!meta) return;
+  const nome = meta.dataset.name || "";
+  const texto = meta.textContent;
+  if (!nome || !texto.startsWith(nome + " - ")) return; // formato inesperado: fica como está
+  const parte = (classe, conteudo) => {
+    const s = document.createElement("span");
+    s.className = classe;
+    s.textContent = conteudo;
+    return s;
+  };
+  const pNome = parte("spo-usuario-nome", nome);
+  const pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
+  meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+  // numa linha só, se couber: tira as duas linhas, vê se a sessão desceu, e decide (tudo no mesmo quadro, sem piscar)
+  const ajustar = () => {
+    meta.classList.remove("spo-usuario-duas-linhas");
+    const desceu = pSessao.getBoundingClientRect().top > pNome.getBoundingClientRect().top + 1;
+    meta.classList.toggle("spo-usuario-duas-linhas", desceu);
+  };
+  let quadro = 0;
+  const depois = () => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); };
+  ajustar();
+  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(depois);
+    ro.observe(meta.parentElement || meta);
+    ro.observe(document.body);
+  }
+  window.addEventListener("resize", depois, { passive: true });
+  if (document.fonts) { document.fonts.ready.then(depois); document.fonts.addEventListener("loadingdone", depois); }
+  new MutationObserver(depois).observe(document.body, { attributes: true, attributeFilter: ["data-spo-font-size", "data-spo-font-ui", "style", "class"] });
+})();
+
+/* ==========================================================================
+   [jean] feat/siglas-explicadas (2026-11-18; achado 3 do dev. Jean)
+   Siglas com explicação em qualquer aparelho. Antes, <abbr title="…"> só mostrava o significado ao passar o
+   mouse: no celular e pelo teclado não aparecia nada (e o sublinhado pontilhado prometia uma explicação).
+   Agora a sigla vira um botão com balão: toque ou clique fixa o balão; mouse por cima e foco pelo teclado
+   mostram; Esc, clicar fora ou sair fecham; o leitor de tela lê o significado (aria-describedby). Sigla
+   dentro de um link (onde não cabe outro controle) ganha, logo depois do link, um botão "ⓘ" com o mesmo
+   balão. Vale para toda <abbr title> do SPO, inclusive as das telas carregadas depois (padrão §4.4).
+   ========================================================================== */
+(function initSiglas() {
+  let seq = 0;
+  const abertas = new Set();
+  const fechar = (w) => {
+    const b = w.querySelector(".spo-sigla-botao"), balao = w.querySelector(".spo-sigla-balao");
+    if (!b || !balao) return;
+    balao.hidden = true;
+    b.setAttribute("aria-expanded", "false");
+    delete w.dataset.fixo;
+    abertas.delete(w);
+  };
+  const abrir = (w, fixo) => {
+    const b = w.querySelector(".spo-sigla-botao"), balao = w.querySelector(".spo-sigla-balao");
+    if (!b || !balao) return;
+    abertas.forEach((o) => { if (o !== w) fechar(o); });
+    balao.hidden = false;
+    b.setAttribute("aria-expanded", "true");
+    if (fixo) w.dataset.fixo = "1";
+    abertas.add(w);
+    // o balão não sai da tela pela direita nem pela esquerda
+    w.style.setProperty("--spo-sigla-desloca", "0px");
+    const r = balao.getBoundingClientRect(), margem = 8;
+    let desloca = 0;
+    if (r.right > innerWidth - margem) desloca = innerWidth - margem - r.right;
+    if (r.left + desloca < margem) desloca = margem - r.left;
+    w.style.setProperty("--spo-sigla-desloca", `${Math.round(desloca)}px`);
+  };
+  const montar = (abbr) => {
+    if (abbr.dataset.siglaPronta) return;
+    const significado = (abbr.getAttribute("title") || "").trim();
+    const sigla = abbr.textContent.trim();
+    if (!significado || !sigla) return;
+    abbr.dataset.siglaPronta = "1";
+    abbr.removeAttribute("title"); // sem a dica nativa repetida
+    const id = `spo-sigla-${++seq}`;
+    const balao = document.createElement("span");
+    balao.className = "spo-sigla-balao";
+    balao.id = id;
+    balao.setAttribute("role", "tooltip");
+    balao.hidden = true;
+    balao.textContent = significado;
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "spo-sigla-botao";
+    botao.setAttribute("aria-expanded", "false");
+    botao.setAttribute("aria-describedby", id);
+    const dentroDeControle = abbr.parentElement && abbr.parentElement.closest("a, button, [role='button'], summary, label");
+    let w;
+    if (dentroDeControle) {
+      // dentro de um link: o botão "ⓘ" vai logo depois do link
+      botao.classList.add("spo-sigla-info");
+      botao.setAttribute("aria-label", `O que é ${sigla}?`);
+      const icone = document.createElement("i");
+      icone.className = "bi bi-info-circle";
+      icone.setAttribute("aria-hidden", "true");
+      botao.appendChild(icone);
+      w = document.createElement("span");
+      w.className = "spo-sigla";
+      w.append(botao, balao);
+      dentroDeControle.insertAdjacentElement("afterend", w);
+    } else {
+      botao.textContent = sigla;
+      abbr.textContent = "";
+      abbr.classList.add("spo-sigla");
+      abbr.append(botao, balao);
+      w = abbr;
+    }
+    botao.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (w.dataset.fixo) fechar(w); else abrir(w, true);
+    });
+    w.addEventListener("pointerenter", (ev) => { if (ev.pointerType === "mouse" && !abertas.has(w)) abrir(w, false); });
+    w.addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse" && !w.dataset.fixo) fechar(w); });
+    botao.addEventListener("focus", () => { if (botao.matches(":focus-visible") && !abertas.has(w)) abrir(w, false); });
+    w.addEventListener("focusout", (ev) => { if (!w.contains(ev.relatedTarget) && !w.dataset.fixo) fechar(w); });
+  };
+  const varrer = (raiz) => raiz.querySelectorAll("abbr[title]").forEach(montar);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !abertas.size) return;
+    abertas.forEach(fechar);
+  });
+  document.addEventListener("click", (ev) => {
+    abertas.forEach((w) => { if (!w.contains(ev.target)) fechar(w); });
+  });
+  // tocar ou clicar numa moldura (iframe, como a do mockup PTA/OpR) não chega aqui: a página perde o foco, e fecha
+  window.addEventListener("blur", () => abertas.forEach(fechar));
+  varrer(document);
+  // telas carregadas depois (o conteúdo do SPO troca sem recarregar a página)
+  let espera = 0;
+  new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(() => varrer(document), 60); })
+    .observe(document.body, { childList: true, subtree: true });
 })();

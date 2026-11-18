@@ -154,3 +154,154 @@
 .kit-barra-tela { display: block; width: 100%; border: thin solid var(--border); border-radius: 0.75rem; background: var(--bg); }
 /* no celular, a moldura ocupa a largura da tela (como a barra no SPO): largura e margem postas pelo kit-mockup.js */
 .kit-barra-tela.kit-tela-inteira { max-width: none; border-inline: 0; border-radius: 0; }
+
+/* [jean] feat/kit-indice (2026-11-18): índice do kit e fichas dos padrões (kit-mockup.js, catalogo.json) */
+.kit-sumario {
+  margin: 12px var(--spo-layout-content-padding, 18px) 0;
+  padding: 12px 16px;
+}
+.kit-sumario h2 { margin: 0 0 4px; font-size: var(--spo-fs-titulo); }
+.kit-sumario p { margin: 0 0 8px; font-size: var(--spo-fs-texto); }
+.kit-sumario-grupos {
+  margin: 0;
+  padding-left: 1.2em;
+  columns: 2 18rem;
+  column-gap: 2rem;
+  font-size: var(--spo-fs-texto);
+}
+.kit-sumario-grupos > li { break-inside: avoid; margin-bottom: 8px; }
+.kit-sumario-grupo { font-weight: 700; color: var(--text); }
+.kit-sumario-grupos ol { margin: 2px 0 0; padding-left: 1.2em; list-style: lower-alpha; }
+.kit-sumario-grupos a { color: var(--spo-accent-text); }
+.kit-ficha {
+  margin: 4px 0 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: var(--spo-fs-texto);
+}
+.kit-ficha > summary { cursor: pointer; font-weight: 600; color: var(--spo-accent-text); }
+.kit-ficha dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 2px;
+}
+.kit-ficha dt { font-weight: 600; color: var(--text); }
+.kit-ficha dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .kit-ficha dl { grid-template-columns: 1fr; }
+  .kit-ficha dd { margin-bottom: 4px; }
+}
+
+/* [jean] feat/lista-spo-unica (2026-11-18): exemplo da lista de marcar de hoje e a PROPOSTA da lista única de várias
+   escolhas (em decisão). Visual leve da lista de marcar (.planning-action-checklist-*), com tokens do SPO; quando for
+   aprovada, estas regras vão para um bloco [jean] do style.css e substituem o .mf-* e o .planning-action-checklist-*. */
+.kit-lista-marcar { position: relative; max-width: 420px; }
+.kit-lista-marcar .planning-action-checklist { position: relative; }
+.kit-proposta .kit-padrao-onde { max-width: 72ch; }
+.spo-multi { position: relative; max-width: 420px; }
+.spo-multi-botao {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--spo-fs-texto);
+  text-align: left;
+  cursor: pointer;
+}
+.spo-multi-botao[aria-expanded="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.spo-multi-painel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 8px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.spo-multi-campo { position: relative; } /* o painel abre logo abaixo do botão (o campo é um grid) */
+.spo-multi-painel[hidden] { display: none; }
+.spo-multi-busca input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--spo-fs-texto);
+}
+.spo-multi-acoes {
+  display: flex;
+  gap: 14px;
+  padding: 8px 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.spo-multi-acoes button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--spo-accent-text);
+  font: inherit;
+  font-size: var(--spo-fs-texto);
+  font-weight: 600;
+  cursor: pointer;
+}
+.spo-multi-acoes button:hover { text-decoration: underline; }
+.spo-multi-opcoes { max-height: 240px; overflow-y: auto; padding-top: 4px; }
+.spo-multi-opcao {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: var(--spo-fs-texto);
+  cursor: pointer;
+}
+.spo-multi-opcao[hidden] { display: none; }
+.spo-multi-opcao:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.spo-multi-opcao input { margin-top: 2px; accent-color: var(--accent); }
+.spo-multi-contagem { margin: 6px 4px 0; color: var(--muted); font-size: var(--spo-fs-texto); }
+.spo-multi-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.spo-multi-etiquetas:empty { display: none; }
+.spo-multi-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--spo-fs-texto);
+  cursor: pointer;
+}
+/* no celular: cartão no alto da tela, com o véu do filtro SPO atrás (como o .mf-panel, #172) */
+@media (max-width: 600px), (max-height: 560px) {
+  .spo-multi.spo-multi-cartao .spo-multi-painel {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 1100;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+}
