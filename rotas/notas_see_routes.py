@@ -13,6 +13,7 @@ servidor, só esta funcionalidade fica indisponível, e o resto do sistema segue
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -519,6 +520,53 @@ def _start_see_worker(job: SeeProcessamento) -> None:
         threading.Thread(target=_run_see_processamento, args=(app, job.id), daemon=True).start()
 
 
+SEE_IGNORADOS_NAVEGADOR_MAX = 500
+SEE_IGNORADOS_NAVEGADOR_NOME_MAX = 255
+_SEE_CARACTER_DE_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _see_nomes_ignorados_navegador(bruto) -> list[str]:
+    """Nomes dos arquivos que o navegador deixou de enviar por não serem PDF.
+
+    Vêm do usuário: só uma lista JSON de textos é aceita, com no máximo
+    SEE_IGNORADOS_NAVEGADOR_MAX nomes de até SEE_IGNORADOS_NAVEGADOR_NOME_MAX caracteres.
+    O que vier fora disso é descartado sem impedir a criação do processamento. O nome
+    recebe o mesmo tratamento do nome de um arquivo enviado (só o nome, sem a pasta);
+    nome com caractere de controle é descartado (quebraria a gravação do Excel)."""
+    if not bruto:
+        return []
+    try:
+        valores = json.loads(bruto)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(valores, list):
+        return []
+    nomes = []
+    for valor in valores:
+        if len(nomes) >= SEE_IGNORADOS_NAVEGADOR_MAX:
+            break
+        if not isinstance(valor, str):
+            continue
+        nome = Path(valor.replace("\\", "/")).name.strip()
+        if not nome or len(nome) > SEE_IGNORADOS_NAVEGADOR_NOME_MAX or _SEE_CARACTER_DE_CONTROLE.search(nome):
+            continue
+        nomes.append(nome)
+    return nomes
+
+
+def _see_registrar_ignorado(job: SeeProcessamento, name: str, reason: str) -> None:
+    item = {"name": name, "reason": reason}
+    db.session.add(SeeOcorrencia(
+        processamento_id=job.id,
+        severidade="informacao",
+        fase="upload",
+        codigo="ARQUIVO_IGNORADO",
+        mensagem=f"{name}: {reason}",
+        contexto=name,
+        dados_contexto_json=item,
+    ))
+
+
 @notas_see_bp.route("/api/notas-see/processamentos", methods=["POST"])
 @login_required
 @require_feature("area-uens/sage/notas-see")
@@ -631,6 +679,11 @@ def api_notas_see_processar():
                 resolvido=old_occurrence.resolvido, resolvido_por=old_occurrence.resolvido_por,
                 resolvido_em=old_occurrence.resolvido_em, observacao_resolucao=old_occurrence.observacao_resolucao,
             ))
+    # Não-PDF filtrados no navegador: só o nome chega; ficam registrados como os ignorados pelo servidor
+    # (aba Ocorrências do Excel, resumo e contagem). O "acrescentar" não copia os ignorados anteriores.
+    ignorados_navegador = _see_nomes_ignorados_navegador(request.form.get("ignorados_navegador"))
+    for nome in ignorados_navegador:
+        _see_registrar_ignorado(job, nome, "Extensão diferente de PDF.")
     job.total_arquivos = inherited
     job.arquivos_enviados = 0
     job.arquivos_processados = inherited
@@ -639,7 +692,7 @@ def api_notas_see_processar():
     job.arquivos_erro = sum(1 for row in base_files if row.status == "falha")
     job.mensagem_atual = "Recebendo PDFs."
     db.session.commit()
-    return jsonify({"ok": True, "job_id": job.id, "initial": inherited}), 201
+    return jsonify({"ok": True, "job_id": job.id, "initial": inherited, "ignorados_navegador": len(ignorados_navegador)}), 201
 
 
 def _see_upload_job(processamento_id: int):
@@ -685,32 +738,44 @@ def api_notas_see_enviar_arquivos(processamento_id: int):
     if not uploads:
         return jsonify({"error": "Nenhum arquivo recebido neste lote."}), 400
     existing = (
-        db.session.query(SeeProcessamentoArquivo.sha256, SeeProcessamentoArquivo.etapa_atual, SeeProcessamentoArquivo.ordem)
+        db.session.query(
+            SeeProcessamentoArquivo.sha256,
+            SeeProcessamentoArquivo.etapa_atual,
+            SeeProcessamentoArquivo.ordem,
+            SeeProcessamentoArquivo.caminho_relativo,
+        )
         .filter(SeeProcessamentoArquivo.processamento_id == job.id)
         .all()
     )
-    base_hashes = {sha for sha, etapa, _ in existing if sha and etapa == "herdado"}
-    seen_hashes = {sha for sha, _, _ in existing if sha}
-    order = max((ordem or 0 for _, _, ordem in existing), default=0)
+    base_hashes = {sha for sha, etapa, _, _ in existing if sha and etapa == "herdado"}
+    seen_hashes = {sha for sha, _, _, _ in existing if sha}
+    # Mesmo conteúdo E mesmo caminho já gravado neste envio: é o mesmo arquivo chegando de novo
+    # (nova tentativa do lote ou reenvio automático do navegador), não um duplicado.
+    received = {(sha, caminho) for sha, etapa, _, caminho in existing if sha and etapa != "herdado"}
+    order = max((ordem or 0 for _, _, ordem, _ in existing), default=0)
     upload_dir = SEE_UPLOAD_DIR / str(job.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved = 0
     ignored = []
     accepted_names = []
+    already_names = []
     for upload in uploads:
         original = upload.filename.replace("\\", "/")
         display_name = Path(original).name
         if not original.lower().endswith(".pdf"):
-            ignored.append({"name": display_name, "reason": "Extensão diferente de PDF."})
+            ignored.append({"name": display_name, "reason": "Extensão diferente de PDF.", "path": original})
             continue
         data = upload.read()
         if not data.startswith(b"%PDF"):
-            ignored.append({"name": display_name, "reason": "O conteúdo do arquivo não é um PDF válido."})
+            ignored.append({"name": display_name, "reason": "O conteúdo do arquivo não é um PDF válido.", "path": original})
             continue
         digest = hashlib.sha256(data).hexdigest()
+        if digest not in base_hashes and (digest, original) in received:
+            already_names.append(display_name)
+            continue
         if digest in seen_hashes:
             reason = "Arquivo já processado anteriormente." if digest in base_hashes else "Arquivo duplicado na seleção atual."
-            ignored.append({"name": display_name, "reason": reason})
+            ignored.append({"name": display_name, "reason": reason, "path": original})
             continue
         seen_hashes.add(digest)
         order += 1
@@ -733,7 +798,17 @@ def api_notas_see_enviar_arquivos(processamento_id: int):
         )
         saved += 1
         accepted_names.append(display_name)
+    # Na nova tentativa de um lote, o ignorado já registrado no envio anterior não é gravado de novo.
+    already_ignored = set()
+    if ignored:
+        for row in SeeOcorrencia.query.filter_by(processamento_id=job.id, codigo="ARQUIVO_IGNORADO").all():
+            dados = row.dados_contexto_json or {}
+            if dados.get("path"):
+                already_ignored.add((dados["path"], dados.get("reason")))
     for item in ignored:
+        if (item["path"], item["reason"]) in already_ignored:
+            continue
+        already_ignored.add((item["path"], item["reason"]))
         db.session.add(SeeOcorrencia(
             processamento_id=job.id,
             severidade="informacao",
@@ -746,7 +821,13 @@ def api_notas_see_enviar_arquivos(processamento_id: int):
     job.arquivos_enviados = (job.arquivos_enviados or 0) + saved
     job.mensagem_atual = f"{job.arquivos_enviados} PDF(s) recebido(s)."
     db.session.commit()
-    return jsonify({"ok": True, "added": saved, "accepted": accepted_names, "ignored": ignored})
+    return jsonify({
+        "ok": True,
+        "added": saved,
+        "accepted": accepted_names,
+        "already": already_names,
+        "ignored": [{"name": item["name"], "reason": item["reason"]} for item in ignored],
+    })
 
 
 @notas_see_bp.route("/api/notas-see/processamentos/<int:processamento_id>/iniciar", methods=["POST"])

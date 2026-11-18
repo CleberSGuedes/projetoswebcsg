@@ -1,6 +1,6 @@
 # Sistema SPO — Sistema de Planejamento e Orçamento
 
-> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-17) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
+> Documento gerado a partir de uma análise completa do repositório em 2026-08-31, e atualizado nas sessões seguintes (última atualização: 2026-11-18) à medida que os riscos identificados foram corrigidos e novas investigações aconteceram.
 > Objetivo: servir de contexto rápido para quem (humano ou IA) for trabalhar neste projeto.
 
 > **Estado em 16/11/2026:** a produção (`main`) está com o AA+ (lotes 1 a 5), os avisos modais e o Teto Orçamentário no celular e as Notas SEE com o DANFE novo da Somos, em produção desde 16/11/2026 (`RELEASE_2_2026_11_16.4`). O que entrou e o que não entrou: [CHANGELOG.md](CHANGELOG.md); lições operacionais das promoções: seção 40.13.
@@ -2153,3 +2153,40 @@ _Parte em vigor. O histórico (problema, medição, verificação) está no [CHA
 - Testes em `tests/test_notas_see.py`: textos sintéticos das três formas da Solicitação (com quebras de linha), D'OESTE, entrega na DRE, os 8 trechos-lixo, casamento (identificada, mesmo nome em outro município, sugestão, duas iguais, município fora do cadastro, DRE), amostra real do 4º bimestre (`SEE_PDFS_DIR_4BIM`) e **lote misto** 3º + 4º bimestre pelo processamento completo (cada nota no layout certo e com o mesmo resultado que teria sozinha). Os testes com PDFs são pulados se as pastas não existirem.
 
 **Operacional:** as notas do 4º bimestre já processadas em produção com o defeito devem ser **reenviadas num processamento novo** ("Não, iniciar uma nova lista"), e não com "acrescentar": o *acrescentar* copia as notas anteriores como estão e não relê os PDFs (§28.7).
+
+## Notas SEE: envio robusto dos PDFs (2026-11-18)
+
+Complementa a §28. Vale para a tela "Notas SEE" (`initNotasSee` no `main.js`) e para as rotas de `rotas/notas_see_routes.py`.
+
+**Envio em lotes, com tempo limite e novas tentativas (navegador):**
+- Os PDFs sobem em lotes (até 50 arquivos ou 20 MB) para `POST /api/notas-see/processamentos/<id>/arquivos`. Cada lote tem tempo limite de **60 s + 15 s por MB**.
+- Tempo esgotado, falha de rede, erro 5xx e 429 reenviam **o mesmo lote**, até **3 tentativas no total**, esperando 5 s e depois 15 s. Outros erros (4xx) não são repetidos.
+- Depois da 3ª falha, a tela não descarta nada: mostra o erro com "Tentar novamente" (continua do lote que falhou) e "Cancelar envio" (cancela o processamento **do envio**, pelo id criado nele, nunca o do painel).
+- Enquanto há envio, o `beforeunload` avisa ao recarregar ou fechar a aba (a troca de tela pelo menu tem aviso próprio, abaixo). O texto é do navegador e não pode ser personalizado; o painel do app (Electron) não mostra o aviso.
+
+**"Já recebido" (servidor):** no mesmo processamento, arquivo com o mesmo SHA-256 **e** o mesmo caminho relativo é tratado como reenvio do mesmo arquivo: não é gravado de novo, não soma ignorado e volta no campo `already` da resposta (`{"ok", "added", "accepted", "already", "ignored"}`). O navegador soma `accepted` e `already` para saber o que já chegou. Mesmo conteúdo em **outro** caminho continua sendo duplicado e é ignorado como antes. A ocorrência de ignorado guarda o `path` para não ser registrada duas vezes num reenvio.
+
+**Arquivos que não são PDF:** o navegador não os envia. A tela mostra "N arquivo(s) ignorado(s) por não ser PDF: …" (até 5 nomes, depois "e mais N") e manda os nomes no campo opcional `ignorados_navegador` (JSON) de `POST /api/notas-see/processamentos`. O servidor aceita só lista de textos, guarda só o nome do arquivo (sem pasta), descarta vazio, nome com mais de 255 caracteres ou com caractere de controle, limita a 500 nomes e registra cada um como a ocorrência `ARQUIVO_IGNORADO` ("Extensão diferente de PDF."), igual à que o servidor gerava quando o arquivo subia. Sem o campo, a criação funciona como antes. No "acrescentar", entram só os ignorados do envio novo.
+
+**Painel "Processamento" (estados e nº sempre visível):** o título e o primeiro item dos dados mostram o nº do processamento que o painel acompanha.
+- **Enviando:** ao clicar em "Iniciar processamento", o acompanhamento anterior para e o painel é zerado; depois de criado o processamento, "Processamento nº X — Enviando PDFs", com a barra dos PDFs enviados (sem os números do processamento, a lista de arquivos e "Baixar Excel").
+- **Envio parado** (depois das 3 tentativas ou com a sessão encerrada): "Processamento nº X — Envio parado"; nunca volta a mostrar o processamento anterior.
+- **Envio cancelado:** "Envio nº X cancelado", com "Último processamento concluído deste catálogo: nº Y" quando houver. Recusado pelo servidor (ex.: "Nenhum arquivo novo para processar"): "Envio nº X encerrado".
+- **Na fila, processando, concluído, falha, cancelado:** "Processamento nº X — <estado>", depois do `iniciar`, acompanhando o mesmo nº até o fim.
+- **Ao abrir a tela ou trocar de catálogo** (rota `/ultimo`, que ignora "enviando"): "Último processamento concluído (nº Y)" ou "Processamento nº Y — Processando", se ainda estiver em andamento.
+- A base do "acrescentar" é o último processamento **concluído** do catálogo, guardado à parte; durante o envio o catálogo não pode ser trocado.
+
+**Acompanhamento (poll):** consulta o status a cada 1 s, com tempo limite de 30 s. Em falha passageira (rede, tempo esgotado, erro do servidor), mostra "Sem conexão com o servidor, tentando de novo…" e tenta de novo depois de 1, 2, 5, 10 e depois 30 s; na primeira resposta boa, a mensagem some e volta a 1 s. Para de vez quando o processamento termina, quando outro envio começa, ao trocar de catálogo ou ao sair da tela. 404 para com "não encontrado".
+
+**Sessão encerrada:** a API responde 401 sem corpo (`login_required` com `X-Requested-With`) e 403 com HTML sem permissão; um redirecionamento ao login chega como HTML. Nada disso é "sem conexão": o acompanhamento para com "Sua sessão foi encerrada. Entre de novo no SPO para acompanhar o processamento nº X." e o envio fica em "Envio parado", sem novas tentativas automáticas ("Tentar novamente" continua depois de entrar de novo). Na prática, a guarda geral de sessão do SPO (`sessionGuard`, no começo do `main.js`) costuma levar ao login logo depois do primeiro 401.
+
+**"Cancelar" do painel e "Cancelar envio":** durante o envio, os dois cancelam o processamento do envio pelo mesmo caminho (um clique a mais só espera o cancelamento em curso: uma chamada só); depois do `iniciar`, o do painel cancela o processamento acompanhado. O "Cancelar" fica oculto quando não há o que cancelar e mostra erro na linha de aviso do painel.
+
+**Aviso do SPO ao trocar de tela durante o envio:** a troca de tela pelo menu não recarrega a página (o `beforeunload` não dispara). Enquanto houver envio, desde o clique em "Iniciar processamento" (inclusive enquanto o processamento é criado), as Notas SEE registram um ouvinte de clique em captura que segura os itens do `#menu` (a busca de telas abre a tela clicando no item e passa pelo mesmo aviso) e mostram, no `.modal-overlay` do SPO, "Deseja permanecer nesta página? O envio dos PDFs ainda não terminou.":
+- "Permanecer" (também Esc e clique fora): o envio continua e o foco volta ao item do menu. O Esc é tratado pelo próprio aviso, porque o tratamento geral dos avisos (§41.11) acionaria o primeiro botão com "cancelar" no texto.
+- "Sair e cancelar o envio": cancela o processamento do envio e só então repete o clique no item escolhido; se o cancelamento falhar, fica na tela com o envio parado.
+- O código de navegação comum do SPO não é alterado. O SPO não usa `history`: o Voltar do navegador sai da página e quem avisa é o `beforeunload`.
+
+**Saída da tela:** um `MutationObserver` no `#content-area` percebe quando a tela das Notas SEE sai; para o acompanhamento e os timers do envio, remove os ouvintes de `document`/`window`, fecha os avisos abertos e se desliga. Ao voltar à tela, nada fica em dobro. Se a tela sair enquanto o processamento é criado, ele é cancelado em seguida.
+
+**Como testar:** `tests/test_notas_see.py` (reenvio idempotente, duplicado em outro caminho, envio depois do cancelamento, contagem do `iniciar`, ignorados do navegador, limite e campo opcional, acrescentar). Para simular resposta perdida ou erro 5xx na tela, use um proxy local temporário **fora do repositório** na frente do servidor de desenvolvimento.
