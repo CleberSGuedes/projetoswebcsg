@@ -35,34 +35,41 @@ export function retratarEstilos() {
     "font-family", "transform", "opacity"];
   const PULAR = new Set(["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NOSCRIPT", "META"]);
   const arred = (v) => Math.round(v * 2) / 2; // meio pixel: abaixo disso é arredondamento do motor
-  const elementos = {};
+  // formato compacto (2): cada combinação de valores (estilo, pseudo-elemento, nome) é guardada uma vez só e o elemento
+  // guarda o número dela; o caminho é o do pai + o segmento. As tabelas grandes repetem o mesmo estilo em milhares de
+  // células: o PLAN 51 (61 mil elementos) passou de ~71 MB para poucos MB. expandirRetrato (comparar.mjs) refaz o formato
+  // completo para a comparação
+  const tabela = () => { const m = new Map(), lista = []; return { lista, de(v) { const k = Array.isArray(v) ? v.join("\u0001") : v; let i = m.get(k); if (i === undefined) { i = lista.length; m.set(k, i); lista.push(v); } return i; } }; };
+  const estilos = tabela(), pseudos = tabela(), nomes = tabela();
+  const els = [];
   const nome = (el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "")
     + (typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\s+/).slice(0, 3).join(".") : "");
-  const visitar = (el, caminho) => {
+  const visitar = (el, pai, segmento) => {
     const cs = getComputedStyle(el);
-    const valores = PROPS.map((p) => cs.getPropertyValue(p));
     const r = el.getBoundingClientRect();
-    const reg = { n: nome(el), v: valores, c: [arred(r.left + scrollX), arred(r.top + scrollY), arred(r.width), arred(r.height)] };
     // o texto próprio entra só como um número (não guarda dado da tela): serve para saber que um texto mudou
     // (relógio, sessões ativas, dado do banco) e que a caixa dele e das que o contêm mudou por isso, não pelo estilo
     const texto = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").trim();
-    if (texto) { let h = 0; for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) | 0; reg.t = h; }
-    for (const ps of ["::before", "::after"]) {
-      const p = getComputedStyle(el, ps);
-      if (p.content && p.content !== "none" && p.content !== "normal") reg[ps] = PSEUDO.map((k) => p.getPropertyValue(k));
-    }
-    elementos[caminho] = reg;
+    let t = null;
+    if (texto) { let h = 0; for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) | 0; t = h; }
+    const ps = ["::before", "::after"].map((qual) => {
+      const p = getComputedStyle(el, qual);
+      return p.content && p.content !== "none" && p.content !== "normal" ? pseudos.de(PSEUDO.map((k) => p.getPropertyValue(k))) : -1;
+    });
+    const eu = els.length;
+    els.push([pai, segmento, nomes.de(nome(el)), estilos.de(PROPS.map((p) => cs.getPropertyValue(p))),
+      arred(r.left + scrollX), arred(r.top + scrollY), arred(r.width), arred(r.height), t, ps[0], ps[1]]);
     const conta = {};
     for (const filho of el.children) {
       if (PULAR.has(filho.tagName)) continue;
-      const t = filho.tagName.toLowerCase();
-      conta[t] = (conta[t] || 0) + 1;
-      visitar(filho, `${caminho}>${t}[${conta[t]}]`);
+      const tag = filho.tagName.toLowerCase();
+      conta[tag] = (conta[tag] || 0) + 1;
+      visitar(filho, eu, `${tag}[${conta[tag]}]`);
     }
   };
-  visitar(document.body, "body");
+  visitar(document.body, -1, "body");
   return {
-    props: PROPS, pseudo: PSEUDO, elementos,
+    formato: 2, props: PROPS, pseudo: PSEUDO, estilos: estilos.lista, pseudos: pseudos.lista, nomes: nomes.lista, els,
     janela: [innerWidth, innerHeight],
     pagina: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     // as variáveis (tokens) como o <body> as enxerga também entram: mudar um token é mudar a aparência
