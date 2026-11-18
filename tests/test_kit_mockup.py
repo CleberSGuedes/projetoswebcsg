@@ -345,3 +345,43 @@ def test_kit_carrega_o_style_css_da_mesma_versao_do_spo():
     assert v_kit.group(1) == v_base.group(1), (
         f"?v= do style.css no kit ({v_kit.group(1)}) diferente do base.html ({v_base.group(1)}): "
         "copie o do base.html para static/kit/mockup-spo-aa-plus.html")
+
+
+def test_catalogo_do_kit_cita_so_o_que_existe():
+    """[jean] feat/kit-indice (2026-11-18): o static/kit/catalogo.json é a fonte do índice e das fichas do kit e a
+    leitura direta para quem implementa (pessoa ou agente). Tudo o que ele cita precisa existir: o título no kit (id),
+    as classes no style.css (ou no kit-mockup.css), as funções no main.js e a seção no padrão SPO-AA+. E todo título de
+    padrão do kit (h2.kit-secao e h3.kit-padrao-titulo) precisa estar no catálogo, para o índice não ficar para trás."""
+    import json
+
+    catalogo = json.loads((KIT / "catalogo.json").read_text(encoding="utf-8"))
+    kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
+    css = (RAIZ / "static" / "css" / "style.css").read_text(encoding="utf-8") + (KIT / "kit-mockup.css").read_text(encoding="utf-8")
+    js = MAIN_JS.read_text(encoding="utf-8-sig")
+    doc = (RAIZ / "docs" / "padrao-visual-spo-aa-plus.md").read_text(encoding="utf-8")
+    problemas, ids = [], set()
+    for grupo in catalogo["grupos"]:
+        assert grupo["nome"] and grupo["itens"], "grupo sem nome ou sem itens no catálogo"
+        for item in grupo["itens"]:
+            ids.add(item["id"])
+            for campo in ("id", "nome", "quando", "onde", "padrao"):
+                if not item.get(campo):
+                    problemas.append(f"{item.get('id')}: sem '{campo}'")
+            if f'id="{item["id"]}"' not in kit:
+                problemas.append(f"{item['id']}: título não encontrado no kit")
+            for c in item.get("classes", []):
+                if not re.search(r"\." + re.escape(c) + r"(?![\w-])", css):
+                    problemas.append(f"{item['id']}: classe .{c} não existe no style.css nem no kit-mockup.css")
+            for f in item.get("js", []):
+                if not re.search(r"(function |const )" + re.escape(f) + r"\b", js):
+                    problemas.append(f"{item['id']}: função {f} não existe no main.js")
+            if not re.search(r"^#{2,3} " + re.escape(item["padrao"]) + r"[ .]", doc, re.M):
+                problemas.append(f"{item['id']}: seção {item['padrao']} não existe no padrão SPO-AA+")
+    titulos = re.findall(r'<h[23] class="kit-(?:secao|padrao-titulo)" id="([\w-]+)"', kit)
+    sem_id = re.findall(r'<h[23] class="kit-(?:secao|padrao-titulo)">', kit)
+    problemas += [f"título de padrão sem id no kit: {t}" for t in sem_id]
+    # títulos que não são padrão por si: o do grupo "Catálogo de padrões" e o subtítulo dos avisos da Início (o padrão
+    # é o kit-avisos-titulo)
+    nao_sao_padrao = {"kit-catalogo-titulo", "kit-p-chave-pendencias"}
+    problemas += [f"{t}: título do kit fora do catálogo" for t in titulos if t not in ids and t not in nao_sao_padrao]
+    assert not problemas, "catálogo do kit (static/kit/catalogo.json) desatualizado:\n  " + "\n  ".join(problemas)
