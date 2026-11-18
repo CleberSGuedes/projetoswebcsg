@@ -1,6 +1,6 @@
 // Bateria SPO-AA+ — medidas que rodam DENTRO da página (passadas ao page.evaluate). Sem dependências de fora.
 
-// Varredura da tela: rolagem lateral, elementos fora da tela, texto cortado, alvos < 24 px (WCAG 2.5.8; links dentro de
+// Varredura da tela: rolagem lateral, elementos fora da tela, texto cortado, alvos < 24 px (WCAG 2.5.8; links e siglas dentro de
 // frases são exceção do critério e não contam), avisos abertos e a coluna do menu.
 export function medirTela() {
   const vw = innerWidth;
@@ -30,7 +30,8 @@ export function medirTela() {
     }
     return r;
   };
-  const emFrase = (e) => e.tagName === "A" && !!e.closest("p, li, dd, td, small, .muted");
+  // exceção do critério: alvo dentro de uma frase (links e as siglas com balão, feat/siglas-explicadas)
+  const emFrase = (e) => (e.tagName === "A" || e.classList.contains("spo-sigla-botao")) && !!e.closest("p, li, dd, td, small, .muted");
   const pequenos = interativos.filter((e) => { const r = caixa(alvoDe(e)); return Math.min(r.width, r.height) < 24 && !emFrase(e); });
   return {
     janela: [vw, innerHeight],

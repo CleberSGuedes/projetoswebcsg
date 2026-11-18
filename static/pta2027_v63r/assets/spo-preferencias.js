@@ -280,3 +280,98 @@
   // pede as preferências assim que carrega (o SPO também manda a cada mudança)
   window.parent.postMessage({ type: "spo-preferencias-pedido" }, ORIGEM);
 })();
+
+// [jean] feat/siglas-explicadas (2026-11-18): o mesmo initSiglas do main.js do SPO (cópia exata; o
+// tests/test_kit_mockup.py reprova se divergir): siglas com balão também dentro do mockup.
+(function initSiglas() {
+  let seq = 0;
+  const abertas = new Set();
+  const fechar = (w) => {
+    const b = w.querySelector(".spo-sigla-botao"), balao = w.querySelector(".spo-sigla-balao");
+    if (!b || !balao) return;
+    balao.hidden = true;
+    b.setAttribute("aria-expanded", "false");
+    delete w.dataset.fixo;
+    abertas.delete(w);
+  };
+  const abrir = (w, fixo) => {
+    const b = w.querySelector(".spo-sigla-botao"), balao = w.querySelector(".spo-sigla-balao");
+    if (!b || !balao) return;
+    abertas.forEach((o) => { if (o !== w) fechar(o); });
+    balao.hidden = false;
+    b.setAttribute("aria-expanded", "true");
+    if (fixo) w.dataset.fixo = "1";
+    abertas.add(w);
+    // o balão não sai da tela pela direita nem pela esquerda
+    w.style.setProperty("--spo-sigla-desloca", "0px");
+    const r = balao.getBoundingClientRect(), margem = 8;
+    let desloca = 0;
+    if (r.right > innerWidth - margem) desloca = innerWidth - margem - r.right;
+    if (r.left + desloca < margem) desloca = margem - r.left;
+    w.style.setProperty("--spo-sigla-desloca", `${Math.round(desloca)}px`);
+  };
+  const montar = (abbr) => {
+    if (abbr.dataset.siglaPronta) return;
+    const significado = (abbr.getAttribute("title") || "").trim();
+    const sigla = abbr.textContent.trim();
+    if (!significado || !sigla) return;
+    abbr.dataset.siglaPronta = "1";
+    abbr.removeAttribute("title"); // sem a dica nativa repetida
+    const id = `spo-sigla-${++seq}`;
+    const balao = document.createElement("span");
+    balao.className = "spo-sigla-balao";
+    balao.id = id;
+    balao.setAttribute("role", "tooltip");
+    balao.hidden = true;
+    balao.textContent = significado;
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "spo-sigla-botao";
+    botao.setAttribute("aria-expanded", "false");
+    botao.setAttribute("aria-describedby", id);
+    const dentroDeControle = abbr.parentElement && abbr.parentElement.closest("a, button, [role='button'], summary, label");
+    let w;
+    if (dentroDeControle) {
+      // dentro de um link: o botão "ⓘ" vai logo depois do link
+      botao.classList.add("spo-sigla-info");
+      botao.setAttribute("aria-label", `O que é ${sigla}?`);
+      const icone = document.createElement("i");
+      icone.className = "bi bi-info-circle";
+      icone.setAttribute("aria-hidden", "true");
+      botao.appendChild(icone);
+      w = document.createElement("span");
+      w.className = "spo-sigla";
+      w.append(botao, balao);
+      dentroDeControle.insertAdjacentElement("afterend", w);
+    } else {
+      botao.textContent = sigla;
+      abbr.textContent = "";
+      abbr.classList.add("spo-sigla");
+      abbr.append(botao, balao);
+      w = abbr;
+    }
+    botao.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (w.dataset.fixo) fechar(w); else abrir(w, true);
+    });
+    w.addEventListener("pointerenter", (ev) => { if (ev.pointerType === "mouse" && !abertas.has(w)) abrir(w, false); });
+    w.addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse" && !w.dataset.fixo) fechar(w); });
+    botao.addEventListener("focus", () => { if (botao.matches(":focus-visible") && !abertas.has(w)) abrir(w, false); });
+    w.addEventListener("focusout", (ev) => { if (!w.contains(ev.relatedTarget) && !w.dataset.fixo) fechar(w); });
+  };
+  const varrer = (raiz) => raiz.querySelectorAll("abbr[title]").forEach(montar);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !abertas.size) return;
+    abertas.forEach(fechar);
+  });
+  document.addEventListener("click", (ev) => {
+    abertas.forEach((w) => { if (!w.contains(ev.target)) fechar(w); });
+  });
+  // tocar ou clicar numa moldura (iframe, como a do mockup PTA/OpR) não chega aqui: a página perde o foco, e fecha
+  window.addEventListener("blur", () => abertas.forEach(fechar));
+  varrer(document);
+  // telas carregadas depois (o conteúdo do SPO troca sem recarregar a página)
+  let espera = 0;
+  new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(() => varrer(document), 60); })
+    .observe(document.body, { childList: true, subtree: true });
+})();
