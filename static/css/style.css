@@ -10620,3 +10620,16 @@ body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#sp
 .see-grid > * { min-width: 0; }
 .see-progress-aviso { margin: -6px 0 12px; }
 .see-panel-actions { margin-top: 12px; }
+
+
+/* ==========================================================================
+   [jean] fix/linha-usuario-cabecalho (2026-11-17): a linha do usuário só quebra entre
+   o nome e "data, hora | Logados" (initLinhaUsuario, main.js). Cabendo, uma linha; não
+   cabendo, duas, sem o traço. Substitui o overflow-wrap: anywhere do #43 nessa linha.
+   ========================================================================== */
+.user-meta .spo-usuario-nome,
+.user-meta .spo-usuario-sessao { white-space: nowrap; overflow-wrap: normal; }
+.user-meta .spo-usuario-sep { white-space: normal; }
+.user-meta.spo-usuario-duas-linhas .spo-usuario-sep { display: none; }
+.user-meta.spo-usuario-duas-linhas .spo-usuario-nome,
+.user-meta.spo-usuario-duas-linhas .spo-usuario-sessao { display: block; white-space: normal; }
