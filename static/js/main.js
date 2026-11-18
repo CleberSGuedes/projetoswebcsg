@@ -28535,9 +28535,16 @@
   const MIN = 12;
   const ESTREITO = 520;
   const elDe = (gd) => (typeof gd === "string" ? document.getElementById(gd) : gd);
+  // [jean] fix/graficos-fontes (2026-11-18): o Plotly guarda a medida de cada texto por um código que inclui o nome da
+  // fonte; o texto medido com a fonte de reserva (a da interface ainda não carregou) continuaria com essa medida depois.
+  // Enquanto a fonte não carrega, o nome leva um último item que não existe ("spo-fonte-carregando": o navegador o
+  // ignora e desenha igual); quando ela chega, o redesenho usa o nome limpo e o Plotly mede de novo.
   const fonteUi = () => {
     try {
-      return getComputedStyle(document.body).fontFamily || "sans-serif";
+      const familia = getComputedStyle(document.body).fontFamily || "sans-serif";
+      // regular e negrito (títulos e rótulos em negrito vêm de outro arquivo da fonte, que pode chegar depois)
+      const pronta = !document.fonts || (document.fonts.check(`12px ${familia}`) && document.fonts.check(`bold 12px ${familia}`));
+      return pronta ? familia : `${familia}, spo-fonte-carregando`;
     } catch (err) {
       return "sans-serif";
     }
@@ -28570,6 +28577,7 @@
     }
     const L = { ...(layout || {}) };
     L.font = { ...(L.font || {}), family: fonteUi(), size: tamanho(L.font) };
+    if (el) el.__spoFonteDesenho = L.font.family;
     Object.keys(L).forEach((k) => {
       if (!/^[xy]axis\d*$/.test(k) || !L[k] || typeof L[k] !== "object") return;
       const eixo = { ...L[k], automargin: true };
@@ -28760,17 +28768,45 @@
   P.newPlot = (gd, data, layout, config) => { const L = ajustar(gd, layout); return newPlot(gd, ajustarDados(gd, data, L), L, config); };
   P.__spoEscala = true;
 
-  // trocar a densidade ou o contraste (largura do separador) no Personalizar redesenha os gráficos já abertos
-  const estadoRedesenho = () => `${document.body.dataset.spoTableText}|${document.body.dataset.visualContrast}`;
+  const redesenharTodos = () => {
+    document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
+      if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+    });
+  };
+  // trocar a densidade, o contraste (largura do separador) ou a fonte da interface no Personalizar redesenha os
+  // gráficos já abertos
+  const estadoRedesenho = () =>
+    `${document.body.dataset.spoTableText}|${document.body.dataset.visualContrast}|${document.body.dataset.spoFontUi}`;
   let densidade = document.body ? estadoRedesenho() : "";
   if (document.body) {
     new MutationObserver(() => {
       if (estadoRedesenho() === densidade) return;
       densidade = estadoRedesenho();
+      redesenharTodos();
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text", "data-visual-contrast", "data-spo-font-ui"] });
+  }
+  // [jean] fix/graficos-fontes (2026-11-18): o Plotly mede o texto ao desenhar. Gráfico desenhado antes de a fonte
+  // da interface chegar ficava medido com a fonte de reserva (legenda, margens e eixos variavam de uma carga para
+  // outra; achado pela comparação antes × depois no kit, no celular). Redesenha quando as fontes terminam de carregar,
+  // inclusive a fonte nova escolhida no Personalizar (o mesmo cuidado do menu, #196). Só os gráficos desenhados com a
+  // fonte ainda carregando: redesenhar à toa mexe 1 px na margem da pizza (o Plotly.react não refaz o automargin igual).
+  if (document.fonts) {
+    let esperaFonte = 0;
+    const redesenharSemFonte = () => {
+      const agora = fonteUi();
+      if (agora.endsWith("spo-fonte-carregando")) return;
       document.querySelectorAll(".js-plotly-plot").forEach((gd) => {
-        if (gd.data) P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+        if (gd.data && gd.__spoFonteDesenho && gd.__spoFonteDesenho !== agora) {
+          P.react(gd, gd.__spoDataBase || gd.data, gd.__spoLayoutBase || gd.layout);
+        }
       });
-    }).observe(document.body, { attributes: true, attributeFilter: ["data-spo-table-text", "data-visual-contrast"] });
+    };
+    const depoisDasFontes = () => {
+      clearTimeout(esperaFonte);
+      esperaFonte = setTimeout(() => requestAnimationFrame(redesenharSemFonte), 50);
+    };
+    document.fonts.ready.then(depoisDasFontes);
+    document.fonts.addEventListener("loadingdone", depoisDasFontes);
   }
 
   let espera = 0;
