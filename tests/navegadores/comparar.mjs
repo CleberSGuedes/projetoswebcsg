@@ -1,6 +1,6 @@
 // Bateria SPO-AA+ — comparação antes × depois: prova que uma mudança (dividir o CSS ou o JS, mover código) não mudou
 // a aparência. Grava um retrato de cada tela ANTES da mudança e, depois, compara elemento por elemento.
-//   node comparar.mjs gravar   [--nome=antes] [--telas=basicas|principais|todas|kit] [--vistas=padrao|ampla]
+//   node comparar.mjs gravar   [--nome=antes] [--telas=basicas|principais|todas|kit|inicio,kit,...] [--vistas=padrao|ampla]
 //   node comparar.mjs comparar [--nome=antes]
 // O retrato de cada tela, em cada vista (aparelho + preferências do Personalizar), guarda o estilo calculado de todos
 // os elementos (cor, fundo, fonte, bordas, espaçamentos, caixa...), os ::before/::after, os tokens e uma captura.
@@ -27,30 +27,54 @@ const VISTAS = {
 // uma divisão do CSS ou do JS também pode mudá-lo; entra no fim de cada lista
 const TELAS = { basicas: [...TELAS_BASICAS, "kit"], principais: [...TELAS_PRINCIPAIS, "kit"], todas: ["", ...TELAS_TODAS, "kit"], kit: ["kit"] };
 
+// --telas: um conjunto (basicas, principais, todas, kit) ou uma lista escolhida, separada por vírgulas, com "inicio", "kit"
+// e rotas do menu (as de TELAS_TODAS): numa mudança que só atinge algumas telas, compara-se só elas
+function escolherTelas(valor) {
+  if (TELAS[valor]) return TELAS[valor];
+  const conhecidas = new Set(["", ...TELAS_TODAS, "kit"]);
+  const lista = valor.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (t === "inicio" ? "" : t));
+  const fora = lista.filter((t) => !conhecidas.has(t));
+  if (!lista.length || fora.length) { if (fora.length) console.log(`tela(s) desconhecida(s): ${fora.join(", ")}`); return null; }
+  return lista;
+}
 const opcao = (n, padrao) => (process.argv.find((a) => a.startsWith(`--${n}=`)) || `=${padrao}`).split("=")[1];
 const modo = process.argv[2];
 const nome = opcao("nome", "antes");
 const PASTA_REF = resolve(PASTA, "resultados", "referencias", nome);
 const arquivoDe = (perfil, pref, rota) => `${perfil}__${pref}__${nomeDaTela(rota)}`;
 
-// espera a tela parar: sem carregamento, fim das transições (0,2 s) e das animações que terminam; topo da página
+// Conta as requisições ao servidor em andamento (fetch e XMLHttpRequest), desde antes dos scripts do SPO: a tela só
+// está pronta quando nenhuma está pendente (as tabelas chegam por fetch depois do carregamento, como a do PLAN 51)
+const CONTAR_PENDENTES = () => {
+  window.__bateriaPendentes = 0;
+  const conta = (d) => { window.__bateriaPendentes += d; };
+  const f = window.fetch;
+  if (f) window.fetch = function (...a) { conta(1); return f.apply(this, a).finally(() => conta(-1)); };
+  const envia = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (...a) { conta(1); this.addEventListener("loadend", () => conta(-1), { once: true }); return envia.apply(this, a); };
+};
+
+// espera a tela ficar pronta, sem tempos fixos: carregamento encerrado, nenhuma requisição pendente, fontes
+// e imagens carregadas e nenhum elemento novo por 0,7 s (até 45 s); depois, o fim das transições e animações que
+// terminam
 async function retratar(pag, rota) {
   if (rota === "kit") {
     await pag.goto(KIT, { waitUntil: "load", timeout: 60000 });
   } else {
     if (pag.url().startsWith(KIT)) await pag.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); // do kit de volta ao SPO
-    await abrirTela(pag, rota);
+    await abrirTela(pag, rota, { pausas: false });
   }
   await pag.evaluate(() => { scrollTo(0, 0); delete window.__bateriaEstavel; });
-  // a tela parou: o número de elementos não muda por 2 s seguidos (tabelas que chegam depois do carregamento, como a
-  // do PLAN 51), até 45 s
   await pag.waitForFunction(() => {
     const n = document.getElementsByTagName("*").length, agora = Date.now(), s = (window.__bateriaEstavel ||= { n: -1, desde: agora });
-    if (n !== s.n) { s.n = n; s.desde = agora; }
-    return agora - s.desde >= 2000;
-  }, null, { timeout: 45000, polling: 250 }).catch(() => {});
-  await pag.waitForFunction(() => document.getAnimations().every((a) => a.effect?.getTiming().iterations === Infinity || a.playState !== "running"), null, { timeout: 10000 }).catch(() => {});
-  await pag.waitForTimeout(500);
+    // imagens também: o "›" do menu no celular é alinhado pelo logotipo, medido depois de ele carregar
+    const ocupada = (window.__bateriaPendentes || 0) > 0 || (document.fonts && document.fonts.status !== "loaded")
+      || [...document.images].some((i) => !i.complete);
+    if (n !== s.n || ocupada) { s.n = n; s.desde = agora; }
+    return agora - s.desde >= 700;
+  }, null, { timeout: 45000, polling: 100 }).catch(() => {});
+  await pag.waitForFunction(() => document.getAnimations().every((a) => a.effect?.getTiming().iterations === Infinity || a.playState !== "running"), null, { timeout: 10000, polling: 100 }).catch(() => {});
+  await pag.waitForTimeout(250); // fim das transições de 0,2 s que começam no mesmo instante
   const retrato = await pag.evaluate(retratarEstilos);
   const captura = await pag.screenshot({ fullPage: true, animations: "disabled", caret: "hide" }).catch(() => null);
   return { retrato, captura };
@@ -59,6 +83,26 @@ async function retratar(pag, rota) {
 function commitAtual() {
   try { return execFileSync("git", ["log", "-1", "--format=%h %s"], { cwd: RAIZ, encoding: "utf-8" }).trim(); } catch (e) { return "?"; }
 }
+
+// ---------- formato compacto (lib/estilos.mjs) → formato completo ----------
+// Refaz o caminho de cada elemento (o do pai + o segmento) e põe os valores no lugar dos números. Retratos antigos
+// (sem "formato") já vêm completos e passam direto. Os elementos com o mesmo estilo apontam para a mesma lista de
+// valores (não é cópia), então a memória continua pequena.
+export function expandirRetrato(r) {
+  if (r.formato !== 2) return r;
+  const caminhos = new Array(r.els.length), elementos = {};
+  r.els.forEach(([pai, seg, n, e, x, y, w, h, t, antes, depois], i) => {
+    const caminho = pai < 0 ? seg : `${caminhos[pai]}>${seg}`;
+    caminhos[i] = caminho;
+    const reg = { n: r.nomes[n], v: r.estilos[e], c: [x, y, w, h] };
+    if (t !== null) reg.t = t;
+    if (antes >= 0) reg["::before"] = r.pseudos[antes];
+    if (depois >= 0) reg["::after"] = r.pseudos[depois];
+    elementos[caminho] = reg;
+  });
+  return { props: r.props, pseudo: r.pseudo, elementos, janela: r.janela, pagina: r.pagina, tokens: r.tokens };
+}
+const contarElementos = (r) => (r.formato === 2 ? r.els.length : Object.keys(r.elementos).length);
 
 // ---------- diferenças entre dois retratos ----------
 // ids sorteados a cada carga (os gráficos Plotly criam clip-path: url("#clip82efa9xyplot")) não são estilo
@@ -108,7 +152,12 @@ export function diferencas(a, b) {
       difs.push({ el, prop: p, antes: va, depois: fmt(vb), ...extra });
     });
     if (ea.c.join() !== eb.c.join()) {
-      const extra = porDado(caminho) ? { dado: true } : ateUmPixel(ea.c.join(), eb.c.join(), true) ? { pixel: true } : {};
+      // também é dado o vizinho que só se deslocou (mesma largura e altura) dentro de um pai que contém o texto que
+      // mudou: numa linha alinhada à direita, a hora que encolhe empurra o nome que vem antes
+      const pai = caminho.includes(">") ? caminho.slice(0, caminho.lastIndexOf(">")) : null;
+      const soDeslocou = ea.c[2] === eb.c[2] && ea.c[3] === eb.c[3];
+      const extra = porDado(caminho) || (soDeslocou && pai && porDado(pai)) ? { dado: true }
+        : ateUmPixel(ea.c.join(), eb.c.join(), true) ? { pixel: true } : {};
       difs.push({ el, prop: "caixa (x, y, largura, altura)", antes: ea.c.join(", "), depois: eb.c.join(", "), ...extra });
     }
     for (const ps of ["::before", "::after"]) {
@@ -124,8 +173,17 @@ export function diferencas(a, b) {
 
 async function percorrer(vistas, telas, aoRetratar) {
   for (const [perfil, pref] of vistas) {
-    const { nav, ctx, pag } = await abrirPerfil(perfil);
+    // abrir a vista (navegador + sessão) pode demorar com o banco remoto lento: tenta duas vezes; não abrindo, registra
+    // a falha das telas dessa vista e segue para a próxima, em vez de parar a comparação inteira
+    let sessao = null;
+    for (let tentativa = 1; tentativa <= 2 && !sessao; tentativa++) {
+      try { sessao = await comTempo(abrirPerfil(perfil), LIMITE_PASSO_S, `abrir a vista ${perfil}`); }
+      catch (e) { if (tentativa === 2) for (const rota of telas) registrar({ verificacao: "comparacao", perfil, alvo: `${nomeDaTela(rota)} [${pref}]`, situacao: "falha", resumo: "a vista não abriu: " + String(e.message).split("\n")[0].slice(0, 120) }); }
+    }
+    if (!sessao) continue;
+    const { nav, ctx, pag } = sessao;
     await gravarPreferencias(ctx, PREFERENCIAS[pref]);
+    await ctx.addInitScript(CONTAR_PENDENTES);
     try {
       for (const rota of telas) {
         const alvo = `${nomeDaTela(rota)} [${pref}]`;
@@ -144,7 +202,7 @@ async function percorrer(vistas, telas, aoRetratar) {
 }
 
 if (!["gravar", "comparar"].includes(modo)) {
-  console.log("uso: node comparar.mjs gravar [--nome=antes] [--telas=basicas|principais|todas|kit] [--vistas=padrao|ampla]\n" +
+  console.log("uso: node comparar.mjs gravar [--nome=antes] [--telas=basicas|principais|todas|kit|inicio,kit,...] [--vistas=padrao|ampla]\n" +
     "     node comparar.mjs comparar [--nome=antes]");
   process.exit(2);
 }
@@ -152,8 +210,12 @@ const inicio = Date.now();
 await garantirSessao();
 
 if (modo === "gravar") {
-  const telas = TELAS[opcao("telas", "principais")], vistas = VISTAS[opcao("vistas", "padrao")];
-  if (!telas || !vistas) { console.log("--telas: basicas|principais|todas|kit; --vistas: padrao|ampla"); process.exit(2); }
+  const telas = escolherTelas(opcao("telas", "principais")), vistas = VISTAS[opcao("vistas", "padrao")];
+  if (!telas || !vistas) {
+    console.log("--telas: basicas|principais|todas|kit, ou uma lista separada por vírgulas (inicio, kit e rotas do menu,\n" +
+      "         ex.: --telas=inicio,kit,relatorios/fip613); --vistas: padrao|ampla");
+    process.exit(2);
+  }
   mkdirSync(PASTA_REF, { recursive: true });
   const meta = { nome, quando: new Date().toISOString(), commit: commitAtual(), base: BASE, telas, vistas };
   console.log(`Gravando a referência "${nome}" (${vistas.length} vistas × ${telas.length} telas), no commit ${meta.commit}`);
@@ -161,7 +223,7 @@ if (modo === "gravar") {
     const arq = arquivoDe(perfil, pref, rota);
     writeFileSync(resolve(PASTA_REF, arq + ".json"), JSON.stringify(retrato));
     if (captura) writeFileSync(resolve(PASTA_REF, arq + ".png"), captura);
-    registrar({ verificacao: "comparacao", perfil, alvo, situacao: "ok", resumo: `gravado: ${Object.keys(retrato.elementos).length} elementos, ${Object.keys(retrato.tokens).length} tokens` });
+    registrar({ verificacao: "comparacao", perfil, alvo, situacao: "ok", resumo: `gravado: ${contarElementos(retrato)} elementos${retrato.estilos ? `, ${retrato.estilos.length} estilos diferentes` : ""}, ${Object.keys(retrato.tokens).length} tokens` });
   });
   writeFileSync(resolve(PASTA_REF, "referencia.json"), JSON.stringify(meta, null, 1));
   const r = escreverRelatorio(`comparação — gravar "${nome}"`, inicio);
@@ -186,12 +248,12 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
   const arq = arquivoDe(perfil, pref, rota);
   const ref = resolve(PASTA_REF, arq + ".json");
   if (!existsSync(ref)) { registrar({ verificacao: "comparacao", perfil, alvo, situacao: "falha", resumo: "sem retrato na referência" }); return; }
-  const antes = JSON.parse(readFileSync(ref, "utf-8"));
-  let difs = diferencas(antes, retrato);
+  const antes = expandirRetrato(JSON.parse(readFileSync(ref, "utf-8")));
+  let difs = diferencas(antes, expandirRetrato(retrato));
   // segunda olhada: a tela é aberta de novo e só fica a diferença que se repete (uma medida feita pelo script num
   // instante diferente, por exemplo, não se repete; uma mudança de estilo, sim)
   if (difs.some((d) => !d.dado && !d.pixel)) {
-    const outra = diferencas(antes, (await deNovo()).retrato);
+    const outra = diferencas(antes, expandirRetrato((await deNovo()).retrato));
     const repete = new Set(outra.map((d) => `${d.el}|${d.prop}`));
     difs = difs.filter((d) => repete.has(`${d.el}|${d.prop}`));
   }
@@ -202,7 +264,7 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
     if (captura) writeFileSync(resolve(pastaDifs, arq + "__depois.png"), captura);
     if (capRef) writeFileSync(resolve(pastaDifs, arq + "__antes.png"), capRef);
   }
-  const elementos = Object.keys(retrato.elementos).length;
+  const elementos = contarElementos(retrato);
   if (estilo.length) registrar({ verificacao: "comparacao", perfil, alvo, situacao: "falha", resumo: resumir(estilo) });
   else if (leves.length) {
     const nDado = new Set(leves.filter((d) => d.dado).map((d) => d.el)).size, nPixel = new Set(leves.filter((d) => d.pixel).map((d) => d.el)).size;
