@@ -9,7 +9,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
-## 2026-11-17 — dev/jean, ainda não publicado
+## 2026-11-18 — homologação, RELEASE_2_2026_11_18.4 (lote 8)
 
 ### Adicionado
 - Kit de mockup: lista de marcar e a proposta de lista única de várias escolhas (`feat/lista-spo-unica`; achado do dev. Jean; **em decisão**): a lista de marcar do Teto/Estrutura do Planejamento, que estava só no padrão (§4.3), entrou no kit; ao lado, a proposta de um componente único no lugar dela e do filtro SPO das tabelas — visual leve, aplica a cada clique, busca com rótulo, "Selecionar exibidos"/"Limpar", etiquetas dos filtros ativos, botão com o nome do campo, cartão no alto no celular. Medido: aplicar um filtro custa no máximo 74 ms nas tabelas (FIP 613, PED, PLAN 20, PLAN 51, PLAN 21, Dotação, Est. Dotação) e 66–102 ms no Teto, então o "Aplicar" não é necessário por desempenho; o filtro SPO de hoje não diz ao leitor de tela a que coluna pertence e rotula a busca só pelo texto de exemplo. Nenhuma tela do SPO mudou: a troca das 11 cópias do filtro vai com a modularização do `main.js`. Só `static/kit/`.
