@@ -31092,19 +31092,28 @@
   const meta = document.getElementById("user-meta");
   if (!meta) return;
   const nome = meta.dataset.name || "";
-  const texto = meta.textContent;
-  if (!nome || !texto.startsWith(nome + " - ")) return; // formato inesperado: fica como está
+  if (!nome) return;
   const parte = (classe, conteudo) => {
     const s = document.createElement("span");
     s.className = classe;
     s.textContent = conteudo;
     return s;
   };
-  const pNome = parte("spo-usuario-nome", nome);
-  const pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
-  meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+  let pNome = null, pSessao = null;
+  // divide o texto em nome / separador / sessão; devolve false se o formato não for o esperado (fica como está)
+  const dividir = () => {
+    if (meta.querySelector(".spo-usuario-nome")) return true; // já dividido
+    const texto = meta.textContent;
+    if (!texto.startsWith(nome + " - ")) { pNome = pSessao = null; return false; }
+    pNome = parte("spo-usuario-nome", nome);
+    pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
+    meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+    return true;
+  };
+  if (!dividir()) return;
   // numa linha só, se couber: tira as duas linhas, vê se a sessão desceu, e decide (tudo no mesmo quadro, sem piscar)
   const ajustar = () => {
+    if (!pNome || !pSessao) return;
     meta.classList.remove("spo-usuario-duas-linhas");
     const desceu = pSessao.getBoundingClientRect().top > pNome.getBoundingClientRect().top + 1;
     meta.classList.toggle("spo-usuario-duas-linhas", desceu);
@@ -31112,11 +31121,26 @@
   let quadro = 0;
   const depois = () => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); };
   ajustar();
-  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe
-  if (window.ResizeObserver) {
-    const ro = new ResizeObserver(depois);
-    ro.observe(meta.parentElement || meta);
-    ro.observe(document.body);
+  // fix/linha-usuario-30s (lote 9): o setUserMeta() regrava o texto inteiro do #user-meta a cada 30 s (data, hora e
+  // logados) e apagava os trechos, e a linha voltava a quebrar em qualquer ponto. Quando o texto é regravado, divide
+  // de novo e reavalia na hora: o observador roda antes de a tela ser pintada, então não pisca. A própria divisão
+  // também dispara o observador, mas aí os trechos já existem e nada se refaz.
+  new MutationObserver(() => { if (dividir()) ajustar(); }).observe(meta, { childList: true });
+  // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe.
+  // fix/linha-usuario-resizeobserver (lote 8.1): observa só a LARGURA do cabeçalho. Antes observava o <body>, e o
+  // Safari registrava "ResizeObserver loop completed with undelivered notifications": ao passar de 1 para 2 linhas
+  // (ou o contrário), a altura do cabeçalho muda, o observador do syncTopbarHeight grava a nova altura e isso muda a
+  // altura do <body> no meio da entrega; o <body>, mais raso, ficava com aviso não entregue. O pai (.user-info) é
+  // display: contents no celular (tamanho 0), por isso o alvo é o .topbar.
+  const cabecalho = meta.closest(".topbar");
+  if (window.ResizeObserver && cabecalho) {
+    let largura = -1;
+    new ResizeObserver((entradas) => {
+      const w = Math.round(entradas[entradas.length - 1].contentRect.width);
+      if (w === largura) return; // só a altura mudou (pelo próprio ajuste): nada a refazer
+      largura = w;
+      depois();
+    }).observe(cabecalho);
   }
   window.addEventListener("resize", depois, { passive: true });
   if (document.fonts) { document.fonts.ready.then(depois); document.fonts.addEventListener("loadingdone", depois); }
@@ -31157,6 +31181,14 @@
     let desloca = 0;
     if (r.right > innerWidth - margem) desloca = innerWidth - margem - r.right;
     if (r.left + desloca < margem) desloca = margem - r.left;
+    // fix/sigla-balao-zoom (lote 8.1): com a "Fonte maior" o conteúdo tem zoom (1,125 a 1,5) e o deslocamento, medido
+    // em pixels da tela, era ampliado por ele (a 360 px com "Maior", o balão começava em -29 px). Aplica, mede quanto
+    // o balão andou de fato e corrige pela proporção: vale com ou sem zoom, em qualquer navegador.
+    if (desloca) {
+      w.style.setProperty("--spo-sigla-desloca", `${desloca}px`);
+      const andou = balao.getBoundingClientRect().left - r.left;
+      if (Math.abs(andou) > 0.5) desloca *= desloca / andou;
+    }
     w.style.setProperty("--spo-sigla-desloca", `${Math.round(desloca)}px`);
   };
   const montar = (abbr) => {
