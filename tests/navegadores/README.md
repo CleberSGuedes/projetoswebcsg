@@ -83,8 +83,17 @@ atingem tudo (dividir o CSS ou o JS).
 
 - **Retrato:** o estilo calculado de cada elemento da tela (cerca de 110 propriedades: cores, fundo, fonte, bordas,
   espaçamentos, grid/flex, sombras...), a caixa (posição e tamanho), os `::before`/`::after`, os tokens (variáveis
-  CSS) e uma captura. O elemento é achado pelo caminho de tags desde o `<body>`; `<script>` e `<link>` não contam, então
-  acrescentar um arquivo de CSS ou JS não muda o caminho de nada. O retrato é **compacto**: cada combinação de estilo
+  CSS) e uma captura. O elemento é gravado pelo caminho de tags desde o `<body>`; `<script>` e `<link>` não contam, então
+  acrescentar um arquivo de CSS ou JS não muda o caminho de nada.
+- **Alinhamento** (`lib/diferencas.mjs`): o caminho diz a posição entre os irmãos, e um bloco novo no meio de uma seção
+  renumeraria os seguintes. Por isso os filhos de cada par de elementos são **alinhados como as linhas de um diff de
+  texto**: primeiro a maior sequência comum pelo nome (tag, id e classes); depois o elemento com id que mudou de lugar
+  (uma seção do kit movida); o que sobra entre dois casados é casado pela tag, na ordem (quem trocou de classe continua
+  comparado consigo mesmo). O que não casou sai como **"sumiu"** ou **"apareceu"**, uma vez só por pedaço, com quantos
+  elementos tem dentro; o elemento que mudou de posição sai com o caminho novo depois de uma seta
+  (`div.b (…>div[2]) → …>div[3]`). Sem nada inserido nem removido, o resultado é o mesmo da comparação por posição.
+  Testes com retratos montados à mão: `node --test lib/diferencas.test.mjs` (também no `pytest`,
+  `tests/test_comparacao_diferencas.py`). O retrato é **compacto**: cada combinação de estilo
   é guardada uma vez só e o elemento guarda o número dela (as tabelas repetem o mesmo estilo em milhares de células).
 - **Telas:** `basicas` (5), `principais` (11, padrão), `todas`, ou uma lista separada por vírgulas (`inicio`, `kit` e
   rotas do menu); os conjuntos terminam sempre com o **kit de mockup** (ele usa o
@@ -103,6 +112,9 @@ atingem tudo (dividir o CSS ou o JS).
   - identificadores sorteados a cada carga (os `url(#clip…)` dos gráficos);
   - o vizinho que só **se deslocou** (mesma largura e altura) dentro de um pai que contém um texto que mudou (a hora
     que encolhe numa linha alinhada à direita empurra o nome que vem antes);
+  - **"deslocou":** numa tela onde um bloco entrou ou saiu (e que por isso já reprova), os elementos que só mudaram de
+    lugar, com a mesma largura e altura, são listados mas não reprovam de novo: a causa é o bloco, que vem primeiro no
+    resumo;
   - uma diferença que **não se repete** quando a tela é aberta de novo (a comparação olha duas vezes antes de
     reprovar; casa as diferenças pelo caminho do elemento, não pelo id, que pode ser sorteado de novo).
 - **Espera a tela ficar pronta**, sem tempos fixos: carregamento encerrado, nenhuma requisição ao servidor pendente
