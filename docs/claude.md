@@ -1405,7 +1405,13 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 
 ### 40.2 Arquivos de uso comum (tocar com cuidado)
 - **`static/js/main.js` e `static/css/style.css`** (arquivos únicos): código novo num bloco próprio no fim do arquivo (função `init<Tema>`). Não reorganizar o que já existe.
-- **`templates/base.html`:** o `?v=` muda em quase todo PR e sempre dá conflito na sincronização. Usar sufixo com o nome do desenvolvedor, por exemplo `?v=AAAAMMDD.jean-<tema>.1`. Na sincronização fica o mais novo.
+- **`templates/_estaticos.html` (versões dos estáticos):** toda versão de estático do SPO fica só aqui: o `?v=` do `style.css`, do `main.js` e do `login-theme.js` e as URLs das CDNs (Bootstrap, Bootstrap Icons, Plotly), em `{% set %}`, com uma macro para cada ponto de inserção. O `base.html` e o `login.html` não escrevem `?v=` nem URL de CDN: chamam as macros, cada uma no lugar da tag de antes (o `tests/test_kit_mockup.py` reprova se voltar a ter). O kit (`static/kit/mockup-spo-aa-plus.html`, HTML estático, copiado à mão) guarda só o `?v=` do CSS e a URL do Plotly (o `main.js` ele busca sem versão); o teste confere que batem:
+  - mudou o `style.css` → troca o `?v=` no `_estaticos.html` **e no kit**;
+  - mudou o `main.js` ou o `login-theme.js` → troca **só** no `_estaticos.html`;
+  - mudou a versão de uma CDN → no `_estaticos.html`; se for o Plotly, também no kit.
+
+  Sufixo com o nome de quem mudou: `?v=AAAAMMDD.<desenvolvedor>-<tema>.N` (ex.: `cleber-…`, `jean-…`); na sincronização fica o mais novo, agora numa linha só do `_estaticos.html`. Arquivo em UTF-8 **sem BOM** e LF (o Jinja não tira o BOM de um arquivo importado).
+- **`templates/base.html` e `templates/login.html`:** não guardam versão de estático. A linha `RELEASE_2_…` do rodapé **continua no `base.html`** (§40.9), e é nela o conflito pré-autorizado das promoções e sincronizações. Numa branch `dev/*`, o selo de ambiente e o rodapé continuam próprios de cada branch. `forgot_password.html` e `reset_password.html` ficam fora do `_estaticos.html` por enquanto (carregam o `style.css` sem `?v=`; vão num `fix/` do dev. Cleber depois da etapa 1).
 - **`services/features.py` (menu e permissões) e `rotas/__init__.py` (registro de blueprint):** só acrescentar; não alterar entradas existentes.
 - **`rotas/home_routes.py`** (mais de 20 mil linhas): tocar o mínimo. Código novo em blueprint próprio (`rotas/<tema>_routes.py`) e em `services/<tema>.py`.
 - **`docs/claude.md` e `docs/CHANGELOG.md`:** todo tema registra entrada no [CHANGELOG](CHANGELOG.md) (§40.14). Ao `claude.md` só vai regra, contrato ou conhecimento que continua valendo, numa seção nova, **sem número**: dois PRs ao mesmo tempo pegariam o mesmo número, e quem promove numera (§40.11).
@@ -1470,7 +1476,7 @@ feat/<tema> → PR (squash) → dev/<nome> → (cherry-pick em branch temporári
 - **`test_tamanho_fonte`:** `font-size` no `static/css/style.css` só por `var(--spo-fs-*)`; valor em px novo ou contagem que sobe reprova.
 - **`test_cor_literal`:** sem cor literal nova (`#hex`, `rgb`, `hsl`) fora da definição de um token; referência em `tests/referencia_cor_literal.json`.
 - **`test_style_inline`:** sem cor ou tamanho de texto em `style="…"` nos templates nem escritos à mão no `main.js`.
-- **`test_kit_mockup`:** o kit (`static/kit/`) continua lendo do `main.js` e segue o próprio padrão; o `?v=` do CSS no kit precisa ser igual ao do `base.html`.
+- **`test_kit_mockup`:** o kit (`static/kit/`) continua lendo do `main.js` e segue o próprio padrão; o `?v=` do CSS e o Plotly do kit precisam ser iguais aos do `_estaticos.html`; o `base.html` e o `login.html` não têm `?v=` nem URL de CDN; o `_estaticos.html` não começa com BOM.
 - Quando uma regra antiga passar a usar o token ou a variável, a contagem desce e o teste avisa para baixar a referência.
 
 ### 40.13 Lições operacionais das promoções
@@ -1587,7 +1593,7 @@ _Parte em vigor. O histórico (problema, medição, verificação) está no [CHA
 
 **Correção:** o `login.html` passa a usar o **mesmo** `?v=` do `base.html` (`20261113.jean-controles.3`). As duas páginas compartilham a mesma entrada de cache do `style.css`.
 
-**Regra daqui em diante:** sempre que o `style.css` mudar, o `?v=` do CSS muda **no `base.html` e no `login.html`**, com o mesmo valor.
+**Regra daqui em diante:** o `?v=` do CSS fica num lugar só, o `_estaticos.html`, usado pelo `base.html` e pelo `login.html`: as duas páginas compartilham a mesma entrada de cache do `style.css` sem depender de lembrar de trocar em dois lugares (§40.2).
 
 **Verificação:** SPO local contra o banco de desenvolvimento do dev. Jean.
 - A página de login servida (pedido sem cookies) traz `?v=20261113.jean-controles.3`, igual ao `base.html`; o `login-theme.js` continua em `?v=20260706.1`.

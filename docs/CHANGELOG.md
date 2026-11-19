@@ -9,6 +9,14 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-23 — dev/jean (modularização, etapa 1: `_estaticos.html`), ainda não publicado
+
+### Alterado
+- Versões dos estáticos num lugar só (`feat/estaticos`; modularização, etapa 1, 1º PR, combinado com o dev. Cleber na 1ª janela): `templates/_estaticos.html` (novo) guarda em `{% set %}` o `?v=` do `style.css`, do `main.js` e do `login-theme.js` e as URLs das CDNs (Bootstrap, Bootstrap Icons, Plotly), com uma macro por tag. O `base.html` e o `login.html` importam o arquivo na primeira linha e chamam cada macro no lugar exato da tag de antes; não escrevem mais `?v=` nem URL de CDN. O `?v=` não mudou (CSS e JS iguais). O arquivo novo fica em UTF-8 sem BOM e com LF (o Jinja não tira o BOM de um arquivo importado). **Ficam fora, de propósito:** `forgot_password.html` e `reset_password.html` (carregam o `style.css` sem `?v=`); o dev. Cleber faz um `fix/` curto para elas depois que a etapa 1 chegar à `main`. Testes: os dois do `test_kit_mockup.py` que liam o `base.html` (o `?v=` do CSS e o Plotly do kit) passam a ler do `_estaticos.html`; novos: o `base.html` e o `login.html` sem `?v=` nem URL de CDN (fonte única) e o `_estaticos.html` sem BOM e sem CRLF (os dois reprovam de propósito com um `?v=` escrito no `base.html` e um BOM no arquivo novo). Regra nova na §40.2 (com a §40.12, a §41.26 e o padrão §6.2/§6.4, versão 5.4): mudou o `style.css` → `?v=` no `_estaticos.html` e no kit; mudou o `main.js` ou o `login-theme.js` → só no `_estaticos.html`; mudou uma CDN → no `_estaticos.html` (o Plotly também no kit); sufixo `AAAAMMDD.<desenvolvedor>-<tema>.N`; a linha `RELEASE_2_…` continua no `base.html`. Prova: o HTML servido do `/login` (sem sessão) e da Início (logada) idêntico byte a byte antes e depois (mesmo SHA-256), com o servidor reiniciado; comparação antes × depois das 11 telas e do kit em 3 vistas sem nenhuma diferença de estilo.
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma. **Não toca** em `app.py`, `config.py`, `.cpanel.yml` nem `scripts/deploy_cpanel.sh` (o deploy já leva o arquivo novo).
+
+---
+
 ## 2026-11-19 — dev/jean (lote 9), ainda não publicado
 
 ### Alterado
