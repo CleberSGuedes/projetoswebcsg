@@ -11,6 +11,6 @@
     "comparar": "node comparar.mjs comparar"
   },
   "dependencies": {
-    "playwright": "1.64.1"
+    "playwright": "1.65.1"
   }
 }
