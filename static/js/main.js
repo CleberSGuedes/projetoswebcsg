@@ -31092,19 +31092,28 @@
   const meta = document.getElementById("user-meta");
   if (!meta) return;
   const nome = meta.dataset.name || "";
-  const texto = meta.textContent;
-  if (!nome || !texto.startsWith(nome + " - ")) return; // formato inesperado: fica como está
+  if (!nome) return;
   const parte = (classe, conteudo) => {
     const s = document.createElement("span");
     s.className = classe;
     s.textContent = conteudo;
     return s;
   };
-  const pNome = parte("spo-usuario-nome", nome);
-  const pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
-  meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+  let pNome = null, pSessao = null;
+  // divide o texto em nome / separador / sessão; devolve false se o formato não for o esperado (fica como está)
+  const dividir = () => {
+    if (meta.querySelector(".spo-usuario-nome")) return true; // já dividido
+    const texto = meta.textContent;
+    if (!texto.startsWith(nome + " - ")) { pNome = pSessao = null; return false; }
+    pNome = parte("spo-usuario-nome", nome);
+    pSessao = parte("spo-usuario-sessao", texto.slice(nome.length + 3));
+    meta.replaceChildren(pNome, parte("spo-usuario-sep", " - "), pSessao);
+    return true;
+  };
+  if (!dividir()) return;
   // numa linha só, se couber: tira as duas linhas, vê se a sessão desceu, e decide (tudo no mesmo quadro, sem piscar)
   const ajustar = () => {
+    if (!pNome || !pSessao) return;
     meta.classList.remove("spo-usuario-duas-linhas");
     const desceu = pSessao.getBoundingClientRect().top > pNome.getBoundingClientRect().top + 1;
     meta.classList.toggle("spo-usuario-duas-linhas", desceu);
@@ -31112,6 +31121,11 @@
   let quadro = 0;
   const depois = () => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); };
   ajustar();
+  // fix/linha-usuario-30s (lote 9): o setUserMeta() regrava o texto inteiro do #user-meta a cada 30 s (data, hora e
+  // logados) e apagava os trechos, e a linha voltava a quebrar em qualquer ponto. Quando o texto é regravado, divide
+  // de novo e reavalia na hora: o observador roda antes de a tela ser pintada, então não pisca. A própria divisão
+  // também dispara o observador, mas aí os trechos já existem e nada se refaz.
+  new MutationObserver(() => { if (dividir()) ajustar(); }).observe(meta, { childList: true });
   // largura da tela, fonte e tamanho do texto (Personalizar) mudam o que cabe.
   // fix/linha-usuario-resizeobserver (lote 8.1): observa só a LARGURA do cabeçalho. Antes observava o <body>, e o
   // Safari registrava "ResizeObserver loop completed with undelivered notifications": ao passar de 1 para 2 linhas
