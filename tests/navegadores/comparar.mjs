@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { abrirPerfil, abrirTela, gravarPreferencias, garantirSessao, nomeDaTela, BASE, KIT, PASTA, RAIZ,
   TELAS_BASICAS, TELAS_PRINCIPAIS, TELAS_TODAS } from "./lib/ambiente.mjs";
 import { retratarEstilos } from "./lib/estilos.mjs";
+import { contarElementos, diferencas, expandirRetrato } from "./lib/diferencas.mjs";
 import { registrar, escreverRelatorio, etapa, PASTA_RESULTADO } from "./lib/registro.mjs";
 import { comTempo, LIMITE_PASSO_S } from "./lib/tempo.mjs";
 import { PREFERENCIAS } from "./verificacoes/contraste.mjs";
@@ -84,93 +85,6 @@ function commitAtual() {
   try { return execFileSync("git", ["log", "-1", "--format=%h %s"], { cwd: RAIZ, encoding: "utf-8" }).trim(); } catch (e) { return "?"; }
 }
 
-// ---------- formato compacto (lib/estilos.mjs) → formato completo ----------
-// Refaz o caminho de cada elemento (o do pai + o segmento) e põe os valores no lugar dos números. Retratos antigos
-// (sem "formato") já vêm completos e passam direto. Os elementos com o mesmo estilo apontam para a mesma lista de
-// valores (não é cópia), então a memória continua pequena.
-export function expandirRetrato(r) {
-  if (r.formato !== 2) return r;
-  const caminhos = new Array(r.els.length), elementos = {};
-  r.els.forEach(([pai, seg, n, e, x, y, w, h, t, antes, depois], i) => {
-    const caminho = pai < 0 ? seg : `${caminhos[pai]}>${seg}`;
-    caminhos[i] = caminho;
-    const reg = { n: r.nomes[n], v: r.estilos[e], c: [x, y, w, h] };
-    if (t !== null) reg.t = t;
-    if (antes >= 0) reg["::before"] = r.pseudos[antes];
-    if (depois >= 0) reg["::after"] = r.pseudos[depois];
-    elementos[caminho] = reg;
-  });
-  return { props: r.props, pseudo: r.pseudo, elementos, janela: r.janela, pagina: r.pagina, tokens: r.tokens };
-}
-const contarElementos = (r) => (r.formato === 2 ? r.els.length : Object.keys(r.elementos).length);
-
-// ---------- diferenças entre dois retratos ----------
-// ids sorteados a cada carga (os gráficos Plotly criam clip-path: url("#clip82efa9xyplot")) não são estilo
-const semIdSorteado = (v) => String(v).replace(/url\("?#[^")]*"?\)/g, "url(#…)");
-// até 1 px em cada número da mesma propriedade: arredondamento de uma medida feita pelo script (ex.: o "›" do menu
-// no celular, alinhado pelo logotipo); sai na lista como "≤ 1 px" e não reprova. Uma mudança de estilo de verdade
-// costuma mudar mais que isso, e uma de 1 px continua visível na lista.
-// Só vale para comprimento em px (ou para a caixa): cor, opacidade, peso de fonte e afins nunca têm tolerância.
-function ateUmPixel(x, y, caixa = false) {
-  const nx = String(x).match(/-?\d+(\.\d+)?/g) || [], ny = String(y).match(/-?\d+(\.\d+)?/g) || [];
-  if (!nx.length || nx.length !== ny.length) return false;
-  const soPx = (v) => (String(v).match(/-?\d+(\.\d+)?[a-z%]*/g) || []).every((n) => n.endsWith("px"));
-  if (!caixa && !(soPx(x) && soPx(y))) return false;
-  if (String(x).replace(/-?\d+(\.\d+)?/g, "#") !== String(y).replace(/-?\d+(\.\d+)?/g, "#")) return false;
-  return nx.every((n, i) => Math.abs(+n - +ny[i]) <= 1);
-}
-// linha de lista ou de tabela (li, tr, option, dt, dd), ou algo dentro dela: entra e sai com o dado
-const LINHA = /(^|>)(li|tr|option|dt|dd)\[\d+\]/;
-// propriedades calculadas que dependem do conteúdo (as faixas de um grid em px): mudam junto com o dado
-const DO_CONTEUDO = new Set(["grid-template-rows", "grid-template-columns"]);
-export function diferencas(a, b) {
-  const difs = [];
-  const fmt = (v) => (v === undefined ? "(nada)" : String(v));
-  for (const [k, va] of Object.entries(a.tokens)) if (b.tokens[k] !== va) difs.push({ el: ":root", prop: k, antes: va, depois: fmt(b.tokens[k]) });
-  for (const k of Object.keys(b.tokens)) if (!(k in a.tokens)) difs.push({ el: ":root", prop: k, antes: "(nada)", depois: b.tokens[k] });
-  const propsB = new Map(b.props.map((p, i) => [p, i]));
-  // dado que mudou: texto diferente (relógio, sessões ativas, dado do banco) ou linha de lista/tabela que entrou ou
-  // saiu. A caixa do próprio elemento, das que o contêm e das que ele contém, e as faixas dos grids que o contêm, podem
-  // mudar sem que o estilo mude: essas diferenças saem como "dado" (aviso); as de estilo continuam como diferença
-  const linhaQueMudou = (k) => LINHA.test(k) ? k.replace(/>[^>]*$/, "") : null; // a lista/tabela que a contém
-  const mudouDado = [
-    ...Object.keys(a.elementos).filter((k) => b.elementos[k] && a.elementos[k].t !== b.elementos[k].t),
-    ...Object.keys(a.elementos).filter((k) => !b.elementos[k]).map(linhaQueMudou).filter(Boolean),
-    ...Object.keys(b.elementos).filter((k) => !a.elementos[k]).map(linhaQueMudou).filter(Boolean),
-  ];
-  const porDado = (caminho) => mudouDado.some((k) => k === caminho || k.startsWith(caminho + ">") || caminho.startsWith(k + ">"));
-  const dadoNaTela = mudouDado.length > 0;
-  if (a.pagina.join() !== b.pagina.join()) difs.push({ el: "página", prop: "largura×altura", antes: a.pagina.join("×"), depois: b.pagina.join("×"), ...(dadoNaTela ? { dado: true } : {}) });
-  for (const [caminho, ea] of Object.entries(a.elementos)) {
-    const eb = b.elementos[caminho];
-    const el = `${ea.n} (${caminho})`;
-    if (!eb) { difs.push({ el, prop: "elemento", antes: "existe", depois: "sumiu", ...(LINHA.test(caminho) ? { dado: true } : {}) }); continue; }
-    a.props.forEach((p, i) => {
-      const va = semIdSorteado(ea.v[i]), vb = eb.v[propsB.get(p)] === undefined ? undefined : semIdSorteado(eb.v[propsB.get(p)]);
-      if (va === vb) return;
-      const extra = DO_CONTEUDO.has(p) && porDado(caminho) ? { dado: true } : ateUmPixel(va, vb) ? { pixel: true } : {};
-      difs.push({ el, prop: p, antes: va, depois: fmt(vb), ...extra });
-    });
-    if (ea.c.join() !== eb.c.join()) {
-      // também é dado o vizinho que só se deslocou (mesma largura e altura) dentro de um pai que contém o texto que
-      // mudou: numa linha alinhada à direita, a hora que encolhe empurra o nome que vem antes
-      const pai = caminho.includes(">") ? caminho.slice(0, caminho.lastIndexOf(">")) : null;
-      const soDeslocou = ea.c[2] === eb.c[2] && ea.c[3] === eb.c[3];
-      const extra = porDado(caminho) || (soDeslocou && pai && porDado(pai)) ? { dado: true }
-        : ateUmPixel(ea.c.join(), eb.c.join(), true) ? { pixel: true } : {};
-      difs.push({ el, prop: "caixa (x, y, largura, altura)", antes: ea.c.join(", "), depois: eb.c.join(", "), ...extra });
-    }
-    for (const ps of ["::before", "::after"]) {
-      const pa = ea[ps], pb = eb[ps];
-      if (!pa && !pb) continue;
-      if (!pa || !pb) { difs.push({ el: el + ps, prop: "pseudo-elemento", antes: pa ? "existe" : "(nada)", depois: pb ? "existe" : "(nada)" }); continue; }
-      a.pseudo.forEach((p, i) => { if (pa[i] !== pb[i]) difs.push({ el: el + ps, prop: p, antes: pa[i], depois: fmt(pb[i]) }); });
-    }
-  }
-  for (const [caminho, eb] of Object.entries(b.elementos)) if (!a.elementos[caminho]) difs.push({ el: `${eb.n} (${caminho})`, prop: "elemento", antes: "(nada)", depois: "apareceu", ...(LINHA.test(caminho) ? { dado: true } : {}) });
-  return difs;
-}
-
 async function percorrer(vistas, telas, aoRetratar) {
   for (const [perfil, pref] of vistas) {
     // abrir a vista (navegador + sessão) pode demorar com o banco remoto lento: tenta duas vezes; não abrindo, registra
@@ -241,9 +155,11 @@ mkdirSync(pastaDifs, { recursive: true });
 const todas = [];
 const resumir = (difs) => {
   const els = new Set(difs.map((d) => d.el)).size;
-  const exemplos = difs.slice(0, 2).map((d) => `${d.el.split(" (")[0]} ${d.prop}: ${String(d.antes).slice(0, 40)} → ${String(d.depois).slice(0, 40)}`).join("; ");
+  // o bloco que entrou ou saiu vem primeiro: é a causa das outras diferenças da tela
+  const exemplos = [...difs].sort((x, y) => (y.prop === "elemento") - (x.prop === "elemento")).slice(0, 2).map((d) => `${d.el.split(" (")[0]} ${d.prop}: ${String(d.antes).slice(0, 40)} → ${String(d.depois).slice(0, 40)}`).join("; ");
   return `${difs.length} diferença(s) em ${els} elemento(s): ${exemplos}`;
 };
+const deslocados = (difs) => { const n = new Set(difs.filter((d) => d.deslocou).map((d) => d.el)).size; return n ? `; ${n} elemento(s) só deslocado(s) por ele(s)` : ""; };
 await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retrato, captura }, deNovo) => {
   const arq = arquivoDe(perfil, pref, rota);
   const ref = resolve(PASTA_REF, arq + ".json");
@@ -260,7 +176,7 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
     const repete = new Set(outra.map(chave));
     difs = difs.filter((d) => repete.has(chave(d)));
   }
-  const estilo = difs.filter((d) => !d.dado && !d.pixel), leves = difs.filter((d) => d.dado || d.pixel);
+  const estilo = difs.filter((d) => !d.dado && !d.pixel && !d.deslocou), leves = difs.filter((d) => d.dado || d.pixel);
   for (const d of difs) todas.push({ perfil, alvo, ...d });
   if (estilo.length) {
     const capRef = existsSync(resolve(PASTA_REF, arq + ".png")) ? readFileSync(resolve(PASTA_REF, arq + ".png")) : null;
@@ -268,7 +184,7 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
     if (capRef) writeFileSync(resolve(pastaDifs, arq + "__antes.png"), capRef);
   }
   const elementos = contarElementos(retrato);
-  if (estilo.length) registrar({ verificacao: "comparacao", perfil, alvo, situacao: "falha", resumo: resumir(estilo) });
+  if (estilo.length) registrar({ verificacao: "comparacao", perfil, alvo, situacao: "falha", resumo: resumir(estilo) + deslocados(difs) });
   else if (leves.length) {
     const nDado = new Set(leves.filter((d) => d.dado).map((d) => d.el)).size, nPixel = new Set(leves.filter((d) => d.pixel).map((d) => d.el)).size;
     registrar({ verificacao: "comparacao", perfil, alvo, situacao: "aviso", resumo: `estilo igual (${elementos} elementos); só ${[nDado && `a caixa de ${nDado} elemento(s) com texto que mudou (dado ao vivo)`, nPixel && `${nPixel} elemento(s) com até 1 px (medida do script)`].filter(Boolean).join(" e ")}` });
@@ -279,10 +195,10 @@ await percorrer(meta.vistas, meta.telas, async (perfil, pref, rota, alvo, { retr
 const linhas = [`# Diferenças em relação à referência "${nome}"`, "", `Referência: ${meta.quando}, commit ${meta.commit}. Agora: ${commit}.`, ""];
 if (!todas.length) linhas.push("Nenhuma diferença.");
 else {
-  linhas.push("\"dado\" = caixa de um elemento com texto que mudou (relógio, sessões, dado do banco), ou que o contém; \"≤ 1 px\" = até 1 px em cada número (arredondamento de medida do script). Os dois não reprovam.", "",
+  linhas.push("\"dado\" = caixa de um elemento com texto que mudou (relógio, sessões, dado do banco), ou que o contém; \"≤ 1 px\" = até 1 px em cada número (arredondamento de medida do script). Os dois não reprovam. \"deslocou\" = elemento que só mudou de lugar (mesma largura e altura) numa tela onde um bloco entrou ou saiu; o bloco reprova, o deslocamento só é listado. Um caminho com \"→\" é o mesmo elemento numa posição nova entre os irmãos.", "",
     "| Vista | Tela | Elemento | Propriedade | Antes | Depois | |", "|---|---|---|---|---|---|---|");
   const c = (s) => String(s).replace(/\|/g, "/").slice(0, 160);
-  for (const d of todas) linhas.push(`| ${d.perfil} | ${d.alvo} | ${c(d.el)} | ${d.prop} | ${c(d.antes)} | ${c(d.depois)} | ${d.dado ? "dado" : d.pixel ? "≤ 1 px" : ""} |`);
+  for (const d of todas) linhas.push(`| ${d.perfil} | ${d.alvo} | ${c(d.el)} | ${d.prop} | ${c(d.antes)} | ${c(d.depois)} | ${d.dado ? "dado" : d.pixel ? "≤ 1 px" : d.deslocou ? "deslocou" : ""} |`);
 }
 writeFileSync(resolve(pastaDifs, "diferencas.md"), linhas.join("\n") + "\n");
 const r = escreverRelatorio(`comparação com "${nome}"`, inicio);
