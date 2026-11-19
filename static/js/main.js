@@ -4524,6 +4524,8 @@
     let pollTimer = null;
     let lastProcessing = null;
     let watchingJobId = null;
+    // Envio em andamento (ou parado por erro, esperando "Tentar novamente" / "Cancelar envio").
+    let envio = null;
     const historyCatalog = document.getElementById("see-history-catalog");
     const historyExercicio = document.getElementById("see-history-exercicio");
     const catalogLabel = (item) => `${item.exercicio} · ${escapeHtml(item.nome)}`;
@@ -4531,6 +4533,41 @@
     const historyMsg = document.getElementById("see-history-msg");
     const SEE_BATCH_MAX_FILES = 50;
     const SEE_BATCH_MAX_BYTES = 20 * 1024 * 1024;
+    // Cada lote tem tempo limite (60 s + 15 s por MB) e até 3 tentativas, com espera de 5 s e depois 15 s.
+    const SEE_LOTE_TENTATIVAS = 3;
+    const SEE_LOTE_ESPERAS_MS = [5000, 15000];
+    const seeTempoLimiteLote = (bytes) => 60000 + Math.ceil((15000 * bytes) / (1024 * 1024));
+    const uploadCancel = document.getElementById("see-upload-cancel");
+    const uploadError = document.getElementById("see-upload-error");
+    const uploadErrorMsg = document.getElementById("see-upload-error-msg");
+    const uploadRetry = document.getElementById("see-upload-retry");
+    const selectionIgnored = document.getElementById("see-selection-ignored");
+    // Painel "Processamento": mostra sempre o nº do processamento que está acompanhando.
+    const progressTitle = document.getElementById("see-progress-title");
+    const progressMessage = document.getElementById("see-progress-message");
+    const progressPercent = document.getElementById("see-progress-percent");
+    const progressAviso = document.getElementById("see-progress-aviso");
+    const progressStats = document.getElementById("see-progress-stats");
+    const fileList = document.getElementById("see-file-list");
+    const cancelJob = document.getElementById("see-cancel-job");
+    const downloadButton = document.getElementById("see-download");
+    const SEE_FINAIS = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"];
+    const SEE_CONCLUIDOS = ["finalizado", "finalizado_com_alertas"];
+    // Consulta do status: a cada 1 s; em falha passageira, espera crescente (1, 2, 5, 10 e depois 30 s).
+    const SEE_POLL_ESPERAS_MS = [1000, 2000, 5000, 10000, 30000];
+    let pollGeracao = 0;
+    let pollFalhas = 0;
+    // true quando o painel mostra o último processamento do catálogo (aberto ao entrar na tela ou ao
+    // trocar de catálogo), e não um processamento iniciado agora nesta tela.
+    let painelRestaurado = false;
+    // Último processamento concluído do catálogo: base do "acrescentar" e referência depois de um envio cancelado.
+    let baseConcluido = null;
+    let cancelamentoEnvio = null;
+    let fecharAvisoConcluido = null;
+    let fecharAvisoSaida = null;
+    // Criação do processamento em curso ("Preparando envio..."): com "acrescentar" leva alguns segundos
+    // (copia as notas anteriores). Já conta como envio para o aviso do menu e o do navegador.
+    let criacaoEnvio = null;
 
     const escapeHtml = (value) => String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -4554,11 +4591,65 @@
     root.addEventListener("change", clearVisibleErrors);
     root.addEventListener("click", clearVisibleErrors);
     const requestJson = async (url, options = {}) => {
-      const { headers = {}, ...rest } = options;
-      const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
-      return data;
+      const { headers = {}, timeoutMs = 0, signal = null, ...rest } = options;
+      if (!timeoutMs && !signal) {
+        const response = await fetch(url, { ...rest, headers: { "X-Requested-With": "fetch", ...headers } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+        return data;
+      }
+      // Com tempo limite e/ou cancelamento (envio dos PDFs): o erro diz o tipo da falha
+      // (tempo, rede, http ou cancelado) e o status HTTP, para decidir se tenta de novo.
+      const controller = new AbortController();
+      let motivo = "";
+      const abortar = (qual) => {
+        if (motivo) return;
+        motivo = qual;
+        controller.abort();
+      };
+      const onSignal = () => abortar("cancelado");
+      if (signal) {
+        if (signal.aborted) onSignal();
+        else signal.addEventListener("abort", onSignal, { once: true });
+      }
+      const timer = timeoutMs ? setTimeout(() => abortar("tempo"), timeoutMs) : null;
+      const falha = (tipo, message, status = 0) => Object.assign(new Error(message), { tipo, status });
+      const falhaAbortada = () => (motivo === "tempo"
+        ? falha("tempo", `O servidor não respondeu em ${Math.round(timeoutMs / 1000)} s.`)
+        : falha("cancelado", "Envio cancelado."));
+      try {
+        let response;
+        try {
+          response = await fetch(url, { ...rest, signal: controller.signal, headers: { "X-Requested-With": "fetch", ...headers } });
+        } catch (error) {
+          if (motivo) throw falhaAbortada();
+          throw falha("rede", "Sem conexão com o servidor.");
+        }
+        // Sessão encerrada: a API responde 401 (sem corpo); sem permissão, 403 (página HTML). Se algum
+        // intermediário redirecionar para o login, chega HTML com status 200. Nada disso é "sem conexão".
+        if (response.status === 401) throw falha("sessao", "Sua sessão foi encerrada.", 401);
+        if (response.status === 403) throw falha("sessao", "Seu usuário não tem acesso às Notas SEE.", 403);
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          if (motivo) throw falhaAbortada();
+          const tipoConteudo = response.headers.get("content-type") || "";
+          if (response.ok && (/\/login/.test(response.url || "") || tipoConteudo.includes("text/html"))) {
+            throw falha("sessao", "Sua sessão foi encerrada.", response.status);
+          }
+        }
+        if (!response.ok) {
+          const message = response.status >= 500 || !data.error
+            ? `O servidor respondeu com erro ${response.status}.`
+            : data.error;
+          throw falha("http", message, response.status);
+        }
+        return data;
+      } finally {
+        if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onSignal);
+      }
     };
     const renderProducts = () => {
       const catalog = selectedCatalog();
@@ -4600,19 +4691,32 @@
       renderProducts();
     };
     const selectedFiles = () => [...Array.from(folderInput.files || []), ...Array.from(filesInput.files || [])];
+    // Só PDFs são enviados; os demais ficam de fora já no navegador (o servidor mantém a própria checagem).
+    const ehPdf = (file) => /\.pdf$/i.test(file.name || "");
+    const selectedPdfs = () => selectedFiles().filter(ehPdf);
+    const selectedNaoPdf = () => selectedFiles().filter((file) => !ehPdf(file));
     function updateSelection() {
-      const files = selectedFiles();
+      const files = selectedPdfs();
+      const outros = selectedNaoPdf();
       const size = files.reduce((total, file) => total + file.size, 0);
       document.getElementById("see-selection-summary").textContent = files.length
         ? `${files.length} PDF(s) selecionado(s) · ${(size / 1024 / 1024).toFixed(2)} MB`
         : "Nenhum PDF selecionado.";
+      const nomesOutros = outros.slice(0, 5).map((file) => file.name).join(", ");
+      const maisOutros = outros.length > 5 ? ` e mais ${outros.length - 5}` : "";
+      selectionIgnored.textContent = outros.length
+        ? `${outros.length === 1 ? "1 arquivo ignorado" : `${outros.length} arquivos ignorados`} por não ser PDF: ${nomesOutros}${maisOutros}`
+        : "";
+      selectionIgnored.hidden = !outros.length;
       const catalog = selectedCatalog();
       const processingActive = lastProcessing
         && !["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(lastProcessing.status);
-      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive;
-      const canAppend = lastProcessing
-        && ["finalizado", "finalizado_com_alertas"].includes(lastProcessing.status)
-        && String(lastProcessing.catalog_id) === String(catalog?.id);
+      submit.disabled = !catalog || !catalog.produtos.length || !files.length || processingActive || Boolean(envio);
+      // Durante o envio o catálogo não muda: o painel e o envio são do catálogo escolhido ao começar.
+      catalogSelect.disabled = Boolean(envio);
+      processCatalogSelect.disabled = Boolean(envio);
+      const canAppend = !processingActive && baseConcluido
+        && String(baseConcluido.catalog_id) === String(catalog?.id);
       // A pergunta só faz sentido quando há novos PDFs para um catálogo que já foi processado.
       appendChoice.hidden = !canAppend || !files.length;
     }
@@ -4627,10 +4731,11 @@
 
     catalogSelect.addEventListener("change", async () => {
       renderProducts();
-      if (pollTimer) clearTimeout(pollTimer);
-      pollTimer = null;
+      pararPoll();
       jobId = null;
       lastProcessing = null;
+      baseConcluido = null;
+      painelRestaurado = false;
       progressCard.hidden = true;
       appendChoice.hidden = true;
       processingMeta.innerHTML = "";
@@ -4718,20 +4823,55 @@
       }
     });
 
+    const SEE_SITUACAO = {
+      enviando: "Enviando PDFs",
+      na_fila: "Na fila",
+      processando: "Processando",
+      finalizado: "Concluído",
+      finalizado_com_alertas: "Concluído",
+      falha: "Falhou",
+      cancelado: "Cancelado",
+    };
+    // Linha de aviso do painel (role="status"): "sem conexão", sessão encerrada e o retorno do "Cancelar".
+    const mostrarAvisoPainel = (mensagem, { erro = false, tipo = "" } = {}) => {
+      progressAviso.textContent = mensagem;
+      progressAviso.classList.toggle("text-error", erro);
+      progressAviso.dataset.tipo = tipo;
+      progressAviso.hidden = false;
+    };
+    const esconderAvisoPainel = (tipo = "") => {
+      if (tipo && progressAviso.dataset.tipo !== tipo) return;
+      progressAviso.hidden = true;
+      progressAviso.textContent = "";
+      progressAviso.dataset.tipo = "";
+    };
     const renderStatus = (data) => {
       lastProcessing = data;
+      if (SEE_CONCLUIDOS.includes(data.status)) baseConcluido = data;
       progressCard.hidden = false;
-      document.getElementById("see-progress-message").textContent = data.message || data.etapa || "Processando...";
-      document.getElementById("see-progress-percent").textContent = `${Math.round(data.progress || 0)}%`;
+      const situacao = SEE_SITUACAO[data.status] || data.status;
+      progressTitle.textContent = painelRestaurado && SEE_CONCLUIDOS.includes(data.status)
+        ? `Último processamento concluído (nº ${data.id})`
+        : painelRestaurado && SEE_FINAIS.includes(data.status)
+          ? `Último processamento (nº ${data.id}) — ${situacao}`
+          : `Processamento nº ${data.id} — ${situacao}`;
+      progressMessage.textContent = data.message || data.etapa || "Processando...";
+      progressPercent.textContent = `${Math.round(data.progress || 0)}%`;
       document.getElementById("see-progress-bar").style.width = `${data.progress || 0}%`;
+      progressStats.hidden = false;
+      fileList.hidden = false;
       document.getElementById("see-stat-processed").textContent = `${data.processed}/${data.total}`;
       document.getElementById("see-stat-success").textContent = data.success;
       document.getElementById("see-stat-warning").textContent = data.warnings;
       document.getElementById("see-stat-error").textContent = data.errors;
       document.getElementById("see-stat-duration").textContent = data.duration ? `${data.duration.toFixed(1)}s` : "em andamento";
-      document.getElementById("see-file-list").innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
-      document.getElementById("see-download").hidden = !data.download_ready;
-      document.getElementById("see-cancel-job").hidden = ["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status);
+      fileList.innerHTML = (data.files || []).map((file) => `<div class="see-file-row is-${escapeHtml(file.status)}"><i class="bi ${file.status === "falha" ? "bi-x-circle" : file.status === "ignorado" ? "bi-dash-circle" : file.status.includes("alerta") ? "bi-exclamation-triangle" : file.status === "finalizado" ? "bi-check-circle" : "bi-hourglass-split"}"></i><span><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.error || file.status)}</small></span><b>${file.status === "ignorado" ? "Ignorado" : `${Math.round(file.progress || 0)}%`}</b></div>`).join("");
+      downloadButton.hidden = !data.download_ready;
+      cancelJob.hidden = SEE_FINAIS.includes(data.status);
+      if (cancelJob.hidden) {
+        cancelJob.disabled = false;
+        esconderAvisoPainel("cancelar");
+      }
       const executedAt = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : "-";
       const updateSummary = data.initial_count
         ? `<span><strong>${data.initial_count} + ${data.added_count} = ${data.total}</strong>Anterior + novos = total</span>`
@@ -4740,6 +4880,7 @@
         ? `<span><strong>${data.ignored_count}</strong>Arquivos ignorados</span>`
         : "";
       processingMeta.innerHTML = `
+        <span><strong>nº ${escapeHtml(data.id)}</strong>Processamento</span>
         <span><strong>${escapeHtml(data.catalog_name || "-")}</strong>Catálogo utilizado</span>
         <span><strong>${escapeHtml(data.executed_by || "-")}</strong>Executado por</span>
         <span><strong>${escapeHtml(executedAt)}</strong>Data e horário</span>
@@ -4747,23 +4888,94 @@
         ${ignoredSummary}`;
       updateSelection();
     };
-    const poll = async () => {
-      if (!jobId) return;
+    // Envio ainda não iniciado (enviando, parado no erro ou cancelado): o painel mostra o nº do envio e
+    // a barra dos PDFs enviados; os números do processamento e a lista de arquivos ficam ocultos.
+    const renderEnvio = (atual, estado) => {
+      progressCard.hidden = false;
+      const percentual = atual.total ? Math.round((atual.enviados / atual.total) * 100) : 0;
+      progressTitle.textContent = estado === "cancelado"
+        ? `Envio nº ${atual.jobId} cancelado`
+        : `Processamento nº ${atual.jobId} — ${estado === "parado" ? "Envio parado" : "Enviando PDFs"}`;
+      progressMessage.textContent = estado === "cancelado"
+        ? `Nenhum PDF foi processado.${baseConcluido ? ` Último processamento concluído deste catálogo: nº ${baseConcluido.id}.` : ""}`
+        : estado === "parado"
+          ? `Envio parado com ${atual.enviados} de ${atual.total} PDF(s) enviados, aguardando "Tentar novamente" ou "Cancelar envio".`
+          : `${atual.enviados} de ${atual.total} PDF(s) enviados.`;
+      progressPercent.textContent = estado === "cancelado" ? "" : `${percentual}%`;
+      document.getElementById("see-progress-bar").style.width = `${estado === "cancelado" ? 0 : percentual}%`;
+      progressStats.hidden = true;
+      fileList.hidden = true;
+      fileList.innerHTML = "";
+      downloadButton.hidden = true;
+      cancelJob.hidden = estado === "cancelado";
+      const criadoEm = atual.criadoEm ? new Date(atual.criadoEm).toLocaleString("pt-BR") : "-";
+      processingMeta.innerHTML = `
+        <span><strong>nº ${escapeHtml(atual.jobId)}</strong>Processamento</span>
+        <span><strong>${escapeHtml(atual.catalogName || "-")}</strong>Catálogo utilizado</span>
+        <span><strong>${escapeHtml(atual.executadoPor || "-")}</strong>Executado por</span>
+        <span><strong>${escapeHtml(criadoEm)}</strong>Data e horário</span>
+        <span><strong>${atual.total}</strong>PDFs do envio</span>`;
+    };
+    // Para o acompanhamento em curso: a consulta que ainda estiver no ar é ignorada ao voltar.
+    const pararPoll = () => {
+      pollGeracao += 1;
+      pollFalhas = 0;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      esconderAvisoPainel("conexao");
+    };
+    const acompanhar = (id) => {
+      pararPoll();
+      esconderAvisoPainel();
+      cancelJob.disabled = false;
+      jobId = id;
+      poll(pollGeracao);
+    };
+    const poll = async (geracao = pollGeracao) => {
+      if (!jobId || geracao !== pollGeracao || !root.isConnected) return;
+      const id = jobId;
+      const vigente = () => geracao === pollGeracao && root.isConnected;
+      let data;
       try {
-        const data = await requestJson(`/api/notas-see/processamentos/${jobId}`);
-        renderStatus(data);
-        if (!["finalizado", "finalizado_com_alertas", "falha", "cancelado"].includes(data.status)) {
-          pollTimer = setTimeout(poll, 1000);
-        } else if (String(watchingJobId) === String(data.id)) {
-          // Concluiu um processamento iniciado nesta tela: limpa o envio e avisa o usuário.
-          watchingJobId = null;
-          resetUploadCard();
-          openDoneModal(data);
-          loadHistory();
-        } else {
-          updateSelection();
+        data = await requestJson(`/api/notas-see/processamentos/${id}`, { timeoutMs: 30000 });
+      } catch (error) {
+        if (!vigente()) return;
+        if (error.tipo === "sessao") {
+          pararPoll();
+          mostrarAvisoPainel(error.status === 403
+            ? `${error.message} O acompanhamento do processamento nº ${id} foi interrompido.`
+            : `Sua sessão foi encerrada. Entre de novo no SPO para acompanhar o processamento nº ${id}.`, { erro: true, tipo: "sessao" });
+          return;
         }
-      } catch (error) { setMessage(processMsg, error.message, true); }
+        if (error.status === 404) {
+          pararPoll();
+          mostrarAvisoPainel(`O processamento nº ${id} não foi encontrado.`, { erro: true, tipo: "sessao" });
+          return;
+        }
+        // Falha passageira (rede, tempo esgotado, erro do servidor): tenta de novo com espera crescente.
+        pollFalhas += 1;
+        mostrarAvisoPainel("Sem conexão com o servidor, tentando de novo…", { erro: true, tipo: "conexao" });
+        pollTimer = setTimeout(() => poll(geracao), SEE_POLL_ESPERAS_MS[Math.min(pollFalhas, SEE_POLL_ESPERAS_MS.length) - 1]);
+        return;
+      }
+      if (!vigente()) return;
+      pollFalhas = 0;
+      esconderAvisoPainel("conexao");
+      renderStatus(data);
+      if (!SEE_FINAIS.includes(data.status)) {
+        pollTimer = setTimeout(() => poll(geracao), 1000);
+        return;
+      }
+      pollTimer = null;
+      if (String(watchingJobId) === String(data.id)) {
+        // Concluiu um processamento iniciado nesta tela: limpa o envio e avisa o usuário.
+        watchingJobId = null;
+        resetUploadCard();
+        openDoneModal(data);
+        loadHistory();
+      } else {
+        updateSelection();
+      }
     };
     const openDoneModal = (data) => {
       document.getElementById("see-done-overlay")?.remove();
@@ -4806,10 +5018,12 @@
           </div>
         </div>`;
       const close = () => {
+        fecharAvisoConcluido = null;
         document.removeEventListener("keydown", onKeyDown, true);
         overlay.remove();
-        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (progressCard.isConnected) progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
       };
+      fecharAvisoConcluido = close;
       const onKeyDown = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(); } };
       overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
       overlay.querySelector('[data-see-done="close"]').addEventListener("click", close);
@@ -4859,103 +5073,443 @@
     const restoreLastProcessing = async (catalogId) => {
       if (!catalogId) return;
       const requestedCatalogId = String(catalogId);
+      const geracao = pollGeracao;
       try {
-        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`);
-        if (String(catalogSelect.value) !== requestedCatalogId) return;
+        const data = await requestJson(`/api/notas-see/processamentos/ultimo?catalogo_id=${encodeURIComponent(catalogId)}`, { timeoutMs: 30000 });
+        // Um envio começou (ou o catálogo mudou) enquanto a consulta estava no ar: o painel já é de outro.
+        if (String(catalogSelect.value) !== requestedCatalogId || envio || geracao !== pollGeracao || !root.isConnected) return;
         if (!data.job_id) return;
-        jobId = data.job_id;
-        await poll();
+        painelRestaurado = true;
+        acompanhar(data.job_id);
       } catch (error) {
-        setMessage(processMsg, error.message, true);
+        if (!root.isConnected) return;
+        setMessage(processMsg, error.tipo === "sessao" ? `${error.message} Entre de novo no SPO.` : error.message, true);
+      }
+    };
+    // ---- Envio dos PDFs em lotes ----
+    // Um lote só avança depois de um 200. Falha passageira (tempo esgotado, rede, 5xx, 429) tenta o mesmo
+    // lote de novo; esgotadas as tentativas, o envio fica parado (o processamento continua "enviando") e
+    // "Tentar novamente" continua do lote que falhou. Nada é descartado sem o usuário pedir.
+    const avisoSaida = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const mostrarErroEnvio = (mensagem, podeTentar) => {
+      setMessage(processMsg, "");
+      uploadErrorMsg.textContent = mensagem;
+      uploadRetry.hidden = !podeTentar;
+      uploadError.hidden = false;
+    };
+    const limparErroEnvio = () => {
+      uploadError.hidden = true;
+      uploadErrorMsg.textContent = "";
+    };
+    // Encerra o envio atual: interrompe o fetch e a espera em curso e libera a tela para um novo envio.
+    const encerrarEnvio = () => {
+      const atual = envio;
+      envio = null;
+      if (atual) {
+        clearTimeout(atual.esperaTimer);
+        clearInterval(atual.cronometro);
+        atual.controller?.abort();
+        atual.acordar?.();
+      }
+      window.removeEventListener("beforeunload", avisoSaida);
+      document.removeEventListener("click", interceptarMenu, true);
+      uploadCancel.hidden = true;
+      updateSelection();
+    };
+    // Interrompe o lote (ou a espera) em curso sem soltar o envio: "Tentar novamente" continua dele.
+    const pausarEnvio = (atual) => {
+      atual.pausado = true;
+      clearTimeout(atual.esperaTimer);
+      clearInterval(atual.cronometro);
+      atual.controller?.abort();
+      atual.acordar?.();
+    };
+    const esperar = (atual, ms) => new Promise((resolve) => {
+      atual.acordar = resolve;
+      atual.esperaTimer = setTimeout(resolve, ms);
+    });
+    const enviarLote = async (atual, lote) => {
+      for (let tentativa = 1; ; tentativa += 1) {
+        const inicio = Date.now();
+        const sufixo = tentativa > 1 ? ` · tentativa ${tentativa} de ${SEE_LOTE_TENTATIVAS}` : "";
+        const mostrar = () => setMessage(processMsg, `Enviando lote ${lote.numero} de ${atual.lotes.length} (PDFs ${lote.de} a ${lote.ate})… ${Math.floor((Date.now() - inicio) / 1000)} s${sufixo}`);
+        mostrar();
+        atual.cronometro = setInterval(mostrar, 1000);
+        atual.controller = new AbortController();
+        const batchData = new FormData();
+        lote.arquivos.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
+        try {
+          return await requestJson(`/api/notas-see/processamentos/${atual.jobId}/arquivos`, {
+            method: "POST",
+            body: batchData,
+            timeoutMs: seeTempoLimiteLote(lote.bytes),
+            signal: atual.controller.signal,
+          });
+        } catch (error) {
+          if (error.tipo === "cancelado" || envio !== atual || atual.pausado) throw error;
+          error.repetivel = error.tipo === "tempo" || error.tipo === "rede"
+            || (error.tipo === "http" && (error.status >= 500 || error.status === 429));
+          if (!error.repetivel || tentativa >= SEE_LOTE_TENTATIVAS) throw error;
+          clearInterval(atual.cronometro);
+          const fimEspera = Date.now() + SEE_LOTE_ESPERAS_MS[tentativa - 1];
+          const avisar = () => setMessage(processMsg, `O lote ${lote.numero} de ${atual.lotes.length} não foi enviado: ${error.message} Nova tentativa em ${Math.max(0, Math.ceil((fimEspera - Date.now()) / 1000))} s…`);
+          avisar();
+          atual.cronometro = setInterval(avisar, 1000);
+          await esperar(atual, fimEspera - Date.now());
+          if (envio !== atual || atual.pausado) throw Object.assign(new Error("Envio cancelado."), { tipo: "cancelado" });
+        } finally {
+          clearInterval(atual.cronometro);
+        }
+      }
+    };
+    const acompanharProcessamento = (data, atual) => {
+      pararPoll();
+      jobId = data.job_id;
+      watchingJobId = data.job_id;
+      painelRestaurado = false;
+      setMessage(processMsg, data.message);
+      progressCard.hidden = false;
+      renderStatus({
+        id: data.job_id,
+        status: "na_fila",
+        message: data.message || "Processamento colocado na fila.",
+        progress: 0,
+        processed: 0,
+        total: data.total || atual.total,
+        success: 0,
+        warnings: 0,
+        errors: 0,
+        duration: 0,
+        files: [
+          ...atual.accepted.map((name) => ({ name, status: "enviado", progress: 0 })),
+          ...atual.ignored.map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
+        ],
+        catalog_id: Number(atual.catalogId),
+        catalog_name: atual.catalogName,
+        executed_by: atual.executadoPor,
+        created_at: atual.criadoEm || new Date().toISOString(),
+        initial_count: data.initial || 0,
+        added_count: data.added || atual.total,
+        ignored_count: data.ignored_count || 0,
+      });
+      progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      acompanhar(data.job_id);
+    };
+    const continuarEnvio = async () => {
+      const atual = envio;
+      if (!atual || cancelamentoEnvio) return;
+      atual.pausado = false;
+      limparErroEnvio();
+      uploadCancel.hidden = false;
+      window.addEventListener("beforeunload", avisoSaida);
+      // Trocar de tela pelo menu do SPO não dispara o beforeunload: o aviso é das próprias Notas SEE.
+      document.addEventListener("click", interceptarMenu, true);
+      esconderAvisoPainel("sessao");
+      renderEnvio(atual, "enviando");
+      updateSelection();
+      try {
+        while (atual.indice < atual.lotes.length) {
+          const lote = atual.lotes[atual.indice];
+          const result = await enviarLote(atual, lote);
+          if (envio !== atual || atual.pausado) return;
+          atual.accepted.push(...(result.accepted || []), ...(result.already || []));
+          atual.ignored.push(...(result.ignored || []));
+          atual.enviados += lote.arquivos.length;
+          atual.indice += 1;
+          renderEnvio(atual, "enviando");
+        }
+        setMessage(processMsg, "Iniciando processamento...");
+        atual.controller = new AbortController();
+        let data;
+        try {
+          data = await requestJson(`/api/notas-see/processamentos/${atual.jobId}/iniciar`, { method: "POST", timeoutMs: 60000, signal: atual.controller.signal });
+        } catch (error) {
+          if (error.status !== 409 || envio !== atual) throw error;
+          // 409 numa nova tentativa: o "iniciar" anterior chegou ao servidor; segue o processamento se ele andou.
+          const status = await requestJson(`/api/notas-see/processamentos/${atual.jobId}`, { timeoutMs: 30000 });
+          if (["enviando", "descartado"].includes(status.status)) throw error;
+          data = { job_id: atual.jobId, message: status.message, total: status.total, initial: status.initial_count, added: status.added_count, ignored_count: status.ignored_count };
+        }
+        if (envio !== atual || atual.pausado) return;
+        encerrarEnvio();
+        acompanharProcessamento(data, atual);
+      } catch (error) {
+        if (envio !== atual || atual.pausado || error.tipo === "cancelado") return;
+        const noIniciar = atual.indice >= atual.lotes.length;
+        if (error.status === 404 || error.status === 409 || (noIniciar && [400, 503].includes(error.status))) {
+          // O processamento não recebe mais arquivos (descartado ou recusado pelo servidor): não há o que retomar.
+          encerrarEnvio();
+          renderEnvio(atual, "cancelado");
+          progressTitle.textContent = `Envio nº ${atual.jobId} encerrado`;
+          mostrarErroEnvio(`${error.message} Selecione os PDFs e inicie um novo envio.`, false);
+          return;
+        }
+        renderEnvio(atual, "parado");
+        if (error.tipo === "sessao") {
+          // Sessão encerrada: sem novas tentativas automáticas; depois de entrar de novo, "Tentar novamente" continua.
+          mostrarErroEnvio(`O envio nº ${atual.jobId} parou: ${error.message} Entre de novo no SPO (pode ser em outra aba) e use "Tentar novamente" para continuar deste ponto, ou "Cancelar envio". ${atual.enviados} de ${atual.total} PDF(s) já foram recebidos.`, true);
+          return;
+        }
+        const lote = atual.lotes[atual.indice];
+        const onde = noIniciar
+          ? "Os PDFs foram recebidos, mas o processamento não foi iniciado"
+          : `O lote ${lote.numero} de ${atual.lotes.length} (PDFs ${lote.de} a ${lote.ate}) não foi enviado${error.repetivel ? ` depois de ${SEE_LOTE_TENTATIVAS} tentativas` : ""}`;
+        mostrarErroEnvio(`${onde}: ${error.message} ${atual.enviados} de ${atual.total} PDF(s) já foram recebidos. Use "Tentar novamente" para continuar deste ponto ou "Cancelar envio" para descartar o envio.`, true);
       }
     };
     processForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!processForm.reportValidity() || submit.disabled) return;
-      submit.disabled = true; setMessage(processMsg, "Preparando envio...");
-      let uploadJobId = null;
+      if (!processForm.reportValidity() || submit.disabled || envio) return;
+      submit.disabled = true;
+      limparErroEnvio();
+      setMessage(processMsg, "Preparando envio...");
+      const files = selectedPdfs();
+      const naoPdf = selectedNaoPdf();
+      const appendMode = appendChoice.hidden
+        ? "novo"
+        : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
+      const baseId = appendMode === "acrescentar" ? baseConcluido?.id : null;
+      // Um envio novo começa: o painel deixa de acompanhar o processamento anterior.
+      pararPoll();
+      esconderAvisoPainel();
+      jobId = null;
+      watchingJobId = null;
+      lastProcessing = null;
+      painelRestaurado = false;
+      progressCard.hidden = true;
+      processingMeta.innerHTML = "";
+      fileList.innerHTML = "";
+      fecharAvisoConcluido?.();
+      window.addEventListener("beforeunload", avisoSaida);
+      document.addEventListener("click", interceptarMenu, true);
+      let created;
       try {
-        const files = selectedFiles();
         const createData = new FormData();
         createData.append("catalogo_id", catalogSelect.value);
-        const appendMode = appendChoice.hidden
-          ? "novo"
-          : (processForm.querySelector('input[name="see_append_mode"]:checked')?.value || "novo");
         createData.append("append_mode", appendMode);
-        if (appendMode === "acrescentar" && lastProcessing?.id) createData.append("base_job_id", lastProcessing.id);
-        const created = await requestJson("/api/notas-see/processamentos", { method: "POST", body: createData });
-        uploadJobId = created.job_id;
-
-        // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
-        const batches = [];
-        let current = [];
-        let currentSize = 0;
-        files.forEach((file) => {
-          if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) {
-            batches.push(current);
-            current = [];
-            currentSize = 0;
-          }
-          current.push(file);
-          currentSize += file.size;
-        });
-        if (current.length) batches.push(current);
-        const accepted = [];
-        const ignored = [];
-        let sent = 0;
-        for (const batch of batches) {
-          setMessage(processMsg, `Enviando PDFs: ${sent} de ${files.length} (${Math.round((sent / files.length) * 100)}%)...`);
-          const batchData = new FormData();
-          batch.forEach((file) => batchData.append("pdfs", file, file.webkitRelativePath || file.name));
-          const result = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/arquivos`, { method: "POST", body: batchData });
-          accepted.push(...(result.accepted || []));
-          ignored.push(...(result.ignored || []));
-          sent += batch.length;
-        }
-        setMessage(processMsg, "Iniciando processamento...");
-        const data = await requestJson(`/api/notas-see/processamentos/${uploadJobId}/iniciar`, { method: "POST" });
-        uploadJobId = null;
-        data.accepted = accepted;
-        data.ignored = ignored;
-        jobId = data.job_id;
-        watchingJobId = data.job_id;
-        setMessage(processMsg, data.message);
-        progressCard.hidden = false;
-        renderStatus({
-          id: data.job_id,
-          status: "na_fila",
-          message: data.message || "Processamento colocado na fila.",
-          progress: 0,
-          processed: 0,
-          total: data.total || selectedFiles().length,
-          success: 0,
-          warnings: 0,
-          errors: 0,
-          duration: 0,
-          files: [
-            ...(data.accepted || []).map((name) => ({ name, status: "enviado", progress: 0 })),
-            ...(data.ignored || []).map((file) => ({ name: file.name, status: "ignorado", progress: 0, error: file.reason })),
-          ],
-          catalog_id: Number(catalogSelect.value),
-          catalog_name: selectedCatalog()?.nome,
-          executed_by: lastProcessing?.executed_by,
-          created_at: new Date().toISOString(),
-          initial_count: data.initial || 0,
-          added_count: data.added || selectedFiles().length,
-          ignored_count: data.ignored_count || 0,
-        });
-        progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        poll();
+        if (baseId) createData.append("base_job_id", baseId);
+        // Os não-PDF não são enviados; só os nomes, para ficarem registrados como ignorados (Excel e resumo).
+        if (naoPdf.length) createData.append("ignorados_navegador", JSON.stringify(naoPdf.map((file) => file.webkitRelativePath || file.name)));
+        criacaoEnvio = requestJson("/api/notas-see/processamentos", { method: "POST", body: createData, timeoutMs: 60000 });
+        created = await criacaoEnvio;
       } catch (error) {
-        // Envio interrompido: descarta o processamento parcial para não deixá-lo pendente.
-        if (uploadJobId) {
-          requestJson(`/api/notas-see/processamentos/${uploadJobId}/cancelar`, { method: "POST" }).catch(() => {});
+        criacaoEnvio = null;
+        encerrarEnvio();
+        if (!root.isConnected) return;
+        mostrarErroEnvio(`Não foi possível começar o envio: ${error.message}${error.tipo === "sessao" ? " Entre de novo no SPO." : ""}`, false);
+        updateSelection();
+        // Nada foi criado: o painel volta ao último processamento do catálogo, identificado como tal.
+        restoreLastProcessing(catalogSelect.value);
+        return;
+      }
+      criacaoEnvio = null;
+      if (!root.isConnected) {
+        // A tela saiu enquanto o processamento era criado: ele não recebe PDFs, então é cancelado já.
+        requestJson(`/api/notas-see/processamentos/${created.job_id}/cancelar`, { method: "POST", timeoutMs: 30000 }).catch(() => {});
+        return;
+      }
+
+      // Envia em lotes: uma requisição com milhares de arquivos excede o limite de partes do servidor (413).
+      const lotes = [];
+      let current = [];
+      let currentSize = 0;
+      let posicao = 0;
+      const fecharLote = () => {
+        lotes.push({ numero: lotes.length + 1, de: posicao + 1, ate: posicao + current.length, bytes: currentSize, arquivos: current });
+        posicao += current.length;
+        current = [];
+        currentSize = 0;
+      };
+      files.forEach((file) => {
+        if (current.length && (current.length >= SEE_BATCH_MAX_FILES || currentSize + file.size > SEE_BATCH_MAX_BYTES)) fecharLote();
+        current.push(file);
+        currentSize += file.size;
+      });
+      if (current.length) fecharLote();
+      envio = {
+        jobId: created.job_id,
+        lotes,
+        indice: 0,
+        total: files.length,
+        enviados: 0,
+        accepted: [],
+        ignored: naoPdf.map((file) => ({ name: file.name, reason: "Extensão diferente de PDF." })),
+        catalogId: catalogSelect.value,
+        catalogName: selectedCatalog()?.nome,
+        criadoEm: new Date().toISOString(),
+        executadoPor: "",
+      };
+      const atual = envio;
+      // Quem e quando, pelo próprio servidor (o processamento ainda não tem arquivos: consulta leve).
+      requestJson(`/api/notas-see/processamentos/${atual.jobId}`, { timeoutMs: 30000 })
+        .then((dados) => {
+          atual.executadoPor = dados.executed_by || "";
+          atual.criadoEm = dados.created_at || atual.criadoEm;
+          if (envio === atual && root.isConnected) renderEnvio(atual, uploadError.hidden ? "enviando" : "parado");
+        })
+        .catch(() => {});
+      await continuarEnvio();
+    });
+    uploadRetry.addEventListener("click", () => {
+      if (envio && !cancelamentoEnvio) continuarEnvio();
+    });
+    // Cancela o processamento do ENVIO (não o do painel) e descarta o que já foi recebido. Os dois botões
+    // ("Cancelar envio" e o "Cancelar" do painel) e o aviso do menu usam este mesmo caminho: um clique a mais
+    // só espera o cancelamento que já está em curso. Devolve true quando o servidor confirmou.
+    const cancelarEnvio = () => {
+      if (cancelamentoEnvio) return cancelamentoEnvio;
+      const atual = envio;
+      if (!atual) return Promise.resolve(false);
+      cancelamentoEnvio = (async () => {
+        pausarEnvio(atual);
+        uploadCancel.disabled = true;
+        cancelJob.disabled = true;
+        uploadRetry.disabled = true;
+        setMessage(processMsg, `Cancelando o envio nº ${atual.jobId}...`);
+        try {
+          await requestJson(`/api/notas-see/processamentos/${atual.jobId}/cancelar`, { method: "POST", timeoutMs: 30000 });
+        } catch (error) {
+          if (!root.isConnected) return false;
+          // Não confirmou: o envio fica parado, e o usuário escolhe continuar ou tentar cancelar de novo.
+          renderEnvio(atual, "parado");
+          mostrarErroEnvio(`Não foi possível cancelar o envio nº ${atual.jobId}: ${error.message}${error.tipo === "sessao" ? " Entre de novo no SPO." : ""} O envio está parado: use "Tentar novamente" para continuar ou "Cancelar envio" para tentar cancelar de novo.`, true);
+          return false;
+        } finally {
+          cancelamentoEnvio = null;
+          uploadCancel.disabled = false;
+          cancelJob.disabled = false;
+          uploadRetry.disabled = false;
         }
-        setMessage(processMsg, error.message, true);
-        submit.disabled = false;
+        if (envio === atual) encerrarEnvio();
+        if (!root.isConnected) return true;
+        limparErroEnvio();
+        renderEnvio(atual, "cancelado");
+        setMessage(processMsg, "Envio cancelado. Nenhum PDF foi processado; quando quiser, inicie um novo envio.");
+        return true;
+      })();
+      return cancelamentoEnvio;
+    };
+    uploadCancel.addEventListener("click", () => { cancelarEnvio(); });
+    // "Cancelar" do painel: durante o envio, cancela o envio; depois, o processamento que o painel acompanha.
+    cancelJob.addEventListener("click", async () => {
+      if (envio) {
+        cancelarEnvio();
+        return;
+      }
+      const id = jobId;
+      if (!id || cancelJob.disabled) return;
+      cancelJob.disabled = true;
+      mostrarAvisoPainel(`Cancelando o processamento nº ${id}...`, { tipo: "cancelar" });
+      try {
+        await requestJson(`/api/notas-see/processamentos/${id}/cancelar`, { method: "POST", timeoutMs: 30000 });
+        if (!root.isConnected) return;
+        // O botão segue desabilitado até o status chegar a "cancelado" (o painel o esconde então).
+        if (String(jobId) === String(id)) mostrarAvisoPainel(`Cancelamento do processamento nº ${id} solicitado. Aguardando o processamento parar…`, { tipo: "cancelar" });
+      } catch (error) {
+        if (!root.isConnected) return;
+        cancelJob.disabled = false;
+        mostrarAvisoPainel(`Não foi possível cancelar o processamento nº ${id}: ${error.message}${error.tipo === "sessao" ? " Entre de novo no SPO." : ""}`, { erro: true, tipo: "cancelar" });
       }
     });
-    document.getElementById("see-cancel-job").addEventListener("click", async () => { if (jobId) await requestJson(`/api/notas-see/processamentos/${jobId}/cancelar`, { method: "POST" }); });
+    // ---- Aviso ao trocar de tela pelo menu durante o envio ----
+    // O SPO troca de tela sem recarregar a página (o beforeunload não dispara). Enquanto houver envio, um
+    // ouvinte de clique em captura (registrado no continuarEnvio e removido no encerrarEnvio) segura o clique
+    // nos itens do menu (também os abertos pela busca de telas, que clicam no item) e pergunta antes.
+    // O código de navegação comum não é alterado: confirmada a saída, o clique é repetido.
+    function interceptarMenu(event) {
+      if (!envio && !criacaoEnvio) return;
+      const link = event.target.closest?.("#menu [data-route]");
+      if (!link || link.getAttribute("data-external-url")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      abrirAvisoSaidaMenu(link);
+    }
+    const abrirAvisoSaidaMenu = (link) => {
+      if (document.getElementById("see-sair-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "see-sair-overlay";
+      overlay.innerHTML = `
+        <div class="modal-card see-done-modal" role="dialog" aria-modal="true" aria-labelledby="see-sair-title" aria-describedby="see-sair-msg">
+          <div class="modal-header">
+            <img src="/static/img/logo.jpg" alt="Logo" class="modal-logo" />
+            <div class="modal-header-text">
+              <div class="modal-header-title">Sistema de Planejamento e Orçamento</div>
+              <div class="modal-header-subtitle">SPO-NGER-SEDUCMT</div>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="modal-title" id="see-sair-title">Deseja permanecer nesta página?</div>
+            <p class="see-done-note" id="see-sair-msg">O envio dos PDFs ainda não terminou.</p>
+          </div>
+          <div class="see-done-footer">
+            <button type="button" class="btn btn-primary sm" data-see-sair="ficar">Permanecer</button>
+            <button type="button" class="btn btn-danger sm" data-see-sair="sair">Sair e cancelar o envio</button>
+          </div>
+        </div>`;
+      const msg = overlay.querySelector("#see-sair-msg");
+      const botoes = [...overlay.querySelectorAll("[data-see-sair]")];
+      const fechar = () => {
+        fecharAvisoSaida = null;
+        document.removeEventListener("keydown", onKeyDown, true);
+        overlay.remove();
+      };
+      fecharAvisoSaida = fechar;
+      // "Permanecer" (botão, Esc ou clique fora): o foco volta ao item do menu que abriu o aviso.
+      const permanecer = () => {
+        fechar();
+        if (link.isConnected) link.focus({ preventScroll: true });
+      };
+      // Esc = "Permanecer". Registrado antes do tratamento geral dos avisos, que acionaria o primeiro
+      // botão com "cancelar" no texto ("Sair e cancelar o envio").
+      const onKeyDown = (ev) => {
+        if (ev.key !== "Escape") return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        if (!botoes[0].disabled) permanecer();
+      };
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay && !botoes[0].disabled) permanecer(); });
+      botoes[0].addEventListener("click", permanecer);
+      botoes[1].addEventListener("click", async () => {
+        botoes.forEach((botao) => { botao.disabled = true; });
+        if (criacaoEnvio) {
+          // Ainda criando o processamento: espera o nº dele (o envio começa logo em seguida) para cancelá-lo.
+          msg.textContent = "Preparando o cancelamento do envio...";
+          await criacaoEnvio.catch(() => {});
+          await Promise.resolve();
+        }
+        // Se o envio terminou com o aviso aberto, não há o que cancelar: o processamento segue no servidor.
+        if (envio) msg.textContent = `Cancelando o envio nº ${envio.jobId}...`;
+        const cancelado = envio ? await cancelarEnvio() : true;
+        fechar();
+        // Só sai depois de o servidor confirmar o cancelamento; senão fica na tela, com o envio parado.
+        if (cancelado) link.click();
+      });
+      document.addEventListener("keydown", onKeyDown, true);
+      document.body.appendChild(overlay);
+      botoes[0].focus();
+    };
+    // ---- Saída da tela ----
+    // Quando a tela das Notas SEE sai do #content-area (outra tela do menu), nada dela continua rodando:
+    // poll, timers do envio, ouvintes no document/window, avisos abertos e este próprio observador.
+    const contentArea = document.getElementById("content-area");
+    const observadorSaida = new MutationObserver(() => {
+      if (root.isConnected) return;
+      observadorSaida.disconnect();
+      pararPoll();
+      if (envio) {
+        pausarEnvio(envio);
+        encerrarEnvio();
+      }
+      window.removeEventListener("beforeunload", avisoSaida);
+      document.removeEventListener("click", interceptarMenu, true);
+      fecharAvisoSaida?.();
+      fecharAvisoConcluido?.();
+    });
+    if (contentArea) observadorSaida.observe(contentArea, { childList: true });
     async function downloadJob(id) {
       if (!id) return;
       const url = `/api/notas-see/processamentos/${id}/download`;
