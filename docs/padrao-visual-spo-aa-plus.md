@@ -4,6 +4,9 @@ Regras de cor, contraste, temas e componentes da interface do SPO. Valem para **
 ou alterada**, por qualquer desenvolvedor. Completa o `docs/contrato-visual-spo.md`, que cuida de
 layout, responsividade e preferências.
 
+> Versão 5.4, 2026-11-23: **versões dos estáticos num lugar só**, o `templates/_estaticos.html` (§6.2, §6.4;
+> modularização, etapa 1).
+>
 > Versão 5.3, 2026-11-18: **siglas com balão** em qualquer aparelho (§4.4).
 >
 > Versão 5.2, 2026-11-18: **índice e fichas** no kit de mockup, a partir do `static/kit/catalogo.json`, fonte única
@@ -547,10 +550,11 @@ leitor de tela; critério novo citado no cartão entra com o link no mesmo forma
 - **Especificidade:** regras antigas com `background:` ou a regra geral dos contornos (0,6,2) vencem
   blocos novos. Quando o novo precisa ganhar, use `:not(#nome)` (soma peso de id sem selecionar nada
   a mais) e **comente o motivo**. Evite `!important`.
-- **`?v=` do CSS:** mudou o `style.css`, muda o `?v=` no `base.html` **e** no `login.html`, com o
-  mesmo valor (#59). Mudou o `main.js`, muda o `?v=` do JS no `base.html`.
-- No `base.html` e no `login.html` de uma branch `dev/*`, mude **só as linhas `?v=`** (o selo de
-  ambiente e o rodapé são próprios de cada branch).
+- **`?v=`:** mudou o `style.css`, muda o `?v=` no `templates/_estaticos.html` e no kit; mudou o
+  `main.js` ou o `login-theme.js`, só no `_estaticos.html`. No `base.html` e no `login.html` não há mais
+  versão de estático para mudar (o `RELEASE` do rodapé continua no `base.html`; §40.2 do `claude.md`).
+- No `base.html` e no `login.html` de uma branch `dev/*`, não mexa no selo de ambiente nem no rodapé: são
+  próprios de cada branch.
 
 ### 6.3 Exceções registradas (cor literal permitida)
 
@@ -661,8 +665,9 @@ tela nova. Abre pelo SPO local, sem entrar: `http://127.0.0.1:5000/static/kit/mo
   se os cartões do painel deixarem de ser iguais aos do Personalizar (cartão novo ou opção nova no
   template precisam ser copiados para o kit) e se o CSS do
   kit escrever px ou cor literal; também se a marcação das prévias do Personalizar mudar sem ir para o kit,
-  se os blocos dos gráficos mudarem de forma ou passarem a depender de outra função global e se o Plotly
-  do kit não for o mesmo do `base.html`; e se um exemplo do catálogo deixar de ser igual ao template de
+  se os blocos dos gráficos mudarem de forma ou passarem a depender de outra função global, se o Plotly
+  do kit não for o mesmo do `templates/_estaticos.html` e se o `?v=` do CSS do kit não for o mesmo de lá
+  (o kit é HTML estático: o `?v=` e a URL do Plotly são copiados à mão do `_estaticos.html`); e se um exemplo do catálogo deixar de ser igual ao template de
   origem. **Padrão novo de cartão no SPO:** acrescentar ao catálogo (recorte do template + linha na lista
   `CATALOGO` do teste). **Opção nova no Personalizar:** copiar o cartão do template para o
   painel do kit (o teste aponta qual).
@@ -716,6 +721,7 @@ resolvido por `initGraficosEscala`).
 | Data | Mudança |
 |---|---|
 | 2026-11-13 | Versão 1: consolida o AA+ da `dev/jean` (#31–#61). |
+| 2026-11-23 | **Versão 5.4:** `?v=` e CDNs só no `templates/_estaticos.html` (§6.2); o kit copia de lá o `?v=` do CSS e o Plotly (§6.4). Modularização, etapa 1 (`feat/estaticos`). |
 | 2026-11-17 | **Versão 5:** modo móvel e navegadores (#166–#176): metas de interrupções, ordem e navegadores (§1); avisos da Início e detalhe junto do cartão (§4.4); bateria entre navegadores (§5, item 15); regras "nada abre sozinho" e "linha do cartão" (§6.1); kit no celular e "Seu aparelho" (§6.4); **barra de título da tela (secundária)** como padrão das telas em tela cheia (§4.4, §6.1, §6.4, §7; `fix/menu-cabecalho-pta`). Detalhe por PR no `docs/CHANGELOG.md`. |
 | 2026-11-17 | **Versão 5.1:** **Bateria SPO-AA+** no repositório (`tests/navegadores/`, §5 item 16; #187): as baterias 1 a 4 numa ferramenta só, em três níveis (básico a cada PR, intermediário a cada lote, completo antes de enviar um lote), passo do checklist (§6.1). Achados das baterias 4 e 5 corrigidos: entrelinha e leitura nas prévias do kit, `data-forced-colors` no kit, filtro que fecha ao clicar fora em qualquer relatório, caixas de marcar com 24 px (§4.2, §4.3; #186) e Esc que fecha o menu por cima da tela com o foco em qualquer lugar (§4.4; #187). |
 | 2026-11-15 | **Versão 4:** §2.2 "Densidade do texto" (Compacto/Intermediário/Legível para a interface inteira; padrão Legível; Compacto com tabelas de 10 px; passo Leitura de 16 px) e as variáveis `--spo-fs-*`; §2.1 Mulish na largura do "Estrito". Só documentação: a aplicação vem nas etapas 2–4. |

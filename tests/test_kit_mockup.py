@@ -14,6 +14,15 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 MAIN_JS = RAIZ / "static" / "js" / "main.js"
 KIT = RAIZ / "static" / "kit"
+# feat/estaticos (modularização, etapa 1): versões e URLs dos estáticos ficam só no templates/_estaticos.html
+ESTATICOS = RAIZ / "templates" / "_estaticos.html"
+
+
+def _estatico(nome: str) -> str:
+    """Valor de um {% set nome = "…" %} do _estaticos.html."""
+    m = re.search(r'\{%-?\s*set\s+' + nome + r'\s*=\s*"([^"]+)"', ESTATICOS.read_text(encoding="utf-8"))
+    assert m, f"_estaticos.html sem o {{% set {nome} = ... %}}"
+    return m.group(1)
 
 # marcadores que o kit-mockup.js procura no main.js (mesmas strings nos dois arquivos)
 MARCADORES = [
@@ -191,11 +200,11 @@ def test_graficos_lidos_do_main_js():
 
 
 def test_kit_usa_o_mesmo_plotly_do_spo():
-    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
     kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
-    plotly = re.search(r'<script src="(https://cdn\.plot\.ly/[^"]+)"', base)
-    assert plotly, "base.html sem o Plotly"
-    assert plotly.group(1) in kit, f"o kit de mockup deve carregar o mesmo Plotly do SPO ({plotly.group(1)})"
+    plotly = _estatico("cdn_plotly")
+    assert plotly.startswith("https://cdn.plot.ly/"), "o Plotly do _estaticos.html mudou de forma"
+    assert f'<script src="{plotly}"' in kit, (
+        f"o kit de mockup deve carregar o mesmo Plotly do SPO ({plotly}): copie a URL do _estaticos.html para o kit")
 
 
 # ---- feat/kit-catalogo: catálogo de padrões (exemplos recortados dos templates de origem)
@@ -336,17 +345,42 @@ def test_filtros_de_lista_do_kit_equivalentes_aos_do_spo():
 
 
 def test_kit_carrega_o_style_css_da_mesma_versao_do_spo():
-    """O kit usa o style.css do SPO: o link precisa do mesmo ?v= do base.html, senão o navegador continua
+    """O kit usa o style.css do SPO: o link precisa do mesmo ?v= do _estaticos.html, senão o navegador continua
     mostrando a versão antiga do cache no kit (aconteceu com as amostras de cor, fix/cor-ativa-check)."""
-    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
     kit = (KIT / "mockup-spo-aa-plus.html").read_text(encoding="utf-8")
-    v_base = re.search(r"css/style\.css'\) \}\}\?v=([\w.-]+)", base)
+    v_spo = _estatico("v_css")
     v_kit = re.search(r'href="\.\./css/style\.css\?v=([\w.-]+)"', kit)
-    assert v_base, "o link do style.css no base.html mudou de forma"
     assert v_kit, "o kit de mockup carrega o style.css sem ?v= (o navegador mostraria a versão antiga)"
-    assert v_kit.group(1) == v_base.group(1), (
-        f"?v= do style.css no kit ({v_kit.group(1)}) diferente do base.html ({v_base.group(1)}): "
-        "copie o do base.html para static/kit/mockup-spo-aa-plus.html")
+    assert v_kit.group(1) == v_spo, (
+        f"?v= do style.css no kit ({v_kit.group(1)}) diferente do _estaticos.html ({v_spo}): "
+        "copie o do templates/_estaticos.html para static/kit/mockup-spo-aa-plus.html")
+
+
+def test_versoes_dos_estaticos_so_no_estaticos_html():
+    """feat/estaticos (modularização, etapa 1; §40.2): o base.html e o login.html não escrevem ?v= nem URL de CDN;
+    chamam as macros do _estaticos.html, a fonte única das versões. Mudou o style.css: ?v= no _estaticos.html e no
+    kit; mudou o main.js ou o login-theme.js: só no _estaticos.html."""
+    for nome in ("base.html", "login.html"):
+        texto = (RAIZ / "templates" / nome).read_text(encoding="utf-8-sig")
+        assert "?v=" not in texto, f"{nome} voltou a escrever ?v=: a versão vai no templates/_estaticos.html"
+        cdn = re.findall(r'(?:href|src)="https?://[^"]+"', texto)
+        assert not cdn, f"{nome} voltou a escrever URL de CDN ({cdn}): vai no templates/_estaticos.html"
+        assert texto.startswith('{% import "_estaticos.html" as estaticos'), (
+            f"{nome} precisa importar o _estaticos.html na primeira linha")
+    estaticos = ESTATICOS.read_text(encoding="utf-8")
+    for nome in ("v_css", "v_js", "v_login_tema"):
+        assert re.fullmatch(r"\d{8}\.[\w.-]+", _estatico(nome)), f"{nome} fora do formato AAAAMMDD.<dev>-<tema>.N"
+    for macro in ("css_bootstrap", "css_bootstrap_icons", "css_spo", "js_plotly", "js_spo", "js_login_tema"):
+        assert re.search(r"\{%-?\s*macro\s+" + macro + r"\(\)", estaticos), f"_estaticos.html sem a macro {macro}()"
+
+
+def test_estaticos_html_sem_bom():
+    """O Jinja não tira o BOM de um arquivo importado: um U+FEFF no começo do _estaticos.html entraria no meio do
+    <head> do base.html e do login.html. O arquivo fica em UTF-8 sem BOM (no repositório, com LF). O fim de linha
+    não é conferido aqui: com core.autocrlf no Windows a cópia de trabalho vem com CRLF, e isso não muda o HTML
+    (as macros cortam as quebras de linha com {%- -%}; conferido com LF e CRLF)."""
+    bruto = ESTATICOS.read_bytes()
+    assert not bruto.startswith(b"\xef\xbb\xbf"), "templates/_estaticos.html começa com BOM: salve em UTF-8 sem BOM"
 
 
 def test_catalogo_do_kit_cita_so_o_que_existe():
