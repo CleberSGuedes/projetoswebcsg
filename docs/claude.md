@@ -2154,7 +2154,7 @@ _Parte em vigor. O histórico (problema, medição, verificação) está no [CHA
 
 **Operacional:** as notas do 4º bimestre já processadas em produção com o defeito devem ser **reenviadas num processamento novo** ("Não, iniciar uma nova lista"), e não com "acrescentar": o *acrescentar* copia as notas anteriores como estão e não relê os PDFs (§28.7).
 
-## Notas SEE: envio robusto dos PDFs (2026-11-18)
+## 43. Notas SEE: envio robusto dos PDFs (2026-11-18)
 
 Complementa a §28. Vale para a tela "Notas SEE" (`initNotasSee` no `main.js`) e para as rotas de `rotas/notas_see_routes.py`.
 
