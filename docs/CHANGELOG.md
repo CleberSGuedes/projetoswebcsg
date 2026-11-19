@@ -9,6 +9,15 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
+## 2026-11-19 — homologação, RELEASE_2_2026_11_19.3 (lote 9)
+
+### Alterado
+- Comparação antes × depois alinha os elementos irmãos (`fix/comparacao-alinhamento`; condição do dev. Cleber para as etapas 3 e 4 da modularização): o elemento era achado pela posição entre os irmãos de mesma tag, e um bloco novo no meio de uma seção desalinhava todos os seguintes, cada um comparado com o vizinho (diferenças falsas em tudo o que vinha depois). Agora os filhos de cada par de elementos são alinhados como as linhas de um diff de texto (maior sequência comum pelo nome; id que mudou de lugar; o resto pela tag, na ordem). O que não casou sai uma vez só por pedaço ("sumiu"/"apareceu", com quantos elementos tem dentro); o elemento que mudou de posição sai com o caminho novo depois de uma seta; numa tela onde um bloco entrou ou saiu, os vizinhos que só se deslocaram são listados como "deslocou" sem reprovar de novo. Sem nada inserido nem removido, o resultado é o mesmo de antes. As funções de diferença foram para `tests/navegadores/lib/diferencas.mjs`, com 9 testes de retratos montados à mão (`lib/diferencas.test.mjs`, rodados pelo `pytest` em `tests/test_comparacao_diferencas.py`; 5 mil linhas com uma no meio: 35 ms). Só `tests/`; nenhuma tela mudou.
+- Bateria SPO-AA+ no Playwright **1.65.1** (era 1.64.1; `chore/playwright-1-65`): navegadores Chromium 159, Firefox 159 e WebKit 27.2. Lidas as notas da 1.65: nada do que mudou atinge a bateria (ela não usa o executor de testes do Playwright; a espera por elemento não inerte nos cliques não alterou nenhum resultado). Comparação antes × depois das 11 telas e do kit em 3 vistas, com a referência gravada na 1.64.1: 2.185 diferenças só de grafia do Chromium 159 (`flex-start`/`flex-end` passam a ser lidos como `flow-start`/`flow-end`, e um `background-size` repetido como valor único), sem mudança na tela; e duas que se repetem sem relação com a versão — a linha do usuário volta a texto corrido depois de 30 s (o `setUserMeta()` regrava o `#user-meta` e apaga os trechos do #197) e o "›" do menu no celular, medido pelo logotipo, varia de 27 a 29 px entre as telas. Uma referência gravada numa versão não serve para comparar na seguinte: gravar de novo depois de trocar o Playwright. Bateria básica 36/36 e intermediária 159/159. Só `tests/navegadores/package*.json`.
+- **Scripts de banco:** nenhum. **Mudança no contrato da API com a automação:** nenhuma.
+
+---
+
 ## 2026-11-19 — homologação, RELEASE_2_2026_11_19.1 (lote 8.1)
 
 ### Corrigido
