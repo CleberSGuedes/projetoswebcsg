@@ -351,3 +351,29 @@ body.spo-ponte.embedded-mode .concept-actions .close-expansion {
   width: 44px;
   height: 44px;
 }
+
+/* [jean] feat/siglas-explicadas (2026-11-18): sigla com balão (initSiglas, igual ao do SPO). Mesmas regras do
+   style.css do SPO, com as variáveis que o mockup recebe do SPO (e uma reserva quando abre sozinho). */
+.spo-sigla { position: relative; display: inline; text-decoration: none; }
+.spo-sigla-botao {
+  display: inline; margin: 0; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: help; text-decoration: underline dotted; text-decoration-thickness: 0.08em; text-underline-offset: 0.18em;
+}
+.spo-sigla-botao.spo-sigla-info { margin-left: 0.2em; text-decoration: none; color: var(--spo-accent-text, inherit); cursor: pointer; }
+.spo-sigla-balao {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 1200;
+  transform: translateX(var(--spo-sigla-desloca, 0px));
+  width: max-content; max-width: min(22rem, calc(100vw - 16px));
+  padding: 6px 10px; border: 1px solid var(--spo-accent-text, currentColor); border-radius: 8px;
+  background: var(--card, Canvas); color: var(--text, CanvasText); box-shadow: var(--shadow, none);
+  font-size: 14px; font-weight: 500; line-height: 1.4; letter-spacing: normal; text-transform: none;
+  white-space: normal; text-align: left;
+}
+.spo-sigla-balao[hidden] { display: none; }
+/* a sigla parece texto: fora da altura mínima de 44 px dos botões em tela de toque (que esticava a linha do título;
+   achado pela comparação antes × depois). Dentro de frase é exceção do alvo de 24 px; no título ela já passa de 24 px */
+/* (os :not() só sobem a especificidade acima da regra dos 44 px, body :is(…, input:not()…), que é 0,4,2) */
+body .spo-sigla > .spo-sigla-botao:not([type="submit"]):not([type="reset"]):not([hidden]) {
+  min-height: 0; min-width: 0; line-height: inherit; vertical-align: baseline;
+}

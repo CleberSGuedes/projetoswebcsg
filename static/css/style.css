@@ -10620,3 +10620,75 @@ body .protected-contract-card .spo-kit-contrato-lista a[data-spo-padrao]:not(#sp
 .see-grid > * { min-width: 0; }
 .see-progress-aviso { margin: -6px 0 12px; }
 .see-panel-actions { margin-top: 12px; }
+
+
+/* ==========================================================================
+   [jean] fix/linha-usuario-cabecalho (2026-11-17): a linha do usuário só quebra entre
+   o nome e "data, hora | Logados" (initLinhaUsuario, main.js). Cabendo, uma linha; não
+   cabendo, duas, sem o traço. Substitui o overflow-wrap: anywhere do #43 nessa linha.
+   ========================================================================== */
+.user-meta .spo-usuario-nome,
+.user-meta .spo-usuario-sessao { white-space: nowrap; overflow-wrap: normal; }
+.user-meta .spo-usuario-sep { white-space: normal; }
+.user-meta.spo-usuario-duas-linhas .spo-usuario-sep { display: none; }
+.user-meta.spo-usuario-duas-linhas .spo-usuario-nome,
+.user-meta.spo-usuario-duas-linhas .spo-usuario-sessao { display: block; white-space: normal; }
+
+/* ==========================================================================
+   [jean] feat/siglas-explicadas (2026-11-18): sigla com balão em qualquer aparelho (initSiglas, main.js).
+   O botão parece texto com o sublinhado pontilhado de sempre; o balão abre abaixo, com as cores do cartão.
+   ========================================================================== */
+.spo-sigla { position: relative; display: inline; text-decoration: none; }
+.spo-sigla-botao {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+.spo-sigla-botao.spo-sigla-info {
+  margin-left: 0.2em;
+  text-decoration: none;
+  color: var(--spo-accent-text);
+  cursor: pointer;
+}
+.spo-sigla-balao {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1200;
+  transform: translateX(var(--spo-sigla-desloca, 0px));
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 16px));
+  padding: 6px 10px;
+  border: 1px solid var(--spo-control-border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: var(--spo-fs-texto);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
+  text-align: left;
+}
+.spo-sigla-balao[hidden] { display: none; }
+/* fix/sigla-balao-zoom (lote 8.1): com a "Fonte maior" o .main tem zoom e o 100vw dentro dele vira 125% da tela (a 360 px
+   com "Maior", o balão tinha 402 px). Mesmo ajuste dos avisos modais (--spo-zoom, bloco "[cleber] Avisos modais com fonte maior") */
+.main .spo-sigla-balao { max-width: min(22rem, calc((100vw - 16px) / var(--spo-zoom, 1))); }
+/* a sigla parece texto: fora da altura mínima de 44 px dos botões em tela de toque (que esticava a linha do título;
+   achado pela comparação antes × depois). Dentro de frase é exceção do alvo de 24 px; no título ela já passa de 24 px */
+/* (os :not() só sobem a especificidade acima da regra dos 44 px, body :is(…, input:not()…), que é 0,4,2) */
+body .spo-sigla > .spo-sigla-botao:not([type="submit"]):not([type="reset"]):not([hidden]) {
+  min-height: 0; min-width: 0; line-height: inherit; vertical-align: baseline;
+}

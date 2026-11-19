@@ -2,7 +2,8 @@
 // avisa abaixo da meta AA+ (7:1; 4,5:1 grande).
 import { abrirPerfil, abrirTela, gravarPreferencias, nomeDaTela } from "../lib/ambiente.mjs";
 import { medirContraste } from "../lib/medidas.mjs";
-import { registrar, capturar } from "../lib/registro.mjs";
+import { registrar, capturar, etapa } from "../lib/registro.mjs";
+import { comTempo, LIMITE_PASSO_S, TempoEsgotado } from "../lib/tempo.mjs";
 
 // combinações exigentes: o Amarelo no escuro e o Azul no claro; contraste reforçado; fontes, tamanho e leitura AAA
 export const PREFERENCIAS = {
@@ -21,10 +22,13 @@ export async function contraste(perfis, rotas, nomesPreferencias) {
       try {
         for (const rota of rotas) {
           const alvo = `${nomeDaTela(rota)} [${nomePref}]`;
+          etapa(`contraste ${perfil}`, alvo);
           try {
-            await abrirTela(pag, rota);
-            await pag.waitForTimeout(400); // fim das transições de cor
-            const m = await pag.evaluate(medirContraste, null);
+            const m = await comTempo((async () => {
+              await abrirTela(pag, rota);
+              await pag.waitForTimeout(400); // fim das transições de cor
+              return pag.evaluate(medirContraste, null);
+            })(), LIMITE_PASSO_S, `contraste ${alvo} (${perfil})`);
             const ex = (a) => a.map(([x, t, c]) => `${x} «${t}» ${c}`).join(", ");
             if (m.abaixoAA) {
               registrar({ verificacao: "contraste", perfil, alvo, situacao: "falha", resumo: `${m.abaixoAA} texto(s) abaixo do AA: ${ex(m.abaixoAAexemplos)}`, captura: await capturar(pag, `contraste-${perfil}-${nomeDaTela(rota)}-${nomePref}`), medida: m });
@@ -35,10 +39,12 @@ export async function contraste(perfis, rotas, nomesPreferencias) {
             }
           } catch (e) {
             registrar({ verificacao: "contraste", perfil, alvo, situacao: "falha", resumo: String(e.message).slice(0, 160) });
+            // navegador possivelmente travado: as telas que faltam desta combinação ficam para a próxima rodada
+            if (e instanceof TempoEsgotado) break;
           }
         }
       } finally {
-        await nav.close();
+        await comTempo(nav.close(), 30, "fechar o navegador").catch(() => {});
       }
     }
   }
