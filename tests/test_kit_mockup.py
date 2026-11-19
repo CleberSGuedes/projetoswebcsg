@@ -376,10 +376,11 @@ def test_versoes_dos_estaticos_so_no_estaticos_html():
 
 def test_estaticos_html_sem_bom():
     """O Jinja não tira o BOM de um arquivo importado: um U+FEFF no começo do _estaticos.html entraria no meio do
-    <head> do base.html e do login.html. O arquivo fica em UTF-8 sem BOM e com LF."""
+    <head> do base.html e do login.html. O arquivo fica em UTF-8 sem BOM (no repositório, com LF). O fim de linha
+    não é conferido aqui: com core.autocrlf no Windows a cópia de trabalho vem com CRLF, e isso não muda o HTML
+    (as macros cortam as quebras de linha com {%- -%}; conferido com LF e CRLF)."""
     bruto = ESTATICOS.read_bytes()
     assert not bruto.startswith(b"\xef\xbb\xbf"), "templates/_estaticos.html começa com BOM: salve em UTF-8 sem BOM"
-    assert b"\r\n" not in bruto, "templates/_estaticos.html com CRLF: salve com LF"
 
 
 def test_catalogo_do_kit_cita_so_o_que_existe():
