@@ -17,7 +17,7 @@ Este arquivo lista o que foi publicado, por data. Formato:
 
 ---
 
-## 2026-11-19 — dev/jean (lote 9), ainda não publicado
+## 2026-11-19 — produção, RELEASE_2_2026_11_19.4
 
 ### Alterado
 - Comparação antes × depois alinha os elementos irmãos (`fix/comparacao-alinhamento`; condição do dev. Cleber para as etapas 3 e 4 da modularização): o elemento era achado pela posição entre os irmãos de mesma tag, e um bloco novo no meio de uma seção desalinhava todos os seguintes, cada um comparado com o vizinho (diferenças falsas em tudo o que vinha depois). Agora os filhos de cada par de elementos são alinhados como as linhas de um diff de texto (maior sequência comum pelo nome; id que mudou de lugar; o resto pela tag, na ordem). O que não casou sai uma vez só por pedaço ("sumiu"/"apareceu", com quantos elementos tem dentro); o elemento que mudou de posição sai com o caminho novo depois de uma seta; numa tela onde um bloco entrou ou saiu, os vizinhos que só se deslocaram são listados como "deslocou" sem reprovar de novo. Sem nada inserido nem removido, o resultado é o mesmo de antes. As funções de diferença foram para `tests/navegadores/lib/diferencas.mjs`, com 9 testes de retratos montados à mão (`lib/diferencas.test.mjs`, rodados pelo `pytest` em `tests/test_comparacao_diferencas.py`; 5 mil linhas com uma no meio: 35 ms). Só `tests/`; nenhuma tela mudou.
