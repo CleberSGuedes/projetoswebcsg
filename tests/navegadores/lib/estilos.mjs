@@ -37,7 +37,7 @@ export function retratarEstilos() {
   const arred = (v) => Math.round(v * 2) / 2; // meio pixel: abaixo disso é arredondamento do motor
   // formato compacto (2): cada combinação de valores (estilo, pseudo-elemento, nome) é guardada uma vez só e o elemento
   // guarda o número dela; o caminho é o do pai + o segmento. As tabelas grandes repetem o mesmo estilo em milhares de
-  // células: o PLAN 51 (61 mil elementos) passou de ~71 MB para poucos MB. expandirRetrato (comparar.mjs) refaz o formato
+  // células: o PLAN 51 (61 mil elementos) passou de ~71 MB para poucos MB. expandirRetrato (lib/diferencas.mjs) refaz o formato
   // completo para a comparação
   const tabela = () => { const m = new Map(), lista = []; return { lista, de(v) { const k = Array.isArray(v) ? v.join("\u0001") : v; let i = m.get(k); if (i === undefined) { i = lista.length; m.set(k, i); lista.push(v); } return i; } }; };
   const estilos = tabela(), pseudos = tabela(), nomes = tabela();
