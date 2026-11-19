@@ -7,7 +7,8 @@
 // houver falha. Só abre telas, clica em preferências (gravadas no navegador), digita em filtros e escolhe opções:
 // nada é gravado no banco. Uma tela por vez (o banco de desenvolvimento é remoto e tem poucas conexões).
 import { DESKTOP, APARELHOS, RAPIDOS, TELAS_BASICAS, TELAS_PRINCIPAIS, TELAS_TODAS, BASE, garantirSessao } from "./lib/ambiente.mjs";
-import { escreverRelatorio } from "./lib/registro.mjs";
+import { escreverRelatorio, registrar, progresso, etapa } from "./lib/registro.mjs";
+import { LIMITE_SEM_PROGRESSO_MIN } from "./lib/tempo.mjs";
 import { travas } from "./verificacoes/travas.mjs";
 import { telas } from "./verificacoes/telas.mjs";
 import { contraste, PREFERENCIAS } from "./verificacoes/contraste.mjs";
@@ -52,12 +53,29 @@ if (!NIVEIS[nivel]) {
 const so = (process.argv.find((a) => a.startsWith("--so=")) || "").slice(5).split(",").filter(Boolean);
 const inicio = Date.now();
 console.log(`Bateria SPO-AA+, nível ${nivel}, em ${BASE}`);
+// vigia: sem nenhum resultado novo por LIMITE_SEM_PROGRESSO_MIN minutos (algo travou fora de um passo com limite),
+// registra a falha dizendo onde parou, grava o relatório e sai com código 1, em vez de ficar parada em silêncio
+const vigia = setInterval(() => {
+  const parado = (Date.now() - progresso.ultimo) / 60000;
+  if (parado < LIMITE_SEM_PROGRESSO_MIN) return;
+  registrar({ verificacao: "bateria", alvo: "travou", situacao: "falha", resumo: `sem progresso há ${parado.toFixed(1)} min; parou em: ${progresso.etapa}${progresso.alvo ? " — " + progresso.alvo : ""}` });
+  const rel = escreverRelatorio(nivel, inicio);
+  console.log(`\nBateria interrompida pelo vigia (${LIMITE_SEM_PROGRESSO_MIN} min sem progresso). Relatório: ${rel.arquivo}`);
+  process.exit(1);
+}, 15000);
+// o vigia segura o processo vivo de propósito (sem unref): se só sobrar uma espera parada, sem ele o Node sairia com o
+// código 13, sem relatório; o clearInterval no fim libera a saída normal
+etapa("sessão do usuário de teste");
 await garantirSessao();
-for (const [nome, rodar] of NIVEIS[nivel]) {
+// BATERIA_TESTE_TRAVA=1: um passo que nunca termina, só para conferir o vigia (ver o README)
+const passos = process.env.BATERIA_TESTE_TRAVA ? [["trava-de-teste", () => new Promise(() => {})], ...NIVEIS[nivel]] : NIVEIS[nivel];
+for (const [nome, rodar] of passos) {
   if (so.length && !so.includes(nome)) continue;
   console.log(`\n== ${nome}`);
+  etapa(nome);
   await rodar();
 }
+clearInterval(vigia);
 const r = escreverRelatorio(nivel, inicio);
 console.log(`\n${r.ok} ok, ${r.falhas} falha(s), ${r.avisos} aviso(s). Relatório: ${r.arquivo}`);
 process.exit(r.falhas ? 1 : 0);

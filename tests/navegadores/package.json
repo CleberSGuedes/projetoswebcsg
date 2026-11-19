@@ -6,7 +6,9 @@
   "scripts": {
     "basico": "node bateria.mjs basico",
     "intermediario": "node bateria.mjs intermediario",
-    "completo": "node bateria.mjs completo"
+    "completo": "node bateria.mjs completo",
+    "comparar:gravar": "node comparar.mjs gravar",
+    "comparar": "node comparar.mjs comparar"
   },
   "dependencies": {
     "playwright": "1.64.1"

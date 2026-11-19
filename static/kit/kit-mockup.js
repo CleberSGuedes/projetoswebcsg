@@ -5,6 +5,7 @@
 //  - OPTIONS e DEFAULTS do initFontesPersonalizar (as opções do Personalizar);
 //  - initNavegacaoTabelas e initTecladoPaginacao (navegação pelo teclado nas tabelas);
 //  - initBuscaListasLongas (campo "Filtrar a lista" nas listas de 40 opções ou mais);
+//  - initSiglas (siglas com balão em qualquer aparelho: <abbr title> vira botão);
 //  - a regra da oferta "Leitura confortável" do initSugestaoAtkinson (ORDEM, ALVO, SEM_VALOR, NOMES, BOTAO);
 //  - os presets do Contrato Visual Protegido (PROTECTED_CONTRACT_PRESETS) e a chave onde o SPO guarda o
 //    preset vigente (PROTECTED_CONTRACT_STATE_KEY): Padrão SPO, Compacto gerencial, Contraste técnico,
@@ -110,6 +111,8 @@ initGovernancaSemanticFlows();`,
       menuCompacto: trecho(fonte, "(function initMenuCompacto() {", true) + ")();",
       // filtro no desktop (fix/filtro-desktop): abre alinhado pela direita quando sairia da área da tabela
       filtroPosicao: trecho(fonte, "(function initFiltroPosicao() {", true) + ")();",
+      // siglas com balão (feat/siglas-explicadas): o mesmo bloco do SPO
+      siglas: trecho(fonte, "(function initSiglas() {", true) + ")();",
     };
   }
 
@@ -651,6 +654,7 @@ initGovernancaSemanticFlows();`,
       spo.teclado.forEach((codigo) => new Function(codigo)());
       new Function(spo.buscaListas)();
       new Function(spo.filtroPosicao)();
+      new Function(spo.siglas)();
       new Function(spo.fluxos)();
       new Function(spo.padraoDoc)();
       barraTela.montar(spo.menuCompacto);
@@ -827,4 +831,144 @@ initGovernancaSemanticFlows();`,
   painel.querySelectorAll(".mf-btn").forEach((b) => b.addEventListener("click", () => { fechar(); botao.focus(); }));
   document.addEventListener("click", (ev) => { if (painel.classList.contains("open") && !wrap.contains(ev.target) && ev.target !== veu) fechar(); });
   painel.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fechar(); botao.focus(); } });
+})();
+
+// [jean] feat/kit-indice (2026-11-18; achado 4 do dev. Jean): índice do kit (itens e subitens) e uma ficha igual para
+// cada padrão — quando usar, onde no SPO, classes, funções do main.js, seção do padrão e PRs —, montados a partir do
+// static/kit/catalogo.json, a fonte única (quem implementa, pessoa ou agente, pode ler o catálogo direto). O
+// tests/test_kit_mockup.py confere que tudo o que o catálogo cita existe.
+(function kitCatalogo() {
+  const nav = document.getElementById("kit-sumario");
+  if (!nav) return;
+  const el = (tag, classe, texto) => { const e = document.createElement(tag); if (classe) e.className = classe; if (texto !== undefined) e.textContent = texto; return e; };
+  const codigos = (lista, sufixo) => { const dd = el("dd"); lista.forEach((c, i) => { if (i) dd.append(", "); dd.append(el("code", "", c + (sufixo || ""))); }); return dd; };
+  function ficha(item) {
+    const det = el("details", "kit-ficha");
+    det.append(el("summary", "", "Ficha do padrão"));
+    const dl = el("dl");
+    const par = (rotulo, dd) => { dl.append(el("dt", "", rotulo)); dl.append(typeof dd === "string" ? el("dd", "", dd) : dd); };
+    par("Quando usar", item.quando);
+    par("Onde no SPO", item.onde);
+    if (item.classes && item.classes.length) par("Classes (style.css)", codigos(item.classes.map((c) => "." + c)));
+    if (item.js && item.js.length) par("Funções (main.js)", codigos(item.js, "()"));
+    par("Padrão", `docs/padrao-visual-spo-aa-plus.md, seção ${item.padrao}`);
+    if (item.prs && item.prs.length) par("PRs", item.prs.join(", "));
+    det.append(dl);
+    return det;
+  }
+  fetch("catalogo.json", { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((cat) => {
+      const lista = el("ol", "kit-sumario-grupos");
+      cat.grupos.forEach((grupo) => {
+        const li = el("li");
+        li.append(el("span", "kit-sumario-grupo", grupo.nome));
+        const sub = el("ol");
+        grupo.itens.forEach((item) => {
+          const alvo = document.getElementById(item.id);
+          if (!alvo) return;
+          const a = el("a", "", item.nome);
+          a.href = "#" + item.id;
+          const linha = el("li");
+          linha.append(a);
+          sub.append(linha);
+          // a ficha logo depois do título (ou do bloco de título do cartão/cabeçalho)
+          (alvo.closest(".module-card-title, header.module-header") || alvo).insertAdjacentElement("afterend", ficha(item));
+        });
+        li.append(sub);
+        lista.append(li);
+      });
+      nav.querySelector(".kit-sumario-carregando")?.remove();
+      nav.append(lista);
+    })
+    .catch(() => {
+      const p = nav.querySelector(".kit-sumario-carregando");
+      if (p) p.textContent = "Não foi possível ler o catálogo (static/kit/catalogo.json). Abra o kit pelo SPO local (http://127.0.0.1:5000/static/kit/…), não pelo disco.";
+    });
+})();
+
+// [jean] feat/lista-spo-unica (2026-11-18): os dois exemplos de lista de várias escolhas do kit.
+// 1) A lista de marcar de hoje (Teto): a mesma marcação; aqui só abrir/fechar, "Selecionar todos", "Limpar" e o texto
+//    do botão (no SPO, o initTetoOrcamentarioDashboard faz isso e a cascata das opções).
+(function kitListaMarcar() {
+  const w = document.querySelector("[data-kit-lista-marcar]");
+  if (!w) return;
+  const botao = w.querySelector(".planning-action-checklist-toggle"), painel = w.querySelector(".planning-action-checklist-panel");
+  const caixas = () => [...w.querySelectorAll(".planning-action-checklist-options input[type=checkbox]")];
+  const texto = () => { const n = caixas().filter((c) => c.checked).length; botao.textContent = !n ? "Todas" : n === 1 ? "1 selecionado" : `${n} selecionados`; };
+  const fechar = () => { painel.hidden = true; botao.setAttribute("aria-expanded", "false"); };
+  botao.addEventListener("click", (ev) => { ev.preventDefault(); const abrir = painel.hidden; painel.hidden = !abrir; botao.setAttribute("aria-expanded", String(abrir)); });
+  w.querySelector("[data-select-all]").addEventListener("click", (ev) => { ev.preventDefault(); caixas().forEach((c) => (c.checked = true)); texto(); });
+  w.querySelector("[data-select-none]").addEventListener("click", (ev) => { ev.preventDefault(); caixas().forEach((c) => (c.checked = false)); texto(); });
+  w.addEventListener("change", texto);
+  w.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !painel.hidden) { fechar(); botao.focus(); } });
+  document.addEventListener("click", (ev) => { if (!painel.hidden && !w.closest("label").contains(ev.target)) fechar(); });
+})();
+
+// 2) A proposta de lista única: aplica a cada clique; busca com rótulo; "Selecionar exibidos" e "Limpar"; etiquetas dos
+//    filtros ativos (removíveis); o botão diz o campo e o estado ("Região: Todas"); Esc e clicar fora fecham; no celular,
+//    cartão no alto da tela com o véu do filtro SPO.
+(function kitListaUnica() {
+  const w = document.querySelector("[data-kit-lista-unica]");
+  if (!w) return;
+  const botao = w.querySelector(".spo-multi-botao"), painel = w.querySelector(".spo-multi-painel");
+  const busca = w.querySelector(".spo-multi-busca input"), estado = w.querySelector("#kit-lu-estado");
+  const contagem = w.querySelector(".spo-multi-contagem"), etiquetas = w.querySelector(".spo-multi-etiquetas");
+  const rotulo = w.querySelector("#kit-lu-rotulo").textContent.trim();
+  const opcoes = () => [...w.querySelectorAll(".spo-multi-opcao")];
+  const celular = window.matchMedia("(max-width: 600px), (max-height: 560px)");
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  let veu = null;
+  function atualizar() {
+    const marcadas = opcoes().filter((o) => o.querySelector("input").checked).map((o) => o.textContent.trim());
+    estado.textContent = !marcadas.length ? "Todas" : marcadas.length === 1 ? marcadas[0] : `${marcadas.length} selecionadas`;
+    etiquetas.replaceChildren(...marcadas.map((nome) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "spo-multi-etiqueta";
+      b.setAttribute("aria-label", `Remover ${rotulo}: ${nome}`);
+      b.append(`${rotulo}: ${nome} `);
+      const x = document.createElement("i"); x.className = "bi bi-x"; x.setAttribute("aria-hidden", "true"); b.append(x);
+      b.addEventListener("click", () => {
+        const o = opcoes().find((op) => op.textContent.trim() === nome);
+        if (o) o.querySelector("input").checked = false;
+        atualizar();
+        botao.focus();
+      });
+      return b;
+    }));
+  }
+  function filtrar() {
+    const termos = norm(busca.value).split(/\s+/).filter(Boolean);
+    let n = 0;
+    opcoes().forEach((o) => { const ok = termos.every((t) => norm(o.textContent).includes(t)); o.hidden = !ok; if (ok) n += 1; });
+    contagem.textContent = `${n} de ${opcoes().length}`;
+  }
+  function fechar() {
+    painel.hidden = true;
+    botao.setAttribute("aria-expanded", "false");
+    w.classList.remove("spo-multi-cartao");
+    if (veu) { veu.remove(); veu = null; }
+  }
+  function abrir() {
+    painel.hidden = false;
+    botao.setAttribute("aria-expanded", "true");
+    if (celular.matches) {
+      w.classList.add("spo-multi-cartao");
+      veu = document.createElement("div");
+      veu.className = "spo-filtro-veu";
+      veu.setAttribute("aria-hidden", "true");
+      veu.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); fechar(); });
+      document.body.appendChild(veu);
+    }
+    busca.value = ""; filtrar(); busca.focus();
+  }
+  botao.addEventListener("click", () => (painel.hidden ? abrir() : fechar()));
+  busca.addEventListener("input", filtrar);
+  w.addEventListener("change", atualizar); // aplica a cada clique
+  w.querySelector("[data-lu-exibidos]").addEventListener("click", () => { opcoes().filter((o) => !o.hidden).forEach((o) => (o.querySelector("input").checked = true)); atualizar(); });
+  w.querySelector("[data-lu-limpar]").addEventListener("click", () => { opcoes().forEach((o) => (o.querySelector("input").checked = false)); atualizar(); });
+  w.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !painel.hidden) { ev.stopPropagation(); fechar(); botao.focus(); } });
+  document.addEventListener("click", (ev) => { if (!painel.hidden && !w.contains(ev.target) && ev.target !== veu) fechar(); });
+  atualizar();
 })();
